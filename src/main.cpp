@@ -38,6 +38,7 @@ extern "C" {
 #include "util/logger.h"
 #include "util/qmlmodules.h"
 #include "util/units.h"
+#include "util/fontcatalog.h"
 #include "util/uiwatchdog.h"
 #include "managers/clock.h"
 #include "managers/networkmanager.h"
@@ -470,6 +471,10 @@ int main(int argc, char *argv[])
 
     // Time formatting, compass points and unit conversions (src/util/units)
     ctx->setContextProperty("units", &units);
+
+    // The bundled UI and icon fonts, registered before any QML loads
+    FontCatalog fontCatalog(frontendDir.absoluteFilePath(QStringLiteral("assets/fonts")));
+    ctx->setContextProperty("fontCatalog", &fontCatalog);
 
     // Optional QML modules, checked without loading them: CarMenu's 3D view
     // needs QtQuick3D (SensorHome greys its card without it); the music

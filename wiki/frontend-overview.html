@@ -73,7 +73,7 @@
  |  | globalAuraFlash (4 edge gradients)            z:999999 |  |
  |  +--------------------------------------------------------+  |
  +--------------------------------------------------------------+
- |  FolderListModel (assets/fonts) + dynamic FontLoaders         |
+ |  Fonts from fontCatalog (registered in C++ at startup)        |
  |  Timers: navReloadTimer (150 ms)                              |
  +--------------------------------------------------------------+
 </pre>
@@ -158,7 +158,6 @@
             <tr><td><code>screenWidth</code> / <code>screenHeight</code></td><td><code>settingsManager.screenWidth</code> / <code>screenHeight</code> (defaults 1280&times;720)</td><td>Persisted window dimensions</td></tr>
             <tr><td><code>isVerticalLayout</code></td><td><code>settingsManager.bottomBarOrientation === "side"</code></td><td>Side bar vs bottom bar mode</td></tr>
             <tr><td><code>nowPlayingStudioOpen</code>, <code>nowPlayingStudioOriginRect</code></td><td><code>openNowPlayingStudio(rect)</code> / <code>closeNowPlayingStudio()</code></td><td>Drive the studio overlay and its hero-morph origin</td></tr>
-            <tr><td><code>loadedFonts</code>, <code>fontLoaders</code>, <code>pendingFontLoads</code>, <code>pendingFontData</code></td><td>font scan</td><td>Dynamic <code>FontLoader</code> bookkeeping</td></tr>
           </tbody>
         </table>
 
@@ -402,9 +401,9 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
         </div>
 
         <!-- Font Loading -->
-        <h2 id="font-loading">Dynamic Font Loading</h2>
+        <h2 id="font-loading">Font Loading</h2>
 
-        <p>Main.qml scans <span class="file-path">frontend/assets/fonts</span> with a <code>FolderListModel</code> (filters <code>*.ttf</code>, <code>*.otf</code>, upper-case variants; sorted by name). For each file it creates a <code>FontLoader</code> from an inline <code>Component</code>, derives a display name from the filename (extension stripped, <code>-</code>/<code>_</code> &rarr; space, so <code>JetBrainsMono-Regular.ttf</code> becomes "JetBrainsMono Regular"), and tracks async loads with <code>pendingFontLoads</code>. When the count reaches zero, <code>Style.registerFonts(names, familyMap)</code> publishes the list for the settings font picker and <code>Style.setFont(settingsManager.fontSetting)</code> applies the saved choice. Two selectable text fonts ship in that directory: GoogleSans-Regular and JetBrainsMono-Regular. The bundled OCTAVE Symbols font lives in a subdirectory and is loaded separately for icon glyphs, so it is not offered in the text-font picker.</p>
+        <p><span class="file-path">src/util/fontcatalog.{h,cpp}</span> (context property <code>fontCatalog</code>, built in <code>main.cpp</code> before the engine loads) registers every <code>*.ttf</code> / <code>*.otf</code> in <span class="file-path">frontend/assets/fonts</span> with <code>QFontDatabase::addApplicationFontFromData</code> (the bytes, so <code>assets:</code> paths work on Android) and publishes <code>fonts</code> as <code>{name, family}</code> maps: the display name is the filename with the extension stripped and <code>-</code>/<code>_</code> &rarr; space (<code>JetBrainsMono-Regular.ttf</code> becomes "JetBrainsMono Regular"), the family is what Qt reports. Main.qml's <code>Component.onCompleted</code> passes them to <code>Style.registerFonts(names, familyMap)</code>, sets <code>Style.symbolFontFamily</code> from <code>fontCatalog.symbolFamily</code> and applies <code>settingsManager.fontSetting</code>, all synchronously, so the saved font shows on the first frame. Two selectable text fonts ship: GoogleSans-Regular and JetBrainsMono-Regular. The OCTAVE Symbols font lives in <span class="file-path">symbols/</span> and is not offered in the picker. Until open-backend #13 Main.qml scanned the folder with a <code>FolderListModel</code> and loaded each file with a dynamic <code>FontLoader</code>, and a font still loading when the setting was applied was refused (the UI stayed in the system font); <span class="file-path">tests/cpp/tst_fontcatalog.cpp</span> covers the new path.</p>
 
         <!-- Album Art Capture -->
         <h2 id="album-art-capture">Album Art Capture Pipeline</h2>
@@ -548,7 +547,7 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
           <li><strong>Custom-theme hot reload</strong> &mdash; connect <code>customThemesChanged</code>.</li>
         </ol>
 
-        <p>Fonts load independently, driven by the <code>FolderListModel</code>'s <code>onStatusChanged</code> / <code>onCountChanged</code>; the IMU gating handler runs from its own <code>Component.onCompleted</code>.</p>
+        <p>Fonts are registered in C++ before the QML loads (<code>fontCatalog</code>) and applied in Main.qml's <code>Component.onCompleted</code>; the IMU gating handler runs from its own <code>Component.onCompleted</code>.</p>
 
         <div class="info-box warning">
           <div class="info-box-title">Signal connections made by hand</div>

@@ -196,6 +196,8 @@ qt_add_executable(octave
     src/util/variantlistmodel.h
     src/util/variantlistmodel.cpp
     src/util/units.h
+    src/util/fontcatalog.h
+    src/util/fontcatalog.cpp
     src/util/units.cpp
     src/managers/settingsmanager.h
     src/managers/settingsmanager.cpp

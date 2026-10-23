@@ -1,7 +1,6 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-import Qt.labs.folderlistmodel 2.15
 import "." as App
 
 ApplicationWindow {
@@ -31,8 +30,6 @@ ApplicationWindow {
     property string fontSetting: settingsManager ? settingsManager.fontSetting : "System Default"
 
     // Font loading properties
-    property var loadedFonts: ({})
-    property var fontLoaders: []
 
     // Screen dimension properties
     property int screenWidth: settingsManager ? settingsManager.screenWidth : 1280
@@ -88,6 +85,20 @@ ApplicationWindow {
         systemDefaultFont = font.family
         // Also store it in Style for other components to use
         App.Style.systemDefaultFont = font.family
+
+        // The bundled fonts, registered in C++ before this loaded (fontCatalog):
+        // the picker's list, then the saved choice, then the icon font
+        if (typeof fontCatalog !== "undefined" && fontCatalog) {
+            var fontNames = [], familyMap = {}
+            for (var f = 0; f < fontCatalog.fonts.length; f++) {
+                fontNames.push(fontCatalog.fonts[f].name)
+                familyMap[fontCatalog.fonts[f].name] = fontCatalog.fonts[f].family
+            }
+            App.Style.registerFonts(fontNames, familyMap)
+            App.Style.symbolFontFamily = fontCatalog.symbolFamily
+            if (settingsManager && settingsManager.fontSetting)
+                App.Style.setFont(settingsManager.fontSetting)
+        }
 
         if (settingsManager) {
             // Load custom themes BEFORE setTheme so saved custom themes
@@ -936,146 +947,6 @@ ApplicationWindow {
                     GradientStop { position: 0.0; color: "transparent" }
                     GradientStop { position: 1.0; color: globalAuraFlash.auraColor }
                 }
-            }
-        }
-    }
-
-    // Icon-glyph font used by every symbol-drawing Text (App.Style.symbolFont).
-    // Lives in its own subfolder so the picker's folder scan below skips it.
-    FontLoader {
-        id: symbolFontLoader
-        source: Qt.resolvedUrl("assets/fonts/symbols/OCTAVESymbols-Regular.ttf")
-        onStatusChanged: {
-            if (status === FontLoader.Ready)
-                App.Style.symbolFontFamily = name
-            else if (status === FontLoader.Error)
-                console.warn("Symbol font failed to load; icon glyphs fall back to the UI font")
-        }
-    }
-
-    // Font folder model to scan for available fonts
-    FolderListModel {
-        id: fontFolderModel
-        folder: Qt.resolvedUrl("assets/fonts")
-        nameFilters: ["*.ttf", "*.otf", "*.TTF", "*.OTF"]
-        showDirs: false
-        showHidden: false
-        sortField: FolderListModel.Name
-
-        onStatusChanged: {
-            console.log("Font folder status:", status, "count:", count, "folder:", folder)
-            if (status === FolderListModel.Ready) {
-                loadFontsFromFolder()
-            }
-        }
-
-        onCountChanged: {
-            console.log("Font folder count changed:", count)
-            if (status === FolderListModel.Ready && count > 0) {
-                loadFontsFromFolder()
-            }
-        }
-    }
-
-    // Dynamically created FontLoader instances
-    property var fontLoaderComponent: Component {
-        FontLoader {}
-    }
-
-    // Track pending font loads
-    property int pendingFontLoads: 0
-    property var pendingFontData: []
-
-    // Function to load fonts from the folder
-    function loadFontsFromFolder() {
-        console.log("Loading fonts from folder, count:", fontFolderModel.count)
-
-        // Clear previous loaders
-        for (var j = 0; j < fontLoaders.length; j++) {
-            fontLoaders[j].destroy()
-        }
-        fontLoaders = []
-        pendingFontData = []
-        pendingFontLoads = 0
-
-        if (fontFolderModel.count === 0) {
-            console.log("No fonts found in folder")
-            App.Style.registerFonts([], {})
-            return
-        }
-
-        pendingFontLoads = fontFolderModel.count
-
-        for (var i = 0; i < fontFolderModel.count; i++) {
-            var filePath = fontFolderModel.get(i, "fileUrl")
-            var fileName = fontFolderModel.get(i, "fileName")
-
-            // Create display name from filename (remove extension)
-            var displayName = fileName.replace(/\.(ttf|otf)$/i, "").replace(/[-_]/g, " ")
-
-            console.log("Creating FontLoader for:", fileName, "->", filePath)
-
-            // Create a FontLoader for this font
-            var loader = fontLoaderComponent.createObject(mainWindow, {
-                "source": filePath,
-                "objectName": displayName
-            })
-
-            fontLoaders.push(loader)
-
-            // Handle async loading
-            if (loader.status === FontLoader.Ready) {
-                onFontLoaded(loader, displayName)
-            } else if (loader.status === FontLoader.Loading) {
-                // Connect to status change
-                loader.statusChanged.connect(function() {
-                    var ld = loader
-                    var dn = displayName
-                    return function() {
-                        if (ld.status === FontLoader.Ready) {
-                            onFontLoaded(ld, dn)
-                        } else if (ld.status === FontLoader.Error) {
-                            console.warn("Failed to load font:", dn)
-                            pendingFontLoads--
-                            checkFontsComplete()
-                        }
-                    }
-                }())
-            } else {
-                console.warn("Font load error for:", fileName, "status:", loader.status)
-                pendingFontLoads--
-            }
-        }
-
-        // Check if all loaded synchronously
-        checkFontsComplete()
-    }
-
-    function onFontLoaded(loader, displayName) {
-        console.log("Font loaded:", displayName, "->", loader.name)
-        pendingFontData.push({ name: displayName, family: loader.name })
-        pendingFontLoads--
-        checkFontsComplete()
-    }
-
-    function checkFontsComplete() {
-        if (pendingFontLoads <= 0) {
-            var fontNames = []
-            var familyMap = {}
-
-            for (var i = 0; i < pendingFontData.length; i++) {
-                fontNames.push(pendingFontData[i].name)
-                familyMap[pendingFontData[i].name] = pendingFontData[i].family
-            }
-
-            console.log("All fonts loaded:", fontNames)
-
-            // Register fonts with Style
-            App.Style.registerFonts(fontNames, familyMap)
-
-            // Apply saved font setting
-            if (settingsManager && settingsManager.fontSetting) {
-                App.Style.setFont(settingsManager.fontSetting)
             }
         }
     }
