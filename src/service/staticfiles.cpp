@@ -71,16 +71,55 @@ QByteArray contentTypeFor(const QString &fileName)
     return types.value(QFileInfo(fileName).suffix().toLower(), "application/octet-stream");
 }
 
+QByteArray pathOf(const QByteArray &target)
+{
+    QByteArray path = target;
+    const int q = path.indexOf('?');
+    if (q >= 0)
+        path.truncate(q);
+    const int h = path.indexOf('#');
+    if (h >= 0)
+        path.truncate(h);
+    return path;
+}
+
+QByteArray imageTypeOf(const QByteArray &bytes)
+{
+    if (bytes.startsWith("\xFF\xD8\xFF"))
+        return "image/jpeg";
+    if (bytes.startsWith("\x89PNG\r\n\x1A\n"))
+        return "image/png";
+    if (bytes.startsWith("GIF87a") || bytes.startsWith("GIF89a"))
+        return "image/gif";
+    if (bytes.size() >= 12 && bytes.startsWith("RIFF") && bytes.mid(8, 4) == "WEBP")
+        return "image/webp";
+    if (bytes.startsWith("BM") && bytes.size() > 14)
+        return "image/bmp";
+    return {};
+}
+
+Reply serveImage(const QString &localPath)
+{
+    const QFileInfo info(localPath);
+    if (localPath.isEmpty() || !info.isFile() || info.size() > kMaxImage)
+        return reply(404, "Not Found", "no art\n");
+    QFile f(localPath);
+    if (!f.open(QIODevice::ReadOnly))
+        return reply(404, "Not Found", "no art\n");
+    const QByteArray bytes = f.readAll();
+    const QByteArray type = imageTypeOf(bytes);
+    if (type.isEmpty())
+        return reply(404, "Not Found", "no art\n");
+    return Reply{200, "OK", type, bytes};
+}
+
 Reply serve(const QString &root, const QByteArray &target)
 {
     const QString rootCanonical = QFileInfo(root).canonicalFilePath();
     if (rootCanonical.isEmpty() || !QFileInfo(rootCanonical).isDir())
         return reply(404, "Not Found", "not found\n");
 
-    QByteArray rawPath = target;
-    const int cut = rawPath.indexOf('?') >= 0 ? rawPath.indexOf('?') : rawPath.indexOf('#');
-    if (cut >= 0)
-        rawPath.truncate(cut);
+    const QByteArray rawPath = pathOf(target);
     if (!rawPath.startsWith('/'))
         return reply(400, "Bad Request", "bad path\n");
     const QString path = QUrl::fromPercentEncoding(rawPath);

@@ -245,6 +245,36 @@ private slots:
         server.stop();
     }
 
+    void routesAndCrossSiteLoads()
+    {
+        CommandServer server(0);
+        server.setPage("<html>client</html>");
+        int calls = 0;
+        server.addRoute("/art", [&calls]() {
+            ++calls;
+            return StaticFiles::Reply{200, "OK", "image/png", "\x89PNG"};
+        });
+        QVERIFY(server.start());
+        const QByteArray host = "127.0.0.1:" + QByteArray::number(server.port());
+        QByteArray reply = once(server.port(), "GET /art?rev=7 HTTP/1.1\r\nHost: " + host + "\r\n\r\n");
+        QVERIFY2(reply.startsWith("HTTP/1.1 200") && reply.contains("Content-Type: image/png") && reply.endsWith("\x89PNG"),
+                 reply.constData());
+        QVERIFY(reply.contains("X-Content-Type-Options: nosniff"));
+        QCOMPARE(calls, 1);
+        // Exact paths only
+        QVERIFY(once(server.port(), "GET /art/x HTTP/1.1\r\nHost: " + host + "\r\n\r\n").startsWith("HTTP/1.1 404"));
+        // An <img> on another site sends no Origin; its Sec-Fetch-Site gives it away
+        reply = once(server.port(), "GET /art HTTP/1.1\r\nHost: " + host + "\r\nSec-Fetch-Site: cross-site\r\n\r\n");
+        QVERIFY2(reply.startsWith("HTTP/1.1 403"), reply.constData());
+        reply = once(server.port(), "GET / HTTP/1.1\r\nHost: " + host + "\r\nSec-Fetch-Site: same-site\r\n\r\n");
+        QVERIFY2(reply.startsWith("HTTP/1.1 403"), reply.constData());
+        QCOMPARE(calls, 1);
+        // The page's own loads and the address bar pass
+        QVERIFY(once(server.port(), "GET /art HTTP/1.1\r\nHost: " + host + "\r\nSec-Fetch-Site: same-origin\r\n\r\n").startsWith("HTTP/1.1 200"));
+        QVERIFY(once(server.port(), "GET / HTTP/1.1\r\nHost: " + host + "\r\nSec-Fetch-Site: none\r\n\r\n").startsWith("HTTP/1.1 200"));
+        server.stop();
+    }
+
 private:
     static QByteArray readUntil(QTcpSocket &s, const QByteArray &marker)
     {

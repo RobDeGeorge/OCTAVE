@@ -49,6 +49,8 @@
 #include <stdexcept>
 #include <vector>
 
+#include "staticfiles.h"
+
 class QThread;
 
 namespace OctaveService {
@@ -119,6 +121,12 @@ public:
     // staticfiles.h); empty = the page. Before start().
     void setWebRoot(const QString &dir) { m_webRoot = dir; }
     QString webRoot() const { return m_webRoot; }
+    // GET `path` (exactly, any ?query ignored) answered by `handler` on the
+    // connection's thread, ahead of the web root and the page (GET /art).
+    // Before start().
+    using Route = std::function<StaticFiles::Reply()>;
+    void addRoute(const QByteArray &path, Route handler) { m_routes.insert(path, std::move(handler)); }
+    Route route(const QByteArray &path) const { return m_routes.value(path); }
     bool start();
     void stop();
     quint16 port() const { return m_port; }   // the bound port once started (0 asks for any)
@@ -143,6 +151,7 @@ private:
     QHostAddress m_bind = QHostAddress(QHostAddress::LocalHost);
     QByteArray m_page;
     QString m_webRoot;
+    QHash<QByteArray, Route> m_routes;
     mutable QReadWriteLock m_lock;
     QHash<QString, Handler> m_handlers;
     QStringList m_order;   // registration order, for list_actions

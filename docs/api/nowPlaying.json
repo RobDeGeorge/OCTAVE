@@ -108,6 +108,14 @@
         },
         {
             "constant": false,
+            "name": "artRevision",
+            "notify": "artUrlChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
             "name": "durationMs",
             "notify": "durationChanged",
             "readable": true,

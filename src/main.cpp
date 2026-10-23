@@ -13,6 +13,8 @@
 #include <QWindow>
 #include <QTemporaryDir>
 #include <QTimer>
+#include <QPointer>
+#include <QUrl>
 #include <QtQml/qqml.h>
 #ifdef OCTAVE_HAVE_WEBENGINE
 #include <QtWebEngineQuick/qtwebenginequickglobal.h>
@@ -124,6 +126,15 @@ Service makeService(const QStringList &arguments, AppCore &core, bool headless)
         }
         service.bridge = std::make_unique<OctaveService::ServiceBridge>(
             &core.registry, OctaveService::AppInfo{QStringLiteral(OCTAVE_VERSION), debugBuild, headless});
+        // The current cover, so a client can show it: only nowPlaying's
+        // own art file, never a path from the request
+        QPointer<NowPlaying> nowPlaying = &core.nowPlaying;
+        service.server->addRoute("/art", [nowPlaying]() {
+            const QString url = OctaveService::CommandServer::onGui([nowPlaying]() {
+                return QVariant(nowPlaying ? nowPlaying->artUrl() : QString());
+            }, 5000).toString();
+            return OctaveService::StaticFiles::serveImage(QUrl(url).isLocalFile() ? QUrl(url).toLocalFile() : QString());
+        });
         // A client that goes without saying so leaves no demand behind
         service.bridge->releaseOnClose(QStringLiteral("obdManager"), QStringLiteral("setParameterDemand"), QStringList());
         service.bridge->releaseOnClose(QStringLiteral("obdManager"), QStringLiteral("setBackgroundDemand"), QStringList());

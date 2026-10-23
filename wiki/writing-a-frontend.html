@@ -109,11 +109,13 @@ $ printf '{"op":"hello","id":1}\n{"op":"get","object":"volumeController","proper
           <li><strong>Dev-only actions</strong> (<code>navigate</code>, <code>click</code>, <code>screenshot</code>, <code>sim_*</code>) exist only in developer builds with <code>--profile</code>, aren't versioned, and drive the bundled UI rather than the managers. Don't build on them.</li>
         </ul>
 
+        <h3>Album art</h3>
+        <p><code>nowPlaying.artUrl</code> is a file on the head unit; fetch the picture itself from <code>GET http://host:9876/art</code> (local and phone art alike, typed by its bytes: JPEG, PNG, GIF, WebP or BMP; 404 when there is none). Subscribe to <code>nowPlaying.artRevision</code>, which goes up by one on every new cover, and use it as your cache key: <code>&lt;img src="/art?rev=12"&gt;</code> from a <code>--web-root</code> page, or refetch when it changes. Only the current cover is served; nothing in the request picks a file.</p>
+
         <h2 id="limits">What Is Not Available Yet</h2>
         <ul>
           <li><strong>Video</strong>: the phone mirror picture and Android Auto frames go straight into the bundled UI. You can start and stop mirroring and read its state, but not show the picture. Media streams are contract step 6 in <span class="file-path">TODO/open-backend.md</span>.</li>
           <li><strong>The waveform's audio levels</strong>: also step 6.</li>
-          <li><strong>Album art</strong> for local tracks is a path on the head unit (<code>nowPlaying.artUrl</code>), which a remote client can't load.</li>
         </ul>
 
         <div class="related-pages">
