@@ -114,7 +114,7 @@ octave_add_test(tst_downloadmanager
     LIBS Qt6::Gui Qt6::Network Qt6::Concurrent ${_taglib}
     DEFINES OCTAVE_ENABLE_DOWNLOADS)
 octave_add_test(tst_mediamanager
-    SOURCES managers/mediamanager.h managers/mediamanager.cpp util/folderbrowser.h util/folderbrowser.cpp util/units.h util/units.cpp
+    SOURCES managers/mediamanager.h managers/mediamanager.cpp util/folderbrowser.h util/folderbrowser.cpp service/staticfiles.h service/staticfiles.cpp util/units.h util/units.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
     LIBS Qt6::Gui Qt6::Multimedia Qt6::Concurrent ${_taglib})
 
@@ -165,7 +165,7 @@ if(WIN32 AND OCTAVE_HAVE_FFMPEG)
     target_include_directories(tst_scrcpyclient PRIVATE ${FFMPEG_INCLUDE_DIRS})
 endif()
 octave_add_test(tst_phonemirror
-    SOURCES managers/phonemirrormanager.h managers/phonemirrormanager.cpp
+    SOURCES managers/phonemirrormanager.h managers/phonemirrormanager.cpp service/staticfiles.h service/staticfiles.cpp
             phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h
             phone_mirror/qrcodegen.hpp phone_mirror/qrcodegen.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
@@ -177,7 +177,7 @@ endif()
 # NowPlaying over the real MediaManager and PhoneMirrorManager
 octave_add_test(tst_nowplaying
     SOURCES managers/nowplaying.h managers/nowplaying.cpp
-            managers/mediamanager.h managers/mediamanager.cpp util/folderbrowser.h util/folderbrowser.cpp util/units.h util/units.cpp
+            managers/mediamanager.h managers/mediamanager.cpp util/folderbrowser.h util/folderbrowser.cpp service/staticfiles.h service/staticfiles.cpp util/units.h util/units.cpp
             managers/phonemirrormanager.h managers/phonemirrormanager.cpp
             phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h
             phone_mirror/qrcodegen.hpp phone_mirror/qrcodegen.cpp

@@ -529,13 +529,6 @@
         },
         {
             "kind": "slot",
-            "name": "musicBrowseRoots",
-            "params": [
-            ],
-            "returns": "QStringList"
-        },
-        {
-            "kind": "slot",
             "name": "get_total_duration",
             "params": [
             ],

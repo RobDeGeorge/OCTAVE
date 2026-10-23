@@ -121,10 +121,11 @@ public:
     // staticfiles.h); empty = the page. Before start().
     void setWebRoot(const QString &dir) { m_webRoot = dir; }
     QString webRoot() const { return m_webRoot; }
-    // GET `path` (exactly, any ?query ignored) answered by `handler` on the
+    // GET `path` (exactly; the ?query is the handler's to read, from the
+    // request target it is given) answered by `handler` on the
     // connection's thread, ahead of the web root and the page (GET /art).
     // Before start().
-    using Route = std::function<StaticFiles::Reply()>;
+    using Route = std::function<StaticFiles::Reply(const QByteArray &target)>;
     void addRoute(const QByteArray &path, Route handler) { m_routes.insert(path, std::move(handler)); }
     Route route(const QByteArray &path) const { return m_routes.value(path); }
     bool start();

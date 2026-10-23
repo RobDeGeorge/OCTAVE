@@ -98,6 +98,36 @@ QByteArray imageTypeOf(const QByteArray &bytes)
     return {};
 }
 
+QString queryValue(const QByteArray &target, const QString &key)
+{
+    const int q = target.indexOf('?');
+    if (q < 0)
+        return {};
+    QByteArray query = target.mid(q + 1);
+    const int h = query.indexOf('#');
+    if (h >= 0)
+        query.truncate(h);
+    for (const QByteArray &pair : query.split('&')) {
+        const int eq = pair.indexOf('=');
+        const QByteArray k = eq < 0 ? pair : pair.left(eq);
+        if (QUrl::fromPercentEncoding(k) != key)
+            continue;
+        QByteArray v = eq < 0 ? QByteArray() : pair.mid(eq + 1);
+        v.replace('+', ' ');
+        return QUrl::fromPercentEncoding(v);
+    }
+    return {};
+}
+
+QString insideDir(const QString &localPath, const QString &dir)
+{
+    const QString file = QFileInfo(localPath).canonicalFilePath();
+    const QString root = QFileInfo(dir).canonicalFilePath();
+    if (file.isEmpty() || root.isEmpty())
+        return {};
+    return file.startsWith(root + QLatin1Char('/')) ? file : QString();
+}
+
 Reply serveImage(const QString &localPath)
 {
     const QFileInfo info(localPath);

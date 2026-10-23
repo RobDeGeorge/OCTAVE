@@ -182,7 +182,7 @@ private:
             if (const CommandServer::Route route = m_owner->route(StaticFiles::pathOf(request.path))) {
                 StaticFiles::Reply r;
                 try {
-                    r = route();
+                    r = route(request.path);
                 } catch (const CommandError &e) {
                     r = StaticFiles::Reply{503, "Service Unavailable", "text/plain", QByteArray(e.what()) + '\n'};
                 }

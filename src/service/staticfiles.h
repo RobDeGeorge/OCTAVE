@@ -49,6 +49,14 @@ QByteArray imageTypeOf(const QByteArray &bytes);
 
 constexpr qint64 kMaxImage = 16 * 1024 * 1024;
 
+// The value of `key` in a request target's query (percent-decoded), or
+// a null string when absent
+QString queryValue(const QByteArray &target, const QString &key);
+
+// `localPath` if its canonical form lies inside `dir` (canonical too),
+// else "": a file a manager names must still be in that manager's folder
+QString insideDir(const QString &localPath, const QString &dir);
+
 // GET /art: the image file at `localPath` (the app's own current cover,
 // never a path a client chose), typed by its bytes. 404 for no path, a
 // missing or oversize file, or one that is not an image.

@@ -165,11 +165,20 @@ public slots:
     // truncated}, anything else {error}. Choose one with
     // settingsManager.save_media_folder(path).
     Q_INVOKABLE QVariantMap browse_music_folders(const QString &path);
-    QStringList musicBrowseRoots() const;
     Q_INVOKABLE QString get_total_duration();
     Q_INVOKABLE int get_album_count();
     Q_INVOKABLE int get_artist_count();
     Q_INVOKABLE QStringList sort_media_files(const QString &sortColumn, bool ascending = true);
+
+public:
+    // Plain C++, not on the service (no slot, no Q_INVOKABLE)
+    // GET /art?song=<filename>: the cover file of a song in the library
+    // (its own lookup and cache, get_album_art), only if that file is in
+    // the art cache folder; "" otherwise. The service serves the bytes,
+    // never the path.
+    QString libraryArtFile(const QString &filename);
+    // browse_music_folders' roots
+    QStringList musicBrowseRoots() const;
 
 private slots:
     void _update_position();

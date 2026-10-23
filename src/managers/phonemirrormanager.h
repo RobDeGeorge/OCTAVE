@@ -150,6 +150,9 @@ public:
     QString mediaArtUrl() const { return m_mediaArtUrl; }
     bool mediaActive() const { return m_mediaActive; }
     QVariantList mediaQueue() const { return m_mediaQueue; }
+    // GET /art?queue=<id>: the art file of that queue item, only if it is
+    // in the queue art folder; "" otherwise
+    QString queueArtFile(qint64 id) const;
     qint64 mediaQueueActiveId() const { return m_mediaQueueActiveId; }
     QString mediaQueueTitle() const { return m_mediaQueueTitle; }
     QString deviceState() const { return m_deviceState; }
