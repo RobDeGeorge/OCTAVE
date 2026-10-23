@@ -15,7 +15,7 @@ from octave_console.app import OctaveConsole
 from octave_console.link import Client
 from octave_console.panes_car import check_flags
 from octave_console.panes_dash import changes, summarize
-from octave_console.panes_media import spectrum
+from octave_console.panes_media import halfblock, spectrum
 
 
 @pytest.fixture
@@ -59,6 +59,23 @@ def test_helpers():
     assert "grid 4 x 2" in summarize({"label": "x", "gridColumns": 4, "gridRows": 2, "cells": []})
 
 
+def test_halfblock():
+    import io
+
+    from PIL import Image
+    img = Image.new("RGB", (4, 4), (255, 0, 0))
+    for x in range(4):
+        for y in range(2, 4):
+            img.putpixel((x, y), (0, 0, 255))   # bottom half blue
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    art = halfblock(buf.getvalue(), cols=2, rows=2)
+    assert art.plain == "▀▀\n▀▀"
+    styles = {str(span.style) for span in art.spans}
+    assert "#ff0000 on #ff0000" in styles and "#0000ff on #0000ff" in styles
+    assert halfblock(b"not an image") is None
+
+
 # ── Library ──────────────────────────────────────────────────────────────
 
 
@@ -70,6 +87,13 @@ async def test_library_playlists_move_and_play(sdk):
         pane = app.query_one("#pane-library")
         assert await wait_for(pilot, lambda: len(pane.songs) >= 2)
         first = pane.songs[0]["file"]
+        # the highlighted song's cover, from GET /art?song=, as half blocks (when the test tracks have covers)
+        songs = app.query_one("#lib-songs", DataTable)
+        songs.focus()
+        songs.move_cursor(row=0)
+        if await wait_for(pilot, lambda: pane.covers.get(pane.cover_query) is not None, timeout=5):
+            assert "▀" in str(app.query_one("#lib-cover").render())
+            shot(app, "library-cover")
         home = sdk.call("mediaManager", "get_song_playlist_name", first)
         # a new playlist
         await pilot.press("n")

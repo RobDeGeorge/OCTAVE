@@ -54,7 +54,7 @@ Pane keys are shown in the footer while the pane has focus:
 - **Trips**: the black box's trips, newest first (the open trip shows its live duration and sample count), details on demand, export, delete, end the current trip; recording state and storage in the side panel.
 - **Settings**: every `settingsManager` property, read from `describe` at run time, so new settings appear without a console change. Labels, options and ranges come from `get_settings_registry`. A write goes through the property's save slot (the registry's `saveSlot`, else `save_<snake_name>`, else `save_setting(key, value)`), and the table shows the value read back from the property event.
 - **Downloads**: search, results and the queue mirrored from the two list models (`rows` once, then `model` events: reset, insert, update, remove), with pause, resume, cancel and clearing. Says so when the build has downloads compiled out.
-- **Library**: the songs of the current playlist with artist, album and length (sorted by the app's `sort_media_files`), the playlists, the phone's queue while mirroring, and a one-line spectrum from `audioAnalyzer.levels` (switched on with `setDemand` while the pane is shown). Metadata takes four calls per song, so a big library takes a moment to list.
+- **Library**: the songs of the current playlist with artist, album and length (sorted by the app's `sort_media_files`), the playlists, the phone's queue while mirroring, the highlighted song's cover (or the phone queue item's) drawn in half blocks from `GET /art?song=` / `?queue=` (32 x 16 pixels, Pillow decodes it), and a one-line spectrum from `audioAnalyzer.levels` (switched on with `setDemand` while the pane is shown). Metadata takes four calls per song, so a big library takes a moment to list.
 - **Dashboards**: every dashboard with a preview of its grid and cells. Editing opens the spec as JSON; on save it goes through `normalizedSpec` (the console says what it moved or dropped) and `saveDashboard`. A built-in is saved as your own copy under `uniqueIdForLabel`. Duplicate, delete, restore built-ins, import pasted JSON, and export.
 - **Car**: the shift light (live state, the look settings, and the flags as a table you edit one by one or as JSON, checked before `setFlags`), the IMU (every IMU reading while the pane is shown, tare and reset tare), the gesture sensor (status, last gesture, the mapping, reset), and the ESP32 knob (status, ports, connect, disconnect, retry). Enables live in Settings.
 - **Phone**: mirroring state, devices, notices and errors, start / stop / resume / wake / check, the phone's home / back / apps keys, wireless address, forget, QR pairing (the QR code drawn in text), install help, the phone's media with its own transport, and the Android Auto desktop head unit (installed, running, launch, close, help).
@@ -97,7 +97,7 @@ Textual pilot tests against a running service: they press the keys and read the 
 
 ## Known gaps
 
-- No album art or phone-mirror video (a terminal can't show them, and media streams are not on the service yet: `TODO/open-backend.md`, step 6).
+- No phone-mirror video (a terminal can't show it, and media streams are not on the service yet: `TODO/open-backend.md`, step 6).
 - The freeze frame shows what `get_freeze_frame` returns, which today is the code that stored it, not the frame's PID values.
-- No library or phone-queue covers (a terminal; the API serves only the current cover so far).
+- Covers are 32 x 16 half-block pixels: recognisable, not pretty. The media bar has no room for one.
 - Downloads were only tried with no search results (no network in the test setup).

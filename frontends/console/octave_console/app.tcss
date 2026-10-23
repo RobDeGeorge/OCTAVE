@@ -240,3 +240,13 @@ Confirm, EditValue {
     height: auto;
     max-height: 24;
 }
+
+#lib-cover {
+    height: 8;
+    width: 32;
+    margin-top: 1;
+}
+
+#lib-cover-label {
+    height: 1;
+}
