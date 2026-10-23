@@ -10,6 +10,7 @@ Clock::Clock(SettingsManager *settingsManager, QObject *parent)
 {
     connect(&m_timer, &QTimer::timeout, this, &Clock::update_time);
     m_timer.start(1000); // Update every second
+    update_time();       // `time` holds the text from the start, not after a second
 }
 
 void Clock::update_time()

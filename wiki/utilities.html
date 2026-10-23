@@ -72,9 +72,10 @@
         <table>
           <thead><tr><th>Member</th><th>Kind</th><th>Declaration</th><th>Description</th></tr></thead>
           <tbody>
+            <tr><td><code>time</code></td><td>property (read-only)</td><td><code>QString time NOTIFY timeChanged</code></td><td>The current text (what <code>timeChanged</code> last carried), set from construction: a service client subscribing to it gets it at once instead of waiting up to a minute</td></tr>
             <tr><td><code>timeChanged(str)</code></td><td>signal</td><td><code>void timeChanged(const QString &amp;)</code></td><td>Formatted time, or <code>""</code> when <code>showClock</code> is off</td></tr>
             <tr><td><code>update_time()</code></td><td>slot</td><td><code>public slots</code></td><td>Timer callback (1000 ms); computes the text and emits on change</td></tr>
-            <tr><td>constructor</td><td>&ndash;</td><td><code>Clock(SettingsManager *, QObject *parent = nullptr)</code></td><td>Starts the timer immediately</td></tr>
+            <tr><td>constructor</td><td>&ndash;</td><td><code>Clock(SettingsManager *, QObject *parent = nullptr)</code></td><td>Starts the timer and computes the first text at once</td></tr>
           </tbody>
         </table>
 
