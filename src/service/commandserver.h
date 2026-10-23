@@ -34,6 +34,7 @@
 // step 1): built in every configuration; the dev runtime (src/dev/)
 // registers its UI / perf / simulator actions on it.
 
+#include <QElapsedTimer>
 #include <QHash>
 #include <QHostAddress>
 #include <QObject>
@@ -109,6 +110,13 @@ public:
     void setTokenId(const QString &id);
     QString tokenId() const;
 
+    // Ops a second (a token bucket of `burst`, refilled at `perSecond`;
+    // connection thread only): false when the client is over the rate,
+    // with `retryAfterMs` until the next one would pass. 0 a second = no limit
+    bool takeOp(int perSecond, int burst, int *retryAfterMs);
+    // Ops takeOp() refused in the current second (connection thread only)
+    int refusedThisSecond() const { return m_opRefused; }
+
 private:
     mutable QMutex m_lock;
     QList<Item> m_queue;
@@ -124,6 +132,11 @@ private:
     std::atomic<int> m_lastId{0};
     const quint64 m_serial;
     std::vector<std::function<void()>> m_cleanups;
+    QElapsedTimer m_opClock;
+    qint64 m_opLastNs = 0;
+    double m_opTokens = 0;
+    qint64 m_opWindowNs = 0;   // start of the second m_opRefused counts
+    int m_opRefused = 0;
 };
 
 // Thrown by handlers; becomes {"ok": false, "error": what()}
@@ -216,6 +229,15 @@ public:
         int untrustedIdleMs = 60000;        // an untrusted connection idle this long is closed
         qint64 maxLineBytes = 1 << 20;      // a JSON line longer than this closes the connection
         qint64 maxUnsentBytes = 4 << 20;    // above this in the socket, events wait in the bounded queue
+        // Many clients (TODO/frontend-platform.md step 7; wiki utilities.html#many-clients)
+        int opsPerSecond = 200;             // ops a connection may send a second, sustained...
+        int opsBurst = 400;                 // ...and at once; past them {"ok":false,"code":"rateLimited"}
+        int maxRefusedPerSecond = 4000;     // a client refused this often in a second ignores retryAfterMs: closed
+        int maxBehindMs = 15000;            // at maxUnsentBytes this long: not reading, closed
+        int connectsPerSecond = 20;         // new connections a second from one network address...
+        int connectsBurst = 100;            // ...and at once (each of a page's files is one)
+        int loopbackConnectsPerSecond = 100;   // the same from this device: a reconnect with
+        int loopbackConnectsBurst = 400;       // back-off never comes near, a runaway loop does
     };
     void setLimits(const Limits &limits) { m_limits = limits; }
     const Limits &limits() const { return m_limits; }

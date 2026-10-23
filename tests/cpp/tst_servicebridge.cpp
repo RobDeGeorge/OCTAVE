@@ -868,6 +868,158 @@ private slots:
                                   !hub.wanted("fixture.video")), 3000);
     }
 
+    void aFloodIsRateLimitedAndNoOneElseIs()
+    {
+        // Step 7: past the burst a connection's ops are refused with a code
+        // and a retry time, before any work; another connection is untouched
+        CommandServer::Limits limits = m_server->limits();
+        limits.opsPerSecond = 20;
+        limits.opsBurst = 10;
+        m_server->setLimits(limits);
+        QTcpSocket flood;
+        flood.connectToHost(QHostAddress::LocalHost, m_server->port());
+        QVERIFY(flood.waitForConnected(3000));
+        QByteArray burst;
+        for (int i = 1; i <= 100; ++i)
+            burst += QByteArray(R"({"op": "hello", "id": )") + QByteArray::number(i) + "}\n";
+        flood.write(burst);
+        QList<QJsonObject> replies;
+        QByteArray in;
+        QElapsedTimer t;
+        t.start();
+        while (replies.size() < 100 && t.elapsed() < 5000) {
+            QCoreApplication::processEvents();
+            if (flood.waitForReadyRead(10))
+                in += flood.readAll();
+            int nl;
+            while ((nl = in.indexOf('\n')) >= 0) {
+                replies.append(QJsonDocument::fromJson(in.left(nl)).object());
+                in.remove(0, nl + 1);
+            }
+        }
+        QCOMPARE(replies.size(), 100);
+        int ok = 0;
+        for (const QJsonObject &r : std::as_const(replies)) {
+            if (r.value("ok").toBool()) {
+                ++ok;
+                continue;
+            }
+            QCOMPARE(r.value("code").toString(), QStringLiteral("rateLimited"));
+            QVERIFY(r.value("retryAfterMs").toInt() > 0);
+            QVERIFY(r.value("id").toInt() > 0);   // still echoed: the client knows which
+        }
+        QVERIFY2(ok >= 10 && ok < 30, qPrintable(QString::number(ok)));
+        // Someone else's bucket is their own
+        QCOMPARE(send(R"({"op": "hello", "id": 1})").value("ok").toBool(), true);
+        // Dev actions are not counted (the perf loops send hundreds)
+        for (int i = 0; i < 30; ++i)
+            QCOMPARE(send(R"({"action": "ping"})").value("ok").toBool(), true);
+        // And the flood may go on once the bucket refills
+        QTest::qWait(200);
+        flood.write(R"({"op": "hello", "id": 101})" "\n");
+        QTRY_VERIFY_WITH_TIMEOUT((in += flood.readAll(), in.contains(R"("id":101,"ok":true)")), 3000);
+    }
+
+    void aClientThatIgnoresRateLimitedIsClosed()
+    {
+        // Refusals cost a parse and a reply each: past maxRefusedPerSecond
+        // in one second the connection goes, and nobody else's does
+        CommandServer::Limits limits = m_server->limits();
+        limits.opsPerSecond = 20;
+        limits.opsBurst = 10;
+        limits.maxRefusedPerSecond = 50;
+        m_server->setLimits(limits);
+        QTcpSocket flood;
+        flood.connectToHost(QHostAddress::LocalHost, m_server->port());
+        QVERIFY(flood.waitForConnected(3000));
+        QByteArray burst;
+        for (int i = 0; i < 300; ++i)
+            burst += R"({"op": "hello"})" "\n";
+        flood.write(burst);
+        QElapsedTimer t;
+        t.start();
+        while (flood.state() == QAbstractSocket::ConnectedState && t.elapsed() < 5000) {
+            QCoreApplication::processEvents();
+            if (flood.waitForReadyRead(10))
+                flood.readAll();
+        }
+        QCOMPARE(flood.state(), QAbstractSocket::UnconnectedState);
+        QCOMPARE(send(R"({"op": "hello"})").value("ok").toBool(), true);
+    }
+
+    void aConnectLoopIsRefusedAtTheDoor()
+    {
+        // Step 7: connections a second per address (loopback is one
+        // address); past the burst they are closed before they cost a thread
+        // The fixture's own connection is accepted (on the server's thread)
+        // before the limits shrink, so it doesn't take one of the 5
+        QCOMPARE(send(R"({"op": "hello"})").value("ok").toBool(), true);
+        CommandServer::Limits limits = m_server->limits();
+        limits.loopbackConnectsPerSecond = 5;
+        limits.loopbackConnectsBurst = 5;
+        m_server->setLimits(limits);
+        int answered = 0, refused = 0;
+        for (int i = 0; i < 30; ++i) {
+            QTcpSocket s;
+            s.connectToHost(QHostAddress::LocalHost, m_server->port());
+            QVERIFY(s.waitForConnected(3000));   // the kernel accepts; the server then closes it
+            s.write(R"({"op": "hello", "id": 1})" "\n");
+            QByteArray in;
+            QElapsedTimer t;
+            t.start();
+            while (!in.contains('\n') && s.state() == QAbstractSocket::ConnectedState && t.elapsed() < 3000) {
+                QCoreApplication::processEvents();
+                if (s.waitForReadyRead(10))
+                    in += s.readAll();
+            }
+            in.contains(R"("ok":true)") ? ++answered : ++refused;
+        }
+        QVERIFY2(answered >= 5 && answered < 15, qPrintable(QStringLiteral("%1 answered").arg(answered)));
+        QVERIFY(refused > 0);
+        // The connection made before the loop is untouched, and the bucket refills
+        QCOMPARE(send(R"({"op": "hello"})").value("ok").toBool(), true);
+        QTest::qWait(400);
+        QCOMPARE(once(m_server->port(), R"({"op": "hello", "id": 2})" "\n").contains(R"("ok":true)"), true);
+    }
+
+    void aReaderThatStaysBehindIsClosed()
+    {
+        // Step 7: at maxUnsentBytes for maxBehindMs the connection goes (its
+        // stream with it), while another client still gets its replies
+        CommandServer::Limits limits = m_server->limits();
+        limits.maxUnsentBytes = 64 * 1024;
+        limits.maxBehindMs = 500;
+        m_server->setLimits(limits);
+        m_registry->add("fixture", &m_fixture);
+        StreamHub &hub = StreamHub::instance();
+        hub.declare("fixture.video");
+        QTcpSocket raw;
+        raw.setReadBufferSize(1);   // never reads
+        raw.connectToHost(QHostAddress::LocalHost, m_server->port());
+        QVERIFY(raw.waitForConnected(3000));
+        raw.write(R"({"op": "stream", "object": "fixture", "name": "video", "id": 1})" "\n");
+        QTRY_VERIFY_WITH_TIMEOUT(hub.wanted("fixture.video"), 3000);
+        hub.publishH264("fixture.video", QByteArray::fromHex("000000016742c01e0000000168ce3c80"), 0, false, true);
+        const QByteArray big = QByteArray("\x00\x00\x00\x01\x65", 5) + QByteArray(200 * 1024, '\x01');
+        QElapsedTimer t;
+        t.start();
+        int i = 0;
+        qint64 gone = -1;
+        while (t.elapsed() < 15000) {
+            hub.publishH264("fixture.video", big, i * 33333, i % 30 == 0, false);
+            ++i;
+            QTest::qWait(5);
+            if (!hub.wanted("fixture.video")) {
+                gone = t.elapsed();
+                break;
+            }
+            if (i % 50 == 0)   // the other client, meanwhile
+                QCOMPARE(send(R"({"op": "hello"})").value("ok").toBool(), true);
+        }
+        QVERIFY2(gone >= 0, "the reader that never reads was never closed");
+        QCOMPARE(send(R"({"op": "hello"})").value("ok").toBool(), true);
+    }
+
     void keyValueObjects()
     {
         // paramStore is a QQmlPropertyMap: keys, not declared properties

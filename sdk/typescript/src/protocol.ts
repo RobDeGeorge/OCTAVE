@@ -19,7 +19,9 @@ export interface ErrorReply {
   id?: Json
   ok: false
   error: string
-  code?: "unauthorised" | "forbidden"
+  code?: "unauthorised" | "forbidden" | "rateLimited"
+  /** With rateLimited: wait this long before sending again. */
+  retryAfterMs?: number
 }
 
 /** What `get` returns for a property holding a list model. */
@@ -301,7 +303,7 @@ export interface Ops {
 export type Request<O extends Op = Op> = { op: O; id?: Json } & Ops[O]['args']
 export type Reply = OkReply | ErrorReply
 /** The `code`s a failure reply can carry; every other failure is a message only. */
-export type ErrorCode = "unauthorised" | "forbidden"
+export type ErrorCode = "unauthorised" | "forbidden" | "rateLimited"
 export const ERROR_CODES: Record<ErrorCode, { description: string; since?: number; http?: number }> = {
   "unauthorised": {
     "description": "The connection is not trusted (protocol 2, pairing): it is not on this device with serviceLoopbackOpen on, and it has presented no valid token. Every op but `hello` and `pair` answers this until the client pairs or sends a valid token with `hello`. HTTP routes answer 401 for the same reason.",
@@ -310,6 +312,10 @@ export const ERROR_CODES: Record<ErrorCode, { description: string; since?: numbe
   },
   "forbidden": {
     "description": "The connection is trusted but its paired device lacks the permission scope this `set` / `call` / phone stream / dev action needs (docs/api/README.md, Permissions). The message names the member, the scope it needs and the scopes the device has. HTTP routes answer 401 for the same reason (`/export/...` needs `files`).",
+    "since": 2
+  },
+  "rateLimited": {
+    "description": "The connection sent more ops than its limit (docs/api/README.md, Limits per connection: 200 a second, 400 at once by default; dev actions are not counted). The op did not run. `retryAfterMs` says when the next one would pass; a client that keeps sending regardless (more than 4000 refusals in a second) has its connection closed.",
     "since": 2
   }
 }

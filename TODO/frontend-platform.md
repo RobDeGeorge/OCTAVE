@@ -17,7 +17,7 @@ What stops an outside developer today, in order of how much it hurts:
 4. There is no way to install a frontend: `--web-root` / `serviceWebRoot` takes one folder, a native frontend is a separate program the user starts themselves, and nothing restarts it.
 5. (Done, step 5.) A paired device got full control.
 6. No starter projects; the smallest examples are the SDKs themselves.
-7. Unmeasured behaviour with many clients: subscription floods, a slow reader, a client that never reads (`tools/stream/service_load.py` is the baseline).
+7. (Done on the desktop, step 7.) Unmeasured behaviour with many clients.
 
 ## Steps
 
@@ -52,10 +52,9 @@ What stops an outside developer today, in order of how much it hurts:
 - Each is copy-and-go: its own README, no path dependencies into the repo.
 
 ### 7. Many clients at once
-**Effort:** M. **Device:** desktop, then Pi.
-- Extend `tools/stream/service_load.py`: 20 clients each subscribed to every PID, one client that never reads, one that floods `call`; measure what the car side and the QML UI lose.
-- Per-connection limits (queued bytes, ops a second) with a clear error code, and dropping a reader that stays behind, without slowing the others.
-- Results on the Pi, since that is the slowest head unit.
+**Done (2026-10-23, desktop):** `tools/stream/service_load.py` runs eight scenarios (20 clients on every PID, a client that never reads, a `call` flood, connect / subscribe / close churn, a WebSocket mix, all at once, the old baseline) headless and with the QML UI offscreen, with a probe for what the car and the screen lose; results in `wiki/utilities.html#many-clients`. Limits per connection (`CommandServer::Limits`; `docs/api/README.md`, "Limits per connection"): ops a second (`rateLimited`, `retryAfterMs`), closing a reader that stays 4 MB behind for 15 s, new connections a second per address.
+**Left:**
+- Results on the Pi, since that is the slowest head unit: run the harness there headless and with `--ui` (`--seconds 30`, all scenarios) and add its table next to the desktop one. Check the defaults against it, above all whether 200 ops a second from one client or 100 new local connections a second still leave the poll rate and the GUI round trip alone. **Effort:** S. **Device:** Pi.
 - This is also the groundwork for the process split in `TODO/open-backend.md`.
 
 ## Order

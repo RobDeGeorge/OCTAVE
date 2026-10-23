@@ -245,6 +245,17 @@ class ProtocolSpecTest(unittest.TestCase):
         with self.assertRaises(OctaveError):
             self.octave.get("nope")
 
+    def test_rate_limited(self):
+        # Past the burst (400 at once by default) an op is refused at once
+        n = 500
+        self.raw.sock.sendall(b"".join(b'{"op":"hello","id":%d}\n' % i for i in range(n)))
+        refused = [r for r in (self.raw.read_json() for _ in range(n)) if not r["ok"]]
+        self.assertTrue(refused, "500 ops at once were all answered")
+        for reply in refused[:5]:
+            self.check(reply, self.spec["$defs"]["errorReply"], "rateLimited")
+            self.assertEqual(reply["code"], "rateLimited")
+            self.assertGreater(reply["retryAfterMs"], 0)
+
     def test_invalid_json_line(self):
         self.raw.sock.sendall(b"{not json\n")
         reply = self.raw.read_json()

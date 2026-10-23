@@ -26,6 +26,7 @@
 #include <QtEndian>
 
 #include <atomic>
+#include <cmath>
 #if defined(Q_OS_UNIX) && !defined(Q_OS_WASM)
 #include <fcntl.h>
 #include <poll.h>
@@ -33,12 +34,33 @@
 #endif
 #include <cstdio>
 #include <memory>
+#ifdef Q_OS_WIN
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
+#include <sys/socket.h>
+#endif
 
 Q_LOGGING_CATEGORY(lcCommand, "octave.service")
 
 namespace OctaveService {
 
 namespace {
+// Who is on the other end of an accepted socket, before any thread or
+// QTcpSocket exists for it (null if the system won't say)
+QHostAddress peerOf(qintptr fd)
+{
+    sockaddr_storage peer{};
+#ifdef Q_OS_WIN
+    int length = sizeof peer;
+#else
+    socklen_t length = sizeof peer;
+#endif
+    if (::getpeername(fd, reinterpret_cast<sockaddr *>(&peer), &length) != 0)
+        return QHostAddress();
+    return QHostAddress(reinterpret_cast<const sockaddr *>(&peer));
+}
+
 // The connection a request on this (connection) thread came in on
 thread_local std::shared_ptr<Connection> t_connection;
 thread_local QElapsedTimer t_lastHeard;   // the connection's last bytes in
@@ -72,6 +94,12 @@ public:
 protected:
     void incomingConnection(qintptr fd) override
     {
+        if (!admitConnect(fd)) {
+            QTcpSocket refused;
+            if (refused.setSocketDescriptor(fd))
+                refused.abort();
+            return;
+        }
         {
             // Every client is a thread: past the cap, refuse at the door
             QMutexLocker l(&m_lock);
@@ -106,6 +134,45 @@ protected:
     }
 
 private:
+    // New connections a second from one address (all of loopback counts as
+    // one, with its own, looser numbers): a token bucket each. A client in
+    // a reconnect loop is refused at the door, before it costs a thread
+    bool admitConnect(qintptr fd)
+    {
+        const CommandServer::Limits &limits = m_owner->limits();
+        const QHostAddress peer = peerOf(fd);
+        const bool loopback = peer.isLoopback();
+        const int perSecond = loopback ? limits.loopbackConnectsPerSecond : limits.connectsPerSecond;
+        const int burst = loopback ? limits.loopbackConnectsBurst : limits.connectsBurst;
+        if (perSecond <= 0)
+            return true;
+        const QString key = loopback ? QStringLiteral("loopback") : peer.toString();
+        QMutexLocker l(&m_lock);
+        if (!m_connectClock.isValid())
+            m_connectClock.start();
+        const qint64 now = m_connectClock.nsecsElapsed();
+        if (m_connectBuckets.size() > 1024) {   // forget addresses that are back to full
+            for (auto it = m_connectBuckets.begin(); it != m_connectBuckets.end();)
+                it = double(now - it->lastNs) * 1e-9 * perSecond >= burst ? m_connectBuckets.erase(it) : ++it;
+        }
+        auto it = m_connectBuckets.find(key);
+        if (it == m_connectBuckets.end())
+            it = m_connectBuckets.insert(key, ConnectBucket{double(burst), now, -1});
+        it->tokens = qMin<double>(burst, it->tokens + double(now - it->lastNs) * 1e-9 * perSecond);
+        it->lastNs = now;
+        if (it->tokens >= 1) {
+            it->tokens -= 1;
+            return true;
+        }
+        // One warning a second per address, not one per refusal
+        if (it->warnedNs < 0 || now - it->warnedNs > 1000000000LL) {
+            it->warnedNs = now;
+            qCWarning(lcCommand).noquote() << "connection refused:" << (loopback ? QStringLiteral("this device") : key)
+                                           << "connects more than" << perSecond << "times a second";
+        }
+        return false;
+    }
+
     void serve(qintptr fd)
     {
         QTcpSocket sock;
@@ -219,14 +286,35 @@ private:
         return sock.waitForReadyRead(20);
     }
 
-    static void flush(QTcpSocket &sock)
+    static void flush(QTcpSocket &sock, int timeoutMs = 10000)
     {
         if (sock.bytesToWrite() > 0)
-            sock.waitForBytesWritten(10000);
+            sock.waitForBytesWritten(timeoutMs);
+    }
+
+    // False once the client has left maxUnsentBytes unread for maxBehindMs
+    // (it gets no more events meanwhile, its queue drops): the caller closes
+    // the connection, and its subscriptions, demand and streams go with it.
+    // `behind` runs while it is at the cap
+    bool keepingUp(QTcpSocket &sock, QElapsedTimer &behind)
+    {
+        if (sock.bytesToWrite() < m_owner->limits().maxUnsentBytes) {
+            behind.invalidate();
+            return true;
+        }
+        if (!behind.isValid())
+            behind.start();
+        if (behind.elapsed() <= m_owner->limits().maxBehindMs)
+            return true;
+        qCWarning(lcCommand).noquote() << "closing" << sock.peerAddress().toString()
+                                       << ": it has not read for" << behind.elapsed() << "ms";
+        sock.abort();
+        return false;
     }
 
     void serveLines(QTcpSocket &sock, QByteArray buf, Connection &connection)
     {
+        QElapsedTimer behind;
         do {
             int nl;
             while ((nl = buf.indexOf('\n')) >= 0) {
@@ -242,6 +330,10 @@ private:
                     return;
                 }
                 sock.write(m_owner->handleLine(line));
+                if (connection.isClosed()) {   // closed by that op (a flood ignoring rateLimited)
+                    flush(sock, 1000);
+                    return;
+                }
             }
             // Events only after the replies: a subscribe's reply (its sub
             // id) always precedes that subscription's first event. Only this
@@ -266,7 +358,10 @@ private:
                 }
                 sock.write(item.bytes);
             }
-            flush(sock);
+            if (!keepingUp(sock, behind))
+                return;
+            // Behind: short waits, so the check above runs every ~100 ms
+            flush(sock, behind.isValid() ? 100 : 10000);
         } while (pump(sock, buf));
     }
 
@@ -368,6 +463,7 @@ private:
             sock.write(Ws::encodeFrame(Ws::Text, json));
         };
         QByteArray incoming;
+        QElapsedTimer behind;
         do {
             decoder.feed(incoming);
             incoming.clear();
@@ -377,6 +473,10 @@ private:
                 case Ws::Text:
                 case Ws::Binary:
                     sendText(m_owner->handleLine(message.payload.trimmed()));
+                    if (connection.isClosed()) {
+                        flush(sock, 1000);
+                        return;
+                    }
                     break;
                 case Ws::Ping:
                     sock.write(Ws::encodeFrame(Ws::Pong, message.payload));
@@ -405,7 +505,9 @@ private:
                 else
                     sendText(item.bytes);
             }
-            flush(sock);
+            if (!keepingUp(sock, behind))
+                return;
+            flush(sock, behind.isValid() ? 100 : 10000);
         } while (pump(sock, incoming));
     }
 
@@ -414,6 +516,13 @@ private:
     QMutex m_lock;
     QList<QThread *> m_clients;
     QHash<QString, int> m_perAddress;   // live connections per non-loopback address
+    struct ConnectBucket {
+        double tokens;
+        qint64 lastNs;
+        qint64 warnedNs;
+    };
+    QHash<QString, ConnectBucket> m_connectBuckets;   // admitConnect(), per address
+    QElapsedTimer m_connectClock;
 };
 
 // ---------------------------------------------------------------------------
@@ -553,6 +662,31 @@ void Connection::close()
     }
     for (auto &c : cleanups)
         CommandServer::postGui(std::move(c));
+}
+
+bool Connection::takeOp(int perSecond, int burst, int *retryAfterMs)
+{
+    if (perSecond <= 0)
+        return true;
+    if (!m_opClock.isValid()) {
+        m_opClock.start();
+        m_opTokens = burst;
+    }
+    const qint64 now = m_opClock.nsecsElapsed();
+    m_opTokens = qMin<double>(burst, m_opTokens + double(now - m_opLastNs) * 1e-9 * perSecond);
+    m_opLastNs = now;
+    if (m_opTokens >= 1) {
+        m_opTokens -= 1;
+        return true;
+    }
+    if (now - m_opWindowNs > 1000000000LL) {
+        m_opWindowNs = now;
+        m_opRefused = 0;
+    }
+    ++m_opRefused;
+    if (retryAfterMs)
+        *retryAfterMs = qMax(1, int(std::ceil((1 - m_opTokens) * 1000.0 / perSecond)));
+    return false;
 }
 
 void Connection::setPeer(bool loopback, const QString &address)
@@ -736,6 +870,24 @@ QByteArray CommandServer::handleLine(const QByteArray &line)
         const QString name = cmd.value(isOp ? QStringLiteral("op") : QStringLiteral("action")).toString();
         if (cmd.contains(QStringLiteral("id")))
             reply[QStringLiteral("id")] = cmd.value(QStringLiteral("id"));
+        // Ops a second, per connection: refused before any work, so a flood
+        // costs the parse and this reply. Dev actions are not counted
+        if (isOp) {
+            int retryMs = 0;
+            const std::shared_ptr<Connection> c = currentConnection();
+            if (c && !c->takeOp(m_limits.opsPerSecond, m_limits.opsBurst, &retryMs)) {
+                reply[QStringLiteral("ok")] = false;
+                reply[QStringLiteral("error")] = QStringLiteral("too many requests: at most %1 a second").arg(m_limits.opsPerSecond);
+                reply[QStringLiteral("code")] = QStringLiteral("rateLimited");
+                reply[QStringLiteral("retryAfterMs")] = retryMs;
+                // Refusals cost too: a client that keeps going regardless is closed
+                if (c->refusedThisSecond() > m_limits.maxRefusedPerSecond && !c->isClosed()) {
+                    qCWarning(lcCommand).noquote() << "closing" << c->peerAddress() << ": it ignores rateLimited";
+                    c->close();
+                }
+                return QJsonDocument(reply).toJson(QJsonDocument::Compact) + '\n';
+            }
+        }
         // Trust is checked as each op runs, so a revoke takes effect at once
         // Only the op form is ever exempt: {"action": "hello"} is checked
         if (m_trusted && !(isOp && m_openOps.contains(name))) {
