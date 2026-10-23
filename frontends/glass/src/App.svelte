@@ -4,7 +4,8 @@
   import Icon from './ui/Icon.svelte'
   import { route } from './lib/router'
   import { octave } from './lib/octave'
-  import { toasts } from './lib/stores'
+  import { toasts, activeTheme } from './lib/stores'
+  import { tint, applyAccent } from './lib/theme'
   import Home from './pages/Home.svelte'
   import Media from './pages/Media.svelte'
   import Obd from './pages/Obd.svelte'
@@ -17,6 +18,7 @@
   const retryIn = octave.retryIn
   const pages: Record<string, any> = { home: Home, media: Media, obd: Obd, dashboards: Dashboards, trips: Trips, settings: Settings, more: More }
   const Page = $derived(pages[$route.page] ?? Home)
+  $effect(() => { applyAccent($tint ? (($activeTheme.accent as string) ?? null) : null) })
 </script>
 
 <Backdrop />
