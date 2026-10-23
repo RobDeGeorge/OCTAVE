@@ -67,7 +67,7 @@ export function fmt(info: ParamInfo | undefined, native: number | undefined): st
 }
 
 /** The current cover, served by the app at GET /art; the revision busts the cache. '' when there is none. */
-export const artSrc: Readable<string> = derived(nowPlaying, (np) => (np.hasTrack && np.artRevision > 0 ? `${import.meta.env.BASE_URL.replace(/\/$/, '')}/art?rev=${np.artRevision}` : ''))
+export const artSrc: Readable<string> = derived(nowPlaying, (np) => (np.hasTrack && np.artRevision > 0 ? `${import.meta.env.BASE_URL}art?rev=${np.artRevision}` : ''))
 
 export const albumColors = octave.prop<Record<string, Json>>('settingsManager', 'albumArtColors', {})
 

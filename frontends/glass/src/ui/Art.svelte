@@ -6,7 +6,7 @@
   function hueOf(s: string): number { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 360 }
   const h = $derived(hueOf(title + artist))
   const initials = $derived((title || '♪').trim().slice(0, 1).toUpperCase())
-  const usable = $derived(url !== '' && url !== failed && (url.startsWith('/') || /^https?:\/\//.test(url) || url.startsWith('art?')))
+  const usable = $derived(url !== '' && url !== failed && !url.startsWith('file:'))
 </script>
 
 <div class="art" style="--s:{size}px; --h:{h}">

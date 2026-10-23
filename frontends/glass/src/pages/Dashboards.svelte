@@ -193,7 +193,7 @@
       <div class="edit-layout">
         <div class="glass palette">
           <div class="small muted">Tap a widget, then tap the grid</div>
-          {#each widgets as w}
+          {#each $widgets as w}
             <button class="pal" class:on={placing?.type === w.type} onclick={() => (placing = placing?.type === w.type ? null : w)}><span class="glyph">{w.glyph}</span>{w.displayName}</button>
           {/each}
           <div class="row"><span class="small">Columns</span><input class="field tiny num" type="number" min="1" max="48" bind:value={spec.gridColumns} onchange={() => (dirty = true)} /></div>
@@ -252,7 +252,7 @@
               <div class="row stack"><span class="small">{cp.replace(/Color$/, '').replace(/^./, (c) => c.toUpperCase())} colour</span>
                 <div class="swatches">
                   <button class="sw theme" class:on={!propVal(cp)} aria-label="Theme colour" onclick={() => setProp(cp, null)}>T</button>
-                  {#each colorSwatches as c}<button class="sw" class:on={String(propVal(cp) ?? '').toUpperCase() === c} style="background:{c}" aria-label={c} onclick={() => setProp(cp, c)}></button>{/each}
+                  {#each $colorSwatches as c}<button class="sw" class:on={String(propVal(cp) ?? '').toUpperCase() === c} style="background:{c}" aria-label={c} onclick={() => setProp(cp, c)}></button>{/each}
                 </div></div>
             {/each}
           {:else}

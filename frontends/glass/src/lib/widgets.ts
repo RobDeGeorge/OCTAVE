@@ -1,7 +1,11 @@
-// The widget catalog, mirroring frontend/dashboards/WidgetCatalog.qml:
-// which types exist, their default span, the PID kinds they accept, and the
-// props the editor offers. Specs store paramUnit props in the PID's native
-// unit; the renderer converts them with the catalog's displayScale / offset.
+// The widget catalog: which types exist, their default span, the PID kinds
+// they accept, and the props the editor offers. The app serves it as the
+// constant property dashboardManager.widgetCatalog (docs/api/widget-catalog.json);
+// `catalogStore` starts from the copy below (the same data, for an older
+// app) and takes the served one when it arrives. Specs store paramUnit props
+// in the PID's native unit; the renderer converts them with displayScale / offset.
+import { derived, readable, type Readable } from 'svelte/store'
+import { octave } from './octave'
 export interface EditableProp { key: string; label: string; kind: 'bool' | 'int' | 'real' | 'enum' | 'string'; def: unknown; min?: number; max?: number; options?: string[]; paramUnit?: boolean }
 export interface WidgetMeta {
   type: string; displayName: string; glyph: string; defaultColSpan: number; defaultRowSpan: number
@@ -11,7 +15,7 @@ const b = (key: string, label: string, def: boolean): EditableProp => ({ key, la
 const i = (key: string, label: string, def: number, min: number, max: number): EditableProp => ({ key, label, kind: 'int', def, min, max })
 const r = (key: string, label: string, def: number | null, min?: number, max?: number, paramUnit = false): EditableProp => ({ key, label, kind: 'real', def, min, max, paramUnit })
 
-export const widgets: WidgetMeta[] = [
+const builtIn: WidgetMeta[] = [
   { type: 'CircularGauge', displayName: 'Circular', glyph: '◯', defaultColSpan: 4, defaultRowSpan: 4, supportedKinds: ['*'], labelProps: true, rangeProps: true, colorProps: ['fillColor', 'needleColor'],
     editableProps: [b('showNeedle', 'Needle', false), b('showTicks', 'Ticks', true), b('showCenterReadout', 'Readout', true), r('redlineStart', 'Redline start', null, undefined, undefined, true),
       i('decimals', 'Decimals', 0, 0, 4), i('majorTickCount', 'Major ticks', 9, 2, 20), i('minorTicksPerMajor', 'Minor per major', 5, 0, 10), r('startAngle', 'Start angle', 135, 0, 360), r('sweepAngle', 'Sweep angle', 270, 30, 360)] },
@@ -37,8 +41,24 @@ export const widgets: WidgetMeta[] = [
     editableProps: [b('showArt', 'Album art', true), b('showArtist', 'Artist', true), b('showProgress', 'Progress', true)] },
   { type: 'MediaControlsWidget', displayName: 'Media Keys', glyph: '▶', defaultColSpan: 4, defaultRowSpan: 2, supportedKinds: [], labelProps: false, rangeProps: false, colorProps: ['accentColor'], editableProps: [] },
 ]
-export const colorSwatches = ['#00BFFF', '#2ECC71', '#F1C40F', '#E67E22', '#E74C3C', '#FF00AA', '#9C27B0', '#FFFFFF']
-export function metaFor(type: string): WidgetMeta | undefined { return widgets.find((w) => w.type === type) }
+const builtInSwatches = ['#00BFFF', '#2ECC71', '#F1C40F', '#E67E22', '#E74C3C', '#FF00AA', '#9C27B0', '#FFFFFF']
+
+export interface Catalog { widgets: WidgetMeta[]; colorSwatches: string[] }
+/** The live catalog: the served one when the app has it, else the built-in copy. */
+export const catalogStore: Readable<Catalog> = readable<Catalog>({ widgets: builtIn, colorSwatches: builtInSwatches }, (set) => {
+  const unsub = octave.status.subscribe((s) => {
+    if (s !== 'online') return
+    octave.get<Catalog | null>('dashboardManager', 'widgetCatalog')
+      .then((c) => { if (c && Array.isArray(c.widgets) && c.widgets.length) set({ widgets: c.widgets, colorSwatches: c.colorSwatches ?? builtInSwatches }) })
+      .catch(() => { /* an app without the property: keep the copy */ })
+  })
+  return unsub
+})
+export const widgets: Readable<WidgetMeta[]> = derived(catalogStore, (c) => c.widgets)
+export const colorSwatches: Readable<string[]> = derived(catalogStore, (c) => c.colorSwatches)
+let current: Catalog = { widgets: builtIn, colorSwatches: builtInSwatches }
+catalogStore.subscribe((c) => (current = c))
+export function metaFor(type: string): WidgetMeta | undefined { return current.widgets.find((w) => w.type === type) }
 export function acceptsKind(meta: WidgetMeta, kind: string): boolean { return meta.supportedKinds.includes('*') || meta.supportedKinds.includes(kind) }
 /** Props of a type whose values are in the PID's unit. */
 export function paramUnitProps(type: string): string[] {
