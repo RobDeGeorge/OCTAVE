@@ -6,6 +6,7 @@
   import Modal from '../ui/Modal.svelte'
   import Toggle from '../ui/Toggle.svelte'
   import SeriesChart from '../ui/SeriesChart.svelte'
+  import { mediaUrl } from '../lib/media'
 
   interface Trip { id: number; startIso: string; endIso?: string; durationS: number; sampleCount: number; open: boolean; make: string; modelYear: number; vin: string; clean: boolean; paramCount?: number }
   interface ParamStat { id: string; title: string; unit: string; min: number; max: number; avg: number; count: number; first: number; last: number }
@@ -22,12 +23,13 @@
   let series = $state<{ t: number; v: number; lo: number; hi: number }[]>([])
   let loadingSeries = $state(false)
   let confirm = $state<'delete' | 'clear' | null>(null)
+  let exported = $state<number | null>(null)   // the trip whose export is ready to download
 
   $effect(() => {
     const unsubs = [
       octave.signal('tripRecorder', 'detailReady', (id, d) => { if (id === selected) detail = d as unknown as Detail }),
       octave.signal('tripRecorder', 'seriesReady', (id, p, pts) => { if (id === selected && p === param) { series = pts as unknown as typeof series; loadingSeries = false } }),
-      octave.signal('tripRecorder', 'exportFinished', (id, path) => toast(path ? `Exported to ${path}` : 'Export failed', path ? 'ok' : 'bad')),
+      octave.signal('tripRecorder', 'exportFinished', (id, path) => { exported = path ? Number(id) : null; toast(path ? `Exported on the head unit: ${String(path).split('/').pop()}` : 'Export failed', path ? 'ok' : 'bad') }),
       octave.signal('tripRecorder', 'tripEnded', () => { if (selected) octave.call('tripRecorder', 'requestDetail', selected).catch(() => {}) }),
     ]
     return () => unsubs.forEach((u) => u())
@@ -93,6 +95,12 @@
               <button class="btn danger" disabled={detail.open} onclick={() => (confirm = 'delete')}><Icon name="trash" />Delete</button>
             </div>
           </div>
+          {#if exported === detail.id}
+            <div class="wrap dl">
+              <a class="btn" href={mediaUrl('/export/trip')} download="trip.csv"><Icon name="download" />Download CSV</a>
+              <a class="btn" href={mediaUrl('/export/trip', { format: 'json' })} download="trip.json"><Icon name="download" />Download JSON</a>
+            </div>
+          {/if}
           <div class="stats">
             <div><span class="k">Duration</span><span class="v num">{hms(detail.durationS)}</span></div>
             {#if detail.distanceMiles !== undefined}<div><span class="k">Distance</span><span class="v num">{detail.distanceMiles.toFixed(1)}<small> mi</small></span></div>{/if}
@@ -168,5 +176,7 @@
   .events { list-style: none; margin: 0; padding: 0; }
   .events li { display: flex; gap: 16px; padding: 8px 0; border-top: 1px solid var(--glass-edge); }
   .bad { color: var(--bad); }
+  .dl { margin: 0 0 12px; }
+  a.btn { text-decoration: none; }
   @media (max-width: 760px), (max-aspect-ratio: 1/1) { .layout { grid-template-columns: 1fr; } }
 </style>
