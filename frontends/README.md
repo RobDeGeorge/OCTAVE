@@ -10,6 +10,8 @@ OCTAVE's managers are served to any program over the service API (`docs/api/`, `
 
 Each has a README: how to run it, its keys, its pages, which API objects it uses, and what it can't do yet.
 
+[`PARITY.md`](PARITY.md) checks, feature by feature, which of these reaches each control the QML app has, and lists what only the QML app can do until the backend adds it.
+
 ## Running one against a simulated car
 
 ```bash
