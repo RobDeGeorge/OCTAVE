@@ -1138,7 +1138,7 @@ export interface SettingsManager {
     set_album_art_colors: { args: [colorsJson: string]; returns: void }
     save_start_volume: { args: [volume: number]; returns: void }
     setCurrentVolume: { args: [volume: number]; returns: void }
-    save_media_folder: { args: [folderPath: string]; returns: void }
+    save_media_folder: { args: [folderPath: string]; returns: boolean }
     save_media_folder_url: { args: [url: string]; returns: boolean }
     save_auto_play_on_startup: { args: [enabled: boolean]; returns: void }
     save_persist_shuffle_state: { args: [enabled: boolean]; returns: void }

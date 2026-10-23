@@ -285,6 +285,7 @@ Flickable {
                         spacing: App.Spacing.overallSpacing
                         Text {
                             Layout.fillWidth: true
+                            textFormat: Text.PlainText   // a client chose this name
                             text: modelData.name + "  \u2022  last used "
                                   + (modelData.lastUsed ? new Date(modelData.lastUsed).toLocaleString(Qt.locale(), Locale.ShortFormat) : "never")
                             color: App.Style.primaryTextColor

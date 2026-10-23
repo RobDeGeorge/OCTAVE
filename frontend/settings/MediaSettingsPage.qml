@@ -104,8 +104,8 @@ Flickable {
 
                             onEditingFinished: {
                                 if (text.trim() !== "" && settingsManager) {
-                                    settingsManager.save_media_folder(text)
-                                    pageRoot.folderError = ""
+                                    pageRoot.folderError = settingsManager.save_media_folder(text)
+                                        ? "" : "Not a folder OCTAVE can use"
                                 }
                             }
                         }

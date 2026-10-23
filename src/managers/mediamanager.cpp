@@ -3213,7 +3213,9 @@ QString MediaManager::get_default_media_dir()
 
 QStringList MediaManager::musicBrowseRoots() const
 {
-    QStringList roots{QDir::homePath(), QStandardPaths::writableLocation(QStandardPaths::MusicLocation),
+    // Not the whole home folder: its Music folder, the app's own media
+    // folder, removable media and the folder in use
+    QStringList roots{QStandardPaths::writableLocation(QStandardPaths::MusicLocation),
                       m_defaultMediaDir,
                       QStringLiteral("/media"), QStringLiteral("/mnt"), QStringLiteral("/run/media"),
                       QStringLiteral("/storage")};

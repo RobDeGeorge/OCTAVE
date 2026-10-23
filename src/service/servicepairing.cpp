@@ -4,6 +4,7 @@
 
 #include <QCryptographicHash>
 #include <QDateTime>
+#include <QHostAddress>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QLoggingCategory>
@@ -38,10 +39,10 @@ ServicePairing::ServicePairing(SettingsManager *settings, QObject *parent)
     , m_settings(settings)
 {
     if (m_settings) {
-        m_serviceEnabled = m_settings->get_setting(QStringLiteral("serviceEnabled")).toBool();
-        const QVariant open = m_settings->get_setting(QStringLiteral("serviceLoopbackOpen"));
+        m_serviceEnabled = m_settings->fileOnlySetting(QStringLiteral("serviceEnabled")).toBool();
+        const QVariant open = m_settings->fileOnlySetting(QStringLiteral("serviceLoopbackOpen"));
         m_loopbackOpen = open.isValid() ? open.toBool() : true;
-        for (const QVariant &v : m_settings->get_setting(QStringLiteral("serviceTokens")).toList()) {
+        for (const QVariant &v : m_settings->fileOnlySetting(QStringLiteral("serviceTokens")).toList()) {
             const QVariantMap m = v.toMap();
             Device d{m.value(QStringLiteral("id")).toString(), m.value(QStringLiteral("name")).toString(),
                      m.value(QStringLiteral("hash")).toString(), m.value(QStringLiteral("created")).toLongLong(),
@@ -64,6 +65,21 @@ ServicePairing::ServicePairing(SettingsManager *settings, QObject *parent)
             m_tick.stop();
         emit pairingChanged();
     });
+}
+
+QString ServicePairing::peerKey(const QString &address)
+{
+    const QHostAddress a(address);
+    if (a.protocol() != QAbstractSocket::IPv6Protocol)
+        return address;
+    bool v4 = false;
+    const quint32 mapped = a.toIPv4Address(&v4);
+    if (v4)
+        return QHostAddress(mapped).toString();
+    Q_IPV6ADDR bytes = a.toIPv6Address();
+    for (int i = 8; i < 16; ++i)
+        bytes[i] = 0;
+    return QHostAddress(bytes).toString() + QStringLiteral("/64");
 }
 
 QString ServicePairing::hashOf(const QString &token)
@@ -127,7 +143,8 @@ QString ServicePairing::pair(const QString &code, const QString &name, const QSt
                 *error = why;
             return QString();
         };
-        if (m_failuresByPeer.value(peer) >= kMaxFailuresPerPeer)
+        const QString key = peerKey(peer);
+        if (m_failuresByPeer.value(key) >= kMaxFailuresPerPeer)
             return refuse(QStringLiteral("too many wrong codes from this address"));
         // One attempt a second across every client
         if (m_lastAttempt.isValid() && m_lastAttempt.elapsed() < kAttemptIntervalMs)
@@ -136,7 +153,7 @@ QString ServicePairing::pair(const QString &code, const QString &name, const QSt
         if (m_code.isEmpty() || m_codeAge.elapsed() >= kCodeLifetimeMs)
             return refuse(QStringLiteral("no pairing code is showing on the head unit"));
         if (!sameBytes(code.toLatin1(), m_code.toLatin1())) {
-            ++m_failuresByPeer[peer];
+            ++m_failuresByPeer[key];
             if (++m_tries >= kMaxTries)
                 m_code.clear();   // void: the head unit has to show a new one
             return refuse(QStringLiteral("wrong code"));
@@ -195,8 +212,16 @@ QString ServicePairing::mintTicket(const QString &tokenId)
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
     for (auto it = m_tickets.begin(); it != m_tickets.end();)
         it = it->expires <= now ? m_tickets.erase(it) : std::next(it);
+    // A bounded table: past kMaxTickets the one expiring first goes
+    while (m_tickets.size() >= kMaxTickets) {
+        auto oldest = m_tickets.begin();
+        for (auto it = m_tickets.begin(); it != m_tickets.end(); ++it)
+            if (it->seq < oldest->seq)
+                oldest = it;
+        m_tickets.erase(oldest);
+    }
     const QString ticket = randomHex(16);
-    m_tickets.insert(hashOf(ticket), Ticket{tokenId, now + kTicketLifetimeMs});
+    m_tickets.insert(hashOf(ticket), Ticket{tokenId, now + kTicketLifetimeMs, ++m_ticketSeq});
     return ticket;
 }
 

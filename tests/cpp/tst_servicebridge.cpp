@@ -456,6 +456,9 @@ private slots:
         QJsonObject hello = a.send(R"({"op": "hello", "id": 1})");
         QCOMPARE(hello.value("result").toObject().value("protocolVersion").toInt(), 2);
         QCOMPARE(hello.value("result").toObject().value("auth").toString(), QStringLiteral("untrusted"));
+        // Only what pairing needs: no app version or build, no object list
+        QVERIFY(!hello.value("result").toObject().contains("objects"));
+        QVERIFY(!hello.value("result").toObject().contains("app"));
         QJsonObject refused = a.send(R"({"op": "get", "object": "fixture", "property": "level", "id": 2})");
         QCOMPARE(refused.value("ok").toBool(), false);
         QCOMPARE(refused.value("code").toString(), QStringLiteral("unauthorised"));

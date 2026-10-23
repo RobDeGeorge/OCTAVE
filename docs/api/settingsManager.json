@@ -241,7 +241,7 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "bool"
         },
         {
             "kind": "slot",

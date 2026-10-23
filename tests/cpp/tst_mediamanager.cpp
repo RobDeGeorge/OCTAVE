@@ -162,6 +162,15 @@ private slots:
         QFile::remove(path);
     }
 
+    void browseRootsLeaveTheHomeFolderOut()
+    {
+        MediaManager mm;
+        const QStringList roots = mm.musicBrowseRoots();
+        QVERIFY(!roots.contains(QDir::homePath()));
+        QVERIFY(!roots.contains(QDir::rootPath()));
+        QVERIFY(mm.browse_music_folders(QDir::homePath()).contains("error"));
+    }
+
     void libraryArtOnlyFromTheArtCache()
     {
         // GET /art?song=: a library song's cover through the manager's own

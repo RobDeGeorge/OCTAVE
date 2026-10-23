@@ -55,9 +55,10 @@ class ServicePairing : public QObject
 
 public:
     static constexpr int kCodeLifetimeMs = 120000;
-    static constexpr int kMaxTries = 5;
+    static constexpr int kMaxTries = 20;               // wrong tries, all addresses, before a code is void
+    static constexpr int kMaxTickets = 256;
     static constexpr int kAttemptIntervalMs = 1000;
-    static constexpr int kMaxFailuresPerPeer = 10;
+    static constexpr int kMaxFailuresPerPeer = 10;     // per address (an IPv6 /64), until restart
     static constexpr qint64 kTicketLifetimeMs = 10 * 60 * 1000;
 
     explicit ServicePairing(SettingsManager *settings, QObject *parent = nullptr);
@@ -87,6 +88,8 @@ public:
     // local process: then only good from this device)
     QString mintTicket(const QString &tokenId);
     bool checkTicket(const QString &ticket, bool peerLoopback) const;
+    // The address a limit counts by: IPv4 as is, IPv6 by its /64
+    static QString peerKey(const QString &address);
 
 signals:
     void pairingChanged();
@@ -106,6 +109,7 @@ private:
     void persistLater();
     static QString hashOf(const QString &token);
 
+
     SettingsManager *m_settings;
     mutable QMutex m_lock;
     QList<Device> m_devices;
@@ -117,7 +121,9 @@ private:
     struct Ticket {
         QString tokenId;
         qint64 expires = 0;
+        quint64 seq = 0;   // minting order: the oldest goes first when full
     };
+    quint64 m_ticketSeq = 0;
     QHash<QString, Ticket> m_tickets;   // by the ticket's SHA-256
     QElapsedTimer m_lastUsedWrite;
     QTimer m_tick;   // the countdown on screen, and the code's expiry

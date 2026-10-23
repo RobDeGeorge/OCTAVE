@@ -214,6 +214,7 @@ void ServiceBridge::install(CommandServer &server)
             tokenRejected = id.isEmpty();
             c->setTokenId(id);   // a rejected token also drops an earlier one
         }
+        const bool isTrusted = !c || trusted(*c);
         QVariantMap reply{
             {QStringLiteral("protocolVersion"), kProtocolVersion},
             {QStringLiteral("app"), QVariantMap{{QStringLiteral("version"), m_app.version},
@@ -221,9 +222,14 @@ void ServiceBridge::install(CommandServer &server)
                                                                                            : QStringLiteral("release")},
                                                 {QStringLiteral("headless"), m_app.headless}}},
             {QStringLiteral("objects"), m_registry->names()},
-            {QStringLiteral("auth"), (!c || trusted(*c)) ? QStringLiteral("trusted") : QStringLiteral("untrusted")},
+            {QStringLiteral("auth"), isTrusted ? QStringLiteral("trusted") : QStringLiteral("untrusted")},
             {QStringLiteral("loopbackOpen"), m_pairing ? m_pairing->loopbackOpen() : true},
         };
+        // An untrusted client learns only enough to pair: no version, no build, no objects
+        if (!isTrusted) {
+            reply.remove(QStringLiteral("app"));
+            reply.remove(QStringLiteral("objects"));
+        }
         if (tokenRejected)
             reply.insert(QStringLiteral("tokenRejected"), true);
         return QVariant(reply);
