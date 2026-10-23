@@ -64,6 +64,7 @@ Key managers (`src/managers/*.{h,cpp}`):
 - `nowplaying` — what is playing and its controls whichever source has them (phone while mirroring, else `mediamanager`); owns the phone-position clock and the phone/local hand-off (context property `nowPlaying`)
 - `parameterstore` — the latest value of every PID / IMU reading as a `QQmlPropertyMap` (context property `paramStore`, one notifying key per id, 33 ms coalescing), fed from `OBDManager::parameterSampled` and the IMU signals in `src/appcore.cpp`
 - `parametercatalog` — title / unit / range / kind / decimals of every OBD PID and IMU reading (context property `parameterCatalog`); new PIDs need a row here as well as a decoder in `elm327protocol` (`tst_parametercatalog` enforces it)
+- `themecatalog` — the colour themes as data (`frontend/themes.json`: the built-in palettes, their order, light / dark grouping) and `activeTheme` / `activeThemeName`, the palette in force resolved as `Style.qml` resolves it (album art > custom > built-in > fallback), live from the theme settings (context property `themeCatalog`); `Style.qml` keeps behaviour and animation
 - `shiftlightmanager` — RPM shift light rules (legacy flag migration, band match, flash phase) fed by `OBDManager::rpmChanged`; the QML overlays and home-card lamp only bind to `active` / `activeFlag` / `lit`
 - `obdadapterfinder` (+ `src/platform/bluezpairer`) — Bluetooth OBD adapter scan / PIN pairing / trust / connect (desktop Linux so far; see `TODO/obd-adapter-discovery.md`)
 - `esp32volumemanager` — Wireless rotary encoder (serial)
@@ -95,7 +96,7 @@ QML files using Qt Quick 2.15. Entry point is `Main.qml`.
 
 - Top-level QML files are full views/pages (e.g., `MediaPlayer.qml`, `CarMenu.qml`, `OBDMenu.qml`)
 - `BottomBar.qml` — Persistent navigation and volume control
-- `EnvironmentTheme.qml` — fixed style tokens; album-art colours are computed in C++ (`MediaManager`) and applied by `Style.qml`
+- `EnvironmentTheme.qml` — fixed style tokens; album-art colours are computed in C++ (`MediaManager`) and applied by `Style.qml`, which takes the theme palettes from `themeCatalog`
 - `Style.qml` / `Spacing.qml` — Design tokens
 - `settings/` — Settings pages and reusable settings UI components (cards, toggles, sliders, etc.)
 
