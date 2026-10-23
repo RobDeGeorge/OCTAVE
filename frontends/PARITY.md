@@ -56,7 +56,7 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 | Vehicle: VIN, make, year, supported PIDs, scan | `obdManager.vin`, `vehicleMake`, `vehicleModelYear`, `vehicleSupportedParameters`, `scan_vehicle` | Yes | Yes | Yes | Partial | Partial | retro-cluster, sunlight: readouts only |
 | Live values of every PID, demand-driven | `paramStore`, `parameterCatalog.displayParameters`, `obdManager.setParameterDemand` | Yes | Yes | Yes | Yes | Partial | sunlight: DRIVE's five and the open dashboard's PIDs |
 | Home OBD cards: choose, order | `settingsManager.homeOBDParameters`, `add_home_obd_parameter`, `remove_home_obd_parameter`, `move_home_obd_parameter` | Yes | Yes | Yes | No | No | console: settings table (list as JSON) |
-| Trouble codes: read, clear, MIL | `obdManager.read_dtc`, `clear_dtc`, `get_dtc_codes`, `dtcCodesChanged`, `milStatusChanged` | Yes | Yes | Yes | Yes | No | |
+| Trouble codes: read, clear, MIL | `obdManager.read_dtc`, `clear_dtc`, `get_dtc_codes`, `dtcCodesChanged`, `milStatusChanged` | Yes | Yes | Yes | Yes | Yes | |
 | Freeze frame | `obdManager.read_freeze_frame`, `freezeFrameChanged` | Yes | Yes | Yes | Yes | No | the backend returns only the storing code, no frame values (on lane A's optional list) |
 | Diagnostic mode, status, current codes | `obdManager.enter_diagnostic_mode`, `exit_diagnostic_mode`, `read_status`, `read_current_dtc` | Yes | Yes | Yes | No | No | |
 | Units (°F / °C, mph / km/h) | `settingsManager.gaugeTempUnit`, `gaugeSpeedUnit`, `displayParameters` | Yes | Yes | Yes | Yes | Yes | all follow the setting; QML, glass and the console can change it |
@@ -83,8 +83,8 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 
 | Feature | API | QML | glass | console | retro-cluster | sunlight | Notes |
 |---|---|---|---|---|---|---|---|
-| Recording state, current trip | `tripRecorder.recording`, `currentTripId`, `currentTripElapsedS`, `currentSampleCount` | Yes | Yes | Yes | Yes | Partial | sunlight: the REC lamp and timer |
-| Trip list and details | `tripRecorder.trips`, `requestDetail`, `detailReady` | Yes | Yes | Yes | Yes | No | |
+| Recording state, current trip | `tripRecorder.recording`, `currentTripId`, `currentTripElapsedS`, `currentSampleCount` | Yes | Yes | Yes | Yes | Yes | sunlight: the REC lamp and timer, and the open trip on TRIPS |
+| Trip list and details | `tripRecorder.trips`, `requestDetail`, `detailReady` | Yes | Yes | Yes | Yes | Yes | sunlight: the list and a summary in the user's units |
 | Charts of a trip's values | `tripRecorder.requestSeries`, `seriesReady` | Yes | Yes | Yes | No | No | console: one value at a time as a sparkline |
 | End trip now | `tripRecorder.endTripNow` | Yes | Yes | Yes | Yes | No | |
 | Export, delete, clear history | `tripRecorder.exportTrip`, `deleteTrip`, `clearHistory`, `lastExportPath` | Partial | Yes | Yes | Partial | No | QML: clear history only; exported files stay on the head unit (lane A 9c) |
