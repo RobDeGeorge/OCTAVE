@@ -189,6 +189,12 @@ jobs:
         with:
           node-version: '22'
 
+      - name: sdk/typescript (types current against docs/api, typecheck, tests)
+        working-directory: sdk/typescript
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+
       - name: glass (TypeScript + Svelte)
         working-directory: frontends/glass
         run: |

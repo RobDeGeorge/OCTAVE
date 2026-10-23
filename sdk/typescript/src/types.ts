@@ -1,5 +1,5 @@
 // Generated from docs/api/*.json by scripts/generate-types.mjs; do not edit.
-// Protocol version 1. Regenerate with `npm run generate`.
+// Protocol version 2. Regenerate with `npm run generate`.
 
 /** What `get` returns for a list-model property; the rows come from `rows` or a model subscription. */
 export interface ModelSummary { model: true; count: number; roles: string[] }
@@ -1587,4 +1587,4 @@ export interface Objects {
   volumeController: VolumeController
 }
 
-export const PROTOCOL_VERSION_OF_TYPES = 1
+export const PROTOCOL_VERSION_OF_TYPES = 2
