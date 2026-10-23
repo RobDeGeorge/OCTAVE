@@ -15,6 +15,9 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
+/// The cover is drawn as a dot matrix this many dots square.
+pub const ART_DOTS: u32 = 40;
+
 /// The protocol version this client was written against (docs/api/README.md).
 pub const PROTOCOL_VERSION: i64 = 1;
 
@@ -125,6 +128,10 @@ pub struct State {
     /// `tripRecorder.requestDetail` answers, by trip id
     pub trip_details: HashMap<i64, Value>,
     pub export_path: Option<String>,
+    /// nowPlaying.artRevision, and the cover fetched for it (GET /art) as
+    /// ART_DOTS x ART_DOTS luminance; None when there is no cover
+    pub art_revision: i64,
+    pub art: Option<(i64, Vec<u8>)>,
     pub last_error: Option<String>,
     /// When the last event arrived, for the RX lamp.
     pub last_rx: Option<Instant>,
@@ -165,6 +172,8 @@ impl State {
             trips: Vec::new(),
             trip_details: HashMap::new(),
             export_path: None,
+            art_revision: -1,
+            art: None,
             last_error: None,
             last_rx: None,
             dropped: 0,
@@ -258,6 +267,7 @@ impl State {
             ("nowPlaying", "canSeek") => np.can_seek = b(),
             ("nowPlaying", "canShuffle") => np.can_shuffle = b(),
             ("nowPlaying", "shuffled") => np.shuffled = b(),
+            ("nowPlaying", "artRevision") => self.art_revision = i(),
             ("volumeController", "percent") => self.volume = i(),
             ("volumeController", "muted") => self.muted = b(),
             ("volumeController", "effectivelyMuted") => self.effectively_muted = b(),
@@ -422,6 +432,7 @@ fn run(address: String, state: Arc<Mutex<State>>, rx: Receiver<Cmd>, repaint: Ar
             thread::spawn(move || read_loop(reader, state, alive, pending, repaint));
         }
 
+        let mut art_fetched = i64::MIN;
         let mut next_id = 0u64;
         let mut send = |stream: &mut TcpStream, mut msg: Value, what: String| -> bool {
             next_id += 1;
@@ -470,6 +481,21 @@ fn run(address: String, state: Arc<Mutex<State>>, rx: Receiver<Cmd>, repaint: Ar
                     return;
                 }
             }
+            // A new cover: fetch it off this thread
+            let want = state.lock().unwrap().art_revision;
+            if want >= 0 && want != art_fetched {
+                art_fetched = want;
+                let (address, state, repaint) = (address.clone(), state.clone(), repaint.clone());
+                thread::spawn(move || {
+                    let art = fetch_art(&address);
+                    let mut s = state.lock().unwrap();
+                    if s.art_revision == want {
+                        s.art = art.map(|dots| (want, dots));
+                    }
+                    drop(s);
+                    repaint();
+                });
+            }
         }
         let _ = stream.shutdown(std::net::Shutdown::Both);
         {
@@ -480,6 +506,26 @@ fn run(address: String, state: Arc<Mutex<State>>, rx: Receiver<Cmd>, repaint: Ar
         repaint();
         thread::sleep(Duration::from_millis(500));
     }
+}
+
+/// GET /art from the service: the current cover, scaled to ART_DOTS square
+/// luminance. None for no cover (404) or anything that won't decode.
+fn fetch_art(address: &str) -> Option<Vec<u8>> {
+    use std::io::Read;
+    let addr = resolve(address)?;
+    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(2)).ok()?;
+    stream.set_read_timeout(Some(Duration::from_secs(5))).ok()?;
+    write!(stream, "GET /art HTTP/1.1\r\nHost: {address}\r\nConnection: close\r\n\r\n").ok()?;
+    let mut reply = Vec::new();
+    stream.read_to_end(&mut reply).ok()?;
+    let split = reply.windows(4).position(|w| w == b"\r\n\r\n")?;
+    let head = String::from_utf8_lossy(&reply[..split]);
+    if !head.starts_with("HTTP/1.1 200") {
+        return None;
+    }
+    let img = image::load_from_memory(&reply[split + 4..]).ok()?;
+    let small = img.resize_exact(ART_DOTS, ART_DOTS, image::imageops::FilterType::Triangle).to_luma8();
+    Some(small.into_raw())
 }
 
 fn demand_msg(ids: &[String]) -> Value {
@@ -493,7 +539,7 @@ fn subscriptions() -> Vec<(&'static str, Vec<&'static str>, u64)> {
         ("parameterCatalog", vec!["displayParameters"], 0),
         (
             "nowPlaying",
-            vec!["source", "playing", "hasTrack", "title", "artist", "album", "durationMs", "canSeek", "canShuffle", "shuffled"],
+            vec!["source", "playing", "hasTrack", "title", "artist", "album", "durationMs", "canSeek", "canShuffle", "shuffled", "artRevision"],
             0,
         ),
         ("nowPlaying", vec!["positionMs"], 500),

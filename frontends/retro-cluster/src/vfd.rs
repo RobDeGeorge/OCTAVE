@@ -436,6 +436,29 @@ pub fn key(painter: &Painter, r: Rect, label: &str, active: bool, pressed: bool,
     painter.circle_filled(led, 3.0, if active { pal.lit } else { pal.ghost });
 }
 
+/// A cover image as a VFD would show it: `n` x `n` dots, each on or off by
+/// a 4x4 ordered dither of the luminance. No image: every dot ghosted.
+pub fn dither_art(painter: &Painter, r: Rect, n: usize, luma: Option<&[u8]>, pal: &Palette) {
+    const BAYER: [[f32; 4]; 4] = [[0.0, 8.0, 2.0, 10.0], [12.0, 4.0, 14.0, 6.0], [3.0, 11.0, 1.0, 9.0], [15.0, 7.0, 13.0, 5.0]];
+    painter.rect_filled(r.expand(4.0), CornerRadius::same(6), pal.bg);
+    let pitch = r.width() / n as f32;
+    let dot = vec2(pitch * 0.8, pitch * 0.8);
+    // Stretch the image's own range, so a dark cover still shows
+    let (lo, hi) = luma
+        .map(|l| (*l.iter().min().unwrap_or(&0) as f32, *l.iter().max().unwrap_or(&255) as f32))
+        .unwrap_or((0.0, 255.0));
+    for y in 0..n {
+        for x in 0..n {
+            let min = pos2(r.min.x + x as f32 * pitch, r.min.y + y as f32 * pitch);
+            let lit = luma.is_some_and(|l| {
+                let v = (l[y * n + x] as f32 - lo) / (hi - lo).max(1.0);
+                v > (BAYER[y % 4][x % 4] + 0.5) / 16.0
+            });
+            painter.rect_filled(Rect::from_min_size(min, dot), CornerRadius::ZERO, if lit { pal.lit } else { pal.ghost });
+        }
+    }
+}
+
 /// CRT-style scanlines over the whole screen.
 pub fn scanlines(painter: &Painter, r: Rect, spacing: f32) {
     let mut y = r.min.y;

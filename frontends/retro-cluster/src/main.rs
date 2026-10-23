@@ -776,9 +776,14 @@ impl Draw<'_> {
         } else {
             String::new()
         };
+        // The cover, as the display would show it: a dithered dot matrix
+        let art = s.art.as_ref().filter(|(rev, _)| *rev == s.art_revision).map(|(_, dots)| dots.as_slice());
+        vfd::dither_art(self.painter, self.cv.r(48.0, 606.0, 160.0, 160.0), link::ART_DOTS as usize, art, &pal);
+
+        let x0 = 226.0;
         let p = self.cv.s(3.6);
-        let cells = 33;
-        vfd::marquee(self.painter, self.cv.p(56.0, 614.0), p, cells, &line, (self.t * 2.4) as f32, pal.lit, pal.ghost);
+        let cells = 26;
+        vfd::marquee(self.painter, self.cv.p(x0, 614.0), p, cells, &line, (self.t * 2.4) as f32, pal.lit, pal.ghost);
 
         let source = match np.source.as_str() {
             "phone" => "PHONE",
@@ -787,13 +792,13 @@ impl Draw<'_> {
             other => other,
         };
         let status = format!("SRC {}   {}   {}", source.to_uppercase(), if np.playing { "▶ PLAY" } else { "‖ PAUSE" }, if np.shuffled { "SHUFFLE" } else { "" });
-        self.label(56.0, 652.0, 1.8, &status, self.dim());
+        self.label(x0, 652.0, 1.8, &status, self.dim());
 
         // The tape: tap to seek
-        let tape = self.cv.r(56.0, 680.0, 730.0, 22.0);
+        let tape = self.cv.r(x0, 680.0, 786.0 - x0, 22.0);
         let pos = np.position_now();
         let frac = if np.duration_ms > 0 { pos as f64 / np.duration_ms as f64 } else { 0.0 };
-        vfd::strip(self.painter, tape, 64, frac, pal.lit, &pal);
+        vfd::strip(self.painter, tape, 48, frac, pal.lit, &pal);
         let resp = self.ui.interact(tape.expand(self.cv.s(8.0)), egui::Id::unique("tape"), Sense::click());
         if resp.clicked()
             && np.can_seek
@@ -804,7 +809,7 @@ impl Draw<'_> {
             actions.push(Action::Call("nowPlaying", "seek", vec![json!((f * np.duration_ms as f64) as i64)]));
         }
         let mmss = |ms: i64| format!("{}:{:02}", ms / 60000, (ms / 1000) % 60);
-        self.label(56.0, 716.0, 3.0, &mmss(pos), pal.lit);
+        self.label(x0, 716.0, 3.0, &mmss(pos), pal.lit);
         let remain = if np.duration_ms > 0 { format!("-{}", mmss(np.duration_ms - pos)) } else { "-:--".into() };
         self.label_right(786.0, 716.0, 3.0, &remain, self.dim());
 

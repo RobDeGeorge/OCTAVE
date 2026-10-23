@@ -8,6 +8,7 @@ license = "GPL-3.0-or-later"
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 eframe = { version = "0.37", default-features = false, features = ["glow", "wayland", "x11"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
 serde_json = "1"
 
 [profile.release]
