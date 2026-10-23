@@ -15,6 +15,7 @@
 #include <memory>
 
 #include "service/commandserver.h"
+#include "service/staticfiles.h"
 #include "service/websocket.h"
 
 using namespace OctaveService;
@@ -235,9 +236,10 @@ private slots:
         // Only GET is HTTP on this port: anything else is a JSON line, never a file
         reply = once(server.port(), "POST / HTTP/1.1\r\nHost: " + host + "\r\nContent-Length: 0\r\n\r\n");
         QVERIFY2(!reply.contains("frontend"), reply.constData());
-        // A Host header that is a name, or tries to add a directive, is not echoed
+        // A Host header that is a name (or tries to add a directive) is
+        // refused before anything is served
         reply = once(server.port(), "GET / HTTP/1.1\r\nHost: evil.example; script-src *\r\n\r\n");
-        QVERIFY2(reply.contains("connect-src 'self';") && !reply.contains("evil"), reply.constData());
+        QVERIFY2(reply.startsWith("HTTP/1.1 403"), reply.constData());
         // The socket still upgrades on the same port
         reply = once(server.port(), "GET / HTTP/1.1\r\nHost: " + host + "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
                                     "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nOrigin: http://" + host + "\r\n\r\n");
@@ -283,6 +285,92 @@ private slots:
         // The page's own loads and the address bar pass
         QVERIFY(once(server.port(), "GET /art HTTP/1.1\r\nHost: " + host + "\r\nSec-Fetch-Site: same-origin\r\n\r\n").startsWith("HTTP/1.1 200"));
         QVERIFY(once(server.port(), "GET / HTTP/1.1\r\nHost: " + host + "\r\nSec-Fetch-Site: none\r\n\r\n").startsWith("HTTP/1.1 200"));
+        server.stop();
+    }
+
+    void everyRequestNeedsAnAddressInHost()
+    {
+        // M6: DNS rebinding sends no Origin on a plain GET; the Host says it
+        CommandServer server(0);
+        server.setPage("<html>client</html>");
+        server.addRoute("/art", [](const QByteArray &) { return StaticFiles::Reply{200, "OK", "image/png", "img"}; });
+        QVERIFY(server.start());
+        const QByteArray port = QByteArray::number(server.port());
+        for (const QByteArray &host : {QByteArray("rebind.example.com:") + port, QByteArray("octave.local"), QByteArray()}) {
+            const QByteArray head = host.isEmpty() ? QByteArray() : "Host: " + host + "\r\n";
+            for (const char *path : {"/", "/art"}) {
+                const QByteArray r = once(server.port(), "GET " + QByteArray(path) + " HTTP/1.1\r\n" + head + "\r\n");
+                QVERIFY2(r.startsWith("HTTP/1.1 403"), r.constData());
+            }
+        }
+        for (const QByteArray &host : {"127.0.0.1:" + port, "localhost:" + port, "[::1]:" + port, QByteArray("192.168.1.20")})
+            QVERIFY(once(server.port(), "GET /art HTTP/1.1\r\nHost: " + host + "\r\n\r\n").startsWith("HTTP/1.1 200"));
+        server.stop();
+    }
+
+    void oneClientCannotExhaustTheServer()
+    {
+        CommandServer server(0);
+        CommandServer::Limits limits;
+        limits.maxConnections = 4;
+        limits.firstByteMs = 300;
+        limits.maxLineBytes = 4096;
+        server.setLimits(limits);
+        // Everyone untrusted, for the idle rule
+        server.setTrust([](const Connection &) { return false; }, {}, {QStringLiteral("hello")});
+        limits.untrustedIdleMs = 400;
+        server.setLimits(limits);
+        QVERIFY(server.start());
+
+        // M3: a line that never ends is cut off at the cap
+        {
+            QTcpSocket s;
+            s.connectToHost(QHostAddress::LocalHost, server.port());
+            QVERIFY(s.waitForConnected(3000));
+            s.write("{\"op\": \"" + QByteArray(8192, 'a'));
+            QByteArray in;
+            QElapsedTimer t;
+            t.start();
+            while (s.state() == QAbstractSocket::ConnectedState && t.elapsed() < 3000)
+                if (s.waitForReadyRead(50))
+                    in += s.readAll();
+            QVERIFY2(in.contains("request too long"), in.constData());
+            QVERIFY(s.state() != QAbstractSocket::ConnectedState || !s.waitForReadyRead(500));
+        }
+        // M4: a connection that says nothing is closed
+        {
+            QTcpSocket s;
+            s.connectToHost(QHostAddress::LocalHost, server.port());
+            QVERIFY(s.waitForConnected(3000));
+            QTRY_VERIFY_WITH_TIMEOUT((s.waitForReadyRead(50), s.state() == QAbstractSocket::UnconnectedState), 3000);
+        }
+        // M4: an untrusted client that goes quiet is closed
+        {
+            QTcpSocket s;
+            s.connectToHost(QHostAddress::LocalHost, server.port());
+            QVERIFY(s.waitForConnected(3000));
+            s.write("{\"op\": \"hello\"}\n");
+            QTRY_VERIFY_WITH_TIMEOUT((s.waitForReadyRead(50), s.state() == QAbstractSocket::UnconnectedState), 3000);
+        }
+        // M4: past maxConnections, refused at the door
+        {
+            QList<QTcpSocket *> held;
+            for (int i = 0; i < 4; ++i) {
+                auto *s = new QTcpSocket;
+                s->connectToHost(QHostAddress::LocalHost, server.port());
+                QVERIFY(s->waitForConnected(3000));
+                s->write("{\"op\": \"hello\"}\n");   // keep each busy past the first-byte rule
+                held.append(s);
+            }
+            QTest::qWait(100);
+            QTcpSocket extra;
+            extra.connectToHost(QHostAddress::LocalHost, server.port());
+            QVERIFY(extra.waitForConnected(3000));
+            extra.write("{\"op\": \"hello\"}\n");
+            QTRY_VERIFY_WITH_TIMEOUT((extra.waitForReadyRead(50), extra.state() == QAbstractSocket::UnconnectedState), 2000);
+            QVERIFY(!extra.readAll().contains("\"ok\""));
+            qDeleteAll(held);
+        }
         server.stop();
     }
 

@@ -45,6 +45,11 @@ bool isUpgrade(const HttpRequest &request);
 // Empty if the request may connect, else why not (for the log and a 403)
 QString refusal(const HttpRequest &request);
 
+// Every HTTP request, Origin or not: the Host must be an address (IP or
+// localhost, with a port or not), never a name a DNS-rebinding site
+// could point at the car. Empty if fine, else why not
+QString hostRefusal(const HttpRequest &request);
+
 // The 101 Switching Protocols reply (Sec-WebSocket-Accept from the key)
 QByteArray acceptResponse(const HttpRequest &request);
 
