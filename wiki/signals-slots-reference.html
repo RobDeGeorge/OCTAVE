@@ -208,8 +208,8 @@
             <tr><td><code>save_clock_size(int size)</code></td><td><code>void</code></td><td>Save <code>clockSize</code>, then emit <code>clockSizeChanged</code></td></tr>
             <tr><td><code>save_clock_size_auto(bool autoSize)</code></td><td><code>void</code></td><td>Persist <code>clockSizeAuto</code>, then emit <code>clockSizeAutoChanged</code></td></tr>
             <tr><td><code>save_background_grid(QString grid)</code></td><td><code>void</code></td><td>Save <code>backgroundGrid</code>, then emit <code>backgroundGridChanged</code></td></tr>
-            <tr><td><code>save_screen_width(int width)</code></td><td><code>void</code></td><td>Save <code>screenWidth</code>, then emit <code>screenWidthChanged</code></td></tr>
-            <tr><td><code>save_screen_height(int height)</code></td><td><code>void</code></td><td>Save <code>screenHeight</code>, then emit <code>screenHeightChanged</code></td></tr>
+            <tr><td><code>save_screen_width(int width)</code></td><td><code>void</code></td><td>Save <code>screenWidth</code> clamped to 400&ndash;7680 (<code>kMin/kMaxScreenWidth</code>), then emit <code>screenWidthChanged</code>; an unchanged value does nothing</td></tr>
+            <tr><td><code>save_screen_height(int height)</code></td><td><code>void</code></td><td>Save <code>screenHeight</code> clamped to 300&ndash;4320, then emit <code>screenHeightChanged</code>; an unchanged value does nothing</td></tr>
             <tr><td><code>save_background_blur_radius(int radius)</code></td><td><code>void</code></td><td>Save <code>backgroundBlurRadius</code>, then emit <code>backgroundBlurRadiusChanged</code></td></tr>
             <tr><td><code>save_bottom_bar_orientation(QString orientation)</code></td><td><code>void</code></td><td>Save <code>bottomBarOrientation</code>, then emit <code>bottomBarOrientationChanged</code></td></tr>
             <tr><td><code>save_show_bottom_bar_media_controls(bool show)</code></td><td><code>void</code></td><td>Save <code>showBottomBarMediaControls</code>, then emit <code>showBottomBarMediaControlsChanged</code></td></tr>

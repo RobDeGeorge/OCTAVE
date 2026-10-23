@@ -195,17 +195,15 @@ Flickable {
                         Layout.preferredWidth: pageRoot.dp(120)
                         text: pageRoot.mainWindow ? pageRoot.mainWindow.width : ""
                         horizontalAlignment: TextInput.AlignHCenter
-                        validator: IntValidator {
+                        validator: IntValidator {   // SettingsManager::kMin/kMaxScreenWidth
                             bottom: 400
-                            top: 3840
+                            top: 7680
                         }
 
                         function applyWidth() {
                             if (text && settingsManager) {
-                                const width = parseInt(text)
-                                settingsManager.save_screen_width(width)
-                                pageRoot.mainWindow.width = width
-                                App.Spacing.updateDimensions(width, pageRoot.mainWindow.height)
+                                // Main.qml saves the new size from the window
+                                pageRoot.mainWindow.width = parseInt(text)
                             }
                         }
 
@@ -215,13 +213,8 @@ Flickable {
                         Connections {
                             target: pageRoot.mainWindow
                             function onWidthChanged() {
-                                if (!screenWidth.activeFocus) {
+                                if (!screenWidth.activeFocus)
                                     screenWidth.text = pageRoot.mainWindow.width
-                                    if (settingsManager) {
-                                        settingsManager.save_screen_width(pageRoot.mainWindow.width)
-                                    }
-                                    App.Spacing.updateDimensions(pageRoot.mainWindow.width, pageRoot.mainWindow.height)
-                                }
                             }
                         }
                     }
@@ -238,17 +231,15 @@ Flickable {
                         Layout.preferredWidth: pageRoot.dp(120)
                         text: pageRoot.mainWindow ? pageRoot.mainWindow.height : ""
                         horizontalAlignment: TextInput.AlignHCenter
-                        validator: IntValidator {
+                        validator: IntValidator {   // SettingsManager::kMin/kMaxScreenHeight
                             bottom: 300
-                            top: 2160
+                            top: 4320
                         }
 
                         function applyHeight() {
                             if (text && settingsManager) {
-                                const height = parseInt(text)
-                                settingsManager.save_screen_height(height)
-                                pageRoot.mainWindow.height = height
-                                App.Spacing.updateDimensions(pageRoot.mainWindow.width, height)
+                                // Main.qml saves the new size from the window
+                                pageRoot.mainWindow.height = parseInt(text)
                             }
                         }
 
@@ -258,13 +249,8 @@ Flickable {
                         Connections {
                             target: pageRoot.mainWindow
                             function onHeightChanged() {
-                                if (!screenHeight.activeFocus) {
+                                if (!screenHeight.activeFocus)
                                     screenHeight.text = pageRoot.mainWindow.height
-                                    if (settingsManager) {
-                                        settingsManager.save_screen_height(pageRoot.mainWindow.height)
-                                    }
-                                    App.Spacing.updateDimensions(pageRoot.mainWindow.width, pageRoot.mainWindow.height)
-                                }
                             }
                         }
                     }

@@ -82,8 +82,8 @@
             <tr><td><code>deviceName</code></td><td>deviceName</td><td>QString</td><td>"Default Device"</td><td>–</td><td>Device page (via <code>Main.updateDeviceName()</code>, which rejects blank names)</td><td>Display name for this OCTAVE installation</td></tr>
             <tr><td><code>fontSetting</code></td><td>fontSetting</td><td>QString</td><td>"GoogleSans Regular"</td><td>–</td><td>Display page</td><td>UI font family; <code>Style.setFont()</code> is called on change. The default is the display name <code>Main.qml</code> derives from the bundled <code>GoogleSans-Regular.ttf</code>; a stored legacy <code>"Google Sans"</code> (which <code>Style.setFont()</code> rejected, leaving the system font) is migrated to it at load and written back</td></tr>
             <tr><td><code>windowState</code></td><td>windowState</td><td>QString</td><td>"windowed"</td><td>"windowed", "fullscreen", "maximized" (others ignored)</td><td>Display page (Layout)</td><td>Window mode applied at startup</td></tr>
-            <tr><td><code>screenWidth</code></td><td>screenWidth</td><td>int</td><td>1280</td><td>–</td><td>Display page; <code>Main.qml</code> also saves the size on window resize</td><td>Window width in pixels when windowed</td></tr>
-            <tr><td><code>screenHeight</code></td><td>screenHeight</td><td>int</td><td>720</td><td>–</td><td>Display page; <code>Main.qml</code> on resize</td><td>Window height in pixels when windowed</td></tr>
+            <tr><td><code>screenWidth</code></td><td>screenWidth</td><td>int</td><td>1280</td><td>400 – 7680 (clamped by the saver)</td><td><code>Main.qml</code> on window resize (desktop only; the Display page's field resizes the window)</td><td>Window width in pixels when windowed</td></tr>
+            <tr><td><code>screenHeight</code></td><td>screenHeight</td><td>int</td><td>720</td><td>300 – 4320 (clamped by the saver)</td><td><code>Main.qml</code> on window resize (desktop only)</td><td>Window height in pixels when windowed</td></tr>
           </tbody>
         </table>
 

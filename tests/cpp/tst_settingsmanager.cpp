@@ -196,6 +196,22 @@ private slots:
         QCOMPARE(sm.scrcpyAudioDuckLevelDb(), -120.0);
     }
 
+    void screenSizeIsClampedAndUnchangedIsSkipped()
+    {
+        SettingsManager sm;
+        QSignalSpy w(&sm, &SettingsManager::screenWidthChanged);
+        sm.save_screen_width(1300);
+        QCOMPARE(w.count(), 1);
+        const int afterSame = w.count();
+        sm.save_screen_width(1300);
+        QCOMPARE(w.count(), afterSame);                       // unchanged: no emit, no write
+        sm.save_screen_width(100);
+        QCOMPARE(sm.screenWidth(), SettingsManager::kMinScreenWidth);
+        sm.save_screen_height(99999);
+        QCOMPARE(sm.screenHeight(), SettingsManager::kMaxScreenHeight);
+        QCOMPARE(sm.m_settings.value("screenHeight").toInt(), SettingsManager::kMaxScreenHeight);
+    }
+
     void everySettingSurvivesARestart()
     {
         QJsonObject saved;

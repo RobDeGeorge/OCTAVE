@@ -171,10 +171,13 @@ ApplicationWindow {
         }
     }
 
-    // Window resize handlers
+    // Window resize: the one place the window size is saved (the manager
+    // clamps it and skips an unchanged value; its writes are batched).
+    // Android's window is the screen and is never restored, so not saved.
     onWidthChanged: {
         if (settingsManager && width > 0 && width >= minimumWidth) {
-            settingsManager.save_screen_width(width)
+            if (!isAndroid)
+                settingsManager.save_screen_width(width)
             screenWidth = width
             App.Spacing.updateDimensions(width, height)
         }
@@ -182,7 +185,8 @@ ApplicationWindow {
 
     onHeightChanged: {
         if (settingsManager && height > 0 && height >= minimumHeight) {
-            settingsManager.save_screen_height(height)
+            if (!isAndroid)
+                settingsManager.save_screen_height(height)
             screenHeight = height
             App.Spacing.updateDimensions(width, height)
         }
@@ -971,20 +975,6 @@ ApplicationWindow {
         if (settingsManager) {
             settingsManager.save_start_volume(newVolume)
             startUpVolume = newVolume
-        }
-    }
-
-    function updateScreenDimensions(newWidth, newHeight) {
-        if (settingsManager) {
-            if (newWidth >= minimumWidth) {
-                settingsManager.save_screen_width(newWidth)
-                width = newWidth
-            }
-            if (newHeight >= minimumHeight) {
-                settingsManager.save_screen_height(newHeight)
-                height = newHeight
-            }
-            App.Spacing.updateDimensions(width, height)
         }
     }
 

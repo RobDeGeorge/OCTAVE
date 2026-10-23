@@ -164,11 +164,12 @@
         <!-- Window Management -->
         <h2 id="window-management">Window Management</h2>
 
-        <p>Window dimensions are persisted bidirectionally on desktop. On resize, <code>onWidthChanged</code> / <code>onHeightChanged</code> write back to the settings manager and recompute <code>Spacing</code>:</p>
+        <p>Window dimensions are persisted bidirectionally on desktop. On resize, <code>onWidthChanged</code> / <code>onHeightChanged</code> write back to the settings manager (the only writer: the Display page's size fields resize the window and let this save it; skipped on Android, whose window is the screen) and recompute <code>Spacing</code>. The manager clamps to 400&ndash;7680 &times; 300&ndash;4320 and ignores an unchanged value, and its disk writes are batched (500&nbsp;ms):</p>
 
         <pre><code><span class="fn">onWidthChanged</span>: {
     <span class="kw">if</span> (settingsManager &amp;&amp; width &gt; <span class="num">0</span> &amp;&amp; width &gt;= minimumWidth) {
-        settingsManager.<span class="fn">save_screen_width</span>(width)
+        <span class="kw">if</span> (!isAndroid)
+            settingsManager.<span class="fn">save_screen_width</span>(width)
         screenWidth = width
         App.Spacing.<span class="fn">updateDimensions</span>(width, height)
     }
@@ -453,7 +454,7 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
           <li><code>onAlbumArtColorsChanged</code> &mdash; see <a href="#album-art-capture">above</a>.</li>
         </ul>
 
-        <p>Custom themes are hot-reloaded from a hand-made <code>settingsManager.customThemesChanged.connect(...)</code>: the whole <code>Style.customThemes</code> object is rebuilt and assigned in one shot (assigning an empty object first would briefly make the active custom theme fall back to SolarizedLight), then <code>Style.customThemesUpdated()</code> is emitted so pickers refresh. Main.qml also exposes <code>updateDeviceName()</code>, <code>updateTheme()</code>, <code>updateFont()</code>, <code>updateStartupVolume()</code> and <code>updateScreenDimensions()</code> for pages that want to write through the window.</p>
+        <p>Custom themes are hot-reloaded from a hand-made <code>settingsManager.customThemesChanged.connect(...)</code>: the whole <code>Style.customThemes</code> object is rebuilt and assigned in one shot (assigning an empty object first would briefly make the active custom theme fall back to SolarizedLight), then <code>Style.customThemesUpdated()</code> is emitted so pickers refresh. Main.qml also exposes <code>updateDeviceName()</code>, <code>updateFont()</code> and <code>updateStartupVolume()</code> for pages that want to write through the window (the window size has one writer, its resize handlers).</p>
 
         <!-- Drop Shadows -->
         <h2 id="drop-shadows">Drop Shadows</h2>

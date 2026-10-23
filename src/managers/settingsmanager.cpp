@@ -1140,6 +1140,9 @@ void SettingsManager::save_background_grid(const QString &grid)
 
 void SettingsManager::save_screen_width(int width)
 {
+    width = qBound(kMinScreenWidth, width, kMaxScreenWidth);
+    if (width == m_screenWidth)
+        return;
     m_screenWidth = width;
     updateSetting(QStringLiteral("screenWidth"), width);
     emit screenWidthChanged(width);
@@ -1147,6 +1150,9 @@ void SettingsManager::save_screen_width(int width)
 
 void SettingsManager::save_screen_height(int height)
 {
+    height = qBound(kMinScreenHeight, height, kMaxScreenHeight);
+    if (height == m_screenHeight)
+        return;
     m_screenHeight = height;
     updateSetting(QStringLiteral("screenHeight"), height);
     emit screenHeightChanged(height);
