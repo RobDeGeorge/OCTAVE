@@ -87,7 +87,7 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 | Trip list and details | `tripRecorder.trips`, `requestDetail`, `detailReady` | Yes | Yes | Yes | Yes | Yes | sunlight: the list and a summary in the user's units |
 | Charts of a trip's values | `tripRecorder.requestSeries`, `seriesReady` | Yes | Yes | Yes | No | No | console: one value at a time as a sparkline |
 | End trip now | `tripRecorder.endTripNow` | Yes | Yes | Yes | Yes | No | |
-| Export, delete, clear history | `tripRecorder.exportTrip`, `deleteTrip`, `clearHistory`, `lastExportPath` | Partial | Yes | Yes | Partial | No | QML: clear history only; exported files stay on the head unit (GET /export/..., lane A 9c, landed) |
+| Export, delete, clear history | `tripRecorder.exportTrip`, `deleteTrip`, `clearHistory`, `lastExportPath`, `GET /export/trip` | Partial | Yes | Yes | Partial | No | QML: clear history only; console: downloads the export over GET /export/trip |
 | Black box on / off, size cap, sweep all PIDs, storage | `tripRecorder.setEnabled`, `storageBytes`, `settingsManager.save_black_box_*` | Yes | Yes | Partial | No | No | console: settings table |
 
 ## Sensors and accessories
@@ -130,8 +130,6 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 
 ## What no frontend but QML can do
 
-All of these are backend items, none frontend work:
-
-- Downloading files the app exports (trip CSV, log bundle, dashboard file): `GET /export/trip|dashboard|logs` landed (lane A 9c); no frontend offers it yet. The contents are reachable anyway (`requestSeries`, `recentLogLines`, `loadDashboard`).
+Nothing any more: every feature above has an API, and at least one frontend besides QML uses it. The last gaps closed tonight: library and queue covers (`GET /art?song=` / `?queue=`), folder browsing, theme palettes, Now Playing presets, export downloads (`GET /export/...`, which the console offers), and video (the `stream` op, which glass plays). What remains are No cells: work for a frontend, not for the backend.
 
 Head-unit-local by design (no gap): the clipboard actions, opening a folder in the head unit's file manager, window size and position.
