@@ -119,16 +119,19 @@ octave_add_test(tst_mediamanager
     LIBS Qt6::Gui Qt6::Multimedia Qt6::Concurrent ${_taglib})
 
 octave_add_test(tst_musicdeviceassets)
-octave_add_test(tst_vehiclegate SOURCES managers/dashboardmanager.h managers/dashboardmanager.cpp util/dashboardgrid.h util/dashboardgrid.cpp managers/parametercatalog.h managers/parametercatalog.cpp managers/parameterstore.h managers/parameterstore.cpp LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
+octave_add_test(tst_vehiclegate SOURCES managers/themecatalog.h managers/themecatalog.cpp managers/dashboardmanager.h managers/dashboardmanager.cpp util/dashboardgrid.h util/dashboardgrid.cpp managers/parametercatalog.h managers/parametercatalog.cpp managers/parameterstore.h managers/parameterstore.cpp LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
 
-octave_add_test(tst_phonemirrorview LIBS Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Multimedia)
-octave_add_test(tst_errortoast LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
+octave_add_test(tst_phonemirrorview SOURCES managers/themecatalog.h managers/themecatalog.cpp LIBS Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Multimedia)
+octave_add_test(tst_errortoast SOURCES managers/themecatalog.h managers/themecatalog.cpp LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
+# The theme table as data and the palette in force
+octave_add_test(tst_themecatalog SOURCES managers/themecatalog.h managers/themecatalog.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
 
 # QML fixtures (tests/fixtures/), each run in its own qmlfixturehost process
 add_executable(qmlfixturehost qmlfixturehost.cpp
     "${OCTAVE_SRC}/managers/settingsmanager.h" "${OCTAVE_SRC}/managers/settingsmanager.cpp"
     "${OCTAVE_SRC}/util/assetstore.h" "${OCTAVE_SRC}/util/assetstore.cpp"
-    "${OCTAVE_SRC}/util/units.h" "${OCTAVE_SRC}/util/units.cpp")
+    "${OCTAVE_SRC}/util/units.h" "${OCTAVE_SRC}/util/units.cpp"
+    "${OCTAVE_SRC}/managers/themecatalog.h" "${OCTAVE_SRC}/managers/themecatalog.cpp")
 target_include_directories(qmlfixturehost PRIVATE "${OCTAVE_SRC}" "${CMAKE_BINARY_DIR}/generated")
 target_compile_definitions(qmlfixturehost PRIVATE OCTAVE_SOURCE_DIR="${CMAKE_SOURCE_DIR}" OCTAVE_VERSION="${PROJECT_VERSION}")
 target_link_libraries(qmlfixturehost PRIVATE Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)

@@ -15,6 +15,7 @@
 #include <QUrl>
 
 #include <memory>
+#include "managers/themecatalog.h"
 
 class FakeMirror : public QObject
 {
@@ -159,6 +160,8 @@ private slots:
         m_fake = std::make_unique<FakeMirror>();
         m_engine->rootContext()->setContextProperty("phoneMirrorManager", m_fake.get());
         m_engine->rootContext()->setContextProperty("settingsManager", QVariant::fromValue<QObject *>(nullptr));
+        m_themes = std::make_unique<ThemeCatalog>(kFrontend + "/themes.json");   // Style.qml's palettes
+        m_engine->rootContext()->setContextProperty("themeCatalog", m_themes.get());
         QQmlComponent comp(m_engine.get());
         comp.setData(QString::fromLatin1(kQml).arg(QUrl::fromLocalFile(kFrontend).toString()).toUtf8(), QUrl());
         m_root.reset(comp.create());
@@ -306,6 +309,7 @@ private:
         return ret;
     }
 
+    std::unique_ptr<ThemeCatalog> m_themes;   // outlives the engine
     std::unique_ptr<QQmlEngine> m_engine;
     std::unique_ptr<FakeMirror> m_fake;
     std::unique_ptr<QObject> m_root;

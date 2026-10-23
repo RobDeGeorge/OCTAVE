@@ -276,6 +276,8 @@ qt_add_executable(octave
     src/managers/androidautomanager.cpp
     src/managers/dashboardmanager.h
     src/managers/dashboardmanager.cpp
+    src/managers/themecatalog.h
+    src/managers/themecatalog.cpp
     src/managers/tripstore.h
     src/managers/tripstore.cpp
     src/managers/triprecorder.h

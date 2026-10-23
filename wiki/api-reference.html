@@ -28,7 +28,7 @@
 
         <h2 id="overview">Overview</h2>
         <p>This page is generated from <span class="file-path">docs/api/</span> (<code>./build/octave --dump-api docs/api</code>, then <code>python wiki/build_api_reference.py</code>); <code>tst_apidocs</code> fails when that copy is out of date. The protocol itself (<code>hello</code>, <code>describe</code>, <code>get</code>, <code>set</code>, <code>call</code>, <code>subscribe</code>, <code>rows</code>) is described in <a href="utilities.html#service-protocol">Utilities: Service protocol</a>; versioning and the dashboard file schema in <span class="file-path">docs/api/README.md</span> and <span class="file-path">docs/api/dashboard-spec.schema.json</span>. What each member means is in the hand-written <a href="signals-slots-reference.html">Signals &amp; Slots API</a>.</p>
-        <p>The same objects are QML context properties under the same names. Types are Qt's names (<code>QString</code>, <code>QVariantMap</code>, ...); on the wire they are JSON. 23 objects:</p>
+        <p>The same objects are QML context properties under the same names. Types are Qt's names (<code>QString</code>, <code>QVariantMap</code>, ...); on the wire they are JSON. 24 objects:</p>
         <ul>
             <li><a href="#androidAutoManager">androidAutoManager</a></li>
             <li><a href="#audioAnalyzer">audioAnalyzer</a></li>
@@ -50,6 +50,7 @@
             <li><a href="#phoneMirrorManager">phoneMirrorManager</a></li>
             <li><a href="#settingsManager">settingsManager</a></li>
             <li><a href="#shiftLightManager">shiftLightManager</a></li>
+            <li><a href="#themeCatalog">themeCatalog</a></li>
             <li><a href="#tripRecorder">tripRecorder</a></li>
             <li><a href="#units">units</a></li>
             <li><a href="#volumeController">volumeController</a></li>
@@ -990,6 +991,21 @@
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>settingsChanged()</code>, <code>flagsChanged()</code>, <code>rpmChanged()</code>, <code>activeFlagChanged()</code>, <code>litChanged()</code>, <code>suppressedChanged()</code>.</p>
+
+        <h3 id="themeCatalog"><code>themeCatalog</code> <span class="cmt">&mdash; ThemeCatalog</span></h3>
+        <p>Hand-written notes: <a href="signals-slots-reference.html#themeCatalog">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/themeCatalog.json</span>.</p>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
+          <tbody>
+            <tr><td><code>themes</code></td><td>QVariantMap</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>themeNames</code></td><td>QStringList</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>lightThemeNames</code></td><td>QStringList</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>darkThemeNames</code></td><td>QStringList</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>activeThemeName</code></td><td>QString</td><td>read</td><td><code>activeThemeChanged</code></td></tr>
+            <tr><td><code>activeTheme</code></td><td>QVariantMap</td><td>read</td><td><code>activeThemeChanged</code></td></tr>
+          </tbody>
+        </table>
+        <p><strong>Signals</strong> (<code>subscribe</code>): <code>activeThemeChanged()</code>.</p>
 
         <h3 id="tripRecorder"><code>tripRecorder</code> <span class="cmt">&mdash; TripRecorder</span></h3>
         <p>Hand-written notes: <a href="signals-slots-reference.html#tripRecorder">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/tripRecorder.json</span>.</p>

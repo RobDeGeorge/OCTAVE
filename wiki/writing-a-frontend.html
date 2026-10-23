@@ -116,6 +116,9 @@ $ printf '{"op":"hello","id":1}\n{"op":"get","object":"volumeController","proper
           <li><strong>Dev-only actions</strong> (<code>navigate</code>, <code>click</code>, <code>screenshot</code>, <code>sim_*</code>) exist only in developer builds with <code>--profile</code>, aren't versioned, and drive the bundled UI rather than the managers. Don't build on them.</li>
         </ul>
 
+        <h3>The user's theme</h3>
+        <p>Subscribe to <code>themeCatalog.activeTheme</code>: the palette the user has chosen, already resolved (an album-art palette, a saved custom theme, or a built-in), as <code>{base, baseAlt, accent, text: {primary, secondary}, states, sliders, bottombar, mediaroom, mainmenu, obd}</code> with <code>#RRGGBB</code> colours; <code>activeThemeName</code> names it. Every built-in palette is in <code>themeCatalog.themes</code> (picker order in <code>lightThemeNames</code> / <code>darkThemeNames</code>), custom ones in <code>settingsManager.customThemeData</code>; choose one with <code>settingsManager.save_theme_setting(name)</code>. Keys: <a href="theme-system.html#theme-object">Theme Object Structure</a>.</p>
+
         <h3>Waveform bars</h3>
         <p>Call <code>audioAnalyzer.setDemand("my-frontend", true)</code> while your bars are on screen (and <code>false</code> when they leave; a closed connection releases it), then subscribe to <code>audioAnalyzer.levels</code>: a list of <code>numBars</code> (96) numbers from 0 to 8, for local tracks and phone audio alike, changing at most 10&ndash;20 times a second; pass <code>throttleMs</code> to thin it further. Nothing is analysed while nobody asks.</p>
 

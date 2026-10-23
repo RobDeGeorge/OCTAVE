@@ -1,0 +1,59 @@
+{
+    "class": "ThemeCatalog",
+    "methods": [
+    ],
+    "object": "themeCatalog",
+    "properties": [
+        {
+            "constant": true,
+            "name": "themes",
+            "readable": true,
+            "type": "QVariantMap",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "themeNames",
+            "readable": true,
+            "type": "QStringList",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "lightThemeNames",
+            "readable": true,
+            "type": "QStringList",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "darkThemeNames",
+            "readable": true,
+            "type": "QStringList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "activeThemeName",
+            "notify": "activeThemeChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "activeTheme",
+            "notify": "activeThemeChanged",
+            "readable": true,
+            "type": "QVariantMap",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "activeThemeChanged",
+            "params": [
+            ]
+        }
+    ]
+}
