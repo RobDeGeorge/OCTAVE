@@ -77,6 +77,11 @@ struct DownloadTask {
 class DownloadManager : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "files")
+    Q_CLASSINFO("octave.scope.read", "get_download_playlist hasStorageAccess next_search_page search search_more")
+    Q_CLASSINFO("octave.scope.system", "requestStorageAccess")
+    Q_CLASSINFO("octave.scope.full", "cleanup connect_settings_manager")
     friend class TstDownloadManager;
 
     Q_PROPERTY(bool isSearching READ isSearching NOTIFY isSearchingChanged)

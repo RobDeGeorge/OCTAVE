@@ -14,7 +14,8 @@
                     "type": "QVariant"
                 }
             ],
-            "returns": "QVariant"
+            "returns": "QVariant",
+            "scope": "read"
         },
         {
             "kind": "invokable",
@@ -25,7 +26,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "invokable",
@@ -36,7 +38,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "QVariantMap"
+            "returns": "QVariantMap",
+            "scope": "read"
         }
     ],
     "object": "parameterCatalog",

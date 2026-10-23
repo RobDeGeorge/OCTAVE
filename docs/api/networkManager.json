@@ -6,42 +6,48 @@
             "name": "refreshNetwork",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "checkForUpdates",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "system"
         },
         {
             "kind": "slot",
             "name": "applySelfUpdate",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "system"
         },
         {
             "kind": "slot",
             "name": "restartApp",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "system"
         },
         {
             "kind": "slot",
             "name": "shutdown_device",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "system"
         },
         {
             "kind": "slot",
             "name": "cleanup",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         }
     ],
     "object": "networkManager",

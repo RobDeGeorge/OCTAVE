@@ -91,6 +91,23 @@ Developing a networked frontend without the head unit's screen: run a developer 
 
 Limits: the code is single use and void after 20 wrong tries in all; one `pair` attempt a second across all clients; an address (an IPv6 /64) with 10 wrong codes is refused until the app restarts; an untrusted `hello` gets only `protocolVersion`, `auth` and `loopbackOpen` (no app version, build or object list); at most 256 media tickets exist at once (the oldest goes); refusals are logged with the address (never the code). Only a SHA-256 of each token is stored, in the settings file key `serviceTokens`, which no setter, `apply_settings` or reset can write. Revoking a device in Settings closes its connections at once (their subscriptions and streams end) and voids its tickets. Making codes, listing or revoking devices and switching the service on are on the head unit only (`servicePairing`, not a service object).
 
+### Permissions
+
+A paired device holds **scopes** (`src/service/servicescopes.h`), asked for in `pair`: `{"op":"pair","code":"123456","name":"Dash","scopes":["media"]}`. Without `scopes` it gets `full`, as every device did before scopes existed. Every paired device can **read**: `get`, `subscribe`, `rows`, `describe`, `/art`, and every stream but the phone's screen. Changing anything needs the member's scope, which `describe` and each file here list as `"scope"` on every method and writable property:
+
+| Scope | What it lets a device change |
+|---|---|
+| `read` | nothing (getters and pure helpers are `read`, so any device may call them, as are the demand calls a reading client needs: `obdManager.setParameterDemand`, `berryIMU.setDemand`, `audioAnalyzer.setDemand`) |
+| `media` | playback, volume, the queue, the visualiser |
+| `vehicle` | OBD connection and trouble codes, adapters, the IMU, gestures, the shift light, the volume knob |
+| `phone` | phone mirroring and Android Auto, including their video streams and touch / key input |
+| `settings` | `settingsManager` |
+| `files` | the library and playlists, downloads, dashboards, trips, logs, and `/export/...` |
+| `system` | restart, shut down, update, opening folders on the head unit |
+| `full` | everything, including the dev `action` form and app internals no frontend needs |
+
+`pair` answers `{token, scopes}` with what was granted (`read` is always included); a trusted `hello` reports `scopes` too (the head unit's own screen, on loopback, has `full`). An unknown scope fails `pair` without using up the code. A member the device may not change answers `{"ok": false, "code": "forbidden", "error": "mediaManager.delete_song needs the files permission; this device has read, media"}`; a route answers 401. Settings > Device > Paired devices shows each device's access and can make it read only (or give it full access) at once, on its open connections too. Narrowing a member's scope later is a breaking change (`tools/api/check_compat.py` catches it); widening it, or making it `read`, is not.
+
 `serviceLoopbackOpen` trusts every process on the device, including a local reverse proxy: behind a proxy, set it to false in `settingsConfigure.json`.
 
 ## Values

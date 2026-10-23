@@ -10,7 +10,8 @@
                     "type": "double"
                 }
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "invokable",
@@ -21,7 +22,8 @@
                     "type": "double"
                 }
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "invokable",
@@ -32,7 +34,8 @@
                     "type": "double"
                 }
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "invokable",
@@ -43,7 +46,8 @@
                     "type": "double"
                 }
             ],
-            "returns": "double"
+            "returns": "double",
+            "scope": "read"
         },
         {
             "kind": "invokable",
@@ -54,7 +58,8 @@
                     "type": "double"
                 }
             ],
-            "returns": "double"
+            "returns": "double",
+            "scope": "read"
         },
         {
             "kind": "invokable",
@@ -65,7 +70,8 @@
                     "type": "double"
                 }
             ],
-            "returns": "double"
+            "returns": "double",
+            "scope": "read"
         },
         {
             "kind": "invokable",
@@ -76,7 +82,8 @@
                     "type": "double"
                 }
             ],
-            "returns": "double"
+            "returns": "double",
+            "scope": "read"
         },
         {
             "kind": "invokable",
@@ -87,7 +94,8 @@
                     "type": "double"
                 }
             ],
-            "returns": "double"
+            "returns": "double",
+            "scope": "read"
         }
     ],
     "object": "units",

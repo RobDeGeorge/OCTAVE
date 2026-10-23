@@ -6,21 +6,24 @@
             "name": "togglePlay",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
             "name": "next",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
             "name": "previous",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
@@ -31,21 +34,24 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
             "name": "toggleShuffle",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
             "name": "extractArtColors",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         }
     ],
     "object": "nowPlaying",

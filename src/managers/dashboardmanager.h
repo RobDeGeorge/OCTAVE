@@ -34,6 +34,9 @@
 class DashboardManager : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "files")
+    Q_CLASSINFO("octave.scope.read", "canPlace fitAt isBuiltIn loadDashboard normalizedSpec refresh uniqueIdForLabel")
     Q_PROPERTY(QVariantList dashboards READ dashboards NOTIFY dashboardsChanged)
     // Human-readable reason the last export/import failed ("" after a
     // success) — the chooser shows it in its status line.

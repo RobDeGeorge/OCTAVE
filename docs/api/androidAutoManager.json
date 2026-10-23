@@ -6,14 +6,16 @@
             "name": "getDhuInstallInstructions",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "launchDhuSeamless",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "phone"
         },
         {
             "kind": "slot",
@@ -28,21 +30,24 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
             "name": "closeDhu",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "phone"
         },
         {
             "kind": "slot",
             "name": "cleanup",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         }
     ],
     "object": "androidAutoManager",

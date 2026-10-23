@@ -23,6 +23,10 @@ class QNetworkReply;
 class NetworkManager : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "system")
+    Q_CLASSINFO("octave.scope.read", "refreshNetwork")
+    Q_CLASSINFO("octave.scope.full", "cleanup")
 
     // ======================================================================
     // Q_PROPERTY declarations

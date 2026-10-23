@@ -51,7 +51,14 @@ def _record(raw):
 
 
 class OctaveError(RuntimeError):
-    """The app answered {"ok": false, "error": ...}, or the connection went."""
+    """The app answered {"ok": false, "error": ...}, or the connection went.
+    `code` is the reply's machine-readable code when it has one
+    ("unauthorised": pair first; "forbidden": this device lacks the
+    permission), else None."""
+
+    def __init__(self, message, code=None):
+        super().__init__(message)
+        self.code = code
 
 
 class Client:
@@ -82,6 +89,8 @@ class Client:
                               f"this client knows {', '.join(map(str, PROTOCOL_VERSIONS))} (docs/api/README.md)")
         # Version 1 has no pairing: everything is accepted
         self.trusted = self.server.get("auth", "trusted") == "trusted"
+        # What this connection may change (protocol 2 with scopes; before: everything)
+        self.scopes = self.server.get("scopes", ["full"] if self.trusted else [])
 
     # ── protocol ops ──────────────────────────────────────────────────────
 
@@ -91,13 +100,20 @@ class Client:
         `token` makes this connection trusted."""
         return self.request("hello", **({"token": token} if token else {}))
 
-    def pair(self, code, name="octave_client"):
+    def pair(self, code, name="octave_client", scopes=None):
         """Pair with the 6-digit code OCTAVE's Settings > Service shows and
         return the token (store it; pass Client(token=...) next time). This
-        connection is trusted from then on."""
-        token = self.request("pair", code=str(code), name=name)["token"]
+        connection is trusted from then on. `scopes` asks for less than full
+        access, e.g. ["media"] (reading is always allowed; the list is in
+        docs/api/README.md, Permissions); what was granted is in
+        `self.scopes`."""
+        args = {"code": str(code), "name": name}
+        if scopes is not None:
+            args["scopes"] = list(scopes)
+        reply = self.request("pair", **args)
         self.trusted = True
-        return token
+        self.scopes = reply.get("scopes", ["full"])
+        return reply["token"]
 
     def media_ticket(self):
         """{ticket, expiresIn}: for GET /art?ticket=... and /export/...?ticket=...,
@@ -187,7 +203,7 @@ class Client:
         if reply is None:
             raise OctaveError("connection closed")
         if not reply.get("ok"):
-            raise OctaveError(reply.get("error", "unknown error"))
+            raise OctaveError(reply.get("error", "unknown error"), reply.get("code"))
         return reply.get("result")
 
     # ── plumbing ──────────────────────────────────────────────────────────

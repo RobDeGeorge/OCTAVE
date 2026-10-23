@@ -10,7 +10,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
@@ -25,7 +26,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -36,7 +38,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
@@ -47,7 +50,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
@@ -58,7 +62,8 @@
                     "type": "qlonglong"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
@@ -69,7 +74,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
@@ -80,7 +86,8 @@
                     "type": "float"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
@@ -91,35 +98,40 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
             "name": "get_current_levels",
             "params": [
             ],
-            "returns": "QVariantList"
+            "returns": "QVariantList",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "get_num_bars",
             "params": [
             ],
-            "returns": "int"
+            "returns": "int",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "is_analyzed",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "clear",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
@@ -130,14 +142,16 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "media"
         },
         {
             "kind": "slot",
             "name": "update_live",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
@@ -152,7 +166,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         }
     ],
     "object": "audioAnalyzer",

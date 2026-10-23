@@ -31,6 +31,10 @@
 class AudioAnalyzer : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "media")
+    Q_CLASSINFO("octave.scope.read", "get_current_levels get_num_bars is_analyzed setDemand")
+    Q_CLASSINFO("octave.scope.full", "analyze_file feed_live_pcm setLocalFile update_live update_position")
     Q_PROPERTY(QVariantList levels READ get_current_levels NOTIFY fftDataChanged)
     Q_PROPERTY(int numBars READ get_num_bars CONSTANT)
 

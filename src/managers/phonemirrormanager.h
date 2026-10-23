@@ -28,6 +28,10 @@ class ScrcpyClient;
 class PhoneMirrorManager : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "phone")
+    Q_CLASSINFO("octave.scope.read", "describeDeviceState environmentOk getDeviceState getInstallInstructions hasConnectedDevice")
+    Q_CLASSINFO("octave.scope.full", "cleanup videoSink")
 
     Q_PROPERTY(QString adbPath READ adbPath CONSTANT)
     // libavcodec linked, server jar embedded, adb found

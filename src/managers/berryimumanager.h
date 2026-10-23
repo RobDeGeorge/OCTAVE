@@ -152,6 +152,10 @@ private:
 class BerryIMUManager : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "vehicle")
+    Q_CLASSINFO("octave.scope.read", "emitRate getConnectionStatus isEnabled setDemand")
+    Q_CLASSINFO("octave.scope.full", "cleanup")
 
     Q_PROPERTY(bool connected READ getConnected NOTIFY connectionStatusChanged)
     Q_PROPERTY(bool hasTemperature READ hasTemperature NOTIFY hasTemperatureChanged)

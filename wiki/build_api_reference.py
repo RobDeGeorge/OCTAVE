@@ -34,7 +34,8 @@ def signature(method):
 def access(prop):
     if prop["constant"]:
         return "constant"
-    return "read / write" if prop["writable"] else "read"
+    return f"read / write ({esc(prop['scope'])})" if prop["writable"] and prop.get("scope") else (
+        "read / write" if prop["writable"] else "read")
 
 
 def marks(member):
@@ -64,9 +65,9 @@ def object_section(name, obj):
         out.append("          </tbody>\n        </table>")
     methods = obj["methods"]
     if methods:
-        out.append("        <table>\n          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th></tr></thead>\n          <tbody>")
+        out.append("        <table>\n          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>\n          <tbody>")
         for m in methods:
-            out.append(f"            <tr><td>{code(signature(m))}{marks(m)}</td><td>{code(m['returns'])}</td><td>{esc(m['kind'])}</td></tr>")
+            out.append(f"            <tr><td>{code(signature(m))}{marks(m)}</td><td>{code(m['returns'])}</td><td>{esc(m['kind'])}</td><td>{code(m.get('scope', ''))}</td></tr>")
         out.append("          </tbody>\n        </table>")
     sigs = obj["signals"]
     if sigs:

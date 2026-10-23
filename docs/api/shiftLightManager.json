@@ -10,7 +10,8 @@
                     "type": "double"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
@@ -21,7 +22,8 @@
                     "type": "QVariantList"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         }
     ],
     "object": "shiftLightManager",
@@ -151,6 +153,7 @@
             "name": "suppressed",
             "notify": "suppressedChanged",
             "readable": true,
+            "scope": "vehicle",
             "type": "bool",
             "writable": true
         }

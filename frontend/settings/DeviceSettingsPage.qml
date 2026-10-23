@@ -286,12 +286,26 @@ Flickable {
                         Text {
                             Layout.fillWidth: true
                             textFormat: Text.PlainText   // a client chose this name
-                            text: modelData.name + "  \u2022  last used "
+                            // What it may change (src/service/servicescopes.h): it can always read
+                            text: modelData.name + "  \u2022  "
+                                  + ((modelData.scopes || ["full"]).indexOf("full") >= 0 ? "full access"
+                                     : (modelData.scopes.length <= 1 ? "read only" : "read, " + modelData.scopes.filter(s => s !== "read").join(", ")))
+                                  + "  \u2022  last used "
                                   + (modelData.lastUsed ? new Date(modelData.lastUsed).toLocaleString(Qt.locale(), Locale.ShortFormat) : "never")
                             color: App.Style.primaryTextColor
                             font.pixelSize: App.Spacing.overallText * 0.85
                             font.family: App.Style.fontFamily
                             elide: Text.ElideRight
+                        }
+                        SettingsButton {
+                            readonly property bool readOnly: !!modelData.scopes && modelData.scopes.length === 1
+                                                             && modelData.scopes[0] === "read"
+                            objectName: "scopes_" + modelData.id
+                            text: readOnly ? "Allow all" : "Read only"
+                            tooltipText: readOnly ? "Let this device change anything, as when it first paired with full access"
+                                                  : "Let this device only read: it can no longer play, change settings or delete"
+                            height: pageRoot.dp(28)
+                            onClicked: pageRoot._pairing.setDeviceScopes(modelData.id, readOnly ? ["full"] : ["read"])
                         }
                         SettingsButton {
                             objectName: "revoke_" + modelData.id

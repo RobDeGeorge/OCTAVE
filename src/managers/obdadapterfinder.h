@@ -37,6 +37,8 @@ class BluezPairer;
 class OBDAdapterFinder : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "vehicle")
     // Discovery + pairing + connect work on this platform
     Q_PROPERTY(bool supported READ supported CONSTANT)
     // A Bluetooth controller exists and is powered

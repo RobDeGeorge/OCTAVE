@@ -18,7 +18,8 @@ BASE = {
             {"name": "mode", "type": "int", "readable": True, "writable": False, "enum": ["A", "B"]},
         ],
         "methods": [
-            {"name": "apply", "kind": "slot", "params": [{"name": "p", "type": "int"}], "returns": ""},
+            {"name": "apply", "kind": "slot", "params": [{"name": "p", "type": "int"}], "returns": "",
+             "scope": "media"},
             {"name": "linear", "kind": "slot", "params": [{"name": "p", "type": "float"}], "returns": "float"},
         ],
         "signals": [{"name": "applied", "params": [{"name": "p", "type": "int"}]}],
@@ -88,6 +89,13 @@ class Compare(unittest.TestCase):
     def test_experimental_members_are_not_covered(self):
         self.assertCompatible(lambda t: vol(t)["properties"].pop(1))
         self.assertCompatible(lambda t: vol(t)["properties"][1].update(type="QString"))
+
+    def test_permissions(self):
+        # Needing another scope locks out devices that had the old one; read opens it up
+        self.assertBreaks(lambda t: vol(t)["methods"][0].update(scope="settings"), "vol.apply")
+        self.assertBreaks(lambda t: vol(t)["methods"][0].update(scope="full"), "vol.apply")
+        self.assertCompatible(lambda t: vol(t)["methods"][0].update(scope="read"))
+        self.assertCompatible(lambda t: vol(t)["methods"][1].update(scope="media"))   # had none: newly declared
 
     def test_deprecation_is_compatible(self):
         self.assertCompatible(lambda t: vol(t)["properties"][0].update(deprecated="use level"))

@@ -139,6 +139,7 @@ class Annotated : public QObject
 {
     Q_OBJECT
     Q_CLASSINFO("octave.experimental", "draft probe")
+    Q_CLASSINFO("octave.scope", "media")
     Q_CLASSINFO("octave.deprecated.oldLevel", "use level; goes in protocol 9")
     Q_PROPERTY(int level READ level CONSTANT)
     Q_PROPERTY(int oldLevel READ level CONSTANT)
@@ -153,10 +154,31 @@ signals:
     void ready();
 };
 
+// Permissions (servicescopes.h): what each member needs
+class Scoped : public QObject
+{
+    Q_OBJECT
+    Q_CLASSINFO("octave.scope", "media")
+    Q_CLASSINFO("octave.scope.read", "peek")
+    Q_CLASSINFO("octave.scope.full", "internal")
+    Q_PROPERTY(int level MEMBER m_level NOTIFY levelChanged)
+
+public:
+    int m_level = 1;
+    int plays = 0, internals = 0;
+    Q_INVOKABLE void play() { ++plays; }
+    Q_INVOKABLE int peek() const { return 42; }
+    Q_INVOKABLE void internal() { ++internals; }
+
+signals:
+    void levelChanged();
+};
+
 class WholeDraft : public QObject
 {
     Q_OBJECT
     Q_CLASSINFO("octave.experimental", "*")
+    Q_CLASSINFO("octave.scope", "media")
 public:
     Q_INVOKABLE void go() {}
 };
@@ -166,6 +188,7 @@ class Mislabelled : public QObject
     Q_OBJECT
     Q_CLASSINFO("octave.experimental", "nosuch")
     Q_CLASSINFO("octave.deprecated.go", " ")
+    Q_CLASSINFO("octave.scope", "media")
 public:
     Q_INVOKABLE void go() {}
 };
@@ -472,7 +495,7 @@ private slots:
                 in += raw.readAll();
         }
         const int nl = in.indexOf('\n');
-        QVERIFY(nl > 0);
+        QVERIFY2(nl > 0, in.toHex().constData());
         const QJsonObject config = QJsonDocument::fromJson(in.left(nl)).object();
         QCOMPARE(config.value("event").toString(), QStringLiteral("streamConfig"));
         QCOMPARE(config.value("stream").toInt(), id);
@@ -590,6 +613,103 @@ private slots:
                                  5000);
         QVERIFY(once(server.port(), "GET /art?ticket=" + ticket.toLatin1() + " HTTP/1.1\r\nHost: " + host + "\r\n\r\n")
                     .startsWith("HTTP/1.1 401"));
+        server.stop();
+    }
+
+    void scopesLimitWhatAPairedDeviceMayChange()
+    {
+        QTemporaryDir cfg;
+        qputenv("HOME", cfg.path().toUtf8());
+        qputenv("XDG_CONFIG_HOME", (cfg.path() + "/config").toUtf8());
+        QDir().mkpath(SettingsManager::getAppDataDir());
+        QFile f(SettingsManager::getAppDataDir() + "/settingsConfigure.json");
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(R"({"serviceLoopbackOpen": false})");
+        f.close();
+        SettingsManager settings;
+        ServicePairing pairing(&settings);
+
+        Scoped scoped;
+        ServiceRegistry registry;
+        registry.add("scoped", &scoped);
+        registry.add("fixture", &m_fixture);   // no scope declared: full
+        CommandServer server(0);
+        ServiceBridge bridge(&registry, AppInfo{"9", false, true});
+        bridge.setPairing(&pairing);
+        bridge.install(server);
+        server.addRoute("/art", [](const QByteArray &) { return StaticFiles::Reply{200, "OK", "image/png", "img"}; });
+        server.addRoute("/export/logs", [](const QByteArray &) { return StaticFiles::Reply{200, "OK", "text/plain", "log"}; });
+        QVERIFY(server.start());
+
+        // describe says what each member needs
+        LineClient a(server.port());
+        pairing.startPairing();
+        QTest::qWait(ServicePairing::kAttemptIntervalMs + 10);
+        // An unknown scope is refused before the code is used
+        const QJsonObject bad = a.send(QStringLiteral(R"({"op": "pair", "code": "%1", "scopes": ["media", "root"]})")
+                                           .arg(pairing.pairingCode()).toUtf8());
+        QCOMPARE(bad.value("ok").toBool(), false);
+        QVERIFY(bad.value("error").toString().contains("root"));
+        QVERIFY(!pairing.pairingCode().isEmpty());
+        QTest::qWait(ServicePairing::kAttemptIntervalMs + 10);
+        const QJsonObject paired = a.send(QStringLiteral(R"({"op": "pair", "code": "%1", "name": "dash", "scopes": ["media"]})")
+                                              .arg(pairing.pairingCode()).toUtf8());
+        QCOMPARE(paired.value("result").toObject().value("scopes").toVariant().toStringList(), (QStringList{"read", "media"}));
+        const QString token = paired.value("result").toObject().value("token").toString();
+        QCOMPARE(token.size(), 64);
+
+        const QJsonObject d = a.send(R"({"op": "describe", "object": "scoped"})").value("result").toObject();
+        QHash<QString, QString> scopeOf;
+        for (const QJsonValue &m : d.value("methods").toArray())
+            scopeOf.insert(m.toObject().value("name").toString(), m.toObject().value("scope").toString());
+        QCOMPARE(scopeOf.value("play"), QStringLiteral("media"));
+        QCOMPARE(scopeOf.value("peek"), QStringLiteral("read"));
+        QCOMPARE(scopeOf.value("internal"), QStringLiteral("full"));
+        QCOMPARE(d.value("properties").toArray().at(0).toObject().value("scope").toString(), QStringLiteral("media"));
+
+        // Reading is always allowed; changing needs the member's scope
+        QCOMPARE(a.send(R"({"op": "get", "object": "fixture", "property": "level"})").value("ok").toBool(), true);
+        QCOMPARE(a.send(R"({"op": "call", "object": "scoped", "method": "peek"})").value("result").toInt(), 42);
+        QCOMPARE(a.send(R"({"op": "call", "object": "scoped", "method": "play"})").value("ok").toBool(), true);
+        QCOMPARE(a.send(R"({"op": "set", "object": "scoped", "property": "level", "value": 5})").value("ok").toBool(), true);
+        QCOMPARE(scoped.plays, 1);
+        QCOMPARE(scoped.m_level, 5);
+        const QJsonObject forbidden = a.send(R"({"op": "call", "object": "scoped", "method": "internal"})");
+        QCOMPARE(forbidden.value("code").toString(), QStringLiteral("forbidden"));
+        QVERIFY(forbidden.value("error").toString().contains("scoped.internal needs the full permission"));
+        QCOMPARE(scoped.internals, 0);
+        QCOMPARE(a.send(R"({"op": "set", "object": "fixture", "property": "level", "value": 9})").value("code").toString(),
+                 QStringLiteral("forbidden"));
+        QCOMPARE(a.send(R"({"action": "ping"})").value("code").toString(), QStringLiteral("forbidden"));
+
+        // hello reports them
+        LineClient b(server.port());
+        QCOMPARE(b.send(QStringLiteral(R"({"op": "hello", "token": "%1"})").arg(token).toUtf8())
+                     .value("result").toObject().value("scopes").toVariant().toStringList(), (QStringList{"read", "media"}));
+
+        // HTTP: a cover only needs read, an export needs files
+        const QByteArray host = "127.0.0.1:" + QByteArray::number(server.port());
+        const QByteArray auth = "\r\nAuthorization: Bearer " + token.toLatin1() + "\r\n\r\n";
+        QVERIFY(once(server.port(), "GET /art HTTP/1.1\r\nHost: " + host + auth).startsWith("HTTP/1.1 200"));
+        QVERIFY(once(server.port(), "GET /export/logs HTTP/1.1\r\nHost: " + host + auth).startsWith("HTTP/1.1 401"));
+        const QString ticket = b.send(R"({"op": "mediaTicket"})").value("result").toObject().value("ticket").toString();
+        QVERIFY(once(server.port(), "GET /export/logs?ticket=" + ticket.toLatin1() + " HTTP/1.1\r\nHost: " + host + "\r\n\r\n")
+                    .startsWith("HTTP/1.1 401"));
+
+        // Narrowed from Settings: at once, on the open connections too
+        const QString id = pairing.checkToken(token);
+        pairing.setDeviceScopes(id, {"read"});
+        QCOMPARE(a.send(R"({"op": "call", "object": "scoped", "method": "play"})").value("code").toString(),
+                 QStringLiteral("forbidden"));
+        QCOMPARE(pairing.devices().value(0).toMap().value("scopes").toStringList(), (QStringList{"read"}));
+        // Widened to full: everything, the dev actions included
+        pairing.setDeviceScopes(id, {"full"});
+        QCOMPARE(a.send(R"({"op": "call", "object": "scoped", "method": "internal"})").value("ok").toBool(), true);
+        QVERIFY(once(server.port(), "GET /export/logs HTTP/1.1\r\nHost: " + host + auth).startsWith("HTTP/1.1 200"));
+
+        // Kept with the device
+        ServicePairing reloaded(&settings);
+        QCOMPARE(reloaded.scopesOf(id), (QStringList{"full"}));
         server.stop();
     }
 

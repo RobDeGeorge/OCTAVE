@@ -38,6 +38,17 @@ class QProcess;
 class OBDManager : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "vehicle")
+    Q_CLASSINFO("octave.scope.read",
+                "airFuelRatio availableAdapters coolantTemp engineLoad engineOilTemp fuelLevel fuelPressure "
+                "getConnectionStatus get_all_parameter_names get_available_ports get_connection_status "
+                "get_dtc_codes get_dtc_count get_freeze_frame get_mil_status get_supported_commands "
+                "ignitionTiming intakeManifoldPressure intakeTemp isConnected is_connected "
+                "is_diagnostic_mode is_scanning longTermFuelTrim massAirFlow oxygenSensorVoltage "
+                "platform_hint rpm setBackgroundDemand setParameterDemand shortTermFuelTrim speedMPH "
+                "throttlePosition timingAdvance voltage")
+    Q_CLASSINFO("octave.scope.system", "open_bluetooth_settings")
 
     // Expose connection state as QML-readable properties
     Q_PROPERTY(bool connected READ isConnected NOTIFY connectionStatusChanged)

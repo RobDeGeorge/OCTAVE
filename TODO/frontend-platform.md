@@ -15,7 +15,7 @@ What stops an outside developer today, in order of how much it hurts:
 2. (Done, step 1.) The versioning rule was not enforced.
 3. Only the TypeScript SDK is generated; the envelope (ops, errors, events, streams) is described in prose, so a new language means reading `sdk/python` and porting by hand.
 4. There is no way to install a frontend: `--web-root` / `serviceWebRoot` takes one folder, a native frontend is a separate program the user starts themselves, and nothing restarts it.
-5. A paired device gets full control. A dashboard someone downloaded can change settings, delete trips and start downloads.
+5. (Done, step 5.) A paired device got full control.
 6. No starter projects; the smallest examples are the SDKs themselves.
 7. Unmeasured behaviour with many clients: subscription floods, a slow reader, a client that never reads (`tools/stream/service_load.py` is the baseline).
 
@@ -45,11 +45,7 @@ What stops an outside developer today, in order of how much it hurts:
 - Settings > Frontends page in QML.
 
 ### 5. Permissions per paired device
-**Effort:** M. **Device:** desktop.
-- Scopes on a token, asked for in `pair` and shown to the user with the code: `read` (get, subscribe, rows, streams), `media` (playback and volume), `vehicle` (OBD connect, demand, trouble-code clear), `settings`, `files` (downloads, imports, exports, deletes), `full`.
-- Every method and settable property gets a scope, from one table next to the stability table in step 1, published in `docs/api/`.
-- Loopback trust stays full by default (it is the head unit's own screen); an installed frontend's manifest permissions apply to it too.
-- Bumps the protocol version only if `pair` without scopes stops meaning `full`.
+**Done (2026-10-23):** scopes on paired devices (`src/service/servicescopes.h`), asked for in `pair`, enforced on `set` / `call` / phone streams / `/export` / dev actions with code `forbidden`, every manager annotated (`Q_CLASSINFO("octave.scope...")`, `--dump-api` refuses one without), `scope` in `describe` and `docs/api/`, Settings shows each device's access with a read-only toggle, `check_compat` treats a narrowed scope as breaking. **Left:** an installed frontend's manifest permissions (step 4) map onto the same scopes; the Settings toggle is all-or-read-only, a per-scope editor if users ask for one. **Effort:** S. **Device:** desktop.
 
 ### 6. Starter templates
 **Effort:** M. **Device:** desktop.

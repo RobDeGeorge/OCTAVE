@@ -19,6 +19,12 @@
 // closes every connection using it (their subscriptions and streams end)
 // and voids its media tickets.
 //
+// Permissions (servicescopes.h): `pair` may ask for scopes ("read",
+// "media", ...); without them a device gets `full`, as every device did
+// before scopes existed (and stored devices without a list still have).
+// Every op checks the member's scope as it runs, so narrowing or revoking
+// takes effect at once.
+//
 // Media tickets (`mediaTicket` op): no long-lived token in a URL. A trusted
 // connection gets a random ticket valid kTicketLifetimeMs, bound to its
 // token (revoked with it), for <img src="/art?ticket=..."> and downloads.
@@ -49,7 +55,7 @@ class ServicePairing : public QObject
     Q_OBJECT
     Q_PROPERTY(QString pairingCode READ pairingCode NOTIFY pairingChanged)   // "" when none
     Q_PROPERTY(int pairingSecondsLeft READ pairingSecondsLeft NOTIFY pairingChanged)
-    Q_PROPERTY(QVariantList devices READ devices NOTIFY devicesChanged)      // [{id, name, created, lastUsed}]
+    Q_PROPERTY(QVariantList devices READ devices NOTIFY devicesChanged)      // [{id, name, created, lastUsed, scopes}]
     Q_PROPERTY(bool serviceEnabled READ serviceEnabled NOTIFY serviceEnabledChanged)
     Q_PROPERTY(bool loopbackOpen READ loopbackOpen CONSTANT)
 
@@ -73,13 +79,20 @@ public:
     Q_INVOKABLE void startPairing();
     Q_INVOKABLE void cancelPairing();
     Q_INVOKABLE void revoke(const QString &id);
+    // Narrow (or widen) what a paired device may do; unknown scopes are ignored
+    Q_INVOKABLE void setDeviceScopes(const QString &id, const QStringList &scopes);
     // The service at the next start (serviceEnabled); takes effect then
     Q_INVOKABLE void setServiceEnabled(bool on);
 
     // ── Connection threads ──
     // A token for `code` (from `peer`, an address for the log and the
-    // per-address limit), or "" with *error set
-    QString pair(const QString &code, const QString &name, const QString &peer, QString *error);
+    // per-address limit) holding `scopes` (empty: full), or "" with *error set
+    QString pair(const QString &code, const QString &name, const QString &peer, QString *error,
+                 const QStringList &scopes = {});
+    // The scopes of a paired device (empty if there is none with that id)
+    QStringList scopesOf(const QString &id) const;
+    // Whether paired device `id` may do what needs `scope`
+    bool allows(const QString &id, const QString &scope) const;
     // The token's id if it is a paired device's, else ""
     QString checkToken(const QString &token);
     bool tokenIdValid(const QString &id) const;
@@ -87,7 +100,9 @@ public:
     // A media ticket for a trusted connection (`tokenId` "" = trusted as a
     // local process: then only good from this device)
     QString mintTicket(const QString &tokenId);
-    bool checkTicket(const QString &ticket, bool peerLoopback) const;
+    bool checkTicket(const QString &ticket, bool peerLoopback) const { return ticketAllows(ticket, peerLoopback, QStringLiteral("read")); }
+    // A valid ticket whose device may do what needs `scope`
+    bool ticketAllows(const QString &ticket, bool peerLoopback, const QString &scope) const;
     // The address a limit counts by: IPv4 as is, IPv6 by its /64
     static QString peerKey(const QString &address);
 
@@ -104,10 +119,12 @@ private:
     struct Device {
         QString id, name, hash;
         qint64 created = 0, lastUsed = 0;
+        QStringList scopes{QStringLiteral("full")};
     };
     void persist();   // GUI thread
     void persistLater();
     static QString hashOf(const QString &token);
+    static QStringList normalizedScopes(const QStringList &scopes, QString *unknown = nullptr);
 
 
     SettingsManager *m_settings;

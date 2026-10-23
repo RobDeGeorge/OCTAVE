@@ -58,6 +58,12 @@ def experimental(member, obj):
     return obj.get("stability") == "experimental" or member.get("stability") == "experimental"
 
 
+def scope_narrowed(old, new):
+    """A device that could call / set it before can't now (servicescopes.h)."""
+    before, after = old.get("scope"), new.get("scope")
+    return before is not None and after not in (before, "read")
+
+
 def sig(params):
     return ", ".join(p["type"] for p in params)
 
@@ -92,6 +98,8 @@ def compare_object(name, old, new, breaks, adds):
             breaks.append((key, f"property `{key}` lost enum keys {sorted(lost)}"))
         if np_.get("stability") == "experimental" and op.get("stability") != "experimental":
             breaks.append((key, f"property `{key}` became experimental"))
+        if scope_narrowed(op, np_):
+            breaks.append((key, f"property `{key}` needs {np_.get('scope')} (was {op['scope']})"))
     for pname in new_props.keys() - old_props.keys():
         note_add(pname, "property")
 
@@ -116,6 +124,8 @@ def compare_object(name, old, new, breaks, adds):
                                 f"{nm.get('returns') or 'nothing'}"))
         if nm.get("stability") == "experimental" and om.get("stability") != "experimental":
             breaks.append((key, f"method `{key}` became experimental"))
+        if scope_narrowed(om, nm):
+            breaks.append((key, f"method `{key}` needs {nm.get('scope')} (was {om['scope']})"))
     for mname, arity in new_m.keys() - old_m.keys():
         note_add(mname, f"method ({arity} arguments)")
 

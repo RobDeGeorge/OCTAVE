@@ -14,7 +14,8 @@
                     "type": "float"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
@@ -25,7 +26,8 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
@@ -36,7 +38,8 @@
                     "type": "QStringList"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
@@ -55,7 +58,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
@@ -70,7 +74,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
@@ -81,21 +86,24 @@
                     "type": "bool"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "files"
         },
         {
             "kind": "slot",
             "name": "endTripNow",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "files"
         },
         {
             "kind": "slot",
             "name": "refresh",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -106,7 +114,8 @@
                     "type": "qlonglong"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -133,7 +142,8 @@
                     "type": "double"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -156,7 +166,8 @@
                     "type": "double"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -175,7 +186,8 @@
                     "type": "int"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -190,7 +202,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -201,14 +214,16 @@
                     "type": "qlonglong"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "files"
         },
         {
             "kind": "slot",
             "name": "clearHistory",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "files"
         },
         {
             "kind": "slot",
@@ -219,14 +234,16 @@
                     "type": "qlonglong"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "files"
         },
         {
             "kind": "slot",
             "name": "openHistoryFolder",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "system"
         }
     ],
     "object": "tripRecorder",

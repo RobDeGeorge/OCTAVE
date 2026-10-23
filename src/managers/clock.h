@@ -13,6 +13,8 @@ class SettingsManager;
 class Clock : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "read")
     Q_PROPERTY(QString time READ time NOTIFY timeChanged)
 
 public:

@@ -29,6 +29,9 @@
 class ParameterStore : public QQmlPropertyMap
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "read")
+    Q_CLASSINFO("octave.scope.full", "ingest")
 
 public:
     static constexpr int kFlushMs = 33;

@@ -14,7 +14,8 @@
                     "type": "float"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "invokable",
@@ -25,14 +26,16 @@
                     "type": "QString"
                 }
             ],
-            "returns": "QVariant"
+            "returns": "QVariant",
+            "scope": "read"
         },
         {
             "kind": "invokable",
             "name": "snapshot",
             "params": [
             ],
-            "returns": "QVariantMap"
+            "returns": "QVariantMap",
+            "scope": "read"
         }
     ],
     "object": "paramStore",

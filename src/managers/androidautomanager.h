@@ -101,6 +101,10 @@ private:
 class AndroidAutoManager : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "phone")
+    Q_CLASSINFO("octave.scope.read", "getDhuInstallInstructions")
+    Q_CLASSINFO("octave.scope.full", "cleanup")
 
     Q_PROPERTY(bool    isDhuInstalled  READ isDhuInstalled  CONSTANT)
     Q_PROPERTY(QString dhuPath         READ dhuPath         CONSTANT)

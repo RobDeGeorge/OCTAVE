@@ -746,6 +746,12 @@ QByteArray CommandServer::handleLine(const QByteArray &line)
                 reply[QStringLiteral("code")] = QStringLiteral("unauthorised");
                 return QJsonDocument(reply).toJson(QJsonDocument::Compact) + '\n';
             }
+            if (!isOp && m_actionTrust && !m_actionTrust(*c)) {
+                reply[QStringLiteral("ok")] = false;
+                reply[QStringLiteral("error")] = QStringLiteral("actions need the full permission");
+                reply[QStringLiteral("code")] = QStringLiteral("forbidden");
+                return QJsonDocument(reply).toJson(QJsonDocument::Compact) + '\n';
+            }
         }
         try {
             QVariant result;
@@ -762,6 +768,8 @@ QByteArray CommandServer::handleLine(const QByteArray &line)
             qCWarning(lcCommand).noquote() << "command error [" + name + "]:" << e.what();
             reply[QStringLiteral("ok")] = false;
             reply[QStringLiteral("error")] = QString::fromUtf8(e.what());
+            if (const auto *ce = dynamic_cast<const CommandError *>(&e); ce && !ce->code().isEmpty())
+                reply[QStringLiteral("code")] = ce->code();
         }
     }
     return QJsonDocument(reply).toJson(QJsonDocument::Compact) + '\n';

@@ -10,14 +10,16 @@
                     "type": "int"
                 }
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "files"
         },
         {
             "kind": "invokable",
             "name": "recentLogLines",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "files"
         },
         {
             "kind": "invokable",
@@ -28,28 +30,32 @@
                     "type": "int"
                 }
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "files"
         },
         {
             "kind": "invokable",
             "name": "copyLogsToClipboard",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "files"
         },
         {
             "kind": "invokable",
             "name": "exportLogs",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "files"
         },
         {
             "kind": "invokable",
             "name": "openLogFolder",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "system"
         },
         {
             "kind": "invokable",
@@ -60,7 +66,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         }
     ],
     "object": "diagnosticsManager",

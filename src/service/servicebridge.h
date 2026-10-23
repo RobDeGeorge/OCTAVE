@@ -80,6 +80,10 @@ public:
     // pair needs a trusted connection. Before install(). None = all trusted.
     void setPairing(ServicePairing *pairing) { m_pairing = pairing; }
     bool trusted(const Connection &c) const;
+    // Permissions (servicescopes.h): whether a connection may do what needs
+    // `scope`, and what it holds (the device's own screen holds full)
+    bool connectionAllows(const Connection &c, const QString &scope) const;
+    QStringList connectionScopes(const Connection &c) const;
 
     // `object`.`method`(consumer, value) claims `consumer` for the calling
     // connection unless `value` is the release value (an empty list for a
@@ -89,6 +93,9 @@ public:
     void releaseOnClose(const QString &object, const QString &method, const QVariant &release);
 
 private:
+    // Throws "forbidden" unless the calling connection may call / set
+    // `member` of `o` ("" = the object's own scope)
+    void requireScope(const QObject *o, const QString &objectName, const QString &member) const;
     QObject *object(const QString &name) const;   // throws CommandError if unknown
     QVariant subscribe(const QVariantMap &args);
     QVariant unsubscribe(const QVariantMap &args);

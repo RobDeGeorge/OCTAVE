@@ -15,6 +15,27 @@
 class SettingsManager : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "settings")
+    Q_CLASSINFO("octave.scope.read",
+                "get_android_auto_enabled get_auto_play_on_startup get_directory_history "
+                "get_esp32_auto_reconnect get_esp32_led_color_mode get_esp32_led_sleep_enabled "
+                "get_esp32_led_static_color get_esp32_volume_enabled get_esp32_volume_port "
+                "get_esp32_volume_step_size get_gesture_mapping get_gesture_mapping_dict "
+                "get_gesture_sensor_enabled get_git_commit_date get_git_commit_hash get_git_commit_message "
+                "get_home_obd_parameters get_imu_enabled get_last_played_playlist get_last_played_position "
+                "get_last_played_song get_last_settings_section get_last_shuffle_state "
+                "get_music_button_default_page get_obd_parameter_enabled get_persist_shuffle_state "
+                "get_phone_mirror_enabled get_pinned_settings_metadata "
+                "get_return_to_library_after_selection get_scrcpy_audio_duck_enabled "
+                "get_scrcpy_audio_duck_level get_scrcpy_audio_gain get_scrcpy_auto_wifi "
+                "get_scrcpy_bit_rate_auto get_scrcpy_bit_rate_usb get_scrcpy_bit_rate_wifi "
+                "get_scrcpy_display_dpi get_scrcpy_display_size get_scrcpy_phone_screen_off "
+                "get_scrcpy_wireless_address get_setting get_setting_with_default "
+                "get_settings_menu_visibility get_settings_registry get_show_waveform_visualizer "
+                "get_supported_obd_parameters get_window_state is_setting_pinned "
+                "is_settings_section_visible")
+    Q_CLASSINFO("octave.scope.full", "setCurrentVolume set_album_art_colors")
     friend class TstSettingsManager;
 
     // ======================================================================

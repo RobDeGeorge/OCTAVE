@@ -36,6 +36,9 @@ class SettingsManager;
 class VolumeController : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "media")
+    Q_CLASSINFO("octave.scope.read", "toLinear toPercent")
     Q_PROPERTY(int percent READ percent NOTIFY percentChanged)
     Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY mutedChanged)
     // muted, or the volume is 0 %: what the mute icons show

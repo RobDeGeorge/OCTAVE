@@ -6,14 +6,16 @@
             "name": "startScan",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "stopScan",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
@@ -24,21 +26,24 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "cancel",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         },
         {
             "kind": "slot",
             "name": "powerOn",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "vehicle"
         }
     ],
     "object": "obdAdapterFinder",

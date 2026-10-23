@@ -33,6 +33,9 @@ class SettingsManager;
 class NowPlaying : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "media")
+    Q_CLASSINFO("octave.scope.full", "extractArtColors")
     Q_PROPERTY(QString source READ source NOTIFY sourceChanged)          // "local" | "phone"
     Q_PROPERTY(bool playing READ playing NOTIFY playingChanged)
     Q_PROPERTY(bool hasTrack READ hasTrack NOTIFY trackInfoChanged)

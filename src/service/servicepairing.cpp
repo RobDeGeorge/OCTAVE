@@ -1,4 +1,5 @@
 #include "servicepairing.h"
+#include "servicescopes.h"
 
 #include "../managers/settingsmanager.h"
 
@@ -47,6 +48,8 @@ ServicePairing::ServicePairing(SettingsManager *settings, QObject *parent)
             Device d{m.value(QStringLiteral("id")).toString(), m.value(QStringLiteral("name")).toString(),
                      m.value(QStringLiteral("hash")).toString(), m.value(QStringLiteral("created")).toLongLong(),
                      m.value(QStringLiteral("lastUsed")).toLongLong()};
+            if (m.contains(QStringLiteral("scopes")))
+                d.scopes = normalizedScopes(m.value(QStringLiteral("scopes")).toStringList());
             if (!d.id.isEmpty() && d.hash.size() == 64)
                 m_devices.append(d);
         }
@@ -105,7 +108,8 @@ QVariantList ServicePairing::devices() const
     QVariantList out;
     for (const Device &d : m_devices)
         out.append(QVariantMap{{QStringLiteral("id"), d.id}, {QStringLiteral("name"), d.name},
-                               {QStringLiteral("created"), d.created}, {QStringLiteral("lastUsed"), d.lastUsed}});
+                               {QStringLiteral("created"), d.created}, {QStringLiteral("lastUsed"), d.lastUsed},
+                               {QStringLiteral("scopes"), d.scopes}});
     return out;
 }
 
@@ -132,9 +136,18 @@ void ServicePairing::cancelPairing()
     emit pairingChanged();
 }
 
-QString ServicePairing::pair(const QString &code, const QString &name, const QString &peer, QString *error)
+QString ServicePairing::pair(const QString &code, const QString &name, const QString &peer, QString *error,
+                            const QStringList &scopes)
 {
     QString token, deviceName;
+    // A bad request costs no attempt and doesn't use the code
+    QString unknown;
+    const QStringList granted = normalizedScopes(scopes, &unknown);
+    if (!unknown.isEmpty()) {
+        if (error)
+            *error = QStringLiteral("unknown permission %1 (known: %2)").arg(unknown, OctaveService::knownScopes().join(QStringLiteral(", ")));
+        return {};
+    }
     {
         QMutexLocker l(&m_lock);
         auto refuse = [&](const QString &why) {
@@ -164,9 +177,9 @@ QString ServicePairing::pair(const QString &code, const QString &name, const QSt
         if (deviceName.isEmpty())
             deviceName = QStringLiteral("Device");
         const qint64 now = QDateTime::currentMSecsSinceEpoch();
-        m_devices.append(Device{randomHex(8), deviceName, hashOf(token), now, now});
+        m_devices.append(Device{randomHex(8), deviceName, hashOf(token), now, now, granted});
     }
-    qCInfo(lcPairing).noquote() << "paired" << deviceName << "from" << peer;
+    qCInfo(lcPairing).noquote() << "paired" << deviceName << "from" << peer << "with" << granted.join(QLatin1Char(' '));
     QMetaObject::invokeMethod(this, [this, deviceName] {
         m_tick.stop();
         persist();
@@ -197,6 +210,62 @@ QString ServicePairing::checkToken(const QString &token)
     return id;
 }
 
+QStringList ServicePairing::normalizedScopes(const QStringList &scopes, QString *unknown)
+{
+    QStringList out;
+    for (const QString &s : scopes) {
+        const QString scope = s.trimmed().toLower();
+        if (!OctaveService::knownScopes().contains(scope)) {
+            if (unknown && unknown->isEmpty())
+                *unknown = s;
+            continue;
+        }
+        if (!out.contains(scope))
+            out.append(scope);
+    }
+    if (out.contains(QStringLiteral("full")) || out.isEmpty())
+        return {QStringLiteral("full")};
+    if (!out.contains(QStringLiteral("read")))
+        out.prepend(QStringLiteral("read"));
+    return out;
+}
+
+QStringList ServicePairing::scopesOf(const QString &id) const
+{
+    QMutexLocker l(&m_lock);
+    for (const Device &d : m_devices)
+        if (d.id == id)
+            return d.scopes;
+    return {};
+}
+
+bool ServicePairing::allows(const QString &id, const QString &scope) const
+{
+    QMutexLocker l(&m_lock);
+    for (const Device &d : m_devices)
+        if (d.id == id)
+            return OctaveService::scopeAllows(d.scopes, scope);
+    return false;
+}
+
+void ServicePairing::setDeviceScopes(const QString &id, const QStringList &scopes)
+{
+    const QStringList granted = normalizedScopes(scopes);
+    bool changed = false;
+    {
+        QMutexLocker l(&m_lock);
+        for (Device &d : m_devices)
+            if (d.id == id && d.scopes != granted) {
+                d.scopes = granted;
+                changed = true;
+            }
+    }
+    if (!changed)
+        return;
+    persist();
+    emit devicesChanged();
+}
+
 bool ServicePairing::tokenIdValid(const QString &id) const
 {
     QMutexLocker l(&m_lock);
@@ -225,7 +294,7 @@ QString ServicePairing::mintTicket(const QString &tokenId)
     return ticket;
 }
 
-bool ServicePairing::checkTicket(const QString &ticket, bool peerLoopback) const
+bool ServicePairing::ticketAllows(const QString &ticket, bool peerLoopback, const QString &scope) const
 {
     if (ticket.size() != 32)
         return false;
@@ -237,7 +306,7 @@ bool ServicePairing::checkTicket(const QString &ticket, bool peerLoopback) const
         return peerLoopback && m_loopbackOpen;
     for (const Device &d : m_devices)
         if (d.id == it->tokenId)
-            return true;
+            return OctaveService::scopeAllows(d.scopes, scope);
     return false;   // its token was revoked
 }
 
@@ -300,7 +369,7 @@ void ServicePairing::persist()
         for (const Device &d : m_devices)
             list.append(QVariantMap{{QStringLiteral("id"), d.id}, {QStringLiteral("name"), d.name},
                                     {QStringLiteral("hash"), d.hash}, {QStringLiteral("created"), d.created},
-                                    {QStringLiteral("lastUsed"), d.lastUsed}});
+                                    {QStringLiteral("lastUsed"), d.lastUsed}, {QStringLiteral("scopes"), d.scopes}});
     }
     m_settings->saveFileOnlySetting(QStringLiteral("serviceTokens"), list);
 }

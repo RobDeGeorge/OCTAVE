@@ -130,7 +130,14 @@ private:
 class CommandError : public std::runtime_error
 {
 public:
-    explicit CommandError(const QString &message) : std::runtime_error(message.toStdString()) {}
+    // `code` goes in the error reply as "code" for clients to act on
+    // ("forbidden", ...; docs/api/README.md lists them)
+    explicit CommandError(const QString &message, const QString &code = {})
+        : std::runtime_error(message.toStdString()), m_code(code) {}
+    const QString &code() const { return m_code; }
+
+private:
+    QString m_code;
 };
 
 class CommandServer : public QObject
@@ -197,6 +204,9 @@ public:
         m_httpTrusted = std::move(httpTrusted);
         m_openOps = std::move(openOps);
     }
+    // Who may send the dev `action` form ({"action": ...}): unset = every
+    // trusted connection
+    void setActionTrust(TrustCheck allowed) { m_actionTrust = std::move(allowed); }
     // What one client may cost (M3-M5 of the 2026-10-23 review): before
     // start(); the defaults are the shipped ones, tests shrink them
     struct Limits {
@@ -230,6 +240,7 @@ private:
     Limits m_limits;
     HttpTrustCheck m_httpTrusted;
     QStringList m_openOps;
+    TrustCheck m_actionTrust;
     QMutex m_connectionsLock;
     QList<std::weak_ptr<Connection>> m_connections;
     QHash<QByteArray, Route> m_routes;

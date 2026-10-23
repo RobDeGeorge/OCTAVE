@@ -6,7 +6,8 @@
             "name": "update_time",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "read"
         }
     ],
     "object": "clock",

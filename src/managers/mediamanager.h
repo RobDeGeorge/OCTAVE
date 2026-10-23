@@ -40,6 +40,23 @@ struct PlaylistInfo {
 class MediaManager : public QObject
 {
     Q_OBJECT
+    // Service permissions (src/service/servicescopes.h)
+    Q_CLASSINFO("octave.scope", "media")
+    Q_CLASSINFO("octave.scope.read",
+                "browse_music_folders getVolume get_album get_album_art get_album_count get_artist_count "
+                "get_band get_current_file get_current_playlist_name get_current_song_list "
+                "get_default_media_dir get_display_name get_duration get_formatted_duration "
+                "get_full_file_path get_media_files get_media_folder_name get_movable_playlist_names "
+                "get_neighbor_album_arts get_next_track_album_art get_next_track_name get_playlist_names "
+                "get_position get_previous_track_album_art get_previous_track_name get_song_file_path "
+                "get_song_playlist_name get_total_duration is_muted is_paused is_playing is_shuffled")
+    Q_CLASSINFO("octave.scope.files",
+                "create_playlist delete_playlist delete_song flush_metadata_store move_song_to_playlist "
+                "set_library_root strip_filenames")
+    Q_CLASSINFO("octave.scope.full",
+                "_clear_temp_files _save_playback_state connect_settings_manager "
+                "extract_colors_from_album_art extract_colors_from_image invalidate_stats_cache setDucking "
+                "setMuted setVolume")
 
 public:
     explicit MediaManager(QObject *parent = nullptr);

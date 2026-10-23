@@ -10,21 +10,24 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "next_search_page",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "search_more",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "read"
         },
         {
             "kind": "slot",
@@ -39,7 +42,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "files"
         },
         {
             "kind": "slot",
@@ -50,7 +54,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "files"
         },
         {
             "kind": "slot",
@@ -61,7 +66,8 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "files"
         },
         {
             "kind": "slot",
@@ -72,21 +78,24 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "files"
         },
         {
             "kind": "slot",
             "name": "clear_download_queue",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "files"
         },
         {
             "kind": "slot",
             "name": "clear_finished_downloads",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "files"
         },
         {
             "kind": "slot",
@@ -97,7 +106,8 @@
                     "type": "QObject*"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "slot",
@@ -108,35 +118,40 @@
                     "type": "QString"
                 }
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "files"
         },
         {
             "kind": "slot",
             "name": "get_download_playlist",
             "params": [
             ],
-            "returns": "QString"
+            "returns": "QString",
+            "scope": "read"
         },
         {
             "kind": "slot",
             "name": "cleanup",
             "params": [
             ],
-            "returns": ""
+            "returns": "",
+            "scope": "full"
         },
         {
             "kind": "invokable",
             "name": "hasStorageAccess",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "read"
         },
         {
             "kind": "invokable",
             "name": "requestStorageAccess",
             "params": [
             ],
-            "returns": "bool"
+            "returns": "bool",
+            "scope": "system"
         }
     ],
     "object": "downloadManager",
