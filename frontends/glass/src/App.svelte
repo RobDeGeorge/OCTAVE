@@ -14,6 +14,8 @@
   import Settings from './pages/Settings.svelte'
   import More from './pages/More.svelte'
   import Mirror from './pages/Mirror.svelte'
+  import Pair from './ui/Pair.svelte'
+  import { needsPairing } from './lib/pairing'
 
   const status = octave.status
   const pages: Record<string, any> = { home: Home, media: Media, obd: Obd, dashboards: Dashboards, trips: Trips, settings: Settings, more: More, mirror: Mirror }
@@ -36,6 +38,8 @@
   {/if}
   <Page arg={$route.arg} />
 </main>
+
+{#if $needsPairing}<Pair />{/if}
 
 <div class="toasts" aria-live="polite">
   {#each $toasts as t (t.id)}

@@ -37,7 +37,7 @@ static void box(SDL_Renderer *r, int x, int y, int w, int h, Uint8 cr, Uint8 cg,
 /* ── buttons: fixed rectangles, hit-tested in ui_tap ──────────────────── */
 typedef struct { int x, y, w, h; const char *label; int id; } Button;
 
-enum { B_NONE, B_TAB_DRIVE, B_TAB_MEDIA, B_TAB_DTC, B_PREV, B_PLAY, B_NEXT, B_VOL_DOWN, B_VOL_UP, B_MUTE, B_SHUFFLE,
+enum { B_NONE, B_KEY_0, B_KEY_1, B_KEY_2, B_KEY_3, B_KEY_4, B_KEY_5, B_KEY_6, B_KEY_7, B_KEY_8, B_KEY_9, B_KEY_DEL, B_KEY_OK, B_TAB_DRIVE, B_TAB_MEDIA, B_TAB_DTC, B_PREV, B_PLAY, B_NEXT, B_VOL_DOWN, B_VOL_UP, B_MUTE, B_SHUFFLE,
        B_READ, B_CLEAR, B_YES, B_NO, B_OBD_CONNECT };
 
 static const Button tabs[] = {
@@ -52,6 +52,12 @@ static const Button dtc_buttons[] = {
 };
 static const Button confirm_buttons[] = {
     {80, 100, 70, 22, "YES", B_YES}, {170, 100, 70, 22, "NO", B_NO},
+};
+static const Button pad_buttons[] = {
+    {118, 46, 26, 22, "1", B_KEY_1}, {148, 46, 26, 22, "2", B_KEY_2}, {178, 46, 26, 22, "3", B_KEY_3},
+    {118, 72, 26, 22, "4", B_KEY_4}, {148, 72, 26, 22, "5", B_KEY_5}, {178, 72, 26, 22, "6", B_KEY_6},
+    {118, 98, 26, 22, "7", B_KEY_7}, {148, 98, 26, 22, "8", B_KEY_8}, {178, 98, 26, 22, "9", B_KEY_9},
+    {118, 124, 26, 22, "<", B_KEY_DEL}, {148, 124, 26, 22, "0", B_KEY_0}, {178, 124, 26, 22, "OK", B_KEY_OK},
 };
 static const Button drive_buttons[] = {
     {212, 150, 100, 18, "CONNECT", B_OBD_CONNECT},
@@ -325,6 +331,39 @@ static void draw_dtc(SDL_Renderer *r, const Ui *ui, const State *s)
     }
 }
 
+/* ── PAIR (protocol 2, over the network) ───────────────────────────────── */
+static void draw_pair(SDL_Renderer *r, const Ui *ui, const State *s)
+{
+    SDL_SetRenderDrawColor(r, C_INK, 255);
+    font_draw_centered(r, 0, UI_W, 22, 2, "PAIR WITH OCTAVE");
+    SDL_SetRenderDrawColor(r, C_DIM, 255);
+    font_draw_centered(r, 0, UI_W, 36, 1, "CODE FROM SETTINGS > SERVICE");
+    /* the six cells */
+    for (int i = 0; i < 6; i++) {
+        int x = 20 + i * 14;
+        fill(r, x, 60, 12, 16, i < (int)strlen(ui->code) ? 255 : 40, i < (int)strlen(ui->code) ? 210 : 36, i < (int)strlen(ui->code) ? 70 : 64);
+        if (i < (int)strlen(ui->code)) {
+            char d[2] = {ui->code[i], 0};
+            SDL_SetRenderDrawColor(r, C_BG, 255);
+            font_draw(r, x + 4, 65, 1, d);
+        }
+    }
+    for (size_t i = 0; i < sizeof pad_buttons / sizeof pad_buttons[0]; i++)
+        draw_button(r, &pad_buttons[i], pad_buttons[i].id == B_KEY_OK && strlen(ui->code) == 6, pad_buttons[i].id != B_KEY_OK);
+    if (s->pair_error[0]) {
+        SDL_SetRenderDrawColor(r, C_RED, 255);
+        font_draw(r, 20, 90, 1, s->pair_error);
+    }
+    SDL_SetRenderDrawColor(r, C_DIM, 255);
+    font_draw(r, 20, 150, 1, "KEYS 0-9, BACKSPACE, ENTER");
+    font_draw(r, 20, 160, 1, ui->token_path[0] ? "TOKEN IS SAVED TO" : "RUN WITH --token-file TO KEEP IT");
+    if (ui->token_path[0]) {
+        char path[48];
+        snprintf(path, sizeof path, "%.46s", ui->token_path + (strlen(ui->token_path) > 46 ? strlen(ui->token_path) - 46 : 0));
+        font_draw(r, 20, 170, 1, path);
+    }
+}
+
 void ui_draw(Ui *ui, SDL_Renderer *r, Link *l, const State *s)
 {
     ui->frame++;
@@ -335,6 +374,14 @@ void ui_draw(Ui *ui, SDL_Renderer *r, Link *l, const State *s)
     for (int i = 0; i < 6; i++)
         fill(r, 0, 16 + i * 27, UI_W, 1, 24 + i * 3, 20 + i * 3, 36 + i * 4);
     draw_top(r, ui, s);
+    if (s->online && s->untrusted) {
+        draw_pair(r, ui, s);
+        return;
+    }
+    if (ui->token_note[0] && ui->frame % 600 < 300) {
+        SDL_SetRenderDrawColor(r, C_GREEN, 255);
+        font_draw_right(r, UI_W - 4, 170, 1, ui->token_note);
+    }
     switch (ui->page) {
     case PAGE_DRIVE: draw_drive(r, ui, s); break;
     case PAGE_MEDIA: draw_media(r, ui, s); break;
@@ -354,7 +401,14 @@ void ui_draw(Ui *ui, SDL_Renderer *r, Link *l, const State *s)
 static void act(Ui *ui, Link *l, const State *s, int id)
 {
     char args[32];
+    if (id >= B_KEY_0 && id <= B_KEY_9) {
+        size_t n = strlen(ui->code);
+        if (n < 6) { ui->code[n] = (char)('0' + (id - B_KEY_0)); ui->code[n + 1] = 0; }
+        return;
+    }
     switch (id) {
+    case B_KEY_DEL: { size_t n = strlen(ui->code); if (n) ui->code[n - 1] = 0; break; }
+    case B_KEY_OK: if (strlen(ui->code) == 6) { link_pair(l, ui->code, "OCTAVE Arcade"); ui->code[0] = 0; } break;
     case B_TAB_DRIVE: ui->page = PAGE_DRIVE; ui->confirm_clear = false; break;
     case B_TAB_MEDIA: ui->page = PAGE_MEDIA; ui->confirm_clear = false; break;
     case B_TAB_DTC: ui->page = PAGE_DTC; break;
@@ -384,6 +438,10 @@ static void act(Ui *ui, Link *l, const State *s, int id)
 void ui_tap(Ui *ui, Link *l, const State *s, int x, int y)
 {
     int id = B_NONE;
+    if (s->online && s->untrusted) {
+        act(ui, l, s, hit(pad_buttons, sizeof pad_buttons / sizeof pad_buttons[0], x, y));
+        return;
+    }
     if (ui->confirm_clear) {
         id = hit(confirm_buttons, 2, x, y);
     } else {
@@ -397,6 +455,14 @@ void ui_tap(Ui *ui, Link *l, const State *s, int x, int y)
 
 void ui_key(Ui *ui, Link *l, const State *s, SDL_Keycode key)
 {
+    if (s->online && s->untrusted) {
+        if (key >= SDLK_0 && key <= SDLK_9) act(ui, l, s, B_KEY_0 + (int)(key - SDLK_0));
+        else if (key >= SDLK_KP_1 && key <= SDLK_KP_9) act(ui, l, s, B_KEY_1 + (int)(key - SDLK_KP_1));
+        else if (key == SDLK_KP_0) act(ui, l, s, B_KEY_0);
+        else if (key == SDLK_BACKSPACE) act(ui, l, s, B_KEY_DEL);
+        else if (key == SDLK_RETURN || key == SDLK_KP_ENTER) act(ui, l, s, B_KEY_OK);
+        return;
+    }
     switch (key) {
     case SDLK_1: act(ui, l, s, B_TAB_DRIVE); break;
     case SDLK_2: act(ui, l, s, B_TAB_MEDIA); break;

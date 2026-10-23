@@ -11,10 +11,12 @@ A fourth OCTAVE frontend, written to prove the open backend from plain C: **C11 
 
 cd frontends/arcade
 cmake -S . -B build && cmake --build build -j4
-./build/octave-arcade                    # --host H --port P --fullscreen --page drive|media|dtc --scale N
+./build/octave-arcade                    # --host H --port P --fullscreen --page drive|media|dtc --scale N --token-file PATH
 ```
 
 Needs `libsdl2-dev` (Debian / Ubuntu / Raspberry Pi OS) or `sdl2` / `sdl2-compat` (Arch), CMake 3.16 and a C11 compiler. It builds warning-free with `-Wall -Wextra -Wpedantic`; the two vendored libraries (`third_party/`, cJSON v1.7.18 and stb_image v2.30, with their licences) are compiled with warnings off. Start it before or after OCTAVE: until the service answers it shows NO SIGNAL and retries every second, and it re-subscribes on every reconnect.
+
+Over the network (OCTAVE started with `--service-bind 0.0.0.0`, protocol 2) the service refuses everything until the device pairs: the PAIR page shows a keypad for the 6-digit code from the car's Settings, Service, Pair a device (keys 0-9, Backspace, Enter work too). Keep the token with `--token-file PATH` (written on a successful pair, read on the next start), or pass one with `--token T` / `OCTAVE_TOKEN`; without either the token is printed once. The cover is fetched with `Authorization: Bearer`. A token OCTAVE rejects is dropped and the PAIR page returns.
 
 | Key | Does |
 |---|---|
@@ -27,6 +29,7 @@ Needs `libsdl2-dev` (Debian / Ubuntu / Raspberry Pi OS) or `sdl2` / `sdl2-compat
 | Y / N | answer the clear-codes question |
 | F11 | fullscreen |
 | Ctrl+Q | quit |
+| 0-9, Backspace, Enter | the pairing code (PAIR page) |
 
 Every key is on screen too: the pages are laid out for a finger (mouse clicks and touch both land as taps).
 
