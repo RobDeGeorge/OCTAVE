@@ -33,7 +33,7 @@ What stops an outside developer today, in order of how much it hurts:
 **Effort:** L. **Device:** desktop.
 - **Done (2026-10-23):** `docs/api/protocol.json` (ops, errors, events, stream record, HTTP routes, pairing), checked against a headless app by `sdk/python/tests/test_protocol_spec.py` (ctest `sdk_python`); `describe` answers `ops`.
 - **Done (2026-10-23):** TypeScript generated from `protocol.json` (`sdk/typescript/src/protocol.ts`: ops, replies, events, errors, record constants, routes; `request` typed per op) and from the object files with `@deprecated` / `@experimental` JSDoc; only the connection logic is hand-written. Go too (`sdk/go`, standard library only: `protocol_gen.go` + `objects_gen.go` from `internal/gen`, hand-written `client.go`, ctest `sdk_go`), which proves the spec isn't TypeScript-shaped. **Left:** Python stays hand-written (its `Client` is 200 lines and `test_protocol_spec.py` already holds it to the spec); generate it only if it drifts.
-- A conformance kit for SDK authors: a recorded session plus a fake server they can run their client against.
+- **Done (2026-10-23):** the conformance kit: `tools/api/fake_server.py`, a stdlib fake that speaks `protocol.json` with canned objects, pairing, scopes from `docs/api`, a stream, and faults on demand (`fake.rateLimitNext`, `fake.setForbidden`, `fake.revokeTokens`); `tools/api/tests/test_fake_server.py` (Python client, ctest `api_compat`) and `sdk/go/fake_test.go` (Go client, ctest `sdk_go`) run against it. A recorded session was not needed: the fake validates every message it sends against the spec.
 
 ### 4. Installable frontends
 **Effort:** L. **Device:** desktop, Pi.
