@@ -460,10 +460,15 @@ void Connection::drainWake()
 #if defined(Q_OS_UNIX) && !defined(Q_OS_WASM)
     if (m_wake[0] < 0)
         return;
-    m_wakePending.store(false);
+    // Empty the pipe before clearing the flag: a push between the two finds
+    // the flag still set and writes nothing, but the takeAll() that follows
+    // this picks its item up. The other order could swallow the byte of a
+    // push that set the flag, leaving it set with an empty pipe, and every
+    // later push waiting for poll's 20 ms timeout.
     char sink[64];
     while (::read(m_wake[0], sink, sizeof sink) > 0) {
     }
+    m_wakePending.store(false);
 #endif
 }
 
