@@ -19,7 +19,7 @@ export interface ErrorReply {
   id?: Json
   ok: false
   error: string
-  code?: "unauthorised"
+  code?: "unauthorised" | "forbidden"
 }
 
 /** What `get` returns for a property holding a list model. */
@@ -62,6 +62,8 @@ export type PropertyDescription = Annotated & {
   notify?: string
   /** The keys, for an enum property (`set` takes a key or a number). */
   enum?: string[]
+  /** Writable properties only: what `set` needs. */
+  scope?: "read" | "media" | "vehicle" | "phone" | "settings" | "files" | "system" | "full"
 }
 
 export type MethodDescription = Annotated & {
@@ -70,6 +72,8 @@ export type MethodDescription = Annotated & {
   params: ParamDescription[]
   /** The Qt return type; "" for void. */
   returns: string
+  /** What `call` needs. */
+  scope: "read" | "media" | "vehicle" | "phone" | "settings" | "files" | "system" | "full"
 }
 
 export type SignalDescription = Annotated & {
@@ -111,6 +115,8 @@ export interface HelloReply {
   loopbackOpen: boolean
   /** Present (true) when the `token` sent was unknown or revoked; the connection keeps no token. */
   tokenRejected?: true
+  /** Trusted connections only: what this connection may change (`full` on the device itself). */
+  scopes?: ("read" | "media" | "vehicle" | "phone" | "settings" | "files" | "system" | "full")[]
   /** Trusted connections only. */
   app?: {
     version: string
@@ -247,9 +253,13 @@ export interface PairArgs {
   code: string
   /** What the user sees in the device list ("Kitchen tablet"). */
   name: string
+  /** The permissions this device asks for; absent or empty: full. An unknown one fails `pair` without using the code. */
+  scopes?: ("read" | "media" | "vehicle" | "phone" | "settings" | "files" | "system" | "full")[]
 }
 export interface PairReply {
   token: string
+  /** What was granted: `read` plus what was asked for, or `full`. */
+  scopes: ("read" | "media" | "vehicle" | "phone" | "settings" | "files" | "system" | "full")[]
 }
 
 /**
@@ -291,12 +301,16 @@ export interface Ops {
 export type Request<O extends Op = Op> = { op: O; id?: Json } & Ops[O]['args']
 export type Reply = OkReply | ErrorReply
 /** The `code`s a failure reply can carry; every other failure is a message only. */
-export type ErrorCode = "unauthorised"
+export type ErrorCode = "unauthorised" | "forbidden"
 export const ERROR_CODES: Record<ErrorCode, { description: string; since?: number; http?: number }> = {
   "unauthorised": {
     "description": "The connection is not trusted (protocol 2, pairing): it is not on this device with serviceLoopbackOpen on, and it has presented no valid token. Every op but `hello` and `pair` answers this until the client pairs or sends a valid token with `hello`. HTTP routes answer 401 for the same reason.",
     "since": 2,
     "http": 401
+  },
+  "forbidden": {
+    "description": "The connection is trusted but its paired device lacks the permission scope this `set` / `call` / phone stream / dev action needs (docs/api/README.md, Permissions). The message names the member, the scope it needs and the scopes the device has. HTTP routes answer 401 for the same reason (`/export/...` needs `files`).",
+    "since": 2
   }
 }
 

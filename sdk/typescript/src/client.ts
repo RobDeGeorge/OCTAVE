@@ -15,6 +15,8 @@ export const PROTOCOL_VERSIONS = [1, 2]
 
 export type { Json, ServiceEvent } from './protocol.js'
 export type Status = 'connecting' | 'online' | 'offline' | 'mismatch'
+/** A permission a paired device holds (docs/api/README.md, Permissions). */
+export type Scope = NonNullable<Ops['pair']['args']['scopes']>[number]
 
 /** The `hello` reply (generated: protocol.ts). `app` and `objects` are present on a trusted connection. */
 export type Hello = HelloReply
@@ -83,10 +85,10 @@ export class OctaveClient {
 
   /** Pair this device with a code from the head unit's Settings; the token is
    *  kept for later connections and returned so the caller can store it. */
-  async pair(code: string, name: string): Promise<string> {
-    const r = (await this.send0('pair', { code, name })) as { token: string }
+  async pair(code: string, name: string, scopes?: Scope[]): Promise<string> {
+    const r = (await this.send0('pair', scopes ? { code, name, scopes } : { code, name })) as { token: string; scopes: Scope[] }
     this.token = r.token
-    if (this._hello) this._hello.auth = 'trusted'
+    if (this._hello) { this._hello.auth = 'trusted'; this._hello.scopes = r.scopes }
     return r.token
   }
   /** Forget this device on the head unit, and the token here. */

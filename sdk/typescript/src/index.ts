@@ -1,5 +1,5 @@
 export { OctaveClient, OctaveError, PROTOCOL_VERSION, PROTOCOL_VERSIONS, defaultUrl } from './client.js'
-export type { ClientOptions, Status, Hello, Json, Description, PropertyMeta, MethodMeta, SignalMeta, ParamMeta, ServiceEvent, ModelChange, SubscribeOptions } from './client.js'
+export type { ClientOptions, Status, Scope, Hello, Json, Description, PropertyMeta, MethodMeta, SignalMeta, ParamMeta, ServiceEvent, ModelChange, SubscribeOptions } from './client.js'
 export { parseRecord, buildRecord, F_KEY, F_CONFIG, F_JPEG, F_DISCONTINUITY, RECORD_HEADER } from './stream.js'
 export type { MediaRecord, StreamInfo, StreamHandlers } from './stream.js'
 export { OPS, OPEN_OPS, ERROR_CODES, STREAMS, ROUTES, PROTOCOL_VERSION as SPEC_PROTOCOL_VERSION } from './protocol.js'

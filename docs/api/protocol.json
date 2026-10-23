@@ -60,6 +60,10 @@
         "description": "The connection is not trusted (protocol 2, pairing): it is not on this device with serviceLoopbackOpen on, and it has presented no valid token. Every op but `hello` and `pair` answers this until the client pairs or sends a valid token with `hello`. HTTP routes answer 401 for the same reason.",
         "since": 2,
         "http": 401
+      },
+      "forbidden": {
+        "description": "The connection is trusted but its paired device lacks the permission scope this `set` / `call` / phone stream / dev action needs (docs/api/README.md, Permissions). The message names the member, the scope it needs and the scopes the device has. HTTP routes answer 401 for the same reason (`/export/...` needs `files`).",
+        "since": 2
       }
     },
     "messages": [
@@ -92,6 +96,7 @@
           "auth": { "type": "string", "enum": ["trusted", "untrusted"], "description": "Whether this connection may use the service. Protocol 2 (absent in 1: everything was trusted)." },
           "loopbackOpen": { "type": "boolean", "description": "Whether a connection from this device is trusted without pairing (the setting serviceLoopbackOpen). Protocol 2." },
           "tokenRejected": { "type": "boolean", "const": true, "description": "Present (true) when the `token` sent was unknown or revoked; the connection keeps no token." },
+          "scopes": { "type": "array", "items": { "$ref": "#/$defs/scope" }, "description": "Trusted connections only: what this connection may change (`full` on the device itself)." },
           "app": {
             "type": "object",
             "description": "Trusted connections only.",
@@ -257,14 +262,22 @@
         "type": "object",
         "properties": {
           "code": { "type": "string", "pattern": "^[0-9]{6}$" },
-          "name": { "type": "string", "description": "What the user sees in the device list (\"Kitchen tablet\")." }
+          "name": { "type": "string", "description": "What the user sees in the device list (\"Kitchen tablet\")." },
+          "scopes": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/scope" },
+            "description": "The permissions this device asks for; absent or empty: full. An unknown one fails `pair` without using the code."
+          }
         },
         "required": ["code", "name"]
       },
       "reply": {
         "type": "object",
-        "properties": { "token": { "type": "string", "pattern": "^[0-9a-f]{64}$" } },
-        "required": ["token"]
+        "properties": {
+          "token": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "scopes": { "type": "array", "items": { "$ref": "#/$defs/scope" }, "description": "What was granted: `read` plus what was asked for, or `full`." }
+        },
+        "required": ["token", "scopes"]
       }
     },
     "unpair": {
@@ -503,7 +516,7 @@
         "id": {},
         "ok": { "const": false },
         "error": { "type": "string" },
-        "code": { "type": "string", "enum": ["unauthorised"] }
+        "code": { "type": "string", "enum": ["unauthorised", "forbidden"] }
       },
       "required": ["ok", "error"]
     },
@@ -528,6 +541,11 @@
         "height": { "type": "integer" }
       },
       "required": ["stream"]
+    },
+    "scope": {
+      "type": "string",
+      "enum": ["read", "media", "vehicle", "phone", "settings", "files", "system", "full"],
+      "description": "A permission a paired device holds (src/service/servicescopes.h)."
     },
     "annotated": {
       "type": "object",
@@ -556,7 +574,8 @@
             "writable": { "type": "boolean" },
             "constant": { "type": "boolean" },
             "notify": { "type": "string", "description": "The signal that fires on change." },
-            "enum": { "type": "array", "items": { "type": "string" }, "description": "The keys, for an enum property (`set` takes a key or a number)." }
+            "enum": { "type": "array", "items": { "type": "string" }, "description": "The keys, for an enum property (`set` takes a key or a number)." },
+            "scope": { "$ref": "#/$defs/scope", "description": "Writable properties only: what `set` needs." }
           },
           "required": ["name", "type", "readable", "writable", "constant"]
         }
@@ -571,9 +590,10 @@
             "name": { "type": "string" },
             "kind": { "type": "string", "enum": ["slot", "invokable"] },
             "params": { "type": "array", "items": { "$ref": "#/$defs/paramDescription" } },
-            "returns": { "type": "string", "description": "The Qt return type; \"\" for void." }
+            "returns": { "type": "string", "description": "The Qt return type; \"\" for void." },
+            "scope": { "$ref": "#/$defs/scope", "description": "What `call` needs." }
           },
-          "required": ["name", "kind", "params", "returns"]
+          "required": ["name", "kind", "params", "returns", "scope"]
         }
       ]
     },
