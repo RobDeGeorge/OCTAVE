@@ -1,6 +1,6 @@
 # Retro Cluster (experimental)
 
-A second OCTAVE frontend, written to prove the open backend: **Rust + egui** instead of C++ / QML, painted as a mid-80s vacuum-fluorescent instrument cluster instead of the bundled UI's look. It is a separate program that talks to OCTAVE over the service API (`docs/api/`, protocol version 1). The QML UI in `frontend/` stays the default; this one is a side experiment and is not built by CI or shipped.
+A second OCTAVE frontend, written to prove the open backend: **Rust + egui** instead of C++ / QML, painted as a mid-80s vacuum-fluorescent instrument cluster instead of the bundled UI's look. It is a separate program that talks to OCTAVE over the service API (`docs/api/`, protocol versions 1 and 2). The QML UI in `frontend/` stays the default; this one is a side experiment and is not built by CI or shipped.
 
 Everything on screen is drawn from shapes: a 5x7 dot-matrix font, slanted seven-segment digits with ghosted unlit segments, segment ladders and a sweep tachometer. There are no font or image files.
 
@@ -14,6 +14,15 @@ Everything on screen is drawn from shapes: a 5x7 dot-matrix font, slanted seven-
 cd frontends/retro-cluster
 cargo run --release                      # --host H --port P --fullscreen --theme 0|1|2 --page drive|diag
 ```
+
+On the head unit itself the cluster needs nothing more. From another machine (OCTAVE started with `--service-bind 0.0.0.0`) it must pair once: on the head unit open Settings > Device > Service > Show a code, then
+
+```bash
+cargo run --release -- --host 192.168.1.20 --pair 123456      # prints the token
+OCTAVE_TOKEN=<token> cargo run --release -- --host 192.168.1.20   # or --token <token>
+```
+
+Unpaired, the tape line says NOT PAIRED and the app answers nothing else. A revoked token gets the same.
 
 Start the cluster before or after OCTAVE: until the service answers it shows NO SIGNAL and retries every second. Debian / Ubuntu / Raspberry Pi OS need `libxkbcommon-dev` and the GL / Wayland / X11 dev packages that eframe builds against.
 

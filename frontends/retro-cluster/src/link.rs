@@ -15,8 +15,9 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
-/// The protocol version this client was written against (docs/api/README.md).
-pub const PROTOCOL_VERSION: i64 = 1;
+/// The protocol versions this client knows (docs/api/README.md): 2 added
+/// pairing, which only matters over the network.
+pub const PROTOCOL_VERSIONS: [i64; 2] = [1, 2];
 
 /// The name this frontend registers its OBD polling demand under.
 const DEMAND_CONSUMER: &str = "retro-cluster";
@@ -99,6 +100,9 @@ pub struct State {
     pub trip_elapsed_s: i64,
     pub clock: Option<String>,
     pub last_error: Option<String>,
+    /// False when the app wants this cluster to pair first (protocol 2 over
+    /// the network): retro-cluster --pair CODE, then --token.
+    pub trusted: bool,
     /// When the last event arrived, for the RX lamp.
     pub last_rx: Option<Instant>,
     pub dropped: u64,
@@ -132,6 +136,7 @@ impl State {
             trip_elapsed_s: 0,
             clock: None,
             last_error: None,
+            trusted: true,
             last_rx: None,
             dropped: 0,
         }
@@ -273,13 +278,14 @@ pub struct Link {
 }
 
 impl Link {
-    pub fn start(address: String, repaint: impl Fn() + Send + Sync + 'static) -> Link {
+    /// `token`: a paired device's, sent with hello (None on this device)
+    pub fn start(address: String, token: Option<String>, repaint: impl Fn() + Send + Sync + 'static) -> Link {
         let state = Arc::new(Mutex::new(State::new(address.clone())));
         let (tx, rx) = mpsc::channel();
         let shared = state.clone();
         thread::Builder::new()
             .name("octave-link".into())
-            .spawn(move || run(address, shared, rx, Arc::new(repaint)))
+            .spawn(move || run(address, token, shared, rx, Arc::new(repaint)))
             .expect("spawn link thread");
         Link { state, tx }
     }
@@ -305,7 +311,27 @@ fn resolve(address: &str) -> Option<SocketAddr> {
     address.to_socket_addrs().ok()?.next()
 }
 
-fn run(address: String, state: Arc<Mutex<State>>, rx: Receiver<Cmd>, repaint: Arc<dyn Fn() + Send + Sync>) {
+/// Pair with the 6-digit code OCTAVE's Settings > Device > Service shows;
+/// the token to pass as --token (or OCTAVE_TOKEN) from then on.
+pub fn pair(address: &str, code: &str) -> Result<String, String> {
+    let addr = resolve(address).ok_or_else(|| format!("cannot resolve {address}"))?;
+    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(3)).map_err(|e| e.to_string())?;
+    let code: String = code.chars().filter(|c| c.is_ascii_digit()).collect();
+    let mut line = json!({"op": "pair", "code": code, "name": "retro-cluster", "id": 1}).to_string();
+    line.push('\n');
+    stream.write_all(line.as_bytes()).map_err(|e| e.to_string())?;
+    let mut reply = String::new();
+    BufReader::new(stream).read_line(&mut reply).map_err(|e| e.to_string())?;
+    let r: Value = serde_json::from_str(&reply).map_err(|e| e.to_string())?;
+    if r["ok"] == true {
+        Ok(r["result"]["token"].as_str().unwrap_or_default().to_string())
+    } else {
+        Err(r["error"].as_str().unwrap_or("pairing failed").to_string())
+    }
+}
+
+fn run(address: String, token: Option<String>, state: Arc<Mutex<State>>, rx: Receiver<Cmd>,
+       repaint: Arc<dyn Fn() + Send + Sync>) {
     let mut demand: Vec<String> = Vec::new();
     loop {
         let stream = resolve(&address).and_then(|a| TcpStream::connect_timeout(&a, Duration::from_secs(1)).ok());
@@ -338,7 +364,11 @@ fn run(address: String, state: Arc<Mutex<State>>, rx: Receiver<Cmd>, repaint: Ar
             stream.write_all(line.as_bytes()).is_ok()
         };
 
-        let mut ok = send(&mut stream, json!({"op": "hello"}), "hello".into());
+        let hello = match &token {
+            Some(t) => json!({"op": "hello", "token": t}),
+            None => json!({"op": "hello"}),
+        };
+        let mut ok = send(&mut stream, hello, "hello".into());
         for (object, props, throttle) in subscriptions() {
             let mut msg = json!({"op": "subscribe", "object": object});
             if !props.is_empty() {
@@ -436,6 +466,7 @@ fn read_loop(
                 s.protocol = r["protocolVersion"].as_i64();
                 s.app_version = r["app"]["version"].as_str().unwrap_or("").to_string();
                 s.headless = r["app"]["headless"].as_bool().unwrap_or(false);
+                s.trusted = r["auth"].as_str() != Some("untrusted");
                 s.last_error = None;
             }
         }
