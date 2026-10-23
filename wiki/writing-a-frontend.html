@@ -47,7 +47,7 @@
         <p>Two transports on the same port carry the same JSON messages:</p>
         <ul>
           <li><strong>TCP, one JSON object per line</strong>, for any language with sockets. Requests carry <code>op</code> and an optional <code>id</code>, which the reply echoes so you can send several at once.</li>
-          <li><strong>WebSocket</strong> (<code>ws://host:9876/</code>), one object per text frame, for browsers. A browser may only connect from the service's own page, i.e. served by the app at <code>http://host:9876/</code> and opened by IP address. To host your own page there, replace <span class="file-path">sdk/web/index.html</span> (it is embedded in the binary). Non-browser WebSocket clients send no <code>Origin</code> and are not restricted.</li>
+          <li><strong>WebSocket</strong> (<code>ws://host:9876/</code>), one object per text frame, for browsers. A browser may only connect from the service's own page, i.e. served by the app at <code>http://host:9876/</code> and opened by IP address. To host your own page there, start the app with <code>--web-root DIR</code> (your built frontend: the directory holding its <code>index.html</code>; or the <code>serviceWebRoot</code> setting) and open <code>http://host:9876/</code>; see <a href="utilities.html#service-protocol">the service protocol</a> for what it serves and refuses. Non-browser WebSocket clients send no <code>Origin</code> and are not restricted.</li>
         </ul>
         <pre><code><span class="cmt"># a whole session by hand</span>
 $ printf '{"op":"hello","id":1}\n{"op":"get","object":"volumeController","property":"percent","id":2}\n' | nc -q1 127.0.0.1 9876

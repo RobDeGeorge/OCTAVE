@@ -40,6 +40,19 @@ private slots:
         qputenv("APPDATA", (m_tmp->path() + "/appdata").toUtf8());
     }
 
+    void serviceKeysAreFileOnly()
+    {
+        // A client of the service must not turn it on or pick what it
+        // serves for the next start: only an edit of the file does
+        SettingsManager sm;
+        sm.save_setting("serviceWebRoot", "/");
+        sm.save_setting("serviceEnabled", true);
+        QCOMPARE(sm.get_setting("serviceWebRoot").toString(), QString());
+        QVERIFY(!sm.get_setting("serviceEnabled").toBool());
+        sm.save_setting("someOtherKey", 5);
+        QCOMPARE(sm.get_setting("someOtherKey").toInt(), 5);
+    }
+
     void corruptSettingsRestoredFromBackup()
     {
         const QString file = SettingsManager::getAppDataDir() + "/settingsConfigure.json";

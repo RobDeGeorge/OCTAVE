@@ -94,15 +94,33 @@ QByteArray acceptResponse(const HttpRequest &request)
            + accept + QByteArrayLiteral("\r\n\r\n");
 }
 
-QByteArray httpResponse(int status, const QByteArray &reason, const QByteArray &contentType, const QByteArray &body)
+QByteArray webRootCsp(const QByteArray &host)
+{
+    QByteArray connect = "'self'";
+    // Only a literal host[:port] goes into the header: never a name, never
+    // anything that could end the directive
+    const QString text = QString::fromLatin1(host);
+    const QUrl url(QStringLiteral("http://") + text);
+    static const QByteArray allowed = "0123456789abcdefABCDEF.:[]localhost";
+    bool plain = !host.isEmpty();
+    for (char c : host)
+        plain = plain && allowed.contains(c);
+    if (plain && url.isValid() && hostIsLiteral(url.host()) && url.authority() == text)
+        connect += " ws://" + host + " wss://" + host;
+    return "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; "
+           "img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; connect-src " + connect
+           + "; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
+}
+
+QByteArray httpResponse(int status, const QByteArray &reason, const QByteArray &contentType, const QByteArray &body,
+                        const QByteArray &csp)
 {
     return QByteArrayLiteral("HTTP/1.1 ") + QByteArray::number(status) + ' ' + reason
            + QByteArrayLiteral("\r\nContent-Type: ") + contentType
            + QByteArrayLiteral("\r\nContent-Length: ") + QByteArray::number(body.size())
            + QByteArrayLiteral("\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff"
-                               // The page's script is inline; it may only talk to this service
-                               "\r\nContent-Security-Policy: default-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:"
-                               "\r\nConnection: close\r\n\r\n")
+                               "\r\nContent-Security-Policy: ") + csp
+           + QByteArrayLiteral("\r\nConnection: close\r\n\r\n")
            + body;
 }
 

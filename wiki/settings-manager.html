@@ -446,7 +446,7 @@ reg[QStringLiteral(<span class="str">"theme_setting"</span>)] = entry(<span clas
             <tr><td><code>writeSettingsToDisk(settings)</code> (private)</td><td>The atomic temp+rename write; takes an already validated object.</td></tr>
             <tr><td><code>updateSetting(key, value)</code> (private)</td><td>Convenience funnel: copy, set key, <code>saveSettings</code>. The calling setter emits its own signal.</td></tr>
             <tr><td><code>get_setting(key)</code>, <code>get_setting_with_default(key, default)</code></td><td>Read any key from memory. <code>get_setting</code> returns an invalid <code>QVariant</code> (<code>undefined</code> in QML) for unknown keys.</td></tr>
-            <tr><td><code>save_setting(key, value)</code></td><td>Write any key and emit <code>genericSettingChanged(key)</code>. No type validation for keys without a default.</td></tr>
+            <tr><td><code>save_setting(key, value)</code></td><td>Write any key and emit <code>genericSettingChanged(key)</code>. No type validation for keys without a default. Refuses <code>serviceEnabled</code> and <code>serviceWebRoot</code> (a warning, nothing written): what turns the service on and what it serves are set in the file, never by one of its own clients.</td></tr>
             <tr><td><code>reset_to_defaults()</code></td><td>Slot. Saves the default object, reloads <em>every</em> backing member through the constructor's <code>populateMembers()</code> and emits every property signal. Not wired to any UI or C++ caller at present.</td></tr>
           </tbody>
         </table>

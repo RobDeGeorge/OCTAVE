@@ -166,6 +166,7 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("blackBoxSweepAll")]      = true;
     d[QStringLiteral("blackBoxMaxMB")]         = 500;
     d[QStringLiteral("serviceEnabled")]        = false;   // the service at every start (src/service/serviceoptions.h)
+    d[QStringLiteral("serviceWebRoot")]        = QString();   // a frontend served at GET / ("" = the reference client)
 
     // OBD parameters
     QJsonObject obdParams;
@@ -2183,6 +2184,14 @@ void SettingsManager::toggle_pin_setting(const QString &settingId)
 // --- Generic setting access ---
 void SettingsManager::save_setting(const QString &key, const QVariant &value)
 {
+    // What turns the service on and what it serves are set in the file,
+    // never by a client of the service itself (one could otherwise point
+    // the web root at any directory for the next start)
+    static const QStringList fileOnly = {QStringLiteral("serviceEnabled"), QStringLiteral("serviceWebRoot")};
+    if (fileOnly.contains(key)) {
+        qCWarning(lcSettings) << "save_setting: refused" << key << "(edit settingsConfigure.json)";
+        return;
+    }
     QJsonObject settings = loadSettings();
     settings[key] = QJsonValue::fromVariant(value);
     saveSettings(settings);

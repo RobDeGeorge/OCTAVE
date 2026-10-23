@@ -209,7 +209,7 @@ octave_add_test(tst_servicebridge
     SOURCES service/commandserver.h service/commandserver.cpp service/protocol.h
             service/serviceregistry.h service/serviceregistry.cpp service/servicebridge.h service/servicebridge.cpp
             service/metadescribe.h service/metadescribe.cpp
-            service/websocket.h service/websocket.cpp
+            service/websocket.h service/websocket.cpp service/staticfiles.h service/staticfiles.cpp
             util/variantlistmodel.h util/variantlistmodel.cpp
     LIBS Qt6::Gui Qt6::Qml Qt6::Network)
 octave_add_test(tst_serviceoptions SOURCES service/serviceoptions.h service/serviceoptions.cpp LIBS Qt6::Network)
@@ -225,7 +225,10 @@ add_dependencies(tst_apidocs octave)
 octave_add_test(tst_conformance)
 octave_add_test(tst_websocket
     SOURCES service/commandserver.h service/commandserver.cpp service/websocket.h service/websocket.cpp
+            service/staticfiles.h service/staticfiles.cpp
     LIBS Qt6::Gui Qt6::Qml Qt6::Network)
+# --web-root: what a frontend directory serves, and what it refuses
+octave_add_test(tst_staticfiles SOURCES service/staticfiles.h service/staticfiles.cpp)
 
 # The Python SDK (sdk/python) against a real `octave --headless`
 find_package(Python3 COMPONENTS Interpreter)

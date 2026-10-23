@@ -20,8 +20,9 @@
 //
 // The same port takes WebSocket clients (a browser): one JSON request or
 // reply / event per text frame (src/service/websocket.h, which also holds
-// the Origin rule), and serves the reference client page (setPage) at
-// GET / so a browser can reach it same-origin.
+// the Origin rule), and serves the reference client page (setPage), or a
+// directory of a frontend's files (setWebRoot), at GET / so a browser can
+// reach it same-origin.
 //
 // Listens on 127.0.0.1 (default port 9876) unless setBindAddress() says
 // otherwise (src/service/serviceoptions.h). Each client connection gets
@@ -114,6 +115,10 @@ public:
     // Before start().
     void setPage(const QByteArray &html) { m_page = html; }
     QByteArray page() const { return m_page; }
+    // A directory served at GET / instead of the page (--web-root,
+    // staticfiles.h); empty = the page. Before start().
+    void setWebRoot(const QString &dir) { m_webRoot = dir; }
+    QString webRoot() const { return m_webRoot; }
     bool start();
     void stop();
     quint16 port() const { return m_port; }   // the bound port once started (0 asks for any)
@@ -137,6 +142,7 @@ private:
     quint16 m_port;
     QHostAddress m_bind = QHostAddress(QHostAddress::LocalHost);
     QByteArray m_page;
+    QString m_webRoot;
     mutable QReadWriteLock m_lock;
     QHash<QString, Handler> m_handlers;
     QStringList m_order;   // registration order, for list_actions

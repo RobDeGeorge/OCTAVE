@@ -224,6 +224,8 @@ qt_add_executable(octave
     src/service/apidump.cpp
     src/service/websocket.h
     src/service/websocket.cpp
+    src/service/staticfiles.h
+    src/service/staticfiles.cpp
     src/service/metadescribe.h
     src/service/metadescribe.cpp
     src/util/units.cpp

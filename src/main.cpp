@@ -99,7 +99,8 @@ Service makeService(const QStringList &arguments, AppCore &core, bool headless)
     constexpr bool debugBuild = false;
 #endif
     const OctaveService::ServiceOptions options = OctaveService::parseServiceOptions(
-        arguments, core.settingsManager.get_setting(QStringLiteral("serviceEnabled")).toBool(), devToolsBuild);
+        arguments, core.settingsManager.get_setting(QStringLiteral("serviceEnabled")).toBool(), devToolsBuild,
+        core.settingsManager.get_setting(QStringLiteral("serviceWebRoot")).toString());
     if (!options.error.isEmpty())
         qWarning("Service not started: %s", qPrintable(options.error));
     Service service;
@@ -110,6 +111,15 @@ Service makeService(const QStringList &arguments, AppCore &core, bool headless)
         QFile page(QStringLiteral(":/web-client/index.html"));
         if (page.open(QIODevice::ReadOnly))
             service.server->setPage(page.readAll());
+        // Or a frontend's own files (--web-root / serviceWebRoot)
+        if (!options.webRoot.isEmpty()) {
+            if (const QString problem = OctaveService::webRootProblem(options.webRoot); problem.isEmpty()) {
+                service.server->setWebRoot(options.webRoot);
+                qInfo("Service: serving %s at GET /", qPrintable(options.webRoot));
+            } else {
+                qWarning("Service: web root not used (%s); serving the reference client", qPrintable(problem));
+            }
+        }
         service.bridge = std::make_unique<OctaveService::ServiceBridge>(
             &core.registry, OctaveService::AppInfo{QStringLiteral(OCTAVE_VERSION), debugBuild, headless});
         service.bridge->install(*service.server);

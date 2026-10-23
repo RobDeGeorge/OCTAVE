@@ -14,6 +14,9 @@
 //                             tools (OCTAVE_DEV_TOOLS), as it always has
 //   --headless                implies --service: with no UI it is the only
 //                             way in
+//   --web-root DIR            serve DIR at GET / instead of the reference
+//                             client (also --web-root=DIR; staticfiles.h)
+//   setting serviceWebRoot    the same at every start; --web-root wins
 //
 // Pure, so tst_serviceoptions covers the parsing.
 
@@ -28,12 +31,19 @@ struct ServiceOptions {
     bool enabled = false;
     quint16 port = kDefaultPort;
     QHostAddress bind = QHostAddress(QHostAddress::LocalHost);
+    QString webRoot;   // absolute, or empty for the reference client
     QString error;   // a bad --service-bind or port; the service stays off
 
     bool loopbackOnly() const { return bind.isLoopback(); }
 };
 
-ServiceOptions parseServiceOptions(const QStringList &arguments, bool settingEnabled, bool devToolsBuild);
+ServiceOptions parseServiceOptions(const QStringList &arguments, bool settingEnabled, bool devToolsBuild,
+                                   const QString &settingWebRoot = QString());
+
+// Empty if `dir` can be a web root (an existing directory holding
+// index.html, so "/" or a home directory is never served by mistake),
+// else why not
+QString webRootProblem(const QString &dir);
 
 } // namespace OctaveService
 
