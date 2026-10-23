@@ -43,6 +43,16 @@ AudioAnalyzer::AudioAnalyzer(QObject *parent)
 
 void AudioAnalyzer::setViewActive(bool active)
 {
+    setDemand(QStringLiteral("view"), active);
+}
+
+void AudioAnalyzer::setDemand(const QString &consumer, bool wanted)
+{
+    if (wanted)
+        m_demand.insert(consumer);
+    else
+        m_demand.remove(consumer);
+    const bool active = !m_demand.isEmpty();
     if (active == m_viewActive)
         return;
     m_viewActive = active;
