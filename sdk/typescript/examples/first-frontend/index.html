@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>First frontend</title>
+  <style>
+    body { margin: 0; padding: 24px; font: 18px/1.4 system-ui, sans-serif; background: #14161c; color: #eef0f4; }
+    .gauges { display: flex; gap: 24px; margin: 16px 0; }
+    .gauge { padding: 16px 20px; border-radius: 12px; background: #22252e; min-width: 140px; }
+    .gauge b { display: block; font-size: 40px; font-variant-numeric: tabular-nums; }
+    .now { display: flex; align-items: center; gap: 16px; }
+    img { width: 72px; height: 72px; border-radius: 8px; object-fit: cover; background: #22252e; }
+    button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 0; background: #3b4252; color: inherit; cursor: pointer; }
+    #pair { display: none; margin: 16px 0; padding: 16px; border-radius: 12px; background: #2d2a3a; }
+    #pair input { font: inherit; padding: 8px; border-radius: 8px; border: 0; width: 7ch; letter-spacing: .2em; }
+  </style>
+</head>
+<body>
+  <div id="status">Connecting…</div>
+  <form id="pair">
+    This browser is not on the head unit: type the code from Settings, Service, Pair a device.
+    <input id="code" inputmode="numeric" maxlength="6" placeholder="000000"> <button>Pair</button> <span id="pairError"></span>
+  </form>
+  <div class="gauges">
+    <div class="gauge">Speed<b id="SPEED">–</b></div>
+    <div class="gauge">RPM<b id="RPM">–</b></div>
+  </div>
+  <div class="now">
+    <img id="cover" alt="">
+    <div><div id="title">Nothing playing</div><div id="artist"></div></div>
+    <button id="prev">⏮</button><button id="play">▶</button><button id="next">⏭</button>
+  </div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

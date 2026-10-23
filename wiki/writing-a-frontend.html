@@ -25,6 +25,7 @@
             <li><a href="#discover">3. Discover</a></li>
             <li><a href="#read">4. Read and Subscribe</a></li>
             <li><a href="#control">5. Control</a></li>
+            <li><a href="#first">Your First Frontend in 60 Lines</a></li>
             <li><a href="#recipes">Recipes</a></li>
             <li><a href="#headless">Being the Only UI</a></li>
             <li><a href="#rules">Versioning and Security</a></li>
@@ -89,6 +90,72 @@ $ printf '{"op":"hello","id":1}\n{"op":"get","object":"volumeController","proper
 {"op":"set","object":"volumeController","property":"muted","value":true,"id":7}
 {"op":"call","object":"settingsManager","method":"save_show_clock","args":[false],"id":8}</code></pre>
         <p>Most state is read-only and changes through a method, the same one the touch screen calls: settings through their <code>save_*</code> slots, media through <code>nowPlaying</code>, volume through <code>volumeController</code>. Arguments are converted to the declared types (an enum by name or number), and overloads are told apart by argument count. Methods run on the app's GUI thread, so a slow one holds the bundled UI just as a tap would.</p>
+
+        <h2 id="first">Your First Frontend in 60 Lines</h2>
+        <p>Everything above, in one page on the TypeScript SDK (<span class="file-path">sdk/typescript</span>): it connects to the app that serves it, pairs when the browser is not on the head unit, shows two live readings, the track with transport, and the cover. The whole thing is <span class="file-path">sdk/typescript/examples/first-frontend/</span>: <span class="file-path">index.html</span> (a status line, a pair form, two gauges, a now-playing row) and this <span class="file-path">app.js</span>, no framework and no bundler.</p>
+        <pre><code>cd sdk/typescript &amp;&amp; npm install &amp;&amp; examples/first-frontend/build.sh      <span class="cmt"># builds the SDK, copies it to lib/</span>
+./build/octave --dev --service --web-root sdk/typescript/examples/first-frontend   <span class="cmt"># a simulated car; open http://127.0.0.1:9876/</span></code></pre>
+        <pre><code>// A first OCTAVE frontend with the TypeScript SDK, in 60 lines: connect, pair
+// when this browser is not on the head unit, two live gauges, a now-playing
+// line with transport, the cover. Build the SDK, then serve this folder from
+// the app (see README.md).
+import { OctaveClient, obj } from &#x27;./lib/index.js&#x27;
+
+const $ = (id) =&gt; document.getElementById(id)
+const client = new OctaveClient({ token: localStorage.getItem(&#x27;token&#x27;) ?? undefined })   // ws://&lt;this page&#x27;s host&gt;/
+const obd = obj(client, &#x27;obdManager&#x27;)
+const now = obj(client, &#x27;nowPlaying&#x27;)
+
+client.on(&#x27;status&#x27;, (s) =&gt; { $(&#x27;status&#x27;).textContent = s === &#x27;online&#x27; ? `OCTAVE ${client.hello?.app.version}` : s })
+client.on(&#x27;hello&#x27;, (h) =&gt; {
+  // Protocol 2: over the network we must pair once; on the head unit nothing to do.
+  if (h.tokenRejected) localStorage.removeItem(&#x27;token&#x27;)
+  $(&#x27;pair&#x27;).style.display = h.auth === &#x27;untrusted&#x27; ? &#x27;block&#x27; : &#x27;none&#x27;
+  if (h.auth !== &#x27;untrusted&#x27;) start()
+})
+$(&#x27;pair&#x27;).onsubmit = async (e) =&gt; {
+  e.preventDefault()
+  try {
+    localStorage.setItem(&#x27;token&#x27;, await client.pair($(&#x27;code&#x27;).value, &#x27;First frontend&#x27;))
+    client.close(); client.connect()                         // a fresh, trusted connection re-issues everything
+  } catch (err) { $(&#x27;pairError&#x27;).textContent = err.message }
+}
+
+let started = false
+async function start() {
+  if (started) return
+  started = true
+  // Live readings: the app polls the car only for what someone asks for.
+  await obd.call(&#x27;setParameterDemand&#x27;, &#x27;first-frontend&#x27;, [&#x27;SPEED&#x27;, &#x27;RPM&#x27;])
+  client.params([&#x27;SPEED&#x27;, &#x27;RPM&#x27;], (v) =&gt; { for (const id in v) $(id).textContent = v[id] === null ? &#x27;–&#x27; : Math.round(v[id]) }, 100)
+  // Now playing: the properties arrive at once, then on every change.
+  now.subscribe({ properties: [&#x27;hasTrack&#x27;, &#x27;title&#x27;, &#x27;artist&#x27;, &#x27;playing&#x27;, &#x27;artRevision&#x27;], throttleMs: 250 }, (e) =&gt; {
+    if (e.event !== &#x27;property&#x27;) return
+    if (e.name === &#x27;title&#x27; || e.name === &#x27;hasTrack&#x27;) $(&#x27;title&#x27;).textContent = e.name === &#x27;hasTrack&#x27; &amp;&amp; !e.value ? &#x27;Nothing playing&#x27; : e.value || $(&#x27;title&#x27;).textContent
+    if (e.name === &#x27;artist&#x27;) $(&#x27;artist&#x27;).textContent = e.value
+    if (e.name === &#x27;playing&#x27;) $(&#x27;play&#x27;).textContent = e.value ? &#x27;⏸&#x27; : &#x27;▶&#x27;
+    if (e.name === &#x27;artRevision&#x27;) cover(e.value)
+  })
+}
+async function cover(rev) {
+  // Over the network /art needs a short-lived ticket; on the head unit it is harmless.
+  const t = client.hello?.loopbackOpen &amp;&amp; location.hostname === &#x27;127.0.0.1&#x27; ? &#x27;&#x27; : `&amp;ticket=${(await client.mediaTicket()).ticket}`
+  $(&#x27;cover&#x27;).src = rev &gt; 0 ? `/art?rev=${rev}${t}` : &#x27;&#x27;
+}
+$(&#x27;play&#x27;).onclick = () =&gt; now.call(&#x27;togglePlay&#x27;)
+$(&#x27;next&#x27;).onclick = () =&gt; now.call(&#x27;next&#x27;)
+$(&#x27;prev&#x27;).onclick = () =&gt; now.call(&#x27;previous&#x27;)
+client.connect()
+</code></pre>
+        <p>What each part leans on:</p>
+        <ul>
+          <li><strong>Connect.</strong> <code>new OctaveClient()</code> defaults to the page's own host, so the page works wherever the app serves it; <code>connect()</code> reconnects with backoff and re-issues the subscriptions on each new link. A token from an earlier pairing goes with <code>hello</code>.</li>
+          <li><strong>Pair when untrusted.</strong> On the head unit <code>hello</code> says <code>"auth": "trusted"</code> and the form stays hidden. Over the network it says <code>untrusted</code>: the page asks for the 6-digit code (Settings, Service, Pair a device), <code>client.pair(code, name)</code> returns the token to keep, and a fresh connection carries it. A token the app rejects (<code>tokenRejected</code>) is dropped.</li>
+          <li><strong>Live readings.</strong> <code>obdManager.setParameterDemand("first-frontend", ["SPEED", "RPM"])</code> makes the app poll those two PIDs (it polls only what someone shows); <code>client.params([...], cb, 100)</code> delivers them in native units, at most ten times a second.</li>
+          <li><strong>Now playing.</strong> One subscription to <code>nowPlaying</code>'s properties: the current values arrive at once, then every change. The buttons call <code>togglePlay</code>, <code>next</code>, <code>previous</code> through the typed facade (<code>obj(client, 'nowPlaying')</code>): a method that does not exist does not compile.</li>
+          <li><strong>The cover.</strong> <code>GET /art?rev=N</code> with <code>nowPlaying.artRevision</code> as the cache key; over the network the URL also carries a short-lived ticket from <code>mediaTicket</code>, never the token.</li>
+        </ul>
+        <p>Run against a developer build with <code>--dev --service-bind 0.0.0.0</code> and opened by the machine's LAN address, the page showed the pair form, took a code from <code>sim_pairing_code</code>, and then read the simulated car and the cover like a page on the head unit.</p>
 
         <h2 id="recipes">Recipes</h2>
         <table>
