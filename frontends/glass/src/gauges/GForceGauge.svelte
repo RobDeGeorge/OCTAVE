@@ -23,6 +23,6 @@
   svg { width: 100%; height: 100%; overflow: visible; }
   .ring { fill: none; stroke: var(--track); stroke-width: 1; }
   .trail { fill: none; stroke: var(--c); stroke-width: 1.2; opacity: .5; }
-  .dot { fill: var(--c); transition: cx .08s linear, cy .08s linear; }
+  .dot { fill: var(--c); }
   .v { fill: var(--ink-2); font-size: 7px; font-weight: 700; }
 </style>

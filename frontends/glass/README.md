@@ -83,6 +83,24 @@ npm run dev                                 # then open http://127.0.0.1:5173/de
 
 The page plays the file in a loop through a fake source, with buttons to stall the feed and burst frames (the player must drop to a keyframe) and a log of touches (never sent anywhere). WebCodecs needs a secure origin: `127.0.0.1` / `localhost` or https.
 
+## Performance and low power
+
+Chromium's cost at 1280x800, pinned to two cores (`taskset -c 0,1`, headless, software compositing, the simulated car at 60 % throttle and a track playing), as a percentage of one core over 30 s, renderer + compositor + browser processes:
+
+| Page | Before | After | After, low power |
+|---|---|---|---|
+| Home | 103 % | 13 % | 4 % |
+| Media (with the waveform) | – | 12 % | 4 % |
+| Full Grid dashboard (8 gauges) | 101 % | 2 % | 1 % |
+| Phone mirror (sim video, 30 fps, WebCodecs) | 110 % | 15 % | 16 % |
+| A static page, for the floor | 0.4 % | 0.4 % | 0.4 % |
+
+What cost a core: the backdrop's three blurred blobs drifted continuously, which made every frosted panel (`backdrop-filter`) re-blur on every frame. They now glide once to a new arrangement per track and then rest. The rest came from CSS transitions on SVG attributes (an arc's `d`, a needle's end, the G-force dot) that re-animated on every reading, the waveform's per-bar height transition, and the seek bar repainting a frosted panel ten times a second (now four). The blinking dots are step animations.
+
+**Low power** (the rail's leaf button, `?power=low` in the URL, remembered in the browser): flat panels instead of frosted ones, no blur anywhere, no transitions or animations. For a Pi, put `?power=low` in the kiosk URL; see `deployment/glass-kiosk/README.md` for running glass as the head unit's screen. The mirror's remaining cost is the decode and the canvas draw, the same in both modes.
+
+Measure again with `node e2e/perf.mjs URL 30` (Chromium on two cores, CPU from /proc over the process tree).
+
 ## Known gaps
 
 - No phone-mirror video: media streams are not on the service yet (`TODO/open-backend.md`, step 6).

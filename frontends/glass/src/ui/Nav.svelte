@@ -2,7 +2,7 @@
   import Icon from './Icon.svelte'
   import { route, go } from '../lib/router'
   import { octave } from '../lib/octave'
-  import { theme } from '../lib/theme'
+  import { theme, power } from '../lib/theme'
 
   const items = [
     { id: 'home', label: 'Home', icon: 'home' },
@@ -32,6 +32,10 @@
       </button>
     {/each}
   </div>
+  <button class="item theme" class:on={$power === 'low'} onclick={() => power.update((p) => (p === 'low' ? 'normal' : 'low'))} aria-label="Low power: {$power === 'low' ? 'on' : 'off'}">
+    <Icon name="bolt" size={24} />
+    <span>{$power === 'low' ? 'Low power' : 'Full'}</span>
+  </button>
   <button class="item theme" onclick={cycleTheme} aria-label="Theme: {$theme}">
     <Icon name={$theme === 'light' ? 'sun' : $theme === 'dark' ? 'moon' : 'clock'} size={24} />
     <span>{$theme === 'auto' ? 'Auto' : $theme === 'dark' ? 'Dark' : 'Light'}</span>
@@ -51,6 +55,7 @@
   .item.on { background: var(--control-on); color: var(--control-on-ink); }
   .item:not(.on):hover { background: var(--control); }
   .theme { margin-top: auto; }
+  .theme + .theme { margin-top: 0; }
 
   @media (max-width: 760px), (max-aspect-ratio: 1/1) {
     nav { left: var(--gap); right: var(--gap); top: auto; bottom: var(--gap); width: auto; height: var(--tab);

@@ -62,7 +62,7 @@
   .compact .title { font-size: 24px; }
   .artist { font-size: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .wave { display: flex; align-items: flex-end; gap: 2px; height: 56px; }
-  .wave span { flex: 1; min-width: 0; border-radius: 2px 2px 0 0; background: var(--accent); opacity: .7; transition: height .08s linear; }
+  .wave span { flex: 1; min-width: 0; border-radius: 2px 2px 0 0; background: var(--accent); opacity: .7; }
   .times { display: flex; justify-content: space-between; margin-top: -8px; padding: 0 4px; }
   .transport { display: flex; justify-content: center; align-items: center; gap: 14px; }
   .vol { display: flex; align-items: center; gap: 12px; color: var(--ink-2); }

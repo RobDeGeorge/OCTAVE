@@ -52,7 +52,7 @@
   path { fill: none; stroke-linecap: round; stroke-width: 7; }
   .track { stroke: var(--track); }
   .red { stroke: color-mix(in oklab, var(--bad) 45%, transparent); }
-  .fill { stroke: var(--c); transition: d .12s linear; }
+  .fill { stroke: var(--c); }
   .fill.hot { stroke: var(--bad); }
   .tick { stroke: var(--ink-3); stroke-width: 1.2; }
   .value { fill: var(--ink); font-size: 20px; font-weight: 700; letter-spacing: -.02em; }

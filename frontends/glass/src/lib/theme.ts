@@ -21,3 +21,17 @@ export function applyAccent(accent: string | null): void {
   if (accent && /^#[0-9a-f]{6}$/i.test(accent)) root.style.setProperty('--accent', accent)
   else root.style.removeProperty('--accent')
 }
+
+/** Low power: flat panels, no blur, no motion (a Pi's GPU pays most for blur). */
+export type Power = 'normal' | 'low'
+function loadPower(): Power {
+  const q = new URLSearchParams(location.search).get('power')
+  if (q === 'low' || q === 'normal') return q
+  try { return (localStorage.getItem('glass.power') as Power) || 'normal' } catch { return 'normal' }
+}
+export const power = writable<Power>(loadPower())
+power.subscribe((p) => {
+  try { localStorage.setItem('glass.power', p) } catch { /* private window */ }
+  if (p === 'low') document.documentElement.dataset.power = 'low'
+  else delete document.documentElement.dataset.power
+})

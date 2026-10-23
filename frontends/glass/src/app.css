@@ -159,6 +159,12 @@ select.field { appearance: none; padding-right: 44px; }
   h1 { font-size: 28px; }
 }
 
+/* ── low power (the rail's leaf, ?power=low): flat panels, nothing blurs ─── */
+:root[data-power='low'] .glass { backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none;
+  background: color-mix(in oklab, var(--bg) 78%, var(--glass-strong)); }
+:root[data-power='low'] .glass.strong { background: color-mix(in oklab, var(--bg) 60%, var(--glass-strong)); }
+:root[data-power='low'] *, :root[data-power='low'] *::before, :root[data-power='low'] *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001s !important; transition-duration: .001s !important; }
 }
