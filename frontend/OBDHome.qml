@@ -29,10 +29,10 @@ Item {
     property string connectionDetail: ""
     property bool connected: obdManager ? obdManager.is_connected() : false
 
-    // Rolling connection log shown beneath the status row. Most useful on
-    // Android where the BLE state machine has many steps and silent failures
-    // are easy unless we surface each transition. Capped at 40 lines.
-    property var connectionLog: []
+    // Connection log shown beneath the status row (the manager keeps the last
+    // 60 lines). Most useful on Android where the BLE state machine has many
+    // steps and silent failures are easy unless each transition shows.
+    readonly property var connectionLog: obdManager ? obdManager.connectionLog : []
 
     Connections {
         target: obdManager
@@ -44,12 +44,6 @@ Item {
         }
         function onConnectionStatusDetailChanged(detail) {
             obdHome.connectionDetail = detail
-        }
-        function onConnectionLogLineAppended(line) {
-            var arr = obdHome.connectionLog.slice()
-            arr.push(line)
-            if (arr.length > 40) arr = arr.slice(arr.length - 40)
-            obdHome.connectionLog = arr
         }
     }
 

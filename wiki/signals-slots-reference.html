@@ -709,6 +709,7 @@
             <tr><td><code>connectionStatus</code></td><td><code>QString</code></td><td>read-only</td><td><code>connectionStatusChanged</code></td><td>Last <code>connectionStatusChanged</code> value (<code>"Disconnected"</code> initially; <code>"Connecting"</code>, <code>"Connected"</code>, <code>"No Vehicle"</code>, <code>"Reconnecting"</code>, <code>"Connection Failed"</code>, <code>"Stale Connection"</code>, <code>"Device Lost"</code>, <code>"Error"</code>, &hellip;); cached from the signal</td></tr>
             <tr><td><code>connectionDetail</code></td><td><code>QString</code></td><td>read-only</td><td><code>connectionStatusDetailChanged</code></td><td>Last <code>connectionStatusDetailChanged</code> message, bound by the Connection card</td></tr>
             <tr><td><code>connectionProgress</code></td><td><code>int</code></td><td>read-only</td><td><code>connectionProgressChanged</code></td><td>Last <code>connectionProgressChanged</code> percent (0&ndash;100)</td></tr>
+            <tr><td><code>connectionLog</code></td><td><code>QStringList</code></td><td>read-only</td><td><code>connectionLogChanged</code></td><td>The last 60 connection log lines, oldest first; OBDHome and the OBD settings page bind it (<code>clearConnectionLog()</code> empties it)</td></tr>
             <tr><td><code>availableAdapters</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>availableAdaptersChanged</code></td><td>Rich <code>[{name, identifier, kind}, &hellip;]</code> list bound by the OBD settings page; <code>kind</code> is <code>ble</code>, <code>serial-rfcomm</code>, <code>serial-usb</code>, <code>com</code>, <code>tty</code> or <code>serial</code>. On Android the list is the phone's bonded devices from <code>OctaveOBDBridge.bondedDevices()</code>, named <code>"&lt;name&gt; &middot; &lt;MAC&gt;"</code>; it stays empty until <code>BLUETOOTH_CONNECT</code> is granted, which the bridge requests on the first Connect tap</td></tr>
             <tr><td><code>vin</code></td><td><code>QString</code></td><td>read-only</td><td><code>vinChanged</code></td><td>17-character VIN read at connect (Mode 09 PID 02); <code>""</code> when the vehicle reports none</td></tr>
             <tr><td><code>vehicleMake</code></td><td><code>QString</code></td><td>read-only</td><td><code>vinChanged</code></td><td>Manufacturer decoded from the VIN's WMI; <code>""</code> if unknown</td></tr>
@@ -892,7 +893,8 @@
             <tr><td><code>obdParameterChanged(QString paramId, float value)</code></td><td>One value from a multi-value PID (0x61 and up: torque, boost, odometer, &hellip;); <code>OBDParameterModel</code> routes it by id</td></tr>
             <tr><td><code>parameterSampled(QString paramId, float value)</code></td><td>Every decoded reading, base or multi-value, by parameter id, on desktop and Android; the <a href="#tripRecorder">black box</a> and the value store (<a href="#paramStore"><code>paramStore</code></a>) tap this</td></tr>
             <tr><td><code>vinChanged(QString vin)</code></td><td>VIN read at connect or by <code>read_vin()</code></td></tr>
-            <tr><td><code>connectionLogLineAppended(QString line)</code></td><td>One live line for the OBD settings Connection Log card</td></tr>
+            <tr><td><code>connectionLogLineAppended(QString line)</code></td><td>One connection log line (kept in <code>connectionLog</code>)</td></tr>
+            <tr><td><code>connectionLogChanged()</code></td><td>Notify for <code>connectionLog</code></td></tr>
           </tbody>
         </table>
 
@@ -1204,7 +1206,7 @@
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
           <tbody>
             <tr><td><code>connectionStatus</code></td><td><code>QString</code></td><td>read-only</td><td><code>connectionStatusChanged</code></td><td><code>"Connected"</code> / <code>"Disconnected"</code> (mobile stub: <code>"Disabled on mobile"</code>); read by the Accessories widget</td></tr>
-          <tr><td><code>gestures</code></td><td><code>QStringList</code></td><td>constant</td><td>&mdash;</td><td>The nine gestures the sensor reports, in settings-page order (<span class="file-path">gesturevocabulary.h</span>)</td></tr>
+            <tr><td><code>gestures</code></td><td><code>QStringList</code></td><td>constant</td><td>&mdash;</td><td>The nine gestures the sensor reports, in settings-page order (<span class="file-path">gesturevocabulary.h</span>)</td></tr>
             <tr><td><code>actions</code></td><td><code>QVariantList</code></td><td>constant</td><td>&mdash;</td><td><code>{key, label}</code> per action a gesture can trigger, <code>none</code> ("Disabled") last; the mobile stub has both</td></tr>
           </tbody>
         </table>

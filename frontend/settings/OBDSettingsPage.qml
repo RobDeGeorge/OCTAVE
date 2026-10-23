@@ -23,20 +23,10 @@ Item {
     property int dragSourceIndex: -1
     property int dropPreviewIndex: -1
 
-    // ── Live connection log (mirrors what OBDHome.qml shows) ─────────
+    // ── Live connection log (the same one OBDHome.qml shows) ─────────
     // Surfaces every BLE state transition so the user can debug from this
-    // page without needing adb logcat. Capped at 60 lines.
-    property var connectionLog: []
-    Connections {
-        target: obdManager
-        enabled: obdManager !== null
-        function onConnectionLogLineAppended(line) {
-            var arr = pageRoot.connectionLog.slice()
-            arr.push(line)
-            if (arr.length > 60) arr = arr.slice(arr.length - 60)
-            pageRoot.connectionLog = arr
-        }
-    }
+    // page without needing adb logcat. The manager keeps the last 60 lines.
+    readonly property var connectionLog: obdManager ? obdManager.connectionLog : []
 
     // Tile model — consumed by SettingsSidebarLayout (grid + slide-in popup).
     // Each entry: { cardId, title, summary, component } — see DisplaySettingsPage

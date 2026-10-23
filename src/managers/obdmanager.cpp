@@ -47,6 +47,12 @@ OBDManager::OBDManager(SettingsManager *settingsManager, QObject *parent)
             [this](const QString &detail) { m_connectionDetail = detail; });
     connect(this, &OBDManager::connectionProgressChanged, this,
             [this](int progress) { m_connectionProgress = progress; });
+    connect(this, &OBDManager::connectionLogLineAppended, this, [this](const QString &line) {
+        m_connectionLog.append(line);
+        while (m_connectionLog.size() > kConnectionLogLines)
+            m_connectionLog.removeFirst();
+        emit connectionLogChanged();
+    });
 
     // --- Timers ---
 
@@ -3114,3 +3120,11 @@ void OBDManager::processAndroidResponse(const QString &response)
 }
 
 #endif // Q_OS_ANDROID
+
+void OBDManager::clearConnectionLog()
+{
+    if (m_connectionLog.isEmpty())
+        return;
+    m_connectionLog.clear();
+    emit connectionLogChanged();
+}

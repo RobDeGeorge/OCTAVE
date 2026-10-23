@@ -46,6 +46,10 @@ class OBDManager : public QObject
     // card can bind declaratively instead of tracking the signals by hand.
     Q_PROPERTY(QString connectionDetail READ connectionDetail NOTIFY connectionStatusDetailChanged)
     Q_PROPERTY(int connectionProgress READ connectionProgress NOTIFY connectionProgressChanged)
+    // The last kConnectionLogLines connection log lines, oldest first (every
+    // connectionLogLineAppended since start), so each page shows the same
+    // history whenever it was built
+    Q_PROPERTY(QStringList connectionLog READ connectionLog NOTIFY connectionLogChanged)
 
     // Unified adapter list — list of {name, identifier, kind} on every OS.
     // QML binds to this directly so the OBD settings page renders identically
@@ -213,9 +217,10 @@ signals:
     void parameterSampled(const QString &paramId, float value);
     void vinChanged(const QString &vin);
 
-    // Live log line for the QML OBD page's connection log/terminal element.
-    // One signal = one new line appended; QML can keep a rolling buffer.
+    // One connection log line (the connection steps, most useful on the
+    // Android BLE path); connectionLog keeps the recent ones
     void connectionLogLineAppended(const QString &line);
+    void connectionLogChanged();
 
 public:
     explicit OBDManager(SettingsManager *settingsManager = nullptr,
@@ -225,6 +230,9 @@ public:
     // --- Property getters (Q_INVOKABLE so QML can call them) ---
     Q_INVOKABLE bool isConnected() const;
     QString connectionDetail() const { return m_connectionDetail; }
+    QStringList connectionLog() const { return m_connectionLog; }
+    static constexpr int kConnectionLogLines = 60;
+    Q_INVOKABLE void clearConnectionLog();
     int connectionProgress() const { return m_connectionProgress; }
     // snake_case alias — QML (OBDHome.qml etc.) calls is_connected().
     // Keep both in lockstep.
@@ -503,6 +511,7 @@ private:
     int m_connectionAttempts = 0;
     QString m_connectionStatus = QStringLiteral("Disconnected");  // last connectionStatusChanged value
     QString m_connectionDetail;
+    QStringList m_connectionLog;
     int m_connectionProgress = 0;
     int m_connectionTimeout = 5;  // seconds
     bool m_forceStopReconnect = false;

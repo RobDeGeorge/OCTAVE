@@ -191,7 +191,7 @@
         <!-- OBDHome -->
         <h2 id="obdhome">OBDHome.qml</h2>
 
-        <p><span class="file-path">frontend/OBDHome.qml</span> is the OBD hub the BottomBar's OBD button opens. Above a two-card row it shows a 48&nbsp;dp status row &mdash; a dot that is green when connected, amber and pulsing while the status contains "Connecting", red otherwise &mdash; with the status text and an elided detail string, and beneath it a rolling <strong>connection log</strong> (<code>connectionLogLineAppended</code>, capped at 40 lines, monospace <code>ListView</code> that <code>positionViewAtEnd()</code>s). The comment explains the log: "Most useful on Android where the BLE state machine has many steps and silent failures are easy unless we surface each transition."</p>
+        <p><span class="file-path">frontend/OBDHome.qml</span> is the OBD hub the BottomBar's OBD button opens. Above a two-card row it shows a 48&nbsp;dp status row &mdash; a dot that is green when connected, amber and pulsing while the status contains "Connecting", red otherwise &mdash; with the status text and an elided detail string, and beneath it a rolling <strong>connection log</strong> (<code>obdManager.connectionLog</code>, the manager's last 60 lines, the same history the OBD settings page shows, monospace <code>ListView</code> that <code>positionViewAtEnd()</code>s). The comment explains the log: "Most useful on Android where the BLE state machine has many steps and silent failures are easy unless we surface each transition."</p>
 
         <table>
           <thead><tr><th>Card</th><th>Subtitle</th><th>Action</th></tr></thead>
@@ -205,7 +205,7 @@
         <p><code>pushSubpage()</code> saves the file name to the generic setting <code>lastOBDPage</code> and opens the page through <code>stackView.openPage()</code>, which logs a <code>console.warn</code> on failure. The card matching <code>lastSubpage</code> gets a 2&nbsp;px accent border ("you were just here"); the BottomBar reads the same key to jump straight to the remembered subpage on the next tap.</p>
 
         <h3>Backend managers used</h3>
-        <p><code>obdManager</code> (<code>is_connected()</code>, <code>connectionStatusChanged</code>, <code>connectionStatusDetailChanged</code>, <code>connectionLogLineAppended</code>), <code>settingsManager</code>.</p>
+        <p><code>obdManager</code> (<code>is_connected()</code>, <code>connectionStatusChanged</code>, <code>connectionStatusDetailChanged</code>, <code>connectionLog</code>), <code>settingsManager</code>.</p>
 
         <!-- OBDMenu -->
         <h2 id="obdmenu">OBDMenu.qml</h2>

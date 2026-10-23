@@ -53,6 +53,23 @@ private slots:
         qputenv("APPDATA", (m_tmp.path() + "/appdata").toUtf8());
     }
 
+    // ── Connection log: one buffer for every page ───────────────────
+    void connectionLogKeepsTheLastLines()
+    {
+        OBDManager obd;
+        QSignalSpy changed(&obd, &OBDManager::connectionLogChanged);
+        const int n = OBDManager::kConnectionLogLines + 10;
+        for (int i = 0; i < n; ++i)
+            emit obd.connectionLogLineAppended(QStringLiteral("line %1").arg(i));
+        QCOMPARE(changed.count(), n);
+        const QStringList log = obd.property("connectionLog").toStringList();
+        QCOMPARE(log.size(), OBDManager::kConnectionLogLines);
+        QCOMPARE(log.first(), QStringLiteral("line 10"));
+        QCOMPARE(log.last(), QStringLiteral("line %1").arg(n - 1));
+        obd.clearConnectionLog();
+        QVERIFY(obd.connectionLog().isEmpty());
+    }
+
     // ── Poll list ───────────────────────────────────────────────────
     void noDemandPollsOnlyTheHeartbeat()
     {
