@@ -83,7 +83,9 @@ func TestStateFoldsEvents(t *testing.T) {
 }
 
 // A fake service: replies to each request, with an event pushed in front of every reply.
-func fakeService(t *testing.T) string {
+func fakeService(t *testing.T) string { return fakeServiceVersion(t, 1) }
+
+func fakeServiceVersion(t *testing.T, version int) string {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -106,7 +108,7 @@ func fakeService(t *testing.T) string {
 			var reply map[string]any
 			switch req["op"] {
 			case "hello":
-				reply = map[string]any{"ok": true, "result": map[string]any{"protocolVersion": 1, "app": map[string]any{"version": "9.9"}}}
+				reply = map[string]any{"ok": true, "result": map[string]any{"protocolVersion": version, "app": map[string]any{"version": "9.9"}}}
 			case "call":
 				reply = map[string]any{"ok": true, "result": req["args"]}
 			default:
@@ -191,5 +193,19 @@ func TestStateDTCsAndTripDetails(t *testing.T) {
 	}
 	if s.Detail(42, &d) {
 		t.Fatal("detail for an unknown trip")
+	}
+}
+
+func TestHelloAcceptsKnownVersionsOnly(t *testing.T) {
+	for version, ok := range map[int]bool{1: true, 2: true, 3: false} {
+		c, err := Dial(fakeServiceVersion(t, version), time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = c.Hello()
+		c.Close()
+		if (err == nil) != ok {
+			t.Fatalf("protocol %d: err %v", version, err)
+		}
 	}
 }

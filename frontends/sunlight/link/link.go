@@ -9,12 +9,17 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"sync"
 	"time"
 )
 
-// ProtocolVersion is the service protocol this client was written against.
-const ProtocolVersion = 1
+// ProtocolVersion is the newest service protocol this client knows;
+// ProtocolVersions every one it can talk to (2 added pairing, which a client
+// on the same device does not need while serviceLoopbackOpen is on).
+const ProtocolVersion = 2
+
+var ProtocolVersions = []int{1, 2}
 
 // Message is any line the service sends: a reply (ID set) or an event.
 type Message struct {
@@ -195,8 +200,8 @@ func (c *Client) Hello() (string, error) {
 	if err := json.Unmarshal(raw, &h); err != nil {
 		return "", err
 	}
-	if h.ProtocolVersion != ProtocolVersion {
-		return "", fmt.Errorf("the app speaks protocol %d, sunlight %d", h.ProtocolVersion, ProtocolVersion)
+	if !slices.Contains(ProtocolVersions, h.ProtocolVersion) {
+		return "", fmt.Errorf("the app speaks protocol %d, sunlight knows %v", h.ProtocolVersion, ProtocolVersions)
 	}
 	return h.App.Version, nil
 }
