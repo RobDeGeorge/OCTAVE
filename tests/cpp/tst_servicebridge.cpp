@@ -391,6 +391,35 @@ private slots:
         QVERIFY(error(R"({"op": "unsubscribe", "sub": 999})").contains("No subscription"));
     }
 
+    void subscribeReplyComesBeforeItsEvents()
+    {
+        // A client learns its sub id from the reply: no event of that
+        // subscription may reach it first, even pipelined
+        m_registry->add("fixture", &m_fixture);
+        m_socket->write(R"({"op": "subscribe", "object": "fixture", "properties": ["level", "mode"], "id": 1})" "\n"
+                        R"({"op": "subscribe", "object": "fixture", "properties": ["label"], "id": 2})" "\n");
+        QList<QJsonObject> lines;
+        QElapsedTimer t;
+        t.start();
+        while (lines.size() < 5 && t.elapsed() < 5000) {
+            pump(10);
+            lines += m_lines;
+            m_lines.clear();
+        }
+        QCOMPARE(lines.size(), 5);   // two replies, three current values
+        QHash<int, int> replyAt;     // sub id -> line index of its reply
+        for (int i = 0; i < lines.size(); ++i) {
+            const QJsonObject &l = lines.at(i);
+            if (l.contains("ok")) {
+                replyAt.insert(l.value("result").toObject().value("sub").toInt(), i);
+            } else {
+                const int sub = l.value("sub").toInt();
+                QVERIFY2(replyAt.contains(sub), qPrintable(QStringLiteral("event of sub %1 before its reply").arg(sub)));
+            }
+        }
+        QCOMPARE(replyAt.size(), 2);
+    }
+
     void throttleKeepsTheLatest()
     {
         m_registry->add("fixture", &m_fixture);
