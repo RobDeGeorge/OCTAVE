@@ -2,293 +2,262 @@
 
 # OCTAVE
 
-### An open-source car head unit
-**Runs on Raspberry Pi, desktop, and Android. C++ / Qt 6 with a QML frontend, GPLv3.**
+### The car head unit you build yourself.
 
-<img src="frontend/assets/readme/drive.webp" alt="OCTAVE drive view: album art beside live speed and RPM during a full-throttle pull" width="900">
+**Live engine data. Gauges you design on the screen. Music that repaints the whole dash.<br>Your phone on the dash. A black box that remembers every drive.**
 
-<sub>My Jeep TJ runs OCTAVE on an Orange Pi 5 Plus driving a 10.1-inch 1280x800 touchscreen. Every clip and screenshot in this README was captured from the running app. The theme is following the album art.</sub>
+<img src="frontend/assets/readme/drive.webp" alt="OCTAVE pulling through the gears: album art beside live speed and RPM, the whole UI coloured by the cover" width="900">
+
+<sub>Real app, real UI, recorded from a script. Engine data comes from OCTAVE's built-in car simulator, so you can try all of this with no car.</sub>
 
 [![Latest Release](https://img.shields.io/github/v/release/RobDeGeorge/OCTAVE?label=latest%20release&style=for-the-badge&color=41cd52)](https://github.com/RobDeGeorge/OCTAVE/releases/latest)
 [![Stars](https://img.shields.io/github/stars/RobDeGeorge/OCTAVE?style=for-the-badge&color=ffb400&logo=github)](https://github.com/RobDeGeorge/OCTAVE/stargazers)
 [![Downloads](https://img.shields.io/github/downloads/RobDeGeorge/OCTAVE/total?style=for-the-badge&color=2b8aff&label=downloads)](https://github.com/RobDeGeorge/OCTAVE/releases)
 [![License: GPL v3+](https://img.shields.io/badge/license-GPLv3%2B-orange?style=for-the-badge)](LICENSE)
 
-[![Platforms](https://img.shields.io/badge/platforms-Win%20%7C%20macOS%20%7C%20Linux%20%7C%20Pi%20%7C%20Android-success?style=flat-square)](#install)
-[![Backend](https://img.shields.io/badge/backend-C%2B%2B%20%2F%20Qt%206-orange?style=flat-square)](#building-from-source)
-[![Frontend](https://img.shields.io/badge/frontend-Qt%206%20%2F%20QML-41cd52?style=flat-square)](#)
+**Windows · macOS · Linux · Raspberry Pi / Orange Pi · Android**
 
-### [Download Latest Release →](https://github.com/RobDeGeorge/OCTAVE/releases/latest) · [Read the Wiki →](https://robdegeorge.com/OCTAVE/)
+### [⬇️ Download](https://github.com/RobDeGeorge/OCTAVE/releases/latest) &nbsp;·&nbsp; [📖 Wiki](https://robdegeorge.com/OCTAVE/) &nbsp;·&nbsp; [🔌 Build your own frontend](https://robdegeorge.com/OCTAVE/writing-a-frontend.html)
 
 </div>
 
 ---
 
-OCTAVE is an infotainment system you run on your own hardware: a Raspberry Pi behind the dash, a laptop in a project car, or an Android tablet. It plays local music, reads live data from the car over OBD-II, mirrors an Android phone over USB or Wi-Fi, and recolours its interface to match the album art.
+Stock head units are locked boxes. Phone projection hides the car behind your phone. **OCTAVE is a full infotainment system you run on your own hardware**: a Pi behind the dash, a laptop in a project car, an old Android tablet. It reads the car over OBD-II, plays your music, mirrors your phone, and every pixel of it is yours to change.
 
-It sits in the same space as Crankshaft, OpenAuto Pro and AGL, but it runs on its own rather than projecting a phone, and it is built to be modified. Most of the customisation (themes, dashboards, layouts, hardware bindings) happens inside the app. Past that, the code is small enough to fork.
+I daily-drive it in my 2003 Jeep TJ.
 
-I daily-drive it in a 2003 Jeep TJ. That is where most of the design decisions come from, and it is why the README is full of the Jeep.
+> 🔌 **Getting data from your car:** plug an ELM327 OBD-II adapter (the cheap $15–30 kind) into the port under your dash. Every car sold in the US since 1996 has one.
+> - **USB** adapters work on every platform.
+> - **Bluetooth** adapters pair from inside OCTAVE on Linux and the Pi. On Windows and macOS, pair it in system settings and pick its port.
+> - **BLE** adapters work on Android.
+>
+> No car handy? A source build's `--dev` mode drives a simulated one.
+
+<table>
+<tr>
+<td width="33%" align="center"><a href="#-music-that-paints-the-whole-dash"><img src="frontend/assets/readme/media_media_room_playing.png" alt="Media room"></a><br><b>🎨 Music paints the dash</b><br><sub>Every song recolours the UI</sub></td>
+<td width="33%" align="center"><a href="#-gauges-you-design-on-the-screen"><img src="frontend/assets/readme/dashboards_sport.png" alt="Sport dashboard"></a><br><b>📊 Gauges you design</b><br><sub>Drag-and-drop editor, 129 live readings</sub></td>
+<td width="33%" align="center"><a href="#-a-black-box-for-every-drive"><img src="frontend/assets/readme/blackbox_coolant.png" alt="Trip history chart"></a><br><b>🧠 A black box</b><br><sub>Every drive recorded and charted</sub></td>
+</tr>
+<tr>
+<td align="center"><a href="#-your-phone-on-the-dash"><img src="frontend/assets/readme/mirror_live.png" alt="Phone mirroring"></a><br><b>📱 Your phone on the dash</b><br><sub>USB or Wi-Fi, nothing to install</sub></td>
+<td align="center"><a href="#-shift-light-warnings-and-trouble-codes"><img src="frontend/assets/readme/shiftlight_strobe.png" alt="Shift light"></a><br><b>🚨 Shift light & codes</b><br><sub>Read and clear the check-engine light</sub></td>
+<td align="center"><a href="#-drive-it-from-anything"><img src="frontend/assets/readme/webclient_tile.png" alt="OCTAVE's web client on a phone"></a><br><b>🔌 Open API</b><br><sub>Drive it from a browser or a script</sub></td>
+</tr>
+</table>
 
 ---
 
-## What it looks like
+## 🎨 Music that paints the whole dash
 
-Every clip below is the real app, driven by a script with music playing (see [Dev tooling](#dev-tooling)). Engine and motion data in the clips come from OCTAVE's built-in simulator, so they can be reproduced without a car. Each clip has a different song behind it, and with the **Album Art Capture** theme on, the whole interface takes its colours from the current track.
+<p align="center"><img src="frontend/assets/readme/media.webp" alt="Skipping tracks: the accent, glow and background follow each album's art" width="900"></p>
 
-### Music that colours the whole interface
+Skip a track and the whole interface takes its colours from the cover art. Local MP3, M4A and FLAC with a live waveform, and a search that pulls tracks from YouTube Music straight into your library.
 
 <p align="center">
-  <img src="frontend/assets/readme/media.webp" alt="Media room and player: accent, glow and background follow each album's art as tracks change" width="900">
+  <img src="frontend/assets/readme/media_media_player_playing.png" alt="The music library in the red of the playing cover" width="49%">
+  <img src="frontend/assets/readme/library_search.png" alt="Searching YouTube Music for David Bowie, each result with album art and a download button" width="49%">
 </p>
 
-Skip a track and the UI recolours. Local MP3, M4A and FLAC with a live waveform, and a downloader that finds tracks on YouTube Music.
+## 📊 Gauges you design on the screen
+
+<p align="center"><img src="frontend/assets/readme/dashboards.webp" alt="The dashboard chooser with live miniatures, then Sport, Performance, TJ Wrangler and Full Grid under load" width="900"></p>
+
+**129 live readings** (121 OBD-II PIDs plus the IMU), **11 widget types**, and full-screen dashboards you swipe between. Pick one of the built-ins or build your own:
+
+<p align="center"><img src="frontend/assets/readme/editor.webp" alt="Building a dashboard in the editor: tap a cell, pick a gauge and a parameter, preview with demo data, save, drive on it" width="900"></p>
+
+No code and no JSON: tap an empty cell, pick a gauge, pick what it shows, drag it where you want it. Hit **Demo data** to watch it move before you save. Share it as a file or through the clipboard.
 
 <p align="center">
-  <img src="frontend/assets/readme/media_media_room_playing.png" alt="Media room with waveform, controls and album art" width="49%">
-  <img src="frontend/assets/readme/media_media_player_playing.png" alt="Full-screen media player" width="49%">
-</p>
-
-### Your library, and finding more
-
-<p align="center">
-  <img src="frontend/assets/readme/library.webp" alt="Music library: long-press a song for its action sheet, sort by artist, open the playlist picker, then search for David Bowie and get results with album art" width="900">
-</p>
-
-Sort by title, artist or album, switch between playlist folders, and long-press any song to move it to another playlist or delete it. Search finds tracks on YouTube Music, with album art, and downloads them into the playlist you pick. Downloads are left out of app-store builds.
-
-<p align="center">
-  <img src="frontend/assets/readme/library_song_sheet.png" alt="Song action sheet: album art, artist and album, the folder it lives in, move to playlist, delete" width="49%">
-  <img src="frontend/assets/readme/library_search.png" alt="Music search results for David Bowie, each with album art and a download button" width="49%">
-</p>
-
-### Gauges and dashboards you build yourself
-
-<p align="center">
-  <img src="frontend/assets/readme/dashboards.webp" alt="Dashboard chooser with live miniatures, then Sport, Performance, TJ Wrangler and Full Grid dashboards under load" width="900">
-</p>
-
-Fifty-plus OBD-II parameters, seven gauge primitives (circular, arc, bar, linear, digital, sparkline, warning light), and full-screen dashboards defined in JSON or built in the in-app drag-and-drop editor. The chooser shows every dashboard as a live miniature. "TJ Wrangler 4.0" is the one I actually drive with.
-
-<p align="center">
-  <img src="frontend/assets/readme/dashboards_sport.png" alt="Sport dashboard: big speed readout and RPM arc" width="49%">
   <img src="frontend/assets/readme/dashboards_fullgrid.png" alt="Full Grid dashboard: eight circular gauges" width="49%">
-</p>
-<p align="center">
-  <img src="frontend/assets/readme/dashboards_tj_wrangler.png" alt="TJ Wrangler 4.0 dashboard: fuel trims, O2 sensors, timing and pressures for a 4.0 inline six" width="49%">
-  <img src="frontend/assets/readme/dashboards_chooser.png" alt="Dashboard chooser with live miniatures of every dashboard" width="49%">
+  <img src="frontend/assets/readme/dashboards_tj_wrangler.png" alt="TJ Wrangler 4.0 dashboard: fuel trims, O2 sensors, timing and pressures" width="49%">
 </p>
 
-### Build a dashboard on the screen itself
+## 🧠 A black box for every drive
 
-<p align="center">
-  <img src="frontend/assets/readme/editor.webp" alt="In the dashboard editor: name it Trail Rig, tap empty cells to add an RPM arc, G-force, compass, speed, coolant warning light, fuel trim and engine load, preview with demo data, save, then drive on it" width="900">
-</p>
+<p align="center"><img src="frontend/assets/readme/blackbox.webp" alt="Trip History: the drive in progress recording at the top, then a past drive's stats and its coolant and voltage charts" width="900"></p>
 
-No code and no JSON. Tap an empty cell, pick a widget, pick the parameter, and nudge its size and position from the side panel. "Demo data" shows the gauges moving before you save, and the saved dashboard joins the chooser and the swipe order. Dashboards can be shared as a file or through the clipboard.
+OCTAVE records **every reading of every drive**, quietly, in the background. Open Trip History to see each drive's distance, top speed, peak coolant, voltage and fuel used, and chart any parameter over the whole trip. Export a drive as CSV, or open the files yourself.
 
-<p align="center">
-  <img src="frontend/assets/readme/editor_built.png" alt="The editor with seven widgets placed on the grid" width="49%">
-  <img src="frontend/assets/readme/editor_live.png" alt="The saved Trail Rig dashboard live under load" width="49%">
-</p>
+## 🚨 Shift light, warnings and trouble codes
 
-### The shift light
+<p align="center"><img src="frontend/assets/readme/shiftlight.webp" alt="Revving up: the shift lamp turns green, flashes yellow, then the whole screen strobes red" width="900"></p>
 
-<p align="center">
-  <img src="frontend/assets/readme/shiftlight.webp" alt="The whole screen flashes red as the engine crosses the shift-light RPM on the Sport dashboard" width="900">
-</p>
+Set your own RPM bands: the lamp goes green, flashes yellow, and at the top **the whole screen strobes red**, whatever page you're on. Any gauge can also be a warning light with its own threshold.
 
-Set an RPM threshold and the whole screen strobes red when the engine crosses it, whatever page is showing.
+<p align="center"><img src="frontend/assets/readme/diagnostics.webp" alt="TEMP and FUEL warning lights come on, then the diagnostics page reads two trouble codes, takes a freeze frame and clears them" width="900"></p>
 
-<p align="center">
-  <img src="frontend/assets/readme/shiftlight_strobe.png" alt="Mid-flash: the Sport dashboard washed red at 6300 RPM" width="700">
-</p>
+Check-engine light on? Read the stored and pending codes in plain English, grab the freeze frame, and clear them, right from the dash.
 
-### Warnings and trouble codes
+## 📱 Your phone on the dash
 
-<p align="center">
-  <img src="frontend/assets/readme/diagnostics.webp" alt="The Performance dashboard's TEMP light turns red as coolant hits 115 °C and FUEL turns yellow, then the diagnostics page reads two stored codes, takes a freeze frame and clears them" width="900">
-</p>
+<p align="center"><img src="frontend/assets/readme/mirror_live.png" alt="A Samsung phone's DeX desktop mirrored onto the head unit" width="900"></p>
 
-Warning lights are ordinary dashboard widgets with a threshold, so any parameter can have one. When something does light up, the diagnostics page reads stored and pending trouble codes with plain-English descriptions, pulls the freeze frame, and clears the codes and the check-engine light after a confirmation.
+Plug in an Android phone, or pair it once over Wi-Fi by scanning a QR code. OCTAVE mirrors a DeX-style desktop onto the dash with its own built-in client: **nothing to install on the phone**. A bumped USB cable picks up where it left off instead of starting over.
 
-<p align="center">
-  <img src="frontend/assets/readme/diagnostics_warnings.png" alt="Performance dashboard with the TEMP light red at 115 °C and the FUEL light yellow" width="49%">
-  <img src="frontend/assets/readme/diagnostics_codes.png" alt="Diagnostics page listing P0300 random misfire and P0420 catalyst efficiency" width="49%">
-</p>
+## 🚙 The car, live in 3D
 
-### Your phone on the dash
+<p align="center"><img src="frontend/assets/readme/jeep.webp" alt="A rigged 3D Jeep TJ: doors, hood and tailgate open, lights on, steering and wheels turning, tilted by the IMU" width="900"></p>
 
-<p align="center">
-  <img src="frontend/assets/readme/mirror_live.png" alt="A Samsung phone's DeX desktop mirrored onto the head unit over USB" width="700">
-</p>
+A rigged model of the Jeep with working doors, hood, tailgate, lights, steering and wheels, rolled and pitched in real time by an IMU on the dash.
 
-Plug in an Android phone, or pair it once over Wi-Fi by scanning a QR code, and OCTAVE mirrors a DeX-style desktop onto the head unit through a built-in scrcpy-protocol client. There is nothing to install on the phone. Its own screen can stay dark in the cradle (opt-in, since some phones only dim), an accidental power press is reverted, unlocking the phone hands control back to it, and a brief USB disconnect resumes where you were instead of resetting to the home screen.
+<p align="center"><img src="frontend/assets/readme/sensors.webp" alt="The sensors page while driving: pitch, roll, heading, a G-force trail, altitude" width="900"></p>
 
-### The vehicle, live
+Pitch, roll, heading, a G-force plot with a trail, altitude and temperature, sampled at 200 Hz.
 
-<p align="center">
-  <img src="frontend/assets/readme/jeep.webp" alt="A rigged 3D Jeep TJ: doors, hood and tailgate open, lights on, steering and wheels turning, tilted by the real IMU" width="900">
-</p>
+## 🔌 Drive it from anything
 
-A rigged model of the Jeep with working doors, hood, tailgate, lights, steering and wheels. The BerryIMU on the dash rolls and pitches it in real time, and supplies heading, altitude and cabin temperature.
+<table>
+<tr>
+<td width="38%" align="center"><img src="frontend/assets/readme/webclient_phone.png" alt="OCTAVE's web client on a phone: live engine gauges, now playing with controls, volume" width="280"></td>
+<td>
 
-<p align="center">
-  <img src="frontend/assets/readme/jeep_open.png" alt="Jeep with doors and hood open" width="49%">
-  <img src="frontend/assets/readme/jeep_lights.png" alt="Jeep with headlights, fog, brake and reverse lights on" width="49%">
-</p>
+Everything the touch screen can do is open to other programs over a small JSON API. Start OCTAVE with `--service --service-bind 0.0.0.0` and open **`http://<head-unit-ip>:9876/`** on your phone (on a network you trust: there's no login): live gauges, now playing, volume. Or run it with **no screen at all** (`--headless`) and make your own UI.
 
-### Sensors
+```python
+from octave_client import Client
 
-<p align="center">
-  <img src="frontend/assets/readme/sensors.webp" alt="The sensors page while driving: pitch, roll and heading change, the G-force dot swings with a trail through bends and braking, altitude climbs; then the 3D Jeep tilting with it" width="900">
-</p>
+with Client() as octave:
+    octave.call("nowPlaying", "next")
+    octave.subscribe("paramStore", properties=["RPM", "SPEED"])
+    for event in octave.events():
+        print(event["values"])        # {'RPM': 2210, 'SPEED': 41}
+```
 
-Pitch, roll, heading, a G-force plot with a trail, altitude and temperature from the BerryIMU, sampled at 200 Hz. Zero it on level ground and every reading is relative to how the unit is mounted.
+A stdlib-only [Python SDK](sdk/), a no-build [web client](sdk/web/index.html), the full [API reference](https://robdegeorge.com/OCTAVE/api-reference.html), and a walkthrough: **[Writing a Frontend](https://robdegeorge.com/OCTAVE/writing-a-frontend.html)**.
 
-<p align="center">
-  <img src="frontend/assets/readme/sensors_live.png" alt="Sensors page with live pitch, roll, heading, G-force, altitude and temperature" width="49%">
-  <img src="frontend/assets/readme/sensors_clock.png" alt="Clock page with digital time, date and an analogue face" width="49%">
-</p>
+</td>
+</tr>
+</table>
 
-### The whole thing, page by page
+---
 
-<p align="center">
-  <img src="frontend/assets/readme/tour.webp" alt="A pass through the home page, media room, media player, OBD parameter cards, sensors, vehicle view and settings" width="900">
-</p>
+## ⬇️ Install
 
-<p align="center">
-  <img src="frontend/assets/readme/tour_home.png" alt="Home page" width="32%">
-  <img src="frontend/assets/readme/drive_drive_cards.png" alt="OBD parameter cards under load" width="32%">
-  <img src="frontend/assets/readme/tour_settings.png" alt="Settings" width="32%">
-</p>
+Grab the file for your platform from **[Releases](https://github.com/RobDeGeorge/OCTAVE/releases/latest)**. No toolchain needed.
 
-<p align="center">
-  <img src="frontend/assets/readme/settings.webp" alt="Settings sections: display, media, OBD, accessories, device, about" width="900">
-</p>
+| Platform | File | |
+|---|---|---|
+| 🪟 Windows | `OCTAVE-<version>-windows-x86_64.exe` | Run the installer |
+| 🍎 macOS | `OCTAVE-<version>-macos.dmg` | Drag to Applications |
+| 🐧 Linux | `OCTAVE-<version>-linux-x86_64.AppImage` | `chmod +x`, then run |
+| 🍓 Raspberry Pi / Orange Pi (64-bit) | `OCTAVE-<version>-linux-aarch64.AppImage` | `chmod +x`, then run |
+| 🤖 Android | `OCTAVE-<version>-android-arm64-v8a.apk` | Sideload it |
+
+<details>
+<summary>Platform notes</summary>
+
+- **Linux:** Ubuntu 22.04+, Debian, Mint, Fedora, openSUSE and Arch. Arch may need `sudo pacman -S fuse2`, or run `./OCTAVE-*.AppImage --appimage-extract-and-run`.
+- **Android:** each release APK is signed with its own key, so uninstall the previous version before updating.
+
+</details>
 
 ## How it compares
 
 | | OCTAVE | Crankshaft | OpenAuto Pro | Stock Android Auto |
 |---|---|---|---|---|
-| Open source | yes (GPLv3) | yes | partial | no |
-| Runs without a phone | yes | no (AA projection) | no (AA projection) | no |
-| Built-in OBD-II + custom gauges | yes | no | limited | no |
-| Phone mirroring | yes (built-in, nothing to install) | AA only | AA only | n/a |
-| Themable / forkable UI | fully (QML) | limited | limited | no |
-| Local music + downloads | yes | via phone | via phone | via phone |
-| Desktop dev loop | yes (Win/macOS/Linux) | Pi only | Pi only | n/a |
+| Open source | ✅ GPLv3 | ✅ | partial | ❌ |
+| Works without a phone | ✅ | ❌ AA projection | ❌ AA projection | ❌ |
+| Live OBD-II, your own dashboards | ✅ | ❌ | limited | ❌ |
+| Records every drive | ✅ | ❌ | ❌ | ❌ |
+| Phone mirroring | ✅ nothing to install | AA only | AA only | n/a |
+| Open API for your own UI | ✅ | ❌ | ❌ | ❌ |
+| Fully themable / forkable UI | ✅ QML | limited | limited | ❌ |
+| Develop on your laptop | ✅ Win / macOS / Linux | Pi only | Pi only | n/a |
 
-## Features
+## Everything else it does
 
-### Media & Audio
-- Local player for MP3, M4A, FLAC with album art carousel and live FFT visualizer
-- Music search and download (YouTube Music + yt-dlp)
-- Dynamic theming that pulls colors straight from album art
+- 🎛️ **ESP32 wireless volume knob** with an LED ring that matches the theme
+- 👋 **Gesture sensor** (PAJ7620U2): wave to skip, pause or change the volume
+- 🔵 **Bluetooth OBD adapters** found, paired and connected from the app on Linux; BLE adapters on Android
+- ⚙️ **100+ settings**, all on the screen, all saved
+- 📖 **The whole wiki inside the app**, readable offline
+- 🩺 **Logs and crash traces** you can export from the dash when something goes wrong
 
-### Vehicle & Hardware
-- OBD-II diagnostics over ELM327 (serial, Bluetooth, BLE on Android) — 50+ live parameters, custom gauges, full dashboards, DTC read and clear
-- Phone mirroring over USB or Wi-Fi (one-time QR pairing) with a built-in scrcpy-protocol client and a phone-side keeper that survives locks and cable blips
-- ESP32 wireless volume knob with LED sync
-- BerryIMU 9DOF sensor fusion (accelerometer, gyro, magnetometer, barometer) with a live vehicle view
-- PAJ7620U2 gesture sensor for touchless control
+---
 
-### Platform & Customization
-- Runs on Windows, macOS, Linux, Raspberry Pi, and Android
-- 100+ user-configurable settings, all persisted to disk
-- Gauge primitives, JSON dashboards and an in-app dashboard editor — build your own and drop them in
-- Rotating logs, crash traces and a Diagnostics page that exports them from the dash
+## 🛠️ Hack on it
 
-## Install
+OCTAVE is C++ / Qt 6 with a QML frontend, built with CMake, small enough to fork. `--dev` runs it with a **simulated car** (warm-up, overheating and low-fuel scenarios) and simulated motion, so you can work on gauges at your desk.
 
-Pre-built binaries for every platform are on the [Releases](https://github.com/RobDeGeorge/OCTAVE/releases) page. No toolchain needed:
+<details>
+<summary><b>Build from source</b></summary>
 
-- **Windows:** `OCTAVE-<version>-windows-x86_64.exe` — run the installer.
-- **macOS:** `OCTAVE-<version>-macos.dmg` — open, drag to Applications.
-- **Linux:** `OCTAVE-<version>-linux-x86_64.AppImage` — `chmod +x` and run. Works on Ubuntu 22.04+, Debian, Mint, Fedora, openSUSE, and Arch.
-  - Arch users may need `fuse2`: `sudo pacman -S fuse2`. Alternative without FUSE: `./OCTAVE-*.AppImage --appimage-extract-and-run`.
-- **Android:** `OCTAVE-<version>-android-arm64-v8a.apk` — sideload (the released APK uses a per-build keystore, so updates require uninstalling the previous version).
-
-## Building from source
-
-OCTAVE is a C++ / Qt 6 app built with CMake (Qt 6.7+, CMake 3.21+):
+Qt 6.7+ and CMake 3.21+:
 
 ```bash
 git clone https://github.com/RobDeGeorge/OCTAVE.git
 cd OCTAVE
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build -j
-./build/octave
-ctest --test-dir build --output-on-failure   # the QtTest suite in tests/cpp/
+cmake --build build -j8
+./build/octave --dev                       # with the simulated car
+ctest --test-dir build --output-on-failure # the test suite
 ```
 
-Full build matrix (9 targets including iOS, Android, Flatpak, and app store variants) lives in [BUILD.md](BUILD.md).
-
-Music downloads on desktop use yt-dlp and a small YouTube Music search helper. Put them in a virtualenv next to the checkout, where OCTAVE looks first:
+Every platform and packaging target is in [BUILD.md](BUILD.md). Music downloads on desktop use yt-dlp; put it in a virtualenv next to the checkout, where OCTAVE looks first:
 
 ```bash
 python3 -m venv venv && venv/bin/pip install -r requirements.txt
 ```
 
-Until October 2026 OCTAVE also had a Python / PySide6 backend. It is frozen, with its own wiki, on the [`python-final`](https://github.com/RobDeGeorge/OCTAVE/tree/python-final) branch if you want to fork it.
+Until October 2026 OCTAVE also had a Python / PySide6 backend. It is frozen, with its own wiki, on the [`python-final`](https://github.com/RobDeGeorge/OCTAVE/tree/python-final) branch.
 
-### YouTube downloads failing
+</details>
 
-If downloads fail with *"Sign in to confirm you're not a bot"*, the usual cause is a VPN. YouTube blocklists most shared VPN exit IPs, and downloads work again on a residential connection or a dedicated-IP exit node.
+<details>
+<summary><b>Dev tooling: how the clips above were made</b></summary>
 
-If you need to stay on the VPN, you can authenticate with your YouTube account through a cookies file instead:
+Every clip and screenshot in this README is scripted. `./build/octave --dev --profile` (a Debug build) runs OCTAVE with the simulator and a local command server; a story script drives it scene by scene (navigate, play, floor the throttle, tap buttons by their label, type into fields, build a dashboard), captures the window from inside Qt, and writes WebP and PNG. The same channel is exposed as MCP tools, so a coding agent can drive the app, change settings, read performance counters and record clips. The in-app half is in `src/dev/`; see the [Development guide](https://robdegeorge.com/OCTAVE/development.html).
 
-1. Install the **Get cookies.txt LOCALLY** extension in any Chromium-based browser:
-   - Desktop: Chrome / Brave / Edge / Vivaldi.
-   - Android: **Kiwi Browser** or **Brave** (Chrome on Android doesn't support extensions).
+</details>
+
+<details>
+<summary><b>YouTube downloads failing?</b></summary>
+
+*"Sign in to confirm you're not a bot"* usually means a VPN: YouTube blocks most shared VPN exit IPs. Downloads work again on a home connection or a dedicated-IP exit.
+
+To stay on the VPN, sign in through a cookies file instead:
+
+1. Install **Get cookies.txt LOCALLY** in a Chromium-based browser (desktop Chrome / Brave / Edge / Vivaldi; on Android, **Kiwi** or **Brave**).
 2. Log into <https://www.youtube.com> in that browser.
-3. Click the extension's icon while on a YouTube tab → **Export → cookies.txt**.
-4. Save (or rename) the file to `youtube_cookies.txt` in your **Downloads** folder:
-   - **Linux / macOS:** `~/Downloads/youtube_cookies.txt`
-   - **Windows:** `%USERPROFILE%\Downloads\youtube_cookies.txt`
-   - **Android:** `/storage/emulated/0/Download/youtube_cookies.txt` (visible as `Internal storage / Download / youtube_cookies.txt` in any file manager)
-5. Restart OCTAVE. Downloads now use those cookies, which usually stay valid for weeks.
+3. On a YouTube tab, click the extension → **Export → cookies.txt**.
+4. Save it as `youtube_cookies.txt` in your **Downloads** folder:
+   - Linux / macOS: `~/Downloads/youtube_cookies.txt`
+   - Windows: `%USERPROFILE%\Downloads\youtube_cookies.txt`
+   - Android: `/storage/emulated/0/Download/youtube_cookies.txt`
+5. Restart OCTAVE. It picks the file up on its own, and the cookies usually last for weeks.
 
-OCTAVE picks the file up automatically. There is no setting to configure.
+</details>
 
-## Dev tooling
+## 🗺️ What's next
 
-The clips and screenshots above are scripted. `./build/octave --dev --profile` (a Debug build) runs OCTAVE with a simulated engine (warm-up, overheat and low-fuel scenarios included), simulated IMU motion and a local command server. `python -m dev.screenshots.stories` drives it through scenes (navigate, play, floor the throttle, tap buttons by their label, type into fields, build a dashboard), captures the window from inside Qt in real time, and writes WebP, GIF and PNG. `--list` shows every scene. The same command channel is exposed as MCP tools, so a coding agent can navigate the app, change settings, read performance counters and record clips. The in-app half is in `src/dev/`; it is documented in the [wiki](https://robdegeorge.com/OCTAVE/development.html).
+- **Android on the Play Store**: the APK runs today as a sideload ([plan](TODO/android-cpp-port.md))
+- **Health trends across drives** on top of the black box ([plan](TODO/trip-history.md))
+- **Wireless CarPlay / Android Auto** through a CarlinKit dongle ([plan](TODO/carlinkit-dongle-port.md))
+- **Video over the API**, so your own frontend can show the phone mirror too ([plan](TODO/open-backend.md))
 
-## System requirements
+Every plan lives in [`TODO/`](TODO/).
 
-- **Qt 6.7+** and **CMake 3.21+** to build; Python 3.10+ only for the optional download helpers and dev scripts
-- **OS:** Windows 10+, macOS 10.14+, Linux (Debian / Arch / Fedora), Raspberry Pi OS, Android
+## 📖 Documentation
 
-## Roadmap
+The **[wiki](https://robdegeorge.com/OCTAVE/)** covers the architecture, every manager and page, every setting, hardware setup and the build guides. The same pages ship in [`wiki/`](wiki/index.html) and inside the app. Building gauges: [`docs/GAUGE_AUTHORING.md`](docs/GAUGE_AUTHORING.md). Building a frontend: [Writing a Frontend](https://robdegeorge.com/OCTAVE/writing-a-frontend.html) and [`docs/api/`](docs/api/README.md).
 
-Larger items in progress. Full plans are under [`TODO/`](TODO/).
+## 🤝 Contributing
 
-- **Android on the Play Store.** The C++ port runs on sideload today. See [`TODO/android-cpp-port.md`](TODO/android-cpp-port.md).
-- **Companion app** for phone mirroring without USB debugging. See [`TODO/octave-companion-app.md`](TODO/octave-companion-app.md).
-- **CarlinKit wireless CarPlay / Android Auto dongle support.** See [`TODO/carlinkit-dongle-port.md`](TODO/carlinkit-dongle-port.md).
-- **In-app error notifications**, so backend problems show up on screen rather than only in the logs.
-- **More tests** beyond the current QtTest suite.
-
-## Documentation
-
-The wiki covers architecture, every backend manager, every frontend page, the settings reference, hardware setup and the build guides. It is live at **[robdegeorge.com/OCTAVE](https://robdegeorge.com/OCTAVE/)**, and the same pages ship in [`wiki/`](wiki/index.html) and inside the app for offline reading. For gauges and dashboards, [`docs/GAUGE_AUTHORING.md`](docs/GAUGE_AUTHORING.md) is the spec.
-
-## Star history
+Pull requests and bug reports are welcome. Built a dashboard, a sensor integration, a port to new hardware, or your own frontend? Open an issue or a PR. I'd love to see it.
 
 <a href="https://star-history.com/#RobDeGeorge/OCTAVE&Date">
   <img src="https://api.star-history.com/svg?repos=RobDeGeorge/OCTAVE&type=Date" alt="Star History Chart" width="720">
 </a>
 
-## Contributing
+<details>
+<summary><b>Built with</b></summary>
 
-Pull requests and bug reports are welcome. If you build a dashboard, a sensor integration or a port to new hardware, open an issue or PR. I would like to see it.
+OCTAVE stands on a lot of other people's work.
 
-## Built with
-
-OCTAVE stands on a lot of other people's work. This is everything it uses, grouped by where it shows up.
-
-### C++ app (every release binary)
+**C++ app (every release binary)**
 
 | Library | Used for |
 |---|---|
@@ -299,9 +268,10 @@ OCTAVE stands on a lot of other people's work. This is everything it uses, group
 | Qt Sensors | The phone's motion sensors on Android |
 | [TagLib](https://taglib.org/) | Reading tags and embedded album art |
 | [FFmpeg](https://ffmpeg.org/) (libavcodec, libavutil) | Decoding the phone mirror's H.264 stream |
+| [SQLite](https://sqlite.org/) | The black box (compiled in from `third_party/sqlite/`) |
 | [CMake](https://cmake.org/) | Build system |
 
-### Python helper tools (optional, `requirements.txt`)
+**Python helper tools (optional, `requirements.txt`)**
 
 | Package | Used for |
 |---|---|
@@ -311,7 +281,7 @@ OCTAVE stands on a lot of other people's work. This is everything it uses, group
 | [python-OBD](https://github.com/brendan-w/python-OBD) | Dev scripts for reading and clearing trouble codes |
 | [Ruff](https://docs.astral.sh/ruff/) | Lint |
 
-### Android
+**Android**
 
 | Library | Used for |
 |---|---|
@@ -319,7 +289,7 @@ OCTAVE stands on a lot of other people's work. This is everything it uses, group
 | [youtubedl-android](https://github.com/JunkFood02/youtubedl-android) (library + ffmpeg) | yt-dlp and FFmpeg on the phone |
 | [OpenSSL](https://www.openssl.org/) | HTTPS for Qt Network (`android/openssl/`) |
 
-### Code bundled in this repository
+**Code bundled in this repository**
 
 | Component | License | Where |
 |---|---|---|
@@ -327,25 +297,20 @@ OCTAVE stands on a lot of other people's work. This is everything it uses, group
 | [QR Code generator library](https://www.nayuki.io/page/qr-code-generator-library) by Project Nayuki | MIT | `src/phone_mirror/qrcodegen.*` |
 | Android platform-tools (`adb`) | See its `NOTICE.txt` | `tools/platform-tools/` |
 
-### External tools and services
+**External tools and services:** adb (phone mirroring and Android Auto), Google's Android Auto Desktop Head Unit (the Android Auto view), YouTube Music (search and downloads).
 
-- **adb**: talks to the phone for mirroring and Android Auto.
-- **Android Auto Desktop Head Unit (DHU)** from Google: the Android Auto view.
-- **YouTube Music**: search and downloads.
+**Fonts, icons and 3D assets**
 
-### Fonts, icons and 3D assets
-
-- **[Google Sans](https://fonts.google.com/)**: UI typeface.
-- **[JetBrains Mono](https://www.jetbrains.com/lp/mono/)**: monospace readouts.
-- **OCTAVE Symbols**: a subset of [Noto Sans Symbols and Noto Sans Symbols 2](https://fonts.google.com/noto) (SIL OFL), renamed as the OFL requires. Built by `tools/fonts/build_symbol_font.py` with [fontTools](https://github.com/fonttools/fonttools).
+- **[Google Sans](https://fonts.google.com/)**: UI typeface. **[JetBrains Mono](https://www.jetbrains.com/lp/mono/)**: monospace readouts.
+- **OCTAVE Symbols**: a subset of [Noto Sans Symbols and Noto Sans Symbols 2](https://fonts.google.com/noto) (SIL OFL), renamed as the OFL requires, built by `tools/fonts/build_symbol_font.py` with [fontTools](https://github.com/fonttools/fonttools).
 - **Icons**: original SVGs drawn for OCTAVE (Illustrator sources in `frontend/assets/-src/`).
-- **The 2003 Jeep TJ**: an original model, built procedurally in [Blender](https://www.blender.org/) by `tools/vehicle/build_jeep_tj.py` from photos of one real TJ. No third-party meshes or textures. See [`tools/vehicle/README.md`](tools/vehicle/README.md).
+- **The 2003 Jeep TJ**: an original model, built procedurally in [Blender](https://www.blender.org/) by `tools/vehicle/build_jeep_tj.py` from photos of one real TJ; no third-party meshes or textures ([details](tools/vehicle/README.md)).
 - **Record player, cassette deck, CD player, iPod and friends**: original glTF models generated by `tools/music_devices/generate.py` (NumPy, Pillow).
-- **Studio lighting (`.hdr`)**: generated locally by `tools/vehicle/build_studio_probe.py`.
+- **Studio lighting (`.hdr`)**: generated by `tools/vehicle/build_studio_probe.py`.
 
-### CI and packaging
+**CI and packaging:** [GitHub Actions](https://github.com/features/actions) with [install-qt-action](https://github.com/jurplel/install-qt-action), [setup-android](https://github.com/android-actions/setup-android) and [action-gh-release](https://github.com/softprops/action-gh-release); [vcpkg](https://vcpkg.io/) and [Homebrew](https://brew.sh/) for TagLib and FFmpeg; [Inno Setup](https://jrsoftware.org/isinfo.php) for the Windows installer; [linuxdeploy](https://github.com/linuxdeploy/linuxdeploy) with its Qt plugin for the AppImages; `windeployqt`, `macdeployqt` and `androiddeployqt` from Qt.
 
-[GitHub Actions](https://github.com/features/actions) with [install-qt-action](https://github.com/jurplel/install-qt-action), [setup-android](https://github.com/android-actions/setup-android) and [action-gh-release](https://github.com/softprops/action-gh-release); [vcpkg](https://vcpkg.io/) and [Homebrew](https://brew.sh/) for TagLib and FFmpeg; [Inno Setup](https://jrsoftware.org/isinfo.php) for the Windows installer; [linuxdeploy](https://github.com/linuxdeploy/linuxdeploy) with its Qt plugin for the AppImages; `windeployqt`, `macdeployqt` and `androiddeployqt` from Qt.
+</details>
 
 ## License
 
