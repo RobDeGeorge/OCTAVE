@@ -511,6 +511,35 @@ private slots:
         server.stop();
     }
 
+    void aBrowserPostNeverRunsAnOp()
+    {
+        // H1: a cross-site no-cors fetch POST to 127.0.0.1 used to be read
+        // as JSON lines (first byte not 'G'): its body ran as a trusted op
+        m_registry->add("fixture", &m_fixture);
+        m_fixture.setLevel(3);
+        const QByteArray body = R"({"op": "set", "object": "fixture", "property": "level", "value": 77})" "\n";
+        const QByteArray post = "POST / HTTP/1.1\r\nHost: 127.0.0.1:" + QByteArray::number(m_server->port())
+                                + "\r\nOrigin: https://evil.example\r\nContent-Type: text/plain\r\nContent-Length: "
+                                + QByteArray::number(body.size()) + "\r\n\r\n" + body;
+        const QByteArray reply = once(m_server->port(), post);
+        QVERIFY2(reply.startsWith("HTTP/1.1 405"), reply.constData());
+        QCOMPARE(m_fixture.level(), 3);
+        // Other methods too, and with no Origin at all
+        for (const char *method : {"PUT", "DELETE", "OPTIONS", "PATCH"}) {
+            const QByteArray r = once(m_server->port(), QByteArray(method) + " / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n" + body);
+            QVERIFY2(r.startsWith("HTTP/1.1 405"), r.constData());
+        }
+        QCOMPARE(m_fixture.level(), 3);
+        // A lines client that sends anything but a JSON object is closed:
+        // the op after it never runs
+        const QByteArray garbage = once(m_server->port(), "{\"op\": \"hello\"}\nnot json\n" + body);
+        QVERIFY2(garbage.contains("Invalid JSON"), garbage.constData());
+        QCOMPARE(m_fixture.level(), 3);
+        // Leading blank lines before '{' are still the line protocol
+        QVERIFY(once(m_server->port(), "\n  \n" + body).contains(R"("ok":true)"));
+        QCOMPARE(m_fixture.level(), 77);
+    }
+
     void keyValueObjects()
     {
         // paramStore is a QQmlPropertyMap: keys, not declared properties
