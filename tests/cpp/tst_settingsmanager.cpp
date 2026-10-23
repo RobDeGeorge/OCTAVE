@@ -12,6 +12,7 @@
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QUrl>
 
 #include <cmath>
 
@@ -47,8 +48,11 @@ private slots:
         SettingsManager sm;
         sm.save_setting("serviceWebRoot", "/");
         sm.save_setting("serviceEnabled", true);
-        QCOMPARE(sm.get_setting("serviceWebRoot").toString(), QString());
-        QVERIFY(!sm.get_setting("serviceEnabled").toBool());
+        QCOMPARE(sm.fileOnlySetting("serviceWebRoot").toString(), QString());
+        // ...and nothing reads them through the generic getters either
+        QVERIFY(!sm.get_setting("serviceTokens").isValid());
+        QCOMPARE(sm.get_setting_with_default("serviceLoopbackOpen", "x").toString(), QStringLiteral("x"));
+        QVERIFY(!sm.fileOnlySetting("serviceEnabled").toBool());
         sm.save_setting("someOtherKey", 5);
         QCOMPARE(sm.get_setting("someOtherKey").toInt(), 5);
 
@@ -65,8 +69,8 @@ private slots:
         f.close();
         SettingsManager fresh;
         fresh.reset_to_defaults();
-        QVERIFY(fresh.get_setting("serviceEnabled").toBool());
-        QCOMPARE(fresh.get_setting("serviceWebRoot").toString(), QStringLiteral("/srv/ui"));
+        QVERIFY(fresh.fileOnlySetting("serviceEnabled").toBool());
+        QCOMPARE(fresh.fileOnlySetting("serviceWebRoot").toString(), QStringLiteral("/srv/ui"));
         QCOMPARE(fresh.get_setting("someOtherKey"), QVariant());   // the rest is reset
     }
 
@@ -95,8 +99,23 @@ private slots:
         QCOMPARE(grid.size(), 1);   // the slot's own notify
         QCOMPARE(sm.backgroundBlurRadius(), 43);
         QCOMPARE(sm.sideCardOpacity(), 0.35);
-        QVERIFY(!sm.get_setting("serviceEnabled").toBool());
+        QVERIFY(!sm.fileOnlySetting("serviceEnabled").toBool());
         QVERIFY(!sm.vinylRecordMode());
+    }
+
+    void mediaFolderMustBeAFolder()
+    {
+        SettingsManager sm;
+        const QString before = sm.mediaFolder();
+        QVERIFY(!sm.save_media_folder("/"));
+        QVERIFY(!sm.save_media_folder("relative/path"));
+        QVERIFY(!sm.save_media_folder(""));
+        QCOMPARE(sm.mediaFolder(), before);
+        QVERIFY(sm.save_media_folder(m_tmp->path()));
+        QCOMPARE(sm.mediaFolder(), m_tmp->path());
+        QVERIFY(!sm.save_media_folder("/tmp/../"));   // the root, however spelled
+        QVERIFY(sm.save_media_folder(QUrl::fromLocalFile(m_tmp->path() + "/").toString()));
+        QCOMPARE(sm.mediaFolder(), m_tmp->path());
     }
 
     void nowPlayingPresetsLiveInCpp()

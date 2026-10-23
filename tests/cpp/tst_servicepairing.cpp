@@ -69,7 +69,7 @@ private slots:
             token = p.pair(p.pairingCode(), "Phone", "10.0.0.3", &error);
             QVERIFY(!token.isEmpty());
             // Written on the GUI thread, after the pairing answered
-            QTRY_COMPARE(settings.get_setting("serviceTokens").toList().size(), 1);
+            QTRY_COMPARE(settings.fileOnlySetting("serviceTokens").toList().size(), 1);
             settings.flushPendingSave();
         }
         QFile f(SettingsManager::getAppDataDir() + "/settingsConfigure.json");
@@ -99,15 +99,35 @@ private slots:
         QTest::qWait(ServicePairing::kAttemptIntervalMs + 10);
         QVERIFY(p.pair(wrong, "x", "10.0.0.4", &error).isEmpty());
         QCOMPARE(error, QStringLiteral("wrong code"));
-        QVERIFY(p.pair(code, "x", "10.0.0.5", &error).isEmpty());   // within a second, even the right one
+        QVERIFY(p.pair(code, "x", "10.0.1.5", &error).isEmpty());   // within a second, even the right one
         QVERIFY(error.contains("too fast"));
-        for (int i = 0; i < ServicePairing::kMaxTries - 1; ++i) {
+        // kMaxTries wrong codes in all (from many addresses, each under its
+        // own limit) void the code
+        for (int i = 1; i < ServicePairing::kMaxTries; ++i) {
             QTest::qWait(ServicePairing::kAttemptIntervalMs + 10);
-            p.pair(wrong, "x", "10.0.0.4", &error);
+            p.pair(wrong, "x", QStringLiteral("10.0.2.%1").arg(i), &error);
         }
-        QVERIFY(p.pairingCode().isEmpty());   // five wrong: void
+        QVERIFY(p.pairingCode().isEmpty());
         QTest::qWait(ServicePairing::kAttemptIntervalMs + 10);
-        QVERIFY(p.pair(code, "x", "10.0.0.6", &error).isEmpty());
+        QVERIFY(p.pair(code, "x", "10.0.3.6", &error).isEmpty());
+    }
+
+    void addressesCountByPrefix()
+    {
+        QCOMPARE(ServicePairing::peerKey("192.168.1.20"), QStringLiteral("192.168.1.20"));
+        QCOMPARE(ServicePairing::peerKey("::ffff:192.168.1.20"), QStringLiteral("192.168.1.20"));
+        QCOMPARE(ServicePairing::peerKey("2001:db8:1:2:aaaa:bbbb:cccc:dddd"), ServicePairing::peerKey("2001:db8:1:2::1"));
+        QVERIFY(ServicePairing::peerKey("2001:db8:1:2::1") != ServicePairing::peerKey("2001:db8:1:3::1"));
+    }
+
+    void ticketsAreBounded()
+    {
+        SettingsManager settings;
+        ServicePairing p(&settings);
+        const QString first = p.mintTicket(QString());
+        for (int i = 0; i < ServicePairing::kMaxTickets; ++i)
+            p.mintTicket(QString());
+        QVERIFY(!p.checkTicket(first, true));   // the oldest went
     }
 
     void anAddressWithTooManyFailuresIsRefused()
@@ -161,9 +181,9 @@ private slots:
         ServicePairing p(&settings);
         QVERIFY(!p.serviceEnabled());
         p.setServiceEnabled(true);
-        QVERIFY(settings.get_setting("serviceEnabled").toBool());
+        QVERIFY(settings.fileOnlySetting("serviceEnabled").toBool());
         settings.save_setting("serviceEnabled", false);   // still refused for the generic path
-        QVERIFY(settings.get_setting("serviceEnabled").toBool());
+        QVERIFY(settings.fileOnlySetting("serviceEnabled").toBool());
     }
 
 private:

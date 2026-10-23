@@ -1234,20 +1234,29 @@ bool SettingsManager::save_media_folder_url(const QUrl &url)
         qCWarning(lcSettings) << "Media folder not usable as a path:" << url.toString();
         return false;
     }
-    save_media_folder(path);
-    return true;
+    return save_media_folder(path);
 }
 
-void SettingsManager::save_media_folder(const QString &folderPath)
+bool SettingsManager::save_media_folder(const QString &folderPathIn)
 {
+    // The rules save_media_folder_url applies, for a typed path too: a URL
+    // becomes its path; it must be an absolute path and never the
+    // filesystem root (it may be absent now: a card not inserted yet)
+    const QUrl asUrl(folderPathIn);
+    const QString folderPath = QDir::cleanPath(asUrl.isLocalFile() ? PathUrl::folderPath(asUrl) : folderPathIn.trimmed());
+    if (folderPathIn.trimmed().isEmpty() || !QDir::isAbsolutePath(folderPath) || QDir(folderPath).isRoot()) {
+        qCWarning(lcSettings) << "Media folder refused (not a folder this can use):" << folderPathIn;
+        return false;
+    }
     if (folderPath == m_mediaFolder) {
         qCDebug(lcSettings) << "Media folder unchanged, skipping:" << folderPath;
-        return;
+        return true;
     }
     qCDebug(lcSettings) << "Saving media folder path:" << folderPath;
     m_mediaFolder = folderPath;
     updateSetting(QStringLiteral("mediaFolder"), folderPath);
     emit mediaFolderChanged(folderPath);
+    return true;
 }
 
 void SettingsManager::save_auto_play_on_startup(bool enabled)
@@ -2192,6 +2201,14 @@ const QStringList &SettingsManager::fileOnlyKeys()
     return keys;
 }
 
+QVariant SettingsManager::fileOnlySetting(const QString &key)
+{
+    if (!fileOnlyKeys().contains(key))
+        return QVariant();
+    const QJsonObject settings = loadSettings();
+    return settings.contains(key) ? settings.value(key).toVariant() : QVariant();
+}
+
 void SettingsManager::saveFileOnlySetting(const QString &key, const QVariant &value)
 {
     if (!fileOnlyKeys().contains(key))
@@ -2347,6 +2364,9 @@ void SettingsManager::save_setting(const QString &key, const QVariant &value)
 
 QVariant SettingsManager::get_setting(const QString &key)
 {
+    // Not the service keys: the paired devices' hashes are nobody's business
+    if (fileOnlyKeys().contains(key))
+        return QVariant();
     QJsonObject settings = loadSettings();
     if (settings.contains(key))
         return settings.value(key).toVariant();
@@ -2355,6 +2375,8 @@ QVariant SettingsManager::get_setting(const QString &key)
 
 QVariant SettingsManager::get_setting_with_default(const QString &key, const QVariant &defaultValue)
 {
+    if (fileOnlyKeys().contains(key))
+        return defaultValue;
     QJsonObject settings = loadSettings();
     if (settings.contains(key))
         return settings.value(key).toVariant();

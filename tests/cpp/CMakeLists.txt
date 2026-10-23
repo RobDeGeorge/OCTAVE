@@ -241,7 +241,7 @@ octave_add_test(tst_staticfiles SOURCES service/staticfiles.h service/staticfile
 # Protocol v2 pairing: codes, limits, hashed tokens, revoke, media tickets
 octave_add_test(tst_servicepairing
     SOURCES service/servicepairing.h service/servicepairing.cpp managers/settingsmanager.h managers/settingsmanager.cpp
-    LIBS Qt6::Gui)
+    LIBS Qt6::Gui Qt6::Network)
 set_tests_properties(tst_servicepairing PROPERTIES TIMEOUT 120)
 # Media streams: the H.264 helpers and the hub's join / drop / config rules
 octave_add_test(tst_streamhub

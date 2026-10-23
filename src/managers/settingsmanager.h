@@ -252,6 +252,8 @@ public:
     // service switch and the paired devices); never reachable from QML or
     // the service. Other keys are ignored.
     void saveFileOnlySetting(const QString &key, const QVariant &value);
+    // ...and read by them (get_setting refuses these keys)
+    QVariant fileOnlySetting(const QString &key);
     // Keys only an edit of the file may set: save_setting and
     // apply_settings refuse them (what turns the service on, what it serves)
     static const QStringList &fileOnlyKeys();
@@ -466,7 +468,9 @@ public slots:
     // Media
     void save_start_volume(float volume);
     void setCurrentVolume(int volume);
-    void save_media_folder(const QString &folderPath);
+    // An absolute path (or a file:// URL), never the filesystem root;
+    // false and nothing saved otherwise
+    bool save_media_folder(const QString &folderPath);
     // A folder from a picker (FolderDialog.selectedFolder): a file:// URL, or
     // an Android external-storage content:// tree mapped to its /storage
     // path (src/util/pathurl.h). False, and nothing saved, when it can't be

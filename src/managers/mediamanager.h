@@ -159,7 +159,7 @@ public slots:
     Q_INVOKABLE QString get_default_media_dir();
     Q_INVOKABLE QString get_media_folder_name();
     // A folder picker for frontends without one (util/folderbrowser.h):
-    // "" lists the browse roots ({roots: [{name, path}]}: home, Music,
+    // "" lists the browse roots ({roots: [{name, path}]}: ~/Music,
     // /media, /mnt, /run/media, /storage, the current music folder unless
     // it is "/"), a path inside them its {path, parent, dirs, audioFiles,
     // truncated}, anything else {error}. Choose one with

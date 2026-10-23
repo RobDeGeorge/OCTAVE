@@ -110,8 +110,8 @@ Service makeService(const QStringList &arguments, AppCore &core, bool headless)
     constexpr bool debugBuild = false;
 #endif
     const OctaveService::ServiceOptions options = OctaveService::parseServiceOptions(
-        arguments, core.settingsManager.get_setting(QStringLiteral("serviceEnabled")).toBool(), devToolsBuild,
-        core.settingsManager.get_setting(QStringLiteral("serviceWebRoot")).toString());
+        arguments, core.settingsManager.fileOnlySetting(QStringLiteral("serviceEnabled")).toBool(), devToolsBuild,
+        core.settingsManager.fileOnlySetting(QStringLiteral("serviceWebRoot")).toString());
     if (!options.error.isEmpty())
         qWarning("Service not started: %s", qPrintable(options.error));
     Service service;
