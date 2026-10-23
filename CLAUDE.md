@@ -64,6 +64,7 @@ Key managers (`src/managers/*.{h,cpp}`):
 - `nowplaying` — what is playing and its controls whichever source has them (phone while mirroring, else `mediamanager`); owns the phone-position clock and the phone/local hand-off (context property `nowPlaying`)
 - `parameterstore` — the latest value of every PID / IMU reading as a `QQmlPropertyMap` (context property `paramStore`, one notifying key per id, 33 ms coalescing), fed from `OBDManager::parameterSampled` and the IMU signals in `src/appcore.cpp`
 - `parametercatalog` — title / unit / range / kind / decimals of every OBD PID and IMU reading (context property `parameterCatalog`); new PIDs need a row here as well as a decoder in `elm327protocol` (`tst_parametercatalog` enforces it)
+- `themecatalog` — the colour themes as data (`frontend/themes.json`: the built-in palettes, their order, light / dark grouping) and `activeTheme` / `activeThemeName`, the palette in force resolved as `Style.qml` resolves it (album art > custom > built-in > fallback), live from the theme settings (context property `themeCatalog`); `Style.qml` keeps behaviour and animation
 - `shiftlightmanager` — RPM shift light rules (legacy flag migration, band match, flash phase) fed by `OBDManager::rpmChanged`; the QML overlays and home-card lamp only bind to `active` / `activeFlag` / `lit`
 - `obdadapterfinder` (+ `src/platform/bluezpairer`) — Bluetooth OBD adapter scan / PIN pairing / trust / connect (desktop Linux so far; see `TODO/obd-adapter-discovery.md`)
 - `esp32volumemanager` — Wireless rotary encoder (serial)
@@ -83,7 +84,7 @@ When adding a new manager: add `.h`/`.cpp` to `src/managers/`, list both in `CMa
 
 1. Implement in C++ (`src/`); QML in `frontend/`.
 2. Build and test: `cmake --build build -j && ctest --test-dir build`. Add or extend a QtTest in `tests/cpp/` for logic changes (`octave_add_test()` in its CMakeLists; give anything that touches settings a temp `XDG_CONFIG_HOME`). Drive the result with `./build/octave --dev --profile` and the dev tooling (screenshots, stories, dashboard drivers, MCP tools) when it touches the UI.
-3. Update the wiki (below) and `docs/GAUGE_AUTHORING.md` when the gauge API changes. When a manager's public surface changes (a `Q_PROPERTY`, `Q_INVOKABLE`, slot or signal, or a PID), regenerate the published API in the same commit: `./build/octave --dump-api docs/api && venv/bin/python wiki/build_api_reference.py` (`tst_apidocs` fails otherwise). A breaking change also bumps `kProtocolVersion` (`src/service/protocol.h`, `docs/api/README.md`).
+3. Update the wiki (below) and `docs/GAUGE_AUTHORING.md` when the gauge API changes. When a manager's public surface changes (a `Q_PROPERTY`, `Q_INVOKABLE`, slot or signal, or a PID), regenerate the published API in the same commit: `./build/octave --dump-api docs/api && venv/bin/python wiki/build_api_reference.py && npm --prefix sdk/typescript run generate` (`tst_apidocs` fails otherwise, and so does `sdk/typescript`'s `npm test` in CI). A breaking change also bumps `kProtocolVersion` (`src/service/protocol.h`, `docs/api/README.md`).
 
 ### Service API (`src/service/`, `sdk/`, `docs/api/`)
 
@@ -95,7 +96,7 @@ QML files using Qt Quick 2.15. Entry point is `Main.qml`.
 
 - Top-level QML files are full views/pages (e.g., `MediaPlayer.qml`, `CarMenu.qml`, `OBDMenu.qml`)
 - `BottomBar.qml` — Persistent navigation and volume control
-- `EnvironmentTheme.qml` — fixed style tokens; album-art colours are computed in C++ (`MediaManager`) and applied by `Style.qml`
+- `EnvironmentTheme.qml` — fixed style tokens; album-art colours are computed in C++ (`MediaManager`) and applied by `Style.qml`, which takes the theme palettes from `themeCatalog`
 - `Style.qml` / `Spacing.qml` — Design tokens
 - `settings/` — Settings pages and reusable settings UI components (cards, toggles, sliders, etc.)
 
@@ -149,7 +150,7 @@ Rotating log files in `logs/` subdirectory of the config path:
 
 CMake + Qt 6 produces native executables per platform (see `BUILD.md`). App store builds use the `OCTAVE_ENABLE_DOWNLOADS=OFF` CMake option to strip out yt-dlp. Mobile (Android `.apk` / iOS `.ipa`) goes through the Qt for Mobile pipeline.
 
-GitHub Actions (`.github/workflows/build.yml`) runs `lint` (ruff over the repo's Python tools) and `cpp-compile-check` (Linux CMake configure + build of the C++ tree, `ctest` over `tests/cpp`, and a `qmllint` error pass over `frontend/`) on every push and PR to `main`, plus `phone-server` (jar/source invariants). On version tags (`v*`) or manual dispatch, the C++ matrix runs (`cpp-build-windows`, `cpp-build-macos`, `cpp-build-linux`, `cpp-build-linux-arm64`, `cpp-build-android`, each gated on `lint` + `cpp-compile-check`) and the `release` job attaches every produced artifact (`.exe`, `.dmg`, x86_64 and aarch64 AppImages, `.apk`) to a single GitHub Release.
+GitHub Actions (`.github/workflows/build.yml`) runs `lint` (ruff over the repo's Python tools) and `cpp-compile-check` (Linux CMake configure + build of the C++ tree, `ctest` over `tests/cpp`, and a `qmllint` error pass over `frontend/`) on every push and PR to `main`, plus `phone-server` (jar/source invariants) and `frontends` (each client in `frontends/` builds and passes its own checks). On version tags (`v*`) or manual dispatch, the C++ matrix runs (`cpp-build-windows`, `cpp-build-macos`, `cpp-build-linux`, `cpp-build-linux-arm64`, `cpp-build-android`, each gated on `lint` + `cpp-compile-check`) and the `release` job attaches every produced artifact (`.exe`, `.dmg`, x86_64 and aarch64 AppImages, `.apk`) to a single GitHub Release.
 
 ## Key Conventions
 
@@ -184,7 +185,7 @@ Dashboards are built in layers, each feeding the next:
 
 1. **Data** — the C++ `paramStore` holds every live value (fed from `obdManager.parameterSampled` and the IMU); `frontend/OBDParameterModel.qml` (singleton) serves it as `liveValue(paramId)` (per-key, or the editor's demo sweep) and serves the per-PID metadata (title / unit / min / max / `kind` / decimals) from the C++ `ParameterCatalog` (`src/managers/parametercatalog.cpp`, context property `parameterCatalog`), plus the vehicle support gate. Widgets never touch `obdManager` directly. Polling is demand-driven: pages register the PIDs they show via `obdManager.setParameterDemand(consumer, ids)`.
 2. **Primitives** — `frontend/gauges/` (`CircularGauge`, `ArcGauge`, `BarGauge`, `LinearGauge`, `DigitalReadout`, `SparklineGauge`, `WarningLight`, plus the self-binding `GForceGauge` and `CompassGauge`) and media widgets in `frontend/dashboards/widgets/` (`NowPlayingWidget`, `MediaControlsWidget`). PID-bound primitives share one binding API: set `paramId`; everything else defaults from the PID and the theme and can be overridden per widget.
-3. **`WidgetCatalog`** (`frontend/dashboards/WidgetCatalog.qml`, singleton) — the single registry the renderer, editor palette, properties panel, and validation all read: type → url, default span, `supportedKinds`, label/range/color capability flags, curated `editableProps`. A widget not in the catalog can't render or be placed.
+3. **Widget catalog** — `frontend/dashboards/widget-catalog.json` is the single registry of widget types: default span, `supportedKinds`, label/range/color capability flags, curated `editableProps`. `DashboardManager` serves it as `widgetCatalog` (published as `docs/api/widget-catalog.json`) and `normalizeSpec` checks props against it; the QML singleton `WidgetCatalog.qml` adds only the type → url map. The renderer, editor palette, properties panel and every other frontend read the same data. A widget needs both a catalog entry and a url to render or be placed.
 4. **JSON specs** — a dashboard is a `"schema": 1` grid spec rendered by `frontend/dashboards/DashboardRenderer.qml` (bad cells are skipped/placeheld, never crash). Built-ins ship read-only in `frontend/dashboards/presets/`; user dashboards live in `<config>/dashboards/*.json` (hot-reloaded).
 5. **Persistence + editor** — `DashboardManager` (`src/managers/dashboardmanager.{h,cpp}`) enumerates, saves, duplicates, deletes, exports, and imports (sanitized, data-only, ids always regenerated). The in-app editor (`frontend/dashboards/editor/`) is pure QML over that API: tap-to-place, drag-to-move, corner-grip resize, PID picker, properties panel.
 

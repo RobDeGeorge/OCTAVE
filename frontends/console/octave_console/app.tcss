@@ -1,0 +1,252 @@
+/* OCTAVE console: dense panes, amber accent */
+
+Screen {
+    layout: vertical;
+}
+
+#status, #media {
+    height: 1;
+    background: $panel;
+}
+
+#tabs {
+    height: 1fr;
+}
+
+TabPane {
+    padding: 0;
+}
+
+Pane {
+    height: 1fr;
+}
+
+DataTable {
+    height: 1fr;
+    border: round $primary-darken-2;
+    border-title-color: #e0a030;
+}
+
+DataTable:focus {
+    border: round #e0a030;
+}
+
+.section {
+    color: #e0a030;
+    text-style: bold;
+    margin-top: 1;
+}
+
+.box {
+    border: round $primary-darken-2;
+    padding: 0 1;
+    height: auto;
+}
+
+.buttons {
+    height: auto;
+}
+
+.buttons Button {
+    min-width: 10;
+    margin-right: 1;
+}
+
+/* Live */
+#pane-live {
+    layout: horizontal;
+}
+
+#live-table {
+    width: 1fr;
+}
+
+#sparks {
+    width: 44;
+    height: 1fr;
+}
+
+.spark {
+    height: 5;
+    border: round $primary-darken-2;
+}
+
+.spark-label {
+    height: 1;
+}
+
+Sparkline {
+    height: 2;
+}
+
+Sparkline > .sparkline--max-color {
+    color: #e0a030;
+}
+
+/* OBD */
+#obd-left {
+    width: 1fr;
+}
+
+#obd-right {
+    width: 1fr;
+}
+
+#adapters {
+    height: 8;
+}
+
+#dtcs {
+    height: 8;
+}
+
+#obd-log {
+    height: 1fr;
+    border: round $primary-darken-2;
+}
+
+/* Trips */
+#trip-list {
+    width: 1fr;
+}
+
+#trip-side {
+    width: 60;
+}
+
+#trip-detail {
+    height: 1fr;
+    overflow-y: auto;
+}
+
+/* Settings */
+#settings-filter, #dl-search, #api-cmd {
+    height: 3;
+}
+
+/* Downloads */
+#dl-status {
+    height: 2;
+    padding: 0 1;
+}
+
+/* API explorer */
+#api-tree {
+    width: 50;
+    border: round $primary-darken-2;
+}
+
+#api-out {
+    height: 1fr;
+    border: round $primary-darken-2;
+}
+
+/* Dialogs */
+Confirm, EditValue {
+    align: center middle;
+}
+
+.dialog {
+    width: 64;
+    height: auto;
+    border: thick #e0a030;
+    background: $surface;
+    padding: 1 2;
+}
+
+/* Library */
+#lib-left {
+    width: 36;
+}
+
+#lib-playlists {
+    height: 1fr;
+}
+
+#lib-queue {
+    height: 1fr;
+}
+
+#lib-right {
+    width: 1fr;
+}
+
+#lib-spectrum {
+    height: 1;
+    color: #e0a030;
+}
+
+#lib-status {
+    height: 1;
+    color: $text-muted;
+}
+
+/* Dashboards */
+#dash-list {
+    width: 60;
+}
+
+#dash-preview {
+    width: 1fr;
+    height: 1fr;
+    overflow-y: auto;
+}
+
+/* Car, Phone, System: two columns */
+#car-left, #car-right, #phone-left, #phone-right, #sys-left, #sys-right {
+    width: 1fr;
+}
+
+#shift-flags {
+    height: 8;
+}
+
+#gestures {
+    height: 12;
+}
+
+#esp-ports {
+    height: 1fr;
+}
+
+#phone-devices {
+    height: 6;
+}
+
+#phone-log, #sys-log {
+    height: 1fr;
+    border: round $primary-darken-2;
+}
+
+/* Trips chart */
+#trip-chart {
+    height: 4;
+}
+
+#trip-chart-label {
+    height: 1;
+}
+
+.dialog.wide {
+    width: 100;
+    height: 36;
+}
+
+.dialog.wide TextArea {
+    height: 1fr;
+}
+
+#pick {
+    height: auto;
+    max-height: 24;
+}
+
+#lib-cover {
+    height: 8;
+    width: 32;
+    margin-top: 1;
+}
+
+#lib-cover-label {
+    height: 1;
+}

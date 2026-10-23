@@ -170,6 +170,72 @@ jobs:
           path: build-phone-server/octave-phone-server
           retention-days: 30
 
+  # The other frontends (frontends/, each a client of the service API):
+  # they must build and pass their own checks. Not shipped; the QML UI is.
+  frontends:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: retro-cluster (Rust + egui)
+        working-directory: frontends/retro-cluster
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy
+          cargo +stable clippy --release --locked -- -D warnings
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: sdk/typescript (types current against docs/api, typecheck, tests)
+        working-directory: sdk/typescript
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+
+      - name: glass (TypeScript + Svelte)
+        working-directory: frontends/glass
+        run: |
+          npm ci --no-audit --no-fund
+          npm run check
+          npm run build
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: console (Python + Textual)
+        working-directory: frontends/console
+        # The tests that need a running OCTAVE skip; the offline ones run
+        run: |
+          pip install -r requirements.txt
+          python -m pytest -q
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: frontends/sunlight/go.sum
+
+      - name: sunlight (Go + Gio)
+        working-directory: frontends/sunlight
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libffi-dev libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev \
+            libgles2-mesa-dev libegl1-mesa-dev libxcursor-dev libxfixes-dev
+          go vet -tags novulkan ./...
+          go test -tags novulkan ./...
+          go build -tags novulkan -o /dev/null .
+
+      - name: arcade (C + SDL2)
+        run: |
+          sudo apt-get install -y libsdl2-dev
+          cmake -S frontends/arcade -B build-arcade -DCMAKE_BUILD_TYPE=Release -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
+          cmake --build build-arcade -j4
+
   # ---------------------------------------------------------------------------
   # C++ / CMake / Qt 6 builds (primary distribution path)
   # ---------------------------------------------------------------------------

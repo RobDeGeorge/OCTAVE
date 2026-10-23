@@ -41,10 +41,29 @@ Over the network: `token = Client(host).pair("123456", "My script")` once, then 
 
 Tests: `python -m unittest discover -s sdk/python/tests` runs the client against a headless app (the stream test uses the dev-only `sim_video` and skips without the dev tools). ctest runs it as `sdk_python`.
 
+## TypeScript: `typescript/`
+
+`typescript/` is an npm package (`octave-client`: ESM, no dependencies, browsers and Node 22+) with the same client as a library plus types generated from `docs/api/`, so `obj(client, "volumeController").call("applyVolume", 40)` type-checks and `call("applyVolume", "loud")` does not:
+
+```ts
+import { OctaveClient, obj } from 'octave-client'
+
+const client = new OctaveClient({ url: 'ws://127.0.0.1:9876/' })   // in a browser the page's own host is the default
+client.connect()
+await client.whenOnline()
+const vol = obj(client, 'volumeController')
+await vol.call('applyVolume', 40)
+vol.property('percent', (v) => console.log(v))                       // now and on every change
+client.params(['RPM', 'SPEED'], (values) => console.log(values))    // live readings
+await client.stream('phoneMirrorManager', 'video', { onRecord: (r) => decoder.feed(r) })   // media records
+```
+
+It reconnects with backoff and re-issues its subscriptions; `request(op, args)` covers any op. `frontends/glass` (a whole browser UI, Svelte) is built on it as a path dependency. `cd sdk/typescript && npm install && npm test` regenerates nothing but checks that the committed `src/types.ts` matches `docs/api` (so it goes stale loudly, like `tst_apidocs`), type-checks the facade, and runs the client against a fake service; `npm run generate` rewrites the types after `octave --dump-api docs/api`. Its README has the details and `examples/now_playing.mjs`.
+
 ## Another whole frontend: `frontends/retro-cluster/`
 
 An experimental UI in Rust + egui, styled as an 80s fluorescent instrument cluster, built only on this API (see its README). Not built by CI.
 
 ## Versioning
 
-Both clients know protocol versions 1 and 2. The Python `Client` asks `hello` on connect and raises `OctaveError` on a version it doesn't know (`check_version=False` skips that); the web page shows the mismatch in its header and carries on. See [`docs/api/README.md`](../docs/api/README.md) for what a version bump means.
+The Python and web clients know protocol versions 1 and 2, as does the TypeScript one (under 2, loopback stays open). The Python `Client` asks `hello` on connect and raises `OctaveError` on a version it doesn't know (`check_version=False` skips that); the web page shows the mismatch in its header and carries on. See [`docs/api/README.md`](../docs/api/README.md) for what a version bump means.

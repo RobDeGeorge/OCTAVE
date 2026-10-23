@@ -1,0 +1,4 @@
+textual>=8.2
+pillow>=10
+pytest>=8
+pytest-asyncio>=1.0

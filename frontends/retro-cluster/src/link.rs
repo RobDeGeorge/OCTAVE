@@ -15,6 +15,9 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
+/// The cover is drawn as a dot matrix this many dots square.
+pub const ART_DOTS: u32 = 40;
+
 /// The protocol versions this client knows (docs/api/README.md): 2 added
 /// pairing, which only matters over the network.
 pub const PROTOCOL_VERSIONS: [i64; 2] = [1, 2];
@@ -72,6 +75,24 @@ impl NowPlaying {
     }
 }
 
+/// One row of `tripRecorder.trips`.
+#[derive(Clone, Debug)]
+pub struct Trip {
+    pub id: i64,
+    pub start_iso: String,
+    pub duration_s: f64,
+    pub samples: i64,
+    pub open: bool,
+    pub vehicle: String,
+}
+
+/// A trouble code as `obdManager` reports it.
+#[derive(Clone, Debug)]
+pub struct Dtc {
+    pub code: String,
+    pub description: String,
+}
+
 pub struct State {
     pub link: LinkState,
     pub address: String,
@@ -99,6 +120,21 @@ pub struct State {
     pub recording: bool,
     pub trip_elapsed_s: i64,
     pub clock: Option<String>,
+    pub dtcs: Vec<Dtc>,
+    pub mil: bool,
+    pub freeze: Vec<Dtc>,
+    /// The last clear: success, the app's message, when
+    pub dtc_result: Option<(bool, String, Instant)>,
+    pub trips: Vec<Trip>,
+    /// `tripRecorder.requestDetail` answers, by trip id
+    pub trip_details: HashMap<i64, Value>,
+    pub export_path: Option<String>,
+    /// nowPlaying.artRevision, and the cover fetched for it (GET /art) as
+    /// ART_DOTS x ART_DOTS luminance; None when there is no cover
+    pub art_revision: i64,
+    pub art: Option<(i64, Vec<u8>)>,
+    /// audioAnalyzer.levels: one bar per band, 0..8
+    pub levels: Vec<u8>,
     pub last_error: Option<String>,
     /// False when the app wants this cluster to pair first (protocol 2 over
     /// the network): retro-cluster --pair CODE, then --token.
@@ -135,6 +171,16 @@ impl State {
             recording: false,
             trip_elapsed_s: 0,
             clock: None,
+            dtcs: Vec::new(),
+            mil: false,
+            freeze: Vec::new(),
+            dtc_result: None,
+            trips: Vec::new(),
+            trip_details: HashMap::new(),
+            export_path: None,
+            art_revision: -1,
+            art: None,
+            levels: Vec::new(),
             last_error: None,
             trusted: true,
             last_rx: None,
@@ -180,9 +226,23 @@ impl State {
                 self.apply_property(object, name, &ev["value"]);
             }
             Some("signal") => {
-                if ev["object"] == "clock" && ev["name"] == "timeChanged" {
-                    let text = ev["args"][0].as_str().unwrap_or("").to_string();
-                    self.clock = Some(text);
+                let args = &ev["args"];
+                match (ev["object"].as_str().unwrap_or(""), ev["name"].as_str().unwrap_or("")) {
+                    ("clock", "timeChanged") => self.clock = Some(args[0].as_str().unwrap_or("").to_string()),
+                    ("obdManager", "dtcCodesChanged") => self.dtcs = dtc_list(&args[0]),
+                    ("obdManager", "freezeFrameChanged") => self.freeze = dtc_list(&args[0]),
+                    ("obdManager", "milStatusChanged") => self.mil = args[0].as_bool().unwrap_or(false),
+                    ("obdManager", "dtcClearResult") => {
+                        let ok = args[0].as_bool().unwrap_or(false);
+                        self.dtc_result = Some((ok, args[1].as_str().unwrap_or("").to_string(), Instant::now()));
+                    }
+                    ("tripRecorder", "detailReady") => {
+                        if let Some(id) = args[0].as_i64() {
+                            self.trip_details.insert(id, args[1].clone());
+                        }
+                    }
+                    ("tripRecorder", "exportFinished") => self.export_path = args[1].as_str().map(String::from),
+                    _ => {}
                 }
             }
             Some("dropped") => self.dropped += ev["count"].as_u64().unwrap_or(0),
@@ -215,6 +275,7 @@ impl State {
             ("nowPlaying", "canSeek") => np.can_seek = b(),
             ("nowPlaying", "canShuffle") => np.can_shuffle = b(),
             ("nowPlaying", "shuffled") => np.shuffled = b(),
+            ("nowPlaying", "artRevision") => self.art_revision = i(),
             ("volumeController", "percent") => self.volume = i(),
             ("volumeController", "muted") => self.muted = b(),
             ("volumeController", "effectivelyMuted") => self.effectively_muted = b(),
@@ -232,6 +293,11 @@ impl State {
             ("tripRecorder", "recording") => self.recording = b(),
             ("tripRecorder", "currentTripElapsedS") => self.trip_elapsed_s = i(),
             ("parameterCatalog", "displayParameters") => self.load_catalog(v),
+            ("clock", "time") => self.clock = Some(s()),
+            ("tripRecorder", "trips") => self.trips = trip_list(v),
+            ("audioAnalyzer", "levels") => {
+                self.levels = v.as_array().map(|a| a.iter().map(|x| x.as_u64().unwrap_or(0).min(8) as u8).collect()).unwrap_or_default();
+            }
             _ => {}
         }
     }
@@ -257,6 +323,50 @@ impl State {
             self.catalog.insert(id.to_string(), info);
         }
     }
+
+    /// The result of a call this client reads back, by "object.method".
+    fn apply_result(&mut self, what: &str, v: &Value) {
+        match what {
+            "obdManager.get_dtc_codes" => self.dtcs = dtc_list(v),
+            "obdManager.get_freeze_frame" => self.freeze = dtc_list(v),
+            "obdManager.get_mil_status" => self.mil = v.as_bool().unwrap_or(false),
+            _ => {}
+        }
+    }
+}
+
+fn dtc_list(v: &Value) -> Vec<Dtc> {
+    v.as_array()
+        .map(|a| {
+            a.iter()
+                .map(|d| Dtc {
+                    code: d["code"].as_str().unwrap_or("").to_string(),
+                    description: d["description"].as_str().unwrap_or("").to_string(),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn trip_list(v: &Value) -> Vec<Trip> {
+    let Some(rows) = v.as_array() else { return Vec::new() };
+    rows.iter()
+        .filter_map(|t| {
+            let vehicle = match (t["modelYear"].as_i64(), t["make"].as_str()) {
+                (Some(y), Some(m)) if y > 0 && !m.is_empty() => format!("{y} {m}"),
+                (_, Some(m)) => m.to_string(),
+                _ => String::new(),
+            };
+            Some(Trip {
+                id: t["id"].as_i64()?,
+                start_iso: t["startIso"].as_str().unwrap_or("").to_string(),
+                duration_s: t["durationS"].as_f64().unwrap_or(0.0),
+                samples: t["sampleCount"].as_i64().unwrap_or(0),
+                open: t["open"].as_bool().unwrap_or(false),
+                vehicle,
+            })
+        })
+        .collect()
 }
 
 fn string_list(v: &Value) -> Vec<String> {
@@ -270,6 +380,8 @@ pub enum Cmd {
     Call(&'static str, &'static str, Vec<Value>),
     /// The PIDs the current page shows (obdManager.setParameterDemand).
     Demand(Vec<String>),
+    /// Whether the spectrum bars are on screen (audioAnalyzer.setDemand).
+    Bars(bool),
 }
 
 pub struct Link {
@@ -296,6 +408,10 @@ impl Link {
 
     pub fn demand(&self, ids: Vec<String>) {
         let _ = self.tx.send(Cmd::Demand(ids));
+    }
+
+    pub fn bars(&self, wanted: bool) {
+        let _ = self.tx.send(Cmd::Bars(wanted));
     }
 }
 
@@ -333,12 +449,14 @@ pub fn pair(address: &str, code: &str) -> Result<String, String> {
 fn run(address: String, token: Option<String>, state: Arc<Mutex<State>>, rx: Receiver<Cmd>,
        repaint: Arc<dyn Fn() + Send + Sync>) {
     let mut demand: Vec<String> = Vec::new();
+    let mut bars = false;
     loop {
         let stream = resolve(&address).and_then(|a| TcpStream::connect_timeout(&a, Duration::from_secs(1)).ok());
         let Some(mut stream) = stream else {
             // Keep the demand current while offline, so the reconnect sends the latest
             match rx.recv_timeout(Duration::from_millis(1000)) {
                 Ok(Cmd::Demand(ids)) => demand = ids,
+                Ok(Cmd::Bars(on)) => bars = on,
                 Ok(Cmd::Call(..)) | Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => return,
             }
@@ -354,6 +472,7 @@ fn run(address: String, token: Option<String>, state: Arc<Mutex<State>>, rx: Rec
             thread::spawn(move || read_loop(reader, state, alive, pending, repaint));
         }
 
+        let mut art_fetched = i64::MIN;
         let mut next_id = 0u64;
         let mut send = |stream: &mut TcpStream, mut msg: Value, what: String| -> bool {
             next_id += 1;
@@ -379,12 +498,20 @@ fn run(address: String, token: Option<String>, state: Arc<Mutex<State>>, rx: Rec
             }
             ok &= send(&mut stream, msg, format!("subscribe {object}"));
         }
-        ok &= send(
-            &mut stream,
-            json!({"op": "subscribe", "object": "clock", "signals": ["timeChanged"]}),
-            "subscribe clock".into(),
-        );
+        for (object, signals) in signal_subscriptions() {
+            let msg = json!({"op": "subscribe", "object": object, "signals": signals});
+            ok &= send(&mut stream, msg, format!("subscribe {object}"));
+        }
+        // Signals only report changes: read the trouble codes as they stand
+        for method in ["get_dtc_codes", "get_mil_status", "get_freeze_frame"] {
+            let msg = json!({"op": "call", "object": "obdManager", "method": method, "args": []});
+            ok &= send(&mut stream, msg, format!("obdManager.{method}"));
+        }
         ok &= send(&mut stream, demand_msg(&demand), "demand".into());
+        // A closed connection released it on the app's side: ask again
+        if bars {
+            ok &= send(&mut stream, bars_msg(true), "bars".into());
+        }
 
         while ok && alive.load(Ordering::Relaxed) {
             match rx.recv_timeout(Duration::from_millis(200)) {
@@ -396,11 +523,30 @@ fn run(address: String, token: Option<String>, state: Arc<Mutex<State>>, rx: Rec
                     demand = ids;
                     ok = send(&mut stream, demand_msg(&demand), "demand".into());
                 }
+                Ok(Cmd::Bars(on)) => {
+                    bars = on;
+                    ok = send(&mut stream, bars_msg(on), "bars".into());
+                }
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => {
                     let _ = stream.shutdown(std::net::Shutdown::Both);
                     return;
                 }
+            }
+            // A new cover: fetch it off this thread
+            let want = state.lock().unwrap().art_revision;
+            if want >= 0 && want != art_fetched {
+                art_fetched = want;
+                let (address, token, state, repaint) = (address.clone(), token.clone(), state.clone(), repaint.clone());
+                thread::spawn(move || {
+                    let art = fetch_art(&address, token.as_deref());
+                    let mut s = state.lock().unwrap();
+                    if s.art_revision == want {
+                        s.art = art.map(|dots| (want, dots));
+                    }
+                    drop(s);
+                    repaint();
+                });
             }
         }
         let _ = stream.shutdown(std::net::Shutdown::Both);
@@ -414,6 +560,33 @@ fn run(address: String, token: Option<String>, state: Arc<Mutex<State>>, rx: Rec
     }
 }
 
+/// GET /art from the service: the current cover, scaled to ART_DOTS square
+/// luminance. None for no cover (404), not paired (401) or anything that
+/// won't decode. A paired cluster sends its token as a Bearer header
+/// (protocol 2), never in the URL.
+fn fetch_art(address: &str, token: Option<&str>) -> Option<Vec<u8>> {
+    use std::io::Read;
+    let addr = resolve(address)?;
+    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(2)).ok()?;
+    stream.set_read_timeout(Some(Duration::from_secs(5))).ok()?;
+    let auth = token.map(|t| format!("Authorization: Bearer {t}\r\n")).unwrap_or_default();
+    write!(stream, "GET /art HTTP/1.1\r\nHost: {address}\r\n{auth}Connection: close\r\n\r\n").ok()?;
+    let mut reply = Vec::new();
+    stream.read_to_end(&mut reply).ok()?;
+    let split = reply.windows(4).position(|w| w == b"\r\n\r\n")?;
+    let head = String::from_utf8_lossy(&reply[..split]);
+    if !head.starts_with("HTTP/1.1 200") {
+        return None;
+    }
+    let img = image::load_from_memory(&reply[split + 4..]).ok()?;
+    let small = img.resize_exact(ART_DOTS, ART_DOTS, image::imageops::FilterType::Triangle).to_luma8();
+    Some(small.into_raw())
+}
+
+fn bars_msg(on: bool) -> Value {
+    json!({"op": "call", "object": "audioAnalyzer", "method": "setDemand", "args": [DEMAND_CONSUMER, on]})
+}
+
 fn demand_msg(ids: &[String]) -> Value {
     json!({"op": "call", "object": "obdManager", "method": "setParameterDemand", "args": [DEMAND_CONSUMER, ids]})
 }
@@ -425,7 +598,7 @@ fn subscriptions() -> Vec<(&'static str, Vec<&'static str>, u64)> {
         ("parameterCatalog", vec!["displayParameters"], 0),
         (
             "nowPlaying",
-            vec!["source", "playing", "hasTrack", "title", "artist", "album", "durationMs", "canSeek", "canShuffle", "shuffled"],
+            vec!["source", "playing", "hasTrack", "title", "artist", "album", "durationMs", "canSeek", "canShuffle", "shuffled", "artRevision"],
             0,
         ),
         ("nowPlaying", vec!["positionMs"], 500),
@@ -436,9 +609,21 @@ fn subscriptions() -> Vec<(&'static str, Vec<&'static str>, u64)> {
             0,
         ),
         ("shiftLightManager", vec!["lit", "active"], 0),
-        ("tripRecorder", vec!["recording", "currentTripElapsedS"], 0),
+        ("tripRecorder", vec!["recording", "currentTripElapsedS", "trips"], 0),
+        ("audioAnalyzer", vec!["levels"], 40),
+        // `time` is a property on newer backends; an older one refuses this
+        // one subscription, and the timeChanged signal below still arrives
+        ("clock", vec!["time"], 0),
         // Every reading, merged into one event per 40 ms
         ("paramStore", vec![], 40),
+    ]
+}
+
+fn signal_subscriptions() -> Vec<(&'static str, Vec<&'static str>)> {
+    vec![
+        ("clock", vec!["timeChanged"]),
+        ("obdManager", vec!["dtcCodesChanged", "milStatusChanged", "freezeFrameChanged", "dtcClearResult"]),
+        ("tripRecorder", vec!["detailReady", "exportFinished"]),
     ]
 }
 
@@ -460,7 +645,9 @@ fn read_loop(
             let what = pending.lock().unwrap().remove(&id).unwrap_or_default();
             if msg["ok"] != true {
                 s.last_error = Some(format!("{what}: {}", msg["error"].as_str().unwrap_or("error")));
-            } else if what == "hello" {
+            } else if what != "hello" {
+                s.apply_result(&what, &msg["result"]);
+            } else {
                 let r = &msg["result"];
                 s.link = LinkState::Online;
                 s.protocol = r["protocolVersion"].as_i64();
