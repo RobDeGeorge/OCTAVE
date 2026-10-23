@@ -688,8 +688,20 @@ impl Draw<'_> {
         if s.freeze.is_empty() {
             self.label(kx, 430.0, 2.6, "NONE", pal.ghost);
         }
-        for (i, d) in s.freeze.iter().take(3).enumerate() {
-            self.label(kx, 430.0 + i as f32 * 30.0, 2.6, &d.code, pal.lit);
+        // The first frame's code, then its readings in the user's units
+        if let Some(d) = s.freeze.first() {
+            self.label(kx, 430.0, 2.6, &d.code, pal.lit);
+            let preferred = ["RPM", "SPEED", "COOLANT_TEMP", "ENGINE_LOAD", "MAF", "INTAKE_PRESSURE"];
+            let mut shown: Vec<&(String, f64)> = preferred.iter().filter_map(|id| d.values.iter().find(|(k, _)| k == id)).collect();
+            shown.extend(d.values.iter().filter(|(k, _)| !preferred.contains(&k.as_str())));
+            for (i, (id, v)) in shown.iter().take(4).enumerate() {
+                let info = s.catalog.get(id);
+                let name = info.map(|i| if i.short_title.is_empty() { i.title.clone() } else { i.short_title.clone() }).unwrap_or_else(|| id.clone());
+                let (val, unit) = info.map(|i| (v * i.scale + i.offset, i.unit.clone())).unwrap_or((*v, String::new()));
+                let y = 462.0 + i as f32 * 22.0;
+                self.label(kx, y, 1.8, &name.to_uppercase(), self.dim());
+                self.label_right(1226.0, y, 1.8, &format!("{:.*} {}", info.map(|i| i.decimals.min(1)).unwrap_or(0), val, unit), pal.lit);
+            }
         }
     }
 

@@ -43,7 +43,7 @@ All the keys are on screen too, for the touch panel. Tap the tape (the progress 
 
 - **DRIVE**: sweep tachometer (shift-light flash from `shiftLightManager`), speed, coolant / oil (intake air if the car has no oil PID) / fuel / voltage ladders, a trip computer (load, throttle, MAF, MAP), the black-box trip timer, and the tape deck, with the album cover redrawn as a 40x40 dithered dot matrix.
 - **DIAG**: every PID the vehicle reports, live, three columns of fifteen per page.
-- **DTC**: the check-engine lamp, the stored trouble codes, the freeze frame, read buttons, and a clear that needs a second press within 4 s.
+- **DTC**: the check-engine lamp, the stored trouble codes with their descriptions (the ECU's, else the backend's generic SAE text), the freeze frame with its readings in the user's units, read buttons, and a clear that needs a second press within 4 s.
 - **TRIPS**: the black box's recorded drives (newest first) and the selected drive's summary in the user's units; export a drive, or end the one being recorded.
 - **AUDIO**: a car-stereo display: the cover as a large dot matrix and a 48-band spectrum analyzer with falling peak dots, from `audioAnalyzer.levels`. The analyzer runs only while this page is on screen (`audioAnalyzer.setDemand`).
 

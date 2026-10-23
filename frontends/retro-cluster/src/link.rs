@@ -91,6 +91,8 @@ pub struct Trip {
 pub struct Dtc {
     pub code: String,
     pub description: String,
+    /// The freeze frame's readings for this code (native units), by PID
+    pub values: Vec<(String, f64)>,
 }
 
 pub struct State {
@@ -342,6 +344,10 @@ fn dtc_list(v: &Value) -> Vec<Dtc> {
                 .map(|d| Dtc {
                     code: d["code"].as_str().unwrap_or("").to_string(),
                     description: d["description"].as_str().unwrap_or("").to_string(),
+                    values: d["values"]
+                        .as_object()
+                        .map(|m| m.iter().filter_map(|(k, v)| v.as_f64().map(|x| (k.clone(), x))).collect())
+                        .unwrap_or_default(),
                 })
                 .collect()
         })
