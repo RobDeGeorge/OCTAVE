@@ -68,6 +68,9 @@ private slots:
                                                     "echo hello from the frontend\n"
                                                     "exit 0\n").arg(out));
         FrontendSupervisor s(manifest({"bin/run"}, {"read", "media"}), dir, m_pairing.get(), 19841);
+        FrontendSupervisor::Options o;
+        o.quickQuitMs = 0;   // it quits at once; that alone is tested below
+        s.setOptions(o);
         QSignalSpy clean(&s, &FrontendSupervisor::exitedCleanly);
         QSignalSpy gaveUp(&s, &FrontendSupervisor::gaveUp);
         s.start();
@@ -154,6 +157,81 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(s.launches() >= 4, 10000);
         QCOMPARE(gaveUp.count(), 0);
         s.stop();
+    }
+
+    // A frontend that quits (exit 0) at once on every start would quit
+    // OCTAVE at every boot: that counts as a crash, and falls back to QML
+    void quittingAtOnceCountsAsACrash()
+    {
+        const QString dir = frontend("#!/bin/sh\nexit 0\n");
+        FrontendSupervisor s(manifest({"bin/run"}), dir, m_pairing.get(), 19841);
+        FrontendSupervisor::Options o;
+        o.maxQuickCrashes = 3;
+        o.firstBackoffMs = 10;
+        o.maxBackoffMs = 30;
+        s.setOptions(o);
+        QSignalSpy gaveUp(&s, &FrontendSupervisor::gaveUp);
+        QSignalSpy clean(&s, &FrontendSupervisor::exitedCleanly);
+        s.start();
+        QVERIFY(gaveUp.wait(10000));
+        QCOMPARE(clean.count(), 0);
+        QCOMPARE(s.launches(), 3);
+        const QString why = gaveUp.first().at(0).toString();
+        QVERIFY2(why.contains("quit (exit code 0) within 3 s of starting"), qPrintable(why));
+    }
+
+    // ... but past quickQuitMs an exit 0 is the user quitting
+    void quittingLaterQuitsOctave()
+    {
+        const QString dir = frontend("#!/bin/sh\nsleep 0.3\nexit 0\n");
+        FrontendSupervisor s(manifest({"bin/run"}), dir, m_pairing.get(), 19841);
+        FrontendSupervisor::Options o;
+        o.quickQuitMs = 100;
+        s.setOptions(o);
+        QSignalSpy clean(&s, &FrontendSupervisor::exitedCleanly);
+        s.start();
+        QVERIFY(clean.wait(10000));
+        QCOMPARE(s.launches(), 1);
+    }
+
+    // A frontend that prints without end: at most the budget a second reaches
+    // the log, long lines are cut, and the rest is counted as dropped
+    void theLogRelayIsBounded()
+    {
+        static QStringList relayed;
+        relayed.clear();
+        const QtMessageHandler previous = qInstallMessageHandler([](QtMsgType, const QMessageLogContext &c, const QString &m) {
+            if (QByteArray(c.category ? c.category : "") == "octave.frontends.supervisor")
+                relayed << m;
+        });
+        // 20000 short lines and a 200 KB line, as fast as it can
+        const QString dir = frontend("#!/bin/sh\n"
+                                     "i=0; while [ $i -lt 20000 ]; do echo \"line $i\"; i=$((i+1)); done\n"
+                                     "head -c 200000 /dev/zero | tr '\\0' x; echo\n"
+                                     "sleep 1.2\necho after\nexit 0\n");
+        FrontendSupervisor s(manifest({"bin/run"}), dir, m_pairing.get(), 19841);
+        FrontendSupervisor::Options o;
+        o.quickQuitMs = 0;
+        o.logLinesPerSecond = 50;
+        o.logLineMax = 100;
+        s.setOptions(o);
+        QSignalSpy clean(&s, &FrontendSupervisor::exitedCleanly);
+        s.start();
+        QVERIFY(clean.wait(30000));
+        qInstallMessageHandler(previous);
+        // Two one-second windows at most (the burst, then "after")
+        QVERIFY2(s.relayedLines() <= 2 * 50, qPrintable(QString::number(s.relayedLines())));
+        QVERIFY(s.droppedLines() > 10000);
+        int longest = 0;
+        bool note = false, after = false;
+        for (const QString &m : std::as_const(relayed)) {
+            longest = qMax(longest, int(m.size()));
+            note = note || m.contains("lines of output dropped");
+            after = after || m.endsWith("after ");
+        }
+        QVERIFY2(longest < 100 + 40, qPrintable(QString::number(longest)));   // the line, cut, and its "[id]" prefix
+        QVERIFY(note);
+        QVERIFY2(after, qPrintable(relayed.mid(relayed.size() - 3).join(" | ")));   // a new second has a new budget
     }
 
     void aProgramThatCantStartGivesUpAtOnce()

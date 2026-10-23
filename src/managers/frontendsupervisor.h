@@ -13,13 +13,20 @@
 // turns loopback trust off for the run, so the token is the only way in.
 //
 //   - exit code 0: the frontend quit on purpose, and OCTAVE quits with it
-//     (exitedCleanly);
+//     (exitedCleanly). Except within quickQuitMs of starting: a frontend
+//     that quits at once on every start would leave a blank head unit, so
+//     that counts as a crash;
 //   - anything else (a crash, a non-zero code, failing to start): started
 //     again after a back-off (1 s, doubling to 30 s). A run longer than a
 //     minute forgives the crashes before it;
 //   - kMaxQuickCrashes crashes in a row, each within a minute of starting:
 //     gaveUp(reason), and main.cpp writes USE_QML and starts OCTAVE again
 //     on the QML UI.
+// Its output is relayed to the log as "[id] line", at most
+// logLinesPerSecond lines and logBytesPerSecond bytes a second, each line
+// cut at logLineMax characters; what is over goes, with one "N lines
+// dropped" note a second, so a frontend that prints megabytes cannot keep
+// the logger busy.
 // stop() asks the program to quit (SIGTERM on Unix), and kills it after
 // stopGraceMs. Needs QProcess (QT_CONFIG(process)); without it start()
 // gives up at once.
@@ -45,6 +52,10 @@ public:
         int firstBackoffMs = 1000;
         int maxBackoffMs = 30000;
         int stopGraceMs = 3000;
+        int quickQuitMs = 3000;
+        int logLinesPerSecond = 200;
+        int logBytesPerSecond = 64 * 1024;
+        int logLineMax = 1000;
     };
 
     FrontendSupervisor(const FrontendManifest &manifest, const QString &dir, ServicePairing *pairing, quint16 port,
@@ -57,6 +68,8 @@ public:
 
     bool running() const;
     int launches() const { return m_launches; }
+    qint64 relayedLines() const { return m_relayed; }
+    qint64 droppedLines() const { return m_droppedTotal; }
     // argv as it is started: the program resolved (inside the folder, or
     // on PATH) and {dir} replaced; empty with *error set when it can't be
     static QStringList resolveCommand(const FrontendManifest &manifest, const QString &dir, QString *error);
@@ -70,6 +83,9 @@ private:
     void launch();
     void finished(int code, bool crashed, const QString &what);
     void revokeToken();
+    void relayOutput();
+    void relayLine(const QByteArray &line, bool cut);
+    void noteDropped();
 
     FrontendManifest m_manifest;
     QString m_dir;
@@ -83,6 +99,14 @@ private:
     int m_quickCrashes = 0;
     int m_launches = 0;
     bool m_stopping = false;
+    // The log relay's budget for the current second
+    QElapsedTimer m_logWindow;
+    int m_logLines = 0;
+    qint64 m_logBytes = 0;
+    int m_logDropped = 0;
+    bool m_midLine = false;   // the rest of a line that was cut
+    qint64 m_relayed = 0;
+    qint64 m_droppedTotal = 0;
 };
 
 #endif // FRONTENDSUPERVISOR_H

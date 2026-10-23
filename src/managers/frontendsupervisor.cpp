@@ -116,15 +116,15 @@ void FrontendSupervisor::launch()
     m_process->setProcessChannelMode(QProcess::MergedChannels);
     const QString id = m_manifest.id;
     QProcess *p = m_process;
-    connect(p, &QProcess::readyRead, this, [p, id] {
-        while (p->canReadLine())
-            qCInfo(lcSupervisor).noquote() << QStringLiteral("[%1]").arg(id) << QString::fromUtf8(p->readLine(4096)).trimmed();
-        if (p->bytesAvailable() > 4096)   // a long line without a newline
-            qCInfo(lcSupervisor).noquote() << QStringLiteral("[%1]").arg(id) << QString::fromUtf8(p->read(4096));
+    m_midLine = false;
+    connect(p, &QProcess::readyRead, this, [this, p] {
+        if (p == m_process)
+            relayOutput();
     });
     connect(p, &QProcess::finished, this, [this, p](int code, QProcess::ExitStatus status) {
         if (p != m_process)
             return;
+        relayOutput();   // what it printed last
         finished(code, status == QProcess::CrashExit, status == QProcess::CrashExit ? QStringLiteral("crashed")
                                                                                      : QStringLiteral("exited with %1").arg(code));
     });
@@ -147,24 +147,86 @@ void FrontendSupervisor::finished(int code, bool crashed, const QString &what)
         return;
     revokeToken();
     const qint64 ran = m_runTime.isValid() ? m_runTime.elapsed() : 0;
-    if (!crashed && code == 0) {
+    noteDropped();
+    if (!crashed && code == 0 && ran >= m_options.quickQuitMs) {
         qCInfo(lcSupervisor).noquote() << m_manifest.id << "quit (exit code 0): OCTAVE quits with it";
         emit exitedCleanly();
         return;
     }
+    const QString why = !crashed && code == 0
+        ? QStringLiteral("quit (exit code 0) within %1 s of starting").arg(m_options.quickQuitMs / 1000.0)
+        : what;
     if (ran >= m_options.quickRunMs)
         m_quickCrashes = 0;
     ++m_quickCrashes;
     if (m_quickCrashes >= m_options.maxQuickCrashes) {
         const QString reason = QStringLiteral("%1 %2, %3 times in a row within %4 s of starting")
-                                   .arg(m_manifest.id, what).arg(m_quickCrashes).arg(m_options.quickRunMs / 1000);
+                                   .arg(m_manifest.id, why).arg(m_quickCrashes).arg(m_options.quickRunMs / 1000);
         qCWarning(lcSupervisor).noquote() << "giving up:" << reason;
         emit gaveUp(reason);
         return;
     }
     const int backoff = qMin(m_options.maxBackoffMs, m_options.firstBackoffMs << qMin(m_quickCrashes - 1, 16));
-    qCWarning(lcSupervisor).noquote() << m_manifest.id << what << "after" << ran << "ms; starting it again in" << backoff << "ms";
+    qCWarning(lcSupervisor).noquote() << m_manifest.id << why << "after" << ran << "ms; starting it again in" << backoff << "ms";
     m_restart.start(backoff);
+}
+
+void FrontendSupervisor::relayOutput()
+{
+#if QT_CONFIG(process)
+    constexpr qint64 kChunk = 4096;
+    for (;;) {
+        QByteArray chunk;
+        if (m_process->canReadLine())
+            chunk = m_process->readLine(kChunk + 1);
+        else if (m_process->bytesAvailable() >= kChunk)
+            chunk = m_process->read(kChunk);   // a long line, no newline yet
+        else
+            break;
+        const bool ends = chunk.endsWith('\n');
+        if (m_midLine) {   // more of a line already relayed, cut
+            m_midLine = !ends;
+            continue;
+        }
+        m_midLine = !ends;
+        relayLine(chunk, !ends);
+    }
+#endif
+}
+
+void FrontendSupervisor::relayLine(const QByteArray &line, bool cut)
+{
+    if (!m_logWindow.isValid() || m_logWindow.elapsed() >= 1000) {
+        noteDropped();
+        m_logWindow.start();
+        m_logLines = 0;
+        m_logBytes = 0;
+    }
+    QString text = QString::fromUtf8(line).trimmed();
+    if (text.size() > m_options.logLineMax) {
+        text.truncate(m_options.logLineMax);
+        cut = true;
+    }
+    if (m_logLines >= m_options.logLinesPerSecond || m_logBytes + text.size() > m_options.logBytesPerSecond) {
+        ++m_logDropped;
+        ++m_droppedTotal;
+        return;
+    }
+    ++m_logLines;
+    m_logBytes += text.size();
+    ++m_relayed;
+    qCInfo(lcSupervisor).noquote() << QStringLiteral("[%1]").arg(m_manifest.id) << text
+                                   << (cut ? QStringLiteral("[cut]") : QString());
+}
+
+void FrontendSupervisor::noteDropped()
+{
+    if (m_logDropped == 0)
+        return;
+    qCWarning(lcSupervisor).noquote() << QStringLiteral("[%1]").arg(m_manifest.id) << m_logDropped
+                                      << "lines of output dropped (over" << m_options.logLinesPerSecond << "lines or"
+                                      << m_options.logBytesPerSecond / 1024 << "KB a second)";
+    m_logDropped = 0;
 }
 
 void FrontendSupervisor::stop()
