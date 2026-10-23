@@ -87,6 +87,7 @@ export class Octave {
   private nextId = 1
   private pending = new Map<number, Pending>()
   private subs = new Set<Sub>()
+  private early: Event[] = []
   private describeCache = new Map<string, Promise<Description>>()
   private backoff = 500
   private retryTimer: ReturnType<typeof setTimeout> | null = null
@@ -136,6 +137,7 @@ export class Octave {
       for (const p of this.pending.values()) p.reject(new OctaveError('connection closed'))
       this.pending.clear()
       for (const sub of this.subs) sub.id = 0
+      this.early = []
       this.describeCache.clear()
       this.status.set('offline')
       if (!this.closed) this.scheduleRetry()
@@ -164,7 +166,10 @@ export class Octave {
         console.warn(`octave: ${e.count} events dropped`)
         return
       }
-      for (const sub of this.subs) if (sub.id === e.sub) sub.onEvent(e)
+      let handled = false
+      for (const sub of this.subs) if (sub.id === e.sub) { sub.onEvent(e); handled = true }
+      // The current values can arrive before the subscribe reply names the id
+      if (!handled) this.early.push(e)
       return
     }
     const p = this.pending.get(msg.id as number)
@@ -222,7 +227,12 @@ export class Octave {
     if (sub.signals) args.signals = sub.signals
     if (sub.throttleMs) args.throttleMs = sub.throttleMs
     this.request('subscribe', args)
-      .then((r) => { sub.id = (r as { sub: number }).sub })
+      .then((r) => {
+        sub.id = (r as { sub: number }).sub
+        const mine = this.early.filter((e) => e.event !== 'dropped' && e.sub === sub.id)
+        this.early = this.early.filter((e) => !mine.includes(e))
+        for (const e of mine) sub.onEvent(e)
+      })
       .catch((e) => console.warn(`octave: subscribe ${sub.object} failed:`, e.message))
   }
 
