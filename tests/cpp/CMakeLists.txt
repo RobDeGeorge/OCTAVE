@@ -114,7 +114,7 @@ octave_add_test(tst_downloadmanager
     LIBS Qt6::Gui Qt6::Network Qt6::Concurrent ${_taglib}
     DEFINES OCTAVE_ENABLE_DOWNLOADS)
 octave_add_test(tst_mediamanager
-    SOURCES managers/mediamanager.h managers/mediamanager.cpp util/units.h util/units.cpp
+    SOURCES managers/mediamanager.h managers/mediamanager.cpp util/folderbrowser.h util/folderbrowser.cpp util/units.h util/units.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
     LIBS Qt6::Gui Qt6::Multimedia Qt6::Concurrent ${_taglib})
 
@@ -177,7 +177,7 @@ endif()
 # NowPlaying over the real MediaManager and PhoneMirrorManager
 octave_add_test(tst_nowplaying
     SOURCES managers/nowplaying.h managers/nowplaying.cpp
-            managers/mediamanager.h managers/mediamanager.cpp util/units.h util/units.cpp
+            managers/mediamanager.h managers/mediamanager.cpp util/folderbrowser.h util/folderbrowser.cpp util/units.h util/units.cpp
             managers/phonemirrormanager.h managers/phonemirrormanager.cpp
             phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h
             phone_mirror/qrcodegen.hpp phone_mirror/qrcodegen.cpp
@@ -209,6 +209,8 @@ octave_add_test(tst_units SOURCES util/units.h util/units.cpp)
 octave_add_test(tst_clock SOURCES managers/clock.h managers/clock.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
 octave_add_test(tst_fontcatalog SOURCES util/fontcatalog.h util/fontcatalog.cpp LIBS Qt6::Gui)
 octave_add_test(tst_pathurl)
+# Folder browsing for remote UIs: confined to its roots
+octave_add_test(tst_folderbrowser SOURCES util/folderbrowser.h util/folderbrowser.cpp)
 octave_add_test(tst_servicebridge
     SOURCES service/commandserver.h service/commandserver.cpp service/protocol.h
             service/serviceregistry.h service/serviceregistry.cpp service/servicebridge.h service/servicebridge.cpp

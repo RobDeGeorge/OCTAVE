@@ -1,4 +1,5 @@
 #include "mediamanager.h"
+#include "../util/folderbrowser.h"
 #include "../util/perfscope.h"
 #include "../util/units.h"
 #include "settingsmanager.h"
@@ -18,6 +19,7 @@
 #include <QtConcurrent>
 #include <QFutureWatcher>
 #include <QDateTime>
+#include <QStandardPaths>
 #include <QJsonArray>
 #include <QColor>
 #include <QMediaDevices>
@@ -3206,6 +3208,25 @@ void MediaManager::update_media_directory(const QString &directory)
 QString MediaManager::get_default_media_dir()
 {
     return m_defaultMediaDir;
+}
+
+QStringList MediaManager::musicBrowseRoots() const
+{
+    QStringList roots{QDir::homePath(), QStandardPaths::writableLocation(QStandardPaths::MusicLocation),
+                      m_defaultMediaDir,
+                      QStringLiteral("/media"), QStringLiteral("/mnt"), QStringLiteral("/run/media"),
+                      QStringLiteral("/storage")};
+    // The folder in use, wherever it is, but never the whole filesystem
+    if (!m_mediaDir.isEmpty() && QFileInfo(m_mediaDir).canonicalFilePath() != QDir::rootPath()
+        && !QDir(m_mediaDir).isRoot())
+        roots.append(m_mediaDir);
+    roots.removeAll(QString());
+    return roots;
+}
+
+QVariantMap MediaManager::browse_music_folders(const QString &path)
+{
+    return FolderBrowser::list(path, musicBrowseRoots(), s_audioExtensions);
 }
 
 QString MediaManager::get_media_folder_name()
