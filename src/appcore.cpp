@@ -24,6 +24,7 @@ AppCore::AppCore(const QDir &frontendDir, Units *units)
     , tripRecorder(&settingsManager)
     , nowPlaying(&mediaManager, &phoneMirrorManager, &settingsManager)
     , fontCatalog(frontendDir.absoluteFilePath(QStringLiteral("assets/fonts")))
+    , themeCatalog(frontendDir.absoluteFilePath(QStringLiteral("themes.json")), &settingsManager)
 {
     // Settings Manager — central settings store, everything depends on this
     expose("settingsManager", &settingsManager);
@@ -139,6 +140,8 @@ AppCore::AppCore(const QDir &frontendDir, Units *units)
         expose("units", units);
     // The bundled UI and icon fonts, registered before any QML loads
     expose("fontCatalog", &fontCatalog);
+    // The colour themes as data, and the palette in force (Style.qml reads it)
+    expose("themeCatalog", &themeCatalog);
 
     // Dashboards (data-driven dashboards + user-authored presets), see
     // TODO/dashboards-roadmap.md

@@ -35,6 +35,7 @@
 #include "managers/androidautomanager.h"
 #include "managers/phonemirrormanager.h"
 #include "managers/nowplaying.h"
+#include "managers/themecatalog.h"
 #include "managers/downloadmanager.h"
 #include "managers/dashboardmanager.h"
 #include "util/fontcatalog.h"
@@ -81,6 +82,7 @@ public:
     NowPlaying nowPlaying;
     DownloadManager downloadManager;
     FontCatalog fontCatalog;
+    ThemeCatalog themeCatalog;
     DashboardManager dashboardManager;
 
 private:

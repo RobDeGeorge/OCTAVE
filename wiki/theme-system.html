@@ -70,7 +70,9 @@
         <!-- Style.qml -->
         <h2 id="style-qml">Style.qml &mdash; Theme Resolution</h2>
 
-        <p><span class="file-path">frontend/Style.qml</span> holds the built-in palettes, the custom-theme map, the live album-art palette, the font registry, and one reactive colour property per UI token. The <code>activeTheme</code> object is what every token binds to, resolved in priority order:</p>
+        <p><strong>The palettes are data.</strong> The built-in table, its order (<code>themeNames</code>) and the picker's light / dark grouping live in <span class="file-path">frontend/themes.json</span>, read by the C++ <code>ThemeCatalog</code> (<span class="file-path">src/managers/themecatalog.{h,cpp}</span>, context property and service object <code>themeCatalog</code>). <code>Style.qml</code>'s <code>themes</code>, <code>lightThemeNames</code> and <code>darkThemeNames</code> bind to it. <code>ThemeCatalog</code> also publishes <code>activeThemeName</code> and <code>activeTheme</code>, the palette in force resolved by the same three rules below from <code>settingsManager.themeSetting</code> / <code>customThemeData</code> / <code>albumArtColors</code>, so another frontend draws the user's theme by subscribing to one property. Animation, transition timing and the token properties stay in QML.</p>
+
+        <p><span class="file-path">frontend/Style.qml</span> holds the built-in palettes (from <code>themeCatalog</code>), the custom-theme map, the live album-art palette, the font registry, and one reactive colour property per UI token. The <code>activeTheme</code> object is what every token binds to, resolved in priority order:</p>
 
         <pre><code><span class="prop">property var</span> activeTheme: {
     <span class="cmt">// 1. Album Art Capture with a live palette</span>
@@ -90,7 +92,7 @@
         <!-- Built-in Themes -->
         <h2 id="builtin-themes">Built-in Themes</h2>
 
-        <p>Seventeen palettes are defined in the <code>themes</code> map: eight light, eight dark, plus the "Album Art Capture" placeholder. The picker order below is hand-tuned in <code>lightThemeNames</code> / <code>darkThemeNames</code> ("so the swatch palette flows nicely"). The default on a fresh install is <code>CosmicVoyager</code> (<code>themeSetting</code> default in <span class="file-path">src/managers/settingsmanager.cpp</span>).</p>
+        <p>Seventeen palettes are defined in <span class="file-path">frontend/themes.json</span> (<code>themeCatalog.themes</code>): eight light, eight dark, plus the "Album Art Capture" placeholder. The picker order below is hand-tuned in <code>lightThemeNames</code> / <code>darkThemeNames</code> ("so the swatch palette flows nicely"). The default on a fresh install is <code>CosmicVoyager</code> (<code>themeSetting</code> default in <span class="file-path">src/managers/settingsmanager.cpp</span>).</p>
 
         <h3>Light</h3>
         <table>
@@ -489,8 +491,8 @@ App.ThemedIcon { <span class="prop">source</span>: App.Style.assetBase + <span c
 
         <h3>Creating a New Built-in Theme</h3>
         <ol class="steps">
-          <li>Add an entry to the <code>themes</code> map in <span class="file-path">frontend/Style.qml</span> with all ten keys, including <code>bottombar.sensorButton</code>.</li>
-          <li>Append its name to <code>lightThemeNames</code> or <code>darkThemeNames</code> &mdash; the picker rows are built from those arrays, not from <code>Object.keys(themes)</code>.</li>
+          <li>Add an entry to <code>themes</code> in <span class="file-path">frontend/themes.json</span> with all ten keys, including <code>bottombar.sensorButton</code>, and its name to <code>themeNames</code>.</li>
+          <li>Append its name to <code>lightThemeNames</code> or <code>darkThemeNames</code> there &mdash; the picker rows are built from those arrays, not from <code>Object.keys(themes)</code>. <code>tst_themecatalog</code> checks every palette has the ten keys and every listed name exists.</li>
           <li>Update <a href="settings-reference.html">Settings Reference</a> if the default changes.</li>
         </ol>
 

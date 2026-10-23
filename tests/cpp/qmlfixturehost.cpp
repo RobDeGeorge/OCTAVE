@@ -29,6 +29,7 @@
 #include "managers/settingsmanager.h"
 #include "util/assetstore.h"
 #include "util/units.h"
+#include "managers/themecatalog.h"
 
 namespace {
 const QString kRepo = QStringLiteral(OCTAVE_SOURCE_DIR);
@@ -94,6 +95,9 @@ int main(int argc, char *argv[])
     Units units;
     ctx->setContextProperty(QStringLiteral("units"), &units);
     std::unique_ptr<SettingsManager> settings;
+    // Style.qml's palettes (the settings, when there are some, set in either branch below)
+    ThemeCatalog themes(kRepo + QStringLiteral("/frontend/themes.json"));
+    ctx->setContextProperty(QStringLiteral("themeCatalog"), &themes);
 
     if (wiki) {
         ctx->setContextProperty(QStringLiteral("testProbe"), &probe);

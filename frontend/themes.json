@@ -1,0 +1,929 @@
+{
+  "schema": 1,
+  "_comment": "OCTAVE's built-in colour themes: read by ThemeCatalog (themeCatalog.themes / themeNames / lightThemeNames / darkThemeNames / activeTheme) and through it by frontend/Style.qml. 'Album Art Capture' is the placeholder palette until colours are extracted from the art (settingsManager.albumArtColors). Custom themes live in the settings (settingsManager.customThemeData). Keys: wiki/theme-system.html.",
+  "themeNames": [
+    "SolarizedLight",
+    "NeonMatrix",
+    "CosmicVoyager",
+    "TechnoRetro",
+    "AutumnCascade",
+    "QuantumNebula",
+    "CrimsonEmber",
+    "ForestEmerald",
+    "ArcticChill",
+    "AmberConsole",
+    "Parchment",
+    "MintGarden",
+    "RoseQuartz",
+    "LavenderMist",
+    "Sunshine",
+    "SlateCloud",
+    "Album Art Capture"
+  ],
+  "lightThemeNames": [
+    "SolarizedLight",
+    "ArcticChill",
+    "Parchment",
+    "Sunshine",
+    "MintGarden",
+    "RoseQuartz",
+    "LavenderMist",
+    "SlateCloud"
+  ],
+  "darkThemeNames": [
+    "AmberConsole",
+    "NeonMatrix",
+    "ForestEmerald",
+    "CosmicVoyager",
+    "TechnoRetro",
+    "QuantumNebula",
+    "CrimsonEmber",
+    "AutumnCascade"
+  ],
+  "themes": {
+    "SolarizedLight": {
+      "base": "#FDF6E3",
+      "baseAlt": "#EEE8D5",
+      "accent": "#268BD2",
+      "text": {
+        "primary": "#073642",
+        "secondary": "#586E75"
+      },
+      "states": {
+        "hover": "#E0DAC3",
+        "paused": "#D6D0B9",
+        "playing": "#CCC6AF"
+      },
+      "sliders": {
+        "volume": "#268BD2",
+        "media": "#586E75",
+        "settings": "#268BD2"
+      },
+      "bottombar": {
+        "previous": "#268BD2",
+        "play": "#268BD2",
+        "pause": "#268BD2",
+        "next": "#268BD2",
+        "volume": "#268BD2",
+        "shuffle": "#268BD2",
+        "toggleShade": "#E0DAC3",
+        "homeButton": "#268BD2",
+        "obdButton": "#268BD2",
+        "mediaButton": "#268BD2",
+        "sensorButton": "#268BD2",
+        "settingsButton": "#268BD2",
+        "androidAutoButton": "#268BD2",
+        "phoneMirrorButton": "#268BD2"
+      },
+      "mediaroom": {
+        "previous": "#2AA198",
+        "play": "#2AA198",
+        "pause": "#2AA198",
+        "next": "#2AA198",
+        "left": "#2AA198",
+        "right": "#2AA198",
+        "shuffle": "#2AA198",
+        "toggleShade": "#D6D0B9"
+      },
+      "mainmenu": {
+        "mediaContainer": "#9d2aa1"
+      },
+      "obd": {
+        "boxBackground": "#EEE8D5",
+        "barColor": "#2AA198"
+      }
+    },
+    "NeonMatrix": {
+      "base": "#0C0C0C",
+      "baseAlt": "#161616",
+      "accent": "#00FF41",
+      "text": {
+        "primary": "#CCFFCC",
+        "secondary": "#88CC88"
+      },
+      "states": {
+        "hover": "#202020",
+        "paused": "#1C1C1C",
+        "playing": "#282828"
+      },
+      "sliders": {
+        "volume": "#00FF41",
+        "media": "#88CC88",
+        "settings": "#00FF41"
+      },
+      "bottombar": {
+        "previous": "#00FF41",
+        "play": "#00FF41",
+        "pause": "#00FF41",
+        "next": "#00FF41",
+        "volume": "#00FF41",
+        "shuffle": "#00FF41",
+        "toggleShade": "#202020",
+        "homeButton": "#00FF41",
+        "obdButton": "#00FF41",
+        "mediaButton": "#00FF41",
+        "sensorButton": "#00FF41",
+        "settingsButton": "#00FF41",
+        "androidAutoButton": "#00FF41",
+        "phoneMirrorButton": "#00FF41"
+      },
+      "mediaroom": {
+        "previous": "#33FF66",
+        "play": "#33FF66",
+        "pause": "#33FF66",
+        "next": "#33FF66",
+        "left": "#33FF66",
+        "right": "#33FF66",
+        "shuffle": "#33FF66",
+        "toggleShade": "#1C1C1C"
+      },
+      "mainmenu": {
+        "mediaContainer": "#005500"
+      },
+      "obd": {
+        "boxBackground": "#161616",
+        "barColor": "#33FF66"
+      }
+    },
+    "CosmicVoyager": {
+      "base": "#0A0E17",
+      "baseAlt": "#151C29",
+      "accent": "#00BFFF",
+      "text": {
+        "primary": "#E0F2FF",
+        "secondary": "#A0C2E0"
+      },
+      "states": {
+        "hover": "#1E2A3D",
+        "paused": "#192433",
+        "playing": "#243143"
+      },
+      "sliders": {
+        "volume": "#00BFFF",
+        "media": "#FF5E94",
+        "settings": "#7CB9E8"
+      },
+      "bottombar": {
+        "previous": "#7D9EC0",
+        "play": "#00CCFF",
+        "pause": "#00CCFF",
+        "next": "#7D9EC0",
+        "volume": "#00BFFF",
+        "shuffle": "#FF5E94",
+        "toggleShade": "#1E2A3D",
+        "homeButton": "#00BFFF",
+        "obdButton": "#FF8C42",
+        "mediaButton": "#00E673",
+        "sensorButton": "#FFD24D",
+        "settingsButton": "#7CB9E8",
+        "androidAutoButton": "#7CB9E8",
+        "phoneMirrorButton": "#7CB9E8"
+      },
+      "mediaroom": {
+        "previous": "#7D9EC0",
+        "play": "#00E0FF",
+        "pause": "#00E0FF",
+        "next": "#7D9EC0",
+        "left": "#4DA6FF",
+        "right": "#4DA6FF",
+        "shuffle": "#FF5E94",
+        "toggleShade": "#192433"
+      },
+      "mainmenu": {
+        "mediaContainer": "#004080"
+      },
+      "obd": {
+        "boxBackground": "#151C29",
+        "barColor": "#FF8C42"
+      }
+    },
+    "TechnoRetro": {
+      "base": "#1E1014",
+      "baseAlt": "#2A1B22",
+      "accent": "#FF00AA",
+      "text": {
+        "primary": "#F5E0FF",
+        "secondary": "#CAA0D4"
+      },
+      "states": {
+        "hover": "#3D2A33",
+        "paused": "#33222B",
+        "playing": "#482F3A"
+      },
+      "sliders": {
+        "volume": "#FF00AA",
+        "media": "#00FFCC",
+        "settings": "#D436FF"
+      },
+      "bottombar": {
+        "previous": "#B347B9",
+        "play": "#FF00AA",
+        "pause": "#FF00AA",
+        "next": "#B347B9",
+        "volume": "#D436FF",
+        "shuffle": "#00FFCC",
+        "toggleShade": "#3D2A33",
+        "homeButton": "#FF47B9",
+        "obdButton": "#FFDD00",
+        "mediaButton": "#00FFCC",
+        "sensorButton": "#FF66E0",
+        "settingsButton": "#D436FF",
+        "androidAutoButton": "#D436FF",
+        "phoneMirrorButton": "#D436FF"
+      },
+      "mediaroom": {
+        "previous": "#B347B9",
+        "play": "#FF47B9",
+        "pause": "#FF47B9",
+        "next": "#B347B9",
+        "left": "#E566FF",
+        "right": "#E566FF",
+        "shuffle": "#00FFCC",
+        "toggleShade": "#33222B"
+      },
+      "mainmenu": {
+        "mediaContainer": "#990066"
+      },
+      "obd": {
+        "boxBackground": "#2A1B22",
+        "barColor": "#FFDD00"
+      }
+    },
+    "AutumnCascade": {
+      "base": "#2D1E12",
+      "baseAlt": "#3E2918",
+      "accent": "#E67E22",
+      "text": {
+        "primary": "#FDF2E9",
+        "secondary": "#D5BBA8"
+      },
+      "states": {
+        "hover": "#4E3923",
+        "paused": "#44321E",
+        "playing": "#5A4329"
+      },
+      "sliders": {
+        "volume": "#E67E22",
+        "media": "#8D6E63",
+        "settings": "#F5B041"
+      },
+      "bottombar": {
+        "previous": "#BA6B40",
+        "play": "#FF9F45",
+        "pause": "#FF9F45",
+        "next": "#BA6B40",
+        "volume": "#E67E22",
+        "shuffle": "#5D4037",
+        "toggleShade": "#4E3923",
+        "homeButton": "#F5B041",
+        "obdButton": "#A04000",
+        "mediaButton": "#D35400",
+        "sensorButton": "#E67E22",
+        "settingsButton": "#F39C12",
+        "androidAutoButton": "#F39C12",
+        "phoneMirrorButton": "#F39C12"
+      },
+      "mediaroom": {
+        "previous": "#BA6B40",
+        "play": "#FFA44F",
+        "pause": "#FFA44F",
+        "next": "#BA6B40",
+        "left": "#CD853F",
+        "right": "#CD853F",
+        "shuffle": "#5D4037",
+        "toggleShade": "#44321E"
+      },
+      "mainmenu": {
+        "mediaContainer": "#7E5109"
+      },
+      "obd": {
+        "boxBackground": "#3E2918",
+        "barColor": "#A04000"
+      }
+    },
+    "QuantumNebula": {
+      "base": "#0F0F1A",
+      "baseAlt": "#17172A",
+      "accent": "#9C27B0",
+      "text": {
+        "primary": "#F0E6FF",
+        "secondary": "#B5A4D4"
+      },
+      "states": {
+        "hover": "#24243F",
+        "paused": "#1F1F37",
+        "playing": "#2D2D4A"
+      },
+      "sliders": {
+        "volume": "#9C27B0",
+        "media": "#00BCD4",
+        "settings": "#673AB7"
+      },
+      "bottombar": {
+        "previous": "#4A148C",
+        "play": "#9C27B0",
+        "pause": "#9C27B0",
+        "next": "#4A148C",
+        "volume": "#673AB7",
+        "shuffle": "#00BCD4",
+        "toggleShade": "#24243F",
+        "homeButton": "#7B1FA2",
+        "obdButton": "#00E5FF",
+        "mediaButton": "#00BCD4",
+        "sensorButton": "#E040FB",
+        "settingsButton": "#673AB7",
+        "androidAutoButton": "#673AB7",
+        "phoneMirrorButton": "#673AB7"
+      },
+      "mediaroom": {
+        "previous": "#4A148C",
+        "play": "#BA68C8",
+        "pause": "#BA68C8",
+        "next": "#4A148C",
+        "left": "#7C4DFF",
+        "right": "#7C4DFF",
+        "shuffle": "#00BCD4",
+        "toggleShade": "#1F1F37"
+      },
+      "mainmenu": {
+        "mediaContainer": "#4A0072"
+      },
+      "obd": {
+        "boxBackground": "#17172A",
+        "barColor": "#00E5FF"
+      }
+    },
+    "CrimsonEmber": {
+      "base": "#1A0808",
+      "baseAlt": "#241010",
+      "accent": "#DC2626",
+      "text": {
+        "primary": "#FFE4E4",
+        "secondary": "#C49595"
+      },
+      "states": {
+        "hover": "#361414",
+        "paused": "#2D0F0F",
+        "playing": "#421A1A"
+      },
+      "sliders": {
+        "volume": "#DC2626",
+        "media": "#F59E0B",
+        "settings": "#B91C1C"
+      },
+      "bottombar": {
+        "previous": "#B91C1C",
+        "play": "#DC2626",
+        "pause": "#DC2626",
+        "next": "#B91C1C",
+        "volume": "#DC2626",
+        "shuffle": "#F59E0B",
+        "toggleShade": "#361414",
+        "homeButton": "#DC2626",
+        "obdButton": "#F59E0B",
+        "mediaButton": "#FB923C",
+        "sensorButton": "#FBBF24",
+        "settingsButton": "#B91C1C",
+        "androidAutoButton": "#B91C1C",
+        "phoneMirrorButton": "#B91C1C"
+      },
+      "mediaroom": {
+        "previous": "#B91C1C",
+        "play": "#EF4444",
+        "pause": "#EF4444",
+        "next": "#B91C1C",
+        "left": "#F87171",
+        "right": "#F87171",
+        "shuffle": "#F59E0B",
+        "toggleShade": "#2D0F0F"
+      },
+      "mainmenu": {
+        "mediaContainer": "#7F1D1D"
+      },
+      "obd": {
+        "boxBackground": "#241010",
+        "barColor": "#F59E0B"
+      }
+    },
+    "ForestEmerald": {
+      "base": "#0A1A14",
+      "baseAlt": "#122620",
+      "accent": "#10B981",
+      "text": {
+        "primary": "#D1FAE5",
+        "secondary": "#87B5A1"
+      },
+      "states": {
+        "hover": "#1E3A2C",
+        "paused": "#1A3025",
+        "playing": "#244032"
+      },
+      "sliders": {
+        "volume": "#10B981",
+        "media": "#FBBF24",
+        "settings": "#059669"
+      },
+      "bottombar": {
+        "previous": "#059669",
+        "play": "#10B981",
+        "pause": "#10B981",
+        "next": "#059669",
+        "volume": "#10B981",
+        "shuffle": "#FBBF24",
+        "toggleShade": "#1E3A2C",
+        "homeButton": "#10B981",
+        "obdButton": "#FBBF24",
+        "mediaButton": "#34D399",
+        "sensorButton": "#FCD34D",
+        "settingsButton": "#059669",
+        "androidAutoButton": "#059669",
+        "phoneMirrorButton": "#059669"
+      },
+      "mediaroom": {
+        "previous": "#059669",
+        "play": "#34D399",
+        "pause": "#34D399",
+        "next": "#059669",
+        "left": "#6EE7B7",
+        "right": "#6EE7B7",
+        "shuffle": "#FBBF24",
+        "toggleShade": "#1A3025"
+      },
+      "mainmenu": {
+        "mediaContainer": "#064E3B"
+      },
+      "obd": {
+        "boxBackground": "#122620",
+        "barColor": "#FBBF24"
+      }
+    },
+    "ArcticChill": {
+      "base": "#F0F4F8",
+      "baseAlt": "#DCE5EE",
+      "accent": "#0EA5E9",
+      "text": {
+        "primary": "#0F2942",
+        "secondary": "#5B7A95"
+      },
+      "states": {
+        "hover": "#C4D4E2",
+        "paused": "#CDDCE8",
+        "playing": "#B7CADC"
+      },
+      "sliders": {
+        "volume": "#0EA5E9",
+        "media": "#7C3AED",
+        "settings": "#0284C7"
+      },
+      "bottombar": {
+        "previous": "#0284C7",
+        "play": "#0EA5E9",
+        "pause": "#0EA5E9",
+        "next": "#0284C7",
+        "volume": "#0EA5E9",
+        "shuffle": "#7C3AED",
+        "toggleShade": "#C4D4E2",
+        "homeButton": "#0EA5E9",
+        "obdButton": "#7C3AED",
+        "mediaButton": "#06B6D4",
+        "sensorButton": "#A78BFA",
+        "settingsButton": "#0284C7",
+        "androidAutoButton": "#0284C7",
+        "phoneMirrorButton": "#0284C7"
+      },
+      "mediaroom": {
+        "previous": "#0284C7",
+        "play": "#38BDF8",
+        "pause": "#38BDF8",
+        "next": "#0284C7",
+        "left": "#7DD3FC",
+        "right": "#7DD3FC",
+        "shuffle": "#7C3AED",
+        "toggleShade": "#CDDCE8"
+      },
+      "mainmenu": {
+        "mediaContainer": "#BFDBFE"
+      },
+      "obd": {
+        "boxBackground": "#DCE5EE",
+        "barColor": "#7C3AED"
+      }
+    },
+    "AmberConsole": {
+      "base": "#000000",
+      "baseAlt": "#0A0A0A",
+      "accent": "#FFB000",
+      "text": {
+        "primary": "#FFE89C",
+        "secondary": "#C49B5C"
+      },
+      "states": {
+        "hover": "#1A1500",
+        "paused": "#150F00",
+        "playing": "#261F00"
+      },
+      "sliders": {
+        "volume": "#FFB000",
+        "media": "#FF8C00",
+        "settings": "#CC8C00"
+      },
+      "bottombar": {
+        "previous": "#CC8C00",
+        "play": "#FFB000",
+        "pause": "#FFB000",
+        "next": "#CC8C00",
+        "volume": "#FFB000",
+        "shuffle": "#FF8C00",
+        "toggleShade": "#1A1500",
+        "homeButton": "#FFB000",
+        "obdButton": "#FF8C00",
+        "mediaButton": "#FFD24D",
+        "sensorButton": "#FFCC33",
+        "settingsButton": "#CC8C00",
+        "androidAutoButton": "#CC8C00",
+        "phoneMirrorButton": "#CC8C00"
+      },
+      "mediaroom": {
+        "previous": "#CC8C00",
+        "play": "#FFC933",
+        "pause": "#FFC933",
+        "next": "#CC8C00",
+        "left": "#FFD966",
+        "right": "#FFD966",
+        "shuffle": "#FF8C00",
+        "toggleShade": "#150F00"
+      },
+      "mainmenu": {
+        "mediaContainer": "#332300"
+      },
+      "obd": {
+        "boxBackground": "#0A0A0A",
+        "barColor": "#FF8C00"
+      }
+    },
+    "Parchment": {
+      "base": "#F5EBD8",
+      "baseAlt": "#E8DBC1",
+      "accent": "#8B4513",
+      "text": {
+        "primary": "#2A1A0A",
+        "secondary": "#6B4F2E"
+      },
+      "states": {
+        "hover": "#D6C5A4",
+        "paused": "#DDCDAE",
+        "playing": "#CCB994"
+      },
+      "sliders": {
+        "volume": "#8B4513",
+        "media": "#B45309",
+        "settings": "#78350F"
+      },
+      "bottombar": {
+        "previous": "#78350F",
+        "play": "#8B4513",
+        "pause": "#8B4513",
+        "next": "#78350F",
+        "volume": "#8B4513",
+        "shuffle": "#B45309",
+        "toggleShade": "#D6C5A4",
+        "homeButton": "#8B4513",
+        "obdButton": "#B45309",
+        "mediaButton": "#A0522D",
+        "sensorButton": "#C2410C",
+        "settingsButton": "#78350F",
+        "androidAutoButton": "#78350F",
+        "phoneMirrorButton": "#78350F"
+      },
+      "mediaroom": {
+        "previous": "#78350F",
+        "play": "#A0522D",
+        "pause": "#A0522D",
+        "next": "#78350F",
+        "left": "#C19A6B",
+        "right": "#C19A6B",
+        "shuffle": "#B45309",
+        "toggleShade": "#DDCDAE"
+      },
+      "mainmenu": {
+        "mediaContainer": "#C2A878"
+      },
+      "obd": {
+        "boxBackground": "#E8DBC1",
+        "barColor": "#B45309"
+      }
+    },
+    "MintGarden": {
+      "base": "#F0F9F4",
+      "baseAlt": "#DDF0E2",
+      "accent": "#16A34A",
+      "text": {
+        "primary": "#0F2A1A",
+        "secondary": "#4D7B5E"
+      },
+      "states": {
+        "hover": "#C5E2CD",
+        "paused": "#CFE7D5",
+        "playing": "#B5D6BF"
+      },
+      "sliders": {
+        "volume": "#16A34A",
+        "media": "#0891B2",
+        "settings": "#15803D"
+      },
+      "bottombar": {
+        "previous": "#15803D",
+        "play": "#16A34A",
+        "pause": "#16A34A",
+        "next": "#15803D",
+        "volume": "#16A34A",
+        "shuffle": "#0891B2",
+        "toggleShade": "#C5E2CD",
+        "homeButton": "#16A34A",
+        "obdButton": "#0891B2",
+        "mediaButton": "#22C55E",
+        "sensorButton": "#06B6D4",
+        "settingsButton": "#15803D",
+        "androidAutoButton": "#15803D",
+        "phoneMirrorButton": "#15803D"
+      },
+      "mediaroom": {
+        "previous": "#15803D",
+        "play": "#22C55E",
+        "pause": "#22C55E",
+        "next": "#15803D",
+        "left": "#4ADE80",
+        "right": "#4ADE80",
+        "shuffle": "#0891B2",
+        "toggleShade": "#CFE7D5"
+      },
+      "mainmenu": {
+        "mediaContainer": "#A7E3B7"
+      },
+      "obd": {
+        "boxBackground": "#DDF0E2",
+        "barColor": "#0891B2"
+      }
+    },
+    "RoseQuartz": {
+      "base": "#FBF2F4",
+      "baseAlt": "#F5E0E5",
+      "accent": "#BE185D",
+      "text": {
+        "primary": "#3A0E1F",
+        "secondary": "#8E5B6C"
+      },
+      "states": {
+        "hover": "#EAC8D1",
+        "paused": "#EFD0D8",
+        "playing": "#E0B8C3"
+      },
+      "sliders": {
+        "volume": "#BE185D",
+        "media": "#9333EA",
+        "settings": "#9D174D"
+      },
+      "bottombar": {
+        "previous": "#9D174D",
+        "play": "#BE185D",
+        "pause": "#BE185D",
+        "next": "#9D174D",
+        "volume": "#BE185D",
+        "shuffle": "#9333EA",
+        "toggleShade": "#EAC8D1",
+        "homeButton": "#BE185D",
+        "obdButton": "#9333EA",
+        "mediaButton": "#DB2777",
+        "sensorButton": "#A855F7",
+        "settingsButton": "#9D174D",
+        "androidAutoButton": "#9D174D",
+        "phoneMirrorButton": "#9D174D"
+      },
+      "mediaroom": {
+        "previous": "#9D174D",
+        "play": "#DB2777",
+        "pause": "#DB2777",
+        "next": "#9D174D",
+        "left": "#F472B6",
+        "right": "#F472B6",
+        "shuffle": "#9333EA",
+        "toggleShade": "#EFD0D8"
+      },
+      "mainmenu": {
+        "mediaContainer": "#E2A5B6"
+      },
+      "obd": {
+        "boxBackground": "#F5E0E5",
+        "barColor": "#9333EA"
+      }
+    },
+    "LavenderMist": {
+      "base": "#F5F3FA",
+      "baseAlt": "#E9E4F2",
+      "accent": "#6D28D9",
+      "text": {
+        "primary": "#1F0E3D",
+        "secondary": "#605685"
+      },
+      "states": {
+        "hover": "#D5CCE5",
+        "paused": "#DDD4EA",
+        "playing": "#C7BCD9"
+      },
+      "sliders": {
+        "volume": "#6D28D9",
+        "media": "#DB2777",
+        "settings": "#5B21B6"
+      },
+      "bottombar": {
+        "previous": "#5B21B6",
+        "play": "#6D28D9",
+        "pause": "#6D28D9",
+        "next": "#5B21B6",
+        "volume": "#6D28D9",
+        "shuffle": "#DB2777",
+        "toggleShade": "#D5CCE5",
+        "homeButton": "#6D28D9",
+        "obdButton": "#DB2777",
+        "mediaButton": "#8B5CF6",
+        "sensorButton": "#EC4899",
+        "settingsButton": "#5B21B6",
+        "androidAutoButton": "#5B21B6",
+        "phoneMirrorButton": "#5B21B6"
+      },
+      "mediaroom": {
+        "previous": "#5B21B6",
+        "play": "#8B5CF6",
+        "pause": "#8B5CF6",
+        "next": "#5B21B6",
+        "left": "#A78BFA",
+        "right": "#A78BFA",
+        "shuffle": "#DB2777",
+        "toggleShade": "#DDD4EA"
+      },
+      "mainmenu": {
+        "mediaContainer": "#C2B4DC"
+      },
+      "obd": {
+        "boxBackground": "#E9E4F2",
+        "barColor": "#DB2777"
+      }
+    },
+    "Sunshine": {
+      "base": "#FFFCF2",
+      "baseAlt": "#FFF6D8",
+      "accent": "#F97316",
+      "text": {
+        "primary": "#3A1E03",
+        "secondary": "#7B5B2E"
+      },
+      "states": {
+        "hover": "#FFE9A8",
+        "paused": "#FFEEB7",
+        "playing": "#FFDF8E"
+      },
+      "sliders": {
+        "volume": "#F97316",
+        "media": "#EAB308",
+        "settings": "#C2410C"
+      },
+      "bottombar": {
+        "previous": "#C2410C",
+        "play": "#F97316",
+        "pause": "#F97316",
+        "next": "#C2410C",
+        "volume": "#F97316",
+        "shuffle": "#EAB308",
+        "toggleShade": "#FFE9A8",
+        "homeButton": "#F97316",
+        "obdButton": "#EAB308",
+        "mediaButton": "#FB923C",
+        "sensorButton": "#FACC15",
+        "settingsButton": "#C2410C",
+        "androidAutoButton": "#C2410C",
+        "phoneMirrorButton": "#C2410C"
+      },
+      "mediaroom": {
+        "previous": "#C2410C",
+        "play": "#FB923C",
+        "pause": "#FB923C",
+        "next": "#C2410C",
+        "left": "#FDBA74",
+        "right": "#FDBA74",
+        "shuffle": "#EAB308",
+        "toggleShade": "#FFEEB7"
+      },
+      "mainmenu": {
+        "mediaContainer": "#FDD08A"
+      },
+      "obd": {
+        "boxBackground": "#FFF6D8",
+        "barColor": "#EAB308"
+      }
+    },
+    "SlateCloud": {
+      "base": "#F1F5F9",
+      "baseAlt": "#E2E8F0",
+      "accent": "#475569",
+      "text": {
+        "primary": "#0F172A",
+        "secondary": "#64748B"
+      },
+      "states": {
+        "hover": "#CBD5E1",
+        "paused": "#D5DCE6",
+        "playing": "#BAC4D2"
+      },
+      "sliders": {
+        "volume": "#475569",
+        "media": "#0F766E",
+        "settings": "#334155"
+      },
+      "bottombar": {
+        "previous": "#334155",
+        "play": "#475569",
+        "pause": "#475569",
+        "next": "#334155",
+        "volume": "#475569",
+        "shuffle": "#0F766E",
+        "toggleShade": "#CBD5E1",
+        "homeButton": "#475569",
+        "obdButton": "#0F766E",
+        "mediaButton": "#64748B",
+        "sensorButton": "#0E7490",
+        "settingsButton": "#334155",
+        "androidAutoButton": "#334155",
+        "phoneMirrorButton": "#334155"
+      },
+      "mediaroom": {
+        "previous": "#334155",
+        "play": "#64748B",
+        "pause": "#64748B",
+        "next": "#334155",
+        "left": "#94A3B8",
+        "right": "#94A3B8",
+        "shuffle": "#0F766E",
+        "toggleShade": "#D5DCE6"
+      },
+      "mainmenu": {
+        "mediaContainer": "#9CABBF"
+      },
+      "obd": {
+        "boxBackground": "#E2E8F0",
+        "barColor": "#0F766E"
+      }
+    },
+    "Album Art Capture": {
+      "base": "#1a1a2e",
+      "baseAlt": "#16213e",
+      "accent": "#e94560",
+      "text": {
+        "primary": "#f0f0f0",
+        "secondary": "#b4b4b4"
+      },
+      "states": {
+        "hover": "#2a2a4e",
+        "paused": "#252545",
+        "playing": "#303060"
+      },
+      "sliders": {
+        "volume": "#e94560",
+        "media": "#0f3460",
+        "settings": "#e94560"
+      },
+      "bottombar": {
+        "previous": "#e94560",
+        "play": "#e94560",
+        "pause": "#e94560",
+        "next": "#e94560",
+        "volume": "#e94560",
+        "shuffle": "#e94560",
+        "toggleShade": "#2a2a4e",
+        "homeButton": "#e94560",
+        "obdButton": "#e94560",
+        "mediaButton": "#e94560",
+        "sensorButton": "#e94560",
+        "settingsButton": "#e94560",
+        "androidAutoButton": "#e94560",
+        "phoneMirrorButton": "#e94560"
+      },
+      "mediaroom": {
+        "previous": "#d43850",
+        "play": "#e94560",
+        "pause": "#e94560",
+        "next": "#d43850",
+        "left": "#c93048",
+        "right": "#c93048",
+        "shuffle": "#0f3460",
+        "toggleShade": "#252545"
+      },
+      "mainmenu": {
+        "mediaContainer": "#8c2a3a"
+      },
+      "obd": {
+        "boxBackground": "#16213e",
+        "barColor": "#e94560"
+      }
+    }
+  }
+}
