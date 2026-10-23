@@ -83,7 +83,7 @@ jobs:
           QT_WASM="$RUNNER_TEMP/qt/Qt/$QT_VERSION/wasm_multithread" \
           BUILD_DIR="$RUNNER_TEMP/build-wasm" \
           OUT_DIR="$GITHUB_WORKSPACE/wasm-site" \
-          packaging/wasm/build.sh
+          bash packaging/wasm/build.sh
           du -sh wasm-site
       - uses: actions/upload-artifact@v4
         with:
