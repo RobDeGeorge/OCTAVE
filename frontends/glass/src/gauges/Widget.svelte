@@ -2,7 +2,7 @@
   // One dashboard cell: binds a widget type to its PID (through the catalog
   // and the shared live map) and hands it display-unit values and props.
   import type { Cell } from '../lib/widgets'
-  import { catalog, toDisplay, nowPlaying, position, volume, mmss, act, type ParamInfo } from '../lib/stores'
+  import { catalog, toDisplay, nowPlaying, position, volume, mmss, act, artSrc, type ParamInfo } from '../lib/stores'
   import { octave } from '../lib/octave'
   import ArcGauge from './ArcGauge.svelte'
   import CircularGauge from './CircularGauge.svelte'
@@ -54,7 +54,7 @@
   <CompassGauge heading={live.HEADING ?? 0} color={str('northColor', '')} showDegrees={bool('showDegrees', true)} />
 {:else if cell.type === 'NowPlayingWidget'}
   <div class="np" style:--c={str('progressColor', '') || 'var(--accent)'}>
-    {#if bool('showArt', true)}<Art title={$nowPlaying.title} artist={$nowPlaying.artist} url={$nowPlaying.artUrl} size={64} />{/if}
+    {#if bool('showArt', true)}<Art title={$nowPlaying.title} artist={$nowPlaying.artist} url={$artSrc} size={64} />{/if}
     <div class="txt">
       <div class="t">{$nowPlaying.hasTrack ? $nowPlaying.title : 'Nothing playing'}</div>
       {#if bool('showArtist', true)}<div class="a">{$nowPlaying.artist}</div>{/if}

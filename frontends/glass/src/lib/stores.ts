@@ -4,14 +4,14 @@ import { octave, type Json } from './octave'
 
 export interface NowPlaying {
   source: string; playing: boolean; hasTrack: boolean
-  title: string; artist: string; album: string; artUrl: string
+  title: string; artist: string; album: string; artUrl: string; artRevision: number
   durationMs: number; positionMs: number
   canSeek: boolean; canShuffle: boolean; shuffled: boolean
   [k: string]: Json
 }
 export const nowPlaying = octave.props<NowPlaying>('nowPlaying',
-  ['source', 'playing', 'hasTrack', 'title', 'artist', 'album', 'artUrl', 'durationMs', 'positionMs', 'canSeek', 'canShuffle', 'shuffled'],
-  { source: 'local', playing: false, hasTrack: false, title: '', artist: '', album: '', artUrl: '',
+  ['source', 'playing', 'hasTrack', 'title', 'artist', 'album', 'artUrl', 'artRevision', 'durationMs', 'positionMs', 'canSeek', 'canShuffle', 'shuffled'],
+  { source: 'local', playing: false, hasTrack: false, title: '', artist: '', album: '', artUrl: '', artRevision: 0,
     durationMs: 0, positionMs: 0, canSeek: false, canShuffle: false, shuffled: false }, 250)
 
 /** Position run forward between reports while playing, at ~10 Hz. */
@@ -66,11 +66,14 @@ export function fmt(info: ParamInfo | undefined, native: number | undefined): st
   return toDisplay(info, native).toFixed(info?.decimals ?? 0)
 }
 
+/** The current cover, served by the app at GET /art; the revision busts the cache. '' when there is none. */
+export const artSrc: Readable<string> = derived(nowPlaying, (np) => (np.hasTrack && np.artRevision > 0 ? `${import.meta.env.BASE_URL.replace(/\/$/, '')}/art?rev=${np.artRevision}` : ''))
+
 export const albumColors = octave.prop<Record<string, Json>>('settingsManager', 'albumArtColors', {})
 
 /** Clock text from the app, in the user's format. */
 export const clock: Readable<string> = readable('', (set) => {
-  octave.get<string>('clock', 'timeText').then(set).catch(() => {})
+  octave.get<string>('clock', 'time').then(set).catch(() => {})
   return octave.signal('clock', 'timeChanged', (t) => set(String(t)))
 })
 

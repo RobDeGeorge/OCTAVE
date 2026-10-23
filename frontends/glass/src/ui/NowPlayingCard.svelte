@@ -2,7 +2,7 @@
   // What is playing, with transport, seek, shuffle and volume. The Home page
   // uses the compact form, the Media page the full one.
   import { octave } from '../lib/octave'
-  import { nowPlaying, position, volume, mmss, act } from '../lib/stores'
+  import { nowPlaying, position, volume, mmss, act, artSrc } from '../lib/stores'
   import Icon from './Icon.svelte'
   import Slider from './Slider.svelte'
   import Art from './Art.svelte'
@@ -16,7 +16,7 @@
 
 <div class="glass panel card" class:compact>
   <div class="top">
-    <Art title={$np.title} artist={$np.artist} url={$np.artUrl} size={compact ? 110 : 200} />
+    <Art title={$np.title} artist={$np.artist} url={$artSrc} size={compact ? 110 : 200} />
     <div class="text">
       <div class="src faint small">{$np.source === 'phone' ? 'From the phone' : $np.hasTrack ? 'Playing from the library' : 'Library'}</div>
       <div class="title">{$np.hasTrack ? $np.title || 'Untitled' : 'Nothing playing'}</div>

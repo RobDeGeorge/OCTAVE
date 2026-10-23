@@ -16,6 +16,8 @@ export default defineConfig({
   server: {
     host: '127.0.0.1',
     proxy: {
+      // GET /art is the current cover; the proxy request carries no Sec-Fetch-Site
+      '/art': { target: `http://${host}:${port}` },
       '/ws': {
         target: `ws://${host}:${port}`,
         ws: true,

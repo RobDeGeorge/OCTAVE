@@ -181,7 +181,23 @@ export class Octave {
 
   // ── requests ────────────────────────────────────────────────────────────
 
-  request(op: string, args: Record<string, unknown> = {}): Promise<Json> {
+  /** Resolves once the connection is open (hello answered), or rejects after `ms`. */
+  whenOnline(ms = 10000): Promise<void> {
+    if (get(this.status) === 'online') return Promise.resolve()
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => { unsub(); reject(new OctaveError('not connected')) }, ms)
+      const unsub = this.status.subscribe((s) => { if (s === 'online') { clearTimeout(t); queueMicrotask(unsub); resolve() } })
+    })
+  }
+
+  /** Any op. A request made while (re)connecting waits for the connection
+   *  rather than failing, so a page can ask for what it needs on load. */
+  async request(op: string, args: Record<string, unknown> = {}): Promise<Json> {
+    if (op !== 'hello' && get(this.status) !== 'online') await this.whenOnline()
+    return this.send0(op, args)
+  }
+
+  private send0(op: string, args: Record<string, unknown>): Promise<Json> {
     const ws = this.ws
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       return Promise.reject(new OctaveError('not connected'))
