@@ -17,13 +17,14 @@ packaging/linux/tools/
 appimagetool-*.AppImage
 *.AppImage
 
+# Build logs at the top level (aqtinstall, build-*.log)
+/*.log
+
 # Android build artifacts
 *.apk
 *.aab
 build-android/
 build-android-*/
-aqtinstall.log
-build-android-configure.log
 # Regenerate via scripts/build-android-pylib-bundle.sh
 android/assets/python-packages/ytmusic-bundle.zip
 
