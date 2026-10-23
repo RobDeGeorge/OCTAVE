@@ -119,12 +119,37 @@ private slots:
     {
         m_sim->setLinkUp(false);   // adapter unplugged
         QTRY_VERIFY_WITH_TIMEOUT(!m_obd->isConnected(), 10000);
+        QCOMPARE(m_obd->connectionState(), OBDManager::ConnectionState::Disconnected);
         QVERIFY(!m_obd->vehicleScanComplete());   // the next car may support a different set
 
         // Plugged back in: the passive scan (every 10 s) reconnects
         m_sim->setLinkUp(true);
         QTRY_VERIFY_WITH_TIMEOUT(m_obd->isConnected(), 25000);
         QTRY_VERIFY_WITH_TIMEOUT(m_obd->vehicleScanComplete(), 15000);
+    }
+
+    void closeSaysDisconnectedAndResetReconnects()
+    {
+        QTRY_VERIFY_WITH_TIMEOUT(m_obd->isConnected(), 25000);
+        QCOMPARE(m_obd->connectionState(), OBDManager::ConnectionState::Connected);
+        QSignalSpy status(m_obd.get(), &OBDManager::connectionStatusChanged);
+        m_obd->close();
+        // connected, connectionState and connectionStatus all notify on
+        // connectionStatusChanged: a subscriber must hear the change
+        QVERIFY(!m_obd->isConnected());
+        QCOMPARE(status.size(), 1);
+        QCOMPARE(status.first().at(0).toString(), QStringLiteral("Disconnected"));
+        QCOMPARE(m_obd->getConnectionStatus(), QStringLiteral("Disconnected"));
+        QCOMPARE(m_obd->connectionState(), OBDManager::ConnectionState::Disconnected);
+        // Closed means closed: no reconnect behind the user's back
+        QTest::qWait(3000);
+        QCOMPARE(m_obd->connectionState(), OBDManager::ConnectionState::Disconnected);
+        m_obd->close();   // again: nothing new to say
+        QCOMPARE(status.size(), 1);
+
+        m_obd->reset_connection();
+        QTRY_VERIFY_WITH_TIMEOUT(m_obd->isConnected(), 15000);
+        QCOMPARE(m_obd->connectionState(), OBDManager::ConnectionState::Connected);
     }
 
 private:
