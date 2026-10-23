@@ -138,6 +138,9 @@ private:
                     continue;
                 sock.write(m_owner->handleLine(line));
             }
+            // Events only after the replies: a subscribe's reply (its sub
+            // id) always precedes that subscription's first event. Only this
+            // thread writes to the socket, so the order holds
             for (const QByteArray &event : connection.takeAll())
                 sock.write(event);
             flush(sock);
@@ -249,6 +252,7 @@ private:
                 flush(sock);
                 return;
             }
+            // As for lines: replies first, then the events queued meanwhile
             for (const QByteArray &event : connection.takeAll())
                 sendText(event);
             flush(sock);
