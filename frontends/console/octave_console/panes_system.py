@@ -2,13 +2,54 @@
 System (network, updates, power, diagnostics, about). Nothing here runs adb
 or touches the network until a key or button asks for it."""
 
+import time
+
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Button, DataTable, Label, RichLog, Static
 
 from .panes import Pane
+from .panes_media import halfblock
 from .screens import Confirm, EditText, EditValue
+
+STREAMS = {   # key -> (object, stream name, label)
+    "video": ("phoneMirrorManager", "video", "Phone mirror (H.264)"),
+    "frames": ("androidAutoManager", "frames", "Android Auto (JPEG)"),
+}
+PREVIEW_COLS, PREVIEW_ROWS = 48, 14   # 48 x 28 pixels of the latest JPEG
+
+
+class StreamStats:
+    """Counters for one stream: records, bytes, keyframes, drops, rate over the last 2 s."""
+
+    def __init__(self, reply):
+        self.id = reply.get("stream")
+        self.format = reply.get("format", "")
+        self.codec = reply.get("codec", "")
+        self.size = (reply.get("width"), reply.get("height"))
+        self.records = self.bytes = self.keys = self.dropped = 0
+        self.recent = []   # (monotonic time, bytes)
+        self.last_pts = None
+
+    def record(self, ev, now):
+        n = len(ev.get("data") or b"")
+        self.records += 1
+        self.bytes += n
+        self.keys += 1 if (ev.get("flags", 0) & 1) else 0
+        self.last_pts = ev.get("pts")
+        self.recent = [(t, b) for t, b in self.recent if now - t < 2.0] + [(now, n)]
+
+    def line(self, now):
+        recent = [(t, b) for t, b in self.recent if now - t < 2.0]
+        span = max(0.5, (now - recent[0][0]) if len(recent) > 1 else 2.0)
+        fps = len(recent) / span
+        kbps = sum(b for _, b in recent) * 8 / 1000 / span
+        w, h = self.size
+        size = f"{w}x{h}" if w and h else "?"
+        return (f"{fps:5.1f} fps  {kbps:7.0f} kb/s  {size}  {self.codec or self.format}  "
+                f"{self.records} records, {self.keys} key, {self.bytes / 1e6:.1f} MB"
+                + (f"  [red]{self.dropped} dropped[/red]" if self.dropped else ""))
 
 PHONE_PROPS = ["nativeAvailable", "adbPath", "serverVersion", "isRunning", "sessionState", "deviceState", "deviceHint",
                "lastErrorKind", "mirrorNotice", "devices", "connectionType", "wirelessAddress", "wirelessBusy",
@@ -61,11 +102,100 @@ class PhonePane(Pane):
                     yield Button("Launch", id="aa-launch", compact=True)
                     yield Button("Close", id="aa-close", compact=True)
                     yield Button("Install help", id="aa-help", compact=True)
+                yield Label("Streams  [dim](while this pane is shown)[/dim]", classes="section")
+                with Horizontal(classes="buttons"):
+                    yield Button("Watch phone video", id="st-video", compact=True)
+                    yield Button("Watch Android Auto", id="st-frames", compact=True)
+                yield Static(id="stream-stats")
+                yield Static(id="stream-preview")
                 yield RichLog(id="phone-log", max_lines=200, wrap=True)
 
     def on_mount(self):
         self.query_one("#phone-devices", DataTable).add_columns("Serial", "Model", "State")
         self.render_all()
+        self.set_interval(0.5, self.render_streams)
+
+    # ── streams ─────────────────────────────────────────────────────────────
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.wanted = set()     # stream keys the user asked to watch
+        self.streams = {}       # key -> StreamStats while subscribed
+        self.visible = False
+        self.last_preview = 0.0
+
+    def shown(self, visible):
+        self.visible = visible
+        if visible:
+            for key in self.wanted:
+                self.start_stream(key)
+        else:
+            for key in list(self.streams):
+                self.stop_stream(key)
+
+    def linked(self):
+        self.streams = {}
+        if self.visible:
+            for key in self.wanted:
+                self.start_stream(key)
+
+    def start_stream(self, key):
+        if key in self.streams:
+            return
+        obj, name, _ = STREAMS[key]
+
+        def done(reply):
+            self.streams[key] = StreamStats(reply or {})
+            self.render_streams()
+        self.app.req("stream", object=obj, name=name, done=done)
+
+    def stop_stream(self, key):
+        stats = self.streams.pop(key, None)
+        if stats is not None and stats.id is not None:
+            self.app.req("unstream", stream=stats.id, quiet=True)
+
+    def toggle_stream(self, key):
+        if key in self.wanted:
+            self.wanted = self.wanted - {key}
+            self.stop_stream(key)
+        else:
+            self.wanted = self.wanted | {key}
+            if self.visible:
+                self.start_stream(key)
+        for k in STREAMS:
+            self.query_one(f"#st-{k}", Button).variant = "primary" if k in self.wanted else "default"
+        self.render_streams()
+
+    def stream_event(self, ev):
+        stats = next((s for s in self.streams.values() if s.id == ev.get("stream")), None)
+        if stats is None:
+            return
+        kind = ev.get("event")
+        if kind == "record":
+            now = time.monotonic()
+            stats.record(ev, now)
+            if (ev.get("flags", 0) & 4) and now - self.last_preview > 0.25:   # a JPEG: preview at 4 a second
+                self.last_preview = now
+                art = halfblock(ev.get("data") or b"", PREVIEW_COLS, PREVIEW_ROWS)
+                if art is not None:
+                    self.query_one("#stream-preview", Static).update(art)
+        elif kind == "streamConfig":
+            stats.codec = ev.get("codec") or stats.codec
+            stats.size = (ev.get("width"), ev.get("height"))
+            self.query_one("#phone-log", RichLog).write(
+                f"stream {stats.id}: {ev.get('codec') or ev.get('format')} {ev.get('width')}x{ev.get('height')}")
+        elif kind == "streamDropped":
+            stats.dropped += ev.get("count", 0)
+
+    def render_streams(self):
+        now = time.monotonic()
+        lines = []
+        for key, (_, _, label) in STREAMS.items():
+            if key in self.streams:
+                lines.append(f"[b]{label}[/b]  {self.streams[key].line(now)}")
+            elif key in self.wanted:
+                lines.append(f"[b]{label}[/b]  [dim]{'starting' if self.visible else 'paused (pane hidden)'}[/dim]")
+        self.query_one("#stream-stats", Static).update("\n".join(lines) or "[dim]not watching[/dim]")
 
     def octave(self, event):
         name = event.get("name")
@@ -141,6 +271,9 @@ class PhonePane(Pane):
         self.app.push_screen(EditText(title, text or "(nothing)", read_only=True))
 
     def on_button_pressed(self, event):
+        if event.button.id in ("st-video", "st-frames"):
+            self.toggle_stream(event.button.id[3:])
+            return
         calls = {
             "pm-start": self.action_start, "pm-stop": self.action_stop, "pm-wireless": self.action_wireless,
             "pm-qr": self.action_qr,

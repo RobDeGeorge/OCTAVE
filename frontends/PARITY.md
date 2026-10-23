@@ -87,7 +87,7 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 | Trip list and details | `tripRecorder.trips`, `requestDetail`, `detailReady` | Yes | Yes | Yes | Yes | Yes | sunlight: the list and a summary in the user's units |
 | Charts of a trip's values | `tripRecorder.requestSeries`, `seriesReady` | Yes | Yes | Yes | No | No | console: one value at a time as a sparkline |
 | End trip now | `tripRecorder.endTripNow` | Yes | Yes | Yes | Yes | No | |
-| Export, delete, clear history | `tripRecorder.exportTrip`, `deleteTrip`, `clearHistory`, `lastExportPath` | Partial | Yes | Yes | Partial | No | QML: clear history only; exported files stay on the head unit (GET /export/..., lane A 9c, landed) |
+| Export, delete, clear history | `tripRecorder.exportTrip`, `deleteTrip`, `clearHistory`, `lastExportPath`, `GET /export/trip` | Partial | Yes | Yes | Partial | No | QML: clear history only; console: downloads the export over GET /export/trip |
 | Black box on / off, size cap, sweep all PIDs, storage | `tripRecorder.setEnabled`, `storageBytes`, `settingsManager.save_black_box_*` | Yes | Yes | Partial | No | No | console: settings table |
 
 ## Sensors and accessories
@@ -108,9 +108,9 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 | Phone keys: home, back, app switch | `phoneMirrorManager.pressHome`, `pressBack`, `pressAppSwitch` | Yes | Yes | Yes | No | No | |
 | Wireless and QR pairing | `phoneMirrorManager.wirelessAddress`, `setWirelessAddress`, `forgetWireless`, `startQrPairing`, `qrPairingRows`, `cancelQrPairing` | Yes | Yes | Yes | No | No | |
 | Mirror settings (size, DPI, bit rates, audio gain and ducking, screen off) | `settingsManager.save_scrcpy_*`, `phoneMirrorManager.setDisplaySize` | Yes | Yes | Partial | No | No | console: settings table |
-| The mirrored picture and touch | `phoneMirrorManager.videoSink`, `injectTouch` | Yes | No | No | No | No | API missing: video (lane A 12); `injectTouch` is callable but useless without the picture |
+| The mirrored picture and touch | `stream` phoneMirrorManager video (H.264 records), `phoneMirrorManager.injectTouch` | Yes | Yes | Partial | No | No | streams landed (lane A 12); glass: WebCodecs player with touch; console: a stats line, no decoder |
 | Android Auto: launch, close, install state | `androidAutoManager.launchDhuSeamless`, `closeDhu`, `isDhuEmbedded`, `isDhuInstalled`, `getDhuInstallInstructions` | Yes | Yes | Yes | No | No | |
-| Android Auto picture | `dhuframe` image provider | Yes | No | No | No | No | API missing: video (lane A 12) |
+| Android Auto picture | `stream` androidAutoManager frames (JPEG records) | Yes | Yes | Partial | No | No | frames landed (lane A 12); glass: JPEG view; console: a 48 x 28 half-block preview |
 
 ## Settings, device, network, diagnostics
 
@@ -130,9 +130,6 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 
 ## What no frontend but QML can do
 
-All of these are backend items, none frontend work:
-
-- The phone mirror picture and Android Auto frames: lane A 12 (contract step 6).
-- Downloading files the app exports (trip CSV, log bundle, dashboard file): `GET /export/trip|dashboard|logs` landed (lane A 9c); no frontend offers it yet. The contents are reachable anyway (`requestSeries`, `recentLogLines`, `loadDashboard`).
+Nothing any more: every feature above has an API, and at least one frontend besides QML uses it. The last gaps closed tonight: library and queue covers (`GET /art?song=` / `?queue=`), folder browsing, theme palettes, Now Playing presets, export downloads (`GET /export/...`, which the console offers), and video (the `stream` op, which glass plays). What remains are No cells: work for a frontend, not for the backend.
 
 Head-unit-local by design (no gap): the clipboard actions, opening a folder in the head unit's file manager, window size and position.

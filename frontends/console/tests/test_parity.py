@@ -501,3 +501,47 @@ async def test_pairing_over_the_network(tmp_path):
     async with app.run_test(size=SIZE) as pilot:
         assert await wait_for(pilot, lambda: screen_name(app) == "PairScreen")
         assert f"{PAIR_HOST}:{PORT}" not in json.loads(token_file.read_text())
+
+
+def test_jpeg_preview_and_stream_stats():
+    import io
+
+    from PIL import Image
+
+    from octave_console.panes_system import StreamStats
+    img = Image.new("RGB", (64, 36), (0, 200, 0))
+    buf = io.BytesIO()
+    img.save(buf, "JPEG")
+    assert "▀" in halfblock(buf.getvalue(), 8, 4).plain
+    stats = StreamStats({"stream": 3, "format": "annexb", "codec": "avc1.42c01f", "width": 640, "height": 360})
+    for i in range(30):
+        stats.record({"flags": 1 if i % 10 == 0 else 0, "pts": i * 33_333, "data": b"x" * 1000}, i / 30)
+    line = stats.line(1.0)
+    assert "640x360" in line and "avc1.42c01f" in line and "30 records, 3 key" in line
+
+
+@live
+async def test_phone_video_stream_stats(sdk):
+    from test_console import sim
+    try:
+        sim("sim_video", on=True)   # loops a test H.264 into the phone stream (dev builds)
+    except OSError:
+        pytest.skip("no dev actions")
+    app = OctaveConsole(HOST, PORT, start_tab="phone")
+    try:
+        async with app.run_test(size=SIZE) as pilot:
+            await linked(pilot, app)
+            pane = app.query_one("#pane-phone")
+            await pilot.click("#st-video")
+            if not await wait_for(pilot, lambda: "video" in pane.streams and pane.streams["video"].records > 10, timeout=8):
+                pytest.skip("no phone video on this service (no sim_video?)")
+            stats = pane.streams["video"]
+            assert stats.keys >= 1 and stats.bytes > 0
+            assert await wait_for(pilot, lambda: "fps" in str(app.query_one("#stream-stats").render()))
+            assert await wait_for(pilot, lambda: stats.size[0] in (640, 1280), timeout=5)
+            await pilot.pause(1.0)   # the stats line redraws twice a second
+            shot(app, "phone-stream")
+            await pilot.press("1")   # leaving the pane stops the stream
+            assert await wait_for(pilot, lambda: not pane.streams)
+    finally:
+        sim("sim_video", on=False)

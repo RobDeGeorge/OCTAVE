@@ -92,6 +92,19 @@ run() {   # run NAME NOTE COMMAND...: PASS / FAIL by exit status, output in logs
 }
 skip() { record "$1" SKIP 0 "$2"; echo "... $1 skipped: $2"; }
 
+backend_alive() { [ -n "$backend_pid" ] && kill -0 "$backend_pid" 2>/dev/null; }
+run_live() {   # run_live NAME NOTE COMMAND...: run, but only while the backend is up
+    if backend_alive; then
+        run "$@"
+        if [ "${results[-1]}" = FAIL ] && ! backend_alive; then
+            notes[-1]="the backend died during it (see $work/logs/backend.log)"
+        fi
+    else
+        record "$1" FAIL 0 "backend died (see $work/logs/backend.log)"
+        echo "... $1: backend died, not run"
+    fi
+}
+
 # glass is built before the backend starts, so the backend can serve that build
 # (--web-root) and the e2e drives the real page
 web_root=()
@@ -161,7 +174,7 @@ if wanted console; then
         console_tests() {
             cd "$here/console" && "$py" -m pytest -q -rs -p no:cacheprovider && ! grep -q "no OCTAVE service" "$work/logs/console.log"
         }
-        run console "pytest, live" console_tests
+        run_live console "pytest, live" console_tests
     else
         skip console "no textual / pytest in $py (pip install -r frontends/console/requirements.txt, or set CONSOLE_PY)"
     fi
@@ -180,7 +193,7 @@ if wanted sunlight; then
                     python3 verify_controls.py --display "$display" --port "$port" --bin "$work/sunlight"
             }
             if [ "$tracks" -gt 0 ]; then
-                run sunlight-controls "taps on $display, read back through the SDK" sunlight_controls
+                run_live sunlight-controls "taps on $display, read back through the SDK" sunlight_controls
             else
                 skip sunlight-controls "no test tracks (needs ffmpeg) to play"
             fi
@@ -205,7 +218,7 @@ if wanted glass; then
             # it exits 0 with a note when it finds nothing to test: here the build is served, so that is a failure
             cd "$here/glass" && npm run e2e && ! grep -qi "nothing to test" "$work/logs/glass-e2e.log"
         }
-        run glass-e2e "npm run e2e on the served build" glass_e2e
+        run_live glass-e2e "npm run e2e on the served build" glass_e2e
     fi
 fi
 
@@ -251,12 +264,12 @@ for i in "${!names[@]}"; do
     [ "${results[$i]}" = FAIL ] && failed=$((failed + 1))
 done
 echo
-if ! kill -0 "$backend_pid" 2>/dev/null; then
-    echo "OCTAVE exited during the checks; its log: $work/logs/backend.log (kept)"
-    keep=1
-    failed=$((failed + 1))
+died=0
+if ! backend_alive; then
+    echo "OCTAVE exited during the checks (killed, or crashed): its log is $work/logs/backend.log"
+    died=1
 fi
-if [ $failed -gt 0 ]; then
+if [ $failed -gt 0 ] || [ $died -eq 1 ]; then
     keep=1
     echo "$failed check(s) failed; logs kept in $work/logs"
     exit 1

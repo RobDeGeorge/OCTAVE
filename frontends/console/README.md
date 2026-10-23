@@ -61,6 +61,7 @@ Pane keys are shown in the footer while the pane has focus:
 - **Car**: the shift light (live state, the look settings, and the flags as a table you edit one by one or as JSON, checked before `setFlags`), the IMU (every IMU reading while the pane is shown, tare and reset tare), the gesture sensor (status, last gesture, the mapping, reset), and the ESP32 knob (status, ports, connect, disconnect, retry). Enables live in Settings.
 - **Phone**: mirroring state, devices, notices and errors, start / stop / resume / wake / check, the phone's home / back / apps keys, wireless address, forget, QR pairing (the QR code drawn in text), install help, the phone's media with its own transport, and the Android Auto desktop head unit (installed, running, launch, close, help).
 - Exports (a trip's CSV, a dashboard file, the log bundle) are written on the head unit; W / "Download export…" fetches the last one over `GET /export/trip|dashboard|logs` and asks where to save it on this computer.
+- **Streams** (Phone pane): watch the phone-mirror video and the Android Auto frames over the service's binary stream records (`stream` / `unstream`), with a live line per stream (frames a second, bit rate, size, codec, records, keyframes, drops); Android Auto's JPEG frames also show as a 48 x 28 half-block preview, four times a second. H.264 is counted, not decoded. Streams run only while the pane is shown.
 - **System**: network, update status with check / apply, restart and shut down (all confirmed), version, backend, device info, the log directory and the last 300 log lines, export logs, the commit, and the LICENSE and NOTICE texts.
 - Settings also has the Now Playing presets (`nowPlayingPresets`, `applyNowPlayingPreset`), a browser for the music folder over the head unit's own folders (`mediaManager.browse_music_folders`), and export / import of the settings as one JSON object: import goes through `apply_settings`, which applies each key through its own save slot with strict types and returns what it refused, and the console shows that list.
 - **API**: a tree of every object with its properties, methods (with parameter types) and signals from `describe`, and a command line for `hello`, `describe`, `get`, `set`, `call` and `rows` (`call volumeController applyVolume 40`, `set volumeController muted true`; arguments are JSON where they parse, strings otherwise).
@@ -100,7 +101,7 @@ Textual pilot tests against a running service: they press the keys and read the 
 
 ## Known gaps
 
-- No phone-mirror video (a terminal can't show it, and media streams are not on the service yet: `TODO/open-backend.md`, step 6).
+- No phone-mirror picture: the H.264 stream is measured, not decoded (a terminal has no use for a decoder); Android Auto gets a coarse half-block preview.
 - The freeze frame shows what `get_freeze_frame` returns, which today is the code that stored it, not the frame's PID values.
 - Covers are 32 x 16 half-block pixels: recognisable, not pretty. The media bar has no room for one.
 - Downloads were only tried with no search results (no network in the test setup).
