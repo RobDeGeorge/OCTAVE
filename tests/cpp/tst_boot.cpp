@@ -10,6 +10,7 @@
 
 #include <QElapsedTimer>
 #include <QProcess>
+#include <QTcpServer>
 #include <QTcpSocket>
 #include <QTemporaryDir>
 #include <QTest>
@@ -42,7 +43,7 @@ private slots:
         QSKIP("built without OCTAVE_DEV_TOOLS");
 #else
         QTemporaryDir tmp;
-        const quint16 port = quint16(20000 + QCoreApplication::applicationPid() % 20000);
+        const quint16 port = freePort();
         QProcess app;
         app.setProcessEnvironment(env(tmp));
         app.setProcessChannelMode(QProcess::MergedChannels);
@@ -61,7 +62,7 @@ private slots:
     void serviceBootServesTheProtocolOnly()
     {
         QTemporaryDir tmp;
-        const quint16 port = quint16(20001 + QCoreApplication::applicationPid() % 20000);
+        const quint16 port = freePort();
         QProcess app;
         app.setProcessEnvironment(env(tmp));
         app.setProcessChannelMode(QProcess::MergedChannels);
@@ -83,7 +84,7 @@ private slots:
     void headlessServesWithoutQml()
     {
         QTemporaryDir tmp;
-        const quint16 port = quint16(20003 + QCoreApplication::applicationPid() % 20000);
+        const quint16 port = freePort();
         QProcess app;
         app.setProcessEnvironment(env(tmp));
         app.setProcessChannelMode(QProcess::MergedChannels);
@@ -107,7 +108,7 @@ private slots:
         QSKIP("built without OCTAVE_DEV_TOOLS");
 #else
         QTemporaryDir tmp;
-        const quint16 port = quint16(20004 + QCoreApplication::applicationPid() % 20000);
+        const quint16 port = freePort();
         QProcess app;
         app.setProcessEnvironment(env(tmp));
         app.setProcessChannelMode(QProcess::MergedChannels);
@@ -147,7 +148,7 @@ private slots:
     void noServiceUnlessAsked()
     {
         QTemporaryDir tmp;
-        const quint16 port = quint16(20002 + QCoreApplication::applicationPid() % 20000);
+        const quint16 port = freePort();
         QProcess app;
         app.setProcessEnvironment(env(tmp));
         app.setProcessChannelMode(QProcess::MergedChannels);
@@ -155,9 +156,25 @@ private slots:
         QVERIFY(app.waitForStarted(10000));
         QVERIFY(request(app, port, R"({"op": "hello"})", 8000).isEmpty());
         QVERIFY2(finished(app), "did not exit within 60 s");
+        // Not only that nothing answered: the app says it never listened
+        const QString out = QString::fromUtf8(app.readAll());
+        QVERIFY2(out.contains("Service off"), qPrintable(out.right(3000)));
+        QVERIFY2(!out.contains("command server listening"), qPrintable(out.right(3000)));
     }
 
 private:
+    // A port nothing is using right now: the OS picks it (a fixed range
+    // would overlap the ephemeral ports other tests' sockets sit on)
+    static quint16 freePort()
+    {
+        QTcpServer probe;
+        if (!probe.listen(QHostAddress::LocalHost, 0))
+            return 0;
+        const quint16 port = probe.serverPort();
+        probe.close();
+        return port;
+    }
+
     // waitForFinished() is false for a process that already exited (one the
     // request loop saw go)
     static bool finished(QProcess &app)
