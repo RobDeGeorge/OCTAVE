@@ -1,16 +1,17 @@
 <script lang="ts">
-  // Album art. The service does not stream art yet (TODO/open-backend.md,
-  // step 6), so until GET /art lands this is a tile coloured from the title.
+  // Album art: the app serves the current cover at GET /art (the revision
+  // in the url busts the cache); without one, a tile coloured from the title.
   let { title = '', artist = '', url = '', size = 160 }: { title?: string; artist?: string; url?: string; size?: number } = $props()
+  let failed = $state('')
   function hueOf(s: string): number { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 360 }
   const h = $derived(hueOf(title + artist))
   const initials = $derived((title || '♪').trim().slice(0, 1).toUpperCase())
-  const http = $derived(/^https?:\/\//.test(url))
+  const usable = $derived(url !== '' && url !== failed && !url.startsWith('file:'))
 </script>
 
 <div class="art" style="--s:{size}px; --h:{h}">
-  {#if http}
-    <img src={url} alt="" />
+  {#if usable}
+    <img src={url} alt="" onerror={() => (failed = url)} />
   {:else}
     <span>{initials}</span>
   {/if}

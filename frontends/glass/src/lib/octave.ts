@@ -87,6 +87,7 @@ export class Octave {
   private nextId = 1
   private pending = new Map<number, Pending>()
   private subs = new Set<Sub>()
+  private early: Event[] = []
   private describeCache = new Map<string, Promise<Description>>()
   private backoff = 500
   private retryTimer: ReturnType<typeof setTimeout> | null = null
@@ -136,6 +137,7 @@ export class Octave {
       for (const p of this.pending.values()) p.reject(new OctaveError('connection closed'))
       this.pending.clear()
       for (const sub of this.subs) sub.id = 0
+      this.early = []
       this.describeCache.clear()
       this.status.set('offline')
       if (!this.closed) this.scheduleRetry()
@@ -164,7 +166,10 @@ export class Octave {
         console.warn(`octave: ${e.count} events dropped`)
         return
       }
-      for (const sub of this.subs) if (sub.id === e.sub) sub.onEvent(e)
+      let handled = false
+      for (const sub of this.subs) if (sub.id === e.sub) { sub.onEvent(e); handled = true }
+      // The current values can arrive before the subscribe reply names the id
+      if (!handled) this.early.push(e)
       return
     }
     const p = this.pending.get(msg.id as number)
@@ -176,7 +181,23 @@ export class Octave {
 
   // ── requests ────────────────────────────────────────────────────────────
 
-  request(op: string, args: Record<string, unknown> = {}): Promise<Json> {
+  /** Resolves once the connection is open (hello answered), or rejects after `ms`. */
+  whenOnline(ms = 10000): Promise<void> {
+    if (get(this.status) === 'online') return Promise.resolve()
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => { unsub(); reject(new OctaveError('not connected')) }, ms)
+      const unsub = this.status.subscribe((s) => { if (s === 'online') { clearTimeout(t); queueMicrotask(unsub); resolve() } })
+    })
+  }
+
+  /** Any op. A request made while (re)connecting waits for the connection
+   *  rather than failing, so a page can ask for what it needs on load. */
+  async request(op: string, args: Record<string, unknown> = {}): Promise<Json> {
+    if (op !== 'hello' && get(this.status) !== 'online') await this.whenOnline()
+    return this.send0(op, args)
+  }
+
+  private send0(op: string, args: Record<string, unknown>): Promise<Json> {
     const ws = this.ws
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       return Promise.reject(new OctaveError('not connected'))
@@ -222,7 +243,12 @@ export class Octave {
     if (sub.signals) args.signals = sub.signals
     if (sub.throttleMs) args.throttleMs = sub.throttleMs
     this.request('subscribe', args)
-      .then((r) => { sub.id = (r as { sub: number }).sub })
+      .then((r) => {
+        sub.id = (r as { sub: number }).sub
+        const mine = this.early.filter((e) => e.event !== 'dropped' && e.sub === sub.id)
+        this.early = this.early.filter((e) => !mine.includes(e))
+        for (const e of mine) sub.onEvent(e)
+      })
       .catch((e) => console.warn(`octave: subscribe ${sub.object} failed:`, e.message))
   }
 
