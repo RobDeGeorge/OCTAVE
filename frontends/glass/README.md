@@ -68,9 +68,9 @@ The page reconnects on its own when OCTAVE goes away (`src/lib/octave.ts`, backo
 
 `src/lib/octave.ts` is the whole client (about 300 lines, one WebSocket): request / reply by id, `describe` cache, and subscriptions as Svelte stores (`prop`, `props`, `params`, `model`, `signal`) that replay on reconnect. `src/lib/stores.ts` holds the stores pages share. `src/gauges/` holds the dashboard primitives and the renderer, `src/lib/widgets.ts` the widget catalog: read from `dashboardManager.widgetCatalog` when the app serves it, with a built-in copy of the same data for an older app.
 
-## Video (in progress)
+## Video
 
-`src/lib/videodecoder.ts` is a WebCodecs H.264 player for Annex-B access units: it configures from the SPS (codec string and picture size parsed in `src/lib/h264.ts`), starts at a keyframe, reconfigures when the SPS changes, drops to the next keyframe when it falls behind, and paints on a canvas with letterboxing. `src/ui/VideoPlayer.svelte` wraps it with a touch layer that maps a finger on the picture to frame-relative 0..1 coordinates (what `phoneMirrorManager.injectTouch` takes); the page decides where touches go. Until the service streams the mirror, the player is exercised on a dev page:
+`src/lib/videodecoder.ts` is a WebCodecs H.264 player for Annex-B access units: it configures from the SPS (codec string and picture size parsed in `src/lib/h264.ts`), starts at a keyframe, reconfigures when the SPS changes, drops to the next keyframe when it falls behind, and paints on a canvas with letterboxing. `src/ui/VideoPlayer.svelte` wraps it with a touch layer that maps a finger on the picture to frame-relative 0..1 coordinates (what `phoneMirrorManager.injectTouch` takes). `src/ui/MirrorView.svelte` opens the service's `phoneMirrorManager` video stream (binary records, `src/lib/stream.ts`) into it and sends touches back; `src/ui/JpegView.svelte` does the same for Android Auto's JPEG frames. Both sit on More, Phone while a session runs, and `#/mirror` shows the phone full screen with Back / Home / Apps. The player is also exercised without a phone on a dev page:
 
 ```bash
 dev/make_test_video.sh                      # dev/test.h264: two resolutions back to back, baseline, a keyframe every 30 frames
