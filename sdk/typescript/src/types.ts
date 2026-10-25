@@ -18,6 +18,46 @@ export interface AndroidAutoManager {
     dhuWindowHandle: number
     /** QObject*, constant */
     dhuCapture: unknown
+    /**
+     * QString, notify backendChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    backend: string
+    /**
+     * bool, constant
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    nativeAvailable: boolean
+    /**
+     * QString, notify nativeStateChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    nativeState: string
+    /**
+     * QString, notify nativeStateChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    nativeStatus: string
+    /**
+     * QString, notify nativeStateChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    phoneName: string
+    /**
+     * bool, notify videoStreamingChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    videoStreaming: boolean
+    /**
+     * QString, constant
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    certificateDir: string
+    /**
+     * QObject*, writable, notify videoSinkChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    videoSink: unknown
   }
   methods: {
     getDhuInstallInstructions: { args: []; returns: string }
@@ -25,12 +65,28 @@ export interface AndroidAutoManager {
     sendDhuClick: { args: [x: number, y: number]; returns: void }
     closeDhu: { args: []; returns: void }
     cleanup: { args: []; returns: void }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    startNative: { args: []; returns: boolean }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    stopNative: { args: []; returns: void }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    injectTouch: { args: [pointerId: number, action: number, x: number, y: number]; returns: void }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    setViewVisible: { args: [visible: boolean]; returns: void }
   }
   signals: {
     connectionProgress: [message: string]
     error: [message: string]
     dhuWindowReady: [windowHandle: number]
     dhuEmbeddedChanged: [embedded: boolean]
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    backendChanged: []
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    nativeStateChanged: []
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    videoStreamingChanged: []
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    videoSinkChanged: []
   }
 }
 

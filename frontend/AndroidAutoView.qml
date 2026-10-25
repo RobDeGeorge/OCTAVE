@@ -2,6 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls.Basic 2.15
+import QtMultimedia
 import OCTAVE.AndroidAuto 1.0
 import "." as App
 
@@ -19,6 +20,10 @@ Item {
 
     property string globalFont: App.Style.fontFamily
 
+    // Native mode: OCTAVE is the head unit (androidAutoBackend = "native")
+    readonly property bool nativeMode: androidAutoManager ? androidAutoManager.backend === "native" : false
+    readonly property string nativeState: androidAutoManager && nativeMode ? androidAutoManager.nativeState : "idle"
+
     // DHU embedding state
     property bool dhuEmbedded: false
     property bool launchFailed: false
@@ -30,11 +35,156 @@ Item {
         color: "black"
     }
 
+    // ── Native: the phone's Android Auto video, touch goes back ──
+    Item {
+        id: nativeContainer
+        objectName: "androidAutoNative"
+        anchors.fill: parent
+        visible: nativeMode
+
+        VideoOutput {
+            id: nativeVideo
+            anchors.fill: parent
+            fillMode: VideoOutput.PreserveAspectFit
+            visible: androidAutoView.nativeState === "running"
+            Component.onCompleted: if (androidAutoManager) androidAutoManager.videoSink = videoSink
+        }
+
+        // Coordinates map through the letterboxed picture to 0..1 of the
+        // video; a touch that starts on the bars is ignored for its whole life
+        MultiPointTouchArea {
+            objectName: "androidAutoTouchArea"
+            anchors.fill: parent
+            enabled: androidAutoView.nativeState === "running"
+            mouseEnabled: true
+            minimumTouchPoints: 1
+            maximumTouchPoints: 10
+
+            property var _ignored: ({})
+
+            function rawPos(p) {
+                var r = nativeVideo.contentRect
+                if (r.width <= 0 || r.height <= 0) return null
+                return { x: (p.x - r.x) / r.width, y: (p.y - r.y) / r.height }
+            }
+            function send(points, action) {
+                for (var i = 0; i < points.length; ++i) {
+                    var p = points[i], rp = rawPos(p)
+                    if (action === 0)
+                        _ignored[p.pointId] = !rp || rp.x < 0 || rp.x > 1 || rp.y < 0 || rp.y > 1
+                    if (_ignored[p.pointId]) {
+                        if (action === 1) delete _ignored[p.pointId]
+                        continue
+                    }
+                    if (rp && androidAutoManager)
+                        androidAutoManager.injectTouch(p.pointId, action,
+                                                       Math.max(0, Math.min(1, rp.x)),
+                                                       Math.max(0, Math.min(1, rp.y)))
+                }
+            }
+            onPressed: function(points) { send(points, 0) }
+            onUpdated: function(points) { send(points, 2) }
+            onReleased: function(points) { send(points, 1) }
+            onCanceled: function(points) { send(points, 1) }
+        }
+
+        // Waiting / setup / error: what the phone or OCTAVE still needs
+        Rectangle {
+            anchors.fill: parent
+            color: "black"
+            visible: androidAutoView.nativeState !== "running"
+
+            ColumnLayout {
+                anchors.centerIn: parent
+                width: Math.min(parent.width * 0.8, dp(640))
+                spacing: dp(18)
+
+                Text {
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                    text: androidAutoView.nativeState === "error" ? "Android Auto stopped"
+                        : androidAutoView.nativeState === "needsCertificate" ? "Android Auto needs a certificate"
+                        : androidAutoView.nativeState === "waitingForServer" ? "Waiting for the phone's head unit server"
+                        : androidAutoView.nativeState === "waitingForPhone" ? "Waiting for the phone"
+                        : "Starting Android Auto..."
+                    font.pixelSize: dp(24)
+                    font.bold: true
+                    font.family: androidAutoView.globalFont
+                    color: androidAutoView.nativeState === "error" ? "#FF6666" : App.Style.primaryTextColor
+                    wrapMode: Text.WordWrap
+                }
+
+                Text {
+                    objectName: "androidAutoStatus"
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                    text: androidAutoManager ? androidAutoManager.nativeStatus : ""
+                    visible: text !== ""
+                    font.pixelSize: dp(16)
+                    font.family: androidAutoView.globalFont
+                    color: App.Style.secondaryTextColor
+                    wrapMode: Text.WordWrap
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                    visible: androidAutoView.nativeState === "waitingForServer" || androidAutoView.nativeState === "waitingForPhone"
+                    text: "On the phone, once: Android Auto settings, tap Version 10 times, then ⋮ > Start head unit server. "
+                          + "OCTAVE connects as soon as it is running."
+                    font.pixelSize: dp(14)
+                    font.family: androidAutoView.globalFont
+                    color: "#888888"
+                    wrapMode: Text.WordWrap
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                    visible: androidAutoView.nativeState === "error"
+                    text: "Retrying on its own."
+                    font.pixelSize: dp(14)
+                    font.family: androidAutoView.globalFont
+                    color: "#888888"
+                }
+            }
+        }
+
+        // Close: ends Android Auto (a bye-bye to the phone) and leaves
+        Rectangle {
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.margins: dp(10)
+            width: dp(40)
+            height: dp(40)
+            radius: dpMin(20, 2)
+            color: "#AA000000"
+            z: 10
+
+            Text {
+                anchors.centerIn: parent
+                text: "X"
+                font.pixelSize: dp(20)
+                font.bold: true
+                color: "white"
+            }
+
+            MouseArea {
+                objectName: "androidAutoClose"
+                anchors.fill: parent
+                onClicked: {
+                    if (androidAutoManager) androidAutoManager.stopNative()
+                    stackView.pop()
+                }
+            }
+        }
+    }
+
     // Embedded DHU display - the DHU window is embedded directly inside OCTAVE
     Item {
         id: dhuContainer
         anchors.fill: parent
-        visible: dhuEmbedded
+        visible: !nativeMode && dhuEmbedded
 
         // This is the embedded DHU widget - the actual DHU window becomes a child of this
         EmbeddedDhuItem {
@@ -108,7 +258,7 @@ Item {
     // Error/Setup screen - shown when DHU is not embedded
     Item {
         anchors.fill: parent
-        visible: !dhuEmbedded
+        visible: !nativeMode && !dhuEmbedded
 
         // Back button (top left)
         Button {
@@ -370,6 +520,11 @@ Item {
 
     // Handle view becoming visible/hidden for detach/reattach
     onVisibleChanged: {
+        if (nativeMode) {
+            // Off screen the phone stops sending video; audio carries on
+            if (androidAutoManager) androidAutoManager.setViewVisible(visible)
+            return
+        }
         if (visible && dhuEmbedded) {
             embeddedDhu.reattach()
         } else if (!visible && dhuEmbedded) {
@@ -386,6 +541,11 @@ Item {
     // once and re-pushed by the StackView page cache (see Main.qml), so a
     // revisit after the DHU exited relaunches it just like a fresh view did.
     StackView.onActivated: {
+        if (androidAutoManager && nativeMode) {
+            androidAutoManager.setViewVisible(true)
+            androidAutoManager.startNative()
+            return
+        }
         if (androidAutoManager) {
             // Check if DHU is already running (user navigated back)
             if (androidAutoManager.isDhuEmbedded) {

@@ -2126,6 +2126,103 @@ Flickable {
                     }
                 }
             }
+
+            // ── Android Auto ──
+            SettingCategory {
+                id: androidAutoCategory
+                readonly property var aa: typeof androidAutoManager !== "undefined" ? androidAutoManager : null
+                title: "Android Auto"
+                description: "Real Android Auto from the phone, with OCTAVE as the car's screen. Built-in needs no extra software: "
+                             + "turn on Android Auto's developer mode on the phone, start its head unit server, and give OCTAVE a "
+                             + "head-unit certificate (see the Android Auto page in the wiki)."
+
+                SettingsToggle {
+                    id: androidAutoEnabledToggle
+                    compact: true
+                    Layout.fillWidth: false
+                    Layout.alignment: Qt.AlignLeft
+                    text: "Show in nav bar"
+                    checked: settingsManager ? settingsManager.androidAutoEnabled : false
+                    activeColor: App.Style.accent
+                    inactiveColor: App.Style.hoverColor
+
+                    onToggled: function(checked) {
+                        if (settingsManager) settingsManager.save_android_auto_enabled(checked)
+                    }
+
+                    Connections {
+                        target: settingsManager
+                        function onAndroidAutoEnabledChanged() {
+                            androidAutoEnabledToggle.checked = settingsManager.androidAutoEnabled
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.rowSpacing
+                    visible: androidAutoCategory.aa ? androidAutoCategory.aa.nativeAvailable : false
+
+                    SettingLabel { text: "Head unit" }
+                    SettingDescription {
+                        text: "Built-in: OCTAVE talks to Android Auto itself (beta). Google DHU: runs Google's Desktop Head Unit "
+                              + "from the Android SDK and shows its window."
+                    }
+                    SettingsSegmentedControl {
+                        Layout.fillWidth: true
+                        options: ["Built-in", "Google DHU"]
+                        currentValue: androidAutoCategory.aa && androidAutoCategory.aa.backend === "native" ? "Built-in" : "Google DHU"
+                        onSelected: function(value) {
+                            if (settingsManager)
+                                settingsManager.save_setting("androidAutoBackend", value === "Built-in" ? "native" : "dhu")
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    id: androidAutoResolution
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.rowSpacing
+                    visible: androidAutoCategory.aa ? androidAutoCategory.aa.backend === "native" : false
+                    property string value: settingsManager
+                        ? settingsManager.get_setting_with_default("androidAutoResolution", "1280x720") : "1280x720"
+
+                    SettingLabel { text: "Video size" }
+                    SettingDescription {
+                        text: "What the phone draws Android Auto at. Takes effect on the next connection."
+                    }
+                    SettingsSegmentedControl {
+                        Layout.fillWidth: true
+                        options: ["800x480", "1280x720", "1920x1080"]
+                        currentValue: androidAutoResolution.value
+                        onSelected: function(value) {
+                            if (!settingsManager) return
+                            settingsManager.save_setting("androidAutoResolution", value)
+                            androidAutoResolution.value = value
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.rowSpacing
+                    visible: androidAutoCategory.aa ? androidAutoCategory.aa.backend === "native" : false
+
+                    SettingLabel { text: "Status" }
+                    SettingDescription {
+                        readonly property string st: androidAutoCategory.aa ? androidAutoCategory.aa.nativeState : "idle"
+                        text: st === "idle"
+                              ? "Not connected. Open Android Auto from the nav bar to connect."
+                              : androidAutoCategory.aa.nativeStatus
+                        color: st === "running" ? App.Style.statusConnected
+                             : (st === "error" || st === "needsCertificate") ? App.Style.statusError
+                             : App.Style.secondaryTextColor
+                    }
+                    SettingDescription {
+                        text: "Certificate folder: " + (androidAutoCategory.aa ? androidAutoCategory.aa.certificateDir : "")
+                    }
+                }
+            }
         }
     }
 

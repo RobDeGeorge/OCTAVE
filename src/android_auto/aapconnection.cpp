@@ -17,7 +17,20 @@ extern "C" {
 Q_LOGGING_CATEGORY(lcAapConn, "octave.androidauto.connection")
 
 namespace {
+const char *streamName(Aap::AudioStream s)
+{
+    switch (s) {
+    case Aap::AudioStream::Media: return "media";
+    case Aap::AudioStream::Guidance: return "guidance";
+    case Aap::AudioStream::System: return "system";
+    }
+    return "?";
+}
+
 constexpr int kStopGraceMs = 2000;          // bye-bye answer before the socket is cut
+// From TCP connect to service discovery. A wedged head unit server accepts
+// the connection and then never answers the version request.
+constexpr int kHandshakeTimeoutMs = 10000;
 constexpr int kAudioQueueMaxMs = 500;       // older audio is dropped beyond this
 constexpr int kAudioDeviceBufferMs = 200;
 }
@@ -28,7 +41,7 @@ class AapWorker : public QObject
 {
 public:
     AapWorker(AapConnection *owner, const QString &host, quint16 port, const AapSession::Options &opt)
-        : m_owner(owner), m_host(host), m_port(port), m_opt(opt), m_closeTimer(this) {}
+        : m_owner(owner), m_host(host), m_port(port), m_opt(opt), m_closeTimer(this), m_handshakeTimer(this) {}
 
     void run()
     {
@@ -37,6 +50,14 @@ public:
         m_session = new AapSession(m_opt, this);
         m_closeTimer.setSingleShot(true);
         connect(&m_closeTimer, &QTimer::timeout, this, [this] { finish(); });
+        m_handshakeTimer.setSingleShot(true);
+        connect(&m_handshakeTimer, &QTimer::timeout, this, [this] {
+            post([o = m_owner] {
+                emit o->failed(QStringLiteral("the phone's head unit server did not answer "
+                                              "(restart it: Android Auto settings > Stop / Start head unit server)"));
+            });
+            finish();
+        });
 
         connect(m_session, &AapSession::transmit, this, [this](const QByteArray &b) {
             if (m_socket->state() == QAbstractSocket::ConnectedState)
@@ -44,6 +65,7 @@ public:
         });
         connect(m_socket, &QTcpSocket::connected, this, [this] {
             qCInfo(lcAapConn) << "connected to the head unit server at" << m_host << m_port;
+            m_handshakeTimer.start(kHandshakeTimeoutMs);
             m_session->start();
         });
         connect(m_socket, &QTcpSocket::readyRead, this, [this] {
@@ -67,6 +89,7 @@ public:
             post([o = m_owner, s] { emit o->stateChanged(s); });
         });
         connect(m_session, &AapSession::running, this, [this](const QString &name) {
+            m_handshakeTimer.stop();
             post([o = m_owner, name] { emit o->running(name); });
         });
         connect(m_session, &AapSession::failed, this, [this](const QString &why) {
@@ -93,6 +116,8 @@ public:
                 m_decoder.setConfig(c);
             });
             connect(m_session, &AapSession::videoFrame, this, [this](const QByteArray &h264, qint64) {
+                if (!m_packets++)
+                    qCInfo(lcAapConn) << "first H.264 packet," << h264.size() << "bytes, starts" << h264.left(5).toHex();
 #ifdef OCTAVE_HAVE_FFMPEG
                 m_decoder.decode(h264, [this](const AVFrame *f) {
                     const QVideoFrame vf = H264Decoder::toVideoFrame(f);
@@ -135,6 +160,7 @@ private:
             return;
         m_done = true;
         m_closeTimer.stop();
+        m_handshakeTimer.stop();
         if (m_socket) {
             m_socket->disconnect(this);
             m_socket->abort();
@@ -151,6 +177,8 @@ private:
     AapSession *m_session = nullptr;
     H264Decoder m_decoder;
     QTimer m_closeTimer;
+    QTimer m_handshakeTimer;
+    qint64 m_packets = 0;
     bool m_done = false;
 };
 
@@ -273,6 +301,8 @@ void AapConnection::deliverFrame()
     if (!frame.isValid())
         return;
     if (frame.size() != m_frameSize) {
+        if (!m_frameSize.isValid())
+            qCInfo(lcAapConn) << "first video frame" << frame.size() << (m_sink ? "" : "(no video sink yet)");
         m_frameSize = frame.size();
         emit frameSizeChanged(m_frameSize.width(), m_frameSize.height());
     }
@@ -299,6 +329,9 @@ bool AapConnection::ensureSink(Aap::AudioStream stream, AudioOut &out)
     out.sink->setBufferSize(out.format.bytesForDuration(kAudioDeviceBufferMs * 1000));
     out.sink->setVolume(m_volume);
     out.io = out.sink->start();
+    if (out.io)
+        qCInfo(lcAapConn) << "audio" << streamName(stream) << "plays on" << device.description()
+                          << f.sampleRate << "Hz" << f.channels << "ch";
     if (!out.io) {
         qCWarning(lcAapConn) << "could not start audio output" << device.description()
                              << f.sampleRate << "Hz" << f.channels << "ch:" << out.sink->error();
@@ -350,6 +383,7 @@ void AapConnection::drainAudio()
 
 void AapConnection::onAudioStreaming(Aap::AudioStream stream, bool streaming)
 {
+    qCInfo(lcAapConn) << "audio" << streamName(stream) << (streaming ? "starts" : "stops");
     emit audioStreaming(stream, streaming);
     if (streaming)
         return;

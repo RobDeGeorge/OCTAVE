@@ -48,6 +48,62 @@
             ],
             "returns": "",
             "scope": "full"
+        },
+        {
+            "kind": "invokable",
+            "name": "startNative",
+            "params": [
+            ],
+            "returns": "bool",
+            "scope": "phone",
+            "stability": "experimental"
+        },
+        {
+            "kind": "invokable",
+            "name": "stopNative",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "phone",
+            "stability": "experimental"
+        },
+        {
+            "kind": "invokable",
+            "name": "injectTouch",
+            "params": [
+                {
+                    "name": "pointerId",
+                    "type": "int"
+                },
+                {
+                    "name": "action",
+                    "type": "int"
+                },
+                {
+                    "name": "x",
+                    "type": "double"
+                },
+                {
+                    "name": "y",
+                    "type": "double"
+                }
+            ],
+            "returns": "",
+            "scope": "phone",
+            "stability": "experimental"
+        },
+        {
+            "kind": "invokable",
+            "name": "setViewVisible",
+            "params": [
+                {
+                    "name": "visible",
+                    "type": "bool"
+                }
+            ],
+            "returns": "",
+            "scope": "phone",
+            "stability": "experimental"
         }
     ],
     "object": "androidAutoManager",
@@ -88,6 +144,77 @@
             "readable": true,
             "type": "QObject*",
             "writable": false
+        },
+        {
+            "constant": false,
+            "name": "backend",
+            "notify": "backendChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "nativeAvailable",
+            "readable": true,
+            "stability": "experimental",
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "nativeState",
+            "notify": "nativeStateChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "nativeStatus",
+            "notify": "nativeStateChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "phoneName",
+            "notify": "nativeStateChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "videoStreaming",
+            "notify": "videoStreamingChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "certificateDir",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "videoSink",
+            "notify": "videoSinkChanged",
+            "readable": true,
+            "scope": "phone",
+            "stability": "experimental",
+            "type": "QObject*",
+            "writable": true
         }
     ],
     "signals": [
@@ -126,6 +253,30 @@
                     "type": "bool"
                 }
             ]
+        },
+        {
+            "name": "backendChanged",
+            "params": [
+            ],
+            "stability": "experimental"
+        },
+        {
+            "name": "nativeStateChanged",
+            "params": [
+            ],
+            "stability": "experimental"
+        },
+        {
+            "name": "videoStreamingChanged",
+            "params": [
+            ],
+            "stability": "experimental"
+        },
+        {
+            "name": "videoSinkChanged",
+            "params": [
+            ],
+            "stability": "experimental"
         }
     ]
 }

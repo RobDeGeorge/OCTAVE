@@ -243,6 +243,11 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("musicButtonDefaultPage")]  = QStringLiteral("mediaRoom");
     d[QStringLiteral("returnToLibraryAfterSelection")] = false;
     d[QStringLiteral("androidAutoEnabled")]      = false;
+    d[QStringLiteral("androidAutoBackend")]      = QStringLiteral("dhu");      // "dhu" | "native" (OCTAVE is the head unit)
+    d[QStringLiteral("androidAutoCertPath")]     = QString();  // head-unit certificate (PEM); "" = <config>/android-auto/headunit.crt + .key
+    d[QStringLiteral("androidAutoResolution")]   = QStringLiteral("1280x720"); // 800x480 | 1280x720 | 1920x1080
+    d[QStringLiteral("androidAutoFps")]          = 30;         // 30 | 60
+    d[QStringLiteral("androidAutoDpi")]          = 160;        // Android Auto UI density
     d[QStringLiteral("phoneMirrorEnabled")]      = false;
     d[QStringLiteral("scrcpyDisplaySize")]       = QStringLiteral("auto");  // --new-display WxH, "auto" = fit the view, "" = phone screen
     d[QStringLiteral("scrcpyAudioGain")]         = 2.0;   // linear gain on phone audio before OCTAVE's volume (+6 dB)

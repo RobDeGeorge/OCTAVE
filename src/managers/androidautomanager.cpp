@@ -14,8 +14,13 @@
 
 #include "phonemirrormanager.h"
 
+#ifdef OCTAVE_HAVE_NATIVE_AA
+#include "../android_auto/aapconnection.h"
+#endif
+
 #include <QCoreApplication>
 #include <QDir>
+#include <QEventLoop>
 #include <QFile>
 #include <QGuiApplication>
 #include <QScreen>
@@ -673,6 +678,19 @@ void AndroidAutoManager::closeDhu()
 void AndroidAutoManager::cleanup()
 {
     qCInfo(lcAndroidAuto) << "Cleaning up Android Auto...";
+
+#ifdef OCTAVE_HAVE_NATIVE_AA
+    // End a native session with a bye-bye: one cut off mid-stream can leave
+    // the phone's head unit server accepting connections but never answering
+    if (m_aap && m_aap->isActive()) {
+        QEventLoop loop;
+        connect(m_aap, &AapConnection::finished, &loop, &QEventLoop::quit);
+        QTimer::singleShot(3000, &loop, &QEventLoop::quit);
+        stopNative();
+        loop.exec();
+    }
+#endif
+    stopNative();
 
     closeDhu();
 

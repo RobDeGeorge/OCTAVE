@@ -68,6 +68,14 @@
             <tr><td><code>isDhuEmbedded</code></td><td>bool</td><td>read</td><td><code>dhuEmbeddedChanged</code></td></tr>
             <tr><td><code>dhuWindowHandle</code></td><td>int</td><td>read</td><td><code>dhuWindowReady</code></td></tr>
             <tr><td><code>dhuCapture</code></td><td>QObject*</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>backend</code> <span class="cmt">(experimental)</span></td><td>QString</td><td>read</td><td><code>backendChanged</code></td></tr>
+            <tr><td><code>nativeAvailable</code> <span class="cmt">(experimental)</span></td><td>bool</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>nativeState</code> <span class="cmt">(experimental)</span></td><td>QString</td><td>read</td><td><code>nativeStateChanged</code></td></tr>
+            <tr><td><code>nativeStatus</code> <span class="cmt">(experimental)</span></td><td>QString</td><td>read</td><td><code>nativeStateChanged</code></td></tr>
+            <tr><td><code>phoneName</code> <span class="cmt">(experimental)</span></td><td>QString</td><td>read</td><td><code>nativeStateChanged</code></td></tr>
+            <tr><td><code>videoStreaming</code> <span class="cmt">(experimental)</span></td><td>bool</td><td>read</td><td><code>videoStreamingChanged</code></td></tr>
+            <tr><td><code>certificateDir</code> <span class="cmt">(experimental)</span></td><td>QString</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>videoSink</code> <span class="cmt">(experimental)</span></td><td>QObject*</td><td>read / write (phone)</td><td><code>videoSinkChanged</code></td></tr>
           </tbody>
         </table>
         <table>
@@ -78,9 +86,13 @@
             <tr><td><code>sendDhuClick(int x, int y)</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
             <tr><td><code>closeDhu()</code></td><td>&ndash;</td><td>slot</td><td><code>phone</code></td></tr>
             <tr><td><code>cleanup()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>startNative()</code> <span class="cmt">(experimental)</span></td><td><code>bool</code></td><td>invokable</td><td><code>phone</code></td></tr>
+            <tr><td><code>stopNative()</code> <span class="cmt">(experimental)</span></td><td>&ndash;</td><td>invokable</td><td><code>phone</code></td></tr>
+            <tr><td><code>injectTouch(int pointerId, int action, double x, double y)</code> <span class="cmt">(experimental)</span></td><td>&ndash;</td><td>invokable</td><td><code>phone</code></td></tr>
+            <tr><td><code>setViewVisible(bool visible)</code> <span class="cmt">(experimental)</span></td><td>&ndash;</td><td>invokable</td><td><code>phone</code></td></tr>
           </tbody>
         </table>
-        <p><strong>Signals</strong> (<code>subscribe</code>): <code>connectionProgress(QString message)</code>, <code>error(QString message)</code>, <code>dhuWindowReady(int windowHandle)</code>, <code>dhuEmbeddedChanged(bool embedded)</code>.</p>
+        <p><strong>Signals</strong> (<code>subscribe</code>): <code>connectionProgress(QString message)</code>, <code>error(QString message)</code>, <code>dhuWindowReady(int windowHandle)</code>, <code>dhuEmbeddedChanged(bool embedded)</code>, <code>backendChanged()</code> <span class="cmt">(experimental)</span>, <code>nativeStateChanged()</code> <span class="cmt">(experimental)</span>, <code>videoStreamingChanged()</code> <span class="cmt">(experimental)</span>, <code>videoSinkChanged()</code> <span class="cmt">(experimental)</span>.</p>
 
         <h3 id="audioAnalyzer"><code>audioAnalyzer</code> <span class="cmt">&mdash; AudioAnalyzer</span></h3>
         <p>Hand-written notes: <a href="signals-slots-reference.html#audioAnalyzer">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/audioAnalyzer.json</span>.</p>

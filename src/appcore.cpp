@@ -221,6 +221,17 @@ void AppCore::wirePhoneMirror()
     phoneMirrorManager.setAudioOutputDevice(settingsManager.audioOutputDevice());
     QObject::connect(&mediaManager, &MediaManager::audioOutputsChanged, &phoneMirrorManager,
                      [this] { phoneMirrorManager.setAudioOutputDevice(settingsManager.audioOutputDevice()); });
+    // Native Android Auto: its settings, the same audio output, and night
+    // mode from the theme (any non-light palette counts as night)
+    androidAutoManager.setSettingsManager(&settingsManager);
+    androidAutoManager.setAudioOutputDevice(settingsManager.audioOutputDevice());
+    QObject::connect(&mediaManager, &MediaManager::audioOutputsChanged, &androidAutoManager,
+                     [this] { androidAutoManager.setAudioOutputDevice(settingsManager.audioOutputDevice()); });
+    auto updateNight = [this] {
+        androidAutoManager.setNightMode(!themeCatalog.lightThemeNames().contains(themeCatalog.activeThemeName()));
+    };
+    updateNight();
+    QObject::connect(&themeCatalog, &ThemeCatalog::activeThemeChanged, &androidAutoManager, updateNight);
     // Keep the phone's own panel dark while mirroring; a locked phone is woken automatically
     phoneMirrorManager.setPhoneScreenOff(settingsManager.get_scrcpy_phone_screen_off());
     QObject::connect(&settingsManager, &SettingsManager::scrcpyPhoneScreenOffChanged,
@@ -260,6 +271,7 @@ void AppCore::wireVolume()
                      &mediaManager, [this](int percent, float linear) {
         mediaManager.setVolume(linear);
         phoneMirrorManager.setVolume(linear);
+        androidAutoManager.setVolume(linear);
 #ifndef Q_OS_MOBILE
         esp32VolumeManager.send_volume_update(percent);
 #else
@@ -273,11 +285,13 @@ void AppCore::wireVolume()
                      &mediaManager, [this](bool muted) {
         mediaManager.setMuted(muted);
         phoneMirrorManager.setMuted(muted);
+        androidAutoManager.setMuted(muted);
 #ifndef Q_OS_MOBILE
         esp32VolumeManager.send_mute_state(muted);
 #endif
     });
     phoneMirrorManager.setMuted(volumeController.muted());
+    androidAutoManager.setMuted(volumeController.muted());
 }
 
 void AppCore::wireInputs()
