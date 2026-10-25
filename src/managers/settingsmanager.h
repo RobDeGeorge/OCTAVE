@@ -93,6 +93,8 @@ class SettingsManager : public QObject
     Q_PROPERTY(bool showAlbumArtShadow READ showAlbumArtShadow NOTIFY showAlbumArtShadowChanged)
     Q_PROPERTY(bool vinylRecordMode READ vinylRecordMode NOTIFY vinylRecordModeChanged)
     Q_PROPERTY(QString albumArtTransition READ albumArtTransition NOTIFY albumArtTransitionChanged)
+    // The audio output to play to (a QAudioDevice id); empty = the system default
+    Q_PROPERTY(QString audioOutputDevice READ audioOutputDevice NOTIFY audioOutputDeviceChanged)
     Q_PROPERTY(int backgroundOverlayOpacity READ backgroundOverlayOpacity NOTIFY backgroundOverlayOpacityChanged)
     Q_PROPERTY(double sideCardOpacity READ sideCardOpacity NOTIFY sideCardOpacityChanged)
     Q_PROPERTY(int sideCardAngle READ sideCardAngle NOTIFY sideCardAngleChanged)
@@ -242,6 +244,7 @@ public:
     bool showAlbumArtShadow() const;
     bool vinylRecordMode() const;
     QString albumArtTransition() const;
+    QString audioOutputDevice() const;
     int backgroundOverlayOpacity() const;
     double sideCardOpacity() const;
     int sideCardAngle() const;
@@ -385,6 +388,7 @@ signals:
     void showAlbumArtShadowChanged(bool value);
     void vinylRecordModeChanged(bool value);
     void albumArtTransitionChanged(const QString &value);
+    void audioOutputDeviceChanged(const QString &value);
     void backgroundOverlayOpacityChanged(int value);
     void sideCardOpacityChanged(double value);
     void sideCardAngleChanged(int value);
@@ -519,6 +523,7 @@ public slots:
     void save_show_album_art_shadow(bool enabled);
     void save_vinyl_record_mode(bool enabled);
     void save_album_art_transition(const QString &transition);
+    void save_audio_output_device(const QString &id);
     void save_background_overlay_opacity(int opacity);
     void save_side_card_opacity(double opacity);
     void save_side_card_angle(int angle);
@@ -829,6 +834,7 @@ private:
     bool m_showAlbumArtShadow = true;
     bool m_vinylRecordMode = false;
     QString m_albumArtTransition;
+    QString m_audioOutputDevice;
     int m_backgroundOverlayOpacity = 80;
     double m_sideCardOpacity = 0.4;
     int m_sideCardAngle = 30;

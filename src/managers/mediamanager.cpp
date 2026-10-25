@@ -1,4 +1,5 @@
 #include "mediamanager.h"
+#include "../util/audiooutput.h"
 #include "../util/folderbrowser.h"
 #include "../service/staticfiles.h"
 #include "../util/perfscope.h"
@@ -147,12 +148,12 @@ MediaManager::MediaManager(QObject *parent)
     m_audioOutput->setVolume(0.5f);
 
     // QAudioOutput stays on the device that was the default when it was
-    // made. Follow the system default instead, so an output that goes away
-    // and comes back (HDMI audio across a display sleep, a USB DAC) doesn't
-    // leave playback silently bound to the old device.
+    // made. Re-pick whenever the outputs change, so an output that goes away
+    // and comes back (HDMI audio across a display sleep, a USB DAC, the
+    // picked earbuds) doesn't leave playback silently bound to the old one.
     m_mediaDevices = new QMediaDevices(this);
     connect(m_mediaDevices, &QMediaDevices::audioOutputsChanged,
-            this, &MediaManager::_follow_default_output);
+            this, &MediaManager::_apply_output_device);
 
     // Ducking ramp: fast attack so a prompt is not stepped on, slower release
     // so music does not jump back up between sentences.
@@ -268,6 +269,11 @@ void MediaManager::setSettingsManager(SettingsManager *sm)
     // Connect to future media folder changes
     connect(m_settingsManager, &SettingsManager::mediaFolderChanged,
             this, &MediaManager::set_library_root);
+
+    // The output the user picked in Settings > Media
+    connect(m_settingsManager, &SettingsManager::audioOutputDeviceChanged,
+            this, &MediaManager::_apply_output_device);
+    _apply_output_device();
 
     // Restore last playback state after library is scanned
     QTimer::singleShot(500, this, &MediaManager::_restore_playback_state);
@@ -429,13 +435,27 @@ static constexpr int kMaxRecoveryAttempts = 2;        // per file, then skip it
 // a skip brought the sound back).
 static constexpr qint64 kLongPauseMs = 30 * 1000;
 
-void MediaManager::_follow_default_output()
+QVariantList MediaManager::audioOutputs() const
 {
-    const QAudioDevice device = QMediaDevices::defaultAudioOutput();
-    if (device.isNull() || device == m_audioOutput->device())
-        return;
-    qCInfo(lcMedia) << "Audio output changed, now using:" << device.description();
-    m_audioOutput->setDevice(device);
+    return AudioOutput::list();
+}
+
+QString MediaManager::currentAudioOutput() const
+{
+    return m_audioOutput->device().description();
+}
+
+void MediaManager::_apply_output_device()
+{
+    const QString wanted = m_settingsManager ? m_settingsManager->audioOutputDevice() : QString();
+    const QAudioDevice device = AudioOutput::preferred(wanted);
+    if (!device.isNull() && device != m_audioOutput->device()) {
+        qCInfo(lcMedia) << "Audio output changed, now using:" << device.description()
+                        << (wanted.isEmpty() ? "(system default)"
+                            : QString::fromUtf8(device.id()) == wanted ? "(picked)" : "(picked one absent: default)");
+        m_audioOutput->setDevice(device);
+    }
+    emit audioOutputsChanged();
 }
 
 // Reload filePath at position (ms), which gives the player a fresh audio

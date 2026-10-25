@@ -25,6 +25,8 @@
 #include <QMediaDevices>
 #include <QtEndian>
 
+#include "../util/audiooutput.h"
+
 #ifdef Q_OS_WIN
 // windows.h (pulled in by winsock2.h) defines min/max macros that break
 // std::max() below unless NOMINMAX is set first.
@@ -1125,16 +1127,18 @@ bool ScrcpyClient::ensureAudioSink()
     fmt.setSampleRate(kAudioSampleRate);
     fmt.setChannelCount(kAudioChannels);
     fmt.setSampleFormat(QAudioFormat::Int16);
-    const QAudioDevice device = QMediaDevices::defaultAudioOutput();
+    const QAudioDevice device = AudioOutput::preferred(m_audioDeviceId);
     if (device.isNull()) {
         qCWarning(lcScrcpyClient) << "no audio output device; phone audio will not play";
         return false;
     }
     if (!device.isFormatSupported(fmt)) {
-        qCWarning(lcScrcpyClient) << "default audio output does not accept 48 kHz stereo s16; phone audio will not play";
+        qCWarning(lcScrcpyClient) << "audio output" << device.description()
+                                  << "does not accept 48 kHz stereo s16; phone audio will not play";
         return false;
     }
     m_audioSink = new QAudioSink(device, fmt, this);
+    m_audioSinkDeviceId = device.id();
     m_audioSink->setBufferSize(kAudioSampleRate * kAudioBytesPerFrame / 5);  // ~200 ms device buffer
     m_audioSink->setVolume(m_volume.load());
     m_audioIo = m_audioSink->start();
@@ -1143,6 +1147,24 @@ bool ScrcpyClient::ensureAudioSink()
         return false;
     }
     return true;
+}
+
+void ScrcpyClient::setAudioOutputDevice(const QString &id)
+{
+    // GUI thread, like the sink
+    m_audioDeviceId = id;
+    if (!m_audioSink)
+        return;   // the next sink opens on the new choice
+    const QAudioDevice device = AudioOutput::preferred(id);
+    if (device.isNull() || device.id() == m_audioSinkDeviceId)
+        return;
+    // Drop only the sink: deliverAudio() opens a new one on the next chunk,
+    // and the queue and the playing state carry on
+    qCInfo(lcScrcpyClient) << "phone audio moves to" << device.description();
+    m_audioSink->stop();
+    m_audioSink->deleteLater();
+    m_audioSink = nullptr;
+    m_audioIo = nullptr;
 }
 
 void ScrcpyClient::stopAudioSink()

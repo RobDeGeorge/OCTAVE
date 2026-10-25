@@ -93,6 +93,11 @@ public:
     void setVolume(float linear);
     // Linear gain applied to phone PCM before the sink (soft-limited)
     void setAudioGain(float gain) { m_audioGain = qBound(0.25f, gain, 8.0f); }
+    // The output phone audio plays to (settingsManager.audioOutputDevice, a
+    // QAudioDevice id; empty = the system default). GUI thread. Called again
+    // when the outputs change: an open sink moves when the device it would
+    // pick now differs from the one it has.
+    void setAudioOutputDevice(const QString &id);
     bool audioActive() const { return m_audioActive.load(); }
     // The phone is producing sound right now (level above kAudioSignalThreshold
     // within the last kAudioHoldMs); drives ducking of OCTAVE's other sources
@@ -240,6 +245,8 @@ private:
     std::mutex m_audioMutex;
     QAudioSink *m_audioSink = nullptr;
     QIODevice *m_audioIo = nullptr;
+    QString m_audioDeviceId;
+    QByteArray m_audioSinkDeviceId;   // what m_audioSink was opened on
 };
 
 #endif // Q_OS_MOBILE

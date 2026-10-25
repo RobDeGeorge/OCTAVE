@@ -287,6 +287,7 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("musicDeviceModel")] = QStringLiteral("Album art");
     d[QStringLiteral("vinylRecordMode")]         = false;
     d[QStringLiteral("albumArtTransition")]      = QStringLiteral("Crossfade");
+    d[QStringLiteral("audioOutputDevice")]       = QString();   // the system default
     d[QStringLiteral("backgroundOverlayOpacity")] = 80;
     d[QStringLiteral("sideCardOpacity")]         = 0.4;
     d[QStringLiteral("sideCardAngle")]           = 30;
@@ -586,6 +587,7 @@ void SettingsManager::populateMembers()
     m_showAlbumArtShadow      = s(QStringLiteral("showAlbumArtShadow")).toBool();
     m_vinylRecordMode         = s(QStringLiteral("vinylRecordMode")).toBool();
     m_albumArtTransition      = s(QStringLiteral("albumArtTransition")).toString();
+    m_audioOutputDevice       = s(QStringLiteral("audioOutputDevice")).toString();
     m_backgroundOverlayOpacity = s(QStringLiteral("backgroundOverlayOpacity")).toInt();
     m_sideCardOpacity         = s(QStringLiteral("sideCardOpacity")).toDouble();
     m_sideCardAngle           = s(QStringLiteral("sideCardAngle")).toInt();
@@ -972,6 +974,7 @@ int     SettingsManager::albumArtCornerRadius() const    { return m_albumArtCorn
 bool    SettingsManager::showAlbumArtShadow() const      { return m_showAlbumArtShadow; }
 bool    SettingsManager::vinylRecordMode() const         { return m_vinylRecordMode; }
 QString SettingsManager::albumArtTransition() const      { return m_albumArtTransition; }
+QString SettingsManager::audioOutputDevice() const       { return m_audioOutputDevice; }
 int     SettingsManager::backgroundOverlayOpacity() const { return m_backgroundOverlayOpacity; }
 double  SettingsManager::sideCardOpacity() const         { return m_sideCardOpacity; }
 int     SettingsManager::sideCardAngle() const           { return m_sideCardAngle; }
@@ -1401,6 +1404,17 @@ void SettingsManager::save_vinyl_record_mode(bool enabled)
     m_vinylRecordMode = enabled;
     updateSetting(QStringLiteral("vinylRecordMode"), enabled);
     emit vinylRecordModeChanged(enabled);
+}
+
+void SettingsManager::save_audio_output_device(const QString &id)
+{
+    // Any id is kept, even one not plugged in now: the earbuds or the car's
+    // output come back later, and playback falls back to the default meanwhile
+    if (id == m_audioOutputDevice || id.size() > 512)
+        return;
+    m_audioOutputDevice = id;
+    updateSetting(QStringLiteral("audioOutputDevice"), id);
+    emit audioOutputDeviceChanged(id);
 }
 
 void SettingsManager::save_album_art_transition(const QString &transition)
@@ -2650,6 +2664,7 @@ void SettingsManager::reset_to_defaults()
     emit vinylRecordModeChanged(m_vinylRecordMode);
     emit genericSettingChanged(QStringLiteral("musicDeviceModel"));
     emit albumArtTransitionChanged(m_albumArtTransition);
+    emit audioOutputDeviceChanged(m_audioOutputDevice);
     emit backgroundOverlayOpacityChanged(m_backgroundOverlayOpacity);
     emit sideCardOpacityChanged(m_sideCardOpacity);
     emit sideCardAngleChanged(m_sideCardAngle);

@@ -620,6 +620,22 @@
     ],
     "object": "mediaManager",
     "properties": [
+        {
+            "constant": false,
+            "name": "audioOutputs",
+            "notify": "audioOutputsChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "currentAudioOutput",
+            "notify": "audioOutputsChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        }
     ],
     "signals": [
         {
@@ -786,6 +802,11 @@
                     "name": "filename",
                     "type": "QString"
                 }
+            ]
+        },
+        {
+            "name": "audioOutputsChanged",
+            "params": [
             ]
         }
     ]

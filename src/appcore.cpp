@@ -216,6 +216,11 @@ void AppCore::wirePhoneMirror()
                      &phoneMirrorManager, [this](double l) { phoneMirrorManager.setAudioDuckLevel(float(l)); });
     QObject::connect(&phoneMirrorManager, &PhoneMirrorManager::duckingChanged,
                      &mediaManager, &MediaManager::setDucking);
+    // Phone audio plays to the same output as local music: the picked one,
+    // re-checked whenever the outputs change (MediaManager watches them)
+    phoneMirrorManager.setAudioOutputDevice(settingsManager.audioOutputDevice());
+    QObject::connect(&mediaManager, &MediaManager::audioOutputsChanged, &phoneMirrorManager,
+                     [this] { phoneMirrorManager.setAudioOutputDevice(settingsManager.audioOutputDevice()); });
     // Keep the phone's own panel dark while mirroring; a locked phone is woken automatically
     phoneMirrorManager.setPhoneScreenOff(settingsManager.get_scrcpy_phone_screen_off());
     QObject::connect(&settingsManager, &SettingsManager::scrcpyPhoneScreenOffChanged,

@@ -185,6 +185,57 @@ Flickable {
             }
 
             SettingCategory {
+                id: audioOutputCategory
+                objectName: "audioOutputCategory"
+                title: "Audio Output"
+                // Music and phone audio play here. A picked output that is
+                // unplugged falls back to the system default until it returns.
+                readonly property var outputs: typeof mediaManager !== "undefined" && mediaManager ? mediaManager.audioOutputs : []
+                readonly property string picked: settingsManager ? settingsManager.audioOutputDevice : ""
+                readonly property bool pickedPresent: {
+                    for (var i = 0; i < outputs.length; i++)
+                        if (outputs[i].id === picked) return true
+                    return false
+                }
+                readonly property string pickedName: {
+                    for (var i = 0; i < outputs.length; i++)
+                        if (outputs[i].id === picked) return outputs[i].name
+                    return ""
+                }
+                description: {
+                    var now = typeof mediaManager !== "undefined" && mediaManager ? mediaManager.currentAudioOutput : ""
+                    if (picked !== "" && !pickedPresent)
+                        return "The picked output is not connected; playing on " + (now || "the system default") + " until it is."
+                    return now ? "Playing on " + now + "." : "Where music and phone audio play."
+                }
+
+                SettingsChips {
+                    options: {
+                        var names = ["System default"]
+                        for (var i = 0; i < audioOutputCategory.outputs.length; i++)
+                            names.push(audioOutputCategory.outputs[i].name)
+                        return names
+                    }
+                    currentValue: audioOutputCategory.picked === "" || !audioOutputCategory.pickedPresent
+                                  ? "System default" : audioOutputCategory.pickedName
+                    onSelected: function(name) {
+                        if (!settingsManager) return
+                        if (name === "System default") {
+                            settingsManager.save_audio_output_device("")
+                            return
+                        }
+                        var list = audioOutputCategory.outputs
+                        for (var i = 0; i < list.length; i++) {
+                            if (list[i].name === name) {
+                                settingsManager.save_audio_output_device(list[i].id)
+                                return
+                            }
+                        }
+                    }
+                }
+            }
+
+            SettingCategory {
                 title: "Autoplay on Startup"
                 description: "Resume the last track automatically when the app launches."
 

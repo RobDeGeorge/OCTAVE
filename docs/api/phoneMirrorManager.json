@@ -63,6 +63,18 @@
         },
         {
             "kind": "slot",
+            "name": "setAudioOutputDevice",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "",
+            "scope": "phone"
+        },
+        {
+            "kind": "slot",
             "name": "setDisplaySize",
             "params": [
                 {

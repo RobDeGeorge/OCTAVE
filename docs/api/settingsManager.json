@@ -491,6 +491,18 @@
         },
         {
             "kind": "slot",
+            "name": "save_audio_output_device",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "",
+            "scope": "settings"
+        },
+        {
+            "kind": "slot",
             "name": "save_background_overlay_opacity",
             "params": [
                 {
@@ -2134,6 +2146,14 @@
         },
         {
             "constant": false,
+            "name": "audioOutputDevice",
+            "notify": "audioOutputDeviceChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
             "name": "backgroundOverlayOpacity",
             "notify": "backgroundOverlayOpacityChanged",
             "readable": true,
@@ -2916,6 +2936,15 @@
         },
         {
             "name": "albumArtTransitionChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "audioOutputDeviceChanged",
             "params": [
                 {
                     "name": "value",

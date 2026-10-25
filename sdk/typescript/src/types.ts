@@ -296,6 +296,10 @@ export interface GestureManager {
 /** mediaManager (MediaManager) */
 export interface MediaManager {
   properties: {
+    /** QVariantList, notify audioOutputsChanged */
+    audioOutputs: unknown[]
+    /** QString, notify audioOutputsChanged */
+    currentAudioOutput: string
   }
   methods: {
     connect_settings_manager: { args: [arg: unknown]; returns: void }
@@ -377,6 +381,7 @@ export interface MediaManager {
     scanProgress: [message: string]
     albumColorsExtracted: [jsonColors: string]
     songDeleted: [filename: string]
+    audioOutputsChanged: []
   }
 }
 
@@ -832,6 +837,7 @@ export interface PhoneMirrorManager {
     setAudioGain: { args: [gain: number]; returns: void }
     setAudioDuckEnabled: { args: [enabled: boolean]; returns: void }
     setAudioDuckLevel: { args: [level: number]; returns: void }
+    setAudioOutputDevice: { args: [id: string]; returns: void }
     setDisplaySize: { args: [size: string]; returns: void }
     setViewSize: { args: [width: number, height: number]; returns: void }
     setDisplayDpi: { args: [dpi: number]; returns: void }
@@ -987,6 +993,8 @@ export interface SettingsManager {
     vinylRecordMode: boolean
     /** QString, notify albumArtTransitionChanged */
     albumArtTransition: string
+    /** QString, notify audioOutputDeviceChanged */
+    audioOutputDevice: string
     /** int, notify backgroundOverlayOpacityChanged */
     backgroundOverlayOpacity: number
     /** double, notify sideCardOpacityChanged */
@@ -1141,6 +1149,7 @@ export interface SettingsManager {
     save_show_album_art_shadow: { args: [enabled: boolean]; returns: void }
     save_vinyl_record_mode: { args: [enabled: boolean]; returns: void }
     save_album_art_transition: { args: [transition: string]; returns: void }
+    save_audio_output_device: { args: [id: string]; returns: void }
     save_background_overlay_opacity: { args: [opacity: number]; returns: void }
     save_side_card_opacity: { args: [opacity: number]; returns: void }
     save_side_card_angle: { args: [angle: number]; returns: void }
@@ -1301,6 +1310,7 @@ export interface SettingsManager {
     showAlbumArtShadowChanged: [value: boolean]
     vinylRecordModeChanged: [value: boolean]
     albumArtTransitionChanged: [value: string]
+    audioOutputDeviceChanged: [value: string]
     backgroundOverlayOpacityChanged: [value: number]
     sideCardOpacityChanged: [value: number]
     sideCardAngleChanged: [value: number]

@@ -57,6 +57,11 @@ class MediaManager : public QObject
                 "_clear_temp_files _save_playback_state connect_settings_manager "
                 "extract_colors_from_album_art extract_colors_from_image invalidate_stats_cache setDucking "
                 "setMuted setVolume")
+    // Every audio output as {id, name, isDefault}, and the name of the one
+    // playing now: the one in settingsManager.audioOutputDevice while it is
+    // plugged in, else the system default (src/util/audiooutput.h)
+    Q_PROPERTY(QVariantList audioOutputs READ audioOutputs NOTIFY audioOutputsChanged)
+    Q_PROPERTY(QString currentAudioOutput READ currentAudioOutput NOTIFY audioOutputsChanged)
 
 public:
     explicit MediaManager(QObject *parent = nullptr);
@@ -66,6 +71,9 @@ public:
     // Settings manager wiring
     // ──────────────────────────────────────────────────────────────
     void setSettingsManager(SettingsManager *sm);
+
+    QVariantList audioOutputs() const;
+    QString currentAudioOutput() const;
 
 signals:
     // ──────────────────────────────────────────────────────────────
@@ -89,6 +97,8 @@ signals:
     void scanProgress(const QString &message);
     void albumColorsExtracted(const QString &jsonColors);
     void songDeleted(const QString &filename);
+    // The output list, or the output in use, changed
+    void audioOutputsChanged();
 
 public slots:
     // ──────────────────────────────────────────────────────────────
@@ -232,7 +242,7 @@ private:
     void _manage_cache(const QString &newAlbumId);
     void _attempt_playback_recovery(bool force = false);
     void _reseat_source(const QString &filePath, qint64 position);
-    void _follow_default_output();
+    void _apply_output_device();
     QStringList _shuffle_playlist();
     QStringList _get_current_playlist_files();
     QString _get_file_path(const QString &filename);

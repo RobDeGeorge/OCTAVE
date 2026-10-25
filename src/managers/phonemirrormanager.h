@@ -284,6 +284,9 @@ public slots:
     // (settings scrcpyAudioDuckEnabled / scrcpyAudioDuckLevel, linear factor)
     void setAudioDuckEnabled(bool enabled);
     void setAudioDuckLevel(float level);
+    // The output phone audio plays to (settingsManager.audioOutputDevice;
+    // empty = the system default); call again when the outputs change
+    void setAudioOutputDevice(const QString &id);
     void setDisplaySize(const QString &size);
     // The mirror view's size in device pixels; drives the "auto" display size.
     // A running auto session is restarted (debounced) when it changes.
@@ -459,6 +462,7 @@ private:
     bool m_isStopping = false;
     bool m_ready = false;
     float m_audioGain = 2.0f;
+    QString m_audioOutputDevice;
     bool m_audioPlaying = false;
     bool m_duckEnabled = true;
     float m_duckLevel = 0.1f;        // -20 dB
@@ -629,6 +633,7 @@ public slots:
     void setAudioGain(float) {}
     void setAudioDuckEnabled(bool) {}
     void setAudioDuckLevel(float) {}
+    void setAudioOutputDevice(const QString &) {}
     void setDisplaySize(const QString &) {}
     void setViewSize(int, int) {}
     void setDisplayDpi(int) {}

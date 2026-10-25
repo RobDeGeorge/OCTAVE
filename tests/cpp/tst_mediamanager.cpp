@@ -4,9 +4,11 @@
 // real MediaManager and a scanned temp library (the "songs" are placeholder bytes; nothing here
 // waits for the player to decode them).
 
+#include <QAudioDevice>
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
+#include <QMediaDevices>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
@@ -28,6 +30,33 @@ private slots:
         qputenv("HOME", m_home.path().toUtf8());
         qputenv("XDG_CONFIG_HOME", (m_home.path() + "/config").toUtf8());
         qputenv("APPDATA", (m_home.path() + "/appdata").toUtf8());
+    }
+
+    void pickedAudioOutputIsUsedWhilePresent()
+    {
+        SettingsManager sm;
+        MediaManager mm;
+        mm.setSettingsManager(&sm);
+        QSignalSpy outputs(&mm, &MediaManager::audioOutputsChanged);
+
+        // Not plugged in (CI has no outputs at all): the system default
+        sm.save_audio_output_device(QStringLiteral("no-such-output"));
+        QCOMPARE(outputs.count(), 1);
+        QCOMPARE(mm.m_audioOutput->device(), QMediaDevices::defaultAudioOutput());
+
+        // With a real second output, picking it moves playback there and back
+        const QList<QAudioDevice> all = QMediaDevices::audioOutputs();
+        for (const QAudioDevice &d : all) {
+            if (d.isDefault())
+                continue;
+            sm.save_audio_output_device(QString::fromUtf8(d.id()));
+            QCOMPARE(mm.m_audioOutput->device(), d);
+            QCOMPARE(mm.currentAudioOutput(), d.description());
+            sm.save_audio_output_device(QString());
+            QCOMPARE(mm.m_audioOutput->device(), QMediaDevices::defaultAudioOutput());
+            break;
+        }
+        QCOMPARE(mm.audioOutputs().size(), all.size());
     }
 
     void missingTrackSkipsToNextPlayable()

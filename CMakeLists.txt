@@ -204,6 +204,7 @@ qt_add_executable(octave
     src/util/variantlistmodel.h
     src/util/variantlistmodel.cpp
     src/util/units.h
+    src/util/audiooutput.h
     src/util/fontcatalog.h
     src/util/fontcatalog.cpp
     src/util/pathurl.h

@@ -766,6 +766,18 @@ func NewMediaManager(c *Client) MediaManager { return MediaManager{c} }
 // Name is the object's name on the wire.
 func (MediaManager) Name() string { return "mediaManager" }
 
+// GetAudioOutputs reads the property "audioOutputs" (QVariantList).
+func (o MediaManager) GetAudioOutputs() (v []any, err error) {
+	err = o.c.Get("mediaManager", "audioOutputs", &v)
+	return
+}
+
+// GetCurrentAudioOutput reads the property "currentAudioOutput" (QString).
+func (o MediaManager) GetCurrentAudioOutput() (v string, err error) {
+	err = o.c.Get("mediaManager", "currentAudioOutput", &v)
+	return
+}
+
 // ConnectSettingsManager calls connect_settings_manager(QObject*).
 func (o MediaManager) ConnectSettingsManager(arg0 any) error {
 	return o.c.Call("mediaManager", "connect_settings_manager", nil, arg0)
@@ -2171,6 +2183,11 @@ func (o PhoneMirrorManager) SetAudioDuckLevel(level float64) error {
 	return o.c.Call("phoneMirrorManager", "setAudioDuckLevel", nil, level)
 }
 
+// SetAudioOutputDevice calls setAudioOutputDevice(QString).
+func (o PhoneMirrorManager) SetAudioOutputDevice(id string) error {
+	return o.c.Call("phoneMirrorManager", "setAudioOutputDevice", nil, id)
+}
+
 // SetDisplaySize calls setDisplaySize(QString).
 func (o PhoneMirrorManager) SetDisplaySize(size string) error {
 	return o.c.Call("phoneMirrorManager", "setDisplaySize", nil, size)
@@ -2617,6 +2634,12 @@ func (o SettingsManager) GetVinylRecordMode() (v bool, err error) {
 // GetAlbumArtTransition reads the property "albumArtTransition" (QString).
 func (o SettingsManager) GetAlbumArtTransition() (v string, err error) {
 	err = o.c.Get("settingsManager", "albumArtTransition", &v)
+	return
+}
+
+// GetAudioOutputDevice reads the property "audioOutputDevice" (QString).
+func (o SettingsManager) GetAudioOutputDevice() (v string, err error) {
+	err = o.c.Get("settingsManager", "audioOutputDevice", &v)
 	return
 }
 
@@ -3156,6 +3179,11 @@ func (o SettingsManager) SaveVinylRecordMode(enabled bool) error {
 // SaveAlbumArtTransition calls save_album_art_transition(QString).
 func (o SettingsManager) SaveAlbumArtTransition(transition string) error {
 	return o.c.Call("settingsManager", "save_album_art_transition", nil, transition)
+}
+
+// SaveAudioOutputDevice calls save_audio_output_device(QString).
+func (o SettingsManager) SaveAudioOutputDevice(id string) error {
+	return o.c.Call("settingsManager", "save_audio_output_device", nil, id)
 }
 
 // SaveBackgroundOverlayOpacity calls save_background_overlay_opacity(int).

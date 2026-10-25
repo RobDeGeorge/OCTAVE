@@ -349,6 +349,7 @@ private slots:
             first.save_gauge_speed_unit(QStringLiteral("km/h"));
             first.save_settings_section_visibility(QStringLiteral("obd"), false);
             first.save_playback_state(QStringLiteral("a.mp3"), 1234, QStringLiteral("Road"));
+            first.save_audio_output_device(QStringLiteral("alsa_output.usb-Sennheiser_BTD_700.analog-stereo"));
             first.flushPendingSave();
             saved = first.m_settings;
 
@@ -397,6 +398,22 @@ private slots:
         }
         QVERIFY2(missing.isEmpty(), qPrintable(missing.join(", ")));
         QVERIFY(!QFile::exists(dir + "/settingsConfigure.json.corrupt"));
+    }
+
+    void audioOutputDeviceDefaultsToTheSystemAndNotifies()
+    {
+        SettingsManager mgr;
+        QCOMPARE(mgr.audioOutputDevice(), QString());   // the system default
+        QSignalSpy changed(&mgr, &SettingsManager::audioOutputDeviceChanged);
+        mgr.save_audio_output_device(QStringLiteral("earbuds"));
+        mgr.save_audio_output_device(QStringLiteral("earbuds"));   // unchanged: no second signal
+        QCOMPARE(changed.count(), 1);
+        QCOMPARE(mgr.audioOutputDevice(), QStringLiteral("earbuds"));
+        mgr.save_audio_output_device(QString(600, QLatin1Char('x')));   // not a device id
+        QCOMPARE(mgr.audioOutputDevice(), QStringLiteral("earbuds"));
+        mgr.save_audio_output_device(QString());
+        QCOMPARE(mgr.audioOutputDevice(), QString());
+        QCOMPARE(changed.count(), 2);
     }
 
     void retiredFeatureKeysAreDropped()

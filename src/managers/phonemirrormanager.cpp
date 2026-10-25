@@ -681,6 +681,13 @@ void PhoneMirrorManager::setAudioDuckEnabled(bool enabled)
     updateDucking();
 }
 
+void PhoneMirrorManager::setAudioOutputDevice(const QString &id)
+{
+    m_audioOutputDevice = id;
+    if (m_client)
+        m_client->setAudioOutputDevice(id);
+}
+
 void PhoneMirrorManager::setAudioDuckLevel(float level)
 {
     m_duckLevel = qBound(0.0f, level, 1.0f);
@@ -1005,6 +1012,7 @@ void PhoneMirrorManager::continueStart(const StartPrep &prep, int generation)
         updateDucking();
     });
     m_client->setAudioGain(m_audioGain);
+    m_client->setAudioOutputDevice(m_audioOutputDevice);
     m_client->setVolume(m_muted ? 0.0f : m_volume);
 
     const int sdk = prep.sdk;

@@ -107,9 +107,14 @@
           <strong>Output device.</strong> A <code>QAudioOutput</code> stays bound to the device that was the system
           default when it was created, so an output that disappears and returns (HDMI audio across a display sleep,
           a USB DAC) used to leave playback silently on the old device. The constructor therefore creates a
-          <code>QMediaDevices</code> and connect <code>audioOutputsChanged</code> to <code>_follow_default_output()</code>,
-          which sets the output to <code>QMediaDevices::defaultAudioOutput()</code> whenever that differs from the
-          current device (a null device is ignored) and logs "Audio output changed, now using: ...".
+          <code>QMediaDevices</code> and connects <code>audioOutputsChanged</code> to <code>_apply_output_device()</code>,
+          which is also called when <code>settingsManager.audioOutputDevice</code> changes. It plays to the output picked
+          in Settings &gt; Media &gt; <strong>Audio Output</strong> (a <code>QAudioDevice</code> id) while that device is
+          plugged in, and to <code>QMediaDevices::defaultAudioOutput()</code> otherwise or when nothing is picked
+          (<span class="file-path">src/util/audiooutput.h</span>, shared with the phone mirror's audio). It switches only
+          when the device differs (a null device is ignored), logs "Audio output changed, now using: ...", and emits
+          <code>audioOutputsChanged()</code>. QML binds to <code>audioOutputs</code> (every output as
+          <code>{id, name, isDefault}</code>) and <code>currentAudioOutput</code> (the name of the one in use).
         </p>
         <pre><code><span class="cmt">// src/managers/mediamanager.cpp — constructor</span>
 m_player = <span class="kw">new</span> <span class="cls">QMediaPlayer</span>(<span class="kw">this</span>);
@@ -117,9 +122,9 @@ m_audioOutput = <span class="kw">new</span> <span class="cls">QAudioOutput</span
 m_player-&gt;<span class="fn">setAudioOutput</span>(m_audioOutput);
 m_audioOutput-&gt;<span class="fn">setVolume</span>(<span class="num">0.5f</span>);
 
-<span class="cmt">// Follow the system default output device</span>
+<span class="cmt">// Re-pick the output (picked one, else the system default) when outputs change</span>
 m_mediaDevices = <span class="kw">new</span> <span class="cls">QMediaDevices</span>(<span class="kw">this</span>);
-<span class="fn">connect</span>(m_mediaDevices, &amp;<span class="cls">QMediaDevices</span>::audioOutputsChanged, <span class="kw">this</span>, &amp;<span class="cls">MediaManager</span>::_follow_default_output);
+<span class="fn">connect</span>(m_mediaDevices, &amp;<span class="cls">QMediaDevices</span>::audioOutputsChanged, <span class="kw">this</span>, &amp;<span class="cls">MediaManager</span>::_apply_output_device);
 
 <span class="fn">connect</span>(m_player, &amp;<span class="cls">QMediaPlayer</span>::durationChanged,    <span class="kw">this</span>, &amp;<span class="cls">MediaManager</span>::durationChanged);
 <span class="fn">connect</span>(m_player, &amp;<span class="cls">QMediaPlayer</span>::positionChanged,    <span class="kw">this</span>, &amp;<span class="cls">MediaManager</span>::positionChanged);
@@ -662,6 +667,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
             <tr><td><code>albumCountChanged</code></td><td>int</td><td>Number of unique albums in the selected playlist</td></tr>
             <tr><td><code>artistCountChanged</code></td><td>int</td><td>Number of unique artists in the selected playlist</td></tr>
             <tr><td><code>songDeleted</code></td><td>str</td><td>A file was removed via <code>delete_song()</code></td></tr>
+            <tr><td><code>audioOutputsChanged</code></td><td>(none)</td><td>The output list or the output in use changed (notify of <code>audioOutputs</code> / <code>currentAudioOutput</code>)</td></tr>
           </tbody>
         </table>
 

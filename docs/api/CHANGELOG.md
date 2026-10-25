@@ -14,6 +14,9 @@ Breaking:
 
 Settings: `downloadSubfolder`, `downloadFormat` and `downloadBitrate` are gone, and are dropped from an existing settings file at start-up.
 
+Added:
+- The audio output picker: `settingsManager.audioOutputDevice` / `audioOutputDeviceChanged` / `save_audio_output_device` (a QAudioDevice id, empty = the system default), `mediaManager.audioOutputs` / `currentAudioOutput` / `audioOutputsChanged`, `phoneMirrorManager.setAudioOutputDevice`.
+
 ## Protocol 2
 
 2026-10-23. Pairing.

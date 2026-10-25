@@ -145,6 +145,7 @@
             <tr><td><code>albumArtCornerRadius</code></td><td><code>int</code></td><td>read-only</td><td><code>albumArtCornerRadiusChanged</code></td><td>Corner radius in px when <code>roundedAlbumArt</code> is on &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>showAlbumArtShadow</code></td><td><code>bool</code></td><td>read-only</td><td><code>showAlbumArtShadowChanged</code></td><td>Drop shadow under album art &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>vinylRecordMode</code></td><td><code>bool</code></td><td>read-only</td><td><code>vinylRecordModeChanged</code></td><td>Spin the album art like a record &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
+            <tr><td><code>audioOutputDevice</code></td><td><code>QString</code></td><td>read-only</td><td><code>audioOutputDeviceChanged</code></td><td>The audio output picked in Settings &gt; Media (a <code>QAudioDevice</code> id); empty = the system default &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>albumArtTransition</code></td><td><code>QString</code></td><td>read-only</td><td><code>albumArtTransitionChanged</code></td><td>Track-change animation (<code>"Crossfade"</code>, <code>"Slide"</code>, <code>"Vinyl Lift"</code>, <code>"Flip"</code>, <code>"Coverflow"</code>, &hellip;) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>backgroundOverlayOpacity</code></td><td><code>int</code></td><td>read-only</td><td><code>backgroundOverlayOpacityChanged</code></td><td>Opacity (0&ndash;100) of the dark overlay on the background &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>sideCardOpacity</code></td><td><code>double</code></td><td>read-only</td><td><code>sideCardOpacityChanged</code></td><td>Opacity of the 3D side cards &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
@@ -240,6 +241,7 @@
             <tr><td><code>save_album_art_corner_radius(int radius)</code></td><td><code>void</code></td><td>Save <code>albumArtCornerRadius</code>, then emit <code>albumArtCornerRadiusChanged</code></td></tr>
             <tr><td><code>save_show_album_art_shadow(bool enabled)</code></td><td><code>void</code></td><td>Save <code>showAlbumArtShadow</code>, then emit <code>showAlbumArtShadowChanged</code></td></tr>
             <tr><td><code>save_vinyl_record_mode(bool enabled)</code></td><td><code>void</code></td><td>Save <code>vinylRecordMode</code>, then emit <code>vinylRecordModeChanged</code></td></tr>
+            <tr><td><code>save_audio_output_device(QString id)</code></td><td><code>void</code></td><td>Save <code>audioOutputDevice</code> (any id up to 512 characters, kept while unplugged; empty = system default), then emit <code>audioOutputDeviceChanged</code></td></tr>
             <tr><td><code>save_album_art_transition(QString transition)</code></td><td><code>void</code></td><td>Save <code>albumArtTransition</code>, then emit <code>albumArtTransitionChanged</code></td></tr>
             <tr><td><code>save_background_overlay_opacity(int opacity)</code></td><td><code>void</code></td><td>Save <code>backgroundOverlayOpacity</code>, then emit <code>backgroundOverlayOpacityChanged</code></td></tr>
             <tr><td><code>save_side_card_opacity(double opacity)</code></td><td><code>void</code></td><td>Save <code>sideCardOpacity</code>, then emit <code>sideCardOpacityChanged</code></td></tr>
@@ -387,6 +389,7 @@
             <tr><td><code>albumArtCornerRadiusChanged(int value)</code></td><td>Emitted after <code>albumArtCornerRadius</code> is saved</td></tr>
             <tr><td><code>showAlbumArtShadowChanged(bool value)</code></td><td>Emitted after <code>showAlbumArtShadow</code> is saved</td></tr>
             <tr><td><code>vinylRecordModeChanged(bool value)</code></td><td>Emitted after <code>vinylRecordMode</code> is saved</td></tr>
+            <tr><td><code>audioOutputDeviceChanged(QString value)</code></td><td>Emitted after <code>audioOutputDevice</code> is saved</td></tr>
             <tr><td><code>albumArtTransitionChanged(QString value)</code></td><td>Emitted after <code>albumArtTransition</code> is saved</td></tr>
             <tr><td><code>backgroundOverlayOpacityChanged(int value)</code></td><td>Emitted after <code>backgroundOverlayOpacity</code> is saved</td></tr>
             <tr><td><code>sideCardOpacityChanged(double value)</code></td><td>Emitted after <code>sideCardOpacity</code> is saved</td></tr>
@@ -666,6 +669,7 @@
             <tr><td><code>scanProgress(QString message)</code></td><td>Terminal-style progress line during library scans, filename stripping and errors</td></tr>
             <tr><td><code>albumColorsExtracted(QString jsonColors)</code></td><td>JSON palette extracted from the current album art, emitted only when no SettingsManager is wired (tests); the app's path is <code>settingsManager.albumArtColors</code></td></tr>
             <tr><td><code>songDeleted(QString filename)</code></td><td>A file was removed by <code>delete_song()</code></td></tr>
+            <tr><td><code>audioOutputsChanged()</code></td><td>The output list or the output in use changed; notify of the read-only properties <code>audioOutputs</code> (<code>QVariantList</code> of <code>{id, name, isDefault}</code>) and <code>currentAudioOutput</code> (<code>QString</code>, the name of the output playing)</td></tr>
           </tbody>
         </table>
 
@@ -1378,6 +1382,7 @@
             <tr><td><code>setMuted(bool muted)</code></td><td><code>void</code></td><td>OCTAVE's mute (<code>volumeController.mutedChanged</code>) silences phone audio too; phone audio always plays through OCTAVE while mirroring</td></tr>
             <tr><td><code>setAudioDuckEnabled(bool enabled)</code></td><td><code>void</code></td><td>Setting <code>scrcpyAudioDuckEnabled</code></td></tr>
             <tr><td><code>setAudioDuckLevel(float level)</code></td><td><code>void</code></td><td>Setting <code>scrcpyAudioDuckLevel</code> (linear factor)</td></tr>
+            <tr><td><code>setAudioOutputDevice(QString id)</code></td><td><code>void</code></td><td>Setting <code>audioOutputDevice</code>: phone audio plays to the same output as local music; called again whenever the outputs change, and an open sink moves when its device would change</td></tr>
             <tr><td><code>setDisplaySize(QString size)</code></td><td><code>void</code></td><td>Virtual display size (snapped to multiples of 8, or <code>"auto"</code>); restarts a running session</td></tr>
             <tr><td><code>setViewSize(int width, int height)</code></td><td><code>void</code></td><td>Mirror view size in device pixels; drives <code>"auto"</code> and restarts a running auto session when it changes (debounced 1.5 s)</td></tr>
             <tr><td><code>setDisplayDpi(int dpi)</code></td><td><code>void</code></td><td>Setting <code>scrcpyDisplayDpi</code> (0 = phone's scaled density); restarts a running session</td></tr>
