@@ -2,6 +2,7 @@
 
 #include "scrcpyclient.h"
 #include "adaptivebitrate.h"
+#include "../util/h264decoder.h"
 
 #include <QElapsedTimer>
 
@@ -761,20 +762,11 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
 void ScrcpyClient::videoLoop(QTcpSocket *video, qint64 t0, const std::function<void()> &pumpServerLog)
 {
 #ifdef OCTAVE_HAVE_FFMPEG
-    const AVCodec *codec = avcodec_find_decoder(AV_CODEC_ID_H264);
-    AVCodecContext *ctx = codec ? avcodec_alloc_context3(codec) : nullptr;
-    // Slice threading only: frame threading delays every picture by one
-    // frame per thread. Must be set before avcodec_open2 to take effect.
-    if (ctx)
-        ctx->thread_type = FF_THREAD_SLICE;
-    if (!ctx || avcodec_open2(ctx, codec, nullptr) < 0) {
+    H264Decoder decoder;
+    if (!decoder.open()) {
         fail(QStringLiteral("could not open H.264 decoder"));
-        if (ctx) avcodec_free_context(&ctx);
         return;
     }
-    AVPacket *pkt = av_packet_alloc();
-    AVFrame *frame = av_frame_alloc();
-    QByteArray pendingConfig;
     QByteArray data;
     bool first = true;
     // Adaptive quality: judged on packet arrival, before decoding, so a
@@ -805,7 +797,7 @@ void ScrcpyClient::videoLoop(QTcpSocket *video, qint64 t0, const std::function<v
         if (!recvExact(video, data.data(), size, m_stopping))
             break;
         if (ptsFlags & kFlagConfig) {
-            pendingConfig = data;          // SPS/PPS: prepend to the next packet
+            decoder.setConfig(data);       // SPS/PPS: prepended to the next packet
             if (videoTap().publish)
                 videoTap().publish(data, 0, false, true);
             continue;
@@ -830,78 +822,43 @@ void ScrcpyClient::videoLoop(QTcpSocket *video, qint64 t0, const std::function<v
                 emit bitRateChanged(bps);
             }
         }
-        if (!pendingConfig.isEmpty()) {
-            data.prepend(pendingConfig);
-            pendingConfig.clear();
-        }
-        // libavcodec needs AV_INPUT_BUFFER_PADDING_SIZE zero bytes after the data
-        data.append(AV_INPUT_BUFFER_PADDING_SIZE, '\0');
-        pkt->data = reinterpret_cast<uint8_t *>(data.data());
-        pkt->size = data.size() - AV_INPUT_BUFFER_PADDING_SIZE;
-        if (avcodec_send_packet(ctx, pkt) < 0)
-            continue;
-        while (avcodec_receive_frame(ctx, frame) == 0) {
-            if (frame->format == AV_PIX_FMT_YUV420P || frame->format == AV_PIX_FMT_YUVJ420P) {
-                const int w = frame->width, h = frame->height;
-                if (w != m_width.load() || h != m_height.load()) {
-                    m_width = w; m_height = h;
-                    emit frameSizeChanged(w, h);
-                }
-                // Also on the first frames of a reattached stream: the display's
-                // first composite after setSurface can be black + status bar, and
-                // the sink still holds the last good frame of the previous session.
-                // Lenient while asleep or in the first seconds of a reattached
-                // stream: the display's first composite after setSurface is
-                // black plus the status/task bar, and neither is content.
-                if (m_holdBlack.load() && m_frameCount.load() > 0) {
-                    // The phone is asleep: whatever it streams now is the doze
-                    // fade (a dimmed or black composite), never content.
-                    av_frame_unref(frame);
-                    continue;
-                }
-                const bool lenient = m_attached.load() && nowMs() - m_tFirst < kBlackHoldMs;
-                if ((m_frameCount.load() > 0 || m_attached.load()) && isBlackFrame(frame, lenient)) {
-                    const qint64 now = nowMs();
-                    if (m_blackSince < 0)
-                        m_blackSince = now;
-                    if (m_holdBlack.load() || now - m_blackSince < kBlackHoldMs) {
-                        av_frame_unref(frame);
-                        continue;
-                    }
-                } else {
-                    m_blackSince = -1;
-                }
-                QVideoFrameFormat fmt(QSize(w, h), QVideoFrameFormat::Format_YUV420P);
-                QVideoFrame vf(fmt);
-                if (vf.map(QVideoFrame::WriteOnly)) {
-                    for (int i = 0; i < 3; ++i) {
-                        const int rows = i == 0 ? h : (h + 1) / 2;
-                        const int rowBytes = i == 0 ? w : (w + 1) / 2;
-                        const int srcStride = frame->linesize[i];
-                        const int dstStride = vf.bytesPerLine(i);
-                        uchar *dst = vf.bits(i);
-                        const uint8_t *src = frame->data[i];
-                        if (srcStride == dstStride) {
-                            std::memcpy(dst, src, size_t(srcStride) * rows);
-                        } else {
-                            for (int r = 0; r < rows; ++r)
-                                std::memcpy(dst + r * dstStride, src + r * srcStride, size_t(rowBytes));
-                        }
-                    }
-                    vf.unmap();
-                    pushFrame(vf);
-                    if (first) {
-                        first = false;
-                        qCInfo(lcScrcpyClient) << "first frame at +" << (nowMs() - t0) / 1000.0 << "s";
-                    }
-                }
+        decoder.decode(data, [&](const AVFrame *frame) {
+            const int w = frame->width, h = frame->height;
+            if (w != m_width.load() || h != m_height.load()) {
+                m_width = w; m_height = h;
+                emit frameSizeChanged(w, h);
             }
-            av_frame_unref(frame);
-        }
+            // Also on the first frames of a reattached stream: the display's
+            // first composite after setSurface can be black + status bar, and
+            // the sink still holds the last good frame of the previous session.
+            // Lenient while asleep or in the first seconds of a reattached
+            // stream: the display's first composite after setSurface is
+            // black plus the status/task bar, and neither is content.
+            if (m_holdBlack.load() && m_frameCount.load() > 0) {
+                // The phone is asleep: whatever it streams now is the doze
+                // fade (a dimmed or black composite), never content.
+                return;
+            }
+            const bool lenient = m_attached.load() && nowMs() - m_tFirst < kBlackHoldMs;
+            if ((m_frameCount.load() > 0 || m_attached.load()) && isBlackFrame(frame, lenient)) {
+                const qint64 now = nowMs();
+                if (m_blackSince < 0)
+                    m_blackSince = now;
+                if (m_holdBlack.load() || now - m_blackSince < kBlackHoldMs)
+                    return;
+            } else {
+                m_blackSince = -1;
+            }
+            const QVideoFrame vf = H264Decoder::toVideoFrame(frame);
+            if (!vf.isValid())
+                return;
+            pushFrame(vf);
+            if (first) {
+                first = false;
+                qCInfo(lcScrcpyClient) << "first frame at +" << (nowMs() - t0) / 1000.0 << "s";
+            }
+        });
     }
-    av_frame_free(&frame);
-    av_packet_free(&pkt);
-    avcodec_free_context(&ctx);
 #else
     Q_UNUSED(video) Q_UNUSED(t0) Q_UNUSED(pumpServerLog)
 #endif

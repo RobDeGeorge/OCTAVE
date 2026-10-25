@@ -306,6 +306,8 @@ qt_add_executable(octave
     src/phone_mirror/scrcpyclient.h
     src/phone_mirror/adaptivebitrate.h
     src/phone_mirror/scrcpyclient.cpp
+    src/util/h264decoder.h
+    src/util/h264decoder.cpp
     src/phone_mirror/qrcodegen.hpp
     src/phone_mirror/qrcodegen.cpp
     src/items/embeddeddhuitem.h

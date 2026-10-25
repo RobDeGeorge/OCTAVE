@@ -147,7 +147,7 @@ if(OCTAVE_HAVE_FFMPEG)
     list(APPEND _mirror_defines OCTAVE_HAVE_FFMPEG)
 endif()
 octave_add_test(tst_scrcpyclient
-    SOURCES phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h
+    SOURCES phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h util/h264decoder.h util/h264decoder.cpp
     LIBS ${_mirror_libs}
     DEFINES ${_mirror_defines})
 if(WIN32 AND OCTAVE_HAVE_FFMPEG)
@@ -155,7 +155,7 @@ if(WIN32 AND OCTAVE_HAVE_FFMPEG)
 endif()
 octave_add_test(tst_phonemirror
     SOURCES managers/phonemirrormanager.h managers/phonemirrormanager.cpp service/staticfiles.h service/staticfiles.cpp
-            phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h
+            phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h util/h264decoder.h util/h264decoder.cpp
             phone_mirror/qrcodegen.hpp phone_mirror/qrcodegen.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
     LIBS ${_mirror_libs}
@@ -168,7 +168,7 @@ octave_add_test(tst_nowplaying
     SOURCES managers/nowplaying.h managers/nowplaying.cpp
             managers/mediamanager.h managers/mediamanager.cpp util/folderbrowser.h util/folderbrowser.cpp service/staticfiles.h service/staticfiles.cpp util/units.h util/units.cpp
             managers/phonemirrormanager.h managers/phonemirrormanager.cpp
-            phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h
+            phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h util/h264decoder.h util/h264decoder.cpp
             phone_mirror/qrcodegen.hpp phone_mirror/qrcodegen.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
     LIBS ${_mirror_libs} Qt6::Concurrent ${_taglib}
