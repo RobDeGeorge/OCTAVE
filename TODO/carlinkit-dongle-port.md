@@ -25,7 +25,7 @@ The reference implementation we'd port from is **LIVI** (`f-io/LIVI`, MIT licens
 
 A local copy is at `~/Downloads/LIVI-main/` — keep a snapshot before deleting it.
 
-**Common prerequisite:** an extracted shared H.264 decoder class (pulled out of `src/phone_mirror/scrcpyclient.cpp:740` onward, which already decodes H.264 with libavcodec into a `QVideoSink`) is needed here, by `TODO/android-auto-native-receiver.md` and by `TODO/phone-mirror-android-host.md`; whichever starts first extracts it.
+**Shared decoder (done 2026-10-25):** `src/util/h264decoder.{h,cpp}` (libavcodec, SPS/PPS prepend, `AVFrame` → `QVideoFrame`), extracted from `scrcpyclient.cpp`; phone mirroring and the native Android Auto receiver (`TODO/android-auto-native-receiver.md`) use it.
 
 **See also:** `TODO/android-auto-native-receiver.md`, the no-hardware wired alternative. Both should feed one shared projection source (H.264 out, touch in, audio out) so whichever lands second just plugs in.
 
@@ -67,7 +67,7 @@ No image provider: push decoded `QVideoFrame`s to the `QVideoSink` of a QML `Vid
 1. **Spike (1 day)** — **Effort:** M. **Hardware:** CPC200-CCPA dongle + an iPhone (or Android phone), desktop Linux. Write a throwaway C++ binary that opens the dongle by VID `0x1314` / PID `0x1520` or `0x1521`, sends the open message, and dumps incoming frames to stdout. Prove libusb + framing work before building a manager around them.
 2. **Port the message protocol** — **Effort:** M. **Hardware:** none for the unit tests. `src/managers/carlinkit/messages.{h,cpp}` mirroring LIVI's `common.ts` + `readable.ts` + `sendable.ts`. Pure data classes, no I/O. Unit-testable.
 3. **Port the driver state machine** — **Effort:** L. **Hardware:** dongle + phone. `src/managers/carlinkit/driver.{h,cpp}` mirroring `dongleDriver.ts`. Heartbeat timer, error counting, mode switching (CarPlay ↔ Android Auto), BoxInfo parsing. Runs on a worker `QThread` — do NOT block the GUI thread on USB I/O.
-4. **H.264 decode + audio routing** — **Effort:** M (after the shared decoder exists). **Hardware:** dongle + phone. Feed the NAL units to the shared decoder → `QVideoSink`; route audio through the existing `VolumeController` so the global volume curve applies (per `CLAUDE.md`, never call manager `setVolume` directly).
+4. **H.264 decode + audio routing** — **Effort:** M (the shared decoder exists). **Hardware:** dongle + phone. Feed the NAL units to the shared decoder → `QVideoSink`; route audio through the existing `VolumeController` so the global volume curve applies (per `CLAUDE.md`, never call manager `setVolume` directly).
 5. **QML surface** — **Effort:** M. **Hardware:** dongle + phone; Orange Pi 5 Plus touch screen. `frontend/CarPlay.qml` showing the video, top-bar status (phone mode + connection), and a touch overlay that calls `carlinkitManager.sendTouch(...)` with normalized coordinates. New `frontend/settings/CarPlaySettingsPage.qml` for resolution / FPS / mic type config + udev rule install button.
 6. **Replace AA path** — **Effort:** M. **Hardware:** dongle + Android phone, then the Jeep. Once CarPlay is solid, plumb the same dongle into the Android Auto code path. Keep `androidautomanager` reachable behind a settings toggle (`mediaSettings.useDHUForAndroidAuto`) for ~1 release as a rollback.
 7. **Wiki updates** — **Effort:** S. New `wiki/carplay-manager.html`, update `wiki/hardware-managers.html`, `wiki/hardware-setup.html`, `wiki/signals-slots-reference.html`, rebuild search index per `CLAUDE.md`.

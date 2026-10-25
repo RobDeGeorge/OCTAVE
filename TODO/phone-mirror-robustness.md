@@ -32,7 +32,7 @@ Done 2026-10-18: `display_ime_policy=local` for the virtual display, letterbox t
     - Note: the `TRUSTED` flag is only set on API 33+ (`phone_server/.../video/NewDisplayCapture.java:185`).
 6. **Slow links.** **Effort:** L. **Device:** Orange Pi 5 Plus (RK3588) over Wi-Fi.
     - Let adaptive bit rate lower `max_fps` and size once it hits the 2 Mbps floor (`kAdaptiveMinBps`, `phonemirrormanager.h:202`; `src/phone_mirror/adaptivebitrate.h` only changes bit rate).
-    - Try hardware decode on the RK3588 (`h264_rkmpp` / v4l2m2m). Best done after the shared H.264 decoder class is extracted from `scrcpyclient.cpp` (see `TODO/phone-mirror-android-host.md`, `TODO/android-auto-native-receiver.md`).
+    - Try hardware decode on the RK3588 (`h264_rkmpp` / v4l2m2m). Do it in the shared decoder (`src/util/h264decoder`), so phone mirroring and Android Auto both get it.
 
 ## Hardware checks still open
 

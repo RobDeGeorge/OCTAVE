@@ -45,7 +45,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | File | Goal | Effort | Needs |
 |---|---|---|---|
 | [phone-mirror-android-host.md](phone-mirror-android-host.md) | OCTAVE on an Android tablet mirrors a phone | XL | tablet + phone |
-| [android-auto-native-receiver.md](android-auto-native-receiver.md) | Android Auto straight into OCTAVE over adb (then USB accessory), no DHU | XL | AA phone, Pi |
+| [android-auto-native-receiver.md](android-auto-native-receiver.md) | Android Auto straight into OCTAVE over adb (works on desktop; Pi, AOA next), no DHU | L | AA phone, Pi |
 | [carlinkit-dongle-port.md](carlinkit-dongle-port.md) | CarPlay / wireless Android Auto through a Carlinkit dongle | XL | $60 dongle, iPhone |
 | [diy-obd-adapter.md](diy-obd-adapter.md) | Our own all-protocol Bluetooth OBD adapter (STM32G474 + ESP32) with native fast mode, store-and-forward, optional sensor pod | M bench steps, then L–XL hardware | Nucleo + ECU sim, Jeep |
 

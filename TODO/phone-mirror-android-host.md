@@ -15,7 +15,7 @@ Because of that, `phonemirrormanager` is a mobile stub (`phonemirrormanager.h:48
 
 It's parked because the adb client is a protocol implementation in its own right, and the Jeep runs the Orange Pi 5 Plus, not a tablet.
 
-**Common prerequisite:** an extracted shared H.264 decoder class (pulled out of `src/phone_mirror/scrcpyclient.cpp:740` onward, where libavcodec decode and `pushFrame` (`scrcpyclient.h:169`) live today) is needed here, by `TODO/android-auto-native-receiver.md` and by `TODO/carlinkit-dongle-port.md`; whichever starts first extracts it.
+**Shared decoder (done 2026-10-25):** `src/util/h264decoder.{h,cpp}` (libavcodec, SPS/PPS prepend, `AVFrame` → `QVideoFrame`), extracted from `scrcpyclient.cpp`; phone mirroring and the native Android Auto receiver (`TODO/android-auto-native-receiver.md`) use it. A MediaCodec backend goes behind the same `H264Decoder` interface.
 
 ## What has to be built
 
@@ -37,7 +37,7 @@ OCTAVE needs only a small slice of adb: connect + auth, `shell:` (for `app_proce
 
 ### 2. Decoder
 
-Use `MediaCodec` (JNI) for hardware H.264. Decode either to a `Surface` backed by the `QVideoSink`'s texture, or to ByteBuffers wrapped as `QVideoFrame` (simpler; costs one copy). Don't bundle libavcodec for arm64: it's software decode and drains the tablet's battery. Pull the decode step behind a small interface so `ScrcpyClient` doesn't care which backend it has. `TODO/android-auto-native-receiver.md` wants the same shared decoder class.
+Use `MediaCodec` (JNI) for hardware H.264. Decode either to a `Surface` backed by the `QVideoSink`'s texture, or to ByteBuffers wrapped as `QVideoFrame` (simpler; costs one copy). Don't bundle libavcodec for arm64: it's software decode and drains the tablet's battery. Pull the decode step behind a small interface so `ScrcpyClient` doesn't care which backend it has. `TODO/android-auto-native-receiver.md` uses the same shared decoder class.
 
 ### 3. Manager wiring
 
@@ -60,7 +60,7 @@ Wireless debugging needs the phone on Wi-Fi, and Android turns it off while the 
 
 Already done (0.9.5): async adb (probe thread, `deviceStateChanged`) and `nativeAvailable` gating; write the Android client against that async API.
 
-1. **Shared decoder interface.** **Effort:** M. **Device:** none (desktop; regression-check on the Orange Pi + S22). Extract the libavcodec path from `scrcpyclient.cpp` behind a small interface so a MediaCodec backend can slot in.
+1. **Shared decoder interface.** **Effort:** S. **Device:** none (desktop; regression-check on the Orange Pi + S22). The libavcodec path is already `src/util/h264decoder`; give it a backend switch so a MediaCodec implementation can slot in.
 2. **Spike (1–2 sessions).** **Effort:** L. **Device:** desktop Linux + S22/S26 with Wireless debugging. Built-in adb client over TCP, pairing + TLS + `shell:` + `sync:` + a `localabstract:` stream to a running phone server. This proves the protocol without Android packaging in the way.
 3. **`AdbTransport` on desktop.** **Effort:** M. **Device:** Orange Pi 5 Plus + S22/S26 for a soak test. Keep `QProcess` adb as the default, with the built-in client behind an env var, so the Pi can soak-test it.
 4. **Android build.** **Effort:** L. **Device:** an Android tablet + S22/S26. NSD + pairing UI, MediaCodec decode, un-stub the manager. Test on the tablet and the S22 (never inject adb taps unless OCTAVE is the foreground app).
