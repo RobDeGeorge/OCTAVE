@@ -122,6 +122,7 @@ void AapSession::handleMessage(const Message &m)
     case Channel::Sensor: handleSensor(m); break;
     case Channel::Input: handleInput(m); break;
     case Channel::Microphone: handleMicrophone(m); break;
+    case Channel::MediaStatus: handleMediaStatus(m); break;
     default:
         qCDebug(lcAap) << "message" << m.id << "on unannounced channel" << m.channel;
     }
@@ -190,8 +191,11 @@ void AapSession::handleControl(const Message &m)
         m_lastPongUs = nowUs();
         break;
     case Msg::AudioFocusRequest: {
-        const int type = int(ProtoReader::varintField(m.body, 1).value_or(1));
-        send(Channel::Control, Msg::AudioFocusNotification, audioFocusNotification(audioFocusStateFor(type)));
+        const int type = int(ProtoReader::varintField(m.body, 1).value_or(Focus::RequestGain));
+        qCInfo(lcAap) << "audio focus request" << type;
+        if (!(m_opt.externalAudioFocus && type == Focus::RequestGain))
+            send(Channel::Control, Msg::AudioFocusNotification, audioFocusNotification(audioFocusStateFor(type)));
+        emit audioFocusRequested(type);
         break;
     }
     case Msg::NavFocusRequest:
@@ -311,6 +315,20 @@ void AapSession::handleMicrophone(const Message &m)
     }
 }
 
+void AapSession::handleMediaStatus(const Message &m)
+{
+    switch (m.id) {
+    case Msg::PlaybackStatus:
+        emit playbackStatus(parsePlaybackStatus(m.body));
+        break;
+    case Msg::PlaybackMetadata:
+        emit playbackMetadata(parsePlaybackMetadata(m.body));
+        break;
+    default:
+        qCDebug(lcAap) << "media status message" << m.id << "ignored," << m.body.size() << "bytes";
+    }
+}
+
 void AapSession::onPingTimer()
 {
     if (m_state != State::Running)
@@ -346,6 +364,31 @@ void AapSession::sendMicrophoneAudio(const QByteArray &pcm)
     qToBigEndian(quint64(nowUs()), data.data());
     data.append(pcm);
     send(Channel::Microphone, Msg::MediaData, data);
+}
+
+void AapSession::answerAudioFocus(int state)
+{
+    if (m_state != State::Running)
+        return;
+    qCInfo(lcAap) << "audio focus answer" << state;
+    send(Channel::Control, Msg::AudioFocusNotification, audioFocusNotification(state, false));
+}
+
+void AapSession::setAudioFocus(int state)
+{
+    if (m_state != State::Running)
+        return;
+    qCInfo(lcAap) << "audio focus set" << state;
+    send(Channel::Control, Msg::AudioFocusNotification, audioFocusNotification(state, true));
+}
+
+void AapSession::sendKey(int keycode)
+{
+    if (m_state != State::Running)
+        return;
+    const qint64 ns = nowUs() * 1000;
+    send(Channel::Input, Msg::InputReport, keyInputReport(ns, keycode, true));
+    send(Channel::Input, Msg::InputReport, keyInputReport(ns + 1000, keycode, false));
 }
 
 void AapSession::setNightMode(bool night)

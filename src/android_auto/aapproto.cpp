@@ -224,8 +224,10 @@ QByteArray serviceDiscoveryResponse(const HeadUnitConfig &c)
         r.message(1, ProtoWriter().int32(1, s.channel).message(3, sink));
     }
 
-    // Touchscreen, in video pixels
+    // Touchscreen, in video pixels, and the media keys OCTAVE's own controls send
     ProtoWriter input;
+    for (int k : {Key::MediaPlayPause, Key::MediaNext, Key::MediaPrevious, Key::MediaPlay, Key::MediaPause})
+        input.varint(1, quint64(k));
     input.message(2, ProtoWriter().int32(1, c.width).int32(2, c.height));
     r.message(1, ProtoWriter().int32(1, Channel::Input).message(4, input));
 
@@ -234,6 +236,9 @@ QByteArray serviceDiscoveryResponse(const HeadUnitConfig &c)
     mic.varint(1, 1);                                   // PCM
     mic.message(2, ProtoWriter().varint(1, 16000).varint(2, 16).varint(3, 1));
     r.message(1, ProtoWriter().int32(1, Channel::Microphone).message(5, mic));
+
+    // Media playback status: the phone reports what plays (title, art, position)
+    r.message(1, ProtoWriter().int32(1, Channel::MediaStatus).message(9, ProtoWriter()));
 
     const QString version = c.softwareVersion.isEmpty() ? QStringLiteral("0") : c.softwareVersion;
     // Deprecated copies of the head unit info, still filled by aasdk-based units
@@ -347,9 +352,57 @@ QByteArray touchInputReport(qint64 timestampNs, const QList<TouchPointer> &point
     return ProtoWriter().varint(1, quint64(timestampNs)).message(3, touch).data();
 }
 
+QByteArray keyInputReport(qint64 timestampNs, int keycode, bool down)
+{
+    const ProtoWriter key = ProtoWriter()
+                                .varint(1, quint64(keycode))
+                                .boolean(2, down)
+                                .varint(3, 0)                // metastate
+                                .boolean(4, false);          // long press
+    return ProtoWriter().varint(1, quint64(timestampNs)).message(4, ProtoWriter().message(1, key)).data();
+}
+
 int audioFocusStateFor(int requestType)
 {
-    return requestType == 4 ? 3 : 1;   // AUDIO_FOCUS_RELEASE → LOSS, else GAIN
+    return requestType == Focus::RequestRelease ? Focus::Loss : Focus::Gain;
+}
+
+PlaybackStatus parsePlaybackStatus(const QByteArray &body)
+{
+    PlaybackStatus s;
+    ProtoReader r(body);
+    ProtoReader::Field f;
+    while (r.next(f)) {
+        switch (f.number) {
+        case 1: s.state = int(f.varint); break;
+        case 2: s.source = QString::fromUtf8(f.bytes); break;
+        case 3: s.positionS = int(f.varint); break;
+        case 4: s.shuffle = f.varint != 0; break;
+        case 5: s.repeat = f.varint != 0; break;
+        case 6: s.repeatOne = f.varint != 0; break;
+        default: break;
+        }
+    }
+    return s;
+}
+
+PlaybackMetadata parsePlaybackMetadata(const QByteArray &body)
+{
+    PlaybackMetadata m;
+    ProtoReader r(body);
+    ProtoReader::Field f;
+    while (r.next(f)) {
+        switch (f.number) {
+        case 1: m.title = QString::fromUtf8(f.bytes); break;
+        case 2: m.artist = QString::fromUtf8(f.bytes); break;
+        case 3: m.album = QString::fromUtf8(f.bytes); break;
+        case 4: m.art = f.bytes; break;
+        case 5: m.playlist = QString::fromUtf8(f.bytes); break;
+        case 6: m.durationS = int(f.varint); break;
+        default: break;
+        }
+    }
+    return m;
 }
 
 } // namespace Aap

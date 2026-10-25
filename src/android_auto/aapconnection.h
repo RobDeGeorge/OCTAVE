@@ -48,6 +48,10 @@ public:
     void sendTouch(const QList<Aap::TouchPointer> &pointers, int actionIndex, Aap::TouchAction action);
     void setNightMode(bool night);
     void setVideoFocus(bool projected);
+    // Media focus and keys (AapSession::answerAudioFocus / setAudioFocus / sendKey)
+    void answerAudioFocus(int state);
+    void setAudioFocus(int state);
+    void sendKey(int keycode);
 
     // Audio goes to this output (AudioOutput::preferred) at this volume
     void setVolume(float linear);
@@ -62,6 +66,10 @@ signals:
     void videoStreaming(bool streaming);
     void audioStreaming(Aap::AudioStream stream, bool streaming);
     void frameSizeChanged(int width, int height);
+    void audioFocusRequested(int requestType);
+    void microphoneRequested(bool open);
+    void playbackStatus(const Aap::PlaybackStatus &status);
+    void playbackMetadata(const Aap::PlaybackMetadata &metadata);
     void failed(const QString &reason);
     void ended(const QString &reason);
     // The session is over and the worker gone; start() may be called again

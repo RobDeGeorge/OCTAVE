@@ -39,6 +39,11 @@ public:
         QByteArray keyPem;          // may be empty when certPem holds both
         int pingIntervalMs = 1500;
         int pingTimeoutMs = 10000;  // no ping answer for this long → failed
+        // GAIN requests (the phone wants to play media) go out through
+        // audioFocusRequested and wait for answerAudioFocus; otherwise every
+        // request is granted. Transient requests and RELEASE are always
+        // answered here.
+        bool externalAudioFocus = false;
     };
 
     explicit AapSession(const Options &options, QObject *parent = nullptr);
@@ -61,6 +66,12 @@ public:
     // it open (microphoneRequested(true)); dropped otherwise
     void sendMicrophoneAudio(const QByteArray &pcm);
     bool microphoneOpen() const { return m_micOpen; }
+    // Answer the pending GAIN request (Aap::Focus::Gain or Loss)
+    void answerAudioFocus(int state);
+    // Unsolicited focus change: Loss makes the phone pause its media
+    void setAudioFocus(int state);
+    // A key press and release (Aap::Key)
+    void sendKey(int keycode);
 
     State state() const { return m_state; }
     QString phoneName() const { return m_phoneName; }
@@ -77,6 +88,11 @@ signals:
     void audioStreaming(Aap::AudioStream stream, bool streaming);
     void audioData(Aap::AudioStream stream, const QByteArray &pcm, qint64 timestampUs);
     void microphoneRequested(bool open);
+    // Every AUDIO_FOCUS_REQUEST (Aap::Focus::Request*); with externalAudioFocus
+    // a RequestGain one waits for answerAudioFocus
+    void audioFocusRequested(int requestType);
+    void playbackStatus(const Aap::PlaybackStatus &status);
+    void playbackMetadata(const Aap::PlaybackMetadata &metadata);
     void failed(const QString &reason);
     void ended(const QString &reason);
 
@@ -90,6 +106,7 @@ private:
     void handleSensor(const Aap::Message &m);
     void handleInput(const Aap::Message &m);
     void handleMicrophone(const Aap::Message &m);
+    void handleMediaStatus(const Aap::Message &m);
     void onPingTimer();
     qint64 nowUs() const { return m_clock.nsecsElapsed() / 1000; }
 

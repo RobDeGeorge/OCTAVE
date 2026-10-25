@@ -113,7 +113,19 @@ public:
             post([o = m_owner, s, pcm] { o->onAudio(s, pcm); });
         });
         connect(m_session, &AapSession::microphoneRequested, this, [this](bool open) {
-            post([o = m_owner, open] { o->onMicrophone(open); });
+            post([o = m_owner, open] {
+                o->onMicrophone(open);
+                emit o->microphoneRequested(open);
+            });
+        });
+        connect(m_session, &AapSession::audioFocusRequested, this, [this](int type) {
+            post([o = m_owner, type] { emit o->audioFocusRequested(type); });
+        });
+        connect(m_session, &AapSession::playbackStatus, this, [this](const Aap::PlaybackStatus &st) {
+            post([o = m_owner, st] { emit o->playbackStatus(st); });
+        });
+        connect(m_session, &AapSession::playbackMetadata, this, [this](const Aap::PlaybackMetadata &md) {
+            post([o = m_owner, md] { emit o->playbackMetadata(md); });
         });
 
         if (m_decoder.open()) {
@@ -468,6 +480,39 @@ void AapConnection::stopMicrophone()
     m_mic->deleteLater();
     m_mic = nullptr;
     m_micIo = nullptr;
+}
+
+void AapConnection::answerAudioFocus(int state)
+{
+    if (!m_worker)
+        return;
+    AapWorker *w = m_worker;
+    QMetaObject::invokeMethod(w, [w, state] {
+        if (w->session())
+            w->session()->answerAudioFocus(state);
+    }, Qt::QueuedConnection);
+}
+
+void AapConnection::setAudioFocus(int state)
+{
+    if (!m_worker)
+        return;
+    AapWorker *w = m_worker;
+    QMetaObject::invokeMethod(w, [w, state] {
+        if (w->session())
+            w->session()->setAudioFocus(state);
+    }, Qt::QueuedConnection);
+}
+
+void AapConnection::sendKey(int keycode)
+{
+    if (!m_worker)
+        return;
+    AapWorker *w = m_worker;
+    QMetaObject::invokeMethod(w, [w, keycode] {
+        if (w->session())
+            w->session()->sendKey(keycode);
+    }, Qt::QueuedConnection);
 }
 
 void AapConnection::setVolume(float linear)

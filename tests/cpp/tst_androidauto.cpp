@@ -373,8 +373,10 @@ private slots:
         QHash<int, QByteArray> services;
         for (const QByteArray &s : ProtoReader::repeatedBytes(r, 1))
             services.insert(int(ProtoReader::varintField(s, 1).value()), s);
-        // Android Auto refuses a head unit without an audio sink or a mic
-        QCOMPARE(QSet<int>(services.keyBegin(), services.keyEnd()), (QSet<int>{1, 3, 4, 5, 6, 8, 9}));
+        // Android Auto refuses a head unit without an audio sink or a mic;
+        // 10 is the media playback status (what plays, for nowPlaying)
+        QCOMPARE(QSet<int>(services.keyBegin(), services.keyEnd()), (QSet<int>{1, 3, 4, 5, 6, 8, 9, 10}));
+        QVERIFY(ProtoReader::bytesField(services[10], 9).has_value());
 
         const QByteArray video = ProtoReader::bytesField(services[3], 3).value();
         QCOMPARE(ProtoReader::varintField(video, 1).value(), quint64(3));              // H.264 BP
@@ -392,6 +394,17 @@ private slots:
         const QByteArray touch = ProtoReader::bytesField(ProtoReader::bytesField(services[8], 4).value(), 2).value();
         QCOMPARE(ProtoReader::varintField(touch, 1).value(), quint64(1280));
         QCOMPARE(ProtoReader::varintField(touch, 2).value(), quint64(720));
+        // the media keys OCTAVE's own controls send
+        QList<quint64> keys;
+        ProtoReader in(ProtoReader::bytesField(services[8], 4).value());
+        ProtoReader::Field f;
+        while (in.next(f)) {
+            if (f.number == 1)
+                keys.append(f.varint);
+        }
+        QVERIFY(keys.contains(quint64(Key::MediaPlayPause)));
+        QVERIFY(keys.contains(quint64(Key::MediaNext)));
+        QVERIFY(keys.contains(quint64(Key::MediaPrevious)));
 
         QVERIFY(ProtoReader::bytesField(services[9], 5).has_value());                  // media source (mic)
         QCOMPARE(ProtoReader::bytesField(r, 14).value(), QByteArray("OCTAVE"));        // display name
@@ -601,6 +614,101 @@ private slots:
         hu.sendMicrophoneAudio(pcm);
         pump(hu, phone, toPhone);
         QVERIFY(!find(phone.received, Channel::Microphone, Msg::MediaData, 1));
+    }
+
+    void mediaFocusDecidedOutside()
+    {
+        AapSession::Options o;
+        o.certPem = m_headUnit.cert;
+        o.keyPem = m_headUnit.key;
+        o.externalAudioFocus = true;
+        AapSession hu(o);
+        FakePhone phone(m_phone);
+        QByteArray toPhone;
+        connect(&hu, &AapSession::transmit, this, [&](const QByteArray &b) { toPhone.append(b); });
+        QSignalSpy requested(&hu, &AapSession::audioFocusRequested);
+        QVERIFY(hu.start());
+        pump(hu, phone, toPhone);
+        QCOMPARE(hu.state(), AapSession::State::Running);
+
+        // GAIN waits for the answer
+        phone.send(Channel::Control, Msg::AudioFocusRequest, ProtoWriter().varint(1, Focus::RequestGain).data());
+        pump(hu, phone, toPhone);
+        QCOMPARE(requested.size(), 1);
+        QCOMPARE(requested.at(0).at(0).toInt(), Focus::RequestGain);
+        QVERIFY(!find(phone.received, Channel::Control, Msg::AudioFocusNotification));
+        hu.answerAudioFocus(Focus::Loss);
+        pump(hu, phone, toPhone);
+        const Message *refused = find(phone.received, Channel::Control, Msg::AudioFocusNotification);
+        QVERIFY(refused);
+        QCOMPARE(ProtoReader::varintField(refused->body, 1).value(), quint64(Focus::Loss));
+        QCOMPARE(ProtoReader::varintField(refused->body, 2).value(), quint64(0));    // an answer
+
+        // transient requests (prompts, Assistant) are granted on the spot
+        phone.send(Channel::Control, Msg::AudioFocusRequest,
+                   ProtoWriter().varint(1, Focus::RequestGainTransientMayDuck).data());
+        pump(hu, phone, toPhone);
+        const Message *transient = find(phone.received, Channel::Control, Msg::AudioFocusNotification, 1);
+        QVERIFY(transient);
+        QCOMPARE(ProtoReader::varintField(transient->body, 1).value(), quint64(Focus::Gain));
+        QCOMPARE(requested.size(), 2);
+
+        // the head unit takes focus back: unsolicited LOSS
+        hu.setAudioFocus(Focus::Loss);
+        pump(hu, phone, toPhone);
+        const Message *taken = find(phone.received, Channel::Control, Msg::AudioFocusNotification, 2);
+        QVERIFY(taken);
+        QCOMPARE(ProtoReader::varintField(taken->body, 1).value(), quint64(Focus::Loss));
+        QCOMPARE(ProtoReader::varintField(taken->body, 2).value(), quint64(1));      // unsolicited
+    }
+
+    void mediaKeysAndPlaybackStatus()
+    {
+        AapSession::Options o;
+        o.certPem = m_headUnit.cert;
+        o.keyPem = m_headUnit.key;
+        AapSession hu(o);
+        FakePhone phone(m_phone);
+        QByteArray toPhone;
+        connect(&hu, &AapSession::transmit, this, [&](const QByteArray &b) { toPhone.append(b); });
+        QVERIFY(hu.start());
+        pump(hu, phone, toPhone);
+
+        // a key press is a down and an up report
+        hu.sendKey(Key::MediaNext);
+        pump(hu, phone, toPhone);
+        for (int i = 0; i < 2; ++i) {
+            const Message *report = find(phone.received, Channel::Input, Msg::InputReport, i);
+            QVERIFY(report);
+            const QByteArray key = ProtoReader::bytesField(ProtoReader::bytesField(report->body, 4).value(), 1).value();
+            QCOMPARE(ProtoReader::varintField(key, 1).value(), quint64(Key::MediaNext));
+            QCOMPARE(ProtoReader::varintField(key, 2).value(), quint64(i == 0 ? 1 : 0));
+        }
+
+        // what plays
+        QSignalSpy status(&hu, &AapSession::playbackStatus);
+        QSignalSpy metadata(&hu, &AapSession::playbackMetadata);
+        phone.send(Channel::MediaStatus, Msg::PlaybackStatus,
+                   ProtoWriter().varint(1, PlaybackStatus::Playing).string(2, QStringLiteral("Spotify"))
+                       .varint(3, 42).boolean(4, true).data());
+        const QByteArray art = QByteArray::fromHex("ffd8ffe0") + QByteArray(30000, 'j');   // fragmented
+        phone.send(Channel::MediaStatus, Msg::PlaybackMetadata,
+                   ProtoWriter().string(1, QStringLiteral("Song")).string(2, QStringLiteral("Artist"))
+                       .string(3, QStringLiteral("Album")).bytes(4, art).varint(6, 215).data());
+        pump(hu, phone, toPhone);
+        QCOMPARE(status.size(), 1);
+        const auto st = status.at(0).at(0).value<PlaybackStatus>();
+        QCOMPARE(st.state, int(PlaybackStatus::Playing));
+        QCOMPARE(st.source, QStringLiteral("Spotify"));
+        QCOMPARE(st.positionS, 42);
+        QVERIFY(st.shuffle);
+        QCOMPARE(metadata.size(), 1);
+        const auto md = metadata.at(0).at(0).value<PlaybackMetadata>();
+        QCOMPARE(md.title, QStringLiteral("Song"));
+        QCOMPARE(md.artist, QStringLiteral("Artist"));
+        QCOMPARE(md.album, QStringLiteral("Album"));
+        QCOMPARE(md.art, art);
+        QCOMPARE(md.durationS, 215);
     }
 
     void silentPhoneTimesOut()

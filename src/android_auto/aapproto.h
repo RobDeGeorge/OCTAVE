@@ -85,13 +85,26 @@ constexpr quint16 VideoFocusRequest = 0x8007, VideoFocusNotification = 0x8008;
 constexpr quint16 SensorRequest = 0x8001, SensorResponse = 0x8002, SensorBatch = 0x8003;
 // input channel
 constexpr quint16 InputReport = 0x8001, KeyBindingRequest = 0x8002, KeyBindingResponse = 0x8003;
+// media playback status channel (phone → head unit)
+constexpr quint16 PlaybackStatus = 0x8001, PlaybackInput = 0x8002, PlaybackMetadata = 0x8003;
 }
 
 // What a channel carries; the channel ids OCTAVE announces (aasdk's numbering)
 namespace Channel {
 constexpr quint8 Control = 0, Sensor = 1, Video = 3;
 constexpr quint8 MediaAudio = 4, GuidanceAudio = 5, SystemAudio = 6;
-constexpr quint8 Input = 8, Microphone = 9;
+constexpr quint8 Input = 8, Microphone = 9, MediaStatus = 10;
+}
+
+// AUDIO_FOCUS_REQUEST types and AUDIO_FOCUS_NOTIFICATION states
+namespace Focus {
+constexpr int RequestGain = 1, RequestGainTransient = 2, RequestGainTransientMayDuck = 3, RequestRelease = 4;
+constexpr int Gain = 1, GainTransient = 2, Loss = 3, LossTransientCanDuck = 4, LossTransient = 5;
+}
+
+// Android keycodes OCTAVE's media controls send (announced in the input service)
+namespace Key {
+constexpr int MediaPlayPause = 85, MediaNext = 87, MediaPrevious = 88, MediaPlay = 126, MediaPause = 127;
 }
 
 enum class AudioStream { Media, Guidance, System };
@@ -145,11 +158,41 @@ enum class TouchAction { Down = 0, Up = 1, Moved = 2, PointerDown = 5, PointerUp
 QByteArray touchInputReport(qint64 timestampNs, const QList<TouchPointer> &pointers,
                             int actionIndex, TouchAction action);
 
+// One key press (down or up); timestamp in nanoseconds
+QByteArray keyInputReport(qint64 timestampNs, int keycode, bool down);
+
 // The audio focus state answering a request type (RELEASE → LOSS, else GAIN)
 int audioFocusStateFor(int requestType);
+
+// ─── what OCTAVE reads ───────────────────────────────────────────────
+
+// MEDIA_PLAYBACK_STATUS
+struct PlaybackStatus {
+    enum State { Stopped = 1, Playing = 2, Paused = 3 };
+    int state = Stopped;
+    QString source;             // the app, e.g. "Spotify"
+    int positionS = 0;
+    bool shuffle = false;
+    bool repeat = false;
+    bool repeatOne = false;
+};
+PlaybackStatus parsePlaybackStatus(const QByteArray &body);
+
+// MEDIA_PLAYBACK_METADATA
+struct PlaybackMetadata {
+    QString title;
+    QString artist;
+    QString album;
+    QByteArray art;             // PNG / JPEG, may be empty
+    QString playlist;
+    int durationS = 0;
+};
+PlaybackMetadata parsePlaybackMetadata(const QByteArray &body);
 
 } // namespace Aap
 
 Q_DECLARE_METATYPE(Aap::AudioStream)
+Q_DECLARE_METATYPE(Aap::PlaybackStatus)
+Q_DECLARE_METATYPE(Aap::PlaybackMetadata)
 
 #endif // AAPPROTO_H

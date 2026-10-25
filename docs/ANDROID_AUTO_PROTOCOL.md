@@ -53,7 +53,7 @@ Every message travels in one or more frames:
 | 11 / 12 | PING_REQUEST / RESPONSE | ↔ | `{timestamp}`; the head unit should also ping (aasdk-based units do every ~1.5 s) |
 | 13 / 14 | NAV_FOCUS_REQUEST / NOTIFICATION | ←/→ | answer `{focus_type = 2}` (PROJECTED) |
 | 15 / 16 | BYEBYE_REQUEST / RESPONSE | ↔ | request `{reason = 1}` (USER_SELECTION); end every session with it |
-| 18 / 19 | AUDIO_FOCUS_REQUEST / NOTIFICATION | ←/→ | request type 4 (RELEASE) → state 3 (LOSS); otherwise → state 1 (GAIN) |
+| 18 / 19 | AUDIO_FOCUS_REQUEST / NOTIFICATION | ←/→ | request `{type 1}`: 1 GAIN, 2 GAIN_TRANSIENT, 3 GAIN_TRANSIENT_MAY_DUCK, 4 RELEASE; notification `{state 1, unsolicited 2}`: 1 GAIN, 2 GAIN_TRANSIENT, 3 LOSS, 4 LOSS_TRANSIENT_CAN_DUCK, 5 LOSS_TRANSIENT. See *Audio focus* below |
 
 ## Service discovery response
 
@@ -70,8 +70,9 @@ What OCTAVE announces (aasdk's channel numbering):
 | 4 | media sink, media audio | `available_type` = 1 (PCM), `audio_type` 2 = 3 (MEDIA), `audio_configs` 3: `{sampling_rate 1 = 48000, number_of_bits 2 = 16, number_of_channels 3 = 2}` |
 | 5 | media sink, guidance audio | `audio_type` = 1, 16000 Hz, 16 bit, mono |
 | 6 | media sink, system audio | `audio_type` = 2, 16000 Hz, 16 bit, mono |
-| 8 | input source | `touchscreen` 2: `{width 1, height 2}` = the video resolution |
+| 8 | input source | `keycodes_supported` 1 (repeated): 85 MEDIA_PLAY_PAUSE, 87 NEXT, 88 PREVIOUS, 126 PLAY, 127 PAUSE; `touchscreen` 2: `{width 1, height 2}` = the video resolution |
 | 9 | media source, microphone | `available_type` 1 = 1 (PCM), `audio_config` 2 = 16000 Hz, 16 bit, mono |
+| 10 | media playback status | `media_playback_service` 9, an empty message |
 
 Rejections seen in logcat while getting here (`CAR.SERVICE: Critical error 2 ...`): detail 72 "No audio playback service" without an audio sink; detail 24 "No audio/mic" without the microphone source. Video, at least one audio sink and the microphone are required.
 
@@ -90,6 +91,23 @@ Rejections seen in logcat while getting here (`CAR.SERVICE: Critical error 2 ...
 | 0x8008 | VIDEO_FOCUS_NOTIFICATION | → | `{ focus 1 = 1 (PROJECTED), unsolicited 2 = false }`; send right after CONFIG on the video channel and in answer to every focus request |
 
 The first video frame arrived ~0.3 s after the handshake. Media audio starts (AUDIO_FOCUS_REQUEST GAIN, then START) when the phone begins playback; with *Start music automatically* on, it does so on connect.
+
+## Audio focus
+
+Seen with Android Auto 17.9: right after discovery the phone sends RELEASE, then GAIN. That GAIN is Android Auto's own (logcat: `CAR.AUDIO.FOCUS: Sending AUDIO_FOCUS_GAIN to HU for app com.google.android.projection.gearhead`), not the music; music starting later sends another GAIN.
+
+**Don't answer GAIN with LOSS.** Android Auto then takes Android audio focus on the phone on the car's behalf, its focus monitor sees a change (`forceNotify: true`) and it asks the head unit again at once: ~1500 requests in 12 s. To refuse, answer GAIN and immediately send an unsolicited LOSS (`{state 3, unsolicited 1}`), as a head unit's own source (radio) does: the playing app pauses and the phone stays quiet until something plays again. Taking focus back from a playing phone is the same unsolicited LOSS.
+
+OCTAVE's rule for granting (who owns the music) is in `NowPlaying` and the wiki (*Which source plays the music*).
+
+## Media playback status (channel 10)
+
+| id | name | direction | body |
+|---|---|---|---|
+| 0x8001 | MEDIA_PLAYBACK_STATUS | ← | `{ state 1 (1 STOPPED, 2 PLAYING, 3 PAUSED), media_source 2 (app name), playback_seconds 3, shuffle 4, repeat 5, repeat_one 6 }` |
+| 0x8003 | MEDIA_PLAYBACK_METADATA | ← | `{ song 1, artist 2, album 3, album_art 4 (a 256x256 PNG from Spotify), playlist 5, duration_seconds 6, rating 7 }` (playlist and rating not seen yet) |
+
+Both arrived as soon as playback started (checked with a podcast in Spotify); how often status repeats while playing was not measured, so OCTAVE extrapolates the position between reports.
 
 ## Microphone (channel 9)
 
@@ -116,4 +134,4 @@ Send a batch with the current value right after the response, then whenever it c
 |---|---|---|---|
 | 0x8002 | KEY_BINDING_REQUEST | ← | `{ keycodes 1 }` (empty for a touchscreen-only head unit) |
 | 0x8003 | KEY_BINDING_RESPONSE | → | `{ status = 0 }` |
-| 0x8001 | INPUT_REPORT | → | `{ timestamp 1, touch_event 3 { pointer_data 1 {x 1, y 2, pointer_id 3}, action_index 2, action 3 } }` (touch not verified yet); action 0 DOWN, 1 UP, 2 MOVED, 5 POINTER_DOWN, 6 POINTER_UP |
+| 0x8001 | INPUT_REPORT | → | `{ timestamp 1, touch_event 3 { pointer_data 1 {x 1, y 2, pointer_id 3}, action_index 2, action 3 } }`; action 0 DOWN, 1 UP, 2 MOVED, 5 POINTER_DOWN, 6 POINTER_UP. Keys: `{ timestamp 1, key_event 4 { keys 1 { keycode 1, down 2, metastate 3, longpress 4 } } }`, one report for down and one for up; the phone acts on announced keycodes only |
