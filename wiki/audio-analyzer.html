@@ -354,7 +354,7 @@ m_watcher.<span class="fn">setFuture</span>(future);        <span class="cmt">//
         <!-- QML Integration -->
         <h2 id="qml-integration">QML Integration</h2>
 
-        <p>The display consumer is the waveform container in <span class="file-path">frontend/MediaRoom.qml</span>, visible when <code>settingsManager.showWaveformVisualizer</code> is on and <code>playlistEmpty</code> is false. The analyzer follows what is playing on its own: <span class="file-path">src/main.cpp</span> feeds it <code>nowPlaying</code>'s source (live for the phone) and play state, and MediaManager's track and position. The page only reports whether its bars are on screen and draws the levels:</p>
+        <p>The display consumer is the waveform container in <span class="file-path">frontend/MediaRoom.qml</span>, visible when <code>settingsManager.showWaveformVisualizer</code> is on and <code>playlistEmpty</code> is false. The analyzer follows what is playing on its own: <span class="file-path">src/main.cpp</span> feeds it <code>nowPlaying</code>'s source (live for the phone; also for Android Auto, whose audio is not fed to it yet, so the bars stay still) and play state, and MediaManager's track and position. The page only reports whether its bars are on screen and draws the levels:</p>
 
         <pre><code><span class="cmt">// On screen and not mid card animation (the decode of a new track waits for it)</span>
 <span class="prop">readonly property bool</span> _barsOn: visible &amp;&amp; !mediaRoom._cardAnimBusy

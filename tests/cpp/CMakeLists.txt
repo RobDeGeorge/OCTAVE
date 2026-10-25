@@ -165,7 +165,7 @@ if(WIN32 AND OCTAVE_HAVE_FFMPEG)
 endif()
 # NowPlaying over the real MediaManager and PhoneMirrorManager
 octave_add_test(tst_nowplaying
-    SOURCES managers/nowplaying.h managers/nowplaying.cpp
+    SOURCES managers/nowplaying.h managers/nowplaying.cpp managers/androidautomedia.h managers/androidautomedia.cpp
             managers/mediamanager.h managers/mediamanager.cpp util/folderbrowser.h util/folderbrowser.cpp service/staticfiles.h service/staticfiles.cpp util/units.h util/units.cpp
             managers/phonemirrormanager.h managers/phonemirrormanager.cpp
             phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h util/h264decoder.h util/h264decoder.cpp

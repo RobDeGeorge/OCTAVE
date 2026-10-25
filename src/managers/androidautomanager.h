@@ -21,6 +21,8 @@
 #ifndef ANDROIDAUTOMANAGER_H
 #define ANDROIDAUTOMANAGER_H
 
+#include "androidautomedia.h"
+
 #ifndef Q_OS_MOBILE
 
 #include <QObject>
@@ -177,6 +179,8 @@ public:
     void setMuted(bool muted);
     void setAudioOutputDevice(const QString &id);
     void setNightMode(bool night);
+    // Android Auto's music for NowPlaying (native mode)
+    AndroidAutoMedia *media() { return &m_media; }
 
     // Connects to the phone's head unit server (adb) and runs a session.
     // False when it can't even begin; nativeState says why.
@@ -269,6 +273,7 @@ private:
     int              m_videoHeight = 720;
     QHash<int, int>  m_touchSlots;     // touch area pointId → Android Auto pointer id
     QHash<int, QPoint> m_touchPos;     // Android Auto pointer id → last position (video px)
+    AndroidAutoMedia m_media;
 };
 
 #else // Q_OS_MOBILE — mobile stub. DhuFrameProvider/DhuCapture not provided.
@@ -323,6 +328,7 @@ public:
     void setMuted(bool) {}
     void setAudioOutputDevice(const QString &) {}
     void setNightMode(bool) {}
+    AndroidAutoMedia *media() { return &m_media; }
     Q_INVOKABLE bool startNative() { return false; }
     Q_INVOKABLE void stopNative() {}
     Q_INVOKABLE void injectTouch(int, int, double, double) {}
@@ -340,6 +346,7 @@ signals:
 
 private:
     DhuFrameProvider *m_provider;
+    AndroidAutoMedia m_media;      // never connected
 };
 
 #endif // Q_OS_MOBILE

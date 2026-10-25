@@ -523,6 +523,7 @@ export interface NowPlaying {
     previous: { args: []; returns: void }
     seek: { args: [positionMs: number]; returns: void }
     toggleShuffle: { args: []; returns: void }
+    useLocal: { args: []; returns: void }
     extractArtColors: { args: []; returns: void }
   }
   signals: {

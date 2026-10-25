@@ -238,6 +238,8 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("lastShuffleState")]        = false;
     d[QStringLiteral("lastPlayedSong")]          = QString();
     d[QStringLiteral("lastPlayedPosition")]      = 0;
+    d[QStringLiteral("mediaLastSource")]         = QStringLiteral("local");  // who owned the music: local | phone | androidauto (NowPlaying)
+    d[QStringLiteral("mediaLastPlaying")]        = false;    // and whether it was playing
     d[QStringLiteral("lastPlayedPlaylist")]      = QString();
     d[QStringLiteral("windowState")]             = QStringLiteral("windowed");
     d[QStringLiteral("musicButtonDefaultPage")]  = QStringLiteral("mediaRoom");

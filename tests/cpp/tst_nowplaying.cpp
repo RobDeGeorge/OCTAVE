@@ -12,6 +12,7 @@
 
 #include <memory>
 
+#include "managers/androidautomedia.h"
 #include "managers/mediamanager.h"
 #include "managers/nowplaying.h"
 #include "managers/phonemirrormanager.h"
@@ -151,6 +152,250 @@ private slots:
         emit media.playStateChanged(true);   // the user started a local track
         QCOMPARE(np.source(), QStringLiteral("local"));
         QVERIFY(!phone.mediaActive());
+    }
+
+    // ── the arbiter: Android Auto asks, a user action decides ──────────
+    // (TODO/media-source-arbiter.md; focus states 1 GAIN / 3 LOSS, keys 85
+    // play-pause / 87 next / 88 previous are the protocol's)
+
+    void androidAutoAutoPlayRefusedWhileLocalOwns()
+    {
+        MediaManager media;
+        PhoneMirrorManager phone;
+        NowPlaying np(&media, &phone);
+        AndroidAutoMedia aa;
+        np.setAndroidAuto(&aa);
+        QSignalSpy answer(&aa, &AndroidAutoMedia::focusAnswer);
+        QSignalSpy change(&aa, &AndroidAutoMedia::focusChange);
+        aa.setConnected(true);
+        aa.focusRequested(1);               // the phone starting music by itself
+        // Refused the way a car radio does it: granted, then taken back at
+        // once (an answered LOSS makes Android Auto ask again in a loop)
+        QCOMPARE(answer.count(), 1);
+        QCOMPARE(answer.at(0).at(0).toInt(), 1);
+        QCOMPARE(change.count(), 1);
+        QCOMPARE(change.at(0).at(0).toInt(), 3);
+        QCOMPARE(np.source(), QStringLiteral("local"));
+        QVERIFY(!aa.hasFocus());
+    }
+
+    void androidAutoGrantedAfterATouch()
+    {
+        MediaManager media;
+        PhoneMirrorManager phone;
+        NowPlaying np(&media, &phone);
+        AndroidAutoMedia aa;
+        np.setAndroidAuto(&aa);
+        QSignalSpy answer(&aa, &AndroidAutoMedia::focusAnswer);
+        QSignalSpy source(&np, &NowPlaying::sourceChanged);
+        aa.setConnected(true);
+        aa.noteUserIntent();                // a tap on Spotify in Android Auto
+        aa.focusRequested(1);
+        QCOMPARE(answer.at(0).at(0).toInt(), 1);
+        QCOMPARE(np.source(), QStringLiteral("androidauto"));
+        QCOMPARE(source.count(), 1);
+        QVERIFY(!np.canShuffle());
+        QVERIFY(!np.canSeek());
+        // it owns now: later requests need no touch
+        aa.focusRequested(4);               // paused, gave focus up
+        aa.focusRequested(1);
+        QCOMPARE(answer.count(), 2);
+        QCOMPARE(answer.at(1).at(0).toInt(), 1);
+    }
+
+    void voiceRequestCountsAsTheUsers()
+    {
+        MediaManager media;
+        PhoneMirrorManager phone;
+        NowPlaying np(&media, &phone);
+        AndroidAutoMedia aa;
+        np.setAndroidAuto(&aa);
+        QSignalSpy answer(&aa, &AndroidAutoMedia::focusAnswer);
+        aa.setConnected(true);
+        aa.setMicrophoneOpen(true);         // "Hey Google, play some music"
+        aa.setMicrophoneOpen(false);
+        aa.focusRequested(1);
+        QCOMPARE(answer.at(0).at(0).toInt(), 1);
+        QCOMPARE(np.source(), QStringLiteral("androidauto"));
+    }
+
+    void localPlayTakesTheMusicBackFromAndroidAuto()
+    {
+        MediaManager media;
+        PhoneMirrorManager phone;
+        NowPlaying np(&media, &phone);
+        AndroidAutoMedia aa;
+        np.setAndroidAuto(&aa);
+        QSignalSpy change(&aa, &AndroidAutoMedia::focusChange);
+        aa.setConnected(true);
+        aa.noteUserIntent();
+        aa.focusRequested(1);
+        QCOMPARE(np.source(), QStringLiteral("androidauto"));
+        emit media.playStateChanged(true);  // the user started a local track
+        QCOMPARE(np.source(), QStringLiteral("local"));
+        QCOMPARE(change.count(), 1);
+        QCOMPARE(change.at(0).at(0).toInt(), 3);   // unsolicited LOSS: the phone pauses
+        QVERIFY(!aa.hasFocus());
+    }
+
+    void phoneMirrorTakingTheControlsStopsAndroidAuto()
+    {
+        MediaManager media;
+        PhoneMirrorManager phone;
+        NowPlaying np(&media, &phone);
+        AndroidAutoMedia aa;
+        np.setAndroidAuto(&aa);
+        QSignalSpy change(&aa, &AndroidAutoMedia::focusChange);
+        aa.setConnected(true);
+        aa.noteUserIntent();
+        aa.focusRequested(1);
+        phone.onMediaState(phoneState(true));
+        QCOMPARE(np.source(), QStringLiteral("phone"));
+        QCOMPARE(change.count(), 1);
+    }
+
+    void controlsGoToAndroidAuto()
+    {
+        MediaManager media;
+        PhoneMirrorManager phone;
+        NowPlaying np(&media, &phone);
+        AndroidAutoMedia aa;
+        np.setAndroidAuto(&aa);
+        QSignalSpy keys(&aa, &AndroidAutoMedia::keyPress);
+        aa.setConnected(true);
+        aa.noteUserIntent();
+        aa.focusRequested(1);
+        np.togglePlay();
+        np.next();
+        np.previous();
+        QCOMPARE(keys.count(), 3);
+        QCOMPARE(keys.at(0).at(0).toInt(), 85);
+        QCOMPARE(keys.at(1).at(0).toInt(), 87);
+        QCOMPARE(keys.at(2).at(0).toInt(), 88);
+        // after pausing from OCTAVE, the phone's next request is the user's
+        aa.focusRequested(4);
+        QSignalSpy answer(&aa, &AndroidAutoMedia::focusAnswer);
+        aa.focusRequested(1);
+        QCOMPARE(answer.at(0).at(0).toInt(), 1);
+    }
+
+    void androidAutoTrackShows()
+    {
+        MediaManager media;
+        PhoneMirrorManager phone;
+        NowPlaying np(&media, &phone);
+        AndroidAutoMedia aa;
+        np.setAndroidAuto(&aa);
+        aa.setConnected(true);
+        aa.noteUserIntent();
+        aa.focusRequested(1);
+        QSignalSpy track(&np, &NowPlaying::trackChanged);
+        aa.setMetadata(QStringLiteral("Song"), QStringLiteral("Artist"), QStringLiteral("Album"), redJpeg(), 200);
+        aa.setPlaybackStatus(2, 10, QStringLiteral("Spotify"));
+        QCOMPARE(track.count(), 1);
+        QVERIFY(np.hasTrack());
+        QCOMPARE(np.title(), QStringLiteral("Song"));
+        QCOMPARE(np.artist(), QStringLiteral("Artist"));
+        QCOMPARE(np.album(), QStringLiteral("Album"));
+        QVERIFY(!np.artUrl().isEmpty());
+        QCOMPARE(np.durationMs(), 200000);
+        QVERIFY(np.playing());
+        QVERIFY(np.positionMs() >= 10000);
+        const int start = np.positionMs();
+        QTRY_VERIFY_WITH_TIMEOUT(np.positionMs() >= start + NowPlaying::kPhoneTickMs, 3000);
+
+        // unplugged: the track stays on show, paused, Android Auto still the source
+        aa.setConnected(false);
+        QCOMPARE(np.source(), QStringLiteral("androidauto"));
+        QVERIFY(!np.playing());
+        QVERIFY(np.hasTrack());
+        // play then goes to OCTAVE's own player, not into the void
+        QSignalSpy keys(&aa, &AndroidAutoMedia::keyPress);
+        np.togglePlay();
+        QCOMPARE(keys.count(), 0);
+    }
+
+    void androidAutoResumesAfterARestart()
+    {
+        SettingsManager settings;
+        AndroidAutoMedia aa;
+        {
+            MediaManager media;
+            PhoneMirrorManager phone;
+            NowPlaying np(&media, &phone, &settings);
+            np.setAndroidAuto(&aa);
+            aa.setConnected(true);
+            aa.noteUserIntent();
+            aa.focusRequested(1);
+            aa.setPlaybackStatus(2, 0, QStringLiteral("Spotify"));
+            QCOMPARE(settings.get_setting(QStringLiteral("mediaLastSource")).toString(), QStringLiteral("androidauto"));
+            QVERIFY(settings.get_setting(QStringLiteral("mediaLastPlaying")).toBool());
+            np.stopSaving();
+            aa.setConnected(false);         // the car turned off
+        }
+        QVERIFY(settings.get_setting(QStringLiteral("mediaLastPlaying")).toBool());
+
+        AndroidAutoMedia aa2;               // next drive: no touch yet
+        MediaManager media;
+        PhoneMirrorManager phone;
+        NowPlaying np(&media, &phone, &settings);
+        np.setAndroidAuto(&aa2);
+        QSignalSpy answer(&aa2, &AndroidAutoMedia::focusAnswer);
+        QSignalSpy keys(&aa2, &AndroidAutoMedia::keyPress);
+        QSignalSpy change(&aa2, &AndroidAutoMedia::focusChange);
+        aa2.setConnected(true);
+        aa2.focusRequested(1);              // Android Auto's own request on connect
+        QCOMPARE(answer.at(0).at(0).toInt(), 1);
+        QCOMPARE(change.count(), 0);
+        QCOMPARE(np.source(), QStringLiteral("androidauto"));
+        // not playing yet: the saved "it was playing" must survive that
+        QVERIFY(settings.get_setting(QStringLiteral("mediaLastPlaying")).toBool());
+        // the phone stays quiet: OCTAVE presses play
+        QTRY_COMPARE_WITH_TIMEOUT(keys.count(), 1, NowPlaying::kResumeKeyDelayMs + 2000);
+        QCOMPARE(keys.at(0).at(0).toInt(), 85);
+    }
+
+    void resumePressesPlayIfThePhoneStaysQuiet()
+    {
+        SettingsManager settings;
+        settings.save_setting(QStringLiteral("mediaLastSource"), QStringLiteral("androidauto"));
+        settings.save_setting(QStringLiteral("mediaLastPlaying"), true);
+        MediaManager media;
+        PhoneMirrorManager phone;
+        NowPlaying np(&media, &phone, &settings);
+        AndroidAutoMedia aa;
+        np.setAndroidAuto(&aa);
+        QSignalSpy keys(&aa, &AndroidAutoMedia::keyPress);
+        aa.setConnected(true);
+        QTRY_COMPARE_WITH_TIMEOUT(keys.count(), 1, NowPlaying::kResumeKeyDelayMs + 2000);
+        QCOMPARE(keys.at(0).at(0).toInt(), 85);
+    }
+
+    void localPlayCancelsTheResume()
+    {
+        SettingsManager settings;
+        settings.save_setting(QStringLiteral("mediaLastSource"), QStringLiteral("androidauto"));
+        settings.save_setting(QStringLiteral("mediaLastPlaying"), true);
+        MediaManager media;
+        PhoneMirrorManager phone;
+        NowPlaying np(&media, &phone, &settings);
+        AndroidAutoMedia aa;
+        np.setAndroidAuto(&aa);
+        QSignalSpy change(&aa, &AndroidAutoMedia::focusChange);
+        emit media.playStateChanged(true);  // the user picked a local song first
+        aa.setConnected(true);
+        aa.focusRequested(1);
+        QCOMPARE(change.count(), 1);        // refused
+        QCOMPARE(np.source(), QStringLiteral("local"));
+    }
+
+    void androidAutoAloneGrantsEverything()
+    {
+        AndroidAutoMedia aa;                // no NowPlaying deciding
+        QSignalSpy answer(&aa, &AndroidAutoMedia::focusAnswer);
+        aa.setConnected(true);
+        aa.focusRequested(1);
+        QCOMPARE(answer.at(0).at(0).toInt(), 1);
     }
 
     // ── Album Art Capture: the theme follows the live source's art ─────

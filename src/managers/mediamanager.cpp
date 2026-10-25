@@ -2926,7 +2926,11 @@ void MediaManager::_restore_playback_state()
     const QString lastSong = m_settingsManager->get_last_played_song();
     const int lastPosition = m_settingsManager->get_last_played_position();
     const QString lastPlaylist = m_settingsManager->get_last_played_playlist();
-    const bool autoPlay = m_settingsManager->get_auto_play_on_startup();
+    // Not when Android Auto owned the music at shutdown: it resumes instead
+    // (NowPlaying, mediaLastSource)
+    const bool autoPlay = m_settingsManager->get_auto_play_on_startup()
+                          && m_settingsManager->get_setting(QStringLiteral("mediaLastSource")).toString()
+                                 != QLatin1String("androidauto");
 
     // Restore shuffle state
     if (m_settingsManager->get_persist_shuffle_state()) {

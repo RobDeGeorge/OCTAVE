@@ -513,8 +513,8 @@
             even with no media app), keeps them while paused or with no media app, and loses them when the session ends or
             <code>releaseMedia()</code> is called; after that it takes them back only when it starts playing again.
             Pressing play with no media app sends <code>KEYCODE_MEDIA_PLAY</code>, which restarts the last media app. <a href="signals-slots-reference.html#nowPlaying"><code>NowPlaying</code></a> holds the hand-offs: when the phone takes over, local playback
-            pauses; a local track starting calls <code>releaseMedia(true)</code> (the phone pauses). Frontends read the live source through <code>nowPlaying</code>, not these properties. With no media app the views show "Phone" / "Nothing playing". The Media Room shows a "Phone" source pill meanwhile; tapping it hands the controls
-            back to local media and pauses the phone. Shuffle is dimmed (it belongs to the phone app) and there are no side cards.</p>
+            pauses; a local track starting calls <code>releaseMedia(true)</code> (the phone pauses). Frontends read the live source through <code>nowPlaying</code>, not these properties. With no media app the views show "Phone" / "Nothing playing". The Media Room shows a "Phone" source pill meanwhile; tapping it (<code>nowPlaying.useLocal()</code>) hands the controls
+            back to local media and pauses the phone. The same rules with Android Auto: <a href="#aa-native-music">Which source plays the music</a>. Shuffle is dimmed (it belongs to the phone app) and there are no side cards.</p>
           <p><strong>Queue:</strong> <code>PhoneMedia</code> follows the selected app’s <code>MediaController</code> queue and active queue ID, sending up to 500 entries. Queue artwork is fetched separately, scaled to 160 px and sent once per URI per session. The manager stores it under <code>&lt;app data&gt;/temp/phone_queue_art/</code> and batches artwork notifications for 150 ms. <code>MediaPlayer.qml</code> shows this queue while the phone is active and a queue is available; selecting an entry calls <code>mediaSkipToQueueItem(id)</code>. The available tracks and skip behavior depend on what the phone app publishes. This is its active queue, not a browsable account library.</p>
           <p><strong>Waveform:</strong> the client emits <code>audioPlayed(pcm, bufferedMs)</code> as audio is handed to the sink. <code>main.cpp</code> routes it to <code>AudioAnalyzer.feed_live_pcm()</code>; <code>main.cpp</code> also switches it to live analysis while <code>nowPlaying</code>'s source is the phone. Without captured phone audio, the controls can still work but there is no live PCM waveform.</p>
           <p><strong>QML</strong> reads what is playing from <a href="signals-slots-reference.html#nowPlaying"><code>nowPlaying</code></a>, which
@@ -939,15 +939,51 @@
             <tbody>
               <tr><td>Video</td><td>Works. H.264 Baseline at the chosen size (800x480, 1280x720 or 1920x1080) and 30 or 60 fps, decoded with libavcodec into the page's <code>VideoOutput</code>, letterboxed to fit. While the page is hidden OCTAVE tells the phone (video focus) and it stops sending video; audio carries on.</td></tr>
               <tr><td>Touch</td><td>Works, multitouch (up to 10 points). Touches map through the letterboxed picture into video pixels; a touch that starts on the black bars is ignored for its whole life.</td></tr>
-              <tr><td>Audio</td><td>Works. Media (48 kHz stereo), guidance (16 kHz mono) and system sounds (16 kHz mono) each play on OCTAVE's selected audio output at OCTAVE's volume and mute, through the <a href="architecture.html#volume-system">volume system</a>; the phone's own volume is not touched. OCTAVE's own music is not paused or ducked for Android Auto yet.</td></tr>
+              <tr><td>Audio</td><td>Works. Media (48 kHz stereo), guidance (16 kHz mono) and system sounds (16 kHz mono) each play on OCTAVE's selected audio output at OCTAVE's volume and mute, through the <a href="architecture.html#volume-system">volume system</a>; the phone's own volume is not touched. Android Auto plays music only when OCTAVE lets it; navigation prompts and system sounds duck OCTAVE's own music (<a href="#aa-native-music">below</a>).</td></tr>
+              <tr><td>Now playing</td><td>Works. The phone reports the track, artist, album, cover art, length and position; <a href="signals-slots-reference.html#nowPlaying"><code>nowPlaying</code></a> shows them (Media Room, home card, dashboard widget, Album Art Capture), and the bottom bar, knob and gestures send play / pause / next / previous to the phone as media keys.</td></tr>
               <tr><td>Night mode</td><td>Follows OCTAVE's theme: any theme outside the light group counts as night, and a theme change is sent to the phone at once.</td></tr>
               <tr><td>Driving status</td><td>Always reported as unrestricted (parked), so the phone does not lock the keyboard or lists.</td></tr>
-              <tr><td>Microphone</td><td>Announced, because Android Auto refuses a head unit without one, but OCTAVE sends no audio: Google Assistant and voice replies hear nothing.</td></tr>
+              <tr><td>Microphone</td><td>OCTAVE records from the default input only while the phone has the microphone open (Google Assistant, voice replies) and sends it as 16 kHz mono; OCTAVE's own music pauses meanwhile. Covered by the tests; not yet tried with someone talking to it.</td></tr>
               <tr><td>Transport</td><td>adb only (USB debugging or wireless debugging, plus the head unit server). No USB accessory (AOA) mode, so a phone without developer mode can't connect, and no wireless Android Auto.</td></tr>
               <tr><td>Platforms</td><td>Desktop builds only (Linux, Windows, macOS). Checked on desktop Linux so far; Windows, macOS and the Orange Pi head unit are still to be tried. Not in the Android, iOS or browser builds.</td></tr>
               <tr><td>Build</td><td>Needs OpenSSL and FFmpeg (libavcodec) at build time (<code>OCTAVE_HAVE_NATIVE_AA</code>, <a href="building.html#cmake-options">Building</a>). Without them <code>nativeAvailable</code> is false and only the DHU backend exists.</td></tr>
             </tbody>
           </table>
+        </section>
+
+        <section id="aa-native-music">
+          <h3>Which source plays the music</h3>
+          <p>
+            OCTAVE's own player, the mirrored phone and Android Auto can all play music, and exactly one of them owns it at a time:
+            <a href="signals-slots-reference.html#nowPlaying"><code>nowPlaying.source</code></a> (<code>"local"</code>, <code>"phone"</code>
+            or <code>"androidauto"</code>). <strong>Only a user action changes the owner.</strong> A phone connecting, Android Auto starting,
+            a reconnect, or Android Auto's <em>Start music automatically</em> never does. Android Auto asks the head unit before it plays
+            (an audio focus request), so for Android Auto OCTAVE decides; phone mirroring can only be noticed once the phone plays.
+          </p>
+          <table>
+            <thead><tr><th>Situation</th><th>What happens</th></tr></thead>
+            <tbody>
+              <tr><td>Local music plays (or nothing does) and Android Auto connects, or Spotify starts on the phone by itself</td><td>Refused: the phone pauses, local keeps playing</td></tr>
+              <tr><td>A tap on the Android Auto screen, OCTAVE's play / next / previous aimed at Android Auto, or a voice request, then the phone asks to play within 6 s</td><td>Granted: Android Auto owns the music; local pauses, a mirrored phone is released</td></tr>
+              <tr><td>Android Auto owns the music and asks again (after a pause)</td><td>Granted</td></tr>
+              <tr><td>Play in OCTAVE's player while Android Auto owns</td><td>Local owns; OCTAVE takes focus back and the phone pauses</td></tr>
+              <tr><td>The Media Room's source pill ("Android Auto" / "Phone")</td><td><code>nowPlaying.useLocal()</code>: the other source pauses, nothing plays until asked</td></tr>
+              <tr><td>Navigation prompt or system sound from Android Auto</td><td>Local music ducks to 30 % (the same <code>MediaManager::setDucking</code> phone mirroring uses; the lower of the two wins)</td></tr>
+              <tr><td>Google Assistant opens the microphone</td><td>Local music pauses, and resumes when the microphone closes unless something else started</td></tr>
+              <tr><td>The owner goes away (phone unplugged, session ended)</td><td>Paused, still shown; nothing else starts. Play then goes to OCTAVE's own player</td></tr>
+              <tr><td>OCTAVE restarts (car off and on) while Android Auto owned and played</td><td>Android Auto resumes when it connects; if the phone doesn't start its music within 4 s, OCTAVE presses play. Local <em>auto-play on startup</em> stays off that time. Playing anything local first cancels it</td></tr>
+            </tbody>
+          </table>
+          <p>
+            Owner and play state are saved as <code>mediaLastSource</code> / <code>mediaLastPlaying</code>
+            (<a href="settings-reference.html">Settings reference</a>), not overwritten by what stops at shutdown or when the phone
+            disconnects. Refusing is done the way a car radio does it: OCTAVE grants the request and at once takes focus back
+            (unsolicited LOSS); answering LOSS makes Android Auto 17.9 ask again about 50 times a second. Phone mirroring keeps its own
+            rule for now (the phone's first media report takes the controls); bringing it under the same rules is in
+            <span class="file-path">TODO/media-source-arbiter.md</span>. Code: <span class="file-path">src/managers/nowplaying.cpp</span>
+            (the rules), <span class="file-path">src/managers/androidautomedia.cpp</span> (Android Auto's side); tests:
+            <code>tst_nowplaying</code>.
+          </p>
         </section>
 
         <section id="aa-native-states">
@@ -986,11 +1022,14 @@
               forward or a mirroring tunnel; the forward is removed when the session ends.</li>
             <li><strong>Session</strong> -- an <code>AapConnection</code> on its own thread connects to <code>127.0.0.1:&lt;port&gt;</code> and
               runs an <code>AapSession</code>: version exchange, TLS 1.2 with the head-unit certificate (OCTAVE is the TLS client), auth
-              complete, then service discovery, where OCTAVE announces video, three audio sinks, a microphone, a touchscreen and sensors
-              (driving status, night mode). From TCP connect to discovery it allows 10 s. Every video frame and audio packet is acknowledged;
+              complete, then service discovery, where OCTAVE announces video, three audio sinks, a microphone, a touchscreen with media keys,
+              sensors (driving status, night mode) and media playback status. From TCP connect to discovery it allows 10 s. Every video frame and audio packet is acknowledged;
               OCTAVE pings every 1.5 s.</li>
             <li><strong>Media</strong> -- H.264 goes through <code>H264Decoder</code> into the page's <code>QVideoSink</code>; PCM goes to one
               <code>QAudioSink</code> per stream with at most 500 ms queued.</li>
+            <li><strong>Music</strong> -- the phone's media focus requests go to <code>AndroidAutoMedia</code> and <code>nowPlaying</code>
+              answers them (<a href="#aa-native-music">above</a>); the media playback status channel brings the track, art and position;
+              OCTAVE's controls go out as key events (<code>KEYCODE_MEDIA_PLAY_PAUSE</code>, <code>NEXT</code>, <code>PREVIOUS</code>).</li>
             <li><strong>End</strong> -- the close button and application quit send a bye-bye and wait for the phone's answer (quit waits up to
               3 s): a session cut off mid-stream can leave the phone's head unit server accepting connections but never answering.</li>
           </ol>

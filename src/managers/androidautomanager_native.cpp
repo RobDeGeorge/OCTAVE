@@ -340,6 +340,7 @@ void AndroidAutoManager::nativeStep()
         m_forwardPort = r.port;
 
         AapSession::Options opt;
+        opt.externalAudioFocus = true;     // NowPlaying decides (AndroidAutoMedia)
         opt.certPem = cert;
         opt.keyPem = key;
         const QString res = setting(QStringLiteral("androidAutoResolution"), QStringLiteral("1280x720")).toString();
@@ -362,6 +363,7 @@ void AndroidAutoManager::nativeStep()
             });
             connect(m_aap, &AapConnection::running, this, [this](const QString &name) {
                 m_phoneName = name;
+                m_media.setConnected(true);
                 m_aap->setNightMode(m_nightMode);
                 m_aap->setVideoFocus(m_viewVisible);
                 setNativeState(QStringLiteral("running"),
@@ -382,6 +384,25 @@ void AndroidAutoManager::nativeStep()
                     setNativeState(QStringLiteral("connecting"), QStringLiteral("Android Auto ended (%1); reconnecting...").arg(reason));
             });
             connect(m_aap, &AapConnection::finished, this, &AndroidAutoManager::onNativeFinished);
+
+            // Music: state into AndroidAutoMedia, its decisions back to the phone
+            connect(m_aap, &AapConnection::audioFocusRequested, &m_media, &AndroidAutoMedia::focusRequested);
+            connect(m_aap, &AapConnection::microphoneRequested, &m_media, &AndroidAutoMedia::setMicrophoneOpen);
+            connect(m_aap, &AapConnection::audioStreaming, this, [this](Aap::AudioStream s, bool on) {
+                if (s == Aap::AudioStream::Guidance)
+                    m_media.setGuidancePlaying(on);
+                else if (s == Aap::AudioStream::System)
+                    m_media.setSystemSoundPlaying(on);
+            });
+            connect(m_aap, &AapConnection::playbackStatus, this, [this](const Aap::PlaybackStatus &st) {
+                m_media.setPlaybackStatus(st.state, st.positionS, st.source);
+            });
+            connect(m_aap, &AapConnection::playbackMetadata, this, [this](const Aap::PlaybackMetadata &md) {
+                m_media.setMetadata(md.title, md.artist, md.album, md.art, md.durationS);
+            });
+            connect(&m_media, &AndroidAutoMedia::focusAnswer, m_aap, &AapConnection::answerAudioFocus);
+            connect(&m_media, &AndroidAutoMedia::focusChange, m_aap, &AapConnection::setAudioFocus);
+            connect(&m_media, &AndroidAutoMedia::keyPress, m_aap, &AapConnection::sendKey);
         }
         m_aap->setVideoSink(m_videoSink);
         m_aap->setAudioOutputDevice(m_audioDeviceId);
@@ -398,6 +419,7 @@ void AndroidAutoManager::nativeStep()
 
 void AndroidAutoManager::onNativeFinished()
 {
+    m_media.setConnected(false);
     removeForward();
     m_touchSlots.clear();
     m_touchPos.clear();
@@ -447,6 +469,8 @@ void AndroidAutoManager::injectTouch(int pointerId, int action, double x, double
 #ifdef OCTAVE_HAVE_NATIVE_AA
     if (!m_aap || m_nativeState != QLatin1String("running"))
         return;
+    if (action == 0)
+        m_media.noteUserIntent();
     const QPoint pos(qBound(0, int(x * m_videoWidth), m_videoWidth - 1),
                      qBound(0, int(y * m_videoHeight), m_videoHeight - 1));
     // Android Auto pointer ids are small and reused; the touch area's are not

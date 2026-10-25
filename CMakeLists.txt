@@ -290,6 +290,8 @@ qt_add_executable(octave
     src/managers/phonemirrormanager.h
     src/managers/phonemirrormanager.cpp
     src/managers/androidautomanager.h
+    src/managers/androidautomedia.h
+    src/managers/androidautomedia.cpp
     src/managers/androidautomanager.cpp
     src/managers/androidautomanager_native.cpp
     src/managers/dashboardmanager.h

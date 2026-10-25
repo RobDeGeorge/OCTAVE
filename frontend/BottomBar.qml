@@ -21,7 +21,7 @@ Rectangle {
     // What is playing and its controls, whichever source has them (the phone
     // while mirroring, else local media): nowPlaying (C++) decides and routes
     readonly property var _np: (typeof nowPlaying !== "undefined" && nowPlaying) ? nowPlaying : null
-    readonly property bool usePhone: !!_np && _np.source === "phone"
+    readonly property bool useRemote: !!_np && _np.source !== "local"   // the phone or Android Auto
     readonly property string playIcon: (_np && _np.playing) ? "./assets/pause_button.svg" : "./assets/play_button.svg"
     function mediaPrevious() { if (_np) _np.previous() }
     function mediaTogglePlay() { if (_np) _np.togglePlay() }
@@ -645,7 +645,7 @@ Rectangle {
                             Layout.alignment: Qt.AlignVCenter
 
                             scale: mouseAreaShuffle.pressed ? 0.8 : 1.0
-                            opacity: mouseAreaShuffle.pressed ? 0.7 : (bottomBar.usePhone ? 0.35 : 1.0)
+                            opacity: mouseAreaShuffle.pressed ? 0.7 : (bottomBar.useRemote ? 0.35 : 1.0)
                             
                             Behavior on scale {
                                 NumberAnimation {
@@ -1653,7 +1653,7 @@ Rectangle {
                             Layout.preferredHeight: App.Spacing.bottomBarShuffleButtonHeight
 
                             scale: mouseAreaShuffleVertical.pressed ? 0.8 : 1.0
-                            opacity: mouseAreaShuffleVertical.pressed ? 0.7 : (bottomBar.usePhone ? 0.35 : 1.0)
+                            opacity: mouseAreaShuffleVertical.pressed ? 0.7 : (bottomBar.useRemote ? 0.35 : 1.0)
 
                             Behavior on scale {
                                 NumberAnimation {

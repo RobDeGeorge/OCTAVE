@@ -1,6 +1,6 @@
 # One media source at a time: local, phone mirror, Android Auto
 
-**Status:** in progress (branch `android-auto-native`)
+**Status:** mostly done (branch `android-auto-native`); left: checks by ear, phone mirror on the same rules
 **Last updated:** 2026-10-25
 
 **Goal:** exactly one source owns music at any moment, only a user action changes the owner, and navigation prompts / Assistant / calls interrupt the owner without taking it over.
@@ -24,27 +24,27 @@ OCTAVE now has three things that play music: its own player (`MediaManager`), th
 - **Phone mirror:** scrcpy doesn't ask, OCTAVE sees playback after it started. Keep the current hand-off (phone starts → it owns); add the same touch-recency check so the phone resuming by itself on connect doesn't take over from local (today the phone's *first* report takes the controls even when paused: `PhoneMirrorManager::onMediaState`, `firstReport`).
 - **Local:** pressing play / picking a track in OCTAVE's player.
 
-## Steps
+## Done (2026-10-25, branch `android-auto-native`)
 
-### 1. Android Auto focus decided outside the session — Effort: M, desktop + AA phone
-- `AapSession::Options::externalAudioFocus`: GAIN requests are emitted (`audioFocusRequested`) instead of auto-granted; `answerAudioFocus(state)` answers; `setAudioFocus(state)` sends an unsolicited notification (head unit takes focus back: the phone pauses). Transient requests (Assistant, prompts) and RELEASE keep being answered by the session.
-- Verify on the phone: a LOSS answer to GAIN pauses playback and the phone asks again on the next tap of play; an unsolicited LOSS pauses; logcat for the request types navigation prompts and Assistant use.
-- Media keys: announce KEYCODE_MEDIA_PLAY_PAUSE / NEXT / PREVIOUS in the input service and send key events (`InputReport` field 4), so OCTAVE's controls drive Android Auto.
+Steps 1-3 of the first plan: OCTAVE decides Android Auto's media focus (`AapSession::Options::externalAudioFocus`), media keys, the media playback status channel, `AndroidAutoMedia`, the rules in `NowPlaying` (`source` = `"androidauto"`, `useLocal()`), ducking under guidance / system sounds, pausing for the mic, `mediaLastSource` / `mediaLastPlaying` and the resume. Checked against the phone (Android Auto 17.9): refusal on connect and on a background start, grant after a tap, OCTAVE's play / pause, local taking the music back, resume after a restart, the Media Room / home card showing Android Auto's track. Rules table: `wiki/phone-mirror-android-auto.html#aa-native-music`. Found on the way: answering LOSS to a GAIN request makes Android Auto loop; refusing is grant + unsolicited LOSS (`docs/ANDROID_AUTO_PROTOCOL.md`, *Audio focus*).
 
-### 2. Arbiter in NowPlaying — Effort: M, desktop
-- `src/managers/androidautomedia.{h,cpp}`: a plain QObject (built everywhere) with Android Auto's media state and intents, fed by `AndroidAutoManager`; `NowPlaying` takes it like it takes `PhoneMirrorManager`, so `tst_nowplaying` drives it without a phone.
-- `NowPlaying::source` gains `"androidauto"`; the rules above; controls route to the owner.
-- Persist `mediaLastSource` / `mediaLastPlaying` (generic settings keys); resume rule on boot and on Android Auto / phone connect.
-- Ducking: reuse `MediaManager::setDucking` (phone mirroring already drives it from `PhoneMirrorManager::duckingChanged`) while Android Auto guidance / system audio plays; pause local while the Android Auto mic is open.
-- Tests: every row of the table in `wiki/phone-mirror-android-auto.html` (written in this step).
+## Left
 
-### 3. Android Auto now-playing — Effort: M, desktop + AA phone
-- Announce the media playback status service; parse playback status (state, position) and metadata (title, artist, album, art, duration); feed `AndroidAutoMedia` so the Now Playing card, Media Room and Album Art Capture work for Android Auto.
+### 1. By ear and voice — Effort: S, desktop + AA phone
+- A navigation prompt while local music plays: local ducks to 30 % and comes back.
+- "Hey Google, play ..." while local plays: local pauses, Android Auto is granted (the mic counts as the user), local stays paused.
+- Assistant asked something else: local resumes after the mic closes.
+- Next / previous from the bottom bar with Spotify (only play / pause was tried, on a podcast).
 
-### 4. Phone mirror on the same rules — Effort: S, desktop + phone
-- No takeover on the first report while another source owns; touch-recency check; refuse to start mirroring while Android Auto runs (and the reverse).
+### 2. Phone mirror on the same rules — Effort: S, desktop + phone
+- No takeover on the first media report while another source owns (`PhoneMirrorManager::onMediaState`, `firstReport`); a touch on the mirror screen in the last few seconds counts as the user's.
+- Refuse to start mirroring while Android Auto runs, and the reverse (same phone).
+- Resume a mirrored phone after a restart like Android Auto (local auto-play is only skipped for `androidauto` today, `MediaManager` restore).
 
-### 5. On the device — Effort: S, Pi in the Jeep
-- Ignition-cycle resume with each source; guidance ducking by ear.
+### 3. Android Auto audio in the visualizer — Effort: S, desktop
+- `AudioAnalyzer` live mode gets no Android Auto PCM yet (bars stay still): feed it the media stream from `AapConnection::onAudio`.
 
-Delete this file (and its README row) when step 5 is done.
+### 4. On the device — Effort: S, Pi in the Jeep
+- Ignition-cycle resume with each source; guidance ducking in the car.
+
+Delete this file (and its README row) when step 4 is done.

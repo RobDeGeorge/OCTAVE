@@ -36,12 +36,13 @@ Item {
     // while mirroring, else local media): nowPlaying (C++) follows it and
     // owns the phone's position clock; this page only words and draws it
     readonly property var _np: (typeof nowPlaying !== "undefined" && nowPlaying) ? nowPlaying : null
-    readonly property bool usePhone: !!_np && _np.source === "phone"
+    readonly property bool useRemote: !!_np && _np.source !== "local"   // the phone or Android Auto
+    readonly property string remoteName: !!_np && _np.source === "androidauto" ? "Android Auto" : "Phone"
     // Something to show: a track, or the phone (which says "Nothing playing")
-    readonly property bool hasMedia: !!_np && (_np.hasTrack || usePhone)
+    readonly property bool hasMedia: !!_np && (_np.hasTrack || useRemote)
     readonly property string currentArt: (_np && _np.artUrl) ? _np.artUrl : "./assets/missing_art.png"
-    readonly property string currentTitle: !_np ? "" : (_np.hasTrack ? _np.title : (usePhone ? "Phone" : ""))
-    readonly property string currentArtist: !_np ? "" : (_np.hasTrack ? _np.artist : (usePhone ? "Nothing playing" : ""))
+    readonly property string currentTitle: !_np ? "" : (_np.hasTrack ? _np.title : (useRemote ? remoteName : ""))
+    readonly property string currentArtist: !_np ? "" : (_np.hasTrack ? _np.artist : (useRemote ? "Nothing playing" : ""))
     readonly property string currentAlbum: (_np && _np.hasTrack) ? _np.album : ""
     readonly property int positionMs: _np ? _np.positionMs : 0
     readonly property int durationMs: _np ? _np.durationMs : 0

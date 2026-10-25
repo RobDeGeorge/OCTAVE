@@ -101,6 +101,8 @@ private:
     void wireVolume();
     void wireInputs();
     void wireKnobLed();
+
+    float m_phoneDuck = 1.0f;    // phone mirror's last ducking factor (wirePhoneMirror)
 };
 
 #endif // OCTAVE_APPCORE_H

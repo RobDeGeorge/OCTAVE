@@ -964,12 +964,12 @@
         <!-- NowPlaying -->
         <h2 id="nowPlaying">NowPlaying <span class="cmt">&mdash; <code>nowPlaying</code></span></h2>
         <p><span class="file-path">src/managers/nowplaying.h</span> &mdash; QML context property <code>nowPlaying</code></p>
-        <p>What is playing right now and the controls for it, whichever source has OCTAVE's media controls: the phone (while mirroring, once <code>phoneMirrorManager.mediaActive</code>) or OCTAVE's own player. Frontends bind to this instead of choosing between <code>mediaManager</code> and <code>phoneMirrorManager</code> themselves. The phone reports its position only now and then, so this owns the one clock that extrapolates it (every 500 ms, only while the phone plays). Values are raw: placeholder text such as "Nothing playing" is the frontend's choice (<code>hasTrack</code>). It also holds the hand-off (the phone taking the controls pauses local playback; a local track starting hands them back with <code>releaseMedia(true)</code>, pausing the phone) and the Album Art Capture rule (the theme follows the live source's art). Tests: <span class="file-path">tests/cpp/tst_nowplaying.cpp</span>.</p>
+        <p>What is playing right now and the controls for it, whichever source owns OCTAVE's music: the phone (while mirroring, once <code>phoneMirrorManager.mediaActive</code>), Android Auto (built-in receiver) or OCTAVE's own player. It is also the arbiter: one source at a time, and only a user action changes it (<a href="phone-mirror-android-auto.html#aa-native-music">Which source plays the music</a>). Frontends bind to this instead of choosing between <code>mediaManager</code> and <code>phoneMirrorManager</code> themselves. The phone reports its position only now and then, so this owns the one clock that extrapolates it (every 500 ms, only while the phone plays). Values are raw: placeholder text such as "Nothing playing" is the frontend's choice (<code>hasTrack</code>). It also holds the hand-off (the phone taking the controls pauses local playback; a local track starting hands them back with <code>releaseMedia(true)</code>, pausing the phone) and the Album Art Capture rule (the theme follows the live source's art). Tests: <span class="file-path">tests/cpp/tst_nowplaying.cpp</span>.</p>
         <h3>Properties</h3>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>source</code></td><td><code>QString</code></td><td>read-only</td><td><code>sourceChanged</code></td><td><code>"local"</code> or <code>"phone"</code></td></tr>
+            <tr><td><code>source</code></td><td><code>QString</code></td><td>read-only</td><td><code>sourceChanged</code></td><td><code>"local"</code>, <code>"phone"</code> or <code>"androidauto"</code></td></tr>
             <tr><td><code>playing</code></td><td><code>bool</code></td><td>read-only</td><td><code>playingChanged</code></td><td>The live source is playing</td></tr>
             <tr><td><code>hasTrack</code>, <code>title</code>, <code>artist</code>, <code>album</code></td><td><code>bool</code>, <code>QString</code></td><td>read-only</td><td><code>trackInfoChanged</code></td><td>Local: display name, artist, album of the current file. Phone: the media session's metadata (<code>hasTrack</code> false with no media app)</td></tr>
             <tr><td><code>artUrl</code></td><td><code>QString</code></td><td>read-only</td><td><code>artUrlChanged</code></td><td>Album art URL, <code>""</code> when none (a file on the head unit; service clients fetch <code>GET /art</code>)</td></tr>
@@ -985,7 +985,8 @@
           <tbody>
             <tr><td><code>togglePlay()</code>, <code>next()</code>, <code>previous()</code></td><td><code>void</code></td><td>Routed to the live source (the gesture sensor uses these too)</td></tr>
             <tr><td><code>seek(int positionMs)</code></td><td><code>void</code></td><td>When <code>canSeek</code>; the position shows at once and the source confirms it</td></tr>
-            <tr><td><code>toggleShuffle()</code></td><td><code>void</code></td><td>Local only; does nothing while the phone is the source</td></tr>
+            <tr><td><code>toggleShuffle()</code></td><td><code>void</code></td><td>Local only; does nothing while the phone or Android Auto is the source</td></tr>
+            <tr><td><code>useLocal()</code></td><td><code>void</code></td><td>Hand the music back to OCTAVE's own player (the Media Room's source pill); the phone or Android Auto pauses, nothing plays until asked</td></tr>
             <tr><td><code>extractArtColors()</code></td><td><code>void</code></td><td>Theme colours from the live source's art now (Media Room's "Save as Theme"). The Album Art Capture rule calls it on its own: while that theme is selected, whenever <code>artUrl</code> changes or the theme is chosen</td></tr>
           </tbody>
         </table>

@@ -5,14 +5,15 @@
 #include <QString>
 #include <QTimer>
 
+class AndroidAutoMedia;
 class MediaManager;
 class PhoneMirrorManager;
 class SettingsManager;
 
 /**
  * @brief What is playing right now and the controls for it, whichever source
- *        has OCTAVE's media controls: the phone (while mirroring, once it has
- *        taken them) or OCTAVE's own player.
+ *        owns OCTAVE's music: OCTAVE's own player, the phone (while
+ *        mirroring, once it has taken the controls) or Android Auto.
  *
  * Every frontend binds to this instead of asking phoneMirrorManager.mediaActive
  * and then reading one of two APIs; `source` says which one is live. The phone
@@ -20,9 +21,15 @@ class SettingsManager;
  * extrapolates it (kPhoneTickMs) while the phone plays. Values are raw: no
  * placeholder text ("Nothing playing" is a frontend's choice, see hasTrack).
  *
- * It also holds the handoff rules: when the phone takes the controls local
- * playback pauses, and a local track starting hands them back (pausing the
- * phone). PhoneMirrorManager decides when the phone takes them.
+ * It is also the arbiter: one source owns the music at a time and only a
+ * user action changes the owner (TODO/media-source-arbiter.md). Local
+ * playback starting takes it (pausing the phone, taking focus back from
+ * Android Auto); the phone taking the controls takes it (PhoneMirrorManager
+ * decides when); Android Auto asks first (AndroidAutoMedia::mediaFocusRequested)
+ * and is granted only after a user action aimed at it, or while it owns.
+ * The owner and whether it played are saved (mediaLastSource /
+ * mediaLastPlaying) so Android Auto picks up where it was after a restart.
+ * Android Auto's voice requests pause local music until the mic closes.
  *
  * And the Album Art Capture rule: while that theme is selected, the colours
  * follow the live source's art (extracted on an art change, a source switch,
@@ -36,7 +43,7 @@ class NowPlaying : public QObject
     // Service permissions (src/service/servicescopes.h)
     Q_CLASSINFO("octave.scope", "media")
     Q_CLASSINFO("octave.scope.full", "extractArtColors")
-    Q_PROPERTY(QString source READ source NOTIFY sourceChanged)          // "local" | "phone"
+    Q_PROPERTY(QString source READ source NOTIFY sourceChanged)          // "local" | "phone" | "androidauto"
     Q_PROPERTY(bool playing READ playing NOTIFY playingChanged)
     Q_PROPERTY(bool hasTrack READ hasTrack NOTIFY trackInfoChanged)
     Q_PROPERTY(QString title READ title NOTIFY trackInfoChanged)
@@ -54,12 +61,22 @@ class NowPlaying : public QObject
 
 public:
     static constexpr int kPhoneTickMs = 500;
+    // Resuming Android Auto after a restart: if the phone hasn't started its
+    // music this long after connecting, OCTAVE presses play
+    static constexpr int kResumeKeyDelayMs = 4000;
+
+    enum class Source { Local, Phone, AndroidAuto };
 
     explicit NowPlaying(MediaManager *media, PhoneMirrorManager *phone,
                         SettingsManager *settings = nullptr, QObject *parent = nullptr);
+    // Android Auto's music (AndroidAutoManager::media()); set once by AppCore
+    void setAndroidAuto(AndroidAutoMedia *aa);
+    // Shutdown: sources stopping now don't overwrite the saved owner
+    void stopSaving();
 
-    QString source() const { return m_phone ? QStringLiteral("phone") : QStringLiteral("local"); }
-    bool isPhone() const { return m_phone; }
+    QString source() const;
+    Source sourceKind() const { return m_source; }
+    bool isPhone() const { return m_source == Source::Phone; }
     bool playing() const { return m_playing; }
     bool hasTrack() const { return m_hasTrack; }
     QString title() const { return m_title; }
@@ -70,7 +87,7 @@ public:
     int durationMs() const { return m_durationMs; }
     int positionMs() const { return m_positionMs; }
     bool canSeek() const { return m_canSeek; }
-    bool canShuffle() const { return !m_phone; }
+    bool canShuffle() const { return m_source == Source::Local; }
     bool shuffled() const { return m_shuffled; }
 
 signals:
@@ -90,18 +107,30 @@ public slots:
     void next();
     void previous();
     void seek(int positionMs);
-    void toggleShuffle();   // no-op while the phone is the source
+    void toggleShuffle();   // no-op unless the local player is the source
+    // Hand the music back to OCTAVE's own player (the Media Room's source
+    // pill): the phone or Android Auto pauses; nothing plays until asked
+    void useLocal();
 
     // Theme colours from the live source's art now, whatever the theme
     // (Media Room's "save as theme" popup; the Album Art Capture rule)
     void extractArtColors();
 
 private:
-    void onSourceChanged();
+    void switchTo(Source s);
+    void readSource();
+    void onPhoneActiveChanged(bool active);
+    void onLocalPlayStateChanged(bool playing);
+    void onAaFocusRequested();
+    void onAaConnectedChanged();
+    void onAaMicrophone(bool open);
+    void readAaTrack();
+    void readAaState();
+    void remember();
     void readLocalTrack();
     void readPhoneState();
     void readPhoneTrack();
-    void tickPhone();
+    void tick();            // extrapolated position of a remote source
     void updateTick();
     bool albumArtCapture() const;
 
@@ -116,7 +145,14 @@ private:
     MediaManager *m_media = nullptr;
     PhoneMirrorManager *m_phoneMirror = nullptr;
     SettingsManager *m_settings = nullptr;
-    bool m_phone = false;
+    AndroidAutoMedia *m_aa = nullptr;
+
+    Source m_source = Source::Local;
+    // Android Auto owned and played when OCTAVE last stopped: it resumes on
+    // its next connect
+    bool m_resumeAa = false;
+    bool m_resumeLocalAfterMic = false;
+    bool m_saving = true;
     QString m_localFile;
 
     bool m_playing = false;
@@ -128,7 +164,7 @@ private:
     bool m_canSeek = false;
     bool m_shuffled = false;
 
-    QTimer m_phoneTick;
+    QTimer m_tick;
 };
 
 #endif // NOWPLAYING_H

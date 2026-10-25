@@ -107,6 +107,7 @@ AppCore::AppCore(const QDir &frontendDir, Units *units)
     // while mirroring, else OCTAVE's player); also the handoff between the two.
     // Outside the desktop block: on mobile the phone stub never takes them, so
     // the source is always local
+    nowPlaying.setAndroidAuto(androidAutoManager.media());
     expose("nowPlaying", &nowPlaying);
     wireAnalyzer();
 
@@ -214,8 +215,17 @@ void AppCore::wirePhoneMirror()
                      &phoneMirrorManager, &PhoneMirrorManager::setAudioDuckEnabled);
     QObject::connect(&settingsManager, &SettingsManager::scrcpyAudioDuckLevelChanged,
                      &phoneMirrorManager, [this](double l) { phoneMirrorManager.setAudioDuckLevel(float(l)); });
-    QObject::connect(&phoneMirrorManager, &PhoneMirrorManager::duckingChanged,
-                     &mediaManager, &MediaManager::setDucking);
+    // Android Auto guidance and system sounds duck it too; the lower wins
+    auto applyDuck = [this] {
+        const float aa = androidAutoManager.media()->interruptsLocal() ? AndroidAutoMedia::kDuckFactor : 1.0f;
+        mediaManager.setDucking(qMin(m_phoneDuck, aa));
+    };
+    QObject::connect(&phoneMirrorManager, &PhoneMirrorManager::duckingChanged, &mediaManager,
+                     [this, applyDuck](float factor) {
+        m_phoneDuck = factor;
+        applyDuck();
+    });
+    QObject::connect(androidAutoManager.media(), &AndroidAutoMedia::interruptsLocalChanged, &mediaManager, applyDuck);
     // Phone audio plays to the same output as local music: the picked one,
     // re-checked whenever the outputs change (MediaManager watches them)
     phoneMirrorManager.setAudioOutputDevice(settingsManager.audioOutputDevice());
@@ -249,7 +259,7 @@ void AppCore::wireAnalyzer()
     // The visualizer follows what is playing: phone audio live, a local
     // track pre-analysed and read at its position
     auto feedAnalyzer = [this] {
-        audioAnalyzer.set_live(nowPlaying.isPhone());
+        audioAnalyzer.set_live(nowPlaying.sourceKind() != NowPlaying::Source::Local);
         audioAnalyzer.setPlaying(nowPlaying.playing());
     };
     QObject::connect(&nowPlaying, &NowPlaying::sourceChanged, &audioAnalyzer, feedAnalyzer);
@@ -399,6 +409,8 @@ void AppCore::wireKnobLed()
 
 void AppCore::shutdown()
 {
+    // Sources stopping below must not overwrite who owned the music
+    nowPlaying.stopSaving();
     // Stubs make all calls no-op on mobile
     androidAutoManager.cleanup();
     phoneMirrorManager.cleanup();

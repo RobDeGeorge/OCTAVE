@@ -54,7 +54,10 @@ Item {
     // while mirroring, else local media): nowPlaying (C++) follows it, routes
     // the controls and owns the phone's position clock
     readonly property var _np: (typeof nowPlaying !== "undefined" && nowPlaying) ? nowPlaying : null
-    readonly property bool usePhone: !!_np && _np.source === "phone"
+    // The phone (mirroring) or Android Auto has the music: no local playlist,
+    // its shuffle belongs to its app
+    readonly property bool useRemote: !!_np && _np.source !== "local"
+    readonly property string remoteName: !!_np && _np.source === "androidauto" ? "Android Auto" : "Phone"
     readonly property bool devicePlaying: !!_np && _np.playing
     readonly property string playIcon: devicePlaying ? "./assets/pause_button.svg" : "./assets/play_button.svg"
     readonly property int duration: _np ? _np.durationMs : 0
@@ -87,7 +90,7 @@ Item {
                 mediaRoom._skipTrackAnimation = false
                 return
             }
-            if (!mediaRoom.usePhone)
+            if (!mediaRoom.useRemote)
                 return
             if (mediaRoom._userInitiatedChange)
                 mediaRoom._userInitiatedChange = false   // the click handler animated already
@@ -98,17 +101,17 @@ Item {
     readonly property bool showMusicDevice: App.MusicDevicePreference.enabled && App.MusicDevicePreference.isAvailable()
 
     // The phone's shuffle belongs to its app: off (and dimmed) meanwhile
-    readonly property bool isShuffleEnabled: !usePhone && !!_np && _np.shuffled
+    readonly property bool isShuffleEnabled: !useRemote && !!_np && _np.shuffled
 
     // Empty playlist detection — swaps the controls for the empty message
     property int localSongCount: 0
-    property bool playlistEmpty: !usePhone && localSongCount === 0
+    property bool playlistEmpty: !useRemote && localSongCount === 0
 
     // Track info from nowPlaying (the phone while it has the controls, else
     // local media); this page only picks the wording
-    property string currentTrackName: !_np ? "" : (_np.hasTrack ? _np.title : (usePhone ? "Phone" : ""))
-    property string currentArtist: !_np ? "" : (_np.hasTrack ? _np.artist : (usePhone ? "Nothing playing" : "Unknown Artist"))
-    property string currentAlbum: !_np ? "" : (_np.hasTrack ? _np.album : (usePhone ? "" : "Unknown Album"))
+    property string currentTrackName: !_np ? "" : (_np.hasTrack ? _np.title : (useRemote ? remoteName : ""))
+    property string currentArtist: !_np ? "" : (_np.hasTrack ? _np.artist : (useRemote ? "Nothing playing" : "Unknown Artist"))
+    property string currentAlbum: !_np ? "" : (_np.hasTrack ? _np.album : (useRemote ? "" : "Unknown Album"))
     property string currentAlbumArt: (_np && _np.artUrl) ? _np.artUrl : "./assets/missing_art.png"
 
     // Card stack -- peek at adjacent tracks
@@ -130,7 +133,7 @@ Item {
         interval: 0
         onTriggered: {
             var prevUrl = "", nextUrl = ""
-            if (mediaRoom.usePhone) {
+            if (mediaRoom.useRemote) {
                 // The phone reports only what is playing now: no side cards
             } else if (mediaManager) {
                 var arts = mediaManager.get_neighbor_album_arts()
@@ -276,7 +279,7 @@ Item {
 
         // The carousel's local bookkeeping; what is playing comes from nowPlaying
         function syncNowPlaying() {
-            if (!mediaRoom.usePhone && mediaManager) {
+            if (!mediaRoom.useRemote && mediaManager) {
                 var currentFile = mediaManager.get_current_file()
                 if (currentFile) {
                     currentSongText.text = currentFile
@@ -1248,12 +1251,14 @@ Item {
                     Layout.minimumWidth: dp(40)  // Added minimum width for consistent layout
                 }
 
-                // Source pill: shown while the phone has the controls; tapping
-                // it hands them back to OCTAVE's local media (the phone pauses)
+                // Source pill: shown while the phone or Android Auto has the
+                // music; tapping it hands it back to OCTAVE's local media (the
+                // other source pauses)
                 Control {
                     id: sourceToggleButton
-                    visible: usePhone
-                    implicitWidth: App.Spacing.mediaRoomShuffleButtonWidth * 1.8
+                    visible: useRemote
+                    implicitWidth: Math.max(App.Spacing.mediaRoomShuffleButtonWidth * 1.8,
+                                            sourcePillText.implicitWidth + implicitHeight)
                     implicitHeight: App.Spacing.mediaRoomShuffleButtonHeight
                     background: Rectangle {
                         color: App.Style.accent
@@ -1262,7 +1267,8 @@ Item {
                         border.width: 1
                     }
                     contentItem: Text {
-                        text: "Phone"
+                        id: sourcePillText
+                        text: mediaRoom.remoteName
                         color: "white"
                         font.pixelSize: App.Spacing.mediaRoomSliderDurationText * 0.9
                         font.bold: true
@@ -1275,8 +1281,8 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         onClicked: {
-                            if (mediaRoom.usePhone)
-                                phoneMirrorManager.releaseMedia(true)
+                            if (mediaRoom.useRemote)
+                                nowPlaying.useLocal()
                         }
                     }
                     ToolTip.visible: sourceToggleMouseArea.containsMouse
@@ -1290,7 +1296,7 @@ Item {
         Control {
             id: shuffleButton
             visible: !playlistEmpty
-            opacity: usePhone ? 0.35 : 1.0   // the phone's shuffle belongs to its app
+            opacity: useRemote ? 0.35 : 1.0   // the phone's shuffle belongs to its app
             width: durationBar.height * 1.96875
             height: durationBar.height * 1.96875
             anchors.verticalCenter: durationBar.verticalCenter
@@ -1341,7 +1347,7 @@ Item {
         function onMediaListChanged(files) {
             var wasEmpty = mediaRoom.localSongCount === 0
             mediaRoom.localSongCount = files.length
-            if (wasEmpty && files.length > 0 && !mediaRoom.usePhone) {
+            if (wasEmpty && files.length > 0 && !mediaRoom.useRemote) {
                 mediaManager.play_file(files[0])
             }
         }
@@ -1350,7 +1356,7 @@ Item {
     // Local media manager connections (only apply when the phone does not have the controls)
     Connections {
         target: mediaManager
-        enabled: !usePhone
+        enabled: !useRemote
 
         // Play state, duration and position come from nowPlaying; this keeps
         // the carousel and its track-change animation in step

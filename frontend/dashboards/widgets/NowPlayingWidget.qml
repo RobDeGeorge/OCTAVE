@@ -31,9 +31,9 @@ Item {
     // nowPlaying (C++) follows whichever source has the media controls and
     // owns the phone's position clock; this only picks the wording
     readonly property var _np: (typeof nowPlaying !== "undefined" && nowPlaying) ? nowPlaying : null
-    readonly property bool _phone: !!_np && _np.source === "phone"
-    readonly property string trackTitle: !_np ? "" : (_np.hasTrack ? _np.title : (_phone ? "Phone" : ""))
-    readonly property string trackArtist: !_np ? "" : (_np.hasTrack ? _np.artist : (_phone ? "Nothing playing" : ""))
+    readonly property bool _remote: !!_np && _np.source !== "local"   // the phone or Android Auto
+    readonly property string trackTitle: !_np ? "" : (_np.hasTrack ? _np.title : (_remote ? (_np.source === "androidauto" ? "Android Auto" : "Phone") : ""))
+    readonly property string trackArtist: !_np ? "" : (_np.hasTrack ? _np.artist : (_remote ? "Nothing playing" : ""))
     readonly property string artSource: _np ? _np.artUrl : ""
     readonly property real position: _np ? _np.positionMs : 0
     readonly property real duration: _np ? _np.durationMs : 0

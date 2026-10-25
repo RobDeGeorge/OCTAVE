@@ -47,6 +47,14 @@
         },
         {
             "kind": "slot",
+            "name": "useLocal",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
             "name": "extractArtColors",
             "params": [
             ],
