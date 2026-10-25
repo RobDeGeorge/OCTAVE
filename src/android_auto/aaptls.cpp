@@ -53,10 +53,14 @@ bool AapTls::init(const QByteArray &certPem, const QByteArray &keyPem)
         return false;
     }
     BIO *kb = BIO_new_mem_buf(keyPem.constData(), int(keyPem.size()));
-    EVP_PKEY *key = kb ? PEM_read_bio_PrivateKey(kb, nullptr, nullptr, nullptr) : nullptr;
+    // No passphrase callback would make OpenSSL prompt on the terminal (from
+    // the worker thread); an encrypted key is simply refused
+    pem_password_cb *noPassphrase = [](char *, int, int, void *) { return 0; };
+    EVP_PKEY *key = kb ? PEM_read_bio_PrivateKey(kb, nullptr, noPassphrase, nullptr) : nullptr;
     BIO_free(kb);
     if (!key) {
-        setOpenSslError(QStringLiteral("no private key found for the head-unit certificate"));
+        setOpenSslError(QStringLiteral("no usable private key for the head-unit certificate "
+                                       "(a passphrase-protected key is not supported)"));
         return false;
     }
     const int keyOk = SSL_CTX_use_PrivateKey(m_ctx, key);

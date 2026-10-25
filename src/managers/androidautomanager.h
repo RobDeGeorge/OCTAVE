@@ -131,8 +131,8 @@ class AndroidAutoManager : public QObject
     Q_PROPERTY(QObject* dhuCapture     READ dhuCapture      CONSTANT)
 
     // Native mode. backend: "native" (OCTAVE is the head unit) or "dhu".
-    // nativeState: idle | connecting | waitingForServer | needsCertificate |
-    // running | error; nativeStatus says the same for a person.
+    // nativeState: idle | connecting | waitingForPhone | waitingForServer |
+    // needsCertificate | running | error; nativeStatus says the same for a person.
     Q_PROPERTY(QString backend         READ backend         NOTIFY backendChanged)
     Q_PROPERTY(bool    nativeAvailable READ nativeAvailable CONSTANT)
     Q_PROPERTY(QString nativeState     READ nativeState     NOTIFY nativeStateChanged)
@@ -295,6 +295,7 @@ class AndroidAutoManager : public QObject
     Q_PROPERTY(QString nativeStatus READ nativeStatus CONSTANT)
     Q_PROPERTY(QString phoneName READ phoneName CONSTANT)
     Q_PROPERTY(bool videoStreaming READ videoStreaming CONSTANT)
+    Q_PROPERTY(QString certificateDir READ certificateDir CONSTANT)
     Q_PROPERTY(QObject* videoSink READ videoSink WRITE setVideoSink CONSTANT)
 public:
     explicit AndroidAutoManager(QObject *parent = nullptr)
@@ -313,6 +314,7 @@ public:
     QString nativeStatus() const { return QString(); }
     QString phoneName() const { return QString(); }
     bool videoStreaming() const { return false; }
+    QString certificateDir() const { return QString(); }
     QObject *videoSink() const { return nullptr; }
     void setVideoSink(QObject *) {}
     void setSettingsManager(class SettingsManager *) {}
