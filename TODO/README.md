@@ -1,6 +1,6 @@
 # TODO index — easiest to hardest
 
-**Last updated:** 2026-10-23 (frontend-platform.md trimmed to what is left and moved to M)
+**Last updated:** 2026-10-25 (media-source-arbiter.md added)
 
 One file per deferred plan. Each file opens with a one-line **Goal**, lists only the work that is left, and gives every step an **Effort** (S under an hour, M one session, L several sessions, XL a new subsystem) and the device it needs. When a plan is finished, delete its file and its row here.
 
@@ -35,6 +35,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 
 | File | Goal | Effort | Needs |
 |---|---|---|---|
+| [media-source-arbiter.md](media-source-arbiter.md) | One music source at a time across local, phone mirror and Android Auto; only a user action switches; prompts duck | M x3, S | desktop, AA phone, Pi |
 | [trip-history.md](trip-history.md) | Health trends across the drives the black box now records (recorder + Trip History page shipped 2026-10-21) | M | desktop (sim), Jeep |
 | [qml-precompile.md](qml-precompile.md) | Ship pre-compiled QML so first launch doesn't stall | L | Win11 VM, Pi, S22 |
 | [user-primitives.md](user-primitives.md) | Save and share your own styled gauges and gauge groups | L (code widgets XL) | desktop |
