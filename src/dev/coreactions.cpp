@@ -260,6 +260,12 @@ void registerCoreActions(CommandServer &server, const CoreTargets &t)
         const QString prefix = str(a, "prefix");
         return Gui::onGui([u, prefix] { return QVariant(u->listItems(prefix)); });
     });
+    // Every on-screen control a finger could reach (not covered, not clipped),
+    // with its visible label: the AI usability testers' view of the page
+    server.registerAction("list_interactive", [needUi](const QVariantMap &) {
+        UiDriver *u = needUi();
+        return Gui::onGui([u] { return QVariant(u->listInteractive()); });
+    });
     server.registerAction("get_prop", [needUi](const QVariantMap &a) {
         UiDriver *u = needUi();
         const QString name = str(a, "name"), prop = str(a, "prop");

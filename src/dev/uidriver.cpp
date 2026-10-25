@@ -2,6 +2,7 @@
 
 #include "../service/commandserver.h"
 
+#include <QColor>
 #include <QCoreApplication>
 #include <QImage>
 #include <QKeyEvent>
@@ -352,6 +353,260 @@ QVariantList UiDriver::listItems(const QString &prefix) const
         }
         return false;
     });
+    return out;
+}
+
+namespace {
+bool hasPointerHandler(const QQuickItem *item)
+{
+    for (const QObject *child : item->children()) {
+        if (child->inherits("QQuickTapHandler") || child->inherits("QQuickDragHandler")
+            || child->inherits("QQuickPinchHandler") || child->inherits("QQuickWheelHandler"))
+            return true;
+    }
+    return false;
+}
+
+bool takesPointer(const QQuickItem *item)
+{
+    // Text accepts presses only to look for links, and passes on the rest
+    if (item->inherits("QQuickText"))
+        return false;
+    // Any pointer handler turns on the item's mouse / touch acceptance, so
+    // with handlers only the grabbing kinds count: a PointHandler or
+    // HoverHandler watches passively and the tap goes on to what is beneath
+    const bool handlers = std::any_of(item->children().cbegin(), item->children().cend(),
+                                      [](const QObject *c) { return c->inherits("QQuickPointerHandler"); });
+    if (handlers && !item->inherits("QQuickMouseArea") && !item->inherits("QQuickControl")
+        && !item->inherits("QQuickFlickable"))
+        return hasPointerHandler(item);
+    return item->acceptedMouseButtons() != Qt::NoButton || item->acceptTouchEvents();
+}
+
+// What a finger would see: the item, minus what clipping ancestors cut off and
+// what lies outside the window. Empty when not on screen at all.
+QRectF visibleSceneRect(QQuickItem *item, const QRectF &window)
+{
+    QRectF r = item->mapRectToScene(QRectF(0, 0, item->width(), item->height())) & window;
+    double opacity = 1;
+    for (QQuickItem *node = item; node && !r.isEmpty(); node = node->parentItem()) {
+        if (!node->isVisible())
+            return {};
+        opacity *= node->opacity();
+        if (node != item && node->clip())
+            r &= node->mapRectToScene(QRectF(0, 0, node->width(), node->height()));
+    }
+    return opacity < 0.05 ? QRectF() : r;
+}
+
+// The topmost item that takes pointer input at scene point p, deepest first,
+// children in reverse paint order (z, then declaration)
+QQuickItem *hitTest(QQuickItem *item, const QPointF &p)
+{
+    if (!item->isVisible() || !item->isEnabled() || item->opacity() < 0.05)
+        return nullptr;
+    const QPointF local = item->mapFromScene(p);
+    const bool inside = item->contains(local);
+    if (item->clip() && !inside)
+        return nullptr;
+    QList<QQuickItem *> kids = item->childItems();
+    std::stable_sort(kids.begin(), kids.end(), [](QQuickItem *a, QQuickItem *b) { return a->z() < b->z(); });
+    for (auto it = kids.crbegin(); it != kids.crend(); ++it) {
+        if (QQuickItem *hit = hitTest(*it, p))
+            return hit;
+    }
+    return inside && takesPointer(item) ? item : nullptr;
+}
+
+bool isAncestorOf(const QQuickItem *ancestor, const QQuickItem *item)
+{
+    for (const QQuickItem *node = item; node; node = node->parentItem()) {
+        if (node == ancestor)
+            return true;
+    }
+    return false;
+}
+
+QString kindOf(const QQuickItem *item)
+{
+    if (item->inherits("QQuickTextInput") || item->inherits("QQuickTextEdit"))
+        return QStringLiteral("text_field");
+    if (item->inherits("QQuickSlider") || item->inherits("QQuickDial"))
+        return QStringLiteral("slider");
+    if (item->inherits("QQuickSwitch") || item->inherits("QQuickCheckBox"))
+        return QStringLiteral("toggle");
+    if (item->inherits("QQuickComboBox"))
+        return QStringLiteral("dropdown");
+    if (item->inherits("QQuickFlickable"))
+        return QStringLiteral("scrollable");
+    return QStringLiteral("button");
+}
+
+// What is drawn on screen that a person reads to tell controls apart: text
+// and icons, by where they appear rather than where they sit in the item tree
+// (a card's label is usually a sibling of its MouseArea, not a child)
+struct Marking
+{
+    QRectF rect;
+    QString text;
+};
+
+// The topmost item that paints something solid at scene point p: what the eye
+// sees there. Faint layers (scrims, glows, transparent rectangles) don't hide.
+QQuickItem *topmostPainted(QQuickItem *item, const QPointF &p)
+{
+    if (!item->isVisible() || item->opacity() < 0.05)
+        return nullptr;
+    const bool inside = item->contains(item->mapFromScene(p));
+    if (item->clip() && !inside)
+        return nullptr;
+    QList<QQuickItem *> kids = item->childItems();
+    std::stable_sort(kids.begin(), kids.end(), [](QQuickItem *a, QQuickItem *b) { return a->z() < b->z(); });
+    for (auto it = kids.crbegin(); it != kids.crend(); ++it) {
+        if (QQuickItem *hit = topmostPainted(*it, p))
+            return hit;
+    }
+    if (!inside || !(item->flags() & QQuickItem::ItemHasContents) || item->opacity() < 0.5)
+        return nullptr;
+    const QVariant colour = item->property("color");
+    if (item->inherits("QQuickRectangle") && colour.canConvert<QColor>() && colour.value<QColor>().alpha() < 128)
+        return nullptr;
+    return item;
+}
+
+// Is what the eye sees at `item`'s spot (`seen`) something laid over it? Only
+// when the branch `seen` belongs to (its ancestor beside `item`'s, under their
+// common ancestor) covers the item and is much bigger: a page or sheet on top.
+// A control's own icon effect or glow is a small sibling and does not count.
+bool coveredBy(QQuickItem *item, QQuickItem *seen, const QRectF &r)
+{
+    if (!seen || isAncestorOf(item, seen) || isAncestorOf(seen, item))
+        return false;
+    QQuickItem *branch = seen;
+    while (branch->parentItem() && !isAncestorOf(branch->parentItem(), item))
+        branch = branch->parentItem();
+    const QRectF b = branch->mapRectToScene(QRectF(0, 0, branch->width(), branch->height()));
+    return b.contains(r.adjusted(1, 1, -1, -1)) && b.width() * b.height() >= 4 * r.width() * r.height();
+}
+
+void collectMarkings(QQuickItem *root, const QRectF &window, QList<Marking> &texts, QList<Marking> &icons)
+{
+    walk(root, [&](QQuickItem *it) {
+        if (it->inherits("QQuickImage")) {
+            // A tinted icon is a hidden Image drawn by a MultiEffect: judge by its parent
+            QQuickItem *shown = it->isVisible() ? it : it->parentItem();
+            const QString src = it->property("source").toUrl().fileName();
+            if (shown && !src.isEmpty() && !visibleSceneRect(shown, window).isEmpty())
+                icons.append({it->mapRectToScene(QRectF(0, 0, it->width(), it->height())), src.section(QLatin1Char('.'), 0, 0)});
+            return false;
+        }
+        for (const char *prop : {"text", "placeholderText"}) {
+            const QVariant v = it->property(prop);
+            if (v.metaType().id() != QMetaType::QString || v.toString().trimmed().isEmpty())
+                continue;
+            const QRectF r = visibleSceneRect(it, window);
+            // Not behind a page or sheet that covers it
+            if (!r.isEmpty() && !coveredBy(it, topmostPainted(root, r.center()), r))
+                texts.append({r, v.toString().simplified()});
+            break;
+        }
+        return false;
+    });
+}
+
+QString labelWithin(const QRectF &control, const QList<Marking> &texts)
+{
+    QList<Marking> inside;
+    for (const Marking &t : texts) {
+        if (control.contains(t.rect.center()))
+            inside.append(t);
+    }
+    std::stable_sort(inside.begin(), inside.end(), [](const Marking &a, const Marking &b) {
+        return std::abs(a.rect.y() - b.rect.y()) > 4 ? a.rect.y() < b.rect.y() : a.rect.x() < b.rect.x();
+    });
+    QStringList words;
+    for (const Marking &t : std::as_const(inside)) {
+        if (!words.contains(t.text))
+            words << t.text;
+    }
+    const QString label = words.join(QStringLiteral(" / "));
+    return label.size() > 90 ? label.left(87) + QStringLiteral("...") : label;
+}
+
+QString iconWithin(const QRectF &control, const QList<Marking> &icons)
+{
+    const Marking *best = nullptr;
+    for (const Marking &i : icons) {
+        const double area = i.rect.width() * i.rect.height();
+        if (control.contains(i.rect.center()) && area <= control.width() * control.height() * 1.2
+            && (!best || area < best->rect.width() * best->rect.height()))
+            best = &i;
+    }
+    return best ? best->text : QString();
+}
+} // namespace
+
+QVariantList UiDriver::listInteractive() const
+{
+    QVariantList out;
+    QQuickWindow *w = window();
+    if (!w)
+        return out;
+    const QRectF screen(0, 0, w->width(), w->height());
+    QQuickItem *root = w->contentItem();
+    QList<QPair<QQuickItem *, QRectF>> found;
+    walk(root, [&](QQuickItem *it) {
+        if (it == root || !it->isEnabled())
+            return false;
+        const bool interactive = takesPointer(it) || it->inherits("QQuickAbstractButton")
+            || it->inherits("QQuickTextInput") || it->inherits("QQuickTextEdit") || it->inherits("QQuickFlickable");
+        if (!interactive)
+            return false;
+        const QRectF r = visibleSceneRect(it, screen);
+        if (r.width() < 2 || r.height() < 2)
+            return false;
+        // Covered by something else that takes the tap (a sheet, a popup, a scrim)?
+        QQuickItem *hit = hitTest(root, r.center());
+        if (!hit || !isAncestorOf(it, hit))
+            return false;
+        // ...nor painted over by a page with no tap areas of its own
+        if (coveredBy(it, topmostPainted(root, r.center()), r))
+            return false;
+        // A control and its own inner MouseArea are one target
+        for (const auto &f : std::as_const(found)) {
+            if (isAncestorOf(f.first, it) && (f.second.center() - r.center()).manhattanLength() < 8)
+                return false;
+        }
+        found.append({it, r});
+        return false;
+    });
+    QList<Marking> texts, icons;
+    collectMarkings(root, screen, texts, icons);
+    for (const auto &[item, r] : std::as_const(found)) {
+        const QString kind = kindOf(item);
+        QVariantMap m{
+            {QStringLiteral("kind"), kind},
+            {QStringLiteral("label"), labelWithin(r, texts)},
+            {QStringLiteral("x"), r.x()},
+            {QStringLiteral("y"), r.y()},
+            {QStringLiteral("width"), r.width()},
+            {QStringLiteral("height"), r.height()},
+            {QStringLiteral("cx"), r.center().x()},
+            {QStringLiteral("cy"), r.center().y()},
+        };
+        if (const QString icon = iconWithin(r, icons); !icon.isEmpty())
+            m.insert(QStringLiteral("icon"), icon);
+        if (!item->objectName().isEmpty())
+            m.insert(QStringLiteral("name"), item->objectName());
+        // State a person can read off the control
+        if (kind == QLatin1String("toggle") || item->property("checkable").toBool())
+            m.insert(QStringLiteral("checked"), item->property("checked"));
+        else if (kind == QLatin1String("slider"))
+            m.insert(QStringLiteral("value"), item->property("value"));
+        else if (kind == QLatin1String("dropdown"))
+            m.insert(QStringLiteral("currentText"), item->property("currentText"));
+        out.append(m);
+    }
     return out;
 }
 

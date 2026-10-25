@@ -50,6 +50,7 @@ public:
     QVariant findItem(const QString &name) const;
     QVariant findText(const QString &text, const QString &prop) const;
     QVariantList listItems(const QString &prefix) const;
+    QVariantList listInteractive() const;
     QVariant getProperty(const QString &name, const QString &prop) const;
     bool setProperty(const QString &name, const QString &prop, const QVariant &value);
     bool callMethod(const QString &name, const QString &method);
