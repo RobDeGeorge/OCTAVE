@@ -98,7 +98,7 @@ The first video frame arrived ~0.3 s after the handshake. Media audio starts (AU
 | 0x8005 | MICROPHONE_REQUEST | ← | `{ open 1, anc_enabled 2, ec_enabled 3, max_unacked 4 }` |
 | 0x8006 | MICROPHONE_RESPONSE | → | `{ status 1 = 0, session_id 2 }` |
 
-Mic audio goes head unit → phone as DATA (timestamp + PCM) on channel 9 while open (not implemented yet).
+Mic audio goes head unit → phone as DATA (8-byte timestamp + 16 kHz mono s16le PCM) on channel 9 while the phone has it open; the phone acks it with ACK. OCTAVE captures the default input only between an open and a close request (`AapConnection::onMicrophone`). Covered by `tst_androidauto`; not yet checked against a phone (no one was there to talk to it).
 
 ## Sensors (channel 1)
 

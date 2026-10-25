@@ -25,6 +25,7 @@
 #include <mutex>
 
 class QAudioSink;
+class QAudioSource;
 class QIODevice;
 class QVideoSink;
 class AapWorker;
@@ -72,6 +73,10 @@ private:
     void deliverFrame();                        // GUI thread
     void onAudio(Aap::AudioStream stream, const QByteArray &pcm);
     void onAudioStreaming(Aap::AudioStream stream, bool streaming);
+    // The phone opens / closes the head unit's microphone (Assistant, voice
+    // replies): capture from the default input only while it is open
+    void onMicrophone(bool open);
+    void stopMicrophone();
     void drainAudio();
     void closeAudio();
     void onWorkerDone();
@@ -95,6 +100,8 @@ private:
     QSize m_frameSize;
     QHash<int, AudioOut> m_audio;               // by Aap::AudioStream
     QTimer m_audioTimer;
+    QAudioSource *m_mic = nullptr;
+    QIODevice *m_micIo = nullptr;
     float m_volume = 1.0f;
     QString m_audioDeviceId;
 };

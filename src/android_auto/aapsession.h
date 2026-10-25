@@ -57,6 +57,10 @@ public:
     void setNightMode(bool night);
     void setDrivingStatus(int status);          // 0 = unrestricted
     void setVideoFocus(bool projected);         // false: the phone stops sending video
+    // 16 kHz mono s16le from the head unit's microphone, while the phone has
+    // it open (microphoneRequested(true)); dropped otherwise
+    void sendMicrophoneAudio(const QByteArray &pcm);
+    bool microphoneOpen() const { return m_micOpen; }
 
     State state() const { return m_state; }
     QString phoneName() const { return m_phoneName; }
@@ -104,6 +108,7 @@ private:
     bool m_sensorNightWanted = false;
     bool m_sensorDrivingWanted = false;
     bool m_videoFocusProjected = true;
+    bool m_micOpen = false;
     QString m_phoneName;
     QString m_error;
 };

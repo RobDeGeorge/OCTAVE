@@ -564,6 +564,45 @@ private slots:
         QVERIFY(find(phone.received, Channel::Control, Msg::ByeByeResponse));
     }
 
+    void microphoneOnlyWhileOpen()
+    {
+        AapSession::Options o;
+        o.certPem = m_headUnit.cert;
+        o.keyPem = m_headUnit.key;
+        AapSession hu(o);
+        FakePhone phone(m_phone);
+        QByteArray toPhone;
+        connect(&hu, &AapSession::transmit, this, [&](const QByteArray &b) { toPhone.append(b); });
+        QSignalSpy requested(&hu, &AapSession::microphoneRequested);
+        QVERIFY(hu.start());
+        pump(hu, phone, toPhone);
+        QCOMPARE(hu.state(), AapSession::State::Running);
+
+        const QByteArray pcm(640, 'm');     // 20 ms of 16 kHz mono s16
+        hu.sendMicrophoneAudio(pcm);         // not open yet: dropped
+        pump(hu, phone, toPhone);
+        QVERIFY(!find(phone.received, Channel::Microphone, Msg::MediaData));
+
+        phone.send(Channel::Microphone, Msg::MicrophoneRequest, ProtoWriter().boolean(1, true).data());
+        pump(hu, phone, toPhone);
+        QCOMPARE(requested.size(), 1);
+        QCOMPARE(requested.at(0).at(0).toBool(), true);
+        QVERIFY(find(phone.received, Channel::Microphone, Msg::MicrophoneResponse));
+        hu.sendMicrophoneAudio(pcm);
+        pump(hu, phone, toPhone);
+        const Message *data = find(phone.received, Channel::Microphone, Msg::MediaData);
+        QVERIFY(data);
+        QCOMPARE(data->body.size(), 8 + pcm.size());   // timestamp, then the PCM
+        QCOMPARE(data->body.mid(8), pcm);
+
+        phone.send(Channel::Microphone, Msg::MicrophoneRequest, ProtoWriter().boolean(1, false).data());
+        pump(hu, phone, toPhone);
+        QVERIFY(!hu.microphoneOpen());
+        hu.sendMicrophoneAudio(pcm);
+        pump(hu, phone, toPhone);
+        QVERIFY(!find(phone.received, Channel::Microphone, Msg::MediaData, 1));
+    }
+
     void silentPhoneTimesOut()
     {
         AapSession::Options o;

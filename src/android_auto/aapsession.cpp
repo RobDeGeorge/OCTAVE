@@ -300,9 +300,12 @@ void AapSession::handleMicrophone(const Message &m)
     if (m.id == Msg::MicrophoneRequest) {
         const bool open = ProtoReader::varintField(m.body, 1).value_or(0) != 0;
         send(Channel::Microphone, Msg::MicrophoneResponse, microphoneResponse(0, 0));
+        m_micOpen = open;
         emit microphoneRequested(open);
     } else if (m.id == Msg::MediaSetup) {
         send(Channel::Microphone, Msg::MediaConfig, mediaConfig(1));
+    } else if (m.id == Msg::MediaAck) {
+        // the phone acknowledging microphone audio; no flow control kept
     } else {
         qCDebug(lcAap) << "microphone message" << m.id << "ignored";
     }
@@ -332,6 +335,17 @@ void AapSession::sendTouch(const QList<TouchPointer> &pointers, int actionIndex,
     if (m_state != State::Running || pointers.isEmpty())
         return;
     send(Channel::Input, Msg::InputReport, touchInputReport(nowUs() * 1000, pointers, actionIndex, action));
+}
+
+void AapSession::sendMicrophoneAudio(const QByteArray &pcm)
+{
+    if (m_state != State::Running || !m_micOpen || pcm.isEmpty())
+        return;
+    // Same layout as the phone's media data: 8-byte timestamp (µs), then PCM
+    QByteArray data(8, '\0');
+    qToBigEndian(quint64(nowUs()), data.data());
+    data.append(pcm);
+    send(Channel::Microphone, Msg::MediaData, data);
 }
 
 void AapSession::setNightMode(bool night)

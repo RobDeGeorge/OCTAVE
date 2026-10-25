@@ -4,6 +4,8 @@
 #include "../util/h264decoder.h"
 
 #include <QAudioSink>
+#include <QAudioSource>
+#include <QMediaDevices>
 #include <QLoggingCategory>
 #include <QTcpSocket>
 #include <QVideoSink>
@@ -110,6 +112,9 @@ public:
         connect(m_session, &AapSession::audioData, this, [this](Aap::AudioStream s, const QByteArray &pcm, qint64) {
             post([o = m_owner, s, pcm] { o->onAudio(s, pcm); });
         });
+        connect(m_session, &AapSession::microphoneRequested, this, [this](bool open) {
+            post([o = m_owner, open] { o->onMicrophone(open); });
+        });
 
         if (m_decoder.open()) {
             connect(m_session, &AapSession::videoCodecConfig, this, [this](const QByteArray &c) {
@@ -202,6 +207,7 @@ AapConnection::~AapConnection()
     m_thread.quit();
     m_thread.wait();
     closeAudio();
+    stopMicrophone();
 }
 
 bool AapConnection::start(const QString &host, quint16 port, const AapSession::Options &options)
@@ -234,6 +240,7 @@ void AapConnection::onWorkerDone()
         m_worker = nullptr;
     }
     closeAudio();
+    stopMicrophone();
     emit finished();
 }
 
@@ -406,6 +413,57 @@ void AapConnection::closeAudio()
         }
     }
     m_audio.clear();
+}
+
+void AapConnection::onMicrophone(bool open)
+{
+    if (!open) {
+        stopMicrophone();
+        return;
+    }
+    if (m_mic || !m_worker)
+        return;
+    QAudioFormat fmt;
+    fmt.setSampleRate(16000);
+    fmt.setChannelCount(1);
+    fmt.setSampleFormat(QAudioFormat::Int16);
+    const QAudioDevice device = QMediaDevices::defaultAudioInput();
+    if (device.isNull()) {
+        qCWarning(lcAapConn) << "the phone asked for the microphone, but there is no audio input";
+        return;
+    }
+    m_mic = new QAudioSource(device, fmt, this);
+    m_mic->setBufferSize(fmt.bytesForDuration(100 * 1000));
+    m_micIo = m_mic->start();
+    if (!m_micIo) {
+        qCWarning(lcAapConn) << "could not open the microphone" << device.description() << m_mic->error();
+        stopMicrophone();
+        return;
+    }
+    qCInfo(lcAapConn) << "microphone open for the phone:" << device.description();
+    connect(m_micIo, &QIODevice::readyRead, this, [this] {
+        if (!m_micIo || !m_worker)
+            return;
+        const QByteArray pcm = m_micIo->readAll();
+        if (pcm.isEmpty())
+            return;
+        AapWorker *w = m_worker;
+        QMetaObject::invokeMethod(w, [w, pcm] {
+            if (w->session())
+                w->session()->sendMicrophoneAudio(pcm);
+        }, Qt::QueuedConnection);
+    });
+}
+
+void AapConnection::stopMicrophone()
+{
+    if (!m_mic)
+        return;
+    qCInfo(lcAapConn) << "microphone closed";
+    m_mic->stop();
+    m_mic->deleteLater();
+    m_mic = nullptr;
+    m_micIo = nullptr;
 }
 
 void AapConnection::setVolume(float linear)
