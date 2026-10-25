@@ -176,6 +176,14 @@ octave_add_test(tst_nowplaying
 if(WIN32 AND OCTAVE_HAVE_FFMPEG)
     target_include_directories(tst_nowplaying PRIVATE ${FFMPEG_INCLUDE_DIRS})
 endif()
+# The native Android Auto receiver's protocol core against a fake phone
+if(OCTAVE_HAVE_NATIVE_AA)
+    octave_add_test(tst_androidauto
+        SOURCES android_auto/aapproto.h android_auto/aapproto.cpp android_auto/aapframer.h android_auto/aapframer.cpp
+                android_auto/aaptls.h android_auto/aaptls.cpp android_auto/aapsession.h android_auto/aapsession.cpp
+        LIBS OpenSSL::SSL OpenSSL::Crypto
+        DEFINES OCTAVE_HAVE_NATIVE_AA)
+endif()
 # The bundled phone server, as in the app (ScrcpyClient::available() checks it)
 qt_add_resources(tst_phonemirror "phone_server"
     PREFIX "/phone-server"

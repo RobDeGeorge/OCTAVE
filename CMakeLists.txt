@@ -169,6 +169,20 @@ if(OCTAVE_REQUIRE_FFMPEG AND NOT OCTAVE_HAVE_FFMPEG)
                         "macOS: brew install ffmpeg)")
 endif()
 
+# ---- Native Android Auto receiver (src/android_auto/) ----
+# OCTAVE as the head unit over the adb head unit server
+# (docs/ANDROID_AUTO_PROTOCOL.md): OpenSSL for the TLS inside AAP, the
+# libavcodec decoder above for the video. Desktop only for now; without
+# either the DHU screen-scrape is all androidAutoManager offers.
+set(OCTAVE_HAVE_NATIVE_AA OFF)
+if(NOT ANDROID AND NOT IOS AND NOT EMSCRIPTEN AND OCTAVE_HAVE_FFMPEG)
+    find_package(OpenSSL QUIET COMPONENTS SSL Crypto)
+    if(OPENSSL_FOUND)
+        set(OCTAVE_HAVE_NATIVE_AA ON)
+    endif()
+endif()
+message(STATUS "Native Android Auto receiver (OpenSSL + libavcodec): ${OCTAVE_HAVE_NATIVE_AA}")
+
 # ---- Developer tooling (src/dev/) ----
 # `octave --dev` (the --sim simulator of src/sim/ plus the dev overlay) and
 # `octave --profile` (perf monitor + JSON command server on 127.0.0.1:9876,
@@ -416,6 +430,22 @@ if(OCTAVE_HAVE_FFMPEG)
     else()
         target_link_libraries(octave PRIVATE PkgConfig::FFMPEG)
     endif()
+endif()
+if(OCTAVE_HAVE_NATIVE_AA)
+    target_sources(octave PRIVATE
+        src/android_auto/aapproto.h
+        src/android_auto/aapproto.cpp
+        src/android_auto/aapframer.h
+        src/android_auto/aapframer.cpp
+        src/android_auto/aaptls.h
+        src/android_auto/aaptls.cpp
+        src/android_auto/aapsession.h
+        src/android_auto/aapsession.cpp
+        src/android_auto/aapconnection.h
+        src/android_auto/aapconnection.cpp
+    )
+    target_link_libraries(octave PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    target_compile_definitions(octave PRIVATE OCTAVE_HAVE_NATIVE_AA)
 endif()
 if(Qt6Quick3D_FOUND)
     target_link_libraries(octave PRIVATE Qt6::Quick3D)
