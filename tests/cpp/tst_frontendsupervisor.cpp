@@ -8,6 +8,7 @@
 #include "managers/frontendsupervisor.h"
 #include "managers/settingsmanager.h"
 #include "service/servicepairing.h"
+#include "service/protocol.h"
 
 #include <QElapsedTimer>
 #include <QFile>
@@ -85,7 +86,7 @@ private slots:
         const QString token = lines.value(2);
         QCOMPARE(token.size(), 64);
         QCOMPARE(lines.value(3), QStringLiteral("read,media"));
-        QCOMPARE(lines.value(4), QStringLiteral("2"));
+        QCOMPARE(lines.value(4), QString::number(OctaveService::kProtocolVersion));
         QCOMPARE(QDir(lines.value(5)).canonicalPath(), QDir(dir).canonicalPath());
         // The run is over: its token is gone, and it was never saved
         QVERIFY(m_pairing->checkToken(token).isEmpty());

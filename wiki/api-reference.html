@@ -14,7 +14,7 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Service API Reference</div>
           <h1 class="page-title">Service API Reference</h1>
-          <p class="page-subtitle">Every object a frontend can read and drive over the service protocol, generated from the C++ meta-objects (protocol version 2).</p>
+          <p class="page-subtitle">Every object a frontend can read and drive over the service protocol, generated from the C++ meta-objects (protocol version 3).</p>
         </div>
 
         <nav class="toc">
@@ -28,7 +28,7 @@
 
         <h2 id="overview">Overview</h2>
         <p>This page is generated from <span class="file-path">docs/api/</span> (<code>./build/octave --dump-api docs/api</code>, then <code>python wiki/build_api_reference.py</code>); <code>tst_apidocs</code> fails when that copy is out of date. The protocol itself (<code>hello</code>, <code>describe</code>, <code>get</code>, <code>set</code>, <code>call</code>, <code>subscribe</code>, <code>rows</code>, <code>stream</code>, <code>pair</code>) is specified in <span class="file-path">docs/api/protocol.json</span> (JSON Schema, checked against the server) and described in <a href="utilities.html#service-protocol">Utilities: Service protocol</a>; versioning and the dashboard file schema in <span class="file-path">docs/api/README.md</span> and <span class="file-path">docs/api/dashboard-spec.schema.json</span>. What each member means is in the hand-written <a href="signals-slots-reference.html">Signals &amp; Slots API</a>.</p>
-        <p>The same objects are QML context properties under the same names. Types are Qt's names (<code>QString</code>, <code>QVariantMap</code>, ...); on the wire they are JSON. 26 objects:</p>
+        <p>The same objects are QML context properties under the same names. Types are Qt's names (<code>QString</code>, <code>QVariantMap</code>, ...); on the wire they are JSON. 25 objects:</p>
         <ul>
             <li><a href="#androidAutoManager">androidAutoManager</a></li>
             <li><a href="#audioAnalyzer">audioAnalyzer</a></li>
@@ -36,7 +36,6 @@
             <li><a href="#clock">clock</a></li>
             <li><a href="#dashboardManager">dashboardManager</a></li>
             <li><a href="#diagnosticsManager">diagnosticsManager</a></li>
-            <li><a href="#downloadManager">downloadManager</a></li>
             <li><a href="#esp32VolumeManager">esp32VolumeManager</a></li>
             <li><a href="#fontCatalog">fontCatalog</a></li>
             <li><a href="#frontendManager">frontendManager</a></li>
@@ -220,41 +219,6 @@
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>lastExportPathChanged()</code>.</p>
 
-        <h3 id="downloadManager"><code>downloadManager</code> <span class="cmt">&mdash; DownloadManager</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#downloadManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/downloadManager.json</span>.</p>
-        <table>
-          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
-          <tbody>
-            <tr><td><code>isSearching</code></td><td>bool</td><td>read</td><td><code>isSearchingChanged</code></td></tr>
-            <tr><td><code>activeDownloads</code></td><td>int</td><td>read</td><td><code>activeDownloadsChanged</code></td></tr>
-            <tr><td><code>downloadPath</code></td><td>QString</td><td>constant</td><td>&ndash;</td></tr>
-            <tr><td><code>downloadsAvailable</code></td><td>bool</td><td>constant</td><td>&ndash;</td></tr>
-            <tr><td><code>searchResults</code></td><td>QAbstractListModel*</td><td>constant</td><td>&ndash;</td></tr>
-            <tr><td><code>downloadQueue</code></td><td>QAbstractListModel*</td><td>constant</td><td>&ndash;</td></tr>
-          </tbody>
-        </table>
-        <table>
-          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
-          <tbody>
-            <tr><td><code>search(QString query)</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>next_search_page()</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>search_more()</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>download(QString songId, QString songName)</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
-            <tr><td><code>cancel_download(QString songId)</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
-            <tr><td><code>pause_download(QString songId)</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
-            <tr><td><code>resume_download(QString songId)</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
-            <tr><td><code>clear_download_queue()</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
-            <tr><td><code>clear_finished_downloads()</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
-            <tr><td><code>connect_settings_manager(QObject* sm)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
-            <tr><td><code>set_download_playlist(QString name)</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
-            <tr><td><code>get_download_playlist()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>cleanup()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
-            <tr><td><code>hasStorageAccess()</code></td><td><code>bool</code></td><td>invokable</td><td><code>read</code></td></tr>
-            <tr><td><code>requestStorageAccess()</code></td><td><code>bool</code></td><td>invokable</td><td><code>system</code></td></tr>
-          </tbody>
-        </table>
-        <p><strong>Signals</strong> (<code>subscribe</code>): <code>searchInProgress(bool inProgress)</code>, <code>searchError(QString errorMsg)</code>, <code>downloadStarted(QString songId, QString displayName)</code>, <code>downloadProgress(QString songId, float progress)</code>, <code>downloadComplete(QString songId, QString filePath)</code>, <code>downloadError(QString songId, QString displayName, QString errorMsg)</code>, <code>downloadQueueChanged()</code>, <code>statusMessage(QString message)</code>, <code>isSearchingChanged(bool value)</code>, <code>activeDownloadsChanged(int count)</code>.</p>
-
         <h3 id="esp32VolumeManager"><code>esp32VolumeManager</code> <span class="cmt">&mdash; ESP32VolumeManager</span></h3>
         <p>Hand-written notes: <a href="signals-slots-reference.html#esp32VolumeManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/esp32VolumeManager.json</span>.</p>
         <table>
@@ -374,7 +338,6 @@
             <tr><td><code>delete_playlist(QString name)</code></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
             <tr><td><code>move_song_to_playlist(QString filename, QString targetPlaylist)</code></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
             <tr><td><code>delete_song(QString filename)</code></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
-            <tr><td><code>play_downloaded_song(QString artist, QString name, QString playlist)</code></td><td><code>bool</code></td><td>slot</td><td><code>media</code></td></tr>
             <tr><td><code>play_file_at_path(QString filePath)</code></td><td><code>bool</code></td><td>slot</td><td><code>media</code></td></tr>
             <tr><td><code>invalidate_stats_cache()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
             <tr><td><code>get_media_files(bool emitSignal)</code></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>

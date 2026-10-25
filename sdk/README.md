@@ -77,4 +77,4 @@ for ev := range c.Events { /* ev.Kind, ev.Decode(&octave.ParamsEvent{}) */ }
 
 ## Versioning
 
-The Python, web, TypeScript and Go clients know protocol versions 1 and 2 (under 2, loopback stays open). The Python `Client` asks `hello` on connect and raises `OctaveError` on a version it doesn't know (`check_version=False` skips that); the web page shows the mismatch in its header and carries on. See [`docs/api/README.md`](../docs/api/README.md) for what a version bump means.
+The Python, web, TypeScript and Go clients know protocol versions 1, 2 and 3 (under 2 and 3, loopback stays open; 3 only dropped `downloadManager`). The Python `Client` asks `hello` on connect and raises `OctaveError` on a version it doesn't know (`check_version=False` skips that); the web page shows the mismatch in its header and carries on. See [`docs/api/README.md`](../docs/api/README.md) for what a version bump means.

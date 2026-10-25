@@ -28,9 +28,9 @@ import (
 	"time"
 )
 
-// ProtocolVersions are the versions this client can talk to: 1 (no pairing)
-// and 2, which only adds to it.
-var ProtocolVersions = []int{1, 2}
+// ProtocolVersions are the versions this client can talk to: 1 (no pairing),
+// 2, which only adds to it, and 3, which drops downloadManager.
+var ProtocolVersions = []int{1, 2, 3}
 
 // Error is a failure reply: Message is the server's `error`, Code its stable
 // code when it has one (CodeUnauthorised), else "".

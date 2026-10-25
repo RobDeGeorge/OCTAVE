@@ -72,9 +72,8 @@ static bool coverFileOk(const QString &path)
 const QStringList MediaManager::s_audioExtensions = {
     QStringLiteral(".mp3"),
     QStringLiteral(".m4a"),
-    // YouTube serves audio-only streams in an MP4 container that yt-dlp names
-    // with a literal .mp4 extension. Treat those as audio — they're the same
-    // format as .m4a, just a different extension.
+    // Audio-only MP4 files: the same container as .m4a with a different
+    // extension. Treat them as audio.
     QStringLiteral(".mp4"),
     QStringLiteral(".flac"),
     QStringLiteral(".ogg"),
@@ -782,7 +781,7 @@ QString MediaManager::_get_album_id(const QString &filename)
 
     if (m_metadataCache.contains(filename)) {
         const MediaMetadata &meta = m_metadataCache[filename];
-        // When album is unknown (common for YouTube downloads), each track
+        // When album is unknown (common for untagged files), each track
         // likely has its own unique cover art, so include the filename
         // to avoid all "Unknown Album" tracks sharing one cached image.
         if (meta.album == QStringLiteral("Unknown Album"))
@@ -2031,12 +2030,12 @@ void MediaManager::_scan_library_inner(bool resetDisplayNames)
 
 #ifdef Q_OS_ANDROID
     // Android: also scan the app's external-files "Music" directory (and its
-    // immediate subfolders) where the downloader writes files. Qt's library
-    // root is at /sdcard/Music, but yt-dlp can only write to the scoped-storage
-    // app-private dir. So we walk the app's own Music dir here and merge its
-    // subfolder contents as extra playlists.
+    // immediate subfolders), the scoped-storage-safe place files can be put
+    // without extra permissions (the music downloader used to write there).
+    // Qt's library root is at /sdcard/Music, so we walk the app's own Music
+    // dir here and merge its subfolder contents as extra playlists.
     {
-        const QString appMusicRoot = OctaveAndroid::getDownloadsDir();
+        const QString appMusicRoot = OctaveAndroid::getAppMusicDir();
         qCInfo(lcMedia) << "Android secondary scan root:" << appMusicRoot;
         QDir rootDir(appMusicRoot);
         // Without All-files-access the library root *is* the app dir, so this
@@ -2268,11 +2267,11 @@ QString MediaManager::_get_file_path(const QString &filename)
     }
 
     // Validate path is within library root. On Android we also accept the
-    // app's external-files Music dir as a secondary valid root — that's where
-    // the downloader writes (scoped-storage-safe path).
+    // app's external-files Music dir as a secondary valid root (the
+    // scoped-storage-safe path scanned as extra playlists).
     if (!m_libraryRoot.isEmpty() && !_is_safe_path(m_libraryRoot, filePath)) {
 #ifdef Q_OS_ANDROID
-        const QString androidRoot = OctaveAndroid::getDownloadsDir();
+        const QString androidRoot = OctaveAndroid::getAppMusicDir();
         if (!androidRoot.isEmpty() && _is_safe_path(androidRoot, filePath)) {
             return filePath;
         }
@@ -2518,61 +2517,7 @@ bool MediaManager::delete_playlist(const QString &name)
     return true;
 }
 
-// ─── Download integration ──────────────────────────────────────────
-
-bool MediaManager::play_downloaded_song(const QString &artist, const QString &name, const QString &playlist)
-{
-    if (artist.isEmpty() || name.isEmpty() || playlist.isEmpty())
-        return false;
-
-    scan_library(false);
-
-    if (!m_playlists.contains(playlist)) {
-        qCWarning(lcMedia) << "play_downloaded_song: playlist not found:" << playlist;
-        return false;
-    }
-
-    // Build expected filename stem
-    QString expectedStem = (artist + QStringLiteral(" - ") + name).toLower();
-    // Sanitize like the download tool
-    static QRegularExpression unsafeChars(QStringLiteral("[/?\\\\*|<>]"));
-    expectedStem.remove(unsafeChars);
-    expectedStem.replace(QLatin1Char('"'), QLatin1Char('\''));
-    expectedStem.replace(QLatin1Char(':'), QLatin1Char('-'));
-
-    const PlaylistInfo &plData = m_playlists[playlist];
-    QString matchedFile;
-
-    // Exact match
-    for (const QString &f : plData.files) {
-        QString stem = QFileInfo(f).completeBaseName().toLower();
-        if (stem == expectedStem) {
-            matchedFile = f;
-            break;
-        }
-    }
-
-    // Fuzzy match
-    if (matchedFile.isEmpty()) {
-        for (const QString &f : plData.files) {
-            QString stem = QFileInfo(f).completeBaseName().toLower();
-            if (expectedStem.contains(stem) || stem.contains(expectedStem)) {
-                matchedFile = f;
-                break;
-            }
-        }
-    }
-
-    if (matchedFile.isEmpty()) {
-        qCWarning(lcMedia) << "play_downloaded_song: no match for" << artist << "-" << name;
-        return false;
-    }
-
-    select_playlist(playlist);
-    play_file(matchedFile);
-    qCInfo(lcMedia) << "play_downloaded_song: playing" << matchedFile << "from" << playlist;
-    return true;
-}
+// ─── Play by path ──────────────────────────────────────────────────
 
 bool MediaManager::play_file_at_path(const QString &filePath)
 {
@@ -2602,8 +2547,8 @@ bool MediaManager::play_file_at_path(const QString &filePath)
     // configured path. Handles the Android dual-root case where "Downloads"
     // is merged from /sdcard/Music/Downloads (the playlist's stored path)
     // AND the app-external files/Music/Downloads (where the files actually
-    // live). Without this, play_file_at_path fails for every downloaded
-    // song on Android.
+    // live). Without this, play_file_at_path fails for those songs on
+    // Android.
     for (auto it = m_playlists.constBegin(); it != m_playlists.constEnd(); ++it) {
         if (it->isCombined)
             continue;

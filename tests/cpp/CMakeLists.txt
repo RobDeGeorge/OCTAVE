@@ -64,7 +64,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
                 managers/settingsmanager.h managers/settingsmanager.cpp
         LIBS Qt6::Gui)
 endif()
-octave_add_test(tst_downloadutil SOURCES managers/downloadutil.cpp)
 octave_add_test(tst_obdmanager
     SOURCES managers/obdmanager.h managers/obdmanager.cpp managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
             managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
@@ -103,13 +102,6 @@ if(TARGET TagLib::tag)
 else()
     set(_taglib PkgConfig::TAGLIB)
 endif()
-octave_add_test(tst_downloadmanager
-    SOURCES managers/downloadmanager.h managers/downloadmanager.cpp
-            managers/downloadutil.h managers/downloadutil.cpp
-            managers/settingsmanager.h managers/settingsmanager.cpp
-            util/variantlistmodel.h util/variantlistmodel.cpp
-    LIBS Qt6::Gui Qt6::Network Qt6::Concurrent ${_taglib}
-    DEFINES OCTAVE_ENABLE_DOWNLOADS)
 octave_add_test(tst_mediamanager
     SOURCES managers/mediamanager.h managers/mediamanager.cpp util/folderbrowser.h util/folderbrowser.cpp service/staticfiles.h service/staticfiles.cpp util/units.h util/units.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
@@ -224,11 +216,7 @@ octave_add_test(tst_servicebridge
 octave_add_test(tst_serviceoptions SOURCES service/serviceoptions.h service/serviceoptions.cpp LIBS Qt6::Network)
 
 # docs/api/ matches what the built app publishes (--dump-api)
-set(_apidocs_defines OCTAVE_APP_BINARY="$<TARGET_FILE:octave>")
-if(OCTAVE_ENABLE_DOWNLOADS)
-    list(APPEND _apidocs_defines OCTAVE_ENABLE_DOWNLOADS)
-endif()
-octave_add_test(tst_apidocs DEFINES ${_apidocs_defines})
+octave_add_test(tst_apidocs DEFINES OCTAVE_APP_BINARY="$<TARGET_FILE:octave>")
 add_dependencies(tst_apidocs octave)
 # Everything the QML UI reaches is a published service member (step 7)
 octave_add_test(tst_conformance)

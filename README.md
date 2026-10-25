@@ -55,12 +55,9 @@ I daily-drive it in my 2003 Jeep TJ.
 
 <p align="center"><img src="frontend/assets/readme/media.webp" alt="Skipping tracks: the accent, glow and background follow each album's art" width="900"></p>
 
-Skip a track and the whole interface takes its colours from the cover art. Local MP3, M4A and FLAC with a live waveform, and a search that pulls tracks from YouTube Music straight into your library.
+Skip a track and the whole interface takes its colours from the cover art. Local MP3, M4A and FLAC with a live waveform.
 
-<p align="center">
-  <img src="frontend/assets/readme/media_media_player_playing.png" alt="The music library in the red of the playing cover" width="49%">
-  <img src="frontend/assets/readme/library_search.png" alt="Searching YouTube Music for David Bowie, each result with album art and a download button" width="49%">
-</p>
+<p align="center"><img src="frontend/assets/readme/media_media_player_playing.png" alt="The music library in the red of the playing cover" width="60%"></p>
 
 ## Gauges you design on the screen
 
@@ -198,7 +195,7 @@ cmake --build build -j8
 ctest --test-dir build --output-on-failure # the test suite
 ```
 
-Every platform and packaging target is in [BUILD.md](BUILD.md). Music downloads on desktop use yt-dlp; put it in a virtualenv next to the checkout, where OCTAVE looks first:
+Every platform and packaging target is in [BUILD.md](BUILD.md). The optional Python tools around the app (dev scripts, docs builders) install into a virtualenv next to the checkout:
 
 ```bash
 python3 -m venv venv && venv/bin/pip install -r requirements.txt
@@ -212,24 +209,6 @@ Until October 2026 OCTAVE also had a Python / PySide6 backend. It is frozen, wit
 <summary><b>Dev tooling: how the clips above were made</b></summary>
 
 Every clip and screenshot in this README is scripted. `./build/octave --dev --profile` (a Debug build) runs OCTAVE with the simulator and a local command server; a story script drives it scene by scene (navigate, play, floor the throttle, tap buttons by their label, type into fields, build a dashboard), captures the window from inside Qt, and writes WebP and PNG. The same channel is exposed as MCP tools, so a coding agent can drive the app, change settings, read performance counters and record clips. The in-app half is in `src/dev/`; see the [Development guide](https://robdegeorge.com/OCTAVE/wiki/development.html).
-
-</details>
-
-<details>
-<summary><b>YouTube downloads failing?</b></summary>
-
-*"Sign in to confirm you're not a bot"* usually means a VPN: YouTube blocks most shared VPN exit IPs. Downloads work again on a home connection or a dedicated-IP exit.
-
-To stay on the VPN, sign in through a cookies file instead:
-
-1. Install **Get cookies.txt LOCALLY** in a Chromium-based browser (desktop Chrome / Brave / Edge / Vivaldi; on Android, **Kiwi** or **Brave**).
-2. Log into <https://www.youtube.com> in that browser.
-3. On a YouTube tab, click the extension → **Export → cookies.txt**.
-4. Save it as `youtube_cookies.txt` in your **Downloads** folder:
-   - Linux / macOS: `~/Downloads/youtube_cookies.txt`
-   - Windows: `%USERPROFILE%\Downloads\youtube_cookies.txt`
-   - Android: `/storage/emulated/0/Download/youtube_cookies.txt`
-5. Restart OCTAVE. It picks the file up on its own, and the cookies usually last for weeks.
 
 </details>
 
@@ -277,8 +256,6 @@ OCTAVE stands on a lot of other people's work.
 
 | Package | Used for |
 |---|---|
-| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | Music downloads on desktop |
-| [ytmusicapi](https://github.com/sigma67/ytmusicapi) | YouTube Music search and metadata (`scripts/ytmusic_search.py`, also bundled into the APK) |
 | [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk), [Pillow](https://python-pillow.org/), [mss](https://github.com/BoboTiG/python-mss), [NumPy](https://numpy.org/), [psutil](https://github.com/giampaolo/psutil) | Dev tooling: MCP servers, screenshots and clips, perf scripts |
 | [python-OBD](https://github.com/brendan-w/python-OBD) | Dev scripts for reading and clearing trouble codes |
 | [Ruff](https://docs.astral.sh/ruff/) | Lint |
@@ -288,7 +265,6 @@ OCTAVE stands on a lot of other people's work.
 | Library | Used for |
 |---|---|
 | Qt for Android, Gradle, Android SDK / NDK | Building the APK |
-| [youtubedl-android](https://github.com/JunkFood02/youtubedl-android) (library + ffmpeg) | yt-dlp and FFmpeg on the phone |
 | [OpenSSL](https://www.openssl.org/) | HTTPS for Qt Network (`android/openssl/`) |
 
 **Code bundled in this repository**
@@ -299,7 +275,7 @@ OCTAVE stands on a lot of other people's work.
 | [QR Code generator library](https://www.nayuki.io/page/qr-code-generator-library) by Project Nayuki | MIT | `src/phone_mirror/qrcodegen.*` |
 | Android platform-tools (`adb`) | See its `NOTICE.txt` | `tools/platform-tools/` |
 
-**External tools and services:** adb (phone mirroring and Android Auto), Google's Android Auto Desktop Head Unit (the Android Auto view), YouTube Music (search and downloads).
+**External tools and services:** adb (phone mirroring and Android Auto), Google's Android Auto Desktop Head Unit (the Android Auto view).
 
 **Fonts, icons and 3D assets**
 

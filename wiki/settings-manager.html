@@ -122,8 +122,9 @@
         <div class="info-box info">
           <div class="info-box-title">Retired keys are deleted at startup</div>
           Files from older builds may carry <code>spotifyClientId</code>, <code>spotifyClientSecret</code>,
-          <code>mediaSource</code> (the removed Spotify integration) and <code>scrcpyAudioEnabled</code> (the removed phone
-          audio toggle). The constructor deletes them, saves, logs "Removed settings of retired features", and then
+          <code>mediaSource</code> (the removed Spotify integration), <code>scrcpyAudioEnabled</code> (the removed phone
+          audio toggle) and <code>downloadSubfolder</code>, <code>downloadFormat</code>, <code>downloadBitrate</code> (the
+          music downloader, removed in 2026-10). The constructor deletes them, saves, logs "Removed settings of retired features", and then
           deletes the old Spotify login token, <code>.spotify_token_cache</code> in the app data dir.
         </div>
 
@@ -213,7 +214,7 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
               <li><code>lastSettingsSection == "clockSettings"</code> (a removed page) becomes <code>"displaySettings"</code>.</li>
               <li><code>obdParameters</code>: every PID present in the defaults but missing from the file is added, so new PIDs appear after an upgrade without discarding the user's toggles.</li>
               <li><code>settingsMenuVisibility</code>: sections missing from the stored object are filled in as <code>true</code> (visible), matching <code>is_settings_section_visible()</code>.</li>
-              <li>Retired keys (<code>spotifyClientId</code>, <code>spotifyClientSecret</code>, <code>mediaSource</code>, <code>scrcpyAudioEnabled</code>) are removed and saved straight away, and the old Spotify login token is deleted (see the "Retired keys" note above).</li>
+              <li>Retired keys (<code>spotifyClientId</code>, <code>spotifyClientSecret</code>, <code>mediaSource</code>, <code>scrcpyAudioEnabled</code>, <code>downloadSubfolder</code>, <code>downloadFormat</code>, <code>downloadBitrate</code>) are removed and saved straight away, and the old Spotify login token is deleted (see the "Retired keys" note above).</li>
             </ul>
           </li>
           <li>Every backing member is populated from the loaded object with the default as fallback (<code>populateMembers()</code>, which <code>reset_to_defaults()</code> reuses).</li>
@@ -425,7 +426,6 @@ reg[QStringLiteral(<span class="str">"theme_setting"</span>)] = entry(<span clas
             <tr><td>ESP32 knob</td><td><code>esp32VolumeEnabled</code>, <code>esp32VolumePort</code>, <code>esp32VolumeStepSize</code>, <code>esp32AutoReconnect</code>, <code>esp32LedSleepEnabled</code>, <code>esp32LedColorMode</code>, <code>esp32LedStaticColor</code></td></tr>
             <tr><td>IMU</td><td><code>imuEnabled</code>, <code>sensorEmitRate</code>, <code>sensorDecimalPlaces</code>, <code>sensorTempUnit</code>, <code>sensorAltitudeUnit</code>, <code>sensorShowPitch</code>, <code>sensorShowRoll</code>, <code>sensorShowHeading</code>, <code>sensorShowGForce</code>, <code>sensorShowAltitude</code>, <code>sensorShowTemperature</code></td></tr>
             <tr><td>Gesture</td><td><code>gestureSensorEnabled</code>, <code>gestureMapping</code>, <code>gestureVolumeStep</code>, <code>gestureCooldown</code></td></tr>
-            <tr><td>Downloads</td><td><code>downloadSubfolder</code>, <code>downloadFormat</code>, <code>downloadBitrate</code></td></tr>
             <tr><td>Settings UI state</td><td><code>lastSettingsSection</code>, <code>settingsMenuVisibility</code>, <code>pinnedSettings</code>, <code>expandedCards</code></td></tr>
           </tbody>
         </table>
@@ -638,7 +638,7 @@ QVariant SettingsManager::<span class="fn">get_setting_with_default</span>(<span
 
         <p>Two families of keys use this path today:</p>
         <ul>
-          <li><strong>Keys with a default but no property</strong>: <code>expandedCards</code>, <code>musicDeviceModel</code> and the three download keys, which <code>DownloadManager</code> reads with <code>get_setting()</code>. These are type-validated like any other default.</li>
+          <li><strong>Keys with a default but no property</strong>: <code>expandedCards</code> and <code>musicDeviceModel</code>. These are type-validated like any other default.</li>
           <li><strong>QML-only keys with no C++ default</strong>: the RPM shift-light configuration (<code>rpm_*</code>, defaults in <code>ShiftLightManager::reload()</code>), <code>lastOBDPage</code>, <code>lastSensorPage</code>, <code>activeDashboard</code> and <code>dashboardEditorDraft</code>. Their defaults live in the QML call sites and they survive validation through the forward-compatibility copy. The full list with defaults is in the <a href="settings-reference.html#generic">Settings Reference</a>.</li>
         </ul>
 
@@ -677,7 +677,7 @@ QVariant SettingsManager::<span class="fn">get_setting_with_default</span>(<span
         <pre><code>SettingsManager settingsManager;
 ctx-&gt;setContextProperty(<span class="str">"settingsManager"</span>, &amp;settingsManager);</code></pre>
 
-        <p>It is then handed to nearly every other manager, either through the constructor (<code>Clock</code>, <code>VolumeController</code>, <code>OBDManager</code>) or a <code>setSettingsManager()</code> (<code>MediaManager</code>) or <code>connect_settings_manager()</code> call (<code>ESP32VolumeManager</code>, <code>BerryIMUManager</code>, <code>GestureManager</code>, <code>DownloadManager</code>); <code>OBDAdapterFinder</code> takes it in its constructor too. <code>PhoneMirrorManager</code> is primed from the <code>get_scrcpy_*</code> getters and its <code>scrcpyAudioGainChanged</code>, <code>scrcpyAudioDuckEnabledChanged</code>, <code>scrcpyAudioDuckLevelChanged</code>, <code>scrcpyPhoneScreenOffChanged</code>, <code>scrcpyDisplayDpiChanged</code>, <code>scrcpyBitRateUsbChanged</code>, <code>scrcpyBitRateWifiChanged</code>, <code>scrcpyBitRateAutoChanged</code> and <code>scrcpyAutoWifiChanged</code> signals are wired straight into the manager's setters, so those Accessories-page sliders apply live. <code>scrcpyWirelessAddress</code> runs the other way: the manager owns the remembered Wi-Fi phone and its <code>wirelessAddressChanged</code> signal is wired to <code>save_scrcpy_wireless_address</code>.</p>
+        <p>It is then handed to nearly every other manager, either through the constructor (<code>Clock</code>, <code>VolumeController</code>, <code>OBDManager</code>) or a <code>setSettingsManager()</code> (<code>MediaManager</code>) or <code>connect_settings_manager()</code> call (<code>ESP32VolumeManager</code>, <code>BerryIMUManager</code>, <code>GestureManager</code>); <code>OBDAdapterFinder</code> takes it in its constructor too. <code>PhoneMirrorManager</code> is primed from the <code>get_scrcpy_*</code> getters and its <code>scrcpyAudioGainChanged</code>, <code>scrcpyAudioDuckEnabledChanged</code>, <code>scrcpyAudioDuckLevelChanged</code>, <code>scrcpyPhoneScreenOffChanged</code>, <code>scrcpyDisplayDpiChanged</code>, <code>scrcpyBitRateUsbChanged</code>, <code>scrcpyBitRateWifiChanged</code>, <code>scrcpyBitRateAutoChanged</code> and <code>scrcpyAutoWifiChanged</code> signals are wired straight into the manager's setters, so those Accessories-page sliders apply live. <code>scrcpyWirelessAddress</code> runs the other way: the manager owns the remembered Wi-Fi phone and its <code>wirelessAddressChanged</code> signal is wired to <code>save_scrcpy_wireless_address</code>.</p>
 
         <p>QML accesses settings directly:</p>
         <pre><code><span class="cmt">// Read a property (binding updates on the notify signal)</span>

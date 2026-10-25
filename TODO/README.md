@@ -14,7 +14,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | [phone-mirror-robustness.md](phone-mirror-robustness.md) | Mirror recovers fast from network and USB changes, works beyond Samsung | S … L | phone on the Pi, then other phones |
 | [android-cpp-port.md](android-cpp-port.md) | APK good enough to daily-drive: icon, splash, log check, then permissions / audio focus | S … L | S22 |
 | [sensorhome-3d-first-visit.md](sensorhome-3d-first-visit.md) | Check on the phone that the first 3D View tap no longer freezes (code done) | S | S22, Pi |
-| [error-notification-ui.md](error-notification-ui.md) | Notice for phone-mirror failures off-page; check the OBD/download notice on the Pi | S | desktop, Pi |
+| [error-notification-ui.md](error-notification-ui.md) | Notice for phone-mirror failures off-page; check the OBD notice on the Pi | S | desktop, Pi |
 | [sensor-driven-ui-cost.md](sensor-driven-ui-cost.md) | Measure on the phone: idle sensors stopped, the grid fix, the Full Grid warnings (code done) | S | S22, Pi |
 
 ## 2. One session each (M)
@@ -23,7 +23,6 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 |---|---|---|---|
 | [dashboards-roadmap.md](dashboards-roadmap.md) | Prove the dashboard editor and demand-driven polling on a touchscreen and in the car | M | S22, Jeep |
 | [future-tests.md](future-tests.md) | Signal wiring test (after moving main.cpp connects into a function), then QML integration and OBD replay suites | M … L–XL | desktop, Jeep for OBD recordings |
-| [yt-cookies-file-picker.md](yt-cookies-file-picker.md) | Import / test / clear the YouTube cookies file in the app | M | desktop, S22 |
 | [update-checker-packaged-builds.md](update-checker-packaged-builds.md) | Packaged builds compare against the latest GitHub release | M | VMs, S22 |
 | [dp-helper-consolidation.md](dp-helper-consolidation.md) | One shared `dp()` instead of 63 private copies | M | 10-min S22 check first |
 | [obd-adapter-discovery.md](obd-adapter-discovery.md) | Pick-and-connect Bluetooth OBD on every platform (Jeep test S, other platforms L) | S, then L | Pi + NEXAS, S22 |

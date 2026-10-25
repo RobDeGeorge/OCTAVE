@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -116,12 +117,10 @@ func TestClientAgainstHeadlessOctave(t *testing.T) {
 		if err != nil || info["id"] != "RPM" {
 			t.Errorf("info %v %v", info, err)
 		}
-		var summary ModelSummary
-		if err := c.Get("downloadManager", "downloadQueue", &summary); err != nil || !summary.Model {
-			t.Errorf("model summary %+v %v", summary, err)
-		}
-		if rows, err := c.Rows("downloadManager", "downloadQueue", 0, -1); err != nil || len(rows) != 0 {
-			t.Errorf("rows %v %v", rows, err)
+		// The app has no list-model property today (tst_servicebridge and the fake server cover rows)
+		var e *Error
+		if _, err := c.Rows("volumeController", "percent", 0, -1); !asError(err, &e) || !strings.Contains(e.Message, "not a list model") {
+			t.Errorf("rows of a plain property: %v", err)
 		}
 	})
 	t.Run("errors carry the message and the code", func(t *testing.T) {

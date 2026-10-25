@@ -315,11 +315,6 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("gestureCooldown")]         = 300;
     d[QStringLiteral("pinnedSettings")]          = QJsonArray();
 
-    // Music downloads
-    d[QStringLiteral("downloadSubfolder")] = QStringLiteral("Downloads");
-    d[QStringLiteral("downloadFormat")]    = QStringLiteral("mp3");
-    d[QStringLiteral("downloadBitrate")]   = QStringLiteral("auto");
-
     // Expanded cards
     d[QStringLiteral("expandedCards")] = QJsonObject();
 
@@ -412,17 +407,20 @@ SettingsManager::SettingsManager(QObject *parent)
     }
 
     // Drop keys of removed features (the Spotify integration, the phone
-    // audio toggle); the Spotify client secret should not linger on disk
+    // audio toggle, music downloads); the Spotify client secret should not
+    // linger on disk
     bool dropped = false;
     for (const QString &key : {QStringLiteral("spotifyClientId"), QStringLiteral("spotifyClientSecret"),
-                               QStringLiteral("mediaSource"), QStringLiteral("scrcpyAudioEnabled")}) {
+                               QStringLiteral("mediaSource"), QStringLiteral("scrcpyAudioEnabled"),
+                               QStringLiteral("downloadSubfolder"), QStringLiteral("downloadFormat"),
+                               QStringLiteral("downloadBitrate")}) {
         if (m_settings.contains(key)) {
             m_settings.remove(key);
             dropped = true;
         }
     }
     if (dropped) {
-        qCInfo(lcSettings) << "Removed settings of retired features (Spotify, phone audio toggle)";
+        qCInfo(lcSettings) << "Removed settings of retired features (Spotify, phone audio toggle, downloads)";
         saveSettings(m_settings);
         QFile::remove(getAppDataDir() + QStringLiteral("/.spotify_token_cache"));   // its login token
     }

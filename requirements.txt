@@ -1,11 +1,6 @@
 # Python tools around the C++ app (the app itself has no Python dependency).
-# Install into ./venv next to the checkout, where the desktop downloader looks:
+# Install into ./venv next to the checkout:
 #   python3 -m venv venv && venv/bin/pip install -r requirements.txt
-
-# Desktop music downloads: DownloadManager runs venv/bin/yt-dlp (else yt-dlp
-# on PATH) and scripts/ytmusic_search.py with venv/bin/python3 (else python3).
-yt-dlp==2026.8.19
-ytmusicapi==1.11.5
 
 # Developer tooling in the gitignored dev/ tree, which drives build/octave over
 # its command server: MCP servers, screenshot / story / collage / perf scripts.

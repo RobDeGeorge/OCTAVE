@@ -1,10 +1,10 @@
 // Generated from docs/api/protocol.json by scripts/generate-protocol.mjs; do not edit.
-// Protocol version 2. Regenerate with `npm run generate`.
+// Protocol version 3. Regenerate with `npm run generate`.
 
 export type Json = null | boolean | number | string | Json[] | { [k: string]: Json }
 
 /** The protocol version protocol.json describes (docs/api/README.md, Versioning). */
-export const PROTOCOL_VERSION = 2
+export const PROTOCOL_VERSION = 3
 
 /** One list-model row: {role name: value}. */
 export type Row = Record<string, Json>
@@ -187,7 +187,7 @@ export interface CallArgs {
 export type CallReply = Json
 
 /**
- * The rows of a list-model property (the download queue, search results), each as {role: value}. Without `count`, every row from `from` on.
+ * The rows of a list-model property, each as {role: value}. Without `count`, every row from `from` on.
  * @since protocol 1
  */
 export interface RowsArgs {

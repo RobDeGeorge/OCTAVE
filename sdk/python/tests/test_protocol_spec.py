@@ -166,8 +166,6 @@ class ProtocolSpecTest(unittest.TestCase):
 
     def test_get_set_call(self):
         self.ok("get", object="volumeController", property="percent")
-        summary = self.ok("get", object="downloadManager", property="downloadQueue")
-        self.check(summary, self.spec["$defs"]["modelSummary"], "model summary")
         self.assertEqual(self.ok("get", object="paramStore"), {})
         self.assertIsNone(self.ok("get", object="paramStore", property="RPM"))
         self.assertIs(self.ok("set", object="volumeController", property="muted", value=False), False)
@@ -177,8 +175,9 @@ class ProtocolSpecTest(unittest.TestCase):
         self.assertEqual(info["id"], "RPM")
 
     def test_rows(self):
-        self.assertEqual(self.ok("rows", object="downloadManager", property="downloadQueue"), [])
-        self.assertEqual(self.ok("rows", object="downloadManager", property="downloadQueue", **{"from": 0}, count=5), [])
+        # The app has no list-model property today: the model summary, rows and model
+        # events are checked by tst_servicebridge and tools/api/tests (the fake server)
+        self.assertIn("not a list model", self.fails("rows", object="volumeController", property="percent")["error"])
 
     def test_subscribe_property_and_signal_events(self):
         r = self.ok("subscribe", object="volumeController", properties=["percent"], signals=["percentChanged"])
@@ -198,13 +197,6 @@ class ProtocolSpecTest(unittest.TestCase):
         first = self.raw.events_until(lambda m: m["event"] == "params")[-1]
         self.event("params", first)
         self.assertEqual(first["values"], {})   # no car: nothing has a value yet
-
-    def test_subscribe_model_event(self):
-        self.ok("subscribe", object="downloadManager", properties=["downloadQueue"])
-        first = self.raw.events_until(lambda m: m["event"] == "model")[-1]
-        self.event("model", first)
-        self.assertEqual(first["change"], "reset")
-        self.assertEqual(first["rows"], [])
 
     def test_stream_and_unstream(self):
         info = self.ok("stream", object="phoneMirrorManager", name="video")

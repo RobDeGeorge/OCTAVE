@@ -275,8 +275,6 @@ Flickable {
                 title: "Open-Source Licenses"
 
                 readonly property bool isAndroid: Qt.platform.os === "android"
-                readonly property bool bundlesDownloads: isAndroid && typeof downloadManager !== "undefined"
-                                                         && downloadManager && downloadManager.downloadsAvailable
                 readonly property var components: {
                     var all = [
                         { name: "Qt 6", license: "LGPL-3.0; GPL-3.0 for Qt Quick 3D and Qt Quick Timeline", use: "The whole application" },
@@ -293,16 +291,6 @@ Flickable {
                         all.push({ name: "Android platform-tools (adb)", license: "Apache-2.0", use: "Talking to the phone (bundled in releases)" })
                     } else {
                         all.push({ name: "OpenSSL 3", license: "Apache-2.0", use: "HTTPS" })
-                    }
-                    if (bundlesDownloads) {
-                        all.push({ name: "youtubedl-android", license: "GPL-3.0", use: "Music downloads on the phone" })
-                        all.push({ name: "yt-dlp", license: "Unlicense", use: "Music downloads (inside youtubedl-android)" })
-                        all.push({ name: "Python", license: "PSF-2.0", use: "Runs yt-dlp and the search helper (inside youtubedl-android)" })
-                        all.push({ name: "FFmpeg (inside youtubedl-android)", license: "LGPL-2.1+ / GPL-2.0+", use: "Audio conversion for downloads" })
-                        all.push({ name: "mutagen", license: "GPL-2.0+", use: "Embedding cover art in downloads" })
-                        all.push({ name: "ytmusicapi", license: "MIT", use: "YouTube Music search" })
-                        all.push({ name: "requests", license: "Apache-2.0", use: "HTTP for the search helper" })
-                        all.push({ name: "urllib3, idna, charset-normalizer, certifi", license: "MIT, BSD-3-Clause, MIT, MPL-2.0", use: "What requests depends on, bundled with it" })
                     }
                     return all
                 }

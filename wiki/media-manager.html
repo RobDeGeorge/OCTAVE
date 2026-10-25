@@ -79,8 +79,8 @@
         <pre><code><span class="cmt">// src/managers/mediamanager.cpp</span>
 <span class="str">".mp3"</span>, <span class="str">".m4a"</span>, <span class="str">".mp4"</span>, <span class="str">".flac"</span>, <span class="str">".ogg"</span>, <span class="str">".opus"</span>, <span class="str">".wav"</span></code></pre>
         <p>
-          The list accepts <code>.mp4</code>: YouTube serves audio-only streams in an MP4 container that yt-dlp names
-          with a literal <code>.mp4</code> extension, and those files are the same format as <code>.m4a</code>. The
+          The list accepts <code>.mp4</code>: an audio-only MP4 file is the same container as <code>.m4a</code> with a
+          different extension. The
           display-name and metadata fallbacks strip any of these extensions (and only these).
         </p>
         <p>The desktop TagLib readers handle the formats below; none extracts WAV art. Actual playback also depends on the codecs available to Qt Multimedia. The dispatch lives in <code>_read_tags(filePath, baseName)</code> (tags) and <code>_extract_art_for(filePath, albumId)</code> (cover); a file that fails to open yields the file-name title with "Unknown Artist" / "Unknown Album":</p>
@@ -174,8 +174,8 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
         </ol>
         <p>
           <strong>Android:</strong> after the root scan the manager also walks the app's own external-files
-          Music directory (<code>OctaveAndroid::getDownloadsDir()</code>), where the downloader must write under scoped
-          storage, and merges each of its sub-folders into the playlist of the same name (or adds it as a new one).
+          Music directory (<code>OctaveAndroid::getAppMusicDir()</code>), the place files can be put under scoped
+          storage without extra permissions, and merges each of its sub-folders into the playlist of the same name (or adds it as a new one).
           <code>_get_file_path()</code> accepts that directory as a second valid root, and
           <code>play_file_at_path()</code> has a filename-only fallback for the same reason.
         </p>
@@ -251,7 +251,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
         <p>
           <code>_get_album_id()</code> keys covers by <code>"{album}_{artist}"</code> so every track of an album shares
           one file. When the album tag is missing the key becomes <code>"Unknown Album_{artist}_{filename}"</code>,
-          because a folder of YouTube downloads usually has a different cover per track and they must not all share the
+          because a folder of loose single tracks usually has a different cover per track and they must not all share the
           first one. If metadata cannot be read at all, a 16-hex-digit SHA-256 of the file name is used.
         </p>
 
@@ -430,7 +430,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
             <tr><td><code>delete_playlist(name)</code></td><td>Recursively deletes the folder (never "All Music" / "Unsorted"), rescans, and selects the first playlist if the deleted one was active</td></tr>
             <tr><td><code>get_movable_playlist_names()</code></td><td>All names except "All Music" (valid move targets)</td></tr>
             <tr><td><code>get_song_playlist_name(file)</code></td><td>The playlist folder the file actually lives in, even when viewed through "All Music"; empty if unknown</td></tr>
-            <tr><td><code>play_downloaded_song(artist, title, playlist)</code> / <code>play_file_at_path(path)</code></td><td>Used by the <a href="download-manager.html">Download Manager</a>: rescan, find the file (exact then fuzzy match on the sanitized <code>"artist - title"</code> stem, or by directory), select its playlist and play it</td></tr>
+            <tr><td><code>play_file_at_path(path)</code></td><td>Rescan, find the file by directory (or by filename in any playlist), select its playlist and play it. Nothing in the bundled UI calls it; it is there for service clients</td></tr>
           </tbody>
         </table>
 
@@ -441,7 +441,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           <code>m_displayNames</code> is persisted as <code>&lt;app data&gt;/display_names.json</code> (written atomically
           with <code>QSaveFile</code>) so cleaned names survive restarts. <code>_strip_single_filename()</code> removes the extension, the artist name(s) from the
           tags (split on <code>/</code> and <code>;</code>), leading track numbers (<code>^\d{1,3}\s*[-._)\s]\s*</code>),
-          a list of YouTube-style junk such as <code>(Official Audio)</code>, <code>[HD]</code>, <code>(feat. ...)</code>,
+          a list of common upload junk such as <code>(Official Audio)</code>, <code>[HD]</code>, <code>(feat. ...)</code>,
           and leftover separators. <code>_auto_strip_display_names()</code> runs at the end of every scan for files that
           have no entry yet; the settings page's "Strip filenames" button (<code>strip_filenames()</code>) re-strips every
           file and reports each change through <code>scanProgress</code>. Without an entry, the fallback strips any recognised audio
@@ -705,7 +705,6 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
             <tr><td><code>move_song_to_playlist</code></td><td>(str, str) -&gt; bool</td><td>Move a file into another playlist folder</td></tr>
             <tr><td><code>delete_song</code></td><td>(str) -&gt; bool</td><td>Delete a file from disk (emits <code>songDeleted</code>)</td></tr>
             <tr><td><code>get_song_playlist_name</code></td><td>(str) -&gt; str</td><td>Playlist folder a file lives in</td></tr>
-            <tr><td><code>play_downloaded_song</code></td><td>(str, str, str) -&gt; bool</td><td>Play a freshly downloaded track by artist / title / playlist</td></tr>
             <tr><td><code>play_file_at_path</code></td><td>(str) -&gt; bool</td><td>Play a file by absolute path (selects its playlist)</td></tr>
             <tr><td><code>get_full_file_path</code> / <code>get_song_file_path</code></td><td>(str) -&gt; str</td><td>Absolute path for a filename (the former returns "" for a missing file; used by the audio analyzer)</td></tr>
             <tr><td><code>get_default_media_dir</code> / <code>get_media_folder_name</code></td><td>() -&gt; str</td><td>Built-in default directory / name of the current media directory</td></tr>
@@ -778,7 +777,6 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
           <a href="audio-analyzer.html" class="related-link">Audio Analyzer</a>
           <a href="settings-manager.html" class="related-link">Settings Manager</a>
           <a href="settings-reference.html" class="related-link">Settings Reference</a>
-          <a href="download-manager.html" class="related-link">Download Manager</a>
           <a href="phone-mirror-android-auto.html" class="related-link">Phone Mirror</a>
           <a href="theme-system.html" class="related-link">Theme System</a>
           <a href="signals-slots-reference.html" class="related-link">Signals &amp; Slots Reference</a>

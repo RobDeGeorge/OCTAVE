@@ -7,7 +7,6 @@
         "clock": "Clock",
         "dashboardManager": "DashboardManager",
         "diagnosticsManager": "DiagnosticsManager",
-        "downloadManager": "DownloadManager",
         "esp32VolumeManager": "ESP32VolumeManager",
         "fontCatalog": "FontCatalog",
         "frontendManager": "FrontendManager",
@@ -28,5 +27,5 @@
         "units": "Units",
         "volumeController": "VolumeController"
     },
-    "protocolVersion": 2
+    "protocolVersion": 3
 }

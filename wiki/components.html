@@ -329,7 +329,6 @@ scanTerminal.<span class="fn">appendLine</span>(<span class="str">"[DONE] 412 fi
         <p>Wired in <span class="file-path">Main.qml</span>:</p>
         <ul>
           <li><code>obdManager.connectionLostUnexpectedly(reason)</code> &rarr; "OBD connection lost: &lt;reason&gt;", unless the current page already shows OBD status (OBDMenu, OBDHome, OBDDiagnostics, or Settings on the OBD section).</li>
-          <li><code>downloadManager.downloadError(songId, displayName, error)</code> &rarr; "Download failed: &lt;name&gt;", unless the Download page is current.</li>
         </ul>
         <p>Everything else stays on its own page and in the logs (no chime, one severity). Phone-mirror errors off-page are still open in <span class="file-path">TODO/error-notification-ui.md</span>.</p>
 

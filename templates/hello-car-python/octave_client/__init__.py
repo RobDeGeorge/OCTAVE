@@ -37,8 +37,8 @@ from .launch import find_binary, launch_headless
 
 __all__ = ["Client", "OctaveError", "PROTOCOL_VERSION", "PROTOCOL_VERSIONS", "find_binary", "launch_headless"]
 
-PROTOCOL_VERSION = 2          # the newest this client knows
-PROTOCOL_VERSIONS = (1, 2)    # every version it can talk to
+PROTOCOL_VERSION = 3            # the newest this client knows
+PROTOCOL_VERSIONS = (1, 2, 3)   # every version it can talk to
 
 
 def _record(raw):

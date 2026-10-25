@@ -1,10 +1,10 @@
 # Error notification: the remaining off-page cases
 
-**Goal:** one small app-wide notice that tells the driver when the OBD link drops mid-drive (and, later, when phone mirror or a download fails) while they're on a different page.
+**Goal:** one small app-wide notice that tells the driver when the OBD link drops mid-drive (and, later, when phone mirror fails) while they're on a different page.
 
 **Status:** mostly done (2026-10-18); see "Left". Errors go to the logs plus per-page notices by design (car UX: nothing chatty in the driver's peripheral vision). This is the plan for the one gap those don't cover.
 
-**Last updated:** 2026-10-18
+**Last updated:** 2026-10-24
 
 ---
 
@@ -13,17 +13,16 @@
 | Error | Where the user sees it today |
 |---|---|
 | Phone mirror error / dropped link | `PhoneMirrorView.qml`: dismissable notice banner (`phoneMirrorManager.mirrorNotice`, `dismissNotice()`), and on a dropped link it holds the last frame and reconnects quietly (`onScrcpyError`) |
-| Download failed | `DownloadPage.qml` `onDownloadError`: status text + queue row |
 | Dashboard editor / share errors | `DashboardEditor.qml` `errorBanner`, `OBDMenu.qml` `shareStatusBanner` |
 | Update available | Pulsing dot on the Settings About card (`SettingsMenu.qml` `updateAvailable`, `AboutPage.qml`) |
 | "What went wrong earlier?" | Settings > About > Diagnostics: recent log lines, copy, export (`DiagnosticsManager`) |
 | OBD status | `OBDHome.qml`, `OBDSettingsPage.qml`, `OBDMenu.qml`: only visible on those pages |
 
-**The gap:** if the OBD adapter drops while you're on the media player or the home screen, nothing tells you. Same for a mirror or download failure when you're not on that page.
+**The gap:** if the OBD adapter drops while you're on the media player or the home screen, nothing tells you. Same for a mirror failure when you're not on that page.
 
 ## Done 2026-10-18
 
-`frontend/ErrorToast.qml` (top centre, fade, 8 s or tap, queue + dedupe; `tst_errortoast`), shown from `Main.qml` for `obdManager.connectionLostUnexpectedly(reason)` (a new C++ signal, emitted only when a live link drops on its own) unless an OBD page or Settings > OBD is showing, and for `downloadManager.downloadError` unless the Download page is showing. Checked end to end in a sandboxed `--dev` run with `sim_link {"up": false}`: no notice on the OBD page, "OBD connection lost: …" on the media page. Decisions taken: no chime, one severity, top centre.
+`frontend/ErrorToast.qml` (top centre, fade, 8 s or tap, queue + dedupe; `tst_errortoast`), shown from `Main.qml` for `obdManager.connectionLostUnexpectedly(reason)` (a new C++ signal, emitted only when a live link drops on its own) unless an OBD page or Settings > OBD is showing (it also covered `downloadManager.downloadError` until the downloader was removed on 2026-10-24). Checked end to end in a sandboxed `--dev` run with `sim_link {"up": false}`: no notice on the OBD page, "OBD connection lost: …" on the media page. Decisions taken: no chime, one severity, top centre.
 
 ## Left
 

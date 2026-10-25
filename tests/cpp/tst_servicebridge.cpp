@@ -552,7 +552,7 @@ private slots:
 
         LineClient a(server.port());
         QJsonObject hello = a.send(R"({"op": "hello", "id": 1})");
-        QCOMPARE(hello.value("result").toObject().value("protocolVersion").toInt(), 2);
+        QCOMPARE(hello.value("result").toObject().value("protocolVersion").toInt(), kProtocolVersion);
         QCOMPARE(hello.value("result").toObject().value("auth").toString(), QStringLiteral("untrusted"));
         // Only what pairing needs: no app version or build, no object list
         QVERIFY(!hello.value("result").toObject().contains("objects"));

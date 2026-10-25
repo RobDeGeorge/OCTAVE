@@ -134,59 +134,6 @@ Item {
         return Math.max(floor, Math.round(size * (App.Spacing.effectiveScale || 1.0)))
     }
 
-    // Navigate to cached DownloadPage, pre-selecting the current playlist
-    function openDownloadPage() {
-        var sv = mediaPlayer.stackView
-        if (sv.currentItem && sv.currentItem.objectName === "downloadPage") return
-
-        // Determine current local playlist to pre-select (skip special playlists)
-        var preselect = ""
-        if (currentPlaylistName
-            && currentPlaylistName !== "All Music" && currentPlaylistName !== "Unsorted") {
-            preselect = currentPlaylistName
-        }
-
-        // Reuse cached page if it exists
-        if (sv._cachedDownloadPage) {
-            // Always refresh playlist list (may have changed while cached)
-            if (mediaManager)
-                sv._cachedDownloadPage.downloadPlaylists = mediaManager.get_movable_playlist_names()
-            // Check if it's already in the stack
-            for (var i = 0; i < sv.depth; i++) {
-                if (sv.get(i) === sv._cachedDownloadPage) {
-                    sv.pop(sv._cachedDownloadPage)
-                    syncDownloadPlaylist(preselect)
-                    return
-                }
-            }
-            sv.push(sv._cachedDownloadPage)
-            syncDownloadPlaylist(preselect)
-            return
-        }
-
-        // First time: create and cache on the stackView
-        var component = Qt.createComponent("DownloadPage.qml")
-        if (component.status === Component.Ready) {
-            sv._cachedDownloadPage = component.createObject(null, {
-                stackView: sv,
-                mainWindow: mediaPlayer.mainWindow
-            })
-            if (sv._cachedDownloadPage) {
-                sv.push(sv._cachedDownloadPage)
-                syncDownloadPlaylist(preselect)
-            }
-        }
-    }
-
-    function syncDownloadPlaylist(name) {
-        if (!name) return
-        var dp = stackView._cachedDownloadPage
-        if (dp) {
-            dp.selectedPlaylist = name
-            downloadManager.set_download_playlist(name)
-        }
-    }
-
     // Core properties
     property var mediaFiles: []
     // Unsorted list as last received from mediaListChanged. Every visit
@@ -527,14 +474,14 @@ Item {
                 }
             }
 
-            // Playlist dropdown (right side, next to download button)
+            // Playlist dropdown (right side)
             Item {
                 id: playlistDropdownContainer
                 width: Math.min(dp(220), parent.width * 0.25)
                 height: App.Spacing.bottomBarNavButtonHeight
                 anchors {
                     right: parent.right
-                    rightMargin: App.Spacing.mediaRoomMargin + App.Spacing.bottomBarNavButtonWidth + App.Spacing.overallMargin * 2
+                    rightMargin: App.Spacing.mediaRoomMargin
                     verticalCenter: parent.verticalCenter
                 }
 
@@ -721,86 +668,6 @@ Item {
                         }
                     }
                 }
-            }
-        }
-
-        // Download Button (top right corner, overlays title bar)
-        // Hidden when the playlist is empty, since there is nothing to add to yet
-        Control {
-            id: downloadButton
-            visible: mediaFiles.length > 0 && !mediaPlayer.phoneQueueShown
-                     && !!downloadManager && downloadManager.downloadsAvailable
-            width: App.Spacing.bottomBarNavButtonWidth
-            height: App.Spacing.bottomBarNavButtonHeight
-            z: 3
-            anchors {
-                top: parent.top
-                right: parent.right
-                topMargin: App.Spacing.mediaRoomMargin
-                rightMargin: App.Spacing.mediaRoomMargin
-            }
-
-            background: Rectangle {
-                color: "transparent"
-                radius: dpMin(8, 2)
-                border.color: App.Style.accent
-                border.width: 1
-                scale: downloadMouseArea.pressed ? 0.8 : 1.0
-                opacity: downloadMouseArea.pressed ? 0.7 : 1.0
-                Behavior on scale {
-                    NumberAnimation {
-                        duration: 200
-                        easing.type: Easing.OutBack
-                        easing.overshoot: 1.1
-                    }
-                }
-                Behavior on opacity {
-                    NumberAnimation { duration: 150 }
-                }
-            }
-
-            contentItem: Item {
-                scale: downloadMouseArea.pressed ? 0.8 : 1.0
-                opacity: downloadMouseArea.pressed ? 0.7 : 1.0
-                Behavior on scale {
-                    NumberAnimation {
-                        duration: 200
-                        easing.type: Easing.OutBack
-                        easing.overshoot: 1.1
-                    }
-                }
-                Behavior on opacity {
-                    NumberAnimation { duration: 150 }
-                }
-                Image {
-                    id: downloadButtonImage
-                    anchors.centerIn: parent
-                    width: parent.width * 0.7
-                    height: parent.height * 0.7
-                    source: "./assets/download_button.svg"
-                    sourceSize: Qt.size(width * 2, height * 2)
-                    fillMode: Image.PreserveAspectFit
-                    smooth: true
-                    antialiasing: true
-                    mipmap: true
-                    visible: false
-                }
-
-                ColorOverlay {
-                    anchors.fill: downloadButtonImage
-                    source: downloadButtonImage
-                    color: App.Style.accent
-                }
-            }
-
-            MouseArea {
-                id: downloadMouseArea
-                width: parent.width * 2
-                height: parent.height * 2
-                anchors.centerIn: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: mediaPlayer.openDownloadPage()
             }
         }
 
@@ -2070,7 +1937,7 @@ Item {
                     Layout.fillWidth: true
                 }
 
-                // Name field, keyboard toggle inside on the left (as on the download page)
+                // Name field, keyboard toggle inside on the left
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: newPlaylistDialog.rowHeight

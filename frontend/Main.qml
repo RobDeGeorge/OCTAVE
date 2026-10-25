@@ -295,7 +295,6 @@ ApplicationWindow {
             "SensorHome.qml":       { file: "SensorHome.qml",       props: { stackView: stackView, mainWindow: mainWindow } },
             "SensorMenu.qml":       { file: "SensorMenu.qml",       props: { stackView: stackView, mainWindow: mainWindow } },
             "CarMenu.qml":          { file: "CarMenu.qml",          props: { stackView: stackView, mainWindow: mainWindow } },
-            "DownloadPage.qml":     { file: "DownloadPage.qml",     props: { stackView: stackView } },
             "ClockMenu.qml":        { file: "ClockMenu.qml",        props: { stackView: stackView, mainWindow: mainWindow } },
         }
         var entry = pageMap[pageName]
@@ -348,9 +347,6 @@ ApplicationWindow {
             id: stackView
             objectName: "stackView"
             z: 1
-
-            // Cached DownloadPage — created once, reused across all navigations
-            property var _cachedDownloadPage: null
 
             // One live instance per page file, keyed by "Foo.qml". A page is
             // built on its first visit and re-pushed on every later one, so a
@@ -1002,13 +998,6 @@ ApplicationWindow {
         function onConnectionLostUnexpectedly(reason) {
             if (!mainWindow._pageShowsObdStatus())
                 errorToast.show("OBD connection lost" + (reason ? ": " + reason : ""))
-        }
-    }
-    Connections {
-        target: typeof downloadManager !== "undefined" ? downloadManager : null
-        function onDownloadError(songId, displayName, errorMsg) {
-            if (mainWindow._currentPageName() !== "downloadPage")
-                errorToast.show("Download failed" + (displayName ? ": " + displayName : ""))
         }
     }
 

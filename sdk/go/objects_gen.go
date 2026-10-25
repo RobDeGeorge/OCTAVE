@@ -4,7 +4,7 @@
 package octave
 
 // ObjectNames is every service object, as hello lists them.
-var ObjectNames = []string{"androidAutoManager", "audioAnalyzer", "berryIMU", "clock", "dashboardManager", "diagnosticsManager", "downloadManager", "esp32VolumeManager", "fontCatalog", "frontendManager", "gestureSensor", "mediaManager", "networkManager", "nowPlaying", "obdAdapterFinder", "obdManager", "paramStore", "parameterCatalog", "phoneMirrorManager", "settingsManager", "shiftLightManager", "sim", "themeCatalog", "tripRecorder", "units", "volumeController"}
+var ObjectNames = []string{"androidAutoManager", "audioAnalyzer", "berryIMU", "clock", "dashboardManager", "diagnosticsManager", "esp32VolumeManager", "fontCatalog", "frontendManager", "gestureSensor", "mediaManager", "networkManager", "nowPlaying", "obdAdapterFinder", "obdManager", "paramStore", "parameterCatalog", "phoneMirrorManager", "settingsManager", "shiftLightManager", "sim", "themeCatalog", "tripRecorder", "units", "volumeController"}
 
 // AndroidAutoManager is the service object "androidAutoManager" (C++ AndroidAutoManager); NewAndroidAutoManager(c) binds it to a client.
 type AndroidAutoManager struct{ c *Client }
@@ -498,129 +498,6 @@ func (o DiagnosticsManager) LicenseText(name string) (v string, err error) {
 	return
 }
 
-// DownloadManager is the service object "downloadManager" (C++ DownloadManager); NewDownloadManager(c) binds it to a client.
-type DownloadManager struct{ c *Client }
-
-// NewDownloadManager binds "downloadManager" to c.
-func NewDownloadManager(c *Client) DownloadManager { return DownloadManager{c} }
-
-// Name is the object's name on the wire.
-func (DownloadManager) Name() string { return "downloadManager" }
-
-// GetIsSearching reads the property "isSearching" (bool).
-func (o DownloadManager) GetIsSearching() (v bool, err error) {
-	err = o.c.Get("downloadManager", "isSearching", &v)
-	return
-}
-
-// GetActiveDownloads reads the property "activeDownloads" (int).
-func (o DownloadManager) GetActiveDownloads() (v int, err error) {
-	err = o.c.Get("downloadManager", "activeDownloads", &v)
-	return
-}
-
-// GetDownloadPath reads the property "downloadPath" (QString).
-func (o DownloadManager) GetDownloadPath() (v string, err error) {
-	err = o.c.Get("downloadManager", "downloadPath", &v)
-	return
-}
-
-// GetDownloadsAvailable reads the property "downloadsAvailable" (bool).
-func (o DownloadManager) GetDownloadsAvailable() (v bool, err error) {
-	err = o.c.Get("downloadManager", "downloadsAvailable", &v)
-	return
-}
-
-// GetSearchResults reads the property "searchResults" (QAbstractListModel*).
-func (o DownloadManager) GetSearchResults() (v ModelSummary, err error) {
-	err = o.c.Get("downloadManager", "searchResults", &v)
-	return
-}
-
-// GetDownloadQueue reads the property "downloadQueue" (QAbstractListModel*).
-func (o DownloadManager) GetDownloadQueue() (v ModelSummary, err error) {
-	err = o.c.Get("downloadManager", "downloadQueue", &v)
-	return
-}
-
-// Search calls search(QString).
-func (o DownloadManager) Search(query string) error {
-	return o.c.Call("downloadManager", "search", nil, query)
-}
-
-// NextSearchPage calls next_search_page().
-func (o DownloadManager) NextSearchPage() error {
-	return o.c.Call("downloadManager", "next_search_page", nil)
-}
-
-// SearchMore calls search_more().
-func (o DownloadManager) SearchMore() error {
-	return o.c.Call("downloadManager", "search_more", nil)
-}
-
-// Download calls download(QString, QString).
-func (o DownloadManager) Download(songId string, songName string) error {
-	return o.c.Call("downloadManager", "download", nil, songId, songName)
-}
-
-// CancelDownload calls cancel_download(QString).
-func (o DownloadManager) CancelDownload(songId string) error {
-	return o.c.Call("downloadManager", "cancel_download", nil, songId)
-}
-
-// PauseDownload calls pause_download(QString).
-func (o DownloadManager) PauseDownload(songId string) error {
-	return o.c.Call("downloadManager", "pause_download", nil, songId)
-}
-
-// ResumeDownload calls resume_download(QString).
-func (o DownloadManager) ResumeDownload(songId string) error {
-	return o.c.Call("downloadManager", "resume_download", nil, songId)
-}
-
-// ClearDownloadQueue calls clear_download_queue().
-func (o DownloadManager) ClearDownloadQueue() error {
-	return o.c.Call("downloadManager", "clear_download_queue", nil)
-}
-
-// ClearFinishedDownloads calls clear_finished_downloads().
-func (o DownloadManager) ClearFinishedDownloads() error {
-	return o.c.Call("downloadManager", "clear_finished_downloads", nil)
-}
-
-// ConnectSettingsManager calls connect_settings_manager(QObject*).
-func (o DownloadManager) ConnectSettingsManager(sm any) error {
-	return o.c.Call("downloadManager", "connect_settings_manager", nil, sm)
-}
-
-// SetDownloadPlaylist calls set_download_playlist(QString).
-func (o DownloadManager) SetDownloadPlaylist(name string) error {
-	return o.c.Call("downloadManager", "set_download_playlist", nil, name)
-}
-
-// GetDownloadPlaylist calls get_download_playlist() -> QString.
-func (o DownloadManager) GetDownloadPlaylist() (v string, err error) {
-	err = o.c.Call("downloadManager", "get_download_playlist", &v)
-	return
-}
-
-// Cleanup calls cleanup().
-func (o DownloadManager) Cleanup() error {
-	return o.c.Call("downloadManager", "cleanup", nil)
-}
-
-// HasStorageAccess calls hasStorageAccess() -> bool.
-func (o DownloadManager) HasStorageAccess() (v bool, err error) {
-	err = o.c.Call("downloadManager", "hasStorageAccess", &v)
-	return
-}
-
-// RequestStorageAccess calls requestStorageAccess() -> bool.
-func (o DownloadManager) RequestStorageAccess() (v bool, err error) {
-	err = o.c.Call("downloadManager", "requestStorageAccess", &v)
-	return
-}
-
 // Esp32VolumeManager is the service object "esp32VolumeManager" (C++ ESP32VolumeManager); NewEsp32VolumeManager(c) binds it to a client.
 type Esp32VolumeManager struct{ c *Client }
 
@@ -1015,12 +892,6 @@ func (o MediaManager) MoveSongToPlaylist(filename string, targetPlaylist string)
 // DeleteSong calls delete_song(QString) -> bool.
 func (o MediaManager) DeleteSong(filename string) (v bool, err error) {
 	err = o.c.Call("mediaManager", "delete_song", &v, filename)
-	return
-}
-
-// PlayDownloadedSong calls play_downloaded_song(QString, QString, QString) -> bool.
-func (o MediaManager) PlayDownloadedSong(artist string, name string, playlist string) (v bool, err error) {
-	err = o.c.Call("mediaManager", "play_downloaded_song", &v, artist, name, playlist)
 	return
 }
 

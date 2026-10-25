@@ -37,7 +37,6 @@
 #include "managers/nowplaying.h"
 #include "managers/themecatalog.h"
 #include "service/servicepairing.h"
-#include "managers/downloadmanager.h"
 #include "managers/dashboardmanager.h"
 #include "util/fontcatalog.h"
 #include "sim/simulator.h"
@@ -83,7 +82,6 @@ public:
     AndroidAutoManager androidAutoManager;
     PhoneMirrorManager phoneMirrorManager;
     NowPlaying nowPlaying;
-    DownloadManager downloadManager;
     FontCatalog fontCatalog;
     ThemeCatalog themeCatalog;
     // Pairing and the service switch (not a service object: QML only)

@@ -4,6 +4,16 @@ What each protocol version added, deprecated and broke. Newest first. The rules 
 
 Additions do not bump the version; they are listed under the version that was current when they landed.
 
+## Protocol 3
+
+2026-10-24. The music downloader is removed (yt-dlp and YouTube Music search, every platform).
+
+Breaking:
+- Object `downloadManager` removed, with every member: its search and download methods, `searchResults` / `downloadQueue` models and signals. There is no replacement; music comes from the library folders. The rest of the envelope is unchanged: `rows` and model events stay, for list models to come.
+- `mediaManager.play_downloaded_song` removed (it found a just-downloaded track by artist and title). `mediaManager.play_file_at_path` stays.
+
+Settings: `downloadSubfolder`, `downloadFormat` and `downloadBitrate` are gone, and are dropped from an existing settings file at start-up.
+
 ## Protocol 2
 
 2026-10-23. Pairing.

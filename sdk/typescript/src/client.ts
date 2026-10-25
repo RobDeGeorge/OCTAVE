@@ -10,8 +10,8 @@ import {
 
 /** The protocol version this client was written against: the one docs/api/protocol.json describes. */
 export const PROTOCOL_VERSION = SPEC_VERSION
-/** The versions this client accepts: 1 (no pairing) and 2 (everything else is additive). */
-export const PROTOCOL_VERSIONS = [1, 2]
+/** The versions this client accepts: 1 (no pairing), 2 and 3 (no downloadManager); everything else is additive. */
+export const PROTOCOL_VERSIONS = [1, 2, 3]
 
 export type { Json, ServiceEvent } from './protocol.js'
 export type Status = 'connecting' | 'online' | 'offline' | 'mismatch'

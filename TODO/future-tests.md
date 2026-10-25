@@ -6,7 +6,7 @@
 
 **Last updated:** 2026-10-18
 
-**Why parked:** the C++ QtTest suite (`tests/cpp/`, 19 tests via `octave_add_test()` in `tests/cpp/CMakeLists.txt`, run by `ctest --test-dir build --output-on-failure` in CI) already covers the subsystems that broke most often: ELM327 parsing, OBD demand polling, the simulated car, phone mirror, downloads, dashboards, settings backup/atomic write. What's left is useful but not urgent.
+**Why parked:** the C++ QtTest suite (`tests/cpp/`, 19 tests via `octave_add_test()` in `tests/cpp/CMakeLists.txt`, run by `ctest --test-dir build --output-on-failure` in CI) already covers the subsystems that broke most often: ELM327 parsing, OBD demand polling, the simulated car, phone mirror, dashboards, settings backup/atomic write. What's left is useful but not urgent.
 
 Items are ordered easiest first. Done 2026-10-18: the VolumeController test (`tst_volumecontroller`), metadata sanitizing cases in `tst_mediamanager` (which found and fixed emoji being stripped from tags), and the settings round-trip and older-file tests in `tst_settingsmanager`.
 

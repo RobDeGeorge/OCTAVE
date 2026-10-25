@@ -53,10 +53,11 @@ class HeadlessClientTest(unittest.TestCase):
         self.assertIsNone(self.octave.get("paramStore", "RPM"))   # no car: null before a reading
         self.assertEqual(self.octave.get("paramStore"), {})       # only ids with readings
 
-    def test_rows_of_a_list_model(self):
-        summary = self.octave.get("downloadManager", "downloadQueue")
-        self.assertTrue(summary["model"])
-        self.assertEqual(self.octave.rows("downloadManager", "downloadQueue"), [])
+    def test_rows_needs_a_list_model(self):
+        # The app has no list-model property today (tst_servicebridge and the fake server cover rows)
+        with self.assertRaises(OctaveError) as e:
+            self.octave.rows("volumeController", "percent")
+        self.assertIn("not a list model", str(e.exception))
 
     def test_hello_on_connect(self):
         self.assertEqual(self.octave.server["protocolVersion"], PROTOCOL_VERSION)

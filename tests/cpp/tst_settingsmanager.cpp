@@ -399,6 +399,25 @@ private slots:
         QVERIFY(!QFile::exists(dir + "/settingsConfigure.json.corrupt"));
     }
 
+    void retiredFeatureKeysAreDropped()
+    {
+        const QString dir = SettingsManager::getAppDataDir();
+        QVERIFY(QDir().mkpath(dir));
+        const QJsonObject old{{"downloadSubfolder", "Downloads"}, {"downloadFormat", "mp3"},
+                              {"downloadBitrate", "auto"}, {"spotifyClientSecret", "s"},
+                              {"themeSetting", "Ocean"}};
+        {
+            QFile f(dir + "/settingsConfigure.json");
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(QJsonDocument(old).toJson());
+        }
+
+        SettingsManager mgr;
+        for (const char *key : {"downloadSubfolder", "downloadFormat", "downloadBitrate", "spotifyClientSecret"})
+            QVERIFY2(!mgr.m_settings.contains(key), key);
+        QCOMPARE(mgr.m_settings.value("themeSetting").toString(), QStringLiteral("Ocean"));
+    }
+
     // ── sensor display + OBD card style: typed, notifying (open-backend #11) ──
     // SensorMenu used to read these once and is cached by the page stack, so
     // a change in Settings showed only after a restart. They keep their old

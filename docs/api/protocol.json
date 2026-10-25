@@ -3,7 +3,7 @@
   "$id": "https://robdegeorge.com/OCTAVE/docs/api/protocol.json",
   "title": "OCTAVE service protocol",
   "description": "The envelope of OCTAVE's service API: the transports, every op with its arguments and reply, the error form, the event shapes, the binary stream record, the HTTP routes and the pairing flow. The objects an op names (their properties, methods and signals) are in the <object>.json files next to this one; this file is the part of the API that does not come from a C++ meta-object. It is hand-written and checked against a running `octave --headless` by sdk/python/tests/test_protocol_spec.py (ctest sdk_python): every op here exists, every op the server registers is here, and sample replies, errors and events validate against these schemas. Each schema is JSON Schema 2020-12; `$ref`s point into this file. Unknown fields: a client ignores fields, ops and events it does not know (additions never bump the version), so the schemas here do not set additionalProperties false; the test applies them strictly so this file cannot lag behind the server. Generators: sdk/typescript (scripts/generate-protocol.mjs) and sdk/go (generate/main.go) read `ops`, `events`, `errors` and `streams` from here.",
-  "protocolVersion": 2,
+  "protocolVersion": 3,
   "versioning": {
     "rule": "protocolVersion (here, in index.json, in `hello` and `describe`, and kProtocolVersion in src/service/protocol.h) goes up on any breaking change: a removed or renamed op, argument, reply field, event, object or member, or a changed type or meaning. Additions do not bump it. A client accepts the versions it was written against and refuses, or degrades, on an unknown later one.",
     "history": "docs/api/CHANGELOG.md"
@@ -192,7 +192,7 @@
     },
     "rows": {
       "since": 1,
-      "description": "The rows of a list-model property (the download queue, search results), each as {role: value}. Without `count`, every row from `from` on.",
+      "description": "The rows of a list-model property, each as {role: value}. Without `count`, every row from `from` on.",
       "args": {
         "type": "object",
         "properties": {

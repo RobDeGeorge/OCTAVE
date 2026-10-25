@@ -11,8 +11,7 @@ on a few objects: volumeController (percent, muted, applyVolume, toggleMute,
 setMuted), nowPlaying (title, artist, playing, hasTrack, artRevision,
 togglePlay, next, previous), paramStore (RPM and SPEED ticking ten times a
 second), obdManager (connected, setParameterDemand), parameterCatalog
-(info(id) from parameters.json), downloadManager.downloadQueue (an empty
-list model: get, rows, model events), mediaTicket, a stream
+(info(id) from parameters.json), mediaTicket, a stream
 (phoneMirrorManager.video: synthetic H.264-shaped records, a keyframe with
 the config flag first). Pairing: `pair` with --code (default 123456) gives a
 token and the scopes asked for plus read; a trusted hello with that token
@@ -21,6 +20,9 @@ start untrusted (as over the network) and every op but hello and pair
 answers unauthorised until they pair. Permissions are enforced from the
 `scope` each member carries in docs/api/: a device without the scope gets
 forbidden, like the app.
+
+A list model to practise on, also on the `fake` object (the app has none
+today): `fake.items`, empty (get, rows, model events).
 
 Faults on demand, through a `fake` object the real app does not have:
 `fake.rateLimitNext(n)` answers the next n ops on every connection with
@@ -52,7 +54,10 @@ from jsonschema_lite import SchemaError, Validator  # noqa: E402
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 DEFAULT_API = os.path.join(ROOT, "docs", "api")
 FAKE_OBJECT = {
-    "class": "FakeServer", "object": "fake", "stability": "experimental", "properties": [],
+    "class": "FakeServer", "object": "fake", "stability": "experimental",
+    "properties": [
+        {"name": "items", "type": "QAbstractListModel*", "readable": True, "writable": False, "constant": True},
+    ],
     "methods": [
         {"name": "rateLimitNext", "kind": "invokable", "params": [{"name": "count", "type": "int"}], "returns": "", "scope": "read"},
         {"name": "setForbidden", "kind": "invokable", "params": [{"name": "on", "type": "bool"}], "returns": "", "scope": "read"},
@@ -105,7 +110,7 @@ class FakeServer:
                            "artRevision": 1, "source": "local", "positionMs": 0, "durationMs": 180000},
             "obdManager": {"connected": True, "connectionState": 2},
             "paramStore": {"RPM": 800.0, "SPEED": 0.0},
-            "downloadManager": {"downloadQueue": []},
+            "fake": {"items": []},
         }
         self._stop = threading.Event()
         self._t0 = time.monotonic()
@@ -385,8 +390,8 @@ class Connection:
             raise Reject("get needs a property")
         self.server.member(obj_name, "properties", prop)
         value = st.get(prop)
-        if isinstance(value, list) and prop == "downloadQueue":
-            return {"model": True, "count": len(value), "roles": ["title", "status"]}
+        if obj_name == "fake" and prop == "items":
+            return {"model": True, "count": len(value), "roles": ["title"]}
         return value
 
     def op_set(self, args):

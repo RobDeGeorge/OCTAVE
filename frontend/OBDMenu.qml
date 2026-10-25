@@ -353,9 +353,8 @@ Item {
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
-            // Match MediaPlayer's titleBar height exactly so the chooser
-            // button lines up pixel-for-pixel with the YouTube Music
-            // download button: see MediaPlayer.qml:277.
+            // Match MediaPlayer's titleBar height exactly so the header
+            // lines up with the media pages.
             height: App.Spacing.bottomBarNavButtonHeight + App.Spacing.mediaRoomMargin * 2
             color: Qt.darker(obdPage.backgroundColor, 1.12)
             z: 2
@@ -401,10 +400,8 @@ Item {
         }
 
         // Dashboards chooser button — anchored to the outer content
-        // Rectangle (NOT to obdHeader) with the identical top/right
-        // margins the YouTube Music download button uses in
-        // MediaPlayer.qml:650-655. Same parent-relative anchors + same
-        // margins + same button size = exact X/Y match across pages.
+        // Rectangle (NOT to obdHeader) with mediaRoomMargin top/right
+        // margins and the bottom-bar nav button size.
         Control {
             id: dashboardsButton
             objectName: "dashboardsButton"

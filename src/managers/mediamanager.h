@@ -137,8 +137,7 @@ public slots:
     bool move_song_to_playlist(const QString &filename, const QString &targetPlaylist);
     bool delete_song(const QString &filename);
 
-    // Playback state for download integration
-    bool play_downloaded_song(const QString &artist, const QString &name, const QString &playlist);
+    // Play a file by absolute path (selects the playlist holding it)
     bool play_file_at_path(const QString &filePath);
 
     // Stats cache invalidation

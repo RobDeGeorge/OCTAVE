@@ -312,7 +312,7 @@ Rectangle {
         var n = item ? item.objectName : ""
         if (n === "mainMenu") return "home"
         if (n.indexOf("obd") === 0) return "obd"
-        if (n === "mediaRoom" || n === "mediaPlayer" || n === "downloadPage") return "media"
+        if (n === "mediaRoom" || n === "mediaPlayer") return "media"
         if (n.indexOf("sensor") === 0 || n === "carMenu") return "sensor"
         if (n === "settingsMenu") return "settings"
         if (n === "androidAutoView") return "androidAuto"

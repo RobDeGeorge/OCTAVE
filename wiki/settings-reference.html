@@ -30,7 +30,6 @@
             <li><a href="#imu">IMU Sensor</a></li>
             <li><a href="#gesture">Gesture Sensor</a></li>
             <li><a href="#phone">Android Auto and Phone Mirror</a></li>
-            <li><a href="#download">Downloads</a></li>
             <li><a href="#ui-state">Settings UI State</a></li>
             <li><a href="#generic">QML-Only Keys (no C++ default)</a></li>
             <li><a href="#in-memory">In-Memory Only</a></li>
@@ -322,20 +321,6 @@ EV_BATTERY_HEALTH</code></pre>
             <tr><td><code>scrcpyBitRateWifi</code></td><td>scrcpyBitRateWifi</td><td>int (Mbps)</td><td>8</td><td>clamped 2 – 40 (UI slider 2 … 20)</td><td>Video bit rate for Wi-Fi sessions. Restarts a running Wi-Fi session</td></tr>
             <tr><td><code>scrcpyBitRateAuto</code></td><td>scrcpyBitRateAuto</td><td>bool</td><td>true</td><td>true/false</td><td>Adaptive quality: the bit rate follows the link (cut when frames arrive late, raised while they keep up), with <code>scrcpyBitRateUsb</code> / <code>scrcpyBitRateWifi</code> as the ceiling. Restarts a running session</td></tr>
             <tr><td><code>scrcpyAutoWifi</code></td><td>scrcpyAutoWifi</td><td>bool</td><td>false</td><td>true/false</td><td>Before each USB session, switch the phone's adbd to TCP port 5555 (<code>adb tcpip</code>, skipped when already on) and remember its Wi-Fi address in <code>scrcpyWirelessAddress</code>, so it reconnects over Wi-Fi without a cable or the Wireless debugging toggle until the phone reboots. Off by default since 0.9.5: until that reboot the phone's adbd accepts connections on any network it joins. Only the default changed; a saved <code>true</code> is kept</td></tr>
-          </tbody>
-        </table>
-
-        <!-- Downloads -->
-        <h2 id="download">Downloads</h2>
-        <p>No settings-page control writes these; <a href="download-manager.html">DownloadManager</a> reads them with <code>get_setting()</code>, so they can be changed in the JSON while OCTAVE is closed. Their defaults remain in SettingsManager when downloads are disabled (<code>OCTAVE_ENABLE_DOWNLOADS=OFF</code>), but the download implementation is replaced by a stub.</p>
-        <table>
-          <thead>
-            <tr><th>Access</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>generic</td><td>downloadSubfolder</td><td>string</td><td>"Downloads"</td><td>Folder name</td><td>Sub-folder of <code>mediaFolder</code> that downloaded songs are written to</td></tr>
-            <tr><td>generic</td><td>downloadFormat</td><td>string</td><td>"mp3"</td><td>"mp3", "flac", "ogg", "opus", "m4a" (per the code comment; not validated)</td><td>Audio container / codec passed to yt-dlp</td></tr>
-            <tr><td>generic</td><td>downloadBitrate</td><td>string</td><td>"auto"</td><td>"auto", "128k", "192k", "320k" (per the code comment; not validated)</td><td>Target bitrate for downloads</td></tr>
           </tbody>
         </table>
 

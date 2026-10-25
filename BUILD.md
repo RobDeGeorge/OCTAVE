@@ -9,7 +9,7 @@ This guide covers:
 3. [Android build](#android-build) (full toolchain setup + APK)
 4. [WebAssembly build](#webassembly-build) (the browser demo)
 5. [iOS build](#ios-build) (planned, not yet wired)
-6. [Python helper tools](#python-helper-tools) (optional download helpers and dev scripts)
+6. [Python helper tools](#python-helper-tools) (optional dev scripts and docs builders)
 7. [CI parity](#ci-parity) (how local commands map to GitHub Actions)
 
 ---
@@ -24,13 +24,6 @@ cmake --build build -j
 # Run
 ./build/octave            # Linux/macOS
 ./build/Debug/octave.exe  # Windows MSVC multi-config
-```
-
-App-store builds (downloads feature stripped):
-
-```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DOCTAVE_ENABLE_DOWNLOADS=OFF
-cmake --build build -j
 ```
 
 Developer tooling (`src/dev/`) is compiled in when `OCTAVE_DEV_TOOLS` is on: the default only
@@ -300,7 +293,6 @@ qt-cmake -S . -B build-android \
     -DANDROID_ABI=arm64-v8a \
     -DANDROID_PLATFORM=android-30 \
     -DQT_ANDROID_SIGN_APK=OFF
-    # add -DOCTAVE_ENABLE_DOWNLOADS=OFF only for a Play Store build; sideload/CI keep downloads ON
 
 cmake --build build-android --target apk -j
 adb install build-android/android-build/build/outputs/apk/debug/android-build-debug.apk
@@ -369,7 +361,7 @@ By hand, it is the usual cross-compile:
 source ~/emsdk/emsdk_env.sh
 ~/Qt/6.12.0/wasm_multithread/bin/qt-cmake -S . -B build-wasm -G Ninja \
     -DCMAKE_BUILD_TYPE=Release -DQT_HOST_PATH=~/Qt/6.12.0/gcc_64 \
-    -DOCTAVE_ENABLE_DOWNLOADS=OFF -DOCTAVE_BUILD_TESTS=OFF -DOCTAVE_DEV_TOOLS=OFF
+    -DOCTAVE_BUILD_TESTS=OFF -DOCTAVE_DEV_TOOLS=OFF
 cmake --build build-wasm
 ```
 
@@ -409,7 +401,7 @@ When this work happens, it will be added here as section 4 alongside Android.
 
 ## Python helper tools
 
-The app has no Python dependency, but a few optional tools around it are Python. `requirements.txt` lists them; install into `./venv` next to the checkout, which is where the desktop downloader looks for `yt-dlp` and the `python3` that runs `scripts/ytmusic_search.py`:
+The app has no Python dependency, but a few optional tools around it are Python. `requirements.txt` lists them; install into `./venv` next to the checkout:
 
 ```bash
 python3 -m venv venv

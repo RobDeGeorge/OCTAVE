@@ -167,7 +167,7 @@ class Octave {
 
 // ── page ───────────────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
-const PROTOCOLS = [1, 2];   // the versions this page knows
+const PROTOCOLS = [1, 2, 3];   // the versions this page knows
 const TOKEN_KEY = "octave.token";
 const store = {   // a token per page origin; private windows may refuse storage
   get() { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } },
@@ -231,7 +231,7 @@ async function main() {
   $("status").className = "up";
   $("app").textContent = `v${hello.app.version}${hello.app.headless ? ", headless" : ""}`;
   if (!PROTOCOLS.includes(hello.protocolVersion))
-    $("app").textContent += ` (protocol ${hello.protocolVersion}, this page knows ${PROTOCOLS.join(" and ")})`;
+    $("app").textContent += ` (protocol ${hello.protocolVersion}, this page knows ${PROTOCOLS.join(", ")})`;
 
   // Gauges: catalog metadata once, then the paramStore stream
   const gauges = {};

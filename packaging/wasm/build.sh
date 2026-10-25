@@ -35,7 +35,6 @@ echo "emcc: $(emcc --version | head -1)"
 "$QT_WASM/bin/qt-cmake" -S "$src" -B "$BUILD_DIR" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DQT_HOST_PATH="$QT_HOST" \
-    -DOCTAVE_ENABLE_DOWNLOADS=OFF \
     -DOCTAVE_BUILD_TESTS=OFF \
     -DOCTAVE_DEV_TOOLS=OFF
 cmake --build "$BUILD_DIR" -j "$JOBS"

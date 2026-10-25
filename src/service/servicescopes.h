@@ -12,7 +12,7 @@
 //   vehicle   OBD, adapters, the IMU, gestures, the shift light, the knob
 //   phone     phone mirroring and Android Auto, their screens and input
 //   settings  settingsManager and the themes
-//   files     the library, playlists, downloads, dashboards, trips, logs:
+//   files     the library, playlists, dashboards, trips, logs:
 //             what is saved, deleted, imported or exported
 //   system    restart, shut down, update, open folders on the head unit
 //   full      all of the above, the dev actions and app internals

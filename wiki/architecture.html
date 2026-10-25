@@ -79,7 +79,7 @@
 │  │  MediaManager AudioAnalyzer│                     │  MediaPlayer  │  │
 │  │  OBDManager (+ELM327)      │                     │  OBDMenu      │  │
 │  │  NetworkManager            │                     │  dashboards/  │  │
-│  │  DownloadManager           │                     │  gauges/      │  │
+│  │  TripRecorder + TripStore  │                     │  gauges/      │  │
 │  │  ESP32VolumeManager        │                     │  CarMenu +    │  │
 │  │  BerryIMUManager           │                     │   JeepVehicle │  │
 │  │  GestureManager            │                     │  SensorMenu   │  │
@@ -198,7 +198,6 @@
             <tr><td>GestureManager</td><td><code>gesturemanager.{h,cpp}</code></td><td><code>gestureSensor</code></td><td>PAJ7620U2 gesture sensor over I²C; stub on mobile</td></tr>
             <tr><td>AndroidAutoManager</td><td><code>androidautomanager.{h,cpp}</code></td><td><code>androidAutoManager</code></td><td>Google DHU launch + window capture; stub on mobile</td></tr>
             <tr><td>PhoneMirrorManager</td><td><code>phonemirrormanager.{h,cpp}</code> + <code>src/phone_mirror/scrcpyclient.{h,cpp}</code></td><td><code>phoneMirrorManager</code></td><td>Built-in scrcpy-protocol client; stub on mobile</td></tr>
-            <tr><td>DownloadManager</td><td><code>downloadmanager.{h,cpp}</code></td><td><code>downloadManager</code></td><td>Music search + yt-dlp download; disabled with <code>OCTAVE_ENABLE_DOWNLOADS=OFF</code></td></tr>
             <tr><td>DashboardManager</td><td><code>dashboardmanager.{h,cpp}</code></td><td><code>dashboardManager</code></td><td>Built-in preset + user JSON dashboards, save / delete / duplicate, hot reload</td></tr>
             <tr><td>ParameterCatalog</td><td><code>parametercatalog.{h,cpp}</code></td><td><code>parameterCatalog</code></td><td>Title / short title / unit / range / kind / decimals of every OBD PID and IMU reading, one table for C++ and every frontend; see <a href="signals-slots-reference.html#parameterCatalog">Signals &amp; Slots</a></td></tr>
             <tr><td>NowPlaying</td><td><code>nowplaying.{h,cpp}</code></td><td><code>nowPlaying</code></td><td>What is playing and its controls, phone or local; the one phone-position clock; the phone/local hand-off</td></tr>
@@ -215,7 +214,7 @@
             <tr><td>Units</td><td><code>src/util/units.{h,cpp}</code></td><td><code>units</code></td><td>Time formatting, compass points and unit conversions for QML and C++</td></tr>
             <tr><td>QmlModules</td><td><code>src/util/qmlmodules.{h,cpp}</code></td><td><em>none</em> (feeds <code>hasQuick3D</code> / <code>hasQuick3DAssetUtils</code>)</td><td>Is an optional QML module installed, from its <code>qmldir</code> in the import paths, without loading it</td></tr>
             <tr><td>DashboardGrid</td><td><code>src/util/dashboardgrid.{h,cpp}</code></td><td><em>none</em> (through <code>dashboardManager.canPlace</code> / <code>fitAt</code>)</td><td>Dashboard grid placement: in the grid, no overlap, shrink-to-fit; shared by spec normalising and the editor</td></tr>
-            <tr><td>VariantListModel</td><td><code>src/util/variantlistmodel.{h,cpp}</code></td><td><em>none</em> (through <code>downloadManager.searchResults</code> / <code>downloadQueue</code>)</td><td>Generic list model of <code>QVariantMap</code> rows, one role per key, <code>count</code> and <code>get(row)</code>; a field change is one <code>dataChanged</code> on one row, so a ListView keeps its delegates and scroll position</td></tr>
+            <tr><td>VariantListModel</td><td><code>src/util/variantlistmodel.{h,cpp}</code></td><td><em>none</em> (no manager serves one at present; the service bridge still handles it)</td><td>Generic list model of <code>QVariantMap</code> rows, one role per key, <code>count</code> and <code>get(row)</code>; a field change is one <code>dataChanged</code> on one row, so a ListView keeps its delegates and scroll position</td></tr>
           </tbody>
         </table>
 
@@ -316,7 +315,7 @@ EmbeddedDhuItem { anchors.fill: parent }</code></pre>
           <li><strong>QGuiApplication</strong> &mdash; organization/application name <code>OCTAVE</code>; <code>QQuickStyle::setStyle("Basic")</code> so sliders are fully customisable. <code>Units</code> is created before the engine (bindings that format times run while the engine tears down).</li>
           <li><strong>Auto-scale and scalar context properties</strong> &mdash; <code>screenAutoScale = min(width, height) / 720</code>, clamped to 0.4&ndash;3.0 (the shorter edge, because Android reports the natural portrait size even when locked landscape); <code>isAndroid</code>.</li>
           <li><strong><code>frontend/</code></strong> &mdash; <code>assets:/frontend</code> on Android; on desktop <code>frontend/</code> next to the binary, or one directory up (so <code>build/octave</code> finds the checkout's).</li>
-          <li><strong><code>UiWatchdog</code></strong> started, then <strong><code>AppCore</code></strong> (<span class="file-path">src/appcore.{h,cpp}</span>): every manager as a member, constructed in dependency order (settings, diagnostics, clock, network, volume; media, analyzer; the PID catalog, OBD, shift light, adapter finder, trip recorder, ESP32, IMU, value store, gestures; Android Auto, phone mirror, now playing, downloads; fonts, dashboards) and wired by its <code>wire*()</code> helpers (<a href="#signal-wiring">Signal Wiring Graph</a>). On Android the constructor also starts the youtubedl-android bridge off-thread and requests the runtime permissions; a granted audio permission triggers a library scan. Each manager is entered in the service registry; <code>core.exposeTo(ctx)</code> makes them all context properties.</li>
+          <li><strong><code>UiWatchdog</code></strong> started, then <strong><code>AppCore</code></strong> (<span class="file-path">src/appcore.{h,cpp}</span>): every manager as a member, constructed in dependency order (settings, diagnostics, clock, network, volume; media, analyzer; the PID catalog, OBD, shift light, adapter finder, trip recorder, ESP32, IMU, value store, gestures; Android Auto, phone mirror, now playing; fonts, dashboards) and wired by its <code>wire*()</code> helpers (<a href="#signal-wiring">Signal Wiring Graph</a>). On Android the constructor also requests the runtime permissions; a granted audio permission triggers a library scan. Each manager is entered in the service registry; <code>core.exposeTo(ctx)</code> makes them all context properties.</li>
           <li><strong>Engine-only setup</strong> &mdash; the <code>dhuframe</code> image provider, <code>qmlRegisterType&lt;EmbeddedDhuItem&gt;</code> and the <code>OCTAVE.OBD</code> enum type, the QML import path, <code>assetStore</code> (<span class="file-path">src/util/assetstore.{h,cpp}</span>: <code>file://</code> URLs for <span class="file-path">frontend/assets/</span> files that Quick3D's Assimp importer must open itself, extracted once from the APK on Android), the <code>hasQuick3D</code> / <code>hasQuick3DAssetUtils</code> probes, and the offline wiki (<code>wikiViewerAvailable</code>, <code>wikiHomeUrl</code>: the local wiki, else <code>qrc:/wiki/index.html</code>, or the APK's assets on Android).</li>
           <li><strong>Developer tooling</strong> (<code>OCTAVE_DEV_TOOLS</code> builds only) &mdash; <code>OctaveDev::Runtime::beforeLoad()</code> reads <code>--dev</code> / <code>--profile</code>; without them it does nothing. A build without the option warns and ignores the flags.</li>
           <li><strong>The service</strong> &mdash; <code>makeService()</code> creates the command server and the service bridge when asked for (<a href="#service">The Service</a>); not started yet.</li>
@@ -338,7 +337,6 @@ EmbeddedDhuItem { anchors.fill: parent }</code></pre>
           <tbody>
             <tr><td>OBD</td><td><code>OBDConnectionWorker</code> on a dedicated <code>QThread</code> owns a serial port or direct RFCOMM transport and a poll <code>QTimer</code> (interval 0 in fast mode, 50&nbsp;ms otherwise). Android: the main thread owns the BLE link through the <code>OctaveOBDBridge</code> JNI class; no worker thread.</td></tr>
             <tr><td>Network</td><td><code>QNetworkAccessManager</code> + <code>QProcess</code> (<code>git</code>) with <code>QTimer</code>s.</td></tr>
-            <tr><td>Download</td><td>Desktop: search and download run as <code>QProcess</code>es (<code>scripts/ytmusic_search.py</code> or yt-dlp). Android: search runs on <code>QtConcurrent::run</code> through the JNI bridge, and a <code>QTimer</code> polls the bridge for download progress.</td></tr>
             <tr><td>Media</td><td>Library scan runs synchronously on the GUI thread. Desktop neighbour pre-cache and album-colour extraction use <code>QtConcurrent::run</code>; Android pre-cache is synchronous. Timers handle position, saved state and cache scheduling.</td></tr>
             <tr><td>AudioAnalyzer</td><td><code>QtConcurrent::run</code> decodes with <code>QAudioDecoder</code> and runs an in-house radix-2 FFT; never touches GUI objects.</td></tr>
             <tr><td>BerryIMU / Gesture</td><td>Worker <code>QObject</code> on its own <code>QThread</code> doing <code>ioctl</code> I²C reads (<code>/dev/i2c-N</code>).</td></tr>
@@ -620,7 +618,7 @@ Component.onCompleted: <span class="kw">if</span> (phoneMirrorManager) phoneMirr
           where stderr goes nowhere, the line is handed to Qt's default handler instead so it reaches logcat /
           <code>os_log</code>). Managers use
           one <code>Q_LOGGING_CATEGORY</code> each (<code>octave.media</code>,
-          <code>octave.download</code>, <code>octave.elm327</code>, <code>octave.dashboards</code>,
+          <code>octave.elm327</code>, <code>octave.dashboards</code>,
           <code>octave.ui_watchdog</code>, &hellip;). Without <code>--debug</code> the filter rule
           <code>*.debug=false</code> discards debug messages at the source, so they cost nothing.
         </p>
@@ -668,7 +666,7 @@ Component.onCompleted: <span class="kw">if</span> (phoneMirrorManager) phoneMirr
         <ul>
           <li><strong>Off unless asked for</strong>: <code>--service [PORT]</code>, the <code>serviceEnabled</code> setting, <code>--headless</code>, or <code>--profile</code> in a developer build; loopback only unless <code>--service-bind</code>.</li>
           <li><strong>Who may use it</strong> (protocol 2): everything on this device is trusted by default; anything else pairs with a 6-digit code from Settings &gt; Device &gt; Service and gets a token whose scopes (<code>read</code>, <code>media</code>, <code>vehicle</code>, &hellip;, <code>full</code>) decide what it may change. Each connection has limits (ops and new connections a second, a reader that stays behind), so one client cannot slow the car, the screen or the others (<a href="utilities.html#many-clients">Many clients</a>).</li>
-          <li><strong>The contract</strong>: <code>protocolVersion</code> 2; <span class="file-path">tools/api/check_compat.py</span> in CI fails a breaking change without a version bump and a <span class="file-path">docs/api/CHANGELOG.md</span> entry; members marked experimental or deprecated say so in <code>describe</code>; <span class="file-path">docs/api/protocol.json</span> describes the envelope (ops, errors, events, stream records) as JSON Schema.</li>
+          <li><strong>The contract</strong>: <code>protocolVersion</code> 3; <span class="file-path">tools/api/check_compat.py</span> in CI fails a breaking change without a version bump and a <span class="file-path">docs/api/CHANGELOG.md</span> entry; members marked experimental or deprecated say so in <code>describe</code>; <span class="file-path">docs/api/protocol.json</span> describes the envelope (ops, errors, events, stream records) as JSON Schema.</li>
           <li><strong><code>--headless</code></strong>: the managers and the service with no QML engine and no window (about a fifth less memory on the desktop). Another program is the UI.</li>
           <li><strong>Streams</strong>: the <code>stream</code> op sends the phone mirror's H.264 and Android Auto's frames as binary records on the same connection; <code>GET /art</code> serves covers.</li>
           <li><strong><code>--sim</code></strong> (every build): a simulated car, IMU motion and test tracks on a throwaway config, driven through the experimental <code>sim</code> object, so a frontend can be written without a car.</li>
@@ -740,10 +738,7 @@ settingsManager.scrcpyBitRateWifiChanged ► phoneMirrorManager.setBitRateWifi()
 settingsManager.scrcpyAutoWifiChanged ► phoneMirrorManager.setAutoWifi()
 settingsManager.scrcpyBitRateAutoChanged ► phoneMirrorManager.setBitRateAuto()
 phoneMirrorManager.wirelessAddressChanged ► settingsManager.save_scrcpy_wireless_address()
-phoneMirrorManager.duckingChanged ──────────► mediaManager.setDucking()
-
-                   Download → Library
-downloadManager.downloadComplete ───────────► mediaManager.scan_library(false)</div>
+phoneMirrorManager.duckingChanged ──────────► mediaManager.setDucking()</div>
 
         <!-- Cleanup -->
         <h2 id="cleanup">Shutdown &amp; Cleanup</h2>
@@ -758,7 +753,7 @@ QObject::connect(&amp;app, &amp;QGuiApplication::aboutToQuit, [&amp;]() {
     androidAutoManager.cleanup();  phoneMirrorManager.cleanup();
     esp32VolumeManager.cleanup();  berryIMU.cleanup();  gestureSensor.cleanup();
     obdManager.close();
-    downloadManager.cleanup();     networkManager.cleanup();
+    networkManager.cleanup();
     mediaManager._save_playback_state();   <span class="cmt">// before the settings flush</span>
     mediaManager.flush_metadata_store();
     settingsManager.flushPendingSave();

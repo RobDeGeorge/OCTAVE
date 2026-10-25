@@ -26,7 +26,6 @@
             <li><a href="#audio">Audio Issues</a></li>
             <li><a href="#obd">OBD Connection Issues</a></li>
             <li><a href="#android-obd">Android OBD (Bluetooth / BLE)</a></li>
-            <li><a href="#downloads">Music Download (yt-dlp) Issues</a></li>
             <li><a href="#phone-mirror">Phone Mirror Issues</a></li>
             <li><a href="#hardware-sensors">Hardware Sensor Issues</a></li>
             <li><a href="#performance">Performance Issues</a></li>
@@ -37,9 +36,9 @@
 
         <!-- First look -->
         <h2 id="first-look">Where to Look First</h2>
-        <p>Start with the status text on the affected page and the logs. OCTAVE has no global error-notification layer, but individual views can show details on request (for example, tap a failed download to open its error popup). These are the main places to look:</p>
+        <p>Start with the status text on the affected page and the logs. OCTAVE has no global error-notification layer, but individual views can show details on request. These are the main places to look:</p>
         <ol class="steps">
-          <li><strong>The Connection Log / status text on the relevant page</strong> &mdash; the OBD settings card shows each connection step and rfcomm / permission errors; the Download page shows <code>Error: &lt;name&gt; - &lt;message&gt;</code> and marks the queue row <code>failed</code>; the phone-mirror view shows the adb / authorization message.</li>
+          <li><strong>The Connection Log / status text on the relevant page</strong> &mdash; the OBD settings card shows each connection step and rfcomm / permission errors; the phone-mirror view shows the adb / authorization message.</li>
           <li><strong>Settings &rarr; Device &rarr; Diagnostics card</strong> (<code>diagnosticsManager</code>) &mdash; a 2&times;2 grid: <strong>Refresh</strong> (last 200 log lines), <strong>Copy</strong> (last 400 lines to the clipboard), <strong>Export logs</strong> (copies the log files to the Downloads folder &mdash; the way to get logs off an Android tablet or a head unit without a shell) and <strong>Open folder</strong> (hidden on Android/iOS, where <code>canOpenFolder</code> is false). The log directory path is printed on the card.</li>
           <li><strong>The rotating log files</strong> described next. A hung UI, a crash and a dropped adapter all leave a trace there even when the screen shows nothing.</li>
         </ol>
@@ -73,7 +72,7 @@
         <h3>Line format</h3>
         <pre><code><span class="cmt"># file and stderr (millisecond timestamps, Qt category in the module column):</span>
 YYYY-MM-DD HH:MM:SS.zzz | LEVEL   | octave.elm327 | obdmanager.cpp:1772 | message</code></pre>
-        <p>Each manager logs through its own <code>QLoggingCategory</code>: <code>octave.settings</code>, <code>octave.media</code>, <code>octave.download</code>, <code>octave.network</code>, <code>octave.phonemirror</code> (+ <code>octave.phonemirror.client</code> for the scrcpy-protocol client), <code>octave.androidauto</code>, <code>octave.embeddeddhu</code>, <code>octave.audioanalyzer</code>, <code>octave.berryimu</code>, <code>octave.gesture</code>, <code>octave.esp32volume</code>, <code>octave.dashboards</code>, <code>octave.diagnostics</code>, <code>octave.ui_watchdog</code> and <code>octave.elm327</code> (protocol transcript and the Android BLE bridge lines). The exceptions are <code>obdmanager.cpp</code>, <code>clock.cpp</code> and <code>volumecontroller.cpp</code>, which log through plain <code>qDebug()</code>/<code>qWarning()</code> and therefore appear under the category <code>default</code> &mdash; so there is no <code>octave.obd</code> category to filter on; look for the <code>[OBD Worker]</code> message prefix instead. With <code>--debug</code> the filter rules are <code>*.debug=true</code>, <code>qt.*.debug=false</code>; without it <code>*.debug=false</code>, so category-debug output costs nothing.</p>
+        <p>Each manager logs through its own <code>QLoggingCategory</code>: <code>octave.settings</code>, <code>octave.media</code>, <code>octave.network</code>, <code>octave.phonemirror</code> (+ <code>octave.phonemirror.client</code> for the scrcpy-protocol client), <code>octave.androidauto</code>, <code>octave.embeddeddhu</code>, <code>octave.audioanalyzer</code>, <code>octave.berryimu</code>, <code>octave.gesture</code>, <code>octave.esp32volume</code>, <code>octave.dashboards</code>, <code>octave.diagnostics</code>, <code>octave.ui_watchdog</code> and <code>octave.elm327</code> (protocol transcript and the Android BLE bridge lines). The exceptions are <code>obdmanager.cpp</code>, <code>clock.cpp</code> and <code>volumecontroller.cpp</code>, which log through plain <code>qDebug()</code>/<code>qWarning()</code> and therefore appear under the category <code>default</code> &mdash; so there is no <code>octave.obd</code> category to filter on; look for the <code>[OBD Worker]</code> message prefix instead. With <code>--debug</code> the filter rules are <code>*.debug=true</code>, <code>qt.*.debug=false</code>; without it <code>*.debug=false</code>, so category-debug output costs nothing.</p>
 
         <h3>Crash traces</h3>
         <ul>
@@ -173,7 +172,7 @@ pactl info                         <span class="cmt"># identifies the audio serv
         <p>OCTAVE assumes Qt Multimedia's FFmpeg backend: the media manager passes <code>probe-size</code> / <code>analyzeduration</code> hints to the player, and the aarch64 AppImage deliberately ships <em>without</em> Qt's GStreamer plugin (<a href="building.html#design-decisions">Building</a>). OCTAVE does not set <code>QT_MEDIA_BACKEND</code> or any GStreamer variable; if you set one yourself and playback breaks, unset it.</p>
 
         <h3>Playback stalls, a track keeps skipping, or playback stops by itself</h3>
-        <p>The media manager recovers like this: an invalid or stalled file is retried at most <strong>2</strong> times, then skipped; after <strong>10 consecutive</strong> unplayable tracks (or the playlist length, if shorter) playback stops and the source is cleared rather than looping forever. Check the log for the file names; the usual cause is an unsupported container. Extensions scanned: <code>.mp3 .m4a .mp4 .flac .ogg .opus .wav</code> (<code>.mp4</code> because yt-dlp names YouTube audio-only streams that way).</p>
+        <p>The media manager recovers like this: an invalid or stalled file is retried at most <strong>2</strong> times, then skipped; after <strong>10 consecutive</strong> unplayable tracks (or the playlist length, if shorter) playback stops and the source is cleared rather than looping forever. Check the log for the file names; the usual cause is an unsupported container. Extensions scanned: <code>.mp3 .m4a .mp4 .flac .ogg .opus .wav</code> (<code>.mp4</code> because an audio-only MP4 is the same container as <code>.m4a</code>).</p>
 
         <!-- OBD -->
         <h2 id="obd">OBD Connection Issues</h2>
@@ -240,19 +239,6 @@ ls -la /dev/rfcomm0</code></pre>
             <tr><td>Nothing happens with an empty port field</td><td>Android requires the adapter's MAC address; there is no default and no serial scan. Once Bluetooth permission has been granted (first Connect tap), the adapter list on the OBD settings page fills with the phone's paired devices as "&lt;name&gt; &middot; &lt;MAC&gt;" (<code>OctaveOBDBridge.bondedDevices()</code>) &mdash; pick the ELM327 there instead of typing the address. An empty list means the permission is still missing or Bluetooth is off.</td></tr>
             <tr><td>Where are the BLE logs?</td><td>The Java side queues <code>I|</code>/<code>W|</code> lines; the OBD manager drains up to 50 per 50 ms poll and re-emits them as <code>[BLE] ...</code> under <code>octave.elm327</code>, so they land in <code>octave-cpp.log</code>, the Connection Log and the Diagnostics export. No <code>adb logcat</code> needed.</td></tr>
             <tr><td>Update refuses to install</td><td>Signing key mismatch (<code>INSTALL_FAILED_UPDATE_INCOMPATIBLE</code>). Releases up to 0.9.3 each used a throwaway key, and a local build uses your own key. Uninstall <code>org.octave.app</code> once, then install; from 0.9.4 on, releases update in place (<a href="building.html#android">Building &rarr; Android</a>).</td></tr>
-          </tbody>
-        </table>
-
-        <!-- Downloads -->
-        <h2 id="downloads">Music Download (yt-dlp) Issues</h2>
-        <p>Where yt-dlp comes from differs per platform: the desktop build first checks for a <code>venv/bin/yt-dlp</code> (<code>venv\Scripts\yt-dlp.exe</code> on Windows) in the checkout next to the build directory, then searches for an external <code>yt-dlp</code> on PATH or in the app dir, <code>/usr/local/bin</code>, <code>/usr/bin</code>, <code>~/.local/bin</code> (<code>.exe</code> variants on Windows). Desktop search runs <span class="file-path">scripts/ytmusic_search.py</span> with that checkout's <code>venv/bin/python3</code> or the <code>python3</code> on PATH (it needs <code>ytmusicapi</code>) and falls back to a plain yt-dlp search when either is missing. Android uses the <code>youtubedl-android</code> AAR through JNI (sentinel path <code>jni://yt-dlp</code>). A build configured with <code>-DOCTAVE_ENABLE_DOWNLOADS=OFF</code> reports "Downloads disabled in this build".</p>
-        <table>
-          <thead><tr><th>Problem</th><th>Solution</th></tr></thead>
-          <tbody>
-            <tr><td><code>yt-dlp</code> not found (desktop)</td><td>Install it (<code>pipx install yt-dlp</code> or the distro package) somewhere on the lookup list above.</td></tr>
-            <tr><td>"Sign in to confirm you're not a bot"</td><td>YouTube rejected the request. A VPN, rate limiting, or an expired login can contribute; changing networks or supplying valid cookies may help but does not guarantee success. OCTAVE checks for <code>youtube_cookies.txt</code> in the Downloads folder before each download. Use the <a href="download-manager.html#bot-wall">Download Manager troubleshooting guide</a> for paths and handling. Failed downloads are retried with backoff and leaves player-client selection to yt-dlp.</td></tr>
-            <tr><td>A download fails silently</td><td>It is not silent: the Download page status reads <code>Error: &lt;name&gt; - &lt;message&gt;</code>, the queue row turns <code>failed</code> with the message, and <code>downloadError</code> / <code>searchError</code> are logged.</td></tr>
-            <tr><td>YouTube Music search returns nothing on Android</td><td>The APK must contain <code>assets/python-packages/ytmusic-bundle.zip</code> (built by <span class="file-path">scripts/build-android-pylib-bundle.sh</span>); without it <code>ytmusic_search.py</code> cannot import <code>ytmusicapi</code> and search fails silently. CI builds it; a local APK needs the script run first.</td></tr>
           </tbody>
         </table>
 

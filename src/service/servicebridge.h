@@ -33,8 +33,8 @@
 // false), so a killed client never leaves the car polled. A consumer
 // released by the client itself, or claimed since by another connection,
 // is left alone.
-// List models (a property holding a QAbstractItemModel, e.g. the download
-// queue): get gives {model: true, count, roles}; rows {object, property,
+// List models (a property holding a QAbstractItemModel; no service object
+// has one today, tst_servicebridge covers them): get gives {model: true, count, roles}; rows {object, property,
 // from?, count?} the rows as {role: value} maps; subscribing to the
 // property sends {"event": "model", ..., name, change: "reset" | "insert" |
 // "remove" | "update", first, last, rows?} (rows for reset / insert /

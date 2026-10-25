@@ -14,13 +14,13 @@ What a frontend, a script or another program can read and drive in OCTAVE, witho
 | `widget-catalog.json` | the widget types a dashboard cell can use: display name, glyph, default span, `supportedKinds`, label / range / colour flags, `editableProps` (`{key, label, kind, def, min?, max?, options?}`), `colorSwatches` (`dashboardManager.widgetCatalog`, from `frontend/dashboards/widget-catalog.json`) | generated |
 | `README.md` | this file | hand-written |
 
-The generated files come from the meta-objects of the desktop build (Linux, downloads on). Mobile builds stub some managers and `OCTAVE_ENABLE_DOWNLOADS=OFF` stubs `downloadManager`; a client finds out at run time with `describe`.
+The generated files come from the meta-objects of the desktop build (Linux). Mobile builds stub some managers; a client finds out at run time with `describe`.
 
 ## Protocol spec
 
 [`protocol.json`](protocol.json) is the half of the API that no meta-object produces: the ops (`hello`, `describe`, `get`, `set`, `call`, `rows`, `subscribe` / `unsubscribe`, `stream` / `unstream`, `pair` / `unpair`, `mediaTicket`) with the schema of each one's arguments and reply, the reply envelope and the error codes, every event (`property`, `signal`, `params`, `model`, `dropped`, `streamConfig`, `streamDropped`), the binary record and its framing on both transports, the HTTP routes with their query keys and status codes, the pairing flow and its limits, and the shape of an object description (what `describe` and the `<object>.json` files hold, annotations included). It carries `protocolVersion` like `index.json`, and each op and route says `since` which version. Code generators read it: `sdk/typescript` and `sdk/go` build their envelope from it, the object files give them the objects.
 
-**For SDK authors.** `tools/api/fake_server.py` (standard library) speaks this spec without the app: `python tools/api/fake_server.py --port 0` serves `hello`, `describe` from these files, canned data on `volumeController`, `nowPlaying`, `paramStore` (ticking), `obdManager`, `parameterCatalog` and `downloadManager.downloadQueue`, a synthetic `phoneMirrorManager.video` stream, `mediaTicket`, and pairing with a fixed code (`--code`, `--untrusted` to start as a network client would) with permissions enforced from each member's `scope`. A `fake` object the app does not have injects faults: `rateLimitNext(n)`, `setForbidden(on)`, `revokeTokens()`, `setValue(object, property, value)`, `emitSignal(object, name, args)`. Every message it sends is validated against this spec, so a client that passes against the fake has met the spec's shapes; `tools/api/tests/test_fake_server.py` (Python) and `sdk/go/fake_test.go` (Go) show the exercise.
+**For SDK authors.** `tools/api/fake_server.py` (standard library) speaks this spec without the app: `python tools/api/fake_server.py --port 0` serves `hello`, `describe` from these files, canned data on `volumeController`, `nowPlaying`, `paramStore` (ticking), `obdManager`, `parameterCatalog`, an empty list model `fake.items`, a synthetic `phoneMirrorManager.video` stream, `mediaTicket`, and pairing with a fixed code (`--code`, `--untrusted` to start as a network client would) with permissions enforced from each member's `scope`. A `fake` object the app does not have injects faults: `rateLimitNext(n)`, `setForbidden(on)`, `revokeTokens()`, `setValue(object, property, value)`, `emitSignal(object, name, args)`. Every message it sends is validated against this spec, so a client that passes against the fake has met the spec's shapes; `tools/api/tests/test_fake_server.py` (Python) and `sdk/go/fake_test.go` (Go) show the exercise.
 
 It is hand-written, so a test keeps it honest: `sdk/python/tests/test_protocol_spec.py` (ctest `sdk_python`) starts `octave --headless`, checks that the ops it lists are exactly the ops the server reports (`describe` with no object answers `ops`), and validates real replies, errors and events against the schemas strictly, so a field the server sends that the spec does not describe fails, as does an op in either place but not the other. `tools/api/jsonschema_lite.py` is the validator (the 2020-12 subset the spec uses). A change to `src/service/servicebridge.cpp`, `commandserver.cpp`, `streamhub.cpp` or the routes in `main.cpp` lands with its line in `protocol.json` and, when it is a break, a protocol bump and a changelog entry like any other.
 
@@ -67,7 +67,7 @@ venv/bin/python wiki/build_api_reference.py
 
 ## Versioning
 
-`protocolVersion` (in `index.json`, in `hello`, and `kProtocolVersion` in `src/service/protocol.h`) is **2**. It goes up on any breaking change: a removed or renamed op, object, property, method or signal, or a changed type or meaning. Additions (a new object, property, method, signal, op or event field) do not bump it, so a client should ignore what it does not know. Accept the versions you were written against and refuse, or degrade, on an unknown later one (`sdk/python` accepts 1 and 2).
+`protocolVersion` (in `index.json`, in `hello`, and `kProtocolVersion` in `src/service/protocol.h`) is **3**. It goes up on any breaking change: a removed or renamed op, object, property, method or signal, or a changed type or meaning. Additions (a new object, property, method, signal, op or event field) do not bump it, so a client should ignore what it does not know. Accept the versions you were written against and refuse, or degrade, on an unknown later one (`sdk/python` accepts 1, 2 and 3).
 
 Compatibility so far:
 
@@ -75,6 +75,7 @@ Compatibility so far:
 |---|---|---|
 | 1 | 2026-10-22 | `hello`, `describe`, `get`, `set`, `call`, `subscribe` / `unsubscribe`, `rows`; list-model events. Transports: JSON lines over TCP, and WebSocket text frames on the same port (a transport, not a protocol change). |
 | 2 | 2026-10-23 | Pairing ("Pairing" below): `pair`, `unpair`, `mediaTicket`; `hello` takes a `token` and reports `auth` and `loopbackOpen`. **What breaks for a v1 client:** nothing on this device while `serviceLoopbackOpen` is true (the default), except that a strict client sees `protocolVersion` 2; over the network (`--service-bind`) every op but `hello` and `pair`, and `/art` / `/export`, now answer `{"ok": false, "code": "unauthorised"}` (HTTP 401) until it pairs |
+| 3 | 2026-10-24 | The music downloader is removed: object `downloadManager` is gone. **What breaks for a v2 client:** only calls to `downloadManager`, which now answer as an unknown object |
 
 ### Stability and deprecation
 
@@ -111,7 +112,7 @@ A paired device holds **scopes** (`src/service/servicescopes.h`), asked for in `
 | `vehicle` | OBD connection and trouble codes, adapters, the IMU, gestures, the shift light, the volume knob |
 | `phone` | phone mirroring and Android Auto, including their video streams and touch / key input |
 | `settings` | `settingsManager` |
-| `files` | the library and playlists, downloads, dashboards, trips, logs, and `/export/...` |
+| `files` | the library and playlists, dashboards, trips, logs, and `/export/...` |
 | `system` | restart, shut down, update, opening folders on the head unit |
 | `full` | everything, including the dev `action` form and app internals no frontend needs |
 

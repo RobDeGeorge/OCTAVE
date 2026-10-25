@@ -36,7 +36,7 @@
         </nav>
 
         <h2 id="what-you-get">What You Get</h2>
-        <p>Every manager the bundled UI uses: settings, media and now playing, volume, OBD and the live value of every PID and IMU reading, the black box, the shift light, phone mirroring control, downloads, dashboards. Each one's properties, methods and signals are listed with their types in the generated <a href="api-reference.html">Service API Reference</a> (<span class="file-path">docs/api/</span>); what they mean is in <a href="signals-slots-reference.html">Signals &amp; Slots API</a>. <code>tst_conformance</code> guarantees the bundled UI uses nothing outside that list, so whatever it can do, your frontend can too.</p>
+        <p>Every manager the bundled UI uses: settings, media and now playing, volume, OBD and the live value of every PID and IMU reading, the black box, the shift light, phone mirroring control, dashboards. Each one's properties, methods and signals are listed with their types in the generated <a href="api-reference.html">Service API Reference</a> (<span class="file-path">docs/api/</span>); what they mean is in <a href="signals-slots-reference.html">Signals &amp; Slots API</a>. <code>tst_conformance</code> guarantees the bundled UI uses nothing outside that list, so whatever it can do, your frontend can too.</p>
         <p>Four working clients come with the repo: <span class="file-path">sdk/web/index.html</span> (plain JavaScript, about 250 lines), <span class="file-path">sdk/python/octave_client</span> (stdlib only), <span class="file-path">sdk/go</span> (standard library only, generated from <span class="file-path">docs/api/protocol.json</span> and the object files: one Go type per service object, with a method per API method) and <span class="file-path">sdk/typescript</span> (an npm package for browsers and Node; its envelope is generated from <span class="file-path">docs/api/protocol.json</span> and its object types from the object files, so a wrong call fails to compile and a deprecated member shows as such in the editor). Read one of them next to this page.</p>
         <p>Five whole frontends written to prove the API (TypeScript + Svelte, Python + Textual, Go + Gio, Rust + egui, C + SDL2, together reaching every feature of the bundled UI) are kept on the <code>frontends-experiment</code> branch as worked examples; they are not part of <code>main</code>.</p>
 
@@ -60,7 +60,7 @@ octave --headless             <span class="cmt"># no UI at all: your frontend is
         </ul>
         <pre><code><span class="cmt"># a whole session by hand</span>
 $ printf '{"op":"hello","id":1}\n{"op":"get","object":"volumeController","property":"percent","id":2}\n' | nc -q1 127.0.0.1 9876
-{"id":1,"ok":true,"result":{"app":{"build":"release","headless":true,"version":"0.9.5"},"auth":"trusted","loopbackOpen":true,"objects":["settingsManager",...],"protocolVersion":2,"scopes":["full"]}}
+{"id":1,"ok":true,"result":{"app":{"build":"release","headless":true,"version":"0.9.5"},"auth":"trusted","loopbackOpen":true,"objects":["settingsManager",...],"protocolVersion":3,"scopes":["full"]}}
 {"id":2,"ok":true,"result":32}</code></pre>
         <p>Every reply has <code>ok</code>; a failure has <code>"ok": false</code> and an <code>error</code> string. Anything with an <code>event</code> key is not a reply but a subscription event, and can arrive between replies.</p>
 
@@ -82,7 +82,7 @@ $ printf '{"op":"hello","id":1}\n{"op":"get","object":"volumeController","proper
           <li><strong>Properties</strong>: a <code>property</code> event with the value at once and on every change. <code>throttleMs</code> caps it at one event per property per interval, carrying the latest value.</li>
           <li><strong>Signals</strong>: <code>"signals": ["trackChanged"]</code> gives <code>signal</code> events with the arguments.</li>
           <li><strong>Live OBD and IMU values</strong>: subscribe to <code>paramStore</code> with the ids you show as <code>properties</code>. You get <code>params</code> events, <code>{"values": {"RPM": 2210, "SPEED": 41}}</code>, in the native unit. OCTAVE only polls the car for what someone shows: call <code>obdManager.setParameterDemand("my-frontend", ["RPM","SPEED"])</code> for the ids on your screen, and an empty list when they leave it. If your connection closes (or the client is killed), the app releases every consumer that connection registered through <code>setParameterDemand</code>, <code>setBackgroundDemand</code> and <code>berryIMU.setDemand</code>, so pick a consumer name of your own: one the QML UI also uses would be released with yours.</li>
-          <li><strong>Lists</strong> (search results, the download queue): <code>get</code> gives a summary, <code>rows</code> the rows, and a subscription sends <code>model</code> events (reset, insert, update, remove) to replay in order.</li>
+          <li><strong>Lists</strong> (no object serves one at present, protocol 3; the op stays for list models to come): <code>get</code> gives a summary, <code>rows</code> the rows, and a subscription sends <code>model</code> events (reset, insert, update, remove) to replay in order.</li>
         </ul>
         <p>A connection's subscriptions end with it. If you stop reading, the oldest events are dropped and a <code>{"event":"dropped","count":N}</code> says how many.</p>
 
@@ -197,7 +197,7 @@ client.connect()
   "name": "Example Dash",
   "version": "1.2.0",
   "description": "Big gauges for the track",
-  "protocol": [2, 2],                <span class="cmt">// the protocol versions it speaks, min and max</span>
+  "protocol": [2, 3],                <span class="cmt">// the protocol versions it speaks, min and max</span>
   "scopes": ["read", "media"],       <span class="cmt">// the permissions it asks for (docs/api/README.md, "Permissions")</span>
   "web":  {"root": "dist"}           <span class="cmt">// a folder with index.html, served at GET /</span>
   <span class="cmt">// or</span>
@@ -221,7 +221,7 @@ client.connect()
 
         <h2 id="rules">Versioning and Security</h2>
         <ul>
-          <li><strong>Versioning.</strong> <code>protocolVersion</code> is 2. Accept the versions you know and refuse an unknown later one; it changes only on a breaking change (something removed, renamed or retyped, or, for 2, pairing). Additions don't change it, so ignore fields, objects and events you don't know. The rule, the history and what version 2 broke are in <span class="file-path">docs/api/README.md</span>.</li>
+          <li><strong>Versioning.</strong> <code>protocolVersion</code> is 3. Accept the versions you know and refuse an unknown later one; it changes only on a breaking change (something removed, renamed or retyped; for 2, pairing; for 3, the <code>downloadManager</code> object removed). Additions don't change it, so ignore fields, objects and events you don't know. The rule, the history and what each version broke are in <span class="file-path">docs/api/README.md</span>.</li>
           <li><strong>Pairing.</strong> On the head unit itself nothing is needed (unless <code>serviceLoopbackOpen</code> is off). Over the network your client pairs once: the user opens Settings &gt; Service &gt; Pair a device, you send <code>{"op":"pair","code":"123456","name":"My dash"}</code> and keep the token; later connections start with <code>{"op":"hello","token":"..."}</code> (a revoked or unknown token gets <code>"auth": "untrusted", "tokenRejected": true</code>: pair again). Until then every op but <code>hello</code> and <code>pair</code> answers <code>"code": "unauthorised"</code>. For <code>&lt;img&gt;</code> and downloads ask <code>{"op":"mediaTicket"}</code> and use <code>/art?ticket=...</code>; never put the token in a URL. A revoked device's connections are closed. Details: <span class="file-path">docs/api/README.md</span>, "Pairing".</li>
           <li><strong>Permissions.</strong> Ask only for what your frontend changes: <code>{"op":"pair",...,"scopes":["media"]}</code>. Every paired device can read; changing a member needs its <code>scope</code> (listed on every method and writable property in <code>describe</code> and the <a href="api-reference.html">API reference</a>: <code>media</code>, <code>vehicle</code>, <code>phone</code>, <code>settings</code>, <code>files</code>, <code>system</code>, <code>full</code>), otherwise it answers <code>"code": "forbidden"</code>. Without <code>scopes</code> you get <code>full</code>. The user sees each device's access in Settings and can make it read only. Details: <span class="file-path">docs/api/README.md</span>, "Permissions".</li>
           <li><strong>The network.</strong> Bind beyond loopback (<code>--service-bind</code>) only on a network you control: pairing keeps strangers out, but traffic is not encrypted.</li>

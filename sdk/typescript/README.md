@@ -26,7 +26,7 @@ vol.property('percent', (v) => console.log('volume', v))   // now, and on every 
 
 client.params(['RPM', 'SPEED'], (values) => console.log(values), 100)   // live readings, native units
 const stop = client.signal('obdManager', 'dtcCodesChanged', (codes) => console.log(codes))
-client.model('downloadManager', 'searchResults', (rows) => render(rows))  // a list model, kept current
+client.model(object, property, (rows) => render(rows))   // a list-model property, kept current
 
 await client.stream('phoneMirrorManager', 'video', { onRecord: (r) => decoder.feed(r) })   // binary media records
 ```

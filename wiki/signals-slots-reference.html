@@ -42,7 +42,6 @@
             <li><a href="#androidAutoManager">AndroidAutoManager</a></li>
             <li><a href="#dhuCapture">DhuCapture</a></li>
             <li><a href="#phoneMirrorManager">PhoneMirrorManager</a></li>
-            <li><a href="#downloadManager">DownloadManager</a></li>
             <li><a href="#dashboardManager">DashboardManager</a></li>
             <li><a href="#frontendManager">FrontendManager</a></li>
             <li><a href="#perfMonitor">PerfMonitor</a> <span class="platform-badge desktop">developer only</span></li>
@@ -85,7 +84,6 @@
             <tr><td><a href="#androidAutoManager"><code>androidAutoManager</code></a></td><td><code>AndroidAutoManager</code> &mdash; <span class="file-path">src/managers/androidautomanager.h</span></td><td>Mobile builds register a stub (see the section)</td></tr>
             <tr><td><a href="#dhuCapture"><code>dhuCapture</code></a></td><td><code>DhuCapture</code> &mdash; <span class="file-path">src/managers/androidautomanager.h</span></td><td>Not registered directly; reached via <code>androidAutoManager.dhuCapture</code></td></tr>
             <tr><td><a href="#phoneMirrorManager"><code>phoneMirrorManager</code></a></td><td><code>PhoneMirrorManager</code> &mdash; <span class="file-path">src/managers/phonemirrormanager.h</span></td><td>Mobile builds register a stub (see the section)</td></tr>
-            <tr><td><a href="#downloadManager"><code>downloadManager</code></a></td><td><code>DownloadManager</code> &mdash; <span class="file-path">src/managers/downloadmanager.h</span></td><td>Stub class when <code>OCTAVE_ENABLE_DOWNLOADS=OFF</code></td></tr>
             <tr><td><a href="#dashboardManager"><code>dashboardManager</code></a></td><td><code>DashboardManager</code> &mdash; <span class="file-path">src/managers/dashboardmanager.h</span></td><td></td></tr>
             <tr><td><a href="#frontendManager"><code>frontendManager</code></a></td><td><code>FrontendManager</code> &mdash; <span class="file-path">src/managers/frontendmanager.h</span></td><td></td></tr>
             <tr><td><a href="#perfMonitor"><code>perfMonitor</code></a></td><td><code>PerfMonitor</code> &mdash; <span class="file-path">src/dev/perfmonitor.h</span></td><td>Only with <code>--profile</code>, in <code>OCTAVE_DEV_TOOLS</code> builds; registered by <code>OctaveDev::Runtime</code></td></tr>
@@ -610,7 +608,6 @@
             <tr><td><code>delete_playlist(QString name)</code></td><td><code>bool</code></td><td>Delete a playlist sub-folder and its files</td></tr>
             <tr><td><code>move_song_to_playlist(QString filename, QString targetPlaylist)</code></td><td><code>bool</code></td><td>Move a file into another playlist folder</td></tr>
             <tr><td><code>delete_song(QString filename)</code></td><td><code>bool</code></td><td>Delete a file from disk and the library; emits <code>songDeleted</code></td></tr>
-            <tr><td><code>play_downloaded_song(QString artist, QString name, QString playlist)</code></td><td><code>bool</code></td><td>Rescan, then play a freshly downloaded song by artist / name inside a playlist (used after DownloadManager finishes)</td></tr>
             <tr><td><code>play_file_at_path(QString filePath)</code></td><td><code>bool</code></td><td>Rescan, select the playlist containing the absolute path and play it</td></tr>
             <tr><td><code>invalidate_stats_cache()</code></td><td><code>void</code></td><td>Force the album / artist / total-duration stats to be recomputed on next read</td></tr>
             <tr><td><code>get_media_files(bool emitSignal)</code></td><td><code>QStringList</code></td><td>Filenames in the library; <code>emitSignal=false</code> suppresses the <code>mediaListChanged</code> emit</td></tr>
@@ -1452,61 +1449,6 @@
           </tbody>
         </table>
 
-        <!-- DownloadManager -->
-        <h2 id="downloadManager">DownloadManager <span class="cmt">&mdash; <code>downloadManager</code></span></h2>
-        <p><span class="file-path">src/managers/downloadmanager.h</span> &mdash; QML context property <code>downloadManager</code></p>
-        <p>Music search and download, driving <code>yt-dlp</code> (YouTube Music). Compiled out with <code>OCTAVE_ENABLE_DOWNLOADS=OFF</code> (app-store builds register a stub with the same members minus the two storage-access invokables).</p>
-        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>On Android the same class runs yt-dlp through the bundled <code>OctaveDownloadBridge</code> (JNI) and polls progress on a timer; <code>hasStorageAccess()</code> / <code>requestStorageAccess()</code> are meaningful only there.</div>
-        <h3>Properties</h3>
-        <table>
-          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
-          <tbody>
-            <tr><td><code>isSearching</code></td><td><code>bool</code></td><td>read-only</td><td><code>isSearchingChanged</code></td><td>A search is in flight</td></tr>
-            <tr><td><code>activeDownloads</code></td><td><code>int</code></td><td>read-only</td><td><code>activeDownloadsChanged</code></td><td>Downloads queued or running</td></tr>
-            <tr><td><code>downloadPath</code></td><td><code>QString</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>Destination folder (media folder / download sub-folder)</td></tr>
-            <tr><td><code>downloadsAvailable</code></td><td><code>bool</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td><code>false</code> only in app-store builds (<code>OCTAVE_ENABLE_DOWNLOADS=OFF</code> stub); QML hides every download button on it</td></tr>
-            <tr><td><code>searchResults</code></td><td><code>QAbstractListModel*</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>One row per search hit (<code>VariantListModel</code>, one role per key: <code>song_id, name, artist, album_name, cover_url, url, duration, explicit, is_downloaded, downloaded_playlist, is_failed, error_message, file_path, is_downloading, progress</code>); reset when a search finishes, patched one row at a time; always empty in the stub</td></tr>
-            <tr><td><code>downloadQueue</code></td><td><code>QAbstractListModel*</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>One row per download this session, oldest first (roles <code>songId, songName, artist, name, status, progress, errorMsg, filePath</code>; <code>status</code> is <code>"downloading"</code>, <code>"complete"</code> or <code>"failed"</code>, cancelled counting as failed)</td></tr>
-          </tbody>
-        </table>
-        <h3>Invokables &amp; Slots</h3>
-        <table>
-          <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
-          <tbody>
-            <tr><td><code>hasStorageAccess()</code></td><td><code>bool</code></td><td>Android All-Files-Access granted; always <code>true</code> elsewhere</td></tr>
-            <tr><td><code>requestStorageAccess()</code></td><td><code>bool</code></td><td>Open the Android All-Files-Access prompt; no-op elsewhere</td></tr>
-            <tr><td><code>search(QString query)</code></td><td><code>void</code></td><td>Search YouTube Music (ytmusicapi helper, yt-dlp fallback); when it finishes the <code>searchResults</code> model is reset to the hits</td></tr>
-            <tr><td><code>next_search_page()</code></td><td><code>void</code></td><td>No offset pagination in yt-dlp flat search &mdash; emits "All results shown"</td></tr>
-            <tr><td><code>search_more()</code></td><td><code>void</code></td><td>Alias of <code>next_search_page()</code></td></tr>
-            <tr><td><code>download(QString songId, QString songName)</code></td><td><code>void</code></td><td>Queue a search hit by id (its row in the current results supplies artist, album, cover and URL); an id not among the results downloads by id with <code>songName</code> as the title</td></tr>
-            <tr><td><code>cancel_download(QString songId)</code></td><td><code>void</code></td><td>Kill/unqueue a download</td></tr>
-            <tr><td><code>pause_download(QString songId)</code></td><td><code>void</code></td><td>SIGSTOP the yt-dlp process (Windows: kill and re-queue as paused)</td></tr>
-            <tr><td><code>resume_download(QString songId)</code></td><td><code>void</code></td><td>Resume a paused download</td></tr>
-            <tr><td><code>clear_download_queue()</code></td><td><code>void</code></td><td>Cancel everything and empty the queue (and the <code>downloadQueue</code> model)</td></tr>
-            <tr><td><code>clear_finished_downloads()</code></td><td><code>void</code></td><td>Remove complete / failed (incl. cancelled) rows from <code>downloadQueue</code> and drop their tasks</td></tr>
-            <tr><td><code>connect_settings_manager(QObject *sm)</code></td><td><code>void</code></td><td>Wire the SettingsManager (called from <code>src/appcore.cpp</code>)</td></tr>
-            <tr><td><code>set_download_playlist(QString name)</code></td><td><code>void</code></td><td>Target playlist sub-folder for new downloads (<code>""</code> resets to the default)</td></tr>
-            <tr><td><code>get_download_playlist()</code></td><td><code>QString</code></td><td>Current target playlist name (default <code>"Downloads"</code>)</td></tr>
-            <tr><td><code>cleanup()</code></td><td><code>void</code></td><td>Kill running yt-dlp processes at exit</td></tr>
-          </tbody>
-        </table>
-        <h3>Signals</h3>
-        <table>
-          <thead><tr><th>Signal</th><th>Description</th></tr></thead>
-          <tbody>
-            <tr><td><code>searchInProgress(bool inProgress)</code></td><td>Search started / finished</td></tr>
-            <tr><td><code>searchError(QString errorMsg)</code></td><td>Search failure text</td></tr>
-            <tr><td><code>downloadStarted(QString songId, QString displayName)</code></td><td>A download began (song id, display name)</td></tr>
-            <tr><td><code>downloadProgress(QString songId, float progress)</code></td><td>Progress 0.0&ndash;1.0 for a song id</td></tr>
-            <tr><td><code>downloadComplete(QString songId, QString filePath)</code></td><td>File written (song id, path); <code>main</code> rescans the library</td></tr>
-            <tr><td><code>downloadError(QString songId, QString displayName, QString errorMsg)</code></td><td>Download failed (song id, display name, error)</td></tr>
-            <tr><td><code>downloadQueueChanged()</code></td><td>Queue contents changed</td></tr>
-            <tr><td><code>statusMessage(QString message)</code></td><td>General status line</td></tr>
-            <tr><td><code>isSearchingChanged(bool value)</code></td><td>Notify for <code>isSearching</code></td></tr>
-            <tr><td><code>activeDownloadsChanged(int count)</code></td><td>Notify for <code>activeDownloads</code></td></tr>
-          </tbody>
-        </table>
-
         <!-- DashboardManager -->
         <h2 id="dashboardManager">DashboardManager <span class="cmt">&mdash; <code>dashboardManager</code></span></h2>
         <p><span class="file-path">src/managers/dashboardmanager.h</span> &mdash; QML context property <code>dashboardManager</code></p>
@@ -1629,7 +1571,6 @@
           <a href="obd-manager.html" class="related-link">OBD Manager</a>
           <a href="hardware-managers.html" class="related-link">Hardware Managers</a>
           <a href="network-manager.html" class="related-link">Network Manager</a>
-          <a href="download-manager.html" class="related-link">Download Manager</a>
           <a href="phone-mirror-android-auto.html" class="related-link">Phone Mirror &amp; Android Auto</a>
           <a href="gauges-dashboards.html" class="related-link">Gauges &amp; Dashboards</a>
           <a href="architecture.html" class="related-link">Architecture Overview</a>

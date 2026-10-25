@@ -12,7 +12,9 @@ OCTAVE is a **C++ / Qt 6** app (`src/`) with a QML frontend (`frontend/`). Every
 
 Until 2026-10-18 there was also a Python / PySide6 backend (`backend/`, `main.py`). It was frozen at the `python-final` branch (`b5463c9`, with its own wiki) and deleted from `main`. Don't reintroduce a Python backend, Python-on-Android (buildozer / p4a) or a PyInstaller pipeline.
 
-Python that remains is tooling around the C++ app, listed in `requirements.txt` and installed into `./venv`: the desktop download helpers (`yt-dlp`, `scripts/ytmusic_search.py` with `ytmusicapi`), `scripts/fetch_platform_tools.py`, `wiki/build_search_index.py`, `wiki/build_api_reference.py` (builds `wiki/api-reference.html` from `docs/api/`), `scripts/gen_gauge_param_docs.py` (regenerates the parameter table in `docs/GAUGE_AUTHORING.md` §6 from the C++ catalog), the Android pylib bundle script, the Blender scripts in `tools/vehicle/`, `tools/trips/make_mock_trip.py` (a mock drive for the black box / Trip History page), and the gitignored `dev/` clients that drive the app over the command server.
+The music downloader (yt-dlp, YouTube Music search, youtubedl-android on the phone, the `OCTAVE_ENABLE_DOWNLOADS` option and its "app store" builds) was removed on 2026-10-24 (service protocol 3). Every build is the same on that axis; music comes from the library folders only. Don't bring it back.
+
+Python that remains is tooling around the C++ app, listed in `requirements.txt` and installed into `./venv`: `scripts/fetch_platform_tools.py`, `wiki/build_search_index.py`, `wiki/build_api_reference.py` (builds `wiki/api-reference.html` from `docs/api/`), `scripts/gen_gauge_param_docs.py` (regenerates the parameter table in `docs/GAUGE_AUTHORING.md` §6 from the C++ catalog), the Blender scripts in `tools/vehicle/`, `tools/trips/make_mock_trip.py` (a mock drive for the black box / Trip History page), and the gitignored `dev/` clients that drive the app over the command server.
 
 ## Commands
 
@@ -26,10 +28,6 @@ cmake --build build -j
 # Run
 ./build/octave
 
-# App store build (downloads feature stripped out)
-cmake -S . -B build -DOCTAVE_ENABLE_DOWNLOADS=OFF
-cmake --build build -j
-
 # Developer tooling (OCTAVE_DEV_TOOLS: default ON only for -DCMAKE_BUILD_TYPE=Debug)
 ./build/octave --dev             # simulated car over a fake ELM327 + dev overlay
 ./build/octave --profile         # perf monitor + JSON command server on 127.0.0.1:9876
@@ -39,12 +37,12 @@ cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
-See `BUILD.md` for the full build matrix (9 targets including iOS / Android / Flatpak / app store variants).
+See `BUILD.md` for the full build matrix (iOS / Android / Flatpak / WebAssembly and the desktop targets).
 
 ### Python helper tools
 
 ```bash
-python3 -m venv venv && venv/bin/pip install -r requirements.txt   # download helpers + dev-tool clients
+python3 -m venv venv && venv/bin/pip install -r requirements.txt   # dev-tool clients + docs builders
 venv/bin/ruff check .                                              # lint scripts/ and packaging/ (CI runs it)
 python wiki/build_search_index.py                                  # after wiki edits
 ```
@@ -72,7 +70,6 @@ Key managers (`src/managers/*.{h,cpp}`):
 - `gesturemanager` — PAJ7620U2 gesture sensor
 - `audioanalyzer` — FFT waveform visualization
 - `androidautomanager`, `phonemirrormanager` — Android Auto / phone mirroring (built-in scrcpy-protocol client in `src/phone_mirror/`, no external scrcpy)
-- `downloadmanager` — yt-dlp wrapper, compiled out for app-store builds via `OCTAVE_ENABLE_DOWNLOADS` CMake option
 - `triprecorder` + `tripstore` — the black box: every OBD reading of every drive into `<config>/history/blackbox.sqlite` (SQLite compiled in from `third_party/sqlite/`, own thread; never go through Qt Sql, its driver is a separate runtime plugin that the Jeep's Ubuntu box did not have) plus one CSV + JSON per trip under `history/trips/`; taps `OBDManager::parameterSampled` and registers a background poll sweep (`setBackgroundDemand`) for every PID the vehicle supports. Viewer: `frontend/TripHistory.qml`
 - `frontendmanager` (+ `frontendsupervisor`) — installable frontends: the active screen, running and restarting an exec frontend with fall-back to QML (service object `frontendManager`)
 - `clock`, `networkmanager`, `volumecontroller` — self-explanatory
@@ -149,7 +146,7 @@ Rotating log files in `logs/` subdirectory of the config path:
 
 ### Build & CI
 
-CMake + Qt 6 produces native executables per platform (see `BUILD.md`). App store builds use the `OCTAVE_ENABLE_DOWNLOADS=OFF` CMake option to strip out yt-dlp. Mobile (Android `.apk` / iOS `.ipa`) goes through the Qt for Mobile pipeline.
+CMake + Qt 6 produces native executables per platform (see `BUILD.md`). Mobile (Android `.apk` / iOS `.ipa`) goes through the Qt for Mobile pipeline.
 
 GitHub Actions (`.github/workflows/build.yml`) runs `lint` (ruff over the repo's Python tools) and `cpp-compile-check` (Linux CMake configure + build of the C++ tree, `ctest` over `tests/cpp`, and a `qmllint` error pass over `frontend/`) on every push and PR to `main`, plus `phone-server` (jar/source invariants) and `sdk` (`sdk/typescript`: generated types current against `docs/api/`, type check, tests). On version tags (`v*`) or manual dispatch, the C++ matrix runs (`cpp-build-windows`, `cpp-build-macos`, `cpp-build-linux`, `cpp-build-linux-arm64`, `cpp-build-android`, each gated on `lint` + `cpp-compile-check`) and the `release` job attaches every produced artifact (`.exe`, `.dmg`, x86_64 and aarch64 AppImages, `.apk`) to a single GitHub Release.
 

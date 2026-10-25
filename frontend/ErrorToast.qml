@@ -1,5 +1,5 @@
 // ErrorToast.qml — the one app-wide notice, for errors the driver should
-// hear about while on another page (OBD link lost, a failed download).
+// hear about while on another page (OBD link lost).
 // Errors otherwise stay on their own pages and in the logs: nothing chatty
 // in the driver's peripheral vision. Top centre (the bottom belongs to the
 // BottomBar), fade only, auto-dismiss, tap to dismiss. Messages queue; a

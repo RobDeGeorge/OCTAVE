@@ -39,46 +39,6 @@ Item {
         })
     }
 
-    // Navigate to cached DownloadPage, optionally pre-selecting a playlist
-    function openDownloadPage(targetPlaylist) {
-        var sv = mediaRoom.stackView
-        if (sv.currentItem && sv.currentItem.objectName === "downloadPage") return
-
-        if (sv._cachedDownloadPage) {
-            // Always refresh playlist list from backend (may have changed
-            // while the page was cached — new playlists, deletions, etc.)
-            if (mediaManager)
-                sv._cachedDownloadPage.downloadPlaylists = mediaManager.get_movable_playlist_names()
-            if (targetPlaylist) {
-                sv._cachedDownloadPage.selectedPlaylist = targetPlaylist
-                downloadManager.set_download_playlist(targetPlaylist)
-            }
-            for (var i = 0; i < sv.depth; i++) {
-                if (sv.get(i) === sv._cachedDownloadPage) {
-                    sv.pop(sv._cachedDownloadPage)
-                    return
-                }
-            }
-            sv.push(sv._cachedDownloadPage)
-            return
-        }
-
-        var component = Qt.createComponent("DownloadPage.qml")
-        if (component.status === Component.Ready) {
-            sv._cachedDownloadPage = component.createObject(null, {
-                stackView: sv,
-                mainWindow: mediaRoom.mainWindow
-            })
-            if (sv._cachedDownloadPage) {
-                if (targetPlaylist) {
-                    sv._cachedDownloadPage.selectedPlaylist = targetPlaylist
-                    downloadManager.set_download_playlist(targetPlaylist)
-                }
-                sv.push(sv._cachedDownloadPage)
-            }
-        }
-    }
-
     // Global font binding for all text in this component
     // fontFamily always returns a valid font (systemDefaultFont or custom font)
     property string globalFont: App.Style.fontFamily
@@ -140,7 +100,7 @@ Item {
     // The phone's shuffle belongs to its app: off (and dimmed) meanwhile
     readonly property bool isShuffleEnabled: !usePhone && !!_np && _np.shuffled
 
-    // Empty playlist detection — drives download button vs controls swap
+    // Empty playlist detection — swaps the controls for the empty message
     property int localSongCount: 0
     property bool playlistEmpty: !usePhone && localSongCount === 0
 
@@ -512,82 +472,6 @@ Item {
                     topVolumeControl.updateVolumeIcon()
                 }
                 function onEffectivelyMutedChanged() { topVolumeControl.updateVolumeIcon() }
-            }
-        }
-
-        // Download Button (top right corner)
-        Control {
-            id: downloadButton
-            visible: !!downloadManager && downloadManager.downloadsAvailable
-            width: App.Spacing.bottomBarNavButtonWidth
-            height: App.Spacing.bottomBarNavButtonHeight
-            z: 3
-            anchors {
-                top: parent.top
-                right: parent.right
-                topMargin: App.Spacing.mediaRoomMargin
-                rightMargin: App.Spacing.mediaRoomMargin
-            }
-
-            background: Rectangle {
-                color: "transparent"
-                radius: dpMin(8, 2)
-                border.color: App.Style.accent
-                border.width: 1
-                scale: dlMouseArea.pressed ? 0.8 : 1.0
-                opacity: dlMouseArea.pressed ? 0.7 : 1.0
-                Behavior on scale {
-                    NumberAnimation {
-                        duration: 200
-                        easing.type: Easing.OutBack
-                        easing.overshoot: 1.1
-                    }
-                }
-                Behavior on opacity {
-                    NumberAnimation { duration: 150 }
-                }
-            }
-
-            contentItem: Item {
-                scale: dlMouseArea.pressed ? 0.8 : 1.0
-                opacity: dlMouseArea.pressed ? 0.7 : 1.0
-                Behavior on scale {
-                    NumberAnimation {
-                        duration: 200
-                        easing.type: Easing.OutBack
-                        easing.overshoot: 1.1
-                    }
-                }
-                Behavior on opacity {
-                    NumberAnimation { duration: 150 }
-                }
-                Image {
-                    id: dlButtonImage
-                    anchors.centerIn: parent
-                    width: parent.width * 0.7
-                    height: parent.height * 0.7
-                    source: "./assets/download_button.svg"
-                    sourceSize: Qt.size(width * 2, height * 2)
-                    fillMode: Image.PreserveAspectFit
-                    smooth: true
-                    antialiasing: true
-                    mipmap: true
-                    visible: false
-                }
-
-                ColorOverlay {
-                    anchors.fill: dlButtonImage
-                    source: dlButtonImage
-                    color: App.Style.accent
-                }
-            }
-
-            MouseArea {
-                id: dlMouseArea
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: mediaRoom.openDownloadPage()
             }
         }
 
@@ -1450,8 +1334,8 @@ Item {
     }
 
     // Track local song count for empty-state detection (always active).
-    // When a playlist transitions from empty → has songs (first download
-    // landed), auto-play the first track so the room comes alive.
+    // When a playlist transitions from empty → has songs (files appeared
+    // after a rescan), auto-play the first track so the room comes alive.
     Connections {
         target: mediaManager
         function onMediaListChanged(files) {

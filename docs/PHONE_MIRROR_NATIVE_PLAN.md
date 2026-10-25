@@ -216,8 +216,7 @@ paths, cable pull, reboot. Plus Windows against the same phone.
   (~8 s on the Pi) plus the encoder's first key frame; the loopback starvation is gone.
   The server emits a key frame on connect, so the 4–60 s wait should disappear. Verify in Phase 0.
 - **adb licensing/bundling.** platform-tools and scrcpy are Apache-2.0; ship LICENSE files
-  next to the binaries. App-store builds (`OCTAVE_ENABLE_DOWNLOADS=OFF`) may not want to
-  spawn adb at all; keep the feature compiled out on mobile as today.
+  next to the binaries. Keep the feature compiled out on mobile as today.
 
 ## Order of work
 

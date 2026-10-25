@@ -169,14 +169,6 @@ if(OCTAVE_REQUIRE_FFMPEG AND NOT OCTAVE_HAVE_FFMPEG)
                         "macOS: brew install ffmpeg)")
 endif()
 
-# ---- Download feature flag ----
-# Desktop: default ON. Disable with `-DOCTAVE_ENABLE_DOWNLOADS=OFF` for app-store builds
-#          (yt-dlp is forbidden on Apple/Microsoft/Play stores).
-# Android: default ON for sideload APKs — downloads run through the
-#          youtubedl-android AAR (Python + yt-dlp + ffmpeg bundled). For Play
-#          Store builds, pass `-DOCTAVE_ENABLE_DOWNLOADS=OFF` explicitly.
-option(OCTAVE_ENABLE_DOWNLOADS "Enable music download feature (disable for app store builds)" ON)
-
 # ---- Developer tooling (src/dev/) ----
 # `octave --dev` (the --sim simulator of src/sim/ plus the dev overlay) and
 # `octave --profile` (perf monitor + JSON command server on 127.0.0.1:9876,
@@ -263,10 +255,6 @@ qt_add_executable(octave
     src/managers/mediamanager.cpp
     src/managers/audioanalyzer.h
     src/managers/audioanalyzer.cpp
-    src/managers/downloadmanager.h
-    src/managers/downloadmanager.cpp
-    src/managers/downloadutil.h
-    src/managers/downloadutil.cpp
     src/managers/elm327protocol.h
     src/managers/elm327protocol.cpp
     src/managers/obdmanager.h
@@ -324,7 +312,6 @@ qt_add_executable(octave
     # Android-only platform headers: fully guarded by #ifdef Q_OS_ANDROID
     # so AUTOMOC on desktop produces empty moc files (no Q_OBJECT visible).
     src/platform/androidmediabridge.h
-    src/platform/androidprocessadapter.h
 )
 
 # Commit hash and date baked in at configure time. Packaged builds (APK,
@@ -360,7 +347,6 @@ target_include_directories(octave PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated
 
 target_compile_definitions(octave PRIVATE
     OCTAVE_VERSION="${PROJECT_VERSION}"
-    $<$<BOOL:${OCTAVE_ENABLE_DOWNLOADS}>:OCTAVE_ENABLE_DOWNLOADS>
     $<$<BOOL:${OCTAVE_HAVE_FFMPEG}>:OCTAVE_HAVE_FFMPEG>
     # Activate existing #ifndef Q_OS_MOBILE guards on Android (and iOS later).
     # Without this define the guards are no-ops and desktop-only code compiles on mobile.
@@ -570,7 +556,7 @@ endif()
 # Without this OCTAVE.exe is a console program and a black console window
 # opens behind the app on every launch. Logging goes to rotating files
 # (src/util/logger.cpp), so nothing needs stdout; Qt's entry-point library
-# supplies WinMain, and QProcess children (adb, yt-dlp) get CREATE_NO_WINDOW
+# supplies WinMain, and QProcess children (adb) get CREATE_NO_WINDOW
 # automatically when the parent has no console.
 if(WIN32)
     set_target_properties(octave PROPERTIES WIN32_EXECUTABLE TRUE)
@@ -650,15 +636,5 @@ if(ANDROID)
         set_property(TARGET octave APPEND PROPERTY QT_ANDROID_EXTRA_PLUGINS
             "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_PLUGINS}/assetimporters")
     endif()
-    # android/build.gradle reads this to keep the youtubedl-android AAR, the
-    # Java download bridge, and the yt-dlp assets out of store APKs. Gradle
-    # runs in android-build*/ directly under this dir and looks one level up.
-    if(OCTAVE_ENABLE_DOWNLOADS)
-        set(_octave_gradle_downloads true)
-    else()
-        set(_octave_gradle_downloads false)
-    endif()
-    file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/octave-android-features.properties"
-         CONTENT "octaveEnableDownloads=${_octave_gradle_downloads}\n")
     # No manual qt_finalize_executable call — qt_add_executable schedules it automatically.
 endif()

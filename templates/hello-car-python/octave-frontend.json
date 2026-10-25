@@ -3,7 +3,7 @@
   "name": "Hello, car (Python)",
   "version": "1.0.0",
   "description": "Two live readings and the track with play / pause, in a terminal",
-  "protocol": [2, 2],
+  "protocol": [2, 3],
   "scopes": ["media"],
   "exec": {
     "linux":   ["python3", "{dir}/hello_car.py"],

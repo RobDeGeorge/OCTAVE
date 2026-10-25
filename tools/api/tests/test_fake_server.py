@@ -65,9 +65,9 @@ class FakeServerTest(unittest.TestCase):
         self.assertEqual(self.octave.call("parameterCatalog", "info", "RPM")["id"], "RPM")
 
     def test_model(self):
-        self.assertEqual(self.octave.get("downloadManager", "downloadQueue")["model"], True)
-        self.assertEqual(self.octave.rows("downloadManager", "downloadQueue"), [])
-        self.octave.subscribe("downloadManager", properties=["downloadQueue"])
+        self.assertEqual(self.octave.get("fake", "items")["model"], True)
+        self.assertEqual(self.octave.rows("fake", "items"), [])
+        self.octave.subscribe("fake", properties=["items"])
         reset = next(self.octave.events(timeout=5))
         self.assertEqual((reset["event"], reset["change"], reset["rows"]), ("model", "reset", []))
 

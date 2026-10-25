@@ -675,17 +675,6 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
-      - name: Build ytmusic Python bundle
-        run: |
-          # OctaveMediaBridge.java extracts assets/python-packages/ytmusic-bundle.zip
-          # at first launch and runs ytmusic_search.py from it (the AAR-shipped
-          # Python 3.12 has no pip). Without this asset, YouTube Music search/
-          # streaming silently fails on the device.
-          set -e
-          python3 -m pip install --upgrade pip
-          bash scripts/build-android-pylib-bundle.sh
-          ls -la android/assets/python-packages/
-
       - name: Dereference android/assets symlinks
         run: |
           # APKs do not support symlinks — entries get bundled as broken 0-byte
@@ -693,10 +682,10 @@ jobs:
           # disk for dev convenience; replace it with a real copy before the
           # APK build runs, otherwise QML asset loads (assets:/frontend/Main.qml)
           # return empty and the app crashes on launch with "Failed to load
-          # Main.qml". Same fix for the scripts symlink.
+          # Main.qml". Same fix for the wiki symlink.
           set -e
           cd android/assets
-          for link in frontend scripts wiki; do
+          for link in frontend wiki; do
             if [ -L "$link" ]; then
               target=$(readlink -f "$link")
               echo "Dereferencing $link -> $target"
@@ -739,7 +728,7 @@ jobs:
       - name: "Build APK (with retry on Maven 429 / network blips)"
         run: |
           # Maven Central rate-limits GH Actions runner IPs intermittently
-          # (HTTP 429 on the youtubedl-android AAR fetch). Retry the whole
+          # (HTTP 429 on dependency fetches). Retry the whole
           # build a few times with backoff before giving up.
           set -e
           attempt=1

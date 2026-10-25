@@ -26,7 +26,7 @@ user `primitives/` folder and add it to the catalog — means **running someone
 else's code inside the head unit**. A QML file loaded into the main engine can:
 
 - call every context property: `obdManager.clear_dtc()`, `settingsManager.save_setting(key, value)`
-  (a public slot, `src/managers/settingsmanager.h:484`), `downloadManager`, `phoneMirrorManager`, the ESP32 / I²C managers;
+  (a public slot, `src/managers/settingsmanager.h:484`), `phoneMirrorManager`, the ESP32 / I²C managers;
 - `import` any app file by absolute path, reach singletons, and walk the object tree;
 - use `XMLHttpRequest` / `Qt.openUrlExternally` for network access or to open URLs.
 
@@ -73,7 +73,7 @@ For genuinely new visuals (e.g. a bar-graph tach, a boost "staircase"). Only con
 this after Tier 1 ships, and only with all of these:
 
 - **Off by default**, behind a "Developer: allow custom code widgets" setting, desktop
-  first. On mobile, store review rules (Play / App Store, see `OCTAVE_ENABLE_DOWNLOADS`)
+  first. On mobile, store review rules (Play / App Store)
   probably forbid downloaded executable code anyway.
 - **Never installed by a dashboard import.** A shared dashboard that references an
   unknown type keeps rendering it as "missing widget" (the renderer already skips

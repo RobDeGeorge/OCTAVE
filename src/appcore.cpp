@@ -11,8 +11,6 @@
 #ifdef Q_OS_ANDROID
 #include <QtCore/private/qandroidextras_p.h>
 #include <QFuture>
-#include <QtConcurrent>
-#include "platform/androidmediabridge.h"
 #endif
 
 AppCore::AppCore(const QDir &frontendDir, Units *units)
@@ -44,19 +42,6 @@ AppCore::AppCore(const QDir &frontendDir, Units *units)
     expose("mediaManager", &mediaManager);
 
 #ifdef Q_OS_ANDROID
-#ifdef OCTAVE_ENABLE_DOWNLOADS
-    // Initialize the youtubedl-android bridge off the GUI thread — on first
-    // launch it extracts Python 3.9 + yt-dlp + ffmpeg to the app's private data
-    // dir (~10–20s). Subsequent launches are instant.
-    QtConcurrent::run([] {
-        if (OctaveAndroid::initDownloadBridge()) {
-            qInfo() << "[OctaveDownloadBridge] yt-dlp + ffmpeg ready";
-        } else {
-            qWarning() << "[OctaveDownloadBridge] init failed — downloads disabled";
-        }
-    });
-#endif
-
     // Request runtime permissions needed for the media library and (eventual)
     // OBD Bluetooth transport. Declared in the manifest isn't enough on
     // Android 12+/13+; user must grant at runtime. Re-scan once granted.
@@ -124,15 +109,6 @@ AppCore::AppCore(const QDir &frontendDir, Units *units)
     // the source is always local
     expose("nowPlaying", &nowPlaying);
     wireAnalyzer();
-
-    // Download Manager — music search & download via yt-dlp
-    downloadManager.connect_settings_manager(&settingsManager);
-    expose("downloadManager", &downloadManager);
-    // Auto-rescan library when a download completes
-    QObject::connect(&downloadManager, &DownloadManager::downloadComplete,
-                     &mediaManager, [this](const QString &, const QString &) {
-        mediaManager.scan_library(false);
-    });
 
     wireVolume();
 
@@ -412,7 +388,6 @@ void AppCore::shutdown()
     gestureSensor.cleanup();
     tripRecorder.shutdown();   // closes the trip and writes its files before the adapter goes
     obdManager.close();
-    downloadManager.cleanup();
     networkManager.cleanup();
     mediaManager._save_playback_state();   // before the settings flush: saveSettings() is debounced now
     mediaManager.flush_metadata_store();

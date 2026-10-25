@@ -60,7 +60,7 @@ const QList<QPair<QString, QString>> kPages = {
     {"trip_history", "TripHistory.qml"},
     {"sensor_home", "SensorHome.qml"}, {"settings", "SettingsMenu.qml"}, {"phone_mirror", "PhoneMirrorView.qml"},
     {"android_auto", "AndroidAutoView.qml"}, {"sensors", "SensorMenu.qml"}, {"car", "CarMenu.qml"},
-    {"download", "DownloadPage.qml"}, {"clock", "ClockMenu.qml"},
+    {"clock", "ClockMenu.qml"},
 };
 
 const QStringList kSettingsSections = {

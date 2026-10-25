@@ -1,5 +1,5 @@
 // Generated from docs/api/*.json by scripts/generate-types.mjs; do not edit.
-// Protocol version 2. Regenerate with `npm run generate`.
+// Protocol version 3. Regenerate with `npm run generate`.
 
 /** What `get` returns for a list-model property; the rows come from `rows` or a model subscription. */
 export interface ModelSummary { model: true; count: number; roles: string[] }
@@ -187,53 +187,6 @@ export interface DiagnosticsManager {
   }
 }
 
-/** downloadManager (DownloadManager) */
-export interface DownloadManager {
-  properties: {
-    /** bool, notify isSearchingChanged */
-    isSearching: boolean
-    /** int, notify activeDownloadsChanged */
-    activeDownloads: number
-    /** QString, constant */
-    downloadPath: string
-    /** bool, constant */
-    downloadsAvailable: boolean
-    /** QAbstractListModel*, constant */
-    searchResults: ModelSummary
-    /** QAbstractListModel*, constant */
-    downloadQueue: ModelSummary
-  }
-  methods: {
-    search: { args: [query: string]; returns: void }
-    next_search_page: { args: []; returns: void }
-    search_more: { args: []; returns: void }
-    download: { args: [songId: string, songName: string]; returns: void }
-    cancel_download: { args: [songId: string]; returns: void }
-    pause_download: { args: [songId: string]; returns: void }
-    resume_download: { args: [songId: string]; returns: void }
-    clear_download_queue: { args: []; returns: void }
-    clear_finished_downloads: { args: []; returns: void }
-    connect_settings_manager: { args: [sm: unknown]; returns: void }
-    set_download_playlist: { args: [name: string]; returns: void }
-    get_download_playlist: { args: []; returns: string }
-    cleanup: { args: []; returns: void }
-    hasStorageAccess: { args: []; returns: boolean }
-    requestStorageAccess: { args: []; returns: boolean }
-  }
-  signals: {
-    searchInProgress: [inProgress: boolean]
-    searchError: [errorMsg: string]
-    downloadStarted: [songId: string, displayName: string]
-    downloadProgress: [songId: string, progress: number]
-    downloadComplete: [songId: string, filePath: string]
-    downloadError: [songId: string, displayName: string, errorMsg: string]
-    downloadQueueChanged: []
-    statusMessage: [message: string]
-    isSearchingChanged: [value: boolean]
-    activeDownloadsChanged: [count: number]
-  }
-}
-
 /** esp32VolumeManager (ESP32VolumeManager) */
 export interface ESP32VolumeManager {
   properties: {
@@ -369,7 +322,6 @@ export interface MediaManager {
     delete_playlist: { args: [name: string]; returns: boolean }
     move_song_to_playlist: { args: [filename: string, targetPlaylist: string]; returns: boolean }
     delete_song: { args: [filename: string]; returns: boolean }
-    play_downloaded_song: { args: [artist: string, name: string, playlist: string]; returns: boolean }
     play_file_at_path: { args: [filePath: string]; returns: boolean }
     invalidate_stats_cache: { args: []; returns: void }
     get_media_files: { args: [emitSignal: boolean] | []; returns: string[] }
@@ -1635,7 +1587,6 @@ export interface Objects {
   clock: Clock
   dashboardManager: DashboardManager
   diagnosticsManager: DiagnosticsManager
-  downloadManager: DownloadManager
   esp32VolumeManager: ESP32VolumeManager
   fontCatalog: FontCatalog
   frontendManager: FrontendManager
@@ -1657,4 +1608,4 @@ export interface Objects {
   volumeController: VolumeController
 }
 
-export const PROTOCOL_VERSION_OF_TYPES = 2
+export const PROTOCOL_VERSION_OF_TYPES = 3

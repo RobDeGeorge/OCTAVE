@@ -19,7 +19,6 @@
         { href: "media-manager.html", label: "Media Manager" },
         { href: "obd-manager.html", label: "OBD Manager" },
         { href: "network-manager.html", label: "Network Manager" },
-        { href: "download-manager.html", label: "Download Manager" },
         { href: "hardware-managers.html", label: "Hardware Managers" },
         { href: "phone-mirror-android-auto.html", label: "Phone Mirror & AA" },
         { href: "audio-analyzer.html", label: "Audio Analyzer" },

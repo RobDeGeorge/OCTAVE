@@ -1,8 +1,8 @@
 # Android C++ Port: sideload polish
 
 **Goal:** make the sideloaded APK good enough to daily-drive in the Jeep, then get ready for the Play Store.
-**Status:** active. The APK builds (locally and in the `cpp-build-android` CI job), installs and runs; OBD over BLE and YT Music downloads work. What's left is polish.
-**Last updated:** 2026-10-18
+**Status:** active. The APK builds (locally and in the `cpp-build-android` CI job), installs and runs; OBD over BLE works. What's left is polish.
+**Last updated:** 2026-10-24
 
 Done so far, in one line: APK version from `project()` and the About > licenses card (2026-10-18), CMake/`android/` wiring, `#ifdef Q_OS_ANDROID` hardware gating in `src/main.cpp`, landscape lock (`android/AndroidManifest.xml:63`), OBD over BLE through the JNI `OctaveOBDBridge` (`f1901d9`, `2d05676`), app data under `SettingsManager::getAppDataDir()`.
 
@@ -15,7 +15,7 @@ adb install -r build-android/android-build/build/outputs/apk/debug/android-build
 
 ## Hardware managers on Android
 
-These are stubs (no-ops) on Android today: `gesturemanager`, `androidautomanager` (the DHU is desktop-only), `phonemirrormanager`, `esp32volumemanager`. `berryimumanager` has no Android replacement yet (see item 6). `downloadmanager` follows `OCTAVE_ENABLE_DOWNLOADS` (ON for sideload, OFF for store builds).
+These are stubs (no-ops) on Android today: `gesturemanager`, `androidautomanager` (the DHU is desktop-only), `phonemirrormanager`, `esp32volumemanager`. `berryimumanager` has no Android replacement yet (see item 6). (The music downloader was removed on 2026-10-24, along with the `MANAGE_EXTERNAL_STORAGE` permission it needed.)
 
 ## Remaining work, easiest first
 
@@ -39,6 +39,6 @@ These are stubs (no-ops) on Android today: `gesturemanager`, `androidautomanager
 
 ## After that: Play Store (write `TODO/android-play-store.md` then)
 
-Upload keystore, signed AAB, privacy policy URL, permission justifications (review `CAMERA` / `RECORD_AUDIO` / `MANAGE_EXTERNAL_STORAGE`, unused ones cause review friction), internal → closed → production tracks, store build with `OCTAVE_ENABLE_DOWNLOADS=OFF`. Open question: OCTAVE is GPL-3.0+ (`3352b92`, required by Qt Quick 3D / Timeline), so the store listing must ship with the source offer and the licenses screen (Settings > About, added 2026-10-18; check it on the S22); decide whether a paid listing is still wanted under GPL.
+Upload keystore, signed AAB, privacy policy URL, permission justifications (review `CAMERA` / `RECORD_AUDIO`, unused ones cause review friction), internal → closed → production tracks. Open question: OCTAVE is GPL-3.0+ (`3352b92`, required by Qt Quick 3D / Timeline), so the store listing must ship with the source offer and the licenses screen (Settings > About, added 2026-10-18; check it on the S22); decide whether a paid listing is still wanted under GPL.
 
 Delete this file when a signed AAB is on the Play Store production track (or Play Store is dropped and item 7 passes).

@@ -23,8 +23,8 @@ class TstApiDocs : public QObject
 private slots:
     void committedDocsMatchTheBuild()
     {
-#if !defined(OCTAVE_ENABLE_DOWNLOADS) || !defined(Q_OS_LINUX)
-        QSKIP("docs/api is the Linux desktop build with downloads on");
+#if !defined(Q_OS_LINUX)
+        QSKIP("docs/api is the Linux desktop build");
 #endif
         QTemporaryDir out;
         QVERIFY(out.isValid());

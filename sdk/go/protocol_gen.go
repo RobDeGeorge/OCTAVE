@@ -1,12 +1,12 @@
 // Code generated from docs/api/protocol.json by internal/gen; DO NOT EDIT.
-// Protocol version 2. Regenerate with `go generate ./...`.
+// Protocol version 3. Regenerate with `go generate ./...`.
 
 package octave
 
 import "encoding/json"
 
 // ProtocolVersion is the version protocol.json describes (docs/api/README.md, Versioning).
-const ProtocolVersion = 2
+const ProtocolVersion = 3
 
 // Annotated is $defs/annotated of protocol.json.
 type Annotated struct {
@@ -247,8 +247,7 @@ type CallArgs struct {
 type CallReply = any
 
 // RowsArgs are the arguments of the "rows" op. The rows of a list-model
-// property (the download queue, search results), each as {role: value}.
-// Without `count`, every row from `from` on.
+// property, each as {role: value}. Without `count`, every row from `from` on.
 //
 // Since protocol 1.
 type RowsArgs struct {

@@ -83,7 +83,7 @@
             <tr>
               <td><strong>Network</strong></td>
               <td>Optional</td>
-              <td>Needed for music download and update checks. Local playback, OBD and phone mirroring work offline.</td>
+              <td>Needed for update checks. Local playback, OBD and phone mirroring work offline.</td>
             </tr>
           </tbody>
         </table>
@@ -131,11 +131,7 @@ cp -R frontend build/octave.app/Contents/MacOS/
 ./build/octave.app/Contents/MacOS/octave <span class="cmt"># macOS</span>
 <span class="cmt"># Windows PowerShell: stage the frontend, then run</span>
 Copy-Item -Recurse -Force frontend build/Debug/
-./build/Debug/octave.exe  <span class="cmt"># Windows (MSVC multi-config)</span>
-
-<span class="cmt"># App-store variant: music download feature compiled out</span>
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DOCTAVE_ENABLE_DOWNLOADS=OFF
-cmake --build build -j</code></pre>
+./build/Debug/octave.exe  <span class="cmt"># Windows (MSVC multi-config)</span></code></pre>
         <p>For the Windows multi-config and macOS bundle layouts, stage the runtime frontend before launching. In PowerShell, run <code>Copy-Item -Recurse -Force frontend build/Debug/</code> for the Debug executable (use <code>build/Release/</code> for Release). On macOS, run <code>cp -R frontend build/octave.app/Contents/MacOS/</code>. Refresh these copies after QML or asset changes. Linux's <code>build/octave</code> finds the checkout's frontend one level up.</p>
 
         <p>
@@ -283,14 +279,12 @@ cp -R frontend build/octave.app/Contents/MacOS/
     -DCMAKE_BUILD_TYPE=Debug \
     -DANDROID_ABI=arm64-v8a \
     -DANDROID_PLATFORM=android-30 \
-    -DOCTAVE_ENABLE_DOWNLOADS=OFF \
     -DQT_ANDROID_SIGN_APK=OFF
 
 cmake --build build-android --target apk -j
 adb install build-android/android-build/build/outputs/apk/debug/android-build-debug.apk</code></pre>
         <p>
-          CI builds Release with downloads left <em>on</em> (the default for sideload APKs; the youtubedl-android AAR
-          bundles Python, yt-dlp and ffmpeg). It uses the persistent release key when signing secrets are available,
+          CI builds Release. It uses the persistent release key when signing secrets are available,
           otherwise a temporary key. <code>INSTALL_FAILED_UPDATE_INCOMPATIBLE</code> means the installed app uses
           a different key. Use a build signed with the same key, or back up settings before uninstalling the old app.
         </p>
@@ -325,11 +319,6 @@ adb install build-android/android-build/build/outputs/apk/debug/android-build-de
               <td>Phone mirror, Android Auto</td>
               <td>Built-in scrcpy-protocol client; experimental DHU integration (see <a href="phone-mirror-android-auto.html#android-auto">limitations</a>)</td>
               <td>Not applicable (stubs)</td>
-            </tr>
-            <tr>
-              <td>Music download</td>
-              <td>yt-dlp as a subprocess</td>
-              <td>youtubedl-android AAR + bundled ytmusic script; off with <code>OCTAVE_ENABLE_DOWNLOADS=OFF</code></td>
             </tr>
             <tr>
               <td>Local media, dashboards, theming, diagnostics</td>
@@ -428,11 +417,9 @@ adb install build-android/android-build/build/outputs/apk/debug/android-build-de
 
         <p>
           Runtime tools that are not build dependencies: <code>adb</code> for phone mirroring (fetched into
-          <code>tools/platform-tools/</code> by <code>python scripts/fetch_platform_tools.py</code> and bundled in releases),
-          and on desktop <code>yt-dlp</code> for music download (looked up next to the checkout, then on <code>PATH</code>
-          and in the usual bin directories). YouTube Music search runs <span class="file-path">scripts/ytmusic_search.py</span>
-          with <code>python3</code> and <code>ytmusicapi</code> when they are available and otherwise falls back to a yt-dlp search.
-          Both go into a virtualenv next to the checkout, which OCTAVE checks first:
+          <code>tools/platform-tools/</code> by <code>python scripts/fetch_platform_tools.py</code> and bundled in releases).
+          The app itself needs no Python; the Python tools around it (the <code>dev/</code> clients, the wiki and API
+          doc generators) go into a virtualenv next to the checkout:
         </p>
         <pre><code>python3 -m venv venv &amp;&amp; venv/bin/pip install -r requirements.txt</code></pre>
 
@@ -441,7 +428,7 @@ adb install build-android/android-build/build/outputs/apk/debug/android-build-de
         <pre><code>octave/
 ├── <span class="prop">src/</span>                 <span class="cmt"># C++ application</span>
 │   ├── main.cpp                       <span class="cmt"># entry point, manager wiring</span>
-│   ├── managers/                      <span class="cmt"># one *manager.{h,cpp} per feature + elm327protocol, downloadutil</span>
+│   ├── managers/                      <span class="cmt"># one *manager.{h,cpp} per feature + elm327protocol</span>
 │   ├── util/                          <span class="cmt"># logger.cpp (rotating logs, crash handlers), uiwatchdog.cpp, perfscope.h</span>
 │   ├── phone_mirror/scrcpyclient.*    <span class="cmt"># built-in scrcpy-protocol client</span>
 │   ├── items/embeddeddhuitem.*        <span class="cmt"># QQuickItem for Android Auto frames</span>
@@ -464,7 +451,7 @@ adb install build-android/android-build/build/outputs/apk/debug/android-build-de
 │   ├── phone-server/    <span class="cmt"># prebuilt jar + LICENSE/NOTICE (tracked)</span>
 │   ├── platform-tools/  <span class="cmt"># adb fetched by scripts/fetch_platform_tools.py (gitignored)</span>
 │   └── vehicle/         <span class="cmt"># Blender scripts that build the Jeep model</span>
-├── <span class="prop">android/</span>             <span class="cmt"># AndroidManifest, gradle, JNI bridges (OctaveMediaBridge, OctaveOBDBridge; src-downloads/ OctaveDownloadBridge)</span>
+├── <span class="prop">android/</span>             <span class="cmt"># AndroidManifest, gradle, JNI bridges (OctaveMediaBridge, OctaveOBDBridge)</span>
 ├── <span class="prop">packaging/linux/</span>     <span class="cmt"># build-appimage.sh</span>
 ├── <span class="prop">build_scripts/</span>       <span class="cmt"># installer_windows.iss (Inno Setup)</span>
 ├── <span class="prop">scripts/</span>             <span class="cmt"># fetch_platform_tools.py, desktop / Pi launcher scripts, Android bundle builder</span>

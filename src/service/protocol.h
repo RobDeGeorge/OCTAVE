@@ -15,7 +15,9 @@ namespace OctaveService {
 // 2 (2026-10-23): pairing. Over the network every op but hello and pair
 // needs a paired device's token; loopback stays open by default, where a
 // v1 client sees no difference except protocolVersion 2.
-constexpr int kProtocolVersion = 2;
+// 3 (2026-10-24): the music downloader is gone, and with it the
+// downloadManager object.
+constexpr int kProtocolVersion = 3;
 }
 
 #endif // OCTAVE_SERVICE_PROTOCOL_H
