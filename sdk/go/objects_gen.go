@@ -45,6 +45,78 @@ func (o AndroidAutoManager) GetDhuCapture() (v any, err error) {
 	return
 }
 
+// GetBackend reads the property "backend" (QString).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AndroidAutoManager) GetBackend() (v string, err error) {
+	err = o.c.Get("androidAutoManager", "backend", &v)
+	return
+}
+
+// GetNativeAvailable reads the property "nativeAvailable" (bool).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AndroidAutoManager) GetNativeAvailable() (v bool, err error) {
+	err = o.c.Get("androidAutoManager", "nativeAvailable", &v)
+	return
+}
+
+// GetNativeState reads the property "nativeState" (QString).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AndroidAutoManager) GetNativeState() (v string, err error) {
+	err = o.c.Get("androidAutoManager", "nativeState", &v)
+	return
+}
+
+// GetNativeStatus reads the property "nativeStatus" (QString).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AndroidAutoManager) GetNativeStatus() (v string, err error) {
+	err = o.c.Get("androidAutoManager", "nativeStatus", &v)
+	return
+}
+
+// GetPhoneName reads the property "phoneName" (QString).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AndroidAutoManager) GetPhoneName() (v string, err error) {
+	err = o.c.Get("androidAutoManager", "phoneName", &v)
+	return
+}
+
+// GetVideoStreaming reads the property "videoStreaming" (bool).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AndroidAutoManager) GetVideoStreaming() (v bool, err error) {
+	err = o.c.Get("androidAutoManager", "videoStreaming", &v)
+	return
+}
+
+// GetCertificateDir reads the property "certificateDir" (QString).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AndroidAutoManager) GetCertificateDir() (v string, err error) {
+	err = o.c.Get("androidAutoManager", "certificateDir", &v)
+	return
+}
+
+// GetVideoSink reads the property "videoSink" (QObject*, writable).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AndroidAutoManager) GetVideoSink() (v any, err error) {
+	err = o.c.Get("androidAutoManager", "videoSink", &v)
+	return
+}
+
+// SetVideoSink writes the property "videoSink" and returns the value read back.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AndroidAutoManager) SetVideoSink(value any) (v any, err error) {
+	err = o.c.Set("androidAutoManager", "videoSink", value, &v)
+	return
+}
+
 // GetDhuInstallInstructions calls getDhuInstallInstructions() -> QString.
 func (o AndroidAutoManager) GetDhuInstallInstructions() (v string, err error) {
 	err = o.c.Call("androidAutoManager", "getDhuInstallInstructions", &v)
@@ -70,6 +142,35 @@ func (o AndroidAutoManager) CloseDhu() error {
 // Cleanup calls cleanup().
 func (o AndroidAutoManager) Cleanup() error {
 	return o.c.Call("androidAutoManager", "cleanup", nil)
+}
+
+// StartNative calls startNative() -> bool.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AndroidAutoManager) StartNative() (v bool, err error) {
+	err = o.c.Call("androidAutoManager", "startNative", &v)
+	return
+}
+
+// StopNative calls stopNative().
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AndroidAutoManager) StopNative() error {
+	return o.c.Call("androidAutoManager", "stopNative", nil)
+}
+
+// InjectTouch calls injectTouch(int, int, double, double).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AndroidAutoManager) InjectTouch(pointerId int, action int, x float64, y float64) error {
+	return o.c.Call("androidAutoManager", "injectTouch", nil, pointerId, action, x, y)
+}
+
+// SetViewVisible calls setViewVisible(bool).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AndroidAutoManager) SetViewVisible(visible bool) error {
+	return o.c.Call("androidAutoManager", "setViewVisible", nil, visible)
 }
 
 // AudioAnalyzer is the service object "audioAnalyzer" (C++ AudioAnalyzer); NewAudioAnalyzer(c) binds it to a client.
@@ -1337,6 +1438,11 @@ func (o NowPlaying) Seek(positionMs int) error {
 // ToggleShuffle calls toggleShuffle().
 func (o NowPlaying) ToggleShuffle() error {
 	return o.c.Call("nowPlaying", "toggleShuffle", nil)
+}
+
+// UseLocal calls useLocal().
+func (o NowPlaying) UseLocal() error {
+	return o.c.Call("nowPlaying", "useLocal", nil)
 }
 
 // ExtractArtColors calls extractArtColors().
