@@ -1261,8 +1261,9 @@
         <!-- AndroidAutoManager -->
         <h2 id="androidAutoManager">AndroidAutoManager <span class="cmt">&mdash; <code>androidAutoManager</code></span></h2>
         <p><span class="file-path">src/managers/androidautomanager.h</span> &mdash; QML context property <code>androidAutoManager</code></p>
-        <p>Android Auto via Google's Desktop Head Unit. The window/capture integration is incomplete (no window handle is discovered and click forwarding is a stub), and no current QML consumes <code>image://dhuframe/</code>. See <a href="phone-mirror-android-auto.html#aa-status">platform status</a>. adb is found by the same discovery as Phone Mirror (bundled platform-tools &rarr; <code>PATH</code> &rarr; SDK locations; <code>PhoneMirrorManager::findAdb()</code>), and only its own <code>tcp:5277</code> forward is removed on setup / cleanup so a live mirror tunnel survives.</p>
-        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>The mobile stub exposes only <code>isDhuInstalled</code> / <code>isDhuEmbedded</code> (constant <code>false</code>), <code>launchDhuSeamless()</code> (false), <code>closeDhu()</code> and the <code>dhuEmbeddedChanged</code>, <code>error</code>, <code>dhuWindowReady</code> signals.</div>
+        <p>Android Auto with two backends, picked by the <code>androidAutoBackend</code> setting. <strong>Built-in</strong> (<code>"native"</code>, implemented in <span class="file-path">src/managers/androidautomanager_native.cpp</span> over <span class="file-path">src/android_auto/</span>): OCTAVE is the head unit and speaks the Android Auto Protocol to the phone's head unit server through an adb forward; see <a href="phone-mirror-android-auto.html#aa-native">Built-in Android Auto</a>. <strong>Google DHU</strong> (<code>"dhu"</code>, the default): the window/capture integration is incomplete (no window handle is discovered and click forwarding is a stub), and no current QML consumes <code>image://dhuframe/</code>; see <a href="phone-mirror-android-auto.html#aa-status">platform status</a>. adb is found by the same discovery as Phone Mirror (bundled platform-tools &rarr; <code>PATH</code> &rarr; SDK locations; <code>PhoneMirrorManager::findAdb()</code>), and only its own <code>tcp:5277</code> forward is removed on setup / cleanup so a live mirror tunnel survives.</p>
+        <div class="info-box info"><div class="info-box-title">Experimental members</div>Every built-in backend member below (<code>backend</code>, <code>nativeAvailable</code>, <code>nativeState</code>, <code>nativeStatus</code>, <code>phoneName</code>, <code>videoStreaming</code>, <code>certificateDir</code>, <code>videoSink</code>, <code>startNative</code>, <code>stopNative</code>, <code>injectTouch</code>, <code>setViewVisible</code>, <code>backendChanged</code>, <code>nativeStateChanged</code>, <code>videoStreamingChanged</code>, <code>videoSinkChanged</code>) is marked <code>Q_CLASSINFO("octave.experimental", ...)</code>: it is published in <span class="file-path">docs/api/androidAutoManager.json</span> but may change without a protocol version bump.</div>
+        <div class="info-box info"><div class="info-box-title">Mobile / build-variant differences</div>The mobile stub exposes only <code>isDhuInstalled</code> / <code>isDhuEmbedded</code> (constant <code>false</code>), <code>launchDhuSeamless()</code> (false), <code>closeDhu()</code>, the <code>dhuEmbeddedChanged</code>, <code>error</code>, <code>dhuWindowReady</code> signals, and the built-in backend's names with inert constant values (<code>backend</code> <code>"dhu"</code>, <code>nativeAvailable</code> false, <code>nativeState</code> <code>"idle"</code>, empty <code>nativeStatus</code> / <code>phoneName</code>, <code>videoStreaming</code> false, <code>videoSink</code> null; <code>startNative()</code> returns false, the other invokables do nothing). A desktop build without OpenSSL or FFmpeg has the full class with <code>nativeAvailable</code> false, <code>backend</code> always <code>"dhu"</code>, and <code>startNative()</code> setting <code>error</code> ("This build has no native Android Auto").</div>
         <h3>Properties</h3>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
@@ -1272,6 +1273,14 @@
             <tr><td><code>isDhuEmbedded</code></td><td><code>bool</code></td><td>read-only</td><td><code>dhuEmbeddedChanged</code></td><td>Manager considers the DHU running/embedded; this alone does not prove its window is displayed</td></tr>
             <tr><td><code>dhuWindowHandle</code></td><td><code>int</code></td><td>read-only</td><td><code>dhuWindowReady</code></td><td>Currently a process ID or 0 rather than a discovered native window handle</td></tr>
             <tr><td><code>dhuCapture</code></td><td><code>QObject*</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>The <a href="#dhuCapture">DhuCapture</a> object streaming frames to <code>image://dhuframe/</code></td></tr>
+            <tr><td><code>backend</code></td><td><code>QString</code></td><td>read-only</td><td><code>backendChanged</code></td><td>Experimental. <code>"native"</code> or <code>"dhu"</code> from the <code>androidAutoBackend</code> setting; <code>"dhu"</code> whenever <code>nativeAvailable</code> is false</td></tr>
+            <tr><td><code>nativeAvailable</code></td><td><code>bool</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>Experimental. Built with the native receiver (<code>OCTAVE_HAVE_NATIVE_AA</code>: OpenSSL + FFmpeg, desktop)</td></tr>
+            <tr><td><code>nativeState</code></td><td><code>QString</code></td><td>read-only</td><td><code>nativeStateChanged</code></td><td>Experimental. <code>idle</code> | <code>connecting</code> | <code>waitingForPhone</code> | <code>waitingForServer</code> | <code>needsCertificate</code> | <code>running</code> | <code>error</code> (<a href="phone-mirror-android-auto.html#aa-native-states">what each means</a>)</td></tr>
+            <tr><td><code>nativeStatus</code></td><td><code>QString</code></td><td>read-only</td><td><code>nativeStateChanged</code></td><td>Experimental. The state as a sentence for a person, including what to do</td></tr>
+            <tr><td><code>phoneName</code></td><td><code>QString</code></td><td>read-only</td><td><code>nativeStateChanged</code></td><td>Experimental. Device name the phone reported in service discovery</td></tr>
+            <tr><td><code>videoStreaming</code></td><td><code>bool</code></td><td>read-only</td><td><code>videoStreamingChanged</code></td><td>Experimental. The phone is sending video</td></tr>
+            <tr><td><code>certificateDir</code></td><td><code>QString</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>Experimental. <code>&lt;config dir&gt;/android-auto</code>: where <code>headunit.crt</code> + <code>headunit.key</code> are looked for when <code>androidAutoCertPath</code> is empty</td></tr>
+            <tr><td><code>videoSink</code></td><td><code>QObject*</code></td><td>read/write</td><td><code>videoSinkChanged</code></td><td>Experimental. The <code>QVideoSink</code> decoded frames go to; <code>AndroidAutoView.qml</code> sets its <code>VideoOutput</code>'s sink</td></tr>
           </tbody>
         </table>
         <h3>Invokables &amp; Slots</h3>
@@ -1282,7 +1291,11 @@
             <tr><td><code>launchDhuSeamless()</code></td><td><code>bool</code></td><td>Prepare the headunit server and adb forward, then launch DHU; embedding is incomplete (see above)</td></tr>
             <tr><td><code>sendDhuClick(int x, int y)</code></td><td><code>void</code></td><td>Forward a click through DhuCapture (currently a logged stub)</td></tr>
             <tr><td><code>closeDhu()</code></td><td><code>void</code></td><td>Stop capture and kill the DHU process</td></tr>
-            <tr><td><code>cleanup()</code></td><td><code>void</code></td><td>Close DHU at exit</td></tr>
+            <tr><td><code>cleanup()</code></td><td><code>void</code></td><td>At exit: end a built-in session with a bye-bye (waits up to 3 s), close the DHU, remove its <code>tcp:5277</code> forward</td></tr>
+            <tr><td><code>startNative()</code></td><td><code>bool</code></td><td>Experimental. Connect to the phone's head unit server and keep retrying (3 s while waiting for the phone, server or certificate; 8 s after an error) until <code>stopNative()</code>. False when it can't begin (<code>nativeState</code> says why); true when already connecting or running</td></tr>
+            <tr><td><code>stopNative()</code></td><td><code>void</code></td><td>Experimental. Stop retrying; a running session ends with a bye-bye, the adb forward is removed, state returns to <code>idle</code></td></tr>
+            <tr><td><code>injectTouch(int pointerId, int action, double x, double y)</code></td><td><code>void</code></td><td>Experimental. A touch on the picture: <code>pointerId</code> from the touch area, <code>action</code> 0 down / 1 up / 2 move, <code>x</code> / <code>y</code> in 0..1 of the video. Only while <code>running</code></td></tr>
+            <tr><td><code>setViewVisible(bool visible)</code></td><td><code>void</code></td><td>Experimental. The view is on screen; false tells the phone to stop sending video (audio continues)</td></tr>
           </tbody>
         </table>
         <h3>Signals</h3>
@@ -1290,9 +1303,13 @@
           <thead><tr><th>Signal</th><th>Description</th></tr></thead>
           <tbody>
             <tr><td><code>connectionProgress(QString message)</code></td><td>Launch progress text</td></tr>
-            <tr><td><code>error(QString message)</code></td><td>Error message</td></tr>
+            <tr><td><code>error(QString message)</code></td><td>Error message (DHU launch errors; also every failed built-in session)</td></tr>
             <tr><td><code>dhuWindowReady(int windowHandle)</code></td><td>DHU window found; carries the handle</td></tr>
             <tr><td><code>dhuEmbeddedChanged(bool embedded)</code></td><td>Embedding state changed</td></tr>
+            <tr><td><code>backendChanged()</code></td><td>Experimental. <code>androidAutoBackend</code> was saved</td></tr>
+            <tr><td><code>nativeStateChanged()</code></td><td>Experimental. <code>nativeState</code>, <code>nativeStatus</code> or <code>phoneName</code> changed</td></tr>
+            <tr><td><code>videoStreamingChanged()</code></td><td>Experimental. <code>videoStreaming</code> changed</td></tr>
+            <tr><td><code>videoSinkChanged()</code></td><td>Experimental. <code>videoSink</code> was set</td></tr>
           </tbody>
         </table>
 

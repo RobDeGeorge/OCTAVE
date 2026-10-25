@@ -366,7 +366,7 @@
         <!-- AndroidAutoView -->
         <h2 id="androidauto">AndroidAutoView.qml</h2>
 
-        <p><span class="file-path">frontend/AndroidAutoView.qml</span> embeds Google's Desktop Head Unit. It imports <code>OCTAVE.AndroidAuto 1.0</code> for <code>EmbeddedDhuItem</code> &mdash; the one custom type <span class="file-path">src/main.cpp</span> registers with <code>qmlRegisterType</code> &mdash; and <code>QtQuick.Controls.Basic</code>. Like the phone mirror, its BottomBar button is hidden on Android and gated by <code>settingsManager.androidAutoEnabled</code>; the shared page cache reuses its instance.</p>
+        <p><span class="file-path">frontend/AndroidAutoView.qml</span> has two modes, following <code>androidAutoManager.backend</code>: the built-in head unit (<code>"native"</code>, below) and Google's Desktop Head Unit (<code>"dhu"</code>). For the DHU it imports <code>OCTAVE.AndroidAuto 1.0</code> for <code>EmbeddedDhuItem</code> &mdash; the one custom type <span class="file-path">src/main.cpp</span> registers with <code>qmlRegisterType</code> &mdash; and <code>QtQuick.Controls.Basic</code>. Like the phone mirror, its BottomBar button is hidden on Android and gated by <code>settingsManager.androidAutoEnabled</code>; the shared page cache reuses its instance.</p>
 
         <pre><code><span class="cls">EmbeddedDhuItem</span> {
     <span class="prop">id</span>: embeddedDhu
@@ -384,8 +384,17 @@
           <li>A semi-transparent "X" at the top-right calls <code>androidAutoManager.closeDhu()</code> and pops the page.</li>
         </ul>
 
+        <h3>Built-in mode (<code>backend === "native"</code>)</h3>
+        <p>The <code>androidAutoNative</code> item replaces the DHU items (which are hidden in this mode):</p>
+        <ul>
+          <li>A <code>VideoOutput</code> (<code>PreserveAspectFit</code>) whose <code>videoSink</code> is handed to <code>androidAutoManager.videoSink</code> in <code>Component.onCompleted</code>; shown while <code>nativeState === "running"</code>.</li>
+          <li>A <code>MultiPointTouchArea</code> (<code>androidAutoTouchArea</code>, up to 10 points, mouse enabled) that maps each point through the video's <code>contentRect</code> to 0..1 and calls <code>injectTouch(pointId, action, x, y)</code> (0 press, 2 move, 1 release or cancel). A touch that starts on the letterbox bars is ignored until it is released.</li>
+          <li>A status screen while not running: a title per <code>nativeState</code> ("Waiting for the phone", "Waiting for the phone's head unit server", "Android Auto needs a certificate", "Android Auto stopped", else "Starting Android Auto..."), <code>nativeStatus</code> under it (<code>androidAutoStatus</code>), the one-time phone setup hint while waiting for the phone or its server, and "Retrying on its own." after an error.</li>
+          <li><code>StackView.onActivated</code> calls <code>setViewVisible(true)</code> and <code>startNative()</code>; <code>onVisibleChanged</code> passes visibility to <code>setViewVisible()</code> (the phone pauses video while the page is hidden, audio continues). The "X" (<code>androidAutoClose</code>) calls <code>stopNative()</code> and pops the page.</li>
+        </ul>
+
         <h3>Backend managers used</h3>
-        <p><code>androidAutoManager</code>. See <a href="phone-mirror-android-auto.html#android-auto">Phone Mirror &amp; Android Auto</a> for the DHU pipeline and the <code>dhuframe</code> image provider.</p>
+        <p><code>androidAutoManager</code>. See <a href="phone-mirror-android-auto.html#android-auto">Phone Mirror &amp; Android Auto</a> for the built-in receiver, the DHU pipeline and the <code>dhuframe</code> image provider.</p>
 
         <!-- SettingsMenu -->
         <h2 id="settingsmenu">SettingsMenu and its Layouts</h2>

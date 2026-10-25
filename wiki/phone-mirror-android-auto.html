@@ -13,7 +13,7 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Phone Mirror &amp; Android Auto</div>
           <h1 class="page-title">Phone Mirror &amp; Android Auto</h1>
-          <p class="page-subtitle">OCTAVE's built-in scrcpy-protocol client with its forked phone server, and the Google DHU-based Android Auto path</p>
+          <p class="page-subtitle">OCTAVE's built-in scrcpy-protocol client with its forked phone server, and Android Auto: the built-in head unit (native receiver) or Google's DHU</p>
         </div>
 
         <nav class="toc">
@@ -42,8 +42,14 @@
             <li><a href="#design-decisions">Design decisions</a></li>
             <li><a href="#android-auto">Android Auto</a>
               <ul class="toc-list">
-                <li><a href="#aa-status">What actually works</a></li>
+                <li><a href="#aa-native">Built-in Android Auto (native receiver)</a></li>
+                <li><a href="#aa-native-setup">Phone and OCTAVE setup</a></li>
+                <li><a href="#aa-native-cert">The head-unit certificate</a></li>
+                <li><a href="#aa-native-works">What works, what doesn't yet</a></li>
+                <li><a href="#aa-native-states">What the page shows and what to do</a></li>
+                <li><a href="#aa-native-inside">How the built-in receiver works</a></li>
                 <li><a href="#aa-manager">AndroidAutoManager</a></li>
+                <li><a href="#aa-status">Google DHU backend: what actually works</a></li>
                 <li><a href="#aa-dhu">Google DHU Integration</a></li>
                 <li><a href="#aa-adb-setup">ADB Connection Setup</a></li>
                 <li><a href="#aa-capture">DhuCapture &amp; Frame Provider</a></li>
@@ -67,15 +73,25 @@
               scrcpy server to the phone over <code>adb</code>, decodes the H.264 stream itself, plays the phone's audio,
               and injects real multitouch over the control socket. The server jar is bundled; adb and a decoder must also be available (see prerequisites below). It is
               desktop-only (mobile builds register a stub).</li>
-            <li><strong>Android Auto</strong> -- Runs Google's Desktop Head Unit (DHU) as a separate process and is meant
-              to embed its window. In practice the head unit is not shown inside OCTAVE yet; see
-              <a href="#aa-status">What actually works</a>.</li>
+            <li><strong>Android Auto</strong> -- real Android Auto from the phone, with two backends picked by the
+              <code>androidAutoBackend</code> setting:
+              <ul>
+                <li><strong>Built-in</strong> (<code>"native"</code>, beta) -- OCTAVE is the car's head unit. It speaks the Android
+                  Auto Protocol (AAP) itself to the phone's Android Auto <em>head unit server</em> through an adb port forward
+                  (phone port 5277), decodes the video and plays the audio. No Google software is needed on the OCTAVE machine.
+                  See <a href="#aa-native">Built-in Android Auto</a>.</li>
+                <li><strong>Google DHU</strong> (<code>"dhu"</code>, the default) -- runs Google's Desktop Head Unit as a separate
+                  process and is meant to embed its window. In practice that window is not shown inside OCTAVE; see
+                  <a href="#aa-status">Google DHU backend: what actually works</a>.</li>
+              </ul>
+            </li>
           </ul>
           <p>
-            The two paths share one thing: <code>adb</code>, found once by <code>PhoneMirrorManager::findAdb()</code> and reused by Android Auto. Phone Mirror pushes decoded frames into a
-            <code>QVideoSink</code> bound to a QML <code>VideoOutput</code>; Android Auto launches the DHU in its own window
-            and registers a <code>QQuickImageProvider</code> (<code>image://dhuframe/</code>)
-            that no QML currently reads.
+            The paths share <code>adb</code>, found once by <code>PhoneMirrorManager::findAdb()</code> and reused by Android Auto, and
+            the built-in Android Auto receiver picks the phone the same way mirroring does. Phone Mirror and built-in Android Auto
+            both decode H.264 with the shared <code>H264Decoder</code> (<span class="file-path">src/util/h264decoder.{h,cpp}</span>) and push
+            frames into a <code>QVideoSink</code> bound to a QML <code>VideoOutput</code>; the DHU backend launches the DHU in its own
+            window and registers a <code>QQuickImageProvider</code> (<code>image://dhuframe/</code>) that no QML currently reads.
           </p>
           <span class="platform-badge desktop">Desktop only</span>
 
@@ -90,8 +106,11 @@
 |   MirrorKeeper (sleep/panel)  | control socket |   touch / keys / keeper policy       |
 |                               | &lt;------------&gt; |   PHONE_STATE device messages        |
 |                               |                |          |                           |
-|  Google DHU (Android Auto)    |  tcp:5277      |  PhoneMirrorManager -&gt; PhoneMirrorView|
-|   head unit server on phone   | &lt;-----------&gt;  |  AndroidAutoManager -&gt; AndroidAutoView|
+|  Android Auto app             |  tcp:5277      |  PhoneMirrorManager -&gt; PhoneMirrorView|
+|   head unit server (dev mode) | &lt;-----------&gt;  |  AndroidAutoManager -&gt; AndroidAutoView|
+|                               |  AAP over TLS  |   built-in: AapConnection -&gt;        |
+|                               |                |     H264Decoder -&gt; QVideoSink       |
+|                               |                |   or Google DHU (separate process)   |
 +-------------------------------+                +--------------------------------------+
           </div>
         </section>
@@ -346,7 +365,9 @@
         <section id="pm-video">
           <h3>Video decode and frame delivery</h3>
           <p>A config packet (SPS/PPS) is not decoded on its own; it is prepended to the next packet, as the scrcpy client does.
-            The client decodes with libavcodec (<code>avcodec_find_decoder(AV_CODEC_ID_H264)</code>, slice threading only, set before
+            The client decodes with libavcodec through <code>H264Decoder</code> (<span class="file-path">src/util/h264decoder.{h,cpp}</span>, shared with
+            the built-in Android Auto receiver; it owns the codec context, the SPS/PPS prepend and the frame copy, while the black-frame hold and
+            size tracking stay in <code>ScrcpyClient</code>'s frame callback) (<code>avcodec_find_decoder(AV_CODEC_ID_H264)</code>, slice threading only, set before
             <code>avcodec_open2</code>, packets padded with <code>AV_INPUT_BUFFER_PADDING_SIZE</code>). Frame threading is avoided because it
             delays every picture by one frame per thread. It accepts <code>YUV420P</code>/<code>YUVJ420P</code> (other formats are dropped)
             and copies the three planes row by row into a <code>QVideoFrame(Format_YUV420P)</code> -- no RGB conversion, the
@@ -797,48 +818,202 @@
         <section id="android-auto">
           <h2>Android Auto</h2>
           <p>
-            The Android Auto path drives Google's <strong>Desktop Head Unit</strong> (DHU), the SDK tool that implements a complete
-            Android Auto head unit against a phone over adb. OCTAVE launches it, sets up its adb forward and the phone-side head
-            unit server, and is meant to show its window inside the dash. Files:
+            Android Auto has two backends behind one manager (<code>androidAutoManager</code>) and one page
+            (<span class="file-path">frontend/AndroidAutoView.qml</span>), picked by the <code>androidAutoBackend</code> setting
+            (Settings &rarr; Accessories &rarr; Phone Dock &rarr; Android Auto &rarr; <em>Head unit</em>):
           </p>
+          <ul>
+            <li><strong>Built-in</strong> (<code>"native"</code>, beta): OCTAVE is the head unit and speaks the Android Auto Protocol to the
+              phone itself. Desktop builds with OpenSSL and FFmpeg only (<code>nativeAvailable</code>); the <em>Head unit</em> choice is hidden
+              where it is missing.</li>
+            <li><strong>Google DHU</strong> (<code>"dhu"</code>, the default): drives Google's <strong>Desktop Head Unit</strong>, the SDK tool
+              that implements a complete Android Auto head unit against a phone over adb. OCTAVE launches it, sets up its adb forward and
+              the phone-side head unit server, and is meant to show its window inside the dash. A build without the built-in receiver
+              always reports <code>backend</code> as <code>"dhu"</code>.</li>
+          </ul>
+          <p>Files:</p>
           <table>
             <thead><tr><th>File</th><th>Class</th><th>Purpose</th></tr></thead>
             <tbody>
-              <tr><td><span class="file-path">src/managers/androidautomanager.{h,cpp}</span></td><td><code>AndroidAutoManager</code></td><td>DHU discovery and process lifecycle, adb setup, window discovery; QML context property <code>androidAutoManager</code></td></tr>
-              <tr><td>same files</td><td><code>DhuCapture</code>, <code>DhuFrameProvider</code></td><td>30 FPS window capture into an image provider; click-forwarding stub</td></tr>
-              <tr><td><span class="file-path">src/items/embeddeddhuitem.{h,cpp}</span></td><td><code>EmbeddedDhuItem</code></td><td>QML item registered as <code>OCTAVE.AndroidAuto 1.0</code></td></tr>
-              <tr><td><span class="file-path">frontend/AndroidAutoView.qml</span></td><td>--</td><td>Launches the DHU on load, shows the embedded item, an error page with setup instructions and a retry button</td></tr>
+              <tr><td><span class="file-path">src/managers/androidautomanager.{h,cpp}</span></td><td><code>AndroidAutoManager</code></td><td>DHU discovery and process lifecycle, adb setup, window discovery; QML context property and service object <code>androidAutoManager</code></td></tr>
+              <tr><td><span class="file-path">src/managers/androidautomanager_native.cpp</span></td><td><code>AndroidAutoManager</code> (native mode)</td><td>Built-in backend: finds the phone over adb, checks the head unit server, forwards a port, loads the certificate, runs an <code>AapConnection</code>, retries, maps touch</td></tr>
+              <tr><td><span class="file-path">src/android_auto/</span></td><td><code>AapConnection</code>, <code>AapSession</code>, <code>AapTls</code>, framer, protobuf</td><td>The protocol core of the built-in receiver (<a href="#aa-native-inside">below</a>; <a href="architecture.html#android-auto-module">Architecture</a>)</td></tr>
+              <tr><td><span class="file-path">src/util/h264decoder.{h,cpp}</span></td><td><code>H264Decoder</code></td><td>libavcodec H.264 decoder shared with Phone Mirror</td></tr>
+              <tr><td>same files as the manager</td><td><code>DhuCapture</code>, <code>DhuFrameProvider</code></td><td>DHU backend: 30 FPS window capture into an image provider; click-forwarding stub</td></tr>
+              <tr><td><span class="file-path">src/items/embeddeddhuitem.{h,cpp}</span></td><td><code>EmbeddedDhuItem</code></td><td>DHU backend: QML item registered as <code>OCTAVE.AndroidAuto 1.0</code></td></tr>
+              <tr><td><span class="file-path">frontend/AndroidAutoView.qml</span></td><td>--</td><td>Built-in: a <code>VideoOutput</code>, a multitouch area, a status screen and a close button. DHU: launches the DHU on load, shows the embedded item, an error page with setup instructions and a retry button</td></tr>
+              <tr><td><span class="file-path">docs/ANDROID_AUTO_PROTOCOL.md</span></td><td>--</td><td>AAP framing, handshake, discovery and channel messages as checked against a real phone</td></tr>
             </tbody>
           </table>
-          <p>Logging: categories <code>octave.androidauto</code> and <code>octave.embeddeddhu</code>. The bottom-bar button is shown when setting <code>androidAutoEnabled</code> is on and the
-            build is not Android.</p>
+          <p>Logging: categories <code>octave.androidauto</code> (the manager), <code>octave.androidauto.session</code> and
+            <code>octave.androidauto.connection</code> (the built-in receiver), and <code>octave.embeddeddhu</code>. The bottom-bar button is
+            shown when setting <code>androidAutoEnabled</code> is on (Settings &rarr; Accessories &rarr; Phone Dock &rarr; Android Auto &rarr;
+            <em>Show in nav bar</em>).</p>
         </section>
 
-        <section id="aa-status">
-          <h3>What actually works</h3>
+        <section id="aa-native">
+          <h3>Built-in Android Auto (native receiver)</h3>
+          <p>
+            With <code>androidAutoBackend</code> set to <code>"native"</code>, OCTAVE takes the place of the car's head unit. The phone runs
+            Android Auto as it would in a car; the Android Auto app on the phone draws the car screen (Maps, media apps, messaging) and sends
+            it to OCTAVE as H.264 video with PCM audio, and OCTAVE sends touches, night mode and driving status back. Nothing extra runs on
+            the phone and no Google software is needed on the OCTAVE machine.
+          </p>
+          <p>
+            The link is the phone's Android Auto <em>head unit server</em>, a developer-mode feature of the Android Auto app that listens on
+            phone TCP port 5277 (the socket Google's DHU uses). OCTAVE reaches it through an adb port forward, so it works over a USB cable
+            with USB debugging or over wireless debugging, the same adb connection <a href="#phone-mirror">Phone Mirror</a> uses. Plain
+            "plug in a stock phone" Android Auto over a USB accessory link is not implemented yet.
+          </p>
+          <p>
+            Checked on a Samsung SM-S948U with Android Auto 17.9 over wireless adb: Maps and Spotify render, taps and drags work, media
+            audio plays.
+          </p>
+          <span class="platform-badge desktop">Desktop only</span>
+        </section>
+
+        <section id="aa-native-setup">
+          <h3>Phone and OCTAVE setup</h3>
+          <h4>On the phone, once</h4>
+          <ol class="steps">
+            <li><strong>adb</strong> -- USB debugging on (or the phone paired for wireless debugging in Phone Mirror), exactly as for
+              <a href="#phone-mirror">Phone Mirror</a>.</li>
+            <li><strong>Android Auto developer mode</strong> -- open Android Auto's settings on the phone and tap <em>Version</em> about 10 times until it confirms
+              developer mode.</li>
+            <li><strong>Head unit server</strong> -- in Android Auto's settings, open the <em>&#8942;</em> menu and tap <em>Start head unit
+              server</em>. It keeps running across USB unplugs and serves one session after another.</li>
+          </ol>
           <div class="info-box warning">
-            <div class="info-box-title">Platform status</div>
-            Android Auto does not show inside OCTAVE. The manager launches and stops the DHU and performs the adb setup, but never
-            locates the DHU window, so the DHU stays in its own window (started minimized on Windows). On <strong>Windows</strong> the
-            100 ms x 50 window poll times out after 5 s; 2 s later the process id is used as a stand-in handle and
-            <code>dhuEmbeddedChanged(true)</code> / <code>dhuWindowReady</code> fire, but no capture starts. On <strong>Linux and
-            macOS</strong>, 3 s after launch the manager hands <code>DhuCapture</code> the handle 0; <code>startCapture()</code> refuses it
-            with "No window handle set" (the view's error page flashes up) and the manager then reports the DHU as embedded anyway.
-            In both cases the view ends up black behind the close button, and <code>EmbeddedDhuItem</code> only tracks state.
-            <code>sendMouseClick()</code> is a stub. The header comments call this out as intentional ("DHU is rarely used").
+            <div class="info-box-title">The head unit server has to be started on the phone</div>
+            On Android Auto 17.9 the head unit server cannot be started over adb any more (the activity the DHU backend tries is gone and
+            the service is not exported), so the built-in backend does not try: the user starts it from the &#8942; menu. Whether it survives a phone reboot or an
+            Android Auto update is not known yet; if the page sits at "Waiting for the phone's head unit server", start it again.
           </div>
+          <h4>In OCTAVE</h4>
+          <ol class="steps">
+            <li>Settings &rarr; Accessories &rarr; Phone Dock &rarr; <strong>Android Auto</strong>: turn on <em>Show in nav bar</em>
+              (<code>androidAutoEnabled</code>).</li>
+            <li>Under <em>Head unit</em>, pick <strong>Built-in</strong> (<code>androidAutoBackend = "native"</code>). Only shown when the
+              build has the built-in receiver.</li>
+            <li>Optionally pick a <em>Video size</em>: 800x480, 1280x720 (default) or 1920x1080 (<code>androidAutoResolution</code>). It
+              applies to the next connection. Frame rate (<code>androidAutoFps</code>) and density (<code>androidAutoDpi</code>) have no
+              control yet; edit the settings file (<a href="settings-reference.html#phone">Settings Reference</a>).</li>
+            <li>Provide the head-unit certificate (<a href="#aa-native-cert">next section</a>). The <em>Status</em> row on the same
+              settings card shows the certificate folder.</li>
+            <li>Tap Android Auto in the nav bar. The page connects on its own as soon as the phone, its head unit server and the certificate
+              are all there.</li>
+          </ol>
+          <p>The <em>Status</em> row on the settings card shows the manager's <code>nativeStatus</code> (green while running, red for
+            <code>error</code> / <code>needsCertificate</code>), or "Not connected. Open Android Auto from the nav bar to connect." while idle.</p>
+        </section>
+
+        <section id="aa-native-cert">
+          <h3>The head-unit certificate</h3>
+          <p>
+            Android Auto only accepts a head unit whose TLS client certificate chains to Google's head-unit certificate authority. OCTAVE
+            does not ship such a certificate and never will: nothing in the repository or in the release downloads contains one. The
+            user supplies a PEM certificate and its private key, and is responsible for having the right to use them. OCTAVE looks for
+            them, in order:
+          </p>
+          <ol>
+            <li><code>androidAutoCertPath</code> set: that file. If it contains a <code>PRIVATE KEY</code> block, the key is taken from the
+              same file; otherwise from a sibling file with the same base name and a <code>.key</code> extension
+              (<code>/path/unit.pem</code> &rarr; <code>/path/unit.key</code>).</li>
+            <li><code>androidAutoCertPath</code> empty (the default): <code>headunit.crt</code> and <code>headunit.key</code> in
+              <code>&lt;config dir&gt;/android-auto/</code> (Linux <code>~/.config/OCTAVE/android-auto/</code>, Windows
+              <code>%APPDATA%\OCTAVE\android-auto\</code>, macOS <code>~/Library/Application Support/OCTAVE/android-auto/</code>). The
+              manager's <code>certificateDir</code> property holds this path and both the page and the settings card show it.</li>
+          </ol>
+          <p>
+            The files are read at every connection attempt, so dropping them in while the page shows "Android Auto needs a certificate"
+            is enough: the next retry (within 3 s) picks them up. A certificate OpenSSL can't parse, or a key that doesn't match it, ends
+            the attempt with an error; a certificate the phone does not accept fails the TLS handshake (see
+            <a href="troubleshooting.html#android-auto">Troubleshooting</a>).
+          </p>
+        </section>
+
+        <section id="aa-native-works">
+          <h3>What works, what doesn't yet</h3>
+          <table>
+            <thead><tr><th>Area</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td>Video</td><td>Works. H.264 Baseline at the chosen size (800x480, 1280x720 or 1920x1080) and 30 or 60 fps, decoded with libavcodec into the page's <code>VideoOutput</code>, letterboxed to fit. While the page is hidden OCTAVE tells the phone (video focus) and it stops sending video; audio carries on.</td></tr>
+              <tr><td>Touch</td><td>Works, multitouch (up to 10 points). Touches map through the letterboxed picture into video pixels; a touch that starts on the black bars is ignored for its whole life.</td></tr>
+              <tr><td>Audio</td><td>Works. Media (48 kHz stereo), guidance (16 kHz mono) and system sounds (16 kHz mono) each play on OCTAVE's selected audio output at OCTAVE's volume and mute, through the <a href="architecture.html#volume-system">volume system</a>; the phone's own volume is not touched. OCTAVE's own music is not paused or ducked for Android Auto yet.</td></tr>
+              <tr><td>Night mode</td><td>Follows OCTAVE's theme: any theme outside the light group counts as night, and a theme change is sent to the phone at once.</td></tr>
+              <tr><td>Driving status</td><td>Always reported as unrestricted (parked), so the phone does not lock the keyboard or lists.</td></tr>
+              <tr><td>Microphone</td><td>Announced, because Android Auto refuses a head unit without one, but OCTAVE sends no audio: Google Assistant and voice replies hear nothing.</td></tr>
+              <tr><td>Transport</td><td>adb only (USB debugging or wireless debugging, plus the head unit server). No USB accessory (AOA) mode, so a phone without developer mode can't connect, and no wireless Android Auto.</td></tr>
+              <tr><td>Platforms</td><td>Desktop builds only (Linux, Windows, macOS). Checked on desktop Linux so far; Windows, macOS and the Orange Pi head unit are still to be tried. Not in the Android, iOS or browser builds.</td></tr>
+              <tr><td>Build</td><td>Needs OpenSSL and FFmpeg (libavcodec) at build time (<code>OCTAVE_HAVE_NATIVE_AA</code>, <a href="building.html#cmake-options">Building</a>). Without them <code>nativeAvailable</code> is false and only the DHU backend exists.</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="aa-native-states">
+          <h3>What the page shows and what to do</h3>
+          <p>
+            Opening the page calls <code>startNative()</code>. From then on the manager keeps trying until the page's close button (X, top
+            right) calls <code>stopNative()</code>: a missing phone, head unit server or certificate is retried every 3 s, an error after 8 s.
+            Leaving the page through the nav bar keeps the session running (audio continues, video pauses). The state is
+            <code>nativeState</code>; the sentence under the title is <code>nativeStatus</code>.
+          </p>
+          <table>
+            <thead><tr><th><code>nativeState</code></th><th>Page title</th><th>Meaning</th><th>What to do</th></tr></thead>
+            <tbody>
+              <tr><td><code>idle</code></td><td>--</td><td>Not started, or stopped with the close button</td><td>Open Android Auto from the nav bar</td></tr>
+              <tr><td><code>connecting</code></td><td>Starting Android Auto...</td><td>Looking for the phone, in the AAP handshake, or reconnecting after a session ended</td><td>Wait; it normally takes a second or two</td></tr>
+              <tr><td><code>waitingForPhone</code></td><td>Waiting for the phone</td><td><code>adb devices</code> lists no usable phone</td><td>Connect the phone with USB debugging on, or pair it for wireless debugging in Phone Mirror</td></tr>
+              <tr><td><code>waitingForServer</code></td><td>Waiting for the phone's head unit server</td><td>The phone is there but nothing listens on its port 5277</td><td>On the phone: Android Auto settings &rarr; &#8942; &rarr; <em>Start head unit server</em> (no menu: tap <em>Version</em> about 10 times first)</td></tr>
+              <tr><td><code>needsCertificate</code></td><td>Android Auto needs a certificate</td><td>No certificate at <code>androidAutoCertPath</code> / in the certificate folder, or no key next to it</td><td>Put the certificate and key where the status says (<a href="#aa-native-cert">above</a>)</td></tr>
+              <tr><td><code>running</code></td><td>(the phone's picture)</td><td>Session up: "Android Auto on &lt;phone&gt;"; <code>phoneName</code> holds the name the phone reported</td><td>--</td></tr>
+              <tr><td><code>error</code></td><td>Android Auto stopped ("Retrying on its own.")</td><td>adb not found, the port forward failed, the head unit server did not answer within 10 s, the certificate or TLS handshake failed, the phone closed the connection, or the phone stopped answering pings for 10 s</td><td>Read the status line; see <a href="troubleshooting.html#android-auto">Troubleshooting</a>. A server that accepts but does not answer needs <em>Stop head unit server</em> / <em>Start head unit server</em> on the phone</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="aa-native-inside">
+          <h3>How the built-in receiver works</h3>
+          <ol class="steps">
+            <li><strong>Find the phone</strong> (off the GUI thread, <code>QtConcurrent</code>) -- <code>adb devices</code>, then the same
+              serial choice as Phone Mirror (<code>PhoneMirrorManager::pickSerial()</code>, preferring the last phone).</li>
+            <li><strong>Check the head unit server</strong> -- <code>adb shell cat /proc/net/tcp6 /proc/net/tcp</code> must show a listening
+              socket on local port 5277 (<code>:149D</code>, state <code>0A</code>). <code>dumpsys</code> is not used: it can't tell a running
+              service from a stale record.</li>
+            <li><strong>Forward</strong> -- <code>adb forward tcp:0 tcp:5277</code> picks a free local port, so it never collides with a DHU
+              forward or a mirroring tunnel; the forward is removed when the session ends.</li>
+            <li><strong>Session</strong> -- an <code>AapConnection</code> on its own thread connects to <code>127.0.0.1:&lt;port&gt;</code> and
+              runs an <code>AapSession</code>: version exchange, TLS 1.2 with the head-unit certificate (OCTAVE is the TLS client), auth
+              complete, then service discovery, where OCTAVE announces video, three audio sinks, a microphone, a touchscreen and sensors
+              (driving status, night mode). From TCP connect to discovery it allows 10 s. Every video frame and audio packet is acknowledged;
+              OCTAVE pings every 1.5 s.</li>
+            <li><strong>Media</strong> -- H.264 goes through <code>H264Decoder</code> into the page's <code>QVideoSink</code>; PCM goes to one
+              <code>QAudioSink</code> per stream with at most 500 ms queued.</li>
+            <li><strong>End</strong> -- the close button and application quit send a bye-bye and wait for the phone's answer (quit waits up to
+              3 s): a session cut off mid-stream can leave the phone's head unit server accepting connections but never answering.</li>
+          </ol>
+          <p>Byte layouts and the message flow: <span class="file-path">docs/ANDROID_AUTO_PROTOCOL.md</span>. Plan, phases and risks:
+            <span class="file-path">TODO/android-auto-native-receiver.md</span>. The protocol core is tested without a phone by
+            <code>tst_androidauto</code> (<a href="development.html#testing">Development</a>).</p>
         </section>
 
         <section id="aa-manager">
           <h3>AndroidAutoManager</h3>
+          <p>The built-in backend's members are marked experimental in the published API (<code>Q_CLASSINFO("octave.experimental", ...)</code>):
+            they may still change without a protocol version bump. The mobile stub keeps their names with inert values
+            (<code>backend</code> <code>"dhu"</code>, <code>nativeAvailable</code> false, <code>nativeState</code> <code>"idle"</code>).</p>
           <h4>Signals</h4>
           <table>
             <thead><tr><th>Signal</th><th>Parameters</th><th>Description</th></tr></thead>
             <tbody>
-              <tr><td><code>connectionProgress</code></td><td><code>str</code></td><td>Human-readable status updates ("Setting up ADB port forwarding...", "Waiting for head unit server... (Ns)", "Android Auto running")</td></tr>
-              <tr><td><code>error</code></td><td><code>str</code></td><td>Error messages; the view switches to its error page</td></tr>
+              <tr><td><code>connectionProgress</code></td><td><code>str</code></td><td>DHU: human-readable status updates ("Setting up ADB port forwarding...", "Waiting for head unit server... (Ns)", "Android Auto running")</td></tr>
+              <tr><td><code>error</code></td><td><code>str</code></td><td>Error messages; the DHU view switches to its error page. Built-in: also emitted when a session fails</td></tr>
               <tr><td><code>dhuWindowReady</code></td><td><code>int</code></td><td>Stand-in window handle: the DHU's process id on Windows, 0 elsewhere</td></tr>
               <tr><td><code>dhuEmbeddedChanged</code></td><td><code>bool</code></td><td>Embedding state changed (false when the DHU process ends)</td></tr>
+              <tr><td><code>backendChanged</code></td><td>--</td><td>Built-in: <code>androidAutoBackend</code> was saved</td></tr>
+              <tr><td><code>nativeStateChanged</code></td><td>--</td><td>Built-in: <code>nativeState</code>, <code>nativeStatus</code> or <code>phoneName</code> changed</td></tr>
+              <tr><td><code>videoStreamingChanged</code></td><td>--</td><td>Built-in: the phone started or stopped sending video</td></tr>
+              <tr><td><code>videoSinkChanged</code></td><td>--</td><td>Built-in: <code>videoSink</code> was set</td></tr>
             </tbody>
           </table>
           <h4>Properties</h4>
@@ -850,9 +1025,17 @@
               <tr><td><code>isDhuEmbedded</code></td><td><code>bool</code></td><td>Whether a DHU is considered embedded/running</td></tr>
               <tr><td><code>dhuWindowHandle</code></td><td><code>int</code></td><td>Native window handle of the DHU (see above for what it really holds)</td></tr>
               <tr><td><code>dhuCapture</code></td><td><code>QObject</code></td><td>The <code>DhuCapture</code> instance</td></tr>
+              <tr><td><code>backend</code></td><td><code>str</code></td><td><code>"native"</code> or <code>"dhu"</code>, from <code>androidAutoBackend</code>; always <code>"dhu"</code> when <code>nativeAvailable</code> is false</td></tr>
+              <tr><td><code>nativeAvailable</code></td><td><code>bool</code></td><td>The build has the built-in receiver (<code>OCTAVE_HAVE_NATIVE_AA</code>; constant)</td></tr>
+              <tr><td><code>nativeState</code></td><td><code>str</code></td><td><code>idle</code> | <code>connecting</code> | <code>waitingForPhone</code> | <code>waitingForServer</code> | <code>needsCertificate</code> | <code>running</code> | <code>error</code> (<a href="#aa-native-states">table above</a>)</td></tr>
+              <tr><td><code>nativeStatus</code></td><td><code>str</code></td><td>The same state in a sentence for a person, including what to do</td></tr>
+              <tr><td><code>phoneName</code></td><td><code>str</code></td><td>The device name the phone reported in service discovery</td></tr>
+              <tr><td><code>videoStreaming</code></td><td><code>bool</code></td><td>The phone is sending video</td></tr>
+              <tr><td><code>certificateDir</code></td><td><code>str</code></td><td><code>&lt;config dir&gt;/android-auto</code>, where <code>headunit.crt</code> + <code>headunit.key</code> are looked for when <code>androidAutoCertPath</code> is empty (constant)</td></tr>
+              <tr><td><code>videoSink</code></td><td><code>QObject</code></td><td>Read/write: the <code>QVideoSink</code> of the page's <code>VideoOutput</code>, set by the view</td></tr>
             </tbody>
           </table>
-          <h4>Slots</h4>
+          <h4>Slots and invokables</h4>
           <table>
             <thead><tr><th>Slot</th><th>Returns</th><th>Description</th></tr></thead>
             <tbody>
@@ -860,10 +1043,33 @@
               <tr><td><code>getDhuInstallInstructions()</code></td><td><code>str</code></td><td>Android Studio &rarr; SDK Manager &rarr; SDK Tools &rarr; "Android Auto Desktop Head Unit Emulator"</td></tr>
               <tr><td><code>sendDhuClick(x, y)</code></td><td>--</td><td>Forwards to <code>DhuCapture.sendMouseClick</code>; not called by any QML</td></tr>
               <tr><td><code>closeDhu()</code></td><td>--</td><td>Stop capture, terminate the DHU (5 s, then kill), reset state</td></tr>
-              <tr><td><code>cleanup()</code></td><td>--</td><td><code>closeDhu()</code> plus <code>adb forward --remove tcp:5277</code> (only its own forward); called at application quit</td></tr>
+              <tr><td><code>cleanup()</code></td><td>--</td><td>Ends a built-in session with a bye-bye (waiting up to 3 s), then <code>closeDhu()</code> plus <code>adb forward --remove tcp:5277</code> (only its own forward); called at application quit</td></tr>
+              <tr><td><code>startNative()</code></td><td><code>bool</code></td><td>Built-in: start connecting and keep retrying until <code>stopNative()</code>. False when it can't even begin (<code>nativeState</code> says why); true when already connecting or running</td></tr>
+              <tr><td><code>stopNative()</code></td><td>--</td><td>Built-in: stop retrying, end a session with a bye-bye, remove the forward; back to <code>idle</code></td></tr>
+              <tr><td><code>injectTouch(pointerId, action, x, y)</code></td><td>--</td><td>Built-in: a touch on the picture; <code>action</code> 0 down / 1 up / 2 move, <code>x</code> / <code>y</code> in 0..1 of the video. Ignored unless <code>running</code>; a move or release without its press is dropped</td></tr>
+              <tr><td><code>setViewVisible(visible)</code></td><td>--</td><td>Built-in: the page is on screen; false tells the phone to stop sending video (audio continues)</td></tr>
             </tbody>
           </table>
+          <p>Not invokable from QML, wired by <code>AppCore</code>: <code>setSettingsManager()</code>, <code>setVolume()</code> /
+            <code>setMuted()</code> (from <code>VolumeController</code>), <code>setAudioOutputDevice()</code> (the <code>audioOutputDevice</code>
+            setting) and <code>setNightMode()</code> (from <code>themeCatalog</code>).</p>
         </section>
+
+        <section id="aa-status">
+          <h3>Google DHU backend: what actually works</h3>
+          <div class="info-box warning">
+            <div class="info-box-title">Platform status (Google DHU backend)</div>
+            With the DHU backend, Android Auto does not show inside OCTAVE. The manager launches and stops the DHU and performs the adb setup, but never
+            locates the DHU window, so the DHU stays in its own window (started minimized on Windows). On <strong>Windows</strong> the
+            100 ms x 50 window poll times out after 5 s; 2 s later the process id is used as a stand-in handle and
+            <code>dhuEmbeddedChanged(true)</code> / <code>dhuWindowReady</code> fire, but no capture starts. On <strong>Linux and
+            macOS</strong>, 3 s after launch the manager hands <code>DhuCapture</code> the handle 0; <code>startCapture()</code> refuses it
+            with "No window handle set" (the view's error page flashes up) and the manager then reports the DHU as embedded anyway.
+            In both cases the view ends up black behind the close button, and <code>EmbeddedDhuItem</code> only tracks state.
+            <code>sendMouseClick()</code> is a stub. The header comments call this out as intentional ("DHU is rarely used").
+          </div>
+        </section>
+
 
         <section id="aa-dhu">
           <h3>Google DHU Integration</h3>
