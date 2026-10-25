@@ -21,6 +21,7 @@
 
 #ifdef OCTAVE_HAVE_NATIVE_AA
 #include "../android_auto/aapconnection.h"
+#include "../android_auto/aaptls.h"
 #endif
 
 #include <QDir>
@@ -33,16 +34,20 @@
 #include <QTimer>
 #include <QtConcurrent>
 
+namespace {
+constexpr int kRetryMs = 3000;          // phone or head unit server not there yet
+constexpr int kRetryAfterErrorMs = 8000;
+}
+
 #ifdef OCTAVE_HAVE_NATIVE_AA
 namespace {
 
-constexpr int kRetryMs = 3000;          // phone or head unit server not there yet
-constexpr int kRetryAfterErrorMs = 8000;
 constexpr int kHeadUnitServerPort = 5277;
 
 // Blocking adb call for the worker thread (runAdb() is the DHU path's, on
 // the GUI thread)
-QString adbOutput(const QString &adb, const QStringList &args, int timeoutMs, bool *ok = nullptr)
+QString adbOutput(const QString &adb, const QStringList &args, int timeoutMs, bool *ok = nullptr,
+                  bool stdoutOnly = false)
 {
     QProcess proc;
     proc.setProgram(adb);
@@ -58,7 +63,8 @@ QString adbOutput(const QString &adb, const QStringList &args, int timeoutMs, bo
         proc.kill();
     if (ok)
         *ok = done && proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0;
-    return QString::fromUtf8(proc.readAllStandardOutput() + proc.readAllStandardError()).trimmed();
+    const QByteArray out = proc.readAllStandardOutput();
+    return QString::fromUtf8(stdoutOnly ? out : out + proc.readAllStandardError()).trimmed();
 }
 
 struct StepResult {
@@ -96,7 +102,7 @@ StepResult prepare(const QString &adb, const QString &preferredSerial)
     bool ok = false;
     const QString out = adbOutput(adb, {QStringLiteral("-s"), r.serial, QStringLiteral("forward"),
                                         QStringLiteral("tcp:0"),
-                                        QStringLiteral("tcp:%1").arg(kHeadUnitServerPort)}, 8000, &ok);
+                                        QStringLiteral("tcp:%1").arg(kHeadUnitServerPort)}, 8000, &ok, true);
     r.port = out.toInt();
     if (!ok || r.port <= 0) {
         r.state = QStringLiteral("error");
@@ -119,8 +125,11 @@ void AndroidAutoManager::setSettingsManager(SettingsManager *settings)
     if (!settings)
         return;
     connect(settings, &SettingsManager::genericSettingChanged, this, [this](const QString &key) {
-        if (key == QLatin1String("androidAutoBackend"))
+        if (key == QLatin1String("androidAutoBackend")) {
+            if (backend() != QLatin1String("native"))
+                stopNative();
             emit backendChanged();
+        }
     });
 }
 
@@ -198,7 +207,19 @@ void AndroidAutoManager::setViewVisible(bool visible)
 #ifdef OCTAVE_HAVE_NATIVE_AA
     if (m_aap)
         m_aap->setVideoFocus(visible);
+    // Retries pause while the page is away and nothing is connected
+    if (visible && m_nativeWanted && !(m_aap && m_aap->isActive()) && m_retryTimer && !m_stepRunning)
+        m_retryTimer->start(0);
 #endif
+}
+
+void AndroidAutoManager::scheduleRetry(int ms)
+{
+    // Off the page with no session there is nothing to show: look for the
+    // phone again when the page comes back (setViewVisible) rather than
+    // running adb every few seconds in the background
+    if (m_retryTimer && m_viewVisible)
+        m_retryTimer->start(ms);
 }
 
 void AndroidAutoManager::setNativeState(const QString &state, const QString &status)
@@ -273,14 +294,25 @@ void AndroidAutoManager::nativeStep()
     QString why;
     if (!loadCertificate(cert, key, why)) {
         setNativeState(QStringLiteral("needsCertificate"), why);
-        m_retryTimer->start(kRetryMs);
+        scheduleRetry(kRetryMs);
         return;
+    }
+    // Parse it now: a bad PEM or a mismatched key found only after the
+    // connection is open would drop it mid-handshake, again and again
+    {
+        AapTls check;
+        if (!check.init(cert, key.isEmpty() ? cert : key)) {
+            setNativeState(QStringLiteral("needsCertificate"),
+                           QStringLiteral("The head-unit certificate can't be used: %1").arg(check.error()));
+            scheduleRetry(kRetryAfterErrorMs);
+            return;
+        }
     }
     const QString adb = findAdbPath();
     if (adb.isEmpty()) {
         setNativeState(QStringLiteral("error"), QStringLiteral("adb was not found (it comes with OCTAVE's "
                                                                "platform tools, or the Android SDK)."));
-        m_retryTimer->start(kRetryAfterErrorMs);
+        scheduleRetry(kRetryAfterErrorMs);
         return;
     }
     if (m_nativeState == QLatin1String("idle") || m_nativeState == QLatin1String("error"))
@@ -302,7 +334,7 @@ void AndroidAutoManager::nativeStep()
         }
         if (!r.state.isEmpty()) {
             setNativeState(r.state, r.status);
-            m_retryTimer->start(r.state == QLatin1String("error") ? kRetryAfterErrorMs : kRetryMs);
+            scheduleRetry(r.state == QLatin1String("error") ? kRetryAfterErrorMs : kRetryMs);
             return;
         }
         m_forwardPort = r.port;
@@ -355,7 +387,10 @@ void AndroidAutoManager::nativeStep()
         m_aap->setAudioOutputDevice(m_audioDeviceId);
         m_aap->setVolume(m_muted ? 0.0f : m_volume);
         qCInfo(lcAndroidAuto) << "native: phone" << m_serial << "head unit server on local port" << m_forwardPort;
-        m_aap->start(QStringLiteral("127.0.0.1"), quint16(m_forwardPort), opt);
+        if (!m_aap->start(QStringLiteral("127.0.0.1"), quint16(m_forwardPort), opt)) {
+            removeForward();
+            scheduleRetry(kRetryMs);
+        }
     });
     watcher->setFuture(QtConcurrent::run(prepare, adb, m_serial));
 #endif
@@ -377,8 +412,7 @@ void AndroidAutoManager::onNativeFinished()
     // Still wanted: reconnect (a phone that ended the session, a dropped link)
     if (m_nativeState == QLatin1String("running"))
         setNativeState(QStringLiteral("connecting"), QStringLiteral("Reconnecting..."));
-    if (m_retryTimer)
-        m_retryTimer->start(m_nativeState == QLatin1String("error") ? kRetryAfterErrorMs : kRetryMs);
+    scheduleRetry(m_nativeState == QLatin1String("error") ? kRetryAfterErrorMs : kRetryMs);
 }
 
 void AndroidAutoManager::removeForward()

@@ -35,7 +35,7 @@ ProtoWriter &ProtoWriter::int32(int field, qint32 value)
 
 ProtoWriter &ProtoWriter::sint32(int field, qint32 value)
 {
-    return varint(field, quint64(quint32((value << 1) ^ (value >> 31))));
+    return varint(field, quint64((quint32(value) << 1) ^ quint32(value >> 31)));
 }
 
 ProtoWriter &ProtoWriter::bytes(int field, const QByteArray &value)
@@ -332,7 +332,7 @@ QByteArray byeByeResponse()
     return QByteArray();
 }
 
-QByteArray touchInputReport(qint64 timestampUs, const QList<TouchPointer> &pointers,
+QByteArray touchInputReport(qint64 timestampNs, const QList<TouchPointer> &pointers,
                             int actionIndex, TouchAction action)
 {
     ProtoWriter touch;
@@ -344,7 +344,7 @@ QByteArray touchInputReport(qint64 timestampUs, const QList<TouchPointer> &point
     }
     touch.varint(2, quint64(qMax(0, actionIndex)));
     touch.varint(3, quint64(int(action)));
-    return ProtoWriter().varint(1, quint64(timestampUs)).message(3, touch).data();
+    return ProtoWriter().varint(1, quint64(timestampNs)).message(3, touch).data();
 }
 
 int audioFocusStateFor(int requestType)

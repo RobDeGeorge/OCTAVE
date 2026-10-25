@@ -329,7 +329,9 @@ bool AapConnection::ensureSink(Aap::AudioStream stream, AudioOut &out)
     out.format.setSampleFormat(QAudioFormat::Int16);
     const QAudioDevice device = AudioOutput::preferred(m_audioDeviceId);
     if (device.isNull()) {
-        qCWarning(lcAapConn) << "no audio output device; Android Auto audio will not play";
+        if (!out.warned)
+            qCWarning(lcAapConn) << "no audio output device; Android Auto" << streamName(stream) << "audio will not play";
+        out.warned = true;
         return false;
     }
     out.sink = new QAudioSink(device, out.format, this);
@@ -340,8 +342,10 @@ bool AapConnection::ensureSink(Aap::AudioStream stream, AudioOut &out)
         qCInfo(lcAapConn) << "audio" << streamName(stream) << "plays on" << device.description()
                           << f.sampleRate << "Hz" << f.channels << "ch";
     if (!out.io) {
-        qCWarning(lcAapConn) << "could not start audio output" << device.description()
-                             << f.sampleRate << "Hz" << f.channels << "ch:" << out.sink->error();
+        if (!out.warned)
+            qCWarning(lcAapConn) << "could not start audio output" << device.description()
+                                 << f.sampleRate << "Hz" << f.channels << "ch:" << out.sink->error();
+        out.warned = true;
         return false;
     }
     return true;
@@ -394,9 +398,9 @@ void AapConnection::onAudioStreaming(Aap::AudioStream stream, bool streaming)
     emit audioStreaming(stream, streaming);
     if (streaming)
         return;
-    // Stream paused: let what is buffered play out, then free the device
+    // Stream stopped: free the device (the phone stops it after its own fade)
     auto it = m_audio.find(int(stream));
-    if (it != m_audio.end() && it->queue.isEmpty() && it->sink) {
+    if (it != m_audio.end() && it->sink) {
         it->sink->stop();
         it->sink->deleteLater();
         m_audio.erase(it);

@@ -87,6 +87,7 @@ private:
         QQueue<QByteArray> queue;
         qsizetype queued = 0;
         QAudioFormat format;
+        bool warned = false;    // a missing output is logged once per session
     };
     bool ensureSink(Aap::AudioStream stream, AudioOut &out);
 

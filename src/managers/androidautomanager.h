@@ -243,6 +243,7 @@ private:
     void setNativeState(const QString &state, const QString &status);
     void nativeStep();                  // one connect attempt, adb work off the GUI thread
     void onNativeFinished();
+    void scheduleRetry(int ms);
     void removeForward();
     bool loadCertificate(QByteArray &cert, QByteArray &key, QString &why) const;
     QVariant setting(const QString &key, const QVariant &fallback) const;
@@ -296,7 +297,7 @@ class AndroidAutoManager : public QObject
     Q_PROPERTY(QString phoneName READ phoneName CONSTANT)
     Q_PROPERTY(bool videoStreaming READ videoStreaming CONSTANT)
     Q_PROPERTY(QString certificateDir READ certificateDir CONSTANT)
-    Q_PROPERTY(QObject* videoSink READ videoSink WRITE setVideoSink CONSTANT)
+    Q_PROPERTY(QObject* videoSink READ videoSink WRITE setVideoSink)
 public:
     explicit AndroidAutoManager(QObject *parent = nullptr)
         : QObject(parent), m_provider(new DhuFrameProvider()) {}

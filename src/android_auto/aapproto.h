@@ -141,7 +141,8 @@ struct TouchPointer {
     int id = 0;
 };
 enum class TouchAction { Down = 0, Up = 1, Moved = 2, PointerDown = 5, PointerUp = 6 };
-QByteArray touchInputReport(qint64 timestampUs, const QList<TouchPointer> &pointers,
+// Timestamp in nanoseconds (as aasdk sends it)
+QByteArray touchInputReport(qint64 timestampNs, const QList<TouchPointer> &pointers,
                             int actionIndex, TouchAction action);
 
 // The audio focus state answering a request type (RELEASE → LOSS, else GAIN)
