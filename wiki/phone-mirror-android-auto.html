@@ -954,8 +954,10 @@
           <h3>What the page shows and what to do</h3>
           <p>
             Opening the page calls <code>startNative()</code>. From then on the manager keeps trying until the page's close button (X, top
-            right) calls <code>stopNative()</code>: a missing phone, head unit server or certificate is retried every 3 s, an error after 8 s.
-            Leaving the page through the nav bar keeps the session running (audio continues, video pauses). The state is
+            right) calls <code>stopNative()</code>: a missing phone, head unit server or certificate is retried every 3 s, an error after 8 s,
+            while the page is on screen. Leaving the page through the nav bar keeps a running session going (audio continues, video
+            pauses); with no session, the retries pause until the page comes back. Switching <em>Head unit</em> to Google DHU stops a
+            built-in session. A certificate or key OpenSSL can't use is caught before anything connects to the phone. The state is
             <code>nativeState</code>; the sentence under the title is <code>nativeStatus</code>.
           </p>
           <table>
