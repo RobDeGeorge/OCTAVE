@@ -1,7 +1,7 @@
 # Native Android Auto receiver (replace the DHU screen-scrape)
 
 **Goal:** let a phone run Android Auto straight into OCTAVE, first over the adb connection phone mirroring already uses, later over a plain USB accessory link, with no Google Desktop Head Unit and no extra hardware.
-**Status:** deferred — scoped, starting with the adb transport (Phases 0–2). Big subsystem (bigger than the phone-mirror client). Needs a test phone with Android Auto installed and USB debugging on; no extra hardware.
+**Status:** in progress on branch `android-auto-native` — the adb transport is proven end to end in a Python spike (2026-10-25); C++ next. Big subsystem (bigger than the phone-mirror client). Needs a test phone with Android Auto installed and USB debugging on; no extra hardware.
 **Last updated:** 2026-10-25
 
 ## Why this is parked here
@@ -22,6 +22,13 @@ It's parked because it's a large protocol implementation and it carries legal an
 ### Licensing (resolved)
 
 OCTAVE moved to GPL-3.0-or-later on 2026-10-12 (commit `3352b92`). That makes the GPLv3 references usable directly: **aasdk** (C++, the library behind OpenAuto / Crankshaft) and its `.proto` definitions can be linked or copied. **Open Headunit** (`github.com/andreknieriem/headunit`, a revival of Mike Reid's `mikereidis/headunit`) is **AGPL-3.0**: read it, don't copy from it, unless OCTAVE goes AGPL too.
+
+## Verified so far (2026-10-25)
+
+Python spike (`dev/aa-spike/`, gitignored) against an SM-S948U with Android Auto 17.9.664044 over wireless adb: the aasdk certificate is accepted, service discovery with video + three audio sinks + mic + touch + sensors opens every channel, 1280x720 H.264 and 48 kHz media PCM stream, bye-bye ends cleanly. Byte layouts and the message flow are in `docs/ANDROID_AUTO_PROTOCOL.md`. Two surprises that change the plan:
+
+- The head unit server can't be started over adb any more (`startHeadunitServer()` in `androidautomanager.cpp` fails both ways on 17.9). The user turns on Android Auto developer mode and taps *⋮ > Start head unit server* once; it then serves session after session and survives USB unplug. Onboarding has to walk through that.
+- Android Auto refuses a head unit without an audio sink and a microphone source, so audio and mic channels are part of Phase 1, not Phase 2.
 
 ## Two transports, one session
 
@@ -118,7 +125,7 @@ Update `wiki/settings-reference.html`, `wiki/settings-manager.html` and `wiki/ph
    a. Extract the shared H.264 decoder from `scrcpyclient.cpp`; phone mirroring behaves the same and its tests pass. One commit.
    b. `docs/ANDROID_AUTO_PROTOCOL.md` from aasdk: framing, the message ids and protobuf fields used, the version/auth sequence.
    c. `aaptransport.h`, `aapframer`, `aapproto`, `aapcrypto`, `aapsession` with the fake-phone tests above, behind `OCTAVE_HAVE_NATIVE_AA`. Not wired into the UI.
-1. **Spike against the phone over adb.** **Effort:** M. **Device:** desktop Linux + a phone with Android Auto developer mode, USB debugging (wired or wireless adb), and a head-unit certificate. `adbtransport` + a dev-only command that runs the session and dumps the first H.264 frames to a file to play with ffplay. Answers: does the head unit server auto-start, is the TCP framing identical, does the cert work. Stop if the handshake can't be made to work.
+1. **Spike against the phone over adb.** Done 2026-10-25 in Python (see *Verified so far*). Next: the same in C++ through `adbtransport`.
 2. **Wired video, touch, audio, sensors.** **Effort:** L. **Device:** same. Video into `AndroidAutoView.qml` through the shared decoder, frame acks, ping, touch out, media/speech/system audio through the volume system (`VolumeController::applyVolume`, never a separate volume path), driving status, night mode from `EnvironmentTheme`. Microphone for Assistant last. DHU stays the default.
 3. **Orange Pi 5 Plus + Jeep.** **Effort:** M–L. **Device:** Orange Pi 5 Plus in the Jeep + phone. Hardware decode, test in the car over the adb link the Jeep already uses for mirroring, then flip `androidAutoBackend` to `"native"`. Diagnostics export logs the session (phone model, AA version, negotiated resolution, which head-unit-server start path worked).
 4. **Windows/macOS.** **Effort:** S–M. **Device:** Windows and macOS machines + phone. The adb transport needs no USB setup, so this is mostly docs and a smoke run.
