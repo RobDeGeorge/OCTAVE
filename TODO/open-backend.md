@@ -3,7 +3,7 @@
 **Goal:** the C++ managers as a documented, language-neutral service that anyone can write an OCTAVE frontend against, in any language or toolkit, with the QML UI as the reference client rather than the only one.
 
 **Status:** the contract is done (2026-10-23): every rule a frontend needs is in C++, the service serves all of it with pairing, and five frontends in five languages (TypeScript, Python, Go, C, Rust) prove it. Left: small desktop follow-ups, checks that need the Pi, a phone or the Jeep, and the process split (parked until v1.0 has road time).
-**Last updated:** 2026-10-23
+**Last updated:** 2026-10-25
 
 Rob, 2026-10-21: "I want other individuals to feel empowered to take this backend and create a frontend in whatever style or way they want, using whatever language or tool they want." A side benefit to confirm with someone who does licensing: a frontend in another process talking over a socket is generally not a derivative work, so the backend's GPL-3.0 stays on the backend.
 
@@ -74,6 +74,6 @@ Constraints:
 2. After v1.0 has road time: CMake plan step 1 with a CI dispatch for every platform, then steps 2 and 3, then the Pi unit and a road test.
 3. Step 4 (`--connect`) only if the measurements say the split is worth it.
 
-Related: `TODO/octave-companion-app.md` item 2 (phone data link) and `TODO/user-primitives.md` (data-only widget presets) should use this service rather than their own sockets. The three XL plans in `TODO/README.md` share the "pull the H.264 decoder out of `scrcpyclient.cpp`" prerequisite.
+Related: `TODO/octave-companion-app.md` item 2 (phone data link) and `TODO/user-primitives.md` (data-only widget presets) should use this service rather than their own sockets.
 
 Delete this file when the process split has landed or has its own plan, and the hardware checks are done or moved to the device TODOs.

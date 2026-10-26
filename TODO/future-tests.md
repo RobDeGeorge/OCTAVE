@@ -4,9 +4,9 @@
 
 **Status:** deferred. A menu, not a commitment; pick an item up when work in its area starts.
 
-**Last updated:** 2026-10-18
+**Last updated:** 2026-10-25
 
-**Why parked:** the C++ QtTest suite (`tests/cpp/`, 19 tests via `octave_add_test()` in `tests/cpp/CMakeLists.txt`, run by `ctest --test-dir build --output-on-failure` in CI) already covers the subsystems that broke most often: ELM327 parsing, OBD demand polling, the simulated car, phone mirror, dashboards, settings backup/atomic write. What's left is useful but not urgent.
+**Why parked:** the C++ QtTest suite (`tests/cpp/`, 45 tests via `octave_add_test()` in `tests/cpp/CMakeLists.txt`, run by `ctest --test-dir build --output-on-failure` in CI) already covers the subsystems that broke most often: ELM327 parsing, OBD demand polling, the simulated car, phone mirror, dashboards, settings backup/atomic write. What's left is useful but not urgent.
 
 Items are ordered easiest first. Done 2026-10-18: the VolumeController test (`tst_volumecontroller`), metadata sanitizing cases in `tst_mediamanager` (which found and fixed emoji being stripped from tags), and the settings round-trip and older-file tests in `tst_settingsmanager`.
 
@@ -14,13 +14,12 @@ Items are ordered easiest first. Done 2026-10-18: the VolumeController test (`ts
 
 ## 1. Signal wiring tests
 
-**Effort:** M (~3 h, including the `main.cpp` refactor)
+**Effort:** M (~2 h)
 
-The ~27 cross-manager `connect()` calls live inline in `src/main.cpp`; only `tst_boot` exercises them, and it asserts nothing about them.
+The cross-manager `connect()` calls now live in `AppCore` (`src/appcore.cpp`), which builds every manager with no QML engine, so a test can construct one directly. Nothing asserts the wiring yet (`tst_boot` only boots).
 
 Steps:
-1. Move the cross-manager `connect()` calls into a function (e.g. `wireManagers(...)`) that both `main.cpp` and a test can call.
-2. New `tests/cpp/tst_signalwiring.cpp`; with `QSignalSpy` / `QTRY_COMPARE`, check:
+1. New `tests/cpp/tst_signalwiring.cpp` that constructs an `AppCore` (temp `XDG_CONFIG_HOME`); with `QSignalSpy` / `QTRY_COMPARE`, check:
    - `volumeController.applyVolume(75)` reaches `MediaManager::setVolume` with the curved value
    - a track change in `MediaManager` updates the playback state saved through `SettingsManager`
    - changing `obdBluetoothPort` in settings triggers `OBDManager`'s debounced reconnect
@@ -41,7 +40,7 @@ Steps:
 **Effort:** L–XL (~2 days initial, plus recording time in the car; ongoing as cars are added)
 **Unblocks:** any large change to `obdmanager.cpp`. Without it, refactoring the OBD worker is "refactor and pray."
 
-`tst_obdsim` drives the real `OBDManager` through `OBDConnectionWorker::setCustomTransport()` with `src/dev/simelm327`, but the simulator only speaks the dialect we wrote.
+`tst_obdsim` drives the real `OBDManager` through `OBDConnectionWorker::setCustomTransport()` with `src/sim/simelm327`, but the simulator only speaks the dialect we wrote.
 
 Steps:
 1. Add a capture mode (or a logging transport) that records adapter request/response pairs with timing.

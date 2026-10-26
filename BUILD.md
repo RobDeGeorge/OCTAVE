@@ -63,6 +63,12 @@ for the MCP / screenshot / perf tooling) and links Qt Test. The simulated car it
 SQLite (for the OBD black box) is compiled in from `third_party/sqlite/`, so no
 `libsqlite3` / Qt Sql driver package is needed at build or run time.
 
+The AirPlay receiver (an iPhone mirrors to OCTAVE; UxPlay's library is compiled
+in from `third_party/uxplay/`) is built when libplist, OpenSSL and libavcodec
+are all found: `sudo apt install libplist-dev libssl-dev libavcodec-dev`
+(Arch: `libplist openssl ffmpeg`). Without them CMake prints
+`AirPlay receiver ...: OFF` and the rest builds as before.
+
 ```bash
 sudo apt install -y build-essential cmake ninja-build pkg-config \
                     libgl1-mesa-dev libxkbcommon-dev libfontconfig1 libdbus-1-3 \
@@ -161,7 +167,7 @@ CI uses **vcpkg** to provide `taglib` and `ffmpeg[core,avcodec]` and pins Qt 6.7
 > FFmpeg packages are GPL builds that pull x264, x265, xvid and a dozen codec libraries into the
 > package. The Linux and macOS release jobs instead run
 > `bash packaging/ffmpeg/build-h264-decoder.sh <prefix>` (FFmpeg 9.0.2, pinned by SHA-256 and
-> checked against FFmpeg's signing key; H.264 decoder only, static, LGPL-2.1-or-later; needs
+> checked against FFmpeg's signing key; H.264, AAC and ALAC decoders only, static, LGPL-2.1-or-later; needs
 > `nasm` on x86_64) and configure with `-DOCTAVE_FFMPEG_ROOT=<prefix>`. Windows uses vcpkg's
 > `ffmpeg[core,avcodec]`, which is LGPL too. `--smoke` logs `libavcodec <version> license: …` and
 > the Windows job fails unless it starts with `LGPL`; the x86_64 AppImage and macOS jobs fail if

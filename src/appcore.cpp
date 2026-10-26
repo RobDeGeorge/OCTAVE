@@ -102,6 +102,13 @@ AppCore::AppCore(const QDir &frontendDir, Units *units)
     expose("androidAutoManager", &androidAutoManager);
     expose("phoneMirrorManager", &phoneMirrorManager);
     wirePhoneMirror();
+    // An iPhone over AirPlay (screen and audio), touch through a Bluetooth
+    // mouse; the same audio output as local music
+    airPlayManager.setAudioOutputDevice(settingsManager.audioOutputDevice());
+    QObject::connect(&mediaManager, &MediaManager::audioOutputsChanged, &airPlayManager,
+                     [this] { airPlayManager.setAudioOutputDevice(settingsManager.audioOutputDevice()); });
+    airPlayManager.setSettingsManager(&settingsManager);
+    expose("airPlayManager", &airPlayManager);
 
     // What is playing and its controls, whichever source has them (the phone
     // while mirroring, else OCTAVE's player); also the handoff between the two.
@@ -282,6 +289,7 @@ void AppCore::wireVolume()
         mediaManager.setVolume(linear);
         phoneMirrorManager.setVolume(linear);
         androidAutoManager.setVolume(linear);
+        airPlayManager.setVolume(linear);
 #ifndef Q_OS_MOBILE
         esp32VolumeManager.send_volume_update(percent);
 #else
@@ -296,12 +304,14 @@ void AppCore::wireVolume()
         mediaManager.setMuted(muted);
         phoneMirrorManager.setMuted(muted);
         androidAutoManager.setMuted(muted);
+        airPlayManager.setMuted(muted);
 #ifndef Q_OS_MOBILE
         esp32VolumeManager.send_mute_state(muted);
 #endif
     });
     phoneMirrorManager.setMuted(volumeController.muted());
     androidAutoManager.setMuted(volumeController.muted());
+    airPlayManager.setMuted(volumeController.muted());
 }
 
 void AppCore::wireInputs()

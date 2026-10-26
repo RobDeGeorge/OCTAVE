@@ -292,6 +292,7 @@ ApplicationWindow {
             "SettingsMenu.qml":     { file: "SettingsMenu.qml",     props: { stackView: stackView, mainWindow: mainWindow, initialSection: "displaySettings" } },
             "PhoneMirrorView.qml":  { file: "PhoneMirrorView.qml",  props: { stackView: stackView } },
             "AndroidAutoView.qml":  { file: "AndroidAutoView.qml",  props: { stackView: stackView } },
+            "AirPlayView.qml":      { file: "AirPlayView.qml",      props: { stackView: stackView } },
             "SensorHome.qml":       { file: "SensorHome.qml",       props: { stackView: stackView, mainWindow: mainWindow } },
             "SensorMenu.qml":       { file: "SensorMenu.qml",       props: { stackView: stackView, mainWindow: mainWindow } },
             "CarMenu.qml":          { file: "CarMenu.qml",          props: { stackView: stackView, mainWindow: mainWindow } },
@@ -998,6 +999,15 @@ ApplicationWindow {
         function onConnectionLostUnexpectedly(reason) {
             if (!mainWindow._pageShowsObdStatus())
                 errorToast.show("OBD connection lost" + (reason ? ": " + reason : ""))
+        }
+    }
+
+    // An iPhone that starts mirroring over AirPlay comes up on screen: the
+    // driver picked OCTAVE on the phone, so showing it is what they asked for
+    Connections {
+        target: typeof airPlayManager !== "undefined" ? airPlayManager : null
+        function onMirroringStarted() {
+            stackView.openPage("AirPlayView.qml")
         }
     }
 

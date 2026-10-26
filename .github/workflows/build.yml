@@ -74,7 +74,7 @@ jobs:
             build-essential cmake ninja-build pkg-config \
             libtag1-dev libavcodec-dev libavutil-dev libgl1-mesa-dev libegl1-mesa-dev \
             libxcb-xinerama0 libxcb-cursor0 libxkbcommon-dev \
-            libpulse-dev libssl-dev
+            libpulse-dev libssl-dev libplist-dev
 
       - name: Install Qt 6
         uses: jurplel/install-qt-action@v4
@@ -496,7 +496,7 @@ jobs:
             build-essential cmake ninja-build pkg-config nasm \
             libtag1-dev libgl1-mesa-dev libegl1-mesa-dev \
             libxcb-xinerama0 libxcb-cursor0 libxkbcommon-dev \
-            libpulse-dev libfuse2 libssl-dev wget file
+            libpulse-dev libfuse2 libssl-dev libplist-dev wget file
 
       - name: Build the H.264 decoder (static LGPL FFmpeg)
         run: bash packaging/ffmpeg/build-h264-decoder.sh "$RUNNER_TEMP/ffmpeg"
@@ -567,7 +567,7 @@ jobs:
             libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 libgstreamer-plugins-bad1.0-0 \
             libgl1-mesa-dev libegl1-mesa-dev \
             libxcb-xinerama0 libxcb-cursor0 libxkbcommon-dev \
-            libpulse-dev libfuse2 libssl-dev wget file
+            libpulse-dev libfuse2 libssl-dev libplist-dev wget file
 
       # The distro FFmpeg above is for Qt's media plugin, which the arm64 Qt
       # package links against libavcodec.so.58 (linuxdeploy bundles it);

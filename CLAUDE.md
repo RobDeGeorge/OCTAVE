@@ -70,6 +70,7 @@ Key managers (`src/managers/*.{h,cpp}`):
 - `gesturemanager` — PAJ7620U2 gesture sensor
 - `audioanalyzer` — FFT waveform visualization
 - `androidautomanager`, `phonemirrormanager` — Android Auto / phone mirroring (built-in scrcpy-protocol client in `src/phone_mirror/`, no external scrcpy)
+- `airplaymanager` — an iPhone over AirPlay: OCTAVE is the receiver (UxPlay's library compiled in from `third_party/uxplay/`, wrapped by `src/airplay/airplayreceiver`; `OCTAVE_HAVE_AIRPLAY` needs libplist + OpenSSL + libavcodec, Linux so far) and, for touch, a Bluetooth LE mouse (`src/platform/bluezhidmouse`, BlueZ; taps become pointer moves in `src/airplay/pointerpath`). New Bluetooth pairings only inside the window `pairTouch()` opens; never auto-accept pairing outside it
 - `triprecorder` + `tripstore` — the black box: every OBD reading of every drive into `<config>/history/blackbox.sqlite` (SQLite compiled in from `third_party/sqlite/`, own thread; never go through Qt Sql, its driver is a separate runtime plugin that the Jeep's Ubuntu box did not have) plus one CSV + JSON per trip under `history/trips/`; taps `OBDManager::parameterSampled` and registers a background poll sweep (`setBackgroundDemand`) for every PID the vehicle supports. Viewer: `frontend/TripHistory.qml`
 - `frontendmanager` (+ `frontendsupervisor`) — installable frontends: the active screen, running and restarting an exec frontend with fall-back to QML (service object `frontendManager`)
 - `clock`, `networkmanager`, `volumecontroller` — self-explanatory

@@ -19,6 +19,10 @@ Third-party code bundled in this repository:
 - phone_server/: fork of the scrcpy server, Apache License 2.0 (see phone_server/LICENSE.scrcpy)
 - SQLite 3.54.1 amalgamation, public domain (https://sqlite.org/copyright.html).
   third_party/sqlite/sqlite3.{c,h}, compiled in for the black box trip store
+- UxPlay 1.74 AirPlay library (https://github.com/FDH2/UxPlay), compiled in for
+  the AirPlay receiver (Linux builds): the server code and its mDNS responder
+  LGPL-2.1-or-later, playfair GPL-3.0, llhttp MIT; the whole GPL-3.0
+  (third_party/uxplay/LICENSE, README.md)
 - Fonts in frontend/assets/fonts/, all under the SIL Open Font License 1.1
   (full text: frontend/assets/fonts/symbols/OFL.txt):
   - Google Sans, Copyright 2025 The Google Sans Project Authors
@@ -31,8 +35,9 @@ Third-party code bundled in this repository:
 Third-party libraries in the release packages (not in this repository):
 
 - FFmpeg 9.0.2 libavcodec + libavutil, LGPL-2.1-or-later, linked statically
-  into the Linux and macOS releases for the phone mirror's video. Built with
-  the H.264 decoder only (no GPL parts, no external codec libraries) by
+  into the Linux and macOS releases for the phone mirror's and AirPlay's video
+  and AirPlay's audio. Built with the H.264, AAC and ALAC decoders only (no GPL
+  parts, no external codec libraries) by
   packaging/ffmpeg/build-h264-decoder.sh from the signed release tarball
   https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz; that script holds the exact
   configure flags. To relink OCTAVE against another FFmpeg, build from this
@@ -46,4 +51,5 @@ Third-party libraries in the release packages (not in this repository):
   source: https://launchpad.net/ubuntu/+source/ffmpeg (jammy-updates) and the
   x264, x265 and xvidcore source packages of the same release.
 - TagLib (LGPL-2.1 / MPL-1.1), linked dynamically, desktop only.
+- libplist 2.x (LGPL-2.1-or-later), linked dynamically, Linux only (AirPlay).
 - Android platform-tools (adb), Apache-2.0, shipped next to the binary.

@@ -527,6 +527,32 @@ Item {
                     wrapMode: Text.WordWrap
                     horizontalAlignment: Text.AlignHCenter
                 }
+
+                // An iPhone mirrors over AirPlay instead (AirPlayView.qml)
+                Button {
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: typeof airPlayManager !== "undefined" && airPlayManager.available
+                    text: "Using an iPhone? Mirror it with AirPlay"
+                    font.pixelSize: dp(15)
+                    font.family: phoneMirrorView.globalFont
+                    onClicked: stackView.openPage("AirPlayView.qml")
+                    background: Rectangle {
+                        implicitHeight: dp(44)
+                        radius: dpMin(8, 2)
+                        color: "transparent"
+                        border.color: App.Style.accent
+                        border.width: 2
+                    }
+                    contentItem: Text {
+                        text: parent.text
+                        font: parent.font
+                        color: App.Style.primaryTextColor
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        leftPadding: dp(14)
+                        rightPadding: dp(14)
+                    }
+                }
             }
 
             // Error state
@@ -566,6 +592,32 @@ Item {
                     wrapMode: Text.WordWrap
                     horizontalAlignment: Text.AlignHCenter
                     Layout.maximumWidth: parent.width
+                }
+
+                // An iPhone mirrors over AirPlay instead (AirPlayView.qml)
+                Button {
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: typeof airPlayManager !== "undefined" && airPlayManager.available
+                    text: "Using an iPhone? Mirror it with AirPlay"
+                    font.pixelSize: dp(15)
+                    font.family: phoneMirrorView.globalFont
+                    onClicked: stackView.openPage("AirPlayView.qml")
+                    background: Rectangle {
+                        implicitHeight: dp(44)
+                        radius: dpMin(8, 2)
+                        color: "transparent"
+                        border.color: App.Style.accent
+                        border.width: 2
+                    }
+                    contentItem: Text {
+                        text: parent.text
+                        font: parent.font
+                        color: App.Style.primaryTextColor
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        leftPadding: dp(14)
+                        rightPadding: dp(14)
+                    }
                 }
 
                 // Phone-side failure: we retry on our own

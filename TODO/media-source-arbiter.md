@@ -1,6 +1,6 @@
 # One media source at a time: local, phone mirror, Android Auto
 
-**Status:** mostly done (branch `android-auto-native`); left: checks by ear, phone mirror on the same rules
+**Status:** mostly done (on `main`); left: checks by ear, phone mirror on the same rules
 **Last updated:** 2026-10-25
 
 **Goal:** exactly one source owns music at any moment, only a user action changes the owner, and navigation prompts / Assistant / calls interrupt the owner without taking it over.
@@ -24,7 +24,7 @@ OCTAVE now has three things that play music: its own player (`MediaManager`), th
 - **Phone mirror:** scrcpy doesn't ask, OCTAVE sees playback after it started. Keep the current hand-off (phone starts → it owns); add the same touch-recency check so the phone resuming by itself on connect doesn't take over from local (today the phone's *first* report takes the controls even when paused: `PhoneMirrorManager::onMediaState`, `firstReport`).
 - **Local:** pressing play / picking a track in OCTAVE's player.
 
-## Done (2026-10-25, branch `android-auto-native`)
+## Done (2026-10-25)
 
 Steps 1-3 of the first plan: OCTAVE decides Android Auto's media focus (`AapSession::Options::externalAudioFocus`), media keys, the media playback status channel, `AndroidAutoMedia`, the rules in `NowPlaying` (`source` = `"androidauto"`, `useLocal()`), ducking under guidance / system sounds, pausing for the mic, `mediaLastSource` / `mediaLastPlaying` and the resume. Checked against the phone (Android Auto 17.9): refusal on connect and on a background start, grant after a tap, OCTAVE's play / pause, local taking the music back, resume after a restart, the Media Room / home card showing Android Auto's track. Rules table: `wiki/phone-mirror-android-auto.html#aa-native-music`. Found on the way: answering LOSS to a GAIN request makes Android Auto loop; refusing is grant + unsolicited LOSS (`docs/ANDROID_AUTO_PROTOCOL.md`, *Audio focus*).
 

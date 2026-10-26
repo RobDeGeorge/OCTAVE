@@ -347,7 +347,7 @@ PhoneMirrorManager::Probe PhoneMirrorManager::probeDevices() const
                                     "restarting the adb server, which drops the phone. Close it, or make both use "
                                     "the same adb.");
     else if (probe.state == QLatin1String("none") && iosDeviceOnUsb())
-        probe.hint = QStringLiteral("An iPhone is plugged in. Phone mirroring works with Android phones only.");
+        probe.hint = QStringLiteral("An iPhone is plugged in. Phone mirroring is for Android phones; an iPhone mirrors over AirPlay.");
     // Names for the picker, only when there is something to pick
     int usable = 0;
     for (const auto &r : std::as_const(probe.rows))

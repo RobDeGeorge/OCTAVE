@@ -5,6 +5,166 @@
 export interface ModelSummary { model: true; count: number; roles: string[] }
 
 
+/** airPlayManager (AirPlayManager) */
+export interface AirPlayManager {
+  properties: {
+    /**
+     * bool, constant
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    available: boolean
+    /**
+     * bool, notify enabledChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    enabled: boolean
+    /**
+     * QString, notify stateChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    state: string
+    /**
+     * QString, notify stateChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    status: string
+    /**
+     * QString, notify stateChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    receiverName: string
+    /**
+     * QString, notify stateChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    deviceName: string
+    /**
+     * QString, notify stateChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    deviceModel: string
+    /**
+     * QString, notify stateChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    pin: string
+    /**
+     * bool, notify stateChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    mirroring: boolean
+    /**
+     * bool, notify stateChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    audioStreaming: boolean
+    /**
+     * int, notify frameSizeChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    frameWidth: number
+    /**
+     * int, notify frameSizeChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    frameHeight: number
+    /**
+     * QString, notify mediaChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    title: string
+    /**
+     * QString, notify mediaChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    artist: string
+    /**
+     * QString, notify mediaChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    album: string
+    /**
+     * QStringList, notify stateChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    addresses: string[]
+    /**
+     * QObject*, writable, notify videoSinkChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    videoSink: unknown
+    /**
+     * bool, constant
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    touchAvailable: boolean
+    /**
+     * bool, notify touchChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    touchEnabled: boolean
+    /**
+     * QString, notify touchChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    touchState: string
+    /**
+     * QString, notify touchChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    touchStatus: string
+    /**
+     * QString, notify touchChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    touchDevice: string
+    /**
+     * bool, notify touchChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    touchPairing: boolean
+    /**
+     * bool, notify touchChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    touchCalibrating: boolean
+  }
+  methods: {
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    setEnabled: { args: [enabled: boolean]; returns: void }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    setTouchEnabled: { args: [enabled: boolean]; returns: void }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    pairTouch: { args: [open: boolean] | []; returns: void }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    injectTouch: { args: [pointerId: number, action: number, x: number, y: number]; returns: void }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    scroll: { args: [dx: number, dy: number]; returns: void }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    calibrateTouch: { args: []; returns: void }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    cancelCalibration: { args: []; returns: void }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    forgetDevices: { args: []; returns: void }
+  }
+  signals: {
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    enabledChanged: []
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    stateChanged: []
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    mediaChanged: []
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    frameSizeChanged: []
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    videoSinkChanged: []
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    touchChanged: []
+    mirroringStarted: []
+    audioStreamingChanged: [streaming: boolean]
+  }
+}
+
 /** androidAutoManager (AndroidAutoManager) */
 export interface AndroidAutoManager {
   properties: {
@@ -1648,6 +1808,7 @@ export interface VolumeController {
 
 /** Every object the service exposes, by its name in `hello`. */
 export interface Objects {
+  airPlayManager: AirPlayManager
   androidAutoManager: AndroidAutoManager
   audioAnalyzer: AudioAnalyzer
   berryIMU: BerryIMUManager

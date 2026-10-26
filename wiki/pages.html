@@ -33,6 +33,7 @@
             <li><a href="#clockmenu">ClockMenu</a></li>
             <li><a href="#phonemirror">PhoneMirrorView</a></li>
             <li><a href="#androidauto">AndroidAutoView</a></li>
+            <li><a href="#airplay">AirPlayView</a></li>
             <li><a href="#settingsmenu">SettingsMenu and its Layouts</a></li>
             <li><a href="#nowplayingstudio">NowPlayingStudio</a></li>
             <li><a href="#navigation-summary">Navigation Summary</a></li>
@@ -61,6 +62,7 @@
             <tr><td><a href="#clockmenu">ClockMenu</a></td><td>&mdash;</td><td><code>stackView</code>, <code>mainWindow</code> (required)</td><td>BottomBar clock; <code>navigateTo("ClockMenu.qml")</code> (command server / screenshot sweeper)</td></tr>
             <tr><td><a href="#phonemirror">PhoneMirrorView</a></td><td><code>phoneMirrorView</code></td><td><code>stackView</code>, <code>mainWindow</code> (plain)</td><td>BottomBar Phone Mirror (desktop only)</td></tr>
             <tr><td><a href="#androidauto">AndroidAutoView</a></td><td>&mdash;</td><td><code>stackView</code>, <code>mainWindow</code> (plain)</td><td>BottomBar Android Auto (desktop only)</td></tr>
+            <tr><td><a href="#airplay">AirPlayView</a></td><td>&mdash;</td><td><code>stackView</code>, <code>mainWindow</code> (plain)</td><td>Opens by itself when an iPhone starts mirroring; Phone Mirror's "Using an iPhone?" button; the phone button while an iPhone mirrors</td></tr>
             <tr><td><a href="#settingsmenu">SettingsMenu</a></td><td><code>settingsMenu</code></td><td><code>stackView</code>, <code>mainWindow</code>, <code>initialSection</code> (required)</td><td>BottomBar Settings, <code>navigateToSettings()</code></td></tr>
             <tr><td>DashboardEditor (<span class="file-path">dashboards/editor/</span>)</td><td>&mdash;</td><td><code>stackView</code>, <code>callerPage</code>, optional <code>editingId</code> / <code>draftJson</code></td><td>OBDMenu chooser (+ New, Edit, &#9650; Draft); see <a href="gauges-dashboards.html#editor">Gauges &amp; Dashboards</a></td></tr>
           </tbody>
@@ -362,6 +364,10 @@
 
         <h3>Backend managers used</h3>
         <p><code>phoneMirrorManager</code>.</p>
+
+        <!-- AirPlayView -->
+        <h2 id="airplay">AirPlayView.qml</h2>
+        <p><span class="file-path">frontend/AirPlayView.qml</span> (objectName <code>airPlayView</code>, dev navigate page <code>airplay</code>) is the iPhone page over <code>airPlayManager</code> (<a href="phone-mirror-android-auto.html#airplay">iPhone (AirPlay)</a>). While an iPhone mirrors it shows the picture in a <code>VideoOutput</code> whose sink it hands to the manager; a <code>MultiPointTouchArea</code> maps touches through the letterboxed <code>contentRect</code> to 0..1 and calls <code>injectTouch()</code> (a touch that starts on the bars is ignored), and a <code>WheelHandler</code> calls <code>scroll()</code>. Top right: a touch badge (tap to open the Bluetooth pairing window) or <em>Calibrate touch</em>, and <strong>X</strong>, which only leaves the page. Without mirroring it shows the setup: <em>Turn on AirPlay</em>, the PIN in large digits while a new iPhone pairs, the track while AirPlay audio plays, the steps with OCTAVE's addresses, and the touch card with <em>Pair touch</em>. <code>Main.qml</code> opens it on <code>airPlayManager.mirroringStarted</code>.</p>
 
         <!-- AndroidAutoView -->
         <h2 id="androidauto">AndroidAutoView.qml</h2>

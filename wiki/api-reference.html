@@ -28,8 +28,9 @@
 
         <h2 id="overview">Overview</h2>
         <p>This page is generated from <span class="file-path">docs/api/</span> (<code>./build/octave --dump-api docs/api</code>, then <code>python wiki/build_api_reference.py</code>); <code>tst_apidocs</code> fails when that copy is out of date. The protocol itself (<code>hello</code>, <code>describe</code>, <code>get</code>, <code>set</code>, <code>call</code>, <code>subscribe</code>, <code>rows</code>, <code>stream</code>, <code>pair</code>) is specified in <span class="file-path">docs/api/protocol.json</span> (JSON Schema, checked against the server) and described in <a href="utilities.html#service-protocol">Utilities: Service protocol</a>; versioning and the dashboard file schema in <span class="file-path">docs/api/README.md</span> and <span class="file-path">docs/api/dashboard-spec.schema.json</span>. What each member means is in the hand-written <a href="signals-slots-reference.html">Signals &amp; Slots API</a>.</p>
-        <p>The same objects are QML context properties under the same names. Types are Qt's names (<code>QString</code>, <code>QVariantMap</code>, ...); on the wire they are JSON. 25 objects:</p>
+        <p>The same objects are QML context properties under the same names. Types are Qt's names (<code>QString</code>, <code>QVariantMap</code>, ...); on the wire they are JSON. 26 objects:</p>
         <ul>
+            <li><a href="#airPlayManager">airPlayManager</a></li>
             <li><a href="#androidAutoManager">androidAutoManager</a></li>
             <li><a href="#audioAnalyzer">audioAnalyzer</a></li>
             <li><a href="#berryIMU">berryIMU</a></li>
@@ -58,6 +59,53 @@
         </ul>
 
         <h2 id="objects">Objects</h2>
+        <h3 id="airPlayManager"><code>airPlayManager</code> <span class="cmt">&mdash; AirPlayManager</span></h3>
+        <p>Hand-written notes: <a href="signals-slots-reference.html#airPlayManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/airPlayManager.json</span>.</p>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
+          <tbody>
+            <tr><td><code>available</code> <span class="cmt">(experimental)</span></td><td>bool</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>enabled</code> <span class="cmt">(experimental)</span></td><td>bool</td><td>read</td><td><code>enabledChanged</code></td></tr>
+            <tr><td><code>state</code> <span class="cmt">(experimental)</span></td><td>QString</td><td>read</td><td><code>stateChanged</code></td></tr>
+            <tr><td><code>status</code> <span class="cmt">(experimental)</span></td><td>QString</td><td>read</td><td><code>stateChanged</code></td></tr>
+            <tr><td><code>receiverName</code> <span class="cmt">(experimental)</span></td><td>QString</td><td>read</td><td><code>stateChanged</code></td></tr>
+            <tr><td><code>deviceName</code> <span class="cmt">(experimental)</span></td><td>QString</td><td>read</td><td><code>stateChanged</code></td></tr>
+            <tr><td><code>deviceModel</code> <span class="cmt">(experimental)</span></td><td>QString</td><td>read</td><td><code>stateChanged</code></td></tr>
+            <tr><td><code>pin</code> <span class="cmt">(experimental)</span></td><td>QString</td><td>read</td><td><code>stateChanged</code></td></tr>
+            <tr><td><code>mirroring</code> <span class="cmt">(experimental)</span></td><td>bool</td><td>read</td><td><code>stateChanged</code></td></tr>
+            <tr><td><code>audioStreaming</code> <span class="cmt">(experimental)</span></td><td>bool</td><td>read</td><td><code>stateChanged</code></td></tr>
+            <tr><td><code>frameWidth</code> <span class="cmt">(experimental)</span></td><td>int</td><td>read</td><td><code>frameSizeChanged</code></td></tr>
+            <tr><td><code>frameHeight</code> <span class="cmt">(experimental)</span></td><td>int</td><td>read</td><td><code>frameSizeChanged</code></td></tr>
+            <tr><td><code>title</code> <span class="cmt">(experimental)</span></td><td>QString</td><td>read</td><td><code>mediaChanged</code></td></tr>
+            <tr><td><code>artist</code> <span class="cmt">(experimental)</span></td><td>QString</td><td>read</td><td><code>mediaChanged</code></td></tr>
+            <tr><td><code>album</code> <span class="cmt">(experimental)</span></td><td>QString</td><td>read</td><td><code>mediaChanged</code></td></tr>
+            <tr><td><code>addresses</code> <span class="cmt">(experimental)</span></td><td>QStringList</td><td>read</td><td><code>stateChanged</code></td></tr>
+            <tr><td><code>videoSink</code> <span class="cmt">(experimental)</span></td><td>QObject*</td><td>read / write (phone)</td><td><code>videoSinkChanged</code></td></tr>
+            <tr><td><code>touchAvailable</code> <span class="cmt">(experimental)</span></td><td>bool</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>touchEnabled</code> <span class="cmt">(experimental)</span></td><td>bool</td><td>read</td><td><code>touchChanged</code></td></tr>
+            <tr><td><code>touchState</code> <span class="cmt">(experimental)</span></td><td>QString</td><td>read</td><td><code>touchChanged</code></td></tr>
+            <tr><td><code>touchStatus</code> <span class="cmt">(experimental)</span></td><td>QString</td><td>read</td><td><code>touchChanged</code></td></tr>
+            <tr><td><code>touchDevice</code> <span class="cmt">(experimental)</span></td><td>QString</td><td>read</td><td><code>touchChanged</code></td></tr>
+            <tr><td><code>touchPairing</code> <span class="cmt">(experimental)</span></td><td>bool</td><td>read</td><td><code>touchChanged</code></td></tr>
+            <tr><td><code>touchCalibrating</code> <span class="cmt">(experimental)</span></td><td>bool</td><td>read</td><td><code>touchChanged</code></td></tr>
+          </tbody>
+        </table>
+        <table>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
+          <tbody>
+            <tr><td><code>setEnabled(bool enabled)</code> <span class="cmt">(experimental)</span></td><td>&ndash;</td><td>invokable</td><td><code>phone</code></td></tr>
+            <tr><td><code>setTouchEnabled(bool enabled)</code> <span class="cmt">(experimental)</span></td><td>&ndash;</td><td>invokable</td><td><code>phone</code></td></tr>
+            <tr><td><code>pairTouch(bool open)</code> <span class="cmt">(experimental)</span></td><td>&ndash;</td><td>invokable</td><td><code>phone</code></td></tr>
+            <tr><td><code>pairTouch()</code> <span class="cmt">(experimental)</span></td><td>&ndash;</td><td>invokable</td><td><code>phone</code></td></tr>
+            <tr><td><code>injectTouch(int pointerId, int action, double x, double y)</code> <span class="cmt">(experimental)</span></td><td>&ndash;</td><td>invokable</td><td><code>phone</code></td></tr>
+            <tr><td><code>scroll(int dx, int dy)</code> <span class="cmt">(experimental)</span></td><td>&ndash;</td><td>invokable</td><td><code>phone</code></td></tr>
+            <tr><td><code>calibrateTouch()</code> <span class="cmt">(experimental)</span></td><td>&ndash;</td><td>invokable</td><td><code>phone</code></td></tr>
+            <tr><td><code>cancelCalibration()</code> <span class="cmt">(experimental)</span></td><td>&ndash;</td><td>invokable</td><td><code>phone</code></td></tr>
+            <tr><td><code>forgetDevices()</code> <span class="cmt">(experimental)</span></td><td>&ndash;</td><td>invokable</td><td><code>phone</code></td></tr>
+          </tbody>
+        </table>
+        <p><strong>Signals</strong> (<code>subscribe</code>): <code>enabledChanged()</code> <span class="cmt">(experimental)</span>, <code>stateChanged()</code> <span class="cmt">(experimental)</span>, <code>mediaChanged()</code> <span class="cmt">(experimental)</span>, <code>frameSizeChanged()</code> <span class="cmt">(experimental)</span>, <code>videoSinkChanged()</code> <span class="cmt">(experimental)</span>, <code>touchChanged()</code> <span class="cmt">(experimental)</span>, <code>mirroringStarted()</code>, <code>audioStreamingChanged(bool streaming)</code>.</p>
+
         <h3 id="androidAutoManager"><code>androidAutoManager</code> <span class="cmt">&mdash; AndroidAutoManager</span></h3>
         <p>Hand-written notes: <a href="signals-slots-reference.html#androidAutoManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/androidAutoManager.json</span>.</p>
         <table>

@@ -1,0 +1,392 @@
+{
+    "class": "AirPlayManager",
+    "methods": [
+        {
+            "kind": "invokable",
+            "name": "setEnabled",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": "",
+            "scope": "phone",
+            "stability": "experimental"
+        },
+        {
+            "kind": "invokable",
+            "name": "setTouchEnabled",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": "",
+            "scope": "phone",
+            "stability": "experimental"
+        },
+        {
+            "kind": "invokable",
+            "name": "pairTouch",
+            "params": [
+                {
+                    "name": "open",
+                    "type": "bool"
+                }
+            ],
+            "returns": "",
+            "scope": "phone",
+            "stability": "experimental"
+        },
+        {
+            "kind": "invokable",
+            "name": "pairTouch",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "phone",
+            "stability": "experimental"
+        },
+        {
+            "kind": "invokable",
+            "name": "injectTouch",
+            "params": [
+                {
+                    "name": "pointerId",
+                    "type": "int"
+                },
+                {
+                    "name": "action",
+                    "type": "int"
+                },
+                {
+                    "name": "x",
+                    "type": "double"
+                },
+                {
+                    "name": "y",
+                    "type": "double"
+                }
+            ],
+            "returns": "",
+            "scope": "phone",
+            "stability": "experimental"
+        },
+        {
+            "kind": "invokable",
+            "name": "scroll",
+            "params": [
+                {
+                    "name": "dx",
+                    "type": "int"
+                },
+                {
+                    "name": "dy",
+                    "type": "int"
+                }
+            ],
+            "returns": "",
+            "scope": "phone",
+            "stability": "experimental"
+        },
+        {
+            "kind": "invokable",
+            "name": "calibrateTouch",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "phone",
+            "stability": "experimental"
+        },
+        {
+            "kind": "invokable",
+            "name": "cancelCalibration",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "phone",
+            "stability": "experimental"
+        },
+        {
+            "kind": "invokable",
+            "name": "forgetDevices",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "phone",
+            "stability": "experimental"
+        }
+    ],
+    "object": "airPlayManager",
+    "properties": [
+        {
+            "constant": true,
+            "name": "available",
+            "readable": true,
+            "stability": "experimental",
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "enabled",
+            "notify": "enabledChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "state",
+            "notify": "stateChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "status",
+            "notify": "stateChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "receiverName",
+            "notify": "stateChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "deviceName",
+            "notify": "stateChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "deviceModel",
+            "notify": "stateChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "pin",
+            "notify": "stateChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "mirroring",
+            "notify": "stateChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "audioStreaming",
+            "notify": "stateChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "frameWidth",
+            "notify": "frameSizeChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "frameHeight",
+            "notify": "frameSizeChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "title",
+            "notify": "mediaChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "artist",
+            "notify": "mediaChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "album",
+            "notify": "mediaChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "addresses",
+            "notify": "stateChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QStringList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "videoSink",
+            "notify": "videoSinkChanged",
+            "readable": true,
+            "scope": "phone",
+            "stability": "experimental",
+            "type": "QObject*",
+            "writable": true
+        },
+        {
+            "constant": true,
+            "name": "touchAvailable",
+            "readable": true,
+            "stability": "experimental",
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "touchEnabled",
+            "notify": "touchChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "touchState",
+            "notify": "touchChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "touchStatus",
+            "notify": "touchChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "touchDevice",
+            "notify": "touchChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "touchPairing",
+            "notify": "touchChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "touchCalibrating",
+            "notify": "touchChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "bool",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "enabledChanged",
+            "params": [
+            ],
+            "stability": "experimental"
+        },
+        {
+            "name": "stateChanged",
+            "params": [
+            ],
+            "stability": "experimental"
+        },
+        {
+            "name": "mediaChanged",
+            "params": [
+            ],
+            "stability": "experimental"
+        },
+        {
+            "name": "frameSizeChanged",
+            "params": [
+            ],
+            "stability": "experimental"
+        },
+        {
+            "name": "videoSinkChanged",
+            "params": [
+            ],
+            "stability": "experimental"
+        },
+        {
+            "name": "touchChanged",
+            "params": [
+            ],
+            "stability": "experimental"
+        },
+        {
+            "name": "mirroringStarted",
+            "params": [
+            ]
+        },
+        {
+            "name": "audioStreamingChanged",
+            "params": [
+                {
+                    "name": "streaming",
+                    "type": "bool"
+                }
+            ]
+        }
+    ]
+}

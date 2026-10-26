@@ -52,7 +52,7 @@ signals:
     void dongleStateChanged();
 ```
 
-No image provider: push decoded `QVideoFrame`s to the `QVideoSink` of a QML `VideoOutput`, the way phone mirror does (`ScrcpyClient::pushFrame`, `scrcpyclient.h:169`). The `dhuframe` image provider (`main.cpp:266`) is the DHU screen-scrape's legacy, not a pattern to copy.
+No image provider: push decoded `QVideoFrame`s to the `QVideoSink` of a QML `VideoOutput`, the way phone mirror does (`ScrcpyClient::pushFrame`, `scrcpyclient.h:169`). The `dhuframe` image provider (`src/main.cpp`) is the DHU screen-scrape's legacy, not a pattern to copy.
 
 ## Prerequisites
 

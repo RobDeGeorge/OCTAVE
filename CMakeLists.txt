@@ -124,7 +124,7 @@ endif()
 # Release CI passes -DOCTAVE_REQUIRE_FFMPEG=ON so a desktop build can't ship
 # without the decoder again (v0.9.4 Windows did, silently).
 option(OCTAVE_REQUIRE_FFMPEG "Fail configure when libavcodec/libavutil are missing" OFF)
-# Release builds on Linux / macOS link a static, LGPL, H.264-decoder-only
+# Release builds on Linux / macOS link a static, LGPL, decoder-only (H.264, AAC, ALAC)
 # FFmpeg built by packaging/ffmpeg/build-h264-decoder.sh instead of the
 # distro / Homebrew one (GPL, with x264 / x265 / xvid and a dozen codec
 # libraries bundled into the package). Empty = use whatever pkg-config finds.
@@ -182,6 +182,55 @@ if(NOT ANDROID AND NOT IOS AND NOT EMSCRIPTEN AND OCTAVE_HAVE_FFMPEG)
     endif()
 endif()
 message(STATUS "Native Android Auto receiver (OpenSSL + libavcodec): ${OCTAVE_HAVE_NATIVE_AA}")
+
+# ---- AirPlay receiver (third_party/uxplay/, src/airplay/) ----
+# An iPhone mirrors its screen (and plays its audio) to OCTAVE over AirPlay:
+# UxPlay's library for the protocol, the libavcodec decoder above for the
+# video and ALAC / AAC audio, OpenSSL's libcrypto and libplist. Linux desktop
+# and the Pi for now (UxPlay also builds on macOS and Windows; not tried here).
+set(OCTAVE_HAVE_AIRPLAY OFF)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT ANDROID AND OCTAVE_HAVE_NATIVE_AA)
+    find_package(PkgConfig QUIET)
+    if(PKG_CONFIG_FOUND)
+        pkg_check_modules(PLIST QUIET IMPORTED_TARGET libplist-2.0)
+    endif()
+    if(PLIST_FOUND)
+        set(OCTAVE_HAVE_AIRPLAY ON)
+    endif()
+endif()
+message(STATUS "AirPlay receiver (UxPlay + libplist + libavcodec): ${OCTAVE_HAVE_AIRPLAY}")
+if(OCTAVE_HAVE_AIRPLAY)
+    set(_uxplay "${CMAKE_SOURCE_DIR}/third_party/uxplay")
+    add_library(octave_uxplay STATIC
+        ${_uxplay}/airplay_video.c ${_uxplay}/byteutils.c ${_uxplay}/compat.c ${_uxplay}/crypto.c
+        ${_uxplay}/dnssd.c ${_uxplay}/fairplay_playfair.c ${_uxplay}/httpd.c ${_uxplay}/http_request.c
+        ${_uxplay}/http_response.c ${_uxplay}/logger.c ${_uxplay}/mirror_buffer.c ${_uxplay}/netutils.c
+        ${_uxplay}/pairing.c ${_uxplay}/raop_buffer.c ${_uxplay}/raop.c ${_uxplay}/raop_ntp.c
+        ${_uxplay}/raop_rtp.c ${_uxplay}/raop_rtp_mirror.c ${_uxplay}/srp.c ${_uxplay}/utils.c
+        ${_uxplay}/mdnsd/dnssd_mdnsd.c ${_uxplay}/mdnsd/mdnsd.c
+        ${_uxplay}/llhttp/api.c ${_uxplay}/llhttp/http.c ${_uxplay}/llhttp/llhttp.c
+        ${_uxplay}/playfair/hand_garble.c ${_uxplay}/playfair/modified_md5.c ${_uxplay}/playfair/omg_hax.c
+        ${_uxplay}/playfair/playfair.c ${_uxplay}/playfair/sap_hash.c)
+    target_include_directories(octave_uxplay PUBLIC "${_uxplay}"
+                               PRIVATE "${_uxplay}/playfair" "${_uxplay}/llhttp" "${_uxplay}/mdnsd")
+    # What UxPlay's lib/CMakeLists.txt sets for Linux; NOHOLD lets a new
+    # iPhone take over from one already connected
+    target_compile_definitions(octave_uxplay PRIVATE
+        STANDALONE TARGET_POSIX _LINUX _REENTRANT _LARGEFILE64_SOURCE _FILE_OFFSET_BITS=64
+        __STDC_CONSTANT_MACROS __STDC_LIMIT_MACROS NOHOLD
+        OPENSSL_API_COMPAT=0x10101000L)
+    # libplist API level, as UxPlay picks it (Ubuntu 22.04 has 2.2)
+    if(PLIST_VERSION VERSION_GREATER_EQUAL 2.1.0)
+        target_compile_definitions(octave_uxplay PRIVATE PLIST_210)
+    endif()
+    if(PLIST_VERSION VERSION_GREATER_EQUAL 2.3.0)
+        target_compile_definitions(octave_uxplay PRIVATE PLIST_230)
+    endif()
+    set_target_properties(octave_uxplay PROPERTIES POSITION_INDEPENDENT_CODE ON C_STANDARD 11)
+    target_compile_options(octave_uxplay PRIVATE -w)   # third-party: not our warnings
+    find_package(Threads REQUIRED)
+    target_link_libraries(octave_uxplay PUBLIC PkgConfig::PLIST OpenSSL::Crypto Threads::Threads m)
+endif()
 
 # ---- Developer tooling (src/dev/) ----
 # `octave --dev` (the --sim simulator of src/sim/ plus the dev overlay) and
@@ -294,6 +343,10 @@ qt_add_executable(octave
     src/managers/androidautomedia.cpp
     src/managers/androidautomanager.cpp
     src/managers/androidautomanager_native.cpp
+    src/managers/airplaymanager.h
+    src/managers/airplaymanager.cpp
+    src/airplay/pointerpath.h
+    src/airplay/pointerpath.cpp
     src/managers/dashboardmanager.h
     src/managers/dashboardmanager.cpp
     src/managers/themecatalog.h
@@ -449,6 +502,16 @@ if(OCTAVE_HAVE_NATIVE_AA)
     )
     target_link_libraries(octave PRIVATE OpenSSL::SSL OpenSSL::Crypto)
     target_compile_definitions(octave PRIVATE OCTAVE_HAVE_NATIVE_AA)
+endif()
+if(OCTAVE_HAVE_AIRPLAY)
+    target_sources(octave PRIVATE
+        src/airplay/airplayreceiver.h
+        src/airplay/airplayreceiver.cpp
+        src/platform/bluezhidmouse.h
+        src/platform/bluezhidmouse.cpp
+    )
+    target_link_libraries(octave PRIVATE octave_uxplay)
+    target_compile_definitions(octave PRIVATE OCTAVE_HAVE_AIRPLAY)
 endif()
 if(Qt6Quick3D_FOUND)
     target_link_libraries(octave PRIVATE Qt6::Quick3D)

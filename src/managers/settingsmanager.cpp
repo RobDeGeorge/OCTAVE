@@ -250,6 +250,12 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("androidAutoResolution")]   = QStringLiteral("1280x720"); // 800x480 | 1280x720 | 1920x1080
     d[QStringLiteral("androidAutoFps")]          = 30;         // 30 | 60
     d[QStringLiteral("androidAutoDpi")]          = 160;        // Android Auto UI density
+    d[QStringLiteral("airPlayEnabled")]          = false;      // advertise OCTAVE as an AirPlay receiver (AirPlayManager)
+    d[QStringLiteral("airPlayName")]             = QStringLiteral("OCTAVE");   // what an iPhone lists under Screen Mirroring
+    d[QStringLiteral("airPlayRequirePin")]       = true;       // a new iPhone types the on-screen PIN once
+    d[QStringLiteral("airPlayResolution")]       = QStringLiteral("1280x720"); // size offered to the iPhone: 1280x720 | 1920x1080
+    d[QStringLiteral("airPlayTouchEnabled")]     = true;       // OCTAVE is also a Bluetooth mouse for the mirrored iPhone
+    d[QStringLiteral("airPlayTouchScale")]       = 600.0;      // mouse counts across the iPhone screen's short side (calibration)
     d[QStringLiteral("phoneMirrorEnabled")]      = false;
     d[QStringLiteral("scrcpyDisplaySize")]       = QStringLiteral("auto");  // --new-display WxH, "auto" = fit the view, "" = phone screen
     d[QStringLiteral("scrcpyAudioGain")]         = 2.0;   // linear gain on phone audio before OCTAVE's volume (+6 dB)

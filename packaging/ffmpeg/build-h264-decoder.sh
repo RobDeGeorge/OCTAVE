@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Build the FFmpeg that release builds link: static libavcodec + libavutil with
-# the H.264 decoder and nothing else (no encoders, no external codec libraries,
-# no GPL parts), so every desktop package carries an LGPL-2.1-or-later FFmpeg
+# the H.264 decoder (phone mirroring, Android Auto, AirPlay mirroring) and the
+# AAC and ALAC decoders (AirPlay audio), and nothing else (no encoders, no
+# external codec libraries, no GPL parts), so every desktop package carries an LGPL-2.1-or-later FFmpeg
 # of a few hundred KB instead of a distro / Homebrew build with x264, x265,
 # xvid and a dozen codec libraries.
 #
@@ -84,11 +85,11 @@ cd "ffmpeg-${FFMPEG_VERSION}"
     --disable-programs --disable-doc --disable-network \
     --disable-avformat --disable-avdevice --disable-avfilter \
     --disable-swscale --disable-swresample \
-    --enable-decoder=h264 \
+    --enable-decoder=h264,aac,alac \
     ${FFMPEG_EXTRA_CONFIGURE:-}
 
 JOBS="$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)"
 make -j"$JOBS"
 make install
 
-echo "==> Installed static LGPL libavcodec + libavutil (H.264 decoder only) to $PREFIX"
+echo "==> Installed static LGPL libavcodec + libavutil (H.264, AAC and ALAC decoders) to $PREFIX"

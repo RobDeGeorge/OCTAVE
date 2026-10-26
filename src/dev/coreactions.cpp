@@ -59,7 +59,7 @@ const QList<QPair<QString, QString>> kPages = {
     {"obd", "OBDMenu.qml"}, {"obd_home", "OBDHome.qml"}, {"obd_diagnostics", "OBDDiagnostics.qml"},
     {"trip_history", "TripHistory.qml"},
     {"sensor_home", "SensorHome.qml"}, {"settings", "SettingsMenu.qml"}, {"phone_mirror", "PhoneMirrorView.qml"},
-    {"android_auto", "AndroidAutoView.qml"}, {"sensors", "SensorMenu.qml"}, {"car", "CarMenu.qml"},
+    {"android_auto", "AndroidAutoView.qml"}, {"airplay", "AirPlayView.qml"}, {"sensors", "SensorMenu.qml"}, {"car", "CarMenu.qml"},
     {"clock", "ClockMenu.qml"},
 };
 

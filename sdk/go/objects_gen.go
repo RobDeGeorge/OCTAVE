@@ -4,7 +4,279 @@
 package octave
 
 // ObjectNames is every service object, as hello lists them.
-var ObjectNames = []string{"androidAutoManager", "audioAnalyzer", "berryIMU", "clock", "dashboardManager", "diagnosticsManager", "esp32VolumeManager", "fontCatalog", "frontendManager", "gestureSensor", "mediaManager", "networkManager", "nowPlaying", "obdAdapterFinder", "obdManager", "paramStore", "parameterCatalog", "phoneMirrorManager", "settingsManager", "shiftLightManager", "sim", "themeCatalog", "tripRecorder", "units", "volumeController"}
+var ObjectNames = []string{"airPlayManager", "androidAutoManager", "audioAnalyzer", "berryIMU", "clock", "dashboardManager", "diagnosticsManager", "esp32VolumeManager", "fontCatalog", "frontendManager", "gestureSensor", "mediaManager", "networkManager", "nowPlaying", "obdAdapterFinder", "obdManager", "paramStore", "parameterCatalog", "phoneMirrorManager", "settingsManager", "shiftLightManager", "sim", "themeCatalog", "tripRecorder", "units", "volumeController"}
+
+// AirPlayManager is the service object "airPlayManager" (C++ AirPlayManager); NewAirPlayManager(c) binds it to a client.
+type AirPlayManager struct{ c *Client }
+
+// NewAirPlayManager binds "airPlayManager" to c.
+func NewAirPlayManager(c *Client) AirPlayManager { return AirPlayManager{c} }
+
+// Name is the object's name on the wire.
+func (AirPlayManager) Name() string { return "airPlayManager" }
+
+// GetAvailable reads the property "available" (bool).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetAvailable() (v bool, err error) {
+	err = o.c.Get("airPlayManager", "available", &v)
+	return
+}
+
+// GetEnabled reads the property "enabled" (bool).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetEnabled() (v bool, err error) {
+	err = o.c.Get("airPlayManager", "enabled", &v)
+	return
+}
+
+// GetState reads the property "state" (QString).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetState() (v string, err error) {
+	err = o.c.Get("airPlayManager", "state", &v)
+	return
+}
+
+// GetStatus reads the property "status" (QString).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetStatus() (v string, err error) {
+	err = o.c.Get("airPlayManager", "status", &v)
+	return
+}
+
+// GetReceiverName reads the property "receiverName" (QString).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetReceiverName() (v string, err error) {
+	err = o.c.Get("airPlayManager", "receiverName", &v)
+	return
+}
+
+// GetDeviceName reads the property "deviceName" (QString).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetDeviceName() (v string, err error) {
+	err = o.c.Get("airPlayManager", "deviceName", &v)
+	return
+}
+
+// GetDeviceModel reads the property "deviceModel" (QString).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetDeviceModel() (v string, err error) {
+	err = o.c.Get("airPlayManager", "deviceModel", &v)
+	return
+}
+
+// GetPin reads the property "pin" (QString).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetPin() (v string, err error) {
+	err = o.c.Get("airPlayManager", "pin", &v)
+	return
+}
+
+// GetMirroring reads the property "mirroring" (bool).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetMirroring() (v bool, err error) {
+	err = o.c.Get("airPlayManager", "mirroring", &v)
+	return
+}
+
+// GetAudioStreaming reads the property "audioStreaming" (bool).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetAudioStreaming() (v bool, err error) {
+	err = o.c.Get("airPlayManager", "audioStreaming", &v)
+	return
+}
+
+// GetFrameWidth reads the property "frameWidth" (int).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetFrameWidth() (v int, err error) {
+	err = o.c.Get("airPlayManager", "frameWidth", &v)
+	return
+}
+
+// GetFrameHeight reads the property "frameHeight" (int).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetFrameHeight() (v int, err error) {
+	err = o.c.Get("airPlayManager", "frameHeight", &v)
+	return
+}
+
+// GetTitle reads the property "title" (QString).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetTitle() (v string, err error) {
+	err = o.c.Get("airPlayManager", "title", &v)
+	return
+}
+
+// GetArtist reads the property "artist" (QString).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetArtist() (v string, err error) {
+	err = o.c.Get("airPlayManager", "artist", &v)
+	return
+}
+
+// GetAlbum reads the property "album" (QString).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetAlbum() (v string, err error) {
+	err = o.c.Get("airPlayManager", "album", &v)
+	return
+}
+
+// GetAddresses reads the property "addresses" (QStringList).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetAddresses() (v []string, err error) {
+	err = o.c.Get("airPlayManager", "addresses", &v)
+	return
+}
+
+// GetVideoSink reads the property "videoSink" (QObject*, writable).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetVideoSink() (v any, err error) {
+	err = o.c.Get("airPlayManager", "videoSink", &v)
+	return
+}
+
+// SetVideoSink writes the property "videoSink" and returns the value read back.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) SetVideoSink(value any) (v any, err error) {
+	err = o.c.Set("airPlayManager", "videoSink", value, &v)
+	return
+}
+
+// GetTouchAvailable reads the property "touchAvailable" (bool).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetTouchAvailable() (v bool, err error) {
+	err = o.c.Get("airPlayManager", "touchAvailable", &v)
+	return
+}
+
+// GetTouchEnabled reads the property "touchEnabled" (bool).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetTouchEnabled() (v bool, err error) {
+	err = o.c.Get("airPlayManager", "touchEnabled", &v)
+	return
+}
+
+// GetTouchState reads the property "touchState" (QString).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetTouchState() (v string, err error) {
+	err = o.c.Get("airPlayManager", "touchState", &v)
+	return
+}
+
+// GetTouchStatus reads the property "touchStatus" (QString).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetTouchStatus() (v string, err error) {
+	err = o.c.Get("airPlayManager", "touchStatus", &v)
+	return
+}
+
+// GetTouchDevice reads the property "touchDevice" (QString).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetTouchDevice() (v string, err error) {
+	err = o.c.Get("airPlayManager", "touchDevice", &v)
+	return
+}
+
+// GetTouchPairing reads the property "touchPairing" (bool).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetTouchPairing() (v bool, err error) {
+	err = o.c.Get("airPlayManager", "touchPairing", &v)
+	return
+}
+
+// GetTouchCalibrating reads the property "touchCalibrating" (bool).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) GetTouchCalibrating() (v bool, err error) {
+	err = o.c.Get("airPlayManager", "touchCalibrating", &v)
+	return
+}
+
+// SetEnabled calls setEnabled(bool).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) SetEnabled(enabled bool) error {
+	return o.c.Call("airPlayManager", "setEnabled", nil, enabled)
+}
+
+// SetTouchEnabled calls setTouchEnabled(bool).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) SetTouchEnabled(enabled bool) error {
+	return o.c.Call("airPlayManager", "setTouchEnabled", nil, enabled)
+}
+
+// PairTouch1 calls pairTouch(bool).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) PairTouch1(open bool) error {
+	return o.c.Call("airPlayManager", "pairTouch", nil, open)
+}
+
+// PairTouch0 calls pairTouch().
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) PairTouch0() error {
+	return o.c.Call("airPlayManager", "pairTouch", nil)
+}
+
+// InjectTouch calls injectTouch(int, int, double, double).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) InjectTouch(pointerId int, action int, x float64, y float64) error {
+	return o.c.Call("airPlayManager", "injectTouch", nil, pointerId, action, x, y)
+}
+
+// Scroll calls scroll(int, int).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) Scroll(dx int, dy int) error {
+	return o.c.Call("airPlayManager", "scroll", nil, dx, dy)
+}
+
+// CalibrateTouch calls calibrateTouch().
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) CalibrateTouch() error {
+	return o.c.Call("airPlayManager", "calibrateTouch", nil)
+}
+
+// CancelCalibration calls cancelCalibration().
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) CancelCalibration() error {
+	return o.c.Call("airPlayManager", "cancelCalibration", nil)
+}
+
+// ForgetDevices calls forgetDevices().
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o AirPlayManager) ForgetDevices() error {
+	return o.c.Call("airPlayManager", "forgetDevices", nil)
+}
 
 // AndroidAutoManager is the service object "androidAutoManager" (C++ AndroidAutoManager); NewAndroidAutoManager(c) binds it to a client.
 type AndroidAutoManager struct{ c *Client }

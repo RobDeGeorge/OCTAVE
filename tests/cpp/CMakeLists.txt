@@ -87,6 +87,12 @@ if(TARGET Qt6::DBus)   # Linux: the BlueZ pairing agent, as in the app
     list(APPEND _finder_libs Qt6::DBus)
     list(APPEND _finder_defines OCTAVE_BLUEZ)
 endif()
+# The BLE HID mouse (AirPlay iPhone control) over BlueZ; the live part runs
+# only with OCTAVE_TEST_BT_LIVE=1
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET Qt6::DBus)
+    octave_add_test(tst_bluezhidmouse SOURCES platform/bluezhidmouse.h platform/bluezhidmouse.cpp
+        LIBS Qt6::DBus DEFINES OCTAVE_BLUEZ)
+endif()
 octave_add_test(tst_obdadapterfinder
     SOURCES ${_finder_sources}
             managers/obdmanager.h managers/obdmanager.cpp managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
@@ -183,6 +189,18 @@ if(OCTAVE_HAVE_NATIVE_AA)
                 android_auto/aaptls.h android_auto/aaptls.cpp android_auto/aapsession.h android_auto/aapsession.cpp
         LIBS OpenSSL::SSL OpenSSL::Crypto
         DEFINES OCTAVE_HAVE_NATIVE_AA)
+endif()
+# The AirPlay receiver (metadata, volume, an RTSP /info on loopback) and the
+# manager's pointer path and touch calibration, without an iPhone
+if(OCTAVE_HAVE_AIRPLAY)
+    octave_add_test(tst_airplay
+        SOURCES airplay/airplayreceiver.h airplay/airplayreceiver.cpp airplay/pointerpath.h airplay/pointerpath.cpp
+                util/h264decoder.h util/h264decoder.cpp
+                managers/airplaymanager.h managers/airplaymanager.cpp
+                managers/settingsmanager.h managers/settingsmanager.cpp
+                managers/volumecontroller.h managers/volumecontroller.cpp
+        LIBS octave_uxplay ${_mirror_libs}
+        DEFINES OCTAVE_HAVE_AIRPLAY ${_mirror_defines})
 endif()
 # The bundled phone server, as in the app (ScrcpyClient::available() checks it)
 qt_add_resources(tst_phonemirror "phone_server"

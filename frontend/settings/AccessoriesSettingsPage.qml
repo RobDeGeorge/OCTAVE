@@ -70,7 +70,16 @@ Flickable {
         { cardId: "accessories_phone_dock", title: "Phone Dock", component: phoneDockContent,
           summary: function() {
               if (!settingsManager) return {}
-              if (!settingsManager.phoneMirrorEnabled) return { state: "Off" }
+              var ap = typeof airPlayManager !== "undefined" ? airPlayManager : null
+              if (!settingsManager.phoneMirrorEnabled) {
+                  if (!ap || !ap.enabled) return { state: "Off" }
+                  var playing = ap.state === "mirroring" || ap.state === "audio"
+                  return { state: ap.state === "mirroring" ? "AirPlay · mirroring" : ap.state === "audio" ? "AirPlay · audio"
+                                : ap.state === "error" ? "AirPlay · error" : "AirPlay · waiting",
+                           active: playing,
+                           status: playing ? App.Style.statusConnected
+                                 : ap.state === "error" ? App.Style.statusError : App.Style.statusWarning }
+              }
               var pm = typeof phoneMirrorManager !== "undefined" ? phoneMirrorManager : null
               var running = !!(pm && pm.isRunning)
               return { state: running ? "Mirror · " + (pm.connectionType === "wifi" ? "Wi-Fi" : "USB") : "Mirror · waiting",
@@ -2220,6 +2229,123 @@ Flickable {
                     }
                     SettingDescription {
                         text: "Certificate folder: " + (androidAutoCategory.aa ? androidAutoCategory.aa.certificateDir : "")
+                    }
+                }
+            }
+
+            // ── iPhone (AirPlay) ──
+            SettingCategory {
+                id: airPlayCategory
+                readonly property var ap: typeof airPlayManager !== "undefined" ? airPlayManager : null
+                visible: ap ? ap.available : false
+                title: "iPhone (AirPlay)"
+                description: "An iPhone mirrors its screen to OCTAVE, or plays its music through it, over AirPlay: "
+                             + "Control Center > Screen Mirroring > " + (ap ? ap.receiverName : "OCTAVE")
+                             + ". The iPhone has to be on the same Wi-Fi. Touch goes back through OCTAVE acting as a "
+                             + "Bluetooth mouse (pair it once, and turn on AssistiveTouch on the iPhone)."
+
+                SettingsToggle {
+                    objectName: "airPlayEnabledToggle"
+                    compact: true
+                    Layout.fillWidth: false
+                    Layout.alignment: Qt.AlignLeft
+                    text: "AirPlay receiver"
+                    checked: airPlayCategory.ap ? airPlayCategory.ap.enabled : false
+                    activeColor: App.Style.accent
+                    inactiveColor: App.Style.hoverColor
+                    onToggled: function(checked) { if (airPlayCategory.ap) airPlayCategory.ap.setEnabled(checked) }
+                }
+
+                SettingsToggle {
+                    compact: true
+                    Layout.fillWidth: false
+                    Layout.alignment: Qt.AlignLeft
+                    visible: airPlayCategory.ap ? airPlayCategory.ap.enabled : false
+                    text: "Ask new iPhones for a PIN"
+                    checked: settingsManager ? settingsManager.get_setting_with_default("airPlayRequirePin", true) : true
+                    activeColor: App.Style.accent
+                    inactiveColor: App.Style.hoverColor
+                    onToggled: function(checked) { if (settingsManager) settingsManager.save_setting("airPlayRequirePin", checked) }
+                }
+
+                SettingsToggle {
+                    compact: true
+                    Layout.fillWidth: false
+                    Layout.alignment: Qt.AlignLeft
+                    visible: airPlayCategory.ap ? airPlayCategory.ap.enabled && airPlayCategory.ap.touchAvailable : false
+                    text: "Touch through Bluetooth"
+                    checked: airPlayCategory.ap ? airPlayCategory.ap.touchEnabled : true
+                    activeColor: App.Style.accent
+                    inactiveColor: App.Style.hoverColor
+                    onToggled: function(checked) { if (airPlayCategory.ap) airPlayCategory.ap.setTouchEnabled(checked) }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.rowSpacing
+                    visible: airPlayCategory.ap ? airPlayCategory.ap.enabled : false
+
+                    SettingLabel { text: "Name" }
+                    SettingDescription { text: "What the iPhone lists under Screen Mirroring." }
+                    SettingsTextField {
+                        Layout.fillWidth: true
+                        text: airPlayCategory.ap ? airPlayCategory.ap.receiverName : "OCTAVE"
+                        placeholderText: "OCTAVE"
+                        onEditingFinished: if (settingsManager) settingsManager.save_setting("airPlayName", text.trim())
+                    }
+                }
+
+                ColumnLayout {
+                    id: airPlayResolution
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.rowSpacing
+                    visible: airPlayCategory.ap ? airPlayCategory.ap.enabled : false
+                    property string value: settingsManager
+                        ? settingsManager.get_setting_with_default("airPlayResolution", "1280x720") : "1280x720"
+
+                    SettingLabel { text: "Video size" }
+                    SettingDescription { text: "The screen size offered to the iPhone. Larger is sharper and costs more CPU." }
+                    SettingsSegmentedControl {
+                        Layout.fillWidth: true
+                        options: ["1280x720", "1920x1080"]
+                        currentValue: airPlayResolution.value
+                        onSelected: function(value) {
+                            if (!settingsManager) return
+                            settingsManager.save_setting("airPlayResolution", value)
+                            airPlayResolution.value = value
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.rowSpacing
+                    visible: airPlayCategory.ap ? airPlayCategory.ap.enabled : false
+
+                    SettingLabel { text: "Status" }
+                    SettingDescription {
+                        text: airPlayCategory.ap ? airPlayCategory.ap.status : ""
+                        color: airPlayCategory.ap && airPlayCategory.ap.state === "error" ? App.Style.statusError
+                             : airPlayCategory.ap && (airPlayCategory.ap.state === "mirroring" || airPlayCategory.ap.state === "audio")
+                               ? App.Style.statusConnected : App.Style.secondaryTextColor
+                    }
+                    SettingDescription {
+                        visible: airPlayCategory.ap ? airPlayCategory.ap.touchAvailable && airPlayCategory.ap.touchEnabled : false
+                        text: "Touch: " + (airPlayCategory.ap ? airPlayCategory.ap.touchStatus : "")
+                    }
+                    RowLayout {
+                        spacing: App.Spacing.rowSpacing
+                        SettingsButton {
+                            visible: airPlayCategory.ap ? airPlayCategory.ap.touchState === "waiting" : false
+                            text: airPlayCategory.ap && airPlayCategory.ap.touchPairing ? "Stop pairing" : "Pair touch"
+                            Layout.preferredHeight: pageRoot.dp(48)
+                            onClicked: airPlayCategory.ap.pairTouch(!airPlayCategory.ap.touchPairing)
+                        }
+                        SettingsButton {
+                            text: "Forget paired iPhones"
+                            Layout.preferredHeight: pageRoot.dp(48)
+                            onClicked: if (airPlayCategory.ap) airPlayCategory.ap.forgetDevices()
+                        }
                     }
                 }
             }

@@ -1,6 +1,6 @@
 # TODO index — easiest to hardest
 
-**Last updated:** 2026-10-25 (media-source-arbiter.md: Android Auto part done)
+**Last updated:** 2026-10-25 (iphone-airplay.md and carplay-native.md added; stale details fixed in android-cpp-port, future-tests, open-backend, media-source-arbiter, android-auto-native-receiver, carlinkit-dongle-port)
 
 One file per deferred plan. Each file opens with a one-line **Goal**, lists only the work that is left, and gives every step an **Effort** (S under an hour, M one session, L several sessions, XL a new subsystem) and the device it needs. When a plan is finished, delete its file and its row here.
 
@@ -12,7 +12,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 |---|---|---|---|
 | [windows-adb-firewall.md](windows-adb-firewall.md) | Verify the new adb firewall rule in the Windows installer (code done) | S | Win11 VM, a phone |
 | [phone-mirror-robustness.md](phone-mirror-robustness.md) | Mirror recovers fast from network and USB changes, works beyond Samsung | S … L | phone on the Pi, then other phones |
-| [android-cpp-port.md](android-cpp-port.md) | APK good enough to daily-drive: icon, splash, log check, then permissions / audio focus | S … L | S22 |
+| [android-cpp-port.md](android-cpp-port.md) | APK good enough to daily-drive: icon, splash, log check, then permissions / audio focus, then a daily-drive week | S … L | S22 |
 | [sensorhome-3d-first-visit.md](sensorhome-3d-first-visit.md) | Check on the phone that the first 3D View tap no longer freezes (code done) | S | S22, Pi |
 | [error-notification-ui.md](error-notification-ui.md) | Notice for phone-mirror failures off-page; check the OBD notice on the Pi | S | desktop, Pi |
 | [sensor-driven-ui-cost.md](sensor-driven-ui-cost.md) | Measure on the phone: idle sensors stopped, the grid fix, the Full Grid warnings (code done) | S | S22, Pi |
@@ -22,13 +22,14 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | File | Goal | Effort | Needs |
 |---|---|---|---|
 | [dashboards-roadmap.md](dashboards-roadmap.md) | Prove the dashboard editor and demand-driven polling on a touchscreen and in the car | M | S22, Jeep |
-| [future-tests.md](future-tests.md) | Signal wiring test (after moving main.cpp connects into a function), then QML integration and OBD replay suites | M … L–XL | desktop, Jeep for OBD recordings |
+| [future-tests.md](future-tests.md) | Signal wiring test against `AppCore`, then QML integration and OBD replay suites | M … L–XL | desktop, Jeep for OBD recordings |
 | [update-checker-packaged-builds.md](update-checker-packaged-builds.md) | Packaged builds compare against the latest GitHub release | M | VMs, S22 |
 | [dp-helper-consolidation.md](dp-helper-consolidation.md) | One shared `dp()` instead of 63 private copies | M | 10-min S22 check first |
 | [obd-adapter-discovery.md](obd-adapter-discovery.md) | Pick-and-connect Bluetooth OBD on every platform (Jeep test S, other platforms L) | S, then L | Pi + NEXAS, S22 |
 | [octave-companion-app.md](octave-companion-app.md) | Setup walkthrough for phone debugging, then phone notifications / calls / battery | M, then L | S22 |
 | [phone-spotify-library.md](phone-spotify-library.md) | Step 1 (shared song rows, shuffle/repeat to the phone) M; library reader is a maybe | M … L | S22 + Spotify |
 | [arm64-qt-ffmpeg-lgpl.md](arm64-qt-ffmpeg-lgpl.md) | aarch64 AppImage ships an LGPL FFmpeg for Qt's music playback instead of Ubuntu's GPL one | M (or with a Qt upgrade) | arm64 CI, Pi |
+| [iphone-airplay.md](iphone-airplay.md) | An iPhone mirrors to OCTAVE over AirPlay and is driven by OCTAVE as a Bluetooth mouse: code done, every check needs an iPhone | S … M | desktop + iPhone, then Pi |
 | [frontend-platform.md](frontend-platform.md) | The frontend platform landed on the desktop (2026-10-23); left: watch the first release run of the `--sim` smoke steps, an installed exec frontend on Windows, macOS and the Pi, many clients measured on the Pi, two items in review (`--pair-code`, web-frontend scopes on the head unit) | S-M | CI, Win11 VM, Pi |
 
 ## 3. Several sessions (L)
@@ -47,7 +48,6 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 |---|---|---|---|
 | [phone-mirror-android-host.md](phone-mirror-android-host.md) | OCTAVE on an Android tablet mirrors a phone | XL | tablet + phone |
 | [android-auto-native-receiver.md](android-auto-native-receiver.md) | Android Auto straight into OCTAVE over adb (works on desktop; Pi, AOA next), no DHU | L | AA phone, Pi |
+| [carplay-native.md](carplay-native.md) | CarPlay from an iPhone on USB with no dongle, on a user-supplied Apple identity (spike first) | M research, L spike | iPhone on USB |
 | [carlinkit-dongle-port.md](carlinkit-dongle-port.md) | CarPlay / wireless Android Auto through a Carlinkit dongle | XL | $60 dongle, iPhone |
 | [diy-obd-adapter.md](diy-obd-adapter.md) | Our own all-protocol Bluetooth OBD adapter (STM32G474 + ESP32) with native fast mode, store-and-forward, optional sensor pod | M bench steps, then L–XL hardware | Nucleo + ECU sim, Jeep |
-
-Shared prerequisite for the last three and for phone-mirror item 6 (hardware decode): pull the H.264 decoder out of `src/phone_mirror/scrcpyclient.cpp` into its own class.

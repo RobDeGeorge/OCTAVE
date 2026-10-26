@@ -1,6 +1,7 @@
 {
     "generatedBy": "octave --dump-api (src/service/apidump.cpp); do not edit",
     "objects": {
+        "airPlayManager": "AirPlayManager",
         "androidAutoManager": "AndroidAutoManager",
         "audioAnalyzer": "AudioAnalyzer",
         "berryIMU": "BerryIMUManager",

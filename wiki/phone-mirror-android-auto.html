@@ -57,6 +57,15 @@
                 <li><a href="#aa-embedded">EmbeddedDhuItem</a></li>
               </ul>
             </li>
+            <li><a href="#airplay">iPhone (AirPlay)</a>
+              <ul class="toc-list">
+                <li><a href="#airplay-setup">Setting it up</a></li>
+                <li><a href="#airplay-touch">Touch through a Bluetooth mouse</a></li>
+                <li><a href="#airplay-states">What the page shows</a></li>
+                <li><a href="#airplay-inside">How it works</a></li>
+                <li><a href="#airplay-limits">What is not checked yet</a></li>
+              </ul>
+            </li>
             <li><a href="#qml-types">Custom QML Types</a></li>
             <li><a href="#image-providers">Image Providers</a></li>
           </ul>
@@ -1203,6 +1212,118 @@ dpi = 160</code></pre>
           </p>
           <p>It connects via <code>connectToManager(androidAutoManager)</code> from the item's <code>Component.onCompleted</code> and picks up a
             DHU that is already running (with a non-zero handle) when the user navigates back to the view.</p>
+        </section>
+
+        <!-- iPhone (AirPlay) -->
+        <section id="airplay">
+          <h2>iPhone (AirPlay)</h2>
+          <p>
+            An iPhone can't be mirrored the way an Android phone is: iOS has nothing like adb, no program can capture its screen or
+            fake touches from outside, and CarPlay needs Apple's authentication chip. What iOS does have is AirPlay. OCTAVE is an
+            AirPlay receiver (<code>airPlayManager</code>, <span class="file-path">src/managers/airplaymanager.{h,cpp}</span>), so the
+            iPhone mirrors its screen to OCTAVE, or plays its music through it, the way it would to an Apple TV. AirPlay sends no touch
+            back, so OCTAVE is also a Bluetooth LE mouse: with AssistiveTouch on, a tap on the mirrored screen moves the iPhone's pointer
+            there and clicks. No app on the iPhone, no developer mode, no extra hardware.
+          </p>
+          <p>
+            Built when libplist, OpenSSL and libavcodec are found (<code>OCTAVE_HAVE_AIRPLAY</code>, Linux desktop and the Pi for now);
+            touch also needs BlueZ (<code>OCTAVE_BLUEZ</code>). <code>airPlayManager.available</code> / <code>touchAvailable</code> say
+            which a build has.
+          </p>
+        </section>
+
+        <section id="airplay-setup">
+          <h3>Setting it up</h3>
+          <ol>
+            <li>Settings &gt; Accessories &gt; Phone Dock &gt; <em>iPhone (AirPlay)</em>: turn on <strong>AirPlay receiver</strong>
+              (<code>airPlayEnabled</code>, off by default: it advertises OCTAVE on the local network). The iPhone page
+              (<span class="file-path">frontend/AirPlayView.qml</span>, also reached from Phone Mirror's "Using an iPhone?" button) has the same switch.</li>
+            <li>Put the iPhone on the same network as OCTAVE (the page lists OCTAVE's addresses). In the car that means the head unit
+              joins the phone's hotspot, or the other way round.</li>
+            <li>On the iPhone: Control Center &gt; Screen Mirroring &gt; <strong>OCTAVE</strong> (the <code>airPlayName</code> setting). The
+              first time, the iPhone asks for a PIN, which OCTAVE shows in large digits; it is remembered after that
+              (<code>airPlayRequirePin</code>, on by default). For music only, pick OCTAVE as the speaker in Control Center's music card.</li>
+            <li>When mirroring starts, OCTAVE opens the iPhone page by itself (<code>mirroringStarted</code>). Its <strong>X</strong>
+              leaves the page; the iPhone keeps mirroring until it is stopped there. The phone button in the nav bar goes back to it.</li>
+          </ol>
+          <p>The receiver's identity (a random, locally administered device id) and the iPhones that paired with the PIN are kept in
+            <span class="file-path">&lt;config&gt;/airplay/state.json</span>, its pairing key in <span class="file-path">receiver.pem</span>.
+            <em>Forget paired iPhones</em> clears the list.</p>
+        </section>
+
+        <section id="airplay-touch">
+          <h3>Touch through a Bluetooth mouse</h3>
+          <p>
+            With <code>airPlayTouchEnabled</code> on (the default), OCTAVE registers a HID-over-GATT mouse with BlueZ
+            (<span class="file-path">src/platform/bluezhidmouse.{h,cpp}</span>, D-Bus only, no root) named "OCTAVE Touch". Once:
+          </p>
+          <ol>
+            <li>Tap <strong>Pair touch</strong> (on the iPhone page, the mirrored screen's badge, or the settings card). For three minutes
+              (<code>pairTouch()</code>) OCTAVE accepts a Just Works pairing; at any other time pairing requests are refused, so a stray
+              device (a Bluetooth keyboard) can't pair with the head unit.</li>
+            <li>On the iPhone: Settings &gt; Bluetooth, tap <strong>OCTAVE Touch</strong>.</li>
+            <li>Settings &gt; Accessibility &gt; Touch &gt; AssistiveTouch: on. The grey pointer appears.</li>
+          </ol>
+          <p>
+            iOS only takes a relative pointer, so <span class="file-path">src/airplay/pointerpath.{h,cpp}</span> turns a tap into: push the
+            pointer into the top-left corner (40 full-speed reports, after which its position is known), move to the spot in steps of at most
+            12 counts (small steps keep iOS's pointer acceleration out of the way), press; a drag moves with the button held, and the lift
+            releases. Reports go out every 8 ms. While the position stays known, later taps move from where the last one ended; it is
+            forgotten when the mirrored picture changes size (a rotation) or the mouse reconnects. A mouse wheel on OCTAVE scrolls.
+          </p>
+          <p>
+            How far the pointer moves per count depends on the iPhone and its AssistiveTouch tracking speed, so it is calibrated:
+            <code>airPlayTouchScale</code> is the number of counts across the screen's short side (600 to start). <strong>Calibrate
+            touch</strong> on the mirrored screen homes the pointer and moves it 240 counts right and down; tap the pointer where it shows
+            and the scale is worked out from both axes (<code>AirPlayManager::scaleFromCalibration</code>).
+          </p>
+        </section>
+
+        <section id="airplay-states">
+          <h3>What the page shows</h3>
+          <table>
+            <thead><tr><th><code>state</code></th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td><code>unavailable</code></td><td>This build has no AirPlay receiver</td></tr>
+              <tr><td><code>off</code></td><td><code>airPlayEnabled</code> is off; the page offers <em>Turn on AirPlay</em></td></tr>
+              <tr><td><code>error</code></td><td>The receiver could not start (no port, mDNS port 5353 unusable, the key file); <code>status</code> says which</td></tr>
+              <tr><td><code>waiting</code></td><td>Advertised; the setup steps and OCTAVE's addresses</td></tr>
+              <tr><td><code>pin</code></td><td>A new iPhone is pairing: the PIN to type</td></tr>
+              <tr><td><code>connected</code></td><td>An iPhone is connecting</td></tr>
+              <tr><td><code>mirroring</code></td><td>The screen is mirrored (the page shows it)</td></tr>
+              <tr><td><code>audio</code></td><td>AirPlay audio only, with the track's title and artist</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="airplay-inside">
+          <h3>How it works</h3>
+          <p>
+            The protocol is UxPlay's library, compiled in from <span class="file-path">third_party/uxplay/</span> as
+            <code>octave_uxplay</code> (RTSP over llhttp, legacy and AirPlay&nbsp;2 pairing, FairPlay setup, the mirror and audio RTP
+            streams, NTP timing, and its own mDNS responder, so no Avahi or Bonjour is needed). It advertises
+            <code>_airplay._tcp</code> and <code>_raop._tcp</code> with UxPlay's mirroring + audio feature set, without AirPlay video (HLS)
+            or H.265. <span class="file-path">src/airplay/airplayreceiver.{h,cpp}</span> does what UxPlay's GStreamer renderers did:
+          </p>
+          <ul>
+            <li>Video: the Annex B H.264 access units go through the shared <code>H264Decoder</code> on UxPlay's mirror thread; the newest
+              frame goes to the page's <code>VideoOutput</code> sink, as with phone mirroring and Android Auto. The display size offered to
+              the iPhone is <code>airPlayResolution</code> (1280x720 at 30 fps by default).</li>
+            <li>Audio: ALAC (music), AAC-LC or AAC-ELD (mirroring) through libavcodec into a <code>QAudioSink</code> on the picked output, at
+              OCTAVE's volume (<code>VolumeController</code>) times the iPhone's own slider through the same curve. Muting OCTAVE mutes it.</li>
+            <li>Track info (DMAP <code>minm</code> / <code>asar</code> / <code>asal</code>) and cover art go to <code>title</code> /
+              <code>artist</code> / <code>album</code> and <code>AirPlayManager::coverArt()</code>.</li>
+          </ul>
+          <p>Checked without an iPhone: <code>tst_airplay</code> starts a real receiver and reads its RTSP <code>/info</code>, and a running
+            OCTAVE answers mDNS queries for both services.</p>
+        </section>
+
+        <section id="airplay-limits">
+          <h3>What is not checked yet</h3>
+          <p>Everything that needs an iPhone (<span class="file-path">TODO/iphone-airplay.md</span>): the PIN pairing, the picture and audio,
+            the Bluetooth mouse pairing and reconnecting after a restart, the pointer path and the calibration, and the head unit's
+            software decode at 1280x720. AirPlay audio does not take part in <code>nowPlaying</code>'s one-source rules yet, so local music
+            keeps playing under it. CarPlay is a separate plan (<span class="file-path">TODO/carplay-native.md</span>).</p>
         </section>
 
         <!-- Custom QML Types -->

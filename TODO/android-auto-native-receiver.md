@@ -1,7 +1,7 @@
 # Native Android Auto receiver (replace the DHU screen-scrape)
 
 **Goal:** let a phone run Android Auto straight into OCTAVE, first over the adb connection phone mirroring already uses, later over a plain USB accessory link, with no Google Desktop Head Unit and no extra hardware.
-**Status:** Phases 0–2 done on branch `android-auto-native` (2026-10-25): OCTAVE runs real Android Auto from a phone over adb, in C++, on desktop Linux. Next: listen, talk and touch in person, then the Orange Pi / Jeep. DHU stays the default backend until then.
+**Status:** Phases 0–2 done and on `main` (2026-10-25): OCTAVE runs real Android Auto from a phone over adb, in C++, on desktop Linux. Next: listen, talk and touch in person, then the Orange Pi / Jeep. DHU stays the default backend until then.
 **Last updated:** 2026-10-25
 
 ## Where it stands

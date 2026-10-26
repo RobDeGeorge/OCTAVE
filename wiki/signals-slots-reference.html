@@ -41,6 +41,7 @@
             <li><a href="#gestureSensor">GestureManager</a></li>
             <li><a href="#androidAutoManager">AndroidAutoManager</a></li>
             <li><a href="#dhuCapture">DhuCapture</a></li>
+            <li><a href="#airPlayManager">AirPlayManager</a></li>
             <li><a href="#phoneMirrorManager">PhoneMirrorManager</a></li>
             <li><a href="#dashboardManager">DashboardManager</a></li>
             <li><a href="#frontendManager">FrontendManager</a></li>
@@ -83,6 +84,7 @@
             <tr><td><a href="#gestureSensor"><code>gestureSensor</code></a></td><td><code>GestureManager</code> &mdash; <span class="file-path">src/managers/gesturemanager.h</span></td><td>Mobile builds register a stub (see the section)</td></tr>
             <tr><td><a href="#androidAutoManager"><code>androidAutoManager</code></a></td><td><code>AndroidAutoManager</code> &mdash; <span class="file-path">src/managers/androidautomanager.h</span></td><td>Mobile builds register a stub (see the section)</td></tr>
             <tr><td><a href="#dhuCapture"><code>dhuCapture</code></a></td><td><code>DhuCapture</code> &mdash; <span class="file-path">src/managers/androidautomanager.h</span></td><td>Not registered directly; reached via <code>androidAutoManager.dhuCapture</code></td></tr>
+            <tr><td><a href="#airPlayManager"><code>airPlayManager</code></a></td><td><code>AirPlayManager</code> &mdash; <span class="file-path">src/managers/airplaymanager.h</span></td><td><code>available</code> false without the AirPlay receiver (Linux only so far)</td></tr>
             <tr><td><a href="#phoneMirrorManager"><code>phoneMirrorManager</code></a></td><td><code>PhoneMirrorManager</code> &mdash; <span class="file-path">src/managers/phonemirrormanager.h</span></td><td>Mobile builds register a stub (see the section)</td></tr>
             <tr><td><a href="#dashboardManager"><code>dashboardManager</code></a></td><td><code>DashboardManager</code> &mdash; <span class="file-path">src/managers/dashboardmanager.h</span></td><td></td></tr>
             <tr><td><a href="#frontendManager"><code>frontendManager</code></a></td><td><code>FrontendManager</code> &mdash; <span class="file-path">src/managers/frontendmanager.h</span></td><td></td></tr>
@@ -1344,6 +1346,59 @@
             <tr><td><code>captureStarted()</code></td><td>Capture started</td></tr>
             <tr><td><code>captureStopped()</code></td><td>Capture stopped</td></tr>
             <tr><td><code>error(QString message)</code></td><td>Capture error</td></tr>
+          </tbody>
+        </table>
+
+        <!-- AirPlayManager -->
+        <h2 id="airPlayManager">AirPlayManager <span class="cmt">&mdash; <code>airPlayManager</code></span></h2>
+        <p><span class="file-path">src/managers/airplaymanager.h</span> &mdash; QML context property <code>airPlayManager</code></p>
+        <p>An iPhone over AirPlay: its mirrored screen and audio, and touch back through OCTAVE as a Bluetooth LE mouse. See <a href="phone-mirror-android-auto.html#airplay">iPhone (AirPlay)</a>. Settings: <code>airPlayEnabled</code>, <code>airPlayName</code>, <code>airPlayRequirePin</code>, <code>airPlayResolution</code>, <code>airPlayTouchEnabled</code>, <code>airPlayTouchScale</code> (generic keys).</p>
+        <div class="info-box info"><div class="info-box-title">Experimental</div>Every member is marked <code>Q_CLASSINFO("octave.experimental", ...)</code>: published in <span class="file-path">docs/api/airPlayManager.json</span> but may change without a protocol version bump. Scope <code>phone</code>.</div>
+        <div class="info-box info"><div class="info-box-title">Build variants</div>Without <code>OCTAVE_HAVE_AIRPLAY</code> (libplist + OpenSSL + libavcodec, Linux) the class is the same with <code>available</code> false and <code>state</code> <code>"unavailable"</code>. Without BlueZ, <code>touchAvailable</code> is false and <code>touchState</code> is <code>"unavailable"</code>.</div>
+        <h3>Properties</h3>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>available</code></td><td><code>bool</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>Built with the AirPlay receiver</td></tr>
+            <tr><td><code>enabled</code></td><td><code>bool</code></td><td>read-only</td><td><code>enabledChanged</code></td><td><code>airPlayEnabled</code> (and available)</td></tr>
+            <tr><td><code>state</code></td><td><code>QString</code></td><td>read-only</td><td><code>stateChanged</code></td><td><code>off</code> | <code>unavailable</code> | <code>error</code> | <code>waiting</code> | <code>pin</code> | <code>connected</code> | <code>mirroring</code> | <code>audio</code></td></tr>
+            <tr><td><code>status</code></td><td><code>QString</code></td><td>read-only</td><td><code>stateChanged</code></td><td>The state as a sentence for a person</td></tr>
+            <tr><td><code>receiverName</code></td><td><code>QString</code></td><td>read-only</td><td><code>stateChanged</code></td><td>What the iPhone lists (<code>airPlayName</code>)</td></tr>
+            <tr><td><code>deviceName</code> / <code>deviceModel</code></td><td><code>QString</code></td><td>read-only</td><td><code>stateChanged</code></td><td>The connecting iPhone's name and model</td></tr>
+            <tr><td><code>pin</code></td><td><code>QString</code></td><td>read-only</td><td><code>stateChanged</code></td><td>The PIN to show while a new iPhone pairs; empty otherwise</td></tr>
+            <tr><td><code>mirroring</code> / <code>audioStreaming</code></td><td><code>bool</code></td><td>read-only</td><td><code>stateChanged</code></td><td>Screen mirroring / AirPlay audio is running</td></tr>
+            <tr><td><code>frameWidth</code> / <code>frameHeight</code></td><td><code>int</code></td><td>read-only</td><td><code>frameSizeChanged</code></td><td>Size of the mirrored picture</td></tr>
+            <tr><td><code>title</code> / <code>artist</code> / <code>album</code></td><td><code>QString</code></td><td>read-only</td><td><code>mediaChanged</code></td><td>Track info sent with AirPlay audio</td></tr>
+            <tr><td><code>addresses</code></td><td><code>QStringList</code></td><td>read-only</td><td><code>stateChanged</code></td><td>This machine's IPv4 addresses on real interfaces (no container bridges or VPN tunnels)</td></tr>
+            <tr><td><code>videoSink</code></td><td><code>QObject*</code></td><td>read/write</td><td><code>videoSinkChanged</code></td><td>The <code>QVideoSink</code> the mirrored picture goes to (<code>AirPlayView.qml</code> sets it)</td></tr>
+            <tr><td><code>touchAvailable</code></td><td><code>bool</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>Built with the Bluetooth mouse (BlueZ)</td></tr>
+            <tr><td><code>touchEnabled</code></td><td><code>bool</code></td><td>read-only</td><td><code>touchChanged</code></td><td><code>airPlayTouchEnabled</code></td></tr>
+            <tr><td><code>touchState</code></td><td><code>QString</code></td><td>read-only</td><td><code>touchChanged</code></td><td><code>unavailable</code> | <code>off</code> | <code>waiting</code> | <code>connected</code></td></tr>
+            <tr><td><code>touchStatus</code> / <code>touchDevice</code></td><td><code>QString</code></td><td>read-only</td><td><code>touchChanged</code></td><td>The mouse's state as a sentence; the connected iPhone's name</td></tr>
+            <tr><td><code>touchPairing</code></td><td><code>bool</code></td><td>read-only</td><td><code>touchChanged</code></td><td>The pairing window is open</td></tr>
+            <tr><td><code>touchCalibrating</code></td><td><code>bool</code></td><td>read-only</td><td><code>touchChanged</code></td><td>Waiting for the calibration tap</td></tr>
+          </tbody>
+        </table>
+        <h3>Invokables &amp; Slots</h3>
+        <table>
+          <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>setEnabled(bool enabled)</code></td><td><code>void</code></td><td>Saves <code>airPlayEnabled</code>: start or stop advertising</td></tr>
+            <tr><td><code>setTouchEnabled(bool enabled)</code></td><td><code>void</code></td><td>Saves <code>airPlayTouchEnabled</code>: start or stop the Bluetooth mouse</td></tr>
+            <tr><td><code>pairTouch(bool open = true)</code></td><td><code>void</code></td><td>Accept a new Bluetooth pairing for three minutes (closes once an iPhone connects); false closes it</td></tr>
+            <tr><td><code>injectTouch(int pointerId, int action, double x, double y)</code></td><td><code>void</code></td><td>A touch on the mirrored picture: action 0 down / 1 up / 2 move, x / y in 0..1. The first finger moves the pointer; only while the mouse is connected</td></tr>
+            <tr><td><code>scroll(int dx, int dy)</code></td><td><code>void</code></td><td>Wheel steps (positive dy scrolls down)</td></tr>
+            <tr><td><code>calibrateTouch()</code> / <code>cancelCalibration()</code></td><td><code>void</code></td><td>Home the pointer and move it 240 counts right and down; the next tap marks where it shows and sets <code>airPlayTouchScale</code></td></tr>
+            <tr><td><code>forgetDevices()</code></td><td><code>void</code></td><td>Forget every iPhone that paired with the PIN</td></tr>
+          </tbody>
+        </table>
+        <h3>Signals</h3>
+        <table>
+          <thead><tr><th>Signal</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>enabledChanged()</code>, <code>stateChanged()</code>, <code>mediaChanged()</code>, <code>frameSizeChanged()</code>, <code>videoSinkChanged()</code>, <code>touchChanged()</code></td><td>Property notifications</td></tr>
+            <tr><td><code>mirroringStarted()</code></td><td>An iPhone started mirroring (<code>Main.qml</code> opens the iPhone page)</td></tr>
+            <tr><td><code>audioStreamingChanged(bool streaming)</code></td><td>AirPlay audio started or stopped</td></tr>
           </tbody>
         </table>
 

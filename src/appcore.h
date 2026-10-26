@@ -33,6 +33,7 @@
 #include "managers/parameterstore.h"
 #include "managers/gesturemanager.h"      // desktop-only; empty on Q_OS_MOBILE
 #include "managers/androidautomanager.h"
+#include "managers/airplaymanager.h"
 #include "managers/phonemirrormanager.h"
 #include "managers/nowplaying.h"
 #include "managers/themecatalog.h"
@@ -81,6 +82,7 @@ public:
     GestureManager gestureSensor;
     AndroidAutoManager androidAutoManager;
     PhoneMirrorManager phoneMirrorManager;
+    AirPlayManager airPlayManager;
     NowPlaying nowPlaying;
     FontCatalog fontCatalog;
     ThemeCatalog themeCatalog;
