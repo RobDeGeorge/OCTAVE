@@ -107,7 +107,7 @@
 
         <h3>QML consumers</h3>
         <ul>
-          <li><span class="file-path">frontend/BottomBar.qml</span> &mdash; one <code>Connections { target: clock }</code> at bar level writes a shared <code>clockTimeText</code> property that both the horizontal and the vertical layout bind to, so the layout loaded on an orientation switch shows the current time at once instead of waiting for the next emit</li>
+          <li><span class="file-path">frontend/BottomBar.qml</span> &mdash; <code>clockTimeText</code> binds <code>clock.time</code>, so the bar shows the current time from its first frame</li>
           <li><span class="file-path">frontend/ClockMenu.qml</span> &mdash; same signal drives the digital readout, the date line and the analog hands (<code>time.split(":")</code> for hours / minutes / seconds; a missing seconds field, i.e. <code>clockShowSeconds</code> off, counts as 0)</li>
         </ul>
         <p>The Clock does not log.</p>

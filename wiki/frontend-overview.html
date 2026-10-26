@@ -259,7 +259,7 @@
         <p>Each entry is handed to <code>stackView.openPage(entry.file, entry.props)</code>, so the command server shares the page cache with the BottomBar and never fails on a <code>null</code> <code>createObject()</code> (<code>cachedPage()</code> supplies <code>stackView</code> and <code>mainWindow</code> itself). <code>navigateToSettings(section)</code> opens the cached SettingsMenu and then calls its <code>navigateToCategory()</code>, so the sweeper lands on the requested section even when the page already existed. ClockMenu is also opened by tapping the BottomBar clock.</p>
 
         <h3>StackView anchoring</h3>
-        <p>When the bottom bar is vertical (side mode) the StackView fills from the bar's right edge to the window's right edge; when horizontal, from the top of the window to the bar's top. The BottomBar itself re-anchors in its <code>onIsVerticalChanged</code> handler in Main.qml (width <code>parent.width * 0.1</code> when vertical; height <code>parent.height * Spacing.bottomBarHeightPercent</code> when horizontal).</p>
+        <p>When the bottom bar is vertical (side mode) the StackView fills from the bar's right edge to the window's right edge; when horizontal, from the top of the window to the bar's top. The BottomBar places and sizes itself with bindings: about 10&nbsp;% of the window width as a side bar, 12.5&nbsp;% of the window height along the bottom, within limits (see <a href="bottom-bar.html#orientation">Bottom Bar &rarr; Dual Orientation</a>).</p>
 
         <!-- IMU gating -->
         <h2 id="imu-gating">IMU Rate Gating by Page Demand</h2>

@@ -189,7 +189,7 @@
         <!-- ThemedIcon -->
         <h2 id="themed-icon">ThemedIcon</h2>
 
-        <p><span class="file-path">frontend/ThemedIcon.qml</span> is a theme-tinted SVG icon. The header comment explains its purpose: it "wraps the Image + ColorOverlay pair that the rest of the app hand-rolls at every call site (BottomBar.qml alone repeats it ~20 times)", and the assets in <span class="file-path">frontend/assets/</span> "are authored as flat white fills precisely so they can be recoloured this way".</p>
+        <p><span class="file-path">frontend/ThemedIcon.qml</span> is a theme-tinted SVG icon. The header comment explains its purpose: it "wraps the Image + ColorOverlay pair that the rest of the app hand-rolls at every call site (BottomBar.qml alone repeats it ~20 times)", and the assets in <span class="file-path">frontend/assets/</span> "are authored as flat white fills precisely so they can be recoloured this way". (BottomBar.qml has since folded its copies into one inline <code>TintedIcon</code>.)</p>
 
         <pre><code><span class="prop">property url</span> source: <span class="str">""</span>          <span class="cmt">// relative to the *importing* file; subdirectories pass "../assets/…"</span>
 <span class="prop">property color</span> color: <span class="str">"#FFFFFF"</span>   <span class="cmt">// tint for every non-transparent pixel</span>

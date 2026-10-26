@@ -1,9 +1,10 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
 import QtQuick.Controls.Basic 2.15
+import QtQuick.Layouts 1.15
 import Qt5Compat.GraphicalEffects
 import "." as App
+import "BottomBarLayout.js" as BarLayout
 
 Rectangle {
     // Local dp/dpMin wrappers — work around Qt Android singleton-function bug.
@@ -30,48 +31,88 @@ Rectangle {
     // button is dimmed meanwhile
     function mediaToggleShuffle() { if (_np) _np.toggleShuffle() }
 
-    // Shared shuffle state for both layouts' shuffle buttons
     readonly property bool isShuffleEnabled: !!_np && _np.shuffled
 
-    // Clock text shared by both layouts. Held at bottomBar level (rather than
-    // set on each layout's Text from its own Connections) so the layout that
-    // is loaded on an orientation switch shows the current time immediately
-    // instead of staying blank until the clock next emits — up to a minute
-    // when seconds are hidden.
-    property string clockTimeText: ""
+    // null at shutdown, when the managers go before the engine
+    readonly property int volumePercent: volumeController ? volumeController.percent : 0
+    readonly property string muteIcon: {
+        if (!volumeController || volumeController.effectivelyMuted)
+            return "./assets/mute_on.svg"
+        if (volumePercent < 33) return "./assets/mute_off_low.svg"
+        if (volumePercent < 66) return "./assets/mute_off_med.svg"
+        return "./assets/mute_off_high.svg"
+    }
 
-    // ── Auto clock size ──
-    // When on, the clock takes the largest font that fits its slot in the bar.
-    // Measured at a 100px reference and scaled, since the clock's container
-    // sizes itself to the text (fitting against it directly would loop).
-    // Digits are measured as "8" so the size doesn't jitter every second.
+    readonly property string clockTimeText: (typeof clock !== "undefined" && clock) ? clock.time : ""
     property bool clockSizeAuto: settingsManager ? settingsManager.clockSizeAuto : true
     property int manualClockSize: settingsManager ? settingsManager.clockSize : 18
 
+    // ── Size and place ──
+    // The bar is a band along the bottom (or the left, as a side bar). Its
+    // thickness follows the window but stays within limits: never thinner
+    // than a touchable minimum, never a fat slab on a portrait or ultrawide
+    // screen. Everything inside is placed by BottomBarLayout.js from the
+    // bar's own size, so nothing inside depends on the window directly.
+    readonly property real _parentW: parent ? parent.width : 0
+    readonly property real _parentH: parent ? parent.height : 0
+    readonly property int thickness: isVertical
+        ? Math.round(Math.max(Math.min(_parentW * 0.1, _parentH * 0.16),
+                              Math.min(_parentW * 0.2, dpMin(72, 56))))
+        : Math.round(Math.max(Math.min(_parentH * App.Spacing.bottomBarHeightPercent, _parentW * 0.09),
+                              Math.min(_parentH * 0.2, dpMin(56, 44))))
+    x: 0
+    y: isVertical ? 0 : _parentH - height
+    width: isVertical ? thickness : _parentW
+    height: isVertical ? _parentH : thickness
+
+    // Text is measured at 100 px and scaled: the layout needs width and
+    // height per pixel of font size. Digits are measured as "8" so the clock
+    // doesn't move the layout as the minutes change.
     TextMetrics {
         id: clockMetrics
         font.family: bottomBar.globalFont
         font.pixelSize: 100
-        text: bottomBar.clockTimeText.replace(/[0-9]/g, "8")
+        text: (bottomBar.clockTimeText || "88:88 PM").replace(/[0-9]/g, "8")
+    }
+    TextMetrics {
+        id: volumeMetrics
+        font.family: bottomBar.globalFont
+        font.pixelSize: 100
+        font.bold: true
+        text: "100%"
     }
 
-    function autoClockSize(availWidth, availHeight) {
-        if (clockMetrics.width <= 0 || clockMetrics.height <= 0)
-            return manualClockSize
-        var byWidth = availWidth * 100 / clockMetrics.width
-        var byHeight = availHeight * 100 / clockMetrics.height
-        return Math.max(10, Math.min(85, Math.floor(Math.min(byWidth, byHeight))))
+    // The nav buttons shown, in order
+    readonly property var navSections: {
+        var s = ["home", "obd", "media", "sensor", "settings"]
+        if (settingsManager && settingsManager.androidAutoEnabled)   // Settings > Accessories > Phone Dock > Android Auto
+            s.push("androidAuto")
+        if (typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null && phoneMirrorManager.nativeAvailable
+                && settingsManager && settingsManager.phoneMirrorEnabled)
+            s.push("phoneMirror")
+        return s
     }
 
-    Connections {
-        target: clock
-        function onTimeChanged(time) {
-            bottomBar.clockTimeText = time
-        }
-    }
+    readonly property var geo: BarLayout.compute({
+        vertical: isVertical,
+        width: width,
+        height: height,
+        navCount: navSections.length,
+        showMedia: settingsManager ? settingsManager.showBottomBarMediaControls : true,
+        showClock: settingsManager ? settingsManager.showClock : true,
+        clockAuto: clockSizeAuto,
+        clockPx: manualClockSize,
+        clockWidthPerPx: clockMetrics.advanceWidth / 100,
+        clockHeightPerPx: clockMetrics.height / 100,
+        volumeWidthPerPx: volumeMetrics.advanceWidth / 100,
+        volumeHeightPerPx: volumeMetrics.height / 100,
+        // Smallest nav button before controls are dropped: in proportion
+        // to the window (not dp(), which follows the screen), never below a
+        // fingertip
+        minUnit: Math.max(24, 0.045 * Math.min(_parentW, _parentH)),
+        scale: App.Spacing.globalScale
+    })
 
-    Component.onCompleted: updateLayout()
-    
     // Show a sensor page, returning true on success. openPage() logs every
     // failure — a silently-swallowed load error here reads to the user as "the
     // sensor button is dead" with nothing in the console to explain it.
@@ -225,6 +266,11 @@ Rectangle {
     // Pressed again while the mirror is on screen and streaming, the button
     // is the phone's Home button.
     function openPhoneMirrorSection() {
+        // An iPhone mirroring over AirPlay is the phone on screen
+        if (typeof airPlayManager !== "undefined" && airPlayManager.mirroring) {
+            stackView.openPage("AirPlayView.qml")
+            return
+        }
         var currentItem = stackView.currentItem
         if (currentItem && currentItem.objectName === "phoneMirrorView"
                 && currentItem.mirrorRunning && phoneMirrorManager) {
@@ -239,66 +285,29 @@ Rectangle {
         stackView.openPage("ClockMenu.qml")
     }
 
-    function updateLayout() {
-        if (isVertical) {
-            // Release anchors first to prevent binding loops
-            anchors.bottom = undefined
-            anchors.right = undefined
-            
-            // Set anchors for vertical layout
-            anchors.left = parent.left
-            anchors.top = parent.top
-            
-            // Explicitly set width and height as percentages
-            width = parent.width * 0.1
-            height = parent.height
-        } else {
-            // Release anchors first
-            anchors.top = undefined
-            anchors.right = undefined
-            
-            // Set anchors for horizontal layout
-            anchors.left = parent.left
-            anchors.bottom = parent.bottom
-            
-            // Explicitly set width and height
-            width = parent.width
-            height = parent.height * App.Spacing.bottomBarHeightPercent
+    // What each nav button shows and does
+    readonly property var navButtons: ({
+        home:        { icon: "./assets/home_button.svg",          open: openHomeSection },
+        obd:         { icon: "./assets/obd_button.svg",           open: openOBDSection },
+        media:       { icon: "./assets/media_button.svg",         open: openMediaSection },
+        sensor:      { icon: "./assets/sensor_button.svg",        open: openSensorSection },
+        settings:    { icon: "./assets/settings_button.svg",      open: openSettingsSection },
+        androidAuto: { icon: "./assets/android_auto_button.svg",  open: openAndroidAutoSection },
+        phoneMirror: { icon: "./assets/phone_mirror_button.svg",  open: openPhoneMirrorSection }
+    })
+    function navColor(section) {
+        switch (section) {
+        case "home": return App.Style.bottomBarHomeButton
+        case "obd": return App.Style.bottomBarOBDButton
+        case "media": return App.Style.bottomBarMediaButton
+        case "sensor": return App.Style.bottomBarSensorButton
+        case "settings": return App.Style.bottomBarSettingsButton
+        case "androidAuto": return App.Style.bottomBarAndroidAutoButton
+        case "phoneMirror": return App.Style.bottomBarPhoneMirrorButton
         }
+        return App.Style.accent
     }
-    
-    // Watch for settings changes
-    Connections {
-        target: settingsManager
-        function onBottomBarOrientationChanged() {
-            updateLayout()
-        }
-    }
-    
-    // Watch for isVertical changes
-    onIsVerticalChanged: {
-        updateLayout()
-    }
-    
-    // Explicitly handle parent size changes
-    Connections {
-        target: parent
-        function onWidthChanged() {
-            if (isVertical) {
-                width = parent.width * 0.1
-            } else {
-                width = parent.width
-            }
-        }
-        function onHeightChanged() {
-            if (isVertical) {
-                height = parent.height
-            } else {
-                height = parent.height * App.Spacing.bottomBarHeightPercent
-            }
-        }
-    }
-    
+
     gradient: Gradient {
         orientation: isVertical ? Gradient.Horizontal : Gradient.Vertical
         GradientStop { position: 1.5; color: App.Style.bottomBarGradientStart }
@@ -306,7 +315,7 @@ Rectangle {
     }
 
     // Which nav button owns the page on top of the stack ("" = none). Drives
-    // the NavHighlight behind that button in both layouts.
+    // the highlight plate behind that button.
     readonly property string activeSection: {
         var item = stackView ? stackView.currentItem : null
         var n = item ? item.objectName : ""
@@ -316,48 +325,9 @@ Rectangle {
         if (n.indexOf("sensor") === 0 || n === "carMenu") return "sensor"
         if (n === "settingsMenu") return "settings"
         if (n === "androidAutoView") return "androidAuto"
-        if (n === "phoneMirrorView") return "phoneMirror"
+        if (n === "phoneMirrorView" || n === "airPlayView") return "phoneMirror"
         return ""
     }
-
-    // Accent-tinted plate behind the active nav button. Each button has its
-    // own plate that grows out from the button's centre when it becomes
-    // active and shrinks back when it doesn't. Lives beside the button layout
-    // (not in it) so the layout doesn't position it; declared before the
-    // layout so it draws behind the icons.
-    component NavHighlight: Item {
-        id: highlight
-        property Item layout
-        // { section: button } for this layout; ids inside the Loader
-        // components aren't reachable from bottomBar scope.
-        property var buttons: ({})
-
-        Repeater {
-            model: Object.keys(highlight.buttons)
-
-            Rectangle {
-                required property string modelData
-                readonly property Item button: highlight.buttons[modelData]
-                readonly property bool active: bottomBar.activeSection === modelData
-                                               && button !== null && button.visible
-
-                x: highlight.layout && button ? highlight.layout.x + button.x : 0
-                y: highlight.layout && button ? highlight.layout.y + button.y : 0
-                width: button ? button.width : 0
-                height: button ? button.height : 0
-                radius: dpMin(8, 2)  // matches the nav button outline
-                color: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.18)
-
-                scale: active ? 1 : 0
-                opacity: active ? 1 : 0
-                visible: opacity > 0
-                Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
-                Behavior on opacity { NumberAnimation { duration: 140 } }
-            }
-        }
-    }
-
-
 
     // Nav presses run a frame late. The press handler is where a page may
     // still have to be built (a tap before pre-building finishes can take
@@ -411,8 +381,92 @@ Rectangle {
         }
     }
 
+    // An SVG icon drawn in one colour
+    component TintedIcon: Item {
+        id: tinted
+        property url source
+        property color color
+        Image {
+            id: tintedImage
+            anchors.fill: parent
+            source: tinted.source
+            sourceSize: Qt.size(Math.max(1, width * 2), Math.max(1, height * 2))
+            fillMode: Image.PreserveAspectFit
+            smooth: true
+            antialiasing: true
+            mipmap: true
+            visible: false
+        }
+        ColorOverlay {
+            anchors.fill: tintedImage
+            source: tintedImage
+            color: tinted.color
+        }
+    }
+
+    // One control: the item spans its touch area (geo.hits), the face inside
+    // it is the drawn part (geo.items). The layout guarantees neither
+    // overlaps a neighbour's.
+    component BarSlot: Item {
+        id: slot
+        required property var face
+        required property var hit
+        readonly property alias faceItem: faceItem
+        default property alias content: faceItem.data
+        visible: face.visible
+        x: hit.x
+        y: hit.y
+        width: hit.w
+        height: hit.h
+        Item {
+            id: faceItem
+            x: slot.face.x - slot.hit.x
+            y: slot.face.y - slot.hit.y
+            width: slot.face.w
+            height: slot.face.h
+        }
+    }
+
+    // A media control: squishes while pressed, acts on release
+    component MediaButton: BarSlot {
+        id: mb
+        property url source
+        property color color
+        property real iconScale: 1.0
+        property bool toggled: false
+        property real restOpacity: 1.0
+        signal tapped()
+
+        Item {
+            anchors.fill: parent
+            scale: area.pressed ? 0.8 : 1.0
+            opacity: area.pressed ? 0.7 : mb.restOpacity
+            Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.OutBack; easing.overshoot: 1.1 } }
+            Behavior on opacity { NumberAnimation { duration: 150 } }
+
+            Rectangle {
+                anchors.fill: parent
+                radius: width * 0.12
+                color: mb.toggled ? App.Style.bottomBarToggleShade : "transparent"
+            }
+            TintedIcon {
+                anchors.centerIn: parent
+                width: parent.width * mb.iconScale
+                height: parent.height * mb.iconScale
+                source: mb.source
+                color: mb.color
+            }
+        }
+        MouseArea {
+            id: area
+            parent: mb
+            anchors.fill: parent
+            onClicked: mb.tapped()
+        }
+    }
+
     signal clicked()
-    
+
     MouseArea {
         anchors.fill: parent
         onClicked: function(mouse) {
@@ -425,1982 +479,276 @@ Rectangle {
     required property StackView stackView
     required property Window mainWindow
 
-    Loader {
-        anchors.fill: parent
-        sourceComponent: isVertical ? verticalLayoutComponent : horizontalLayoutComponent
+    // ── Media controls ──
+    MediaButton {
+        face: bottomBar.geo.items.prev; hit: bottomBar.geo.hits.prev
+        source: "./assets/previous_button.svg"
+        color: App.Style.bottomBarPreviousButton
+        onTapped: bottomBar.mediaPrevious()
+    }
+    MediaButton {
+        face: bottomBar.geo.items.play; hit: bottomBar.geo.hits.play
+        source: bottomBar.playIcon
+        color: App.Style.bottomBarPlayButton
+        onTapped: bottomBar.mediaTogglePlay()
+    }
+    MediaButton {
+        face: bottomBar.geo.items.next; hit: bottomBar.geo.hits.next
+        source: "./assets/next_button.svg"
+        color: App.Style.bottomBarNextButton
+        onTapped: bottomBar.mediaNext()
+    }
+    MediaButton {
+        face: bottomBar.geo.items.shuffle; hit: bottomBar.geo.hits.shuffle
+        source: "./assets/shuffle_button.svg"
+        color: bottomBar.isShuffleEnabled ? App.Style.bottomBarActiveToggleButton : App.Style.bottomBarShuffleButton
+        iconScale: 0.7
+        toggled: bottomBar.isShuffleEnabled
+        restOpacity: bottomBar.useRemote ? 0.35 : 1.0
+        onTapped: bottomBar.mediaToggleShuffle()
+    }
+    MediaButton {
+        face: bottomBar.geo.items.mute; hit: bottomBar.geo.hits.mute
+        source: bottomBar.muteIcon
+        color: App.Style.bottomBarVolumeButton
+        // At 0 % this restores the startup volume instead
+        onTapped: volumeController.toggleMute()
+    }
+    BarSlot {
+        id: volumeSlot
+        face: bottomBar.geo.items.volume; hit: bottomBar.geo.hits.volume
+        Text {
+            anchors.centerIn: parent
+            text: bottomBar.volumePercent + "%"
+            color: App.Style.primaryTextColor
+            font.pixelSize: bottomBar.geo.volumePx
+            font.bold: true
+            font.family: bottomBar.globalFont
+        }
+        MouseArea {
+            parent: volumeSlot
+            anchors.fill: parent
+            onClicked: popupSlider.open()
+        }
+    }
 
-        Component { //horizontal 
-            id: horizontalLayoutComponent
+    // ── Nav buttons ──
+    Repeater {
+        model: bottomBar.navSections
 
-            RowLayout { // Main layout that divides the bar into three sections with equal spacing
+        BarSlot {
+            id: navSlot
+            required property string modelData
+            required property int index
+            readonly property bool active: bottomBar.activeSection === modelData
+            face: bottomBar.geo.nav[index] || ({ x: 0, y: 0, w: 0, h: 0, visible: false })
+            hit: bottomBar.geo.navHits[index] || ({ x: 0, y: 0, w: 0, h: 0, visible: false })
+
+            // Accent-tinted plate behind the active button: grows out from
+            // the button's centre when it becomes active, shrinks back when
+            // it doesn't. Outside the face so the press bounce leaves it be.
+            Rectangle {
+                parent: navSlot
+                z: -1
+                x: navSlot.faceItem.x; y: navSlot.faceItem.y
+                width: navSlot.faceItem.width; height: navSlot.faceItem.height
+                radius: Math.min(width, height) * 0.14  // matches the outline
+                color: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.18)
+                scale: navSlot.active ? 1 : 0
+                opacity: navSlot.active ? 1 : 0
+                visible: opacity > 0
+                Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                Behavior on opacity { NumberAnimation { duration: 140 } }
+            }
+
+            Rectangle {
                 anchors.fill: parent
-                spacing: 0 // We'll handle spacing within each section
-                
+                color: "transparent"
+                radius: Math.min(width, height) * 0.14
+                border.color: App.Style.accent
+                border.width: 1
+            }
+            TintedIcon {
+                anchors.centerIn: parent
+                width: Math.min(parent.width, parent.height) * 0.7
+                height: width
+                source: bottomBar.navButtons[navSlot.modelData].icon
+                color: bottomBar.navColor(navSlot.modelData)
+            }
 
-                Item { // SECTION 1: Left section - Media Controls
-                    id: mediaControlsSection
-                    property bool showControls: settingsManager ? settingsManager.showBottomBarMediaControls : true
-                    // When hidden, mirror the clock section's width so nav buttons sit at the true horizontal center
-                    Layout.preferredWidth: showControls ? parent.width * 0.4 : clockSection.width
-                    Layout.fillHeight: true
-                    // Keep item visible to preserve space, just hide the contents
+            // Settings: update available
+            Rectangle {
+                visible: navSlot.modelData === "settings" && networkManager && networkManager.updateStatus === "update-available"
+                width: Math.max(6, Math.min(parent.width, parent.height) * 0.14)
+                height: width
+                radius: width / 2
+                color: "#FF9800"
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.topMargin: -width / 8
+                anchors.rightMargin: -width / 8
 
-                    RowLayout {
-                        id: mediaControls
-                        visible: mediaControlsSection.showControls
-                        anchors {
-                            left: parent.left
-                            leftMargin: App.Spacing.overallMargin
-                            right: parent.right
-                            rightMargin: App.Spacing.overallMargin
-                            verticalCenter: parent.verticalCenter
-                        }
-                        spacing: App.Spacing.bottomBarBetweenButtonMargin
-
-                        // Previous button
-                        Control {
-                            id: previousButtonControl
-                            implicitWidth: App.Spacing.bottomBarPreviousButtonWidth
-                            implicitHeight: App.Spacing.bottomBarPreviousButtonHeight
-                            Layout.alignment: Qt.AlignVCenter
-                            
-                            scale: mouseAreaPrev.pressed ? 0.8 : 1.0
-                            opacity: mouseAreaPrev.pressed ? 0.7 : 1.0
-                            
-                            Behavior on scale {
-                                NumberAnimation {
-                                    duration: 200
-                                    easing.type: Easing.OutBack  
-                                    easing.overshoot: 1.1
-                                }
-                            }
-                            
-                            Behavior on opacity {
-                                NumberAnimation { duration: 150 }
-                            }
-
-                            background: Rectangle { color: "transparent" }
-                            
-                            contentItem: Item {
-                                Image {
-                                    id: previousButtonImage
-                                    anchors.centerIn: parent
-                                    width: parent.width
-                                    height: parent.height
-                                    source: "./assets/previous_button.svg"
-                                    sourceSize: Qt.size(width * 2, height * 2)
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    antialiasing: true
-                                    mipmap: true
-                                    visible: false
-                                }
-                                
-                                ColorOverlay {
-                                    id: colorOverlay
-                                    anchors.fill: previousButtonImage
-                                    source: previousButtonImage
-                                    color: App.Style.bottomBarPreviousButton
-                                }
-                            }
-                            Item {
-                                id: previousButtonClickArea
-                                anchors.centerIn: parent
-                                width: parent.width * 2.5
-                                height: parent.height * 3.0
-
-                                MouseArea {
-                                    id: mouseAreaPrev
-                                    anchors.fill: parent
-                                    onClicked: bottomBar.mediaPrevious()
-                                }
-                            }
-                        }
-
-                        // Play/Pause button
-                        Control {
-                            id: playButtonControl
-                            implicitWidth: App.Spacing.bottomBarPreviousButtonWidth
-                            implicitHeight: App.Spacing.bottomBarPreviousButtonHeight
-                            Layout.alignment: Qt.AlignVCenter
-                            clip: false
-
-                            scale: mouseAreaPlay.pressed ? 0.8 : 1.0
-                            opacity: mouseAreaPlay.pressed ? 0.7 : 1.0
-
-                            Behavior on scale {
-                                NumberAnimation {
-                                    duration: 200
-                                    easing.type: Easing.OutBack
-                                    easing.overshoot: 1.1
-                                }
-                            }
-
-                            Behavior on opacity {
-                                NumberAnimation { duration: 150 }
-                            }
-
-                            background: Rectangle { color: "transparent" }
-
-                            contentItem: Item {
-                                clip: false
-                                Image {
-                                    id: playButtonImage
-                                    anchors.centerIn: parent
-                                    width: App.Spacing.bottomBarPlayButtonWidth
-                                    height: App.Spacing.bottomBarPlayButtonHeight
-                                    source: bottomBar.playIcon
-                                    sourceSize: Qt.size(width * 2, height * 2)
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    antialiasing: true
-                                    mipmap: true
-                                    visible: false
-                                }
-
-                                ColorOverlay {
-                                    anchors.fill: playButtonImage
-                                    source: playButtonImage
-                                    color: App.Style.bottomBarPlayButton
-                                }
-                            }
-                            Item {
-                                id: playButtonClickArea
-                                anchors.centerIn: parent
-                                width: App.Spacing.bottomBarPlayButtonWidth * 1.5
-                                height: App.Spacing.bottomBarPlayButtonHeight * 2.5
-
-                                MouseArea {
-                                    id: mouseAreaPlay
-                                    anchors.fill: parent
-                                    onClicked: bottomBar.mediaTogglePlay()
-                                }
-                            }
-                        }
-
-                        // Next button
-                        Control {
-                            id: nextButtonControl
-                            implicitWidth: App.Spacing.bottomBarNextButtonWidth
-                            implicitHeight: App.Spacing.bottomBarNextButtonHeight
-                            Layout.alignment: Qt.AlignVCenter
-
-                            scale: mouseAreaNext.pressed ? 0.8 : 1.0
-                            opacity: mouseAreaNext.pressed ? 0.7 : 1.0
-                            
-                            Behavior on scale {
-                                NumberAnimation {
-                                    duration: 200
-                                    easing.type: Easing.OutBack  
-                                    easing.overshoot: 1.1
-                                }
-                            }
-                            
-                            Behavior on opacity {
-                                NumberAnimation { duration: 150 }
-                            }
-                            
-                            background: Rectangle { color: "transparent" }
-                            
-                            contentItem: Item {
-                                Image {
-                                    id: nextButtonImage
-                                    anchors.centerIn: parent
-                                    width: parent.width
-                                    height: parent.height
-                                    source: "./assets/next_button.svg"
-                                    sourceSize: Qt.size(width * 2, height * 2)
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    antialiasing: true
-                                    mipmap: true
-                                    visible: false
-                                }
-                                
-                                ColorOverlay {
-                                    anchors.fill: nextButtonImage
-                                    source: nextButtonImage
-                                    color: App.Style.bottomBarNextButton
-                                }
-                            }
-                            Item {
-                                id: nextButtonClickArea
-                                anchors.centerIn: parent
-                                width: parent.width * 2.5
-                                height: parent.height * 3.0
-
-                                MouseArea {
-                                    id: mouseAreaNext
-                                    anchors.fill: parent
-                                    onClicked: bottomBar.mediaNext()
-                                }
-                            }
-                        }
-
-                        // Shuffle button
-                        Control {
-                            id: shuffleButton
-                            implicitWidth: App.Spacing.bottomBarShuffleButtonWidth
-                            implicitHeight: App.Spacing.bottomBarShuffleButtonHeight
-                            Layout.alignment: Qt.AlignVCenter
-
-                            scale: mouseAreaShuffle.pressed ? 0.8 : 1.0
-                            opacity: mouseAreaShuffle.pressed ? 0.7 : (bottomBar.useRemote ? 0.35 : 1.0)
-                            
-                            Behavior on scale {
-                                NumberAnimation {
-                                    duration: 200
-                                    easing.type: Easing.OutBack  
-                                    easing.overshoot: 1.1
-                                }
-                            }
-                            
-                            Behavior on opacity {
-                                NumberAnimation { duration: 150 }
-                            }
-
-                            background: Rectangle {
-                                color: bottomBar.isShuffleEnabled ? App.Style.bottomBarToggleShade : "transparent"
-                                radius: 4
-                            }
-
-                            contentItem: Item {
-                                Image {
-                                    id: shuffleButtonImage
-                                    anchors.centerIn: parent
-                                    width: parent.width * 0.7
-                                    height: parent.height * 0.7
-                                    source: "./assets/shuffle_button.svg"
-                                    sourceSize: Qt.size(width * 2, height * 2)
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    antialiasing: true
-                                    mipmap: true
-                                    visible: false
-                                }
-
-                                ColorOverlay {
-                                    anchors.fill: shuffleButtonImage
-                                    source: shuffleButtonImage
-                                    color: bottomBar.isShuffleEnabled ?
-                                        App.Style.bottomBarActiveToggleButton :
-                                        App.Style.bottomBarShuffleButton
-                                }
-                            }
-
-                            Item {
-                                id: shuffleButtonClickArea
-                                anchors.centerIn: parent
-                                width: parent.width * 1.5
-                                height: parent.height * 2.5
-
-                                MouseArea {
-                                    id: mouseAreaShuffle
-                                    anchors.fill: parent
-                                    onClicked: bottomBar.mediaToggleShuffle()
-                                }
-                            }
-                        }
-
-                        // Mute button
-                        Control {
-                            id: muteButton
-                            implicitWidth: App.Spacing.bottomBarMuteButtonWidth
-                            implicitHeight: App.Spacing.bottomBarMuteButtonHeight
-                            Layout.alignment: Qt.AlignVCenter
-
-                            scale: mouseAreaMute.pressed ? 0.8 : 1.0
-                            opacity: mouseAreaMute.pressed ? 0.7 : 1.0
-                            
-                            Behavior on scale {
-                                NumberAnimation {
-                                    duration: 200
-                                    easing.type: Easing.OutBack  
-                                    easing.overshoot: 1.1
-                                }
-                            }
-                            
-                            Behavior on opacity {
-                                NumberAnimation { duration: 150 }
-                            }
-
-                            background: Rectangle { color: "transparent" }
-                            
-                            contentItem: Item {
-                                Image {
-                                    id: muteButtonImage
-                                    anchors.centerIn: parent
-                                    width: parent.width
-                                    height: parent.height
-                                    source: getUpdatedMuteSource()
-                                    sourceSize: Qt.size(width * 2, height * 2)
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    antialiasing: true
-                                    mipmap: true
-                                    visible: false
-                                }
-                                
-                                ColorOverlay {
-                                    anchors.fill: muteButtonImage
-                                    source: muteButtonImage
-                                    color: App.Style.bottomBarVolumeButton
-                                }
-                            }
-                            Item {
-                                id: muteButtonClickArea
-                                anchors.centerIn: parent
-                                width: parent.width * 1.5
-                                height: parent.height * 2.5
-                            
-                                MouseArea {
-                                    id: mouseAreaMute
-                                    anchors.fill: parent
-                                    // At 0 % this restores the startup volume instead
-                                    onClicked: volumeController.toggleMute()
-                                }
-                            }
-                        }
-
-                        // Volume Control
-                        Control {
-                            id: volumeControl
-                            // The percentage is drawn as text, which is far wider than the
-                            // slider-sized box; size to the widest value ("100%") so the
-                            // layout reserves its real footprint and the text never spills
-                            // into the nav buttons.
-                            implicitWidth: Math.max(App.Spacing.bottomBarVolumeSliderWidth,
-                                                    App.Spacing.overallMargin + Math.ceil(volumeTextMetrics.advanceWidth))
-                            implicitHeight: App.Spacing.bottomBarVolumeSliderHeight
-                            Layout.alignment: Qt.AlignVCenter
-                            
-                            TextMetrics {
-                                id: volumeTextMetrics
-                                text: "100%"
-                                font: volumeText.font
-                            }
-
-                            Text {
-                                id: volumeText
-                                anchors {
-                                    left: parent.left
-                                    leftMargin: App.Spacing.overallMargin
-                                    verticalCenter: parent.verticalCenter
-                                }
-                                text: volumeControl.currentValue + "%"
-                                color: App.Style.primaryTextColor
-                                font.pixelSize: App.Spacing.bottomBarVolumeText
-                                font.bold: true
-                                font.family: bottomBar.globalFont
-                            }
-                            
-                            // null at shutdown, when the managers go before the engine
-                            readonly property int currentValue: volumeController ? volumeController.percent : 0
-
-                            Component.onCompleted: {
-                                // (main.cpp applies the startup volume to every output)
-                                updateMuteButtonImage()
-                            }
-                            Item {
-                                anchors.centerIn: parent
-                                width: parent.width * 1.5
-                                height: parent.height * 3.5
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    onClicked: popupSlider.open()
-                                }
-                            }
-
-                            Popup {
-                                id: popupSlider
-                                width: parent.Window.width
-                                height: dp(140)
-                                anchors.centerIn: Overlay.overlay
-                                modal: true
-                                focus: true
-                                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-
-                                // Simple background
-                                background: Rectangle {
-                                    color: App.Style.backgroundColor
-                                    radius: dpMin(8, 2)
-                                    border.color: App.Style.accent
-                                    border.width: 1
-                                }
-
-                                // Content with centered slider
-                                contentItem: Item {
-                                    anchors.fill: parent
-
-                                    // Larger percentage display
-                                    Label {
-                                        id: percentLabel
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        anchors.top: parent.top
-                                        anchors.topMargin: dp(15)
-                                        text: Math.round(volumeSlider.value) + "%"
-                                        color: App.Style.accent
-                                        font.pixelSize: dp(32)
-                                        font.bold: true
-                                    }
-
-                                    // Container for the slider - centered in the popup
-                                    Item {
-                                        id: sliderContainer
-                                        anchors.top: percentLabel.bottom
-                                        anchors.topMargin: dp(15)
-                                        anchors.left: parent.left
-                                        anchors.right: parent.right
-                                        anchors.bottom: parent.bottom
-                                        anchors.bottomMargin: dp(15)
-
-                                        // Simplified slider
-                                        Slider {
-                                            id: volumeSlider
-                                            anchors.centerIn: parent
-                                            width: parent.width * 0.95
-                                            height: dp(50)
-                                            from: 0
-                                            to: 100
-                                            stepSize: 1
-                                            value: volumeControl.currentValue
-                                            
-                                            // Simple slider background
-                                            background: Rectangle {
-                                                x: volumeSlider.leftPadding
-                                                y: volumeSlider.topPadding + volumeSlider.availableHeight / 2 - height / 2
-                                                width: volumeSlider.availableWidth
-                                                height: dp(16)
-                                                radius: dpMin(8, 2)
-                                                color: App.Style.hoverColor
-
-                                                // Filled portion
-                                                Rectangle {
-                                                    // Ends at the handle's center so the rounded end stays under it
-                                                    width: volumeSlider.visualPosition * (parent.width - volumeSlider.handle.width) + volumeSlider.handle.width / 2
-                                                    height: parent.height
-                                                    color: App.Style.volumeSliderColor
-                                                    radius: dpMin(8, 2)
-                                                }
-                                            }
-
-                                            // Larger handle for better touch
-                                            handle: Rectangle {
-                                                x: volumeSlider.leftPadding + volumeSlider.visualPosition * (volumeSlider.availableWidth - width)
-                                                y: volumeSlider.topPadding + volumeSlider.availableHeight / 2 - height / 2
-                                                width: dp(40)
-                                                height: dp(40)
-                                                radius: dpMin(20, 2)  // Circular handle
-                                                color: App.Style.accent
-                                            }
-                                            
-                                            // The core functionality
-                                            onValueChanged: {
-                                                // Single dispatch to settings + every audio output;
-                                                // raising it while muted unmutes (VolumeController)
-                                                // null at shutdown: the binding to percent drops to 0 as the managers go
-                                                if (volumeController)
-                                                    volumeController.applyVolume(Math.round(value))
-                                            }
-                                        }
-                                        
-                                        // Circular touch area
-                                        Item {
-                                            id: touchAreaContainer
-                                            anchors.centerIn: sliderContainer
-                                            width: sliderContainer.width
-                                            height: sliderContainer.height
-                                            
-                                            // Create multiple circular touch areas along the slider track
-                                            Repeater {
-                                                model: 9  // Create 9 touch areas along the slider
-                                                
-                                                // Each touch area is a circular MouseArea
-                                                MouseArea {
-                                                    id: circularTouchArea
-                                                    // Position touch areas evenly along the slider
-                                                    x: (index * (volumeSlider.width / 8)) - width/2 + volumeSlider.x
-                                                    y: volumeSlider.y + volumeSlider.height/2 - height/2
-                                                    width: dp(80)  // Large circular area
-                                                    height: dp(80)
-                                                    
-                                                    // Make the touch area visually circular (only for debugging)
-                                                    // Rectangle {
-                                                    //     anchors.fill: parent
-                                                    //     radius: width/2
-                                                    //     color: "transparent"
-                                                    //     border.width: 1
-                                                    //     border.color: "red"
-                                                    //     opacity: 0.3
-                                                    // }
-                                                    
-                                                    // Handle touch interactions
-                                                    onMouseXChanged: {
-                                                        if (pressed) {
-                                                            // Calculate global position relative to the slider
-                                                            var globalX = mapToItem(volumeSlider, mouseX, mouseY).x
-                                                            var newPosition = Math.max(0, Math.min(1, 
-                                                                (globalX - volumeSlider.leftPadding) / volumeSlider.availableWidth))
-                                                            volumeSlider.value = newPosition * 100
-                                                        }
-                                                    }
-                                                    
-                                                    // Allow slider to receive events too
-                                                    preventStealing: false
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                SequentialAnimation on opacity {
+                    running: navSlot.modelData === "settings" && networkManager && networkManager.updateStatus === "update-available"
+                    loops: Animation.Infinite
+                    NumberAnimation { from: 1.0; to: 0.3; duration: 1200 }
+                    NumberAnimation { from: 0.3; to: 1.0; duration: 1200 }
                 }
-                
-                Item { // SECTION 2: Center section - Navigation Buttons
-                    property bool mediaControlsVisible: settingsManager ? settingsManager.showBottomBarMediaControls : true
-                    Layout.fillWidth: true // Fill remaining space (centers content properly)
-                    Layout.fillHeight: true
-                    // With many nav buttons enabled the row can be wider than this
-                    // section; keep it above the neighbouring sections so the
-                    // outermost buttons (e.g. Phone Mirror) still receive clicks.
-                    z: 1
+            }
 
-                    NavHighlight {
-                        layout: navigationBar
-                        buttons: ({ "home": homeButton, "obd": obdButton, "media": mediaButton, "sensor": sensorButton, "settings": settingsButton, "androidAuto": androidAutoButton, "phoneMirror": phoneMirrorButton })
-                    }
+            PressBounce { id: navBounce; target: navSlot.faceItem }
 
-                    RowLayout {
-                        id: navigationBar
-                        anchors.centerIn: parent
-                        // Shrink the gap between buttons when they would not fit,
-                        // instead of overflowing under the clock / media controls.
-                        readonly property real preferredSpacing: App.Spacing.bottomBarBetweenButtonMargin * 6
-                        readonly property real edgeGap: App.Spacing.bottomBarBetweenButtonMargin * 3
-                        readonly property real fitSpacing: {
-                            var n = 0, w = 0
-                            for (var i = 0; i < children.length; ++i) {
-                                var c = children[i]
-                                if (c.visible && c.implicitWidth > 0) { n++; w += c.implicitWidth }
-                            }
-                            if (n < 2) return preferredSpacing
-                            // Keep a gap at both ends so the outermost buttons never sit
-                            // flush against the media controls or the clock.
-                            var avail = parent.width - w - 2 * edgeGap
-                            return Math.max(dp(4), Math.min(preferredSpacing, avail / (n - 1)))
-                        }
-                        spacing: fitSpacing
-                        
-                        // Home Button (Main Menu)
-                        Control {
-                            id: homeButton
-                            implicitWidth: App.Spacing.bottomBarNavButtonWidth
-                            implicitHeight: App.Spacing.bottomBarNavButtonHeight
-                            
-                            background: Rectangle {
-                                color: "transparent"
-                                radius: dpMin(8, 2)
-                                border.color: App.Style.accent
-                                border.width: 1
-                            }
-
-                            contentItem: Item {
-                                Image {
-                                    id: homeButtonImage
-                                    anchors.centerIn: parent
-                                    width: parent.width * 0.7
-                                    height: parent.height * 0.7
-                                    source: "./assets/home_button.svg"
-                                    sourceSize: Qt.size(width * 2, height * 2)
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    antialiasing: true
-                                    mipmap: true
-                                    visible: false
-                                }
-                                
-                                ColorOverlay {
-                                    anchors.fill: homeButtonImage
-                                    source: homeButtonImage
-                                    color: App.Style.bottomBarHomeButton
-                                }
-                            }
-                            
-                            PressBounce { id: homeButtonBounce; target: homeButton }
-
-                            MouseArea {
-                                id: mouseAreaHome
-                                width: parent.width * 1.5
-                                height: parent.height * 1.5
-                                anchors.centerIn: parent
-                                hoverEnabled: true
-                                onPressed: { homeButtonBounce.restart(); bottomBar.navAfterFrame(bottomBar.openHomeSection) }
-                            }
-                        }
-                        
-                        // OBD Button
-                        Control {
-                            id: obdButton
-                            implicitWidth: App.Spacing.bottomBarNavButtonWidth
-                            implicitHeight: App.Spacing.bottomBarNavButtonHeight
-
-                            background: Rectangle {
-                                color: "transparent"
-                                radius: dpMin(8, 2)
-                                border.color: App.Style.accent
-                                border.width: 1
-                            }
-
-                            contentItem: Item {
-                                Image {
-                                    id: obdButtonImage
-                                    anchors.centerIn: parent
-                                    width: parent.width * 0.7
-                                    height: parent.height * 0.7
-                                    source: "./assets/obd_button.svg"
-                                    sourceSize: Qt.size(width * 2, height * 2)
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    antialiasing: true
-                                    mipmap: true
-                                    visible: false
-                                }
-                                
-                                ColorOverlay {
-                                    anchors.fill: obdButtonImage
-                                    source: obdButtonImage
-                                    color: App.Style.bottomBarOBDButton
-                                }
-                            }
-                            
-                            PressBounce { id: obdButtonBounce; target: obdButton }
-
-                            MouseArea {
-                                id: mouseAreaOBD
-                                width: parent.width * 1.5
-                                height: parent.height * 1.5
-                                anchors.centerIn: parent
-                                hoverEnabled: true
-                                onPressed: { obdButtonBounce.restart(); bottomBar.navAfterFrame(bottomBar.openOBDSection) }
-                            }
-                        }
-
-                        // Media Button
-                        Control {
-                            id: mediaButton
-                            implicitWidth: App.Spacing.bottomBarNavButtonWidth
-                            implicitHeight: App.Spacing.bottomBarNavButtonHeight
-                            
-                            background: Rectangle {
-                                color: "transparent"
-                                radius: dpMin(8, 2)
-                                border.color: App.Style.accent
-                                border.width: 1
-                            }
-
-                            contentItem: Item {
-                                Image {
-                                    id: mediaButtonImage
-                                    anchors.centerIn: parent
-                                    width: parent.width * 0.7
-                                    height: parent.height * 0.7
-                                    source: "./assets/media_button.svg"
-                                    sourceSize: Qt.size(width * 2, height * 2)
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    antialiasing: true
-                                    mipmap: true
-                                    visible: false
-                                }
-                                
-                                ColorOverlay {
-                                    anchors.fill: mediaButtonImage
-                                    source: mediaButtonImage
-                                    color: App.Style.bottomBarMediaButton
-                                }
-                            }
-                            
-                            PressBounce { id: mediaButtonBounce; target: mediaButton }
-
-                            MouseArea {
-                                id: mouseAreaMedia
-                                width: parent.width * 1.5
-                                height: parent.height * 1.5
-                                anchors.centerIn: parent
-                                hoverEnabled: true
-                                onPressed: { mediaButtonBounce.restart(); bottomBar.navAfterFrame(bottomBar.openMediaSection) }
-                            }
-                        }
-
-                        // Sensor Button
-                        Control {
-                            id: sensorButton
-                            implicitWidth: App.Spacing.bottomBarNavButtonWidth
-                            implicitHeight: App.Spacing.bottomBarNavButtonHeight
-
-                            background: Rectangle {
-                                color: "transparent"
-                                radius: dpMin(8, 2)
-                                border.color: App.Style.accent
-                                border.width: 1
-                            }
-
-                            contentItem: Item {
-                                Image {
-                                    id: sensorButtonImage
-                                    anchors.centerIn: parent
-                                    width: parent.width * 0.7
-                                    height: parent.height * 0.7
-                                    source: "./assets/sensor_button.svg"
-                                    sourceSize: Qt.size(width * 2, height * 2)
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    antialiasing: true
-                                    mipmap: true
-                                    visible: false
-                                }
-
-                                ColorOverlay {
-                                    anchors.fill: sensorButtonImage
-                                    source: sensorButtonImage
-                                    color: App.Style.bottomBarSensorButton
-                                }
-                            }
-
-                            PressBounce { id: sensorButtonBounce; target: sensorButton }
-
-                            MouseArea {
-                                id: mouseAreaSensor
-                                width: parent.width * 1.5
-                                height: parent.height * 1.5
-                                anchors.centerIn: parent
-                                hoverEnabled: true
-                                onPressed: { sensorButtonBounce.restart(); bottomBar.navAfterFrame(bottomBar.openSensorSection) }
-                            }
-                        }
-
-                        // Settings Button
-                        Control {
-                            id: settingsButton
-                            implicitWidth: App.Spacing.bottomBarNavButtonWidth
-                            implicitHeight: App.Spacing.bottomBarNavButtonHeight
-
-                            background: Rectangle {
-                                color: "transparent"
-                                radius: dpMin(8, 2)
-                                border.color: App.Style.accent
-                                border.width: 1
-                            }
-
-                            contentItem: Item {
-                                Image {
-                                    id: settingsButtonImage
-                                    anchors.centerIn: parent
-                                    width: parent.width * 0.7
-                                    height: parent.height * 0.7
-                                    source: "./assets/settings_button.svg"
-                                    sourceSize: Qt.size(width * 2, height * 2)
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    antialiasing: true
-                                    mipmap: true
-                                    visible: false
-                                }
-
-                                ColorOverlay {
-                                    anchors.fill: settingsButtonImage
-                                    source: settingsButtonImage
-                                    color: App.Style.bottomBarSettingsButton
-                                }
-                            }
-
-                            // Update notification dot
-                            Rectangle {
-                                width: dp(8)
-                                height: dp(8)
-                                radius: width / 2
-                                color: "#FF9800"
-                                z: 10
-                                anchors.top: parent.top
-                                anchors.right: parent.right
-                                anchors.topMargin: dp(-1)
-                                anchors.rightMargin: dp(-1)
-                                visible: networkManager && networkManager.updateStatus === "update-available"
-
-                                SequentialAnimation on opacity {
-                                    running: networkManager && networkManager.updateStatus === "update-available"
-                                    loops: Animation.Infinite
-                                    NumberAnimation { from: 1.0; to: 0.3; duration: 1200 }
-                                    NumberAnimation { from: 0.3; to: 1.0; duration: 1200 }
-                                }
-                            }
-
-                            PressBounce { id: settingsButtonBounce; target: settingsButton }
-
-                            MouseArea {
-                                id: mouseAreaSettings
-                                width: parent.width * 1.5
-                                height: parent.height * 1.5
-                                anchors.centerIn: parent
-                                hoverEnabled: true
-                                onPressAndHold: settingsVisibilityPopup.open()
-                                onPressed: { settingsButtonBounce.restart(); bottomBar.navAfterFrame(bottomBar.openSettingsSection) }
-                            }
-                        }
-
-                        // Android Auto Button
-                        Control {
-                            id: androidAutoButton
-                            implicitWidth: App.Spacing.bottomBarNavButtonWidth
-                            implicitHeight: App.Spacing.bottomBarNavButtonHeight
-                            visible: settingsManager ? settingsManager.androidAutoEnabled : false  // Settings > Accessories > Phone Dock > Android Auto
-
-                            background: Rectangle {
-                                color: "transparent"
-                                radius: dpMin(8, 2)
-                                border.color: App.Style.accent
-                                border.width: 1
-                            }
-
-                            contentItem: Item {
-                                Image {
-                                    id: androidAutoButtonImage
-                                    anchors.centerIn: parent
-                                    width: parent.width * 0.7
-                                    height: parent.height * 0.7
-                                    source: "./assets/android_auto_button.svg"
-                                    sourceSize: Qt.size(width * 2, height * 2)
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    antialiasing: true
-                                    mipmap: true
-                                    visible: false
-                                }
-
-                                ColorOverlay {
-                                    anchors.fill: androidAutoButtonImage
-                                    source: androidAutoButtonImage
-                                    color: App.Style.bottomBarAndroidAutoButton
-                                }
-                            }
-
-                            PressBounce { id: androidAutoButtonBounce; target: androidAutoButton }
-
-                            MouseArea {
-                                id: mouseAreaAndroidAuto
-                                width: parent.width * 1.5
-                                height: parent.height * 1.5
-                                anchors.centerIn: parent
-                                hoverEnabled: true
-                                onPressed: { androidAutoButtonBounce.restart(); bottomBar.navAfterFrame(bottomBar.openAndroidAutoSection) }
-                            }
-                        }
-
-                        // Phone Mirror Button
-                        Control {
-                            id: phoneMirrorButton
-                            implicitWidth: App.Spacing.bottomBarNavButtonWidth
-                            implicitHeight: App.Spacing.bottomBarNavButtonHeight
-                            visible: typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null && phoneMirrorManager.nativeAvailable
-                                     && (settingsManager ? settingsManager.phoneMirrorEnabled : false)
-
-                            background: Rectangle {
-                                color: "transparent"
-                                radius: dpMin(8, 2)
-                                border.color: App.Style.accent
-                                border.width: 1
-                            }
-
-                            contentItem: Item {
-                                Image {
-                                    id: phoneMirrorButtonImage
-                                    anchors.centerIn: parent
-                                    width: parent.width * 0.7
-                                    height: parent.height * 0.7
-                                    source: "./assets/phone_mirror_button.svg"
-                                    sourceSize: Qt.size(width * 2, height * 2)
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    antialiasing: true
-                                    mipmap: true
-                                    visible: false
-                                }
-
-                                ColorOverlay {
-                                    anchors.fill: phoneMirrorButtonImage
-                                    source: phoneMirrorButtonImage
-                                    color: App.Style.bottomBarPhoneMirrorButton
-                                }
-                            }
-
-                            PressBounce { id: phoneMirrorButtonBounce; target: phoneMirrorButton }
-
-                            MouseArea {
-                                id: mouseAreaPhoneMirror
-                                width: parent.width * 1.5
-                                height: parent.height * 1.5
-                                anchors.centerIn: parent
-                                hoverEnabled: true
-                                onPressed: { phoneMirrorButtonBounce.restart(); bottomBar.navAfterFrame(bottomBar.openPhoneMirrorSection) }
-                            }
-                        }
-                    }
-                }
-
-                Item { // SECTION 3: Right section - Clock and other controls
-                    id: clockSection
-                    property bool showClock: settingsManager ? settingsManager.showClock : true
-                    Layout.preferredWidth: showClock ? parent.width * 0.2 : 0 // Collapse when clock hidden so nav row re-centers
-                    Layout.fillHeight: true
-
-                    RowLayout {
-                        id: rightControls
-                        anchors {
-                            right: parent.right
-                            rightMargin: App.Spacing.overallMargin
-                            verticalCenter: parent.verticalCenter
-                        }
-                        spacing: App.Spacing.bottomBarBetweenButtonMargin
-                        
-
-                        Item {
-                            id: clockContainer
-                            Layout.preferredWidth: clockText.implicitWidth + dp(20) // Add some padding
-                            Layout.preferredHeight: clockText.implicitHeight + dp(10)
-                            
-                            Rectangle {
-                                anchors.fill: parent
-                                color: mouseAreaClock.pressed ? App.Style.hoverColor : "transparent"
-                                radius: 4
-                            }
-                            
-                            Text {
-                                id: clockText
-                                anchors.centerIn: parent
-                                visible: settingsManager ? settingsManager.showClock : true
-                                font.pixelSize: bottomBar.clockSizeAuto
-                                    ? bottomBar.autoClockSize(clockSection.width - App.Spacing.overallMargin - dp(20),
-                                                              clockSection.height * 0.75)
-                                    : bottomBar.manualClockSize
-                                font.family: bottomBar.globalFont
-                                color: App.Style.clockTextColor
-                                text: bottomBar.clockTimeText
-                            }
-
-                            MouseArea {
-                                id: mouseAreaClock
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onPressed: bottomBar.navAfterFrame(bottomBar.openClockSection)
-                            }
-                        }
-                    }
-                }
-
-
-
-                // Helper functions
-                function getUpdatedMuteSource() {
-                    if (!volumeController || volumeController.effectivelyMuted) {   // null at shutdown
-                        return "./assets/mute_on.svg"
-                    }
-                    var volume = volumeControl.currentValue
-                    if (volume < 33) {
-                        return "./assets/mute_off_low.svg"
-                    } else if (volume < 66) {
-                        return "./assets/mute_off_med.svg"
-                    } else {
-                        return "./assets/mute_off_high.svg"
-                    }
-                }
-
-                function updateMuteButtonImage() {
-                    muteButtonImage.source = getUpdatedMuteSource()
-                }
-
-                // Volume set anywhere else (knob, gesture, media room)
-                Connections {
-                    target: volumeController
-                    function onPercentChanged(percent) {
-                        if (!volumeSlider.pressed)
-                            volumeSlider.value = percent
-                        updateMuteButtonImage()
-                    }
-                    function onEffectivelyMutedChanged() { updateMuteButtonImage() }
+            MouseArea {
+                parent: navSlot
+                anchors.fill: parent
+                onPressAndHold: if (navSlot.modelData === "settings") settingsVisibilityPopup.open()
+                onPressed: {
+                    navBounce.restart()
+                    bottomBar.navAfterFrame(bottomBar.navButtons[navSlot.modelData].open)
                 }
             }
         }
-
-        Component { //Vertical
-            id: verticalLayoutComponent
-
-            ColumnLayout {
-                anchors.fill: parent
-                spacing: 0
-                
-                // SECTION 1: Media Controls (Top section when vertical)
-                Item {
-                    id: mediaControlsSectionVertical
-                    property bool showControls: settingsManager ? settingsManager.showBottomBarMediaControls : true
-                    // When hidden, mirror the clock section's height so nav buttons sit at the true vertical center
-                    Layout.preferredHeight: showControls ? parent.height * 0.4 : parent.height * 0.1
-                    Layout.fillWidth: true
-
-                    ColumnLayout {
-                        anchors.centerIn: parent
-                        visible: mediaControlsSectionVertical.showControls
-                        spacing: App.Spacing.bottomBarBetweenButtonMargin * 4
-                        
-                        // Previous, Play/Pause, and Next buttons
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Layout.alignment: Qt.AlignHCenter
-                            spacing: App.Spacing.bottomBarBetweenButtonMargin * 2
-
-                            Item {
-                                Layout.fillWidth: true
-                            }
-
-                            // Previous button
-                            Control {
-                                id: previousButtonControlVertical
-                                Layout.preferredWidth: App.Spacing.bottomBarPreviousButtonWidth
-                                Layout.preferredHeight: App.Spacing.bottomBarPreviousButtonHeight
-                                Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
-
-                                scale: mouseAreaPrevVertical.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaPrevVertical.pressed ? 0.7 : 1.0
-
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
-
-                                background: Rectangle { color: "transparent" }
-
-                                contentItem: Item {
-                                    Image {
-                                        id: previousButtonImageVertical
-                                        anchors.centerIn: parent
-                                        width: parent.width
-                                        height: parent.height
-                                        source: "./assets/previous_button.svg"
-                                        sourceSize: Qt.size(width * 2, height * 2)
-                                        fillMode: Image.PreserveAspectFit
-                                        smooth: true
-                                        antialiasing: true
-                                        mipmap: true
-                                        visible: false
-                                    }
-
-                                    ColorOverlay {
-                                        anchors.fill: previousButtonImageVertical
-                                        source: previousButtonImageVertical
-                                        color: App.Style.bottomBarPreviousButton
-                                    }
-                                }
-
-                                Item {
-                                    anchors.centerIn: parent
-                                    width: parent.width * 2
-                                    height: parent.height * 2.5
-
-                                    MouseArea {
-                                        id: mouseAreaPrevVertical
-                                        anchors.fill: parent
-                                        onClicked: bottomBar.mediaPrevious()
-                                    }
-                                }
-                            }
-
-                            // Play/Pause button
-                            Control {
-                                id: playButtonControlVertical
-                                Layout.preferredWidth: App.Spacing.bottomBarPlayButtonWidth
-                                Layout.preferredHeight: App.Spacing.bottomBarPlayButtonHeight
-                                Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
-
-                                scale: mouseAreaPlayVertical.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaPlayVertical.pressed ? 0.7 : 1.0
-
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
-
-                                background: Rectangle { color: "transparent" }
-
-                                contentItem: Item {
-                                    Image {
-                                        id: playButtonImageVertical
-                                        anchors.centerIn: parent
-                                        width: parent.height
-                                        height: parent.height
-                                        source: bottomBar.playIcon
-                                        sourceSize: Qt.size(width * 2, height * 2)
-                                        fillMode: Image.PreserveAspectFit
-                                        smooth: true
-                                        antialiasing: true
-                                        mipmap: true
-                                        visible: false
-                                    }
-
-                                    ColorOverlay {
-                                        anchors.fill: playButtonImageVertical
-                                        source: playButtonImageVertical
-                                        color: App.Style.bottomBarPlayButton
-                                    }
-                                }
-
-                                Item {
-                                    anchors.centerIn: parent
-                                    width: parent.width * 1.5
-                                    height: parent.height * 2.5
-
-                                    MouseArea {
-                                        id: mouseAreaPlayVertical
-                                        anchors.fill: parent
-                                        onClicked: bottomBar.mediaTogglePlay()
-                                    }
-                                }
-                            }
-
-                            // Next button
-                            Control {
-                                id: nextButtonControlVertical
-                                Layout.preferredWidth: App.Spacing.bottomBarNextButtonWidth
-                                Layout.preferredHeight: App.Spacing.bottomBarNextButtonHeight
-                                Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
-
-                                scale: mouseAreaNextVertical.pressed ? 0.8 : 1.0
-                                opacity: mouseAreaNextVertical.pressed ? 0.7 : 1.0
-
-                                Behavior on scale {
-                                    NumberAnimation {
-                                        duration: 200
-                                        easing.type: Easing.OutBack
-                                        easing.overshoot: 1.1
-                                    }
-                                }
-
-                                Behavior on opacity {
-                                    NumberAnimation { duration: 150 }
-                                }
-
-                                background: Rectangle { color: "transparent" }
-
-                                contentItem: Item {
-                                    Image {
-                                        id: nextButtonImageVertical
-                                        anchors.centerIn: parent
-                                        width: parent.width
-                                        height: parent.height
-                                        source: "./assets/next_button.svg"
-                                        sourceSize: Qt.size(width * 2, height * 2)
-                                        fillMode: Image.PreserveAspectFit
-                                        smooth: true
-                                        antialiasing: true
-                                        mipmap: true
-                                        visible: false
-                                    }
-
-                                    ColorOverlay {
-                                        anchors.fill: nextButtonImageVertical
-                                        source: nextButtonImageVertical
-                                        color: App.Style.bottomBarNextButton
-                                    }
-                                }
-
-                                Item {
-                                    anchors.centerIn: parent
-                                    width: parent.width * 2
-                                    height: parent.height * 2.5
-
-                                    MouseArea {
-                                        id: mouseAreaNextVertical
-                                        anchors.fill: parent
-                                        onClicked: bottomBar.mediaNext()
-                                    }
-                                }
-                            }
-
-                            Item {
-                                Layout.fillWidth: true
-                            }
-                        }
-                        
-                        // Shuffle button
-                        Control {
-                            id: shuffleButtonVertical
-                            Layout.alignment: Qt.AlignHCenter
-                            Layout.preferredWidth: App.Spacing.bottomBarShuffleButtonWidth
-                            Layout.preferredHeight: App.Spacing.bottomBarShuffleButtonHeight
-
-                            scale: mouseAreaShuffleVertical.pressed ? 0.8 : 1.0
-                            opacity: mouseAreaShuffleVertical.pressed ? 0.7 : (bottomBar.useRemote ? 0.35 : 1.0)
-
-                            Behavior on scale {
-                                NumberAnimation {
-                                    duration: 200
-                                    easing.type: Easing.OutBack
-                                    easing.overshoot: 1.1
-                                }
-                            }
-
-                            Behavior on opacity {
-                                NumberAnimation { duration: 150 }
-                            }
-
-                            background: Rectangle {
-                                color: bottomBar.isShuffleEnabled ? App.Style.bottomBarToggleShade : "transparent"
-                                radius: 4
-                            }
-
-                            contentItem: Item {
-                                Image {
-                                    id: shuffleButtonImageVertical
-                                    anchors.centerIn: parent
-                                    width: parent.width * 0.7
-                                    height: parent.height * 0.7
-                                    source: "./assets/shuffle_button.svg"
-                                    sourceSize: Qt.size(width * 2, height * 2)
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    antialiasing: true
-                                    mipmap: true
-                                    visible: false
-                                }
-
-                                ColorOverlay {
-                                    anchors.fill: shuffleButtonImageVertical
-                                    source: shuffleButtonImageVertical
-                                    color: bottomBar.isShuffleEnabled ?
-                                        App.Style.bottomBarActiveToggleButton :
-                                        App.Style.bottomBarShuffleButton
-                                }
-                            }
-
-                            Item {
-                                anchors.centerIn: parent
-                                width: parent.width * 3
-                                height: parent.height
-
-                                MouseArea {
-                                    id: mouseAreaShuffleVertical
-                                    anchors.fill: parent
-                                    onClicked: bottomBar.mediaToggleShuffle()
-                                }
-                            }
-                        }
-                        
-                        // Mute button
-                        Control {
-                            id: muteButtonVertical
-                            Layout.alignment: Qt.AlignHCenter
-                            Layout.preferredWidth: App.Spacing.bottomBarMuteButtonWidth
-                            Layout.preferredHeight: App.Spacing.bottomBarMuteButtonHeight
-                            
-                            scale: mouseAreaMuteVertical.pressed ? 0.8 : 1.0
-                            opacity: mouseAreaMuteVertical.pressed ? 0.7 : 1.0
-                            
-                            Behavior on scale {
-                                NumberAnimation {
-                                    duration: 200
-                                    easing.type: Easing.OutBack  
-                                    easing.overshoot: 1.1
-                                }
-                            }
-                            
-                            Behavior on opacity {
-                                NumberAnimation { duration: 150 }
-                            }
-
-                            background: Rectangle { color: "transparent" }
-                            
-                            contentItem: Item {
-                                Image {
-                                    id: muteButtonImageVertical
-                                    anchors.centerIn: parent
-                                    width: parent.width
-                                    height: parent.height
-                                    source: getUpdatedMuteSourceVertical()
-                                    sourceSize: Qt.size(width * 2, height * 2)
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    antialiasing: true
-                                    mipmap: true
-                                    visible: false
-                                }
-                                
-                                ColorOverlay {
-                                    anchors.fill: muteButtonImageVertical
-                                    source: muteButtonImageVertical
-                                    color: App.Style.bottomBarVolumeButton
-                                }
-                            }
-                            
-                            Item {
-                                anchors.centerIn: parent
-                                width: parent.width * 3
-                                height: parent.height 
-                            
-                                MouseArea {
-                                    id: mouseAreaMuteVertical
-                                    anchors.fill: parent
-                                    // At 0 % this restores the startup volume instead
-                                    onClicked: volumeController.toggleMute()
-                                }
-                            }
-                        }
-                        
-                        // Volume control with better alignment
-                        Control {
-                            id: volumeControlVertical
-                            Layout.alignment: Qt.AlignHCenter
-                            Layout.preferredWidth: App.Spacing.bottomBarVolumeSliderWidth * 0.8
-                            Layout.preferredHeight: App.Spacing.bottomBarVolumeSliderHeight
-                            
-                            // null at shutdown, when the managers go before the engine
-                            readonly property int currentValue: volumeController ? volumeController.percent : 0
-                            
-                            Text {
-                                id: volumeTextVertical
-                                anchors.centerIn: parent
-                                text: volumeControlVertical.currentValue + "%"
-                                color: App.Style.primaryTextColor
-                                font.pixelSize: App.Spacing.bottomBarVolumeText
-                                font.bold: true
-                                font.family: bottomBar.globalFont
-                                anchors.horizontalCenterOffset: -2  // Further adjust text position
-                            }
-                            
-                            Component.onCompleted: {
-                                // (main.cpp applies the startup volume to every output)
-                                updateMuteButtonImageVertical()
-                            }
-                            Item {
-                                anchors.centerIn: parent
-                                width: parent.width*3 
-                                height: parent.height*2
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    onClicked: popupSliderVertical.open()
-                                }
-                            }
-
-                            Popup {
-                                id: popupSliderVertical
-                                width: parent.Window.width
-                                height: dp(140)
-                                anchors.centerIn: Overlay.overlay
-                                modal: true
-                                focus: true
-                                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-                                
-                                // Simple background
-                                background: Rectangle {
-                                    color: App.Style.backgroundColor
-                                    radius: dpMin(8, 2)
-                                    border.color: App.Style.accent
-                                    border.width: 1
-                                }
-                                
-                                // Content with centered slider
-                                contentItem: Item {
-                                    anchors.fill: parent
-                                    
-                                    // Larger percentage display
-                                    Label {
-                                        id: percentLabelVertical
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        anchors.top: parent.top
-                                        anchors.topMargin: dp(15)
-                                        text: Math.round(volumeSliderVertical.value) + "%"
-                                        color: App.Style.accent
-                                        font.pixelSize: dp(32)
-                                        font.bold: true
-                                    }
-
-                                    // Container for the slider - centered in the popup
-                                    Item {
-                                        id: sliderContainerVertical
-                                        anchors.top: percentLabelVertical.bottom
-                                        anchors.topMargin: dp(15)
-                                        anchors.left: parent.left
-                                        anchors.right: parent.right
-                                        anchors.bottom: parent.bottom
-                                        anchors.bottomMargin: dp(15)
-
-                                        // Simplified slider
-                                        Slider {
-                                            id: volumeSliderVertical
-                                            anchors.centerIn: parent
-                                            width: parent.width * 0.95
-                                            height: dp(50)
-                                            from: 0
-                                            to: 100
-                                            stepSize: 1
-                                            value: volumeControlVertical.currentValue
-                                            
-                                            // Simple slider background
-                                            background: Rectangle {
-                                                x: volumeSliderVertical.leftPadding
-                                                y: volumeSliderVertical.topPadding + volumeSliderVertical.availableHeight / 2 - height / 2
-                                                width: volumeSliderVertical.availableWidth
-                                                height: dp(16)
-                                                radius: dpMin(8, 2)
-                                                color: App.Style.hoverColor
-                                                
-                                                // Filled portion
-                                                Rectangle {
-                                                    // Ends at the handle's center so the rounded end stays under it
-                                                    width: volumeSliderVertical.visualPosition * (parent.width - volumeSliderVertical.handle.width) + volumeSliderVertical.handle.width / 2
-                                                    height: parent.height
-                                                    color: App.Style.volumeSliderColor
-                                                    radius: dpMin(8, 2)
-                                                }
-                                            }
-                                            
-                                            // Larger handle for better touch
-                                            handle: Rectangle {
-                                                x: volumeSliderVertical.leftPadding + volumeSliderVertical.visualPosition * (volumeSliderVertical.availableWidth - width)
-                                                y: volumeSliderVertical.topPadding + volumeSliderVertical.availableHeight / 2 - height / 2
-                                                width: dp(40)
-                                                height: dp(40)
-                                                radius: dpMin(20, 2)  // Circular handle
-                                                color: App.Style.accent
-                                            }
-                                            
-                                            // The core functionality
-                                            onValueChanged: {
-                                                // Single dispatch to settings + every audio output;
-                                                // raising it while muted unmutes (VolumeController)
-                                                // null at shutdown: the binding to percent drops to 0 as the managers go
-                                                if (volumeController)
-                                                    volumeController.applyVolume(Math.round(value))
-                                            }
-                                        }
-
-                                        // Circular touch area
-                                        Item {
-                                            id: touchAreaContainerVertical
-                                            anchors.centerIn: sliderContainerVertical
-                                            width: sliderContainerVertical.width
-                                            height: sliderContainerVertical.height
-                                            
-                                            // Create multiple circular touch areas along the slider track
-                                            Repeater {
-                                                model: 9  // Create 9 touch areas along the slider
-                                                
-                                                // Each touch area is a circular MouseArea
-                                                MouseArea {
-                                                    // Position touch areas evenly along the slider
-                                                    x: (index * (volumeSliderVertical.width / 8)) - width/2 + volumeSliderVertical.x
-                                                    y: volumeSliderVertical.y + volumeSliderVertical.height/2 - height/2
-                                                    width: dp(80)  // Large circular area
-                                                    height: dp(80)
-                                                    
-                                                    // Handle touch interactions
-                                                    onMouseXChanged: {
-                                                        if (pressed) {
-                                                            // Calculate global position relative to the slider
-                                                            var globalX = mapToItem(volumeSliderVertical, mouseX, mouseY).x
-                                                            var newPosition = Math.max(0, Math.min(1, 
-                                                                (globalX - volumeSliderVertical.leftPadding) / volumeSliderVertical.availableWidth))
-                                                            volumeSliderVertical.value = newPosition * 100
-                                                        }
-                                                    }
-                                                    
-                                                    // Allow slider to receive events too
-                                                    preventStealing: false
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // SECTION 2: Navigation (Middle section when vertical)
-                Item {
-                    property bool mediaControlsVisible: settingsManager ? settingsManager.showBottomBarMediaControls : true
-                    Layout.fillHeight: true // Fill remaining space (centers content properly)
-                    Layout.fillWidth: true
-
-                    NavHighlight {
-                        layout: navigationBarVertical
-                        buttons: ({ "home": homeButtonVertical, "obd": obdButtonVertical, "media": mediaButtonVertical, "sensor": sensorButtonVertical, "settings": settingsButtonVertical, "androidAuto": androidAutoButtonVertical, "phoneMirror": phoneMirrorButtonVertical })
-                    }
-
-                    ColumnLayout {
-                        id: navigationBarVertical
-                        anchors.centerIn: parent
-                        spacing: App.Spacing.bottomBarBetweenButtonMargin * 3
-
-                        // Home Button
-                        Control {
-                            id: homeButtonVertical
-                            implicitWidth: App.Spacing.bottomBarNavButtonWidth*1.5
-                            implicitHeight: App.Spacing.bottomBarNavButtonHeight
-                            Layout.alignment: Qt.AlignHCenter
-                            
-                            background: Rectangle {
-                                color: "transparent"
-                                radius: dpMin(8, 2)
-                                border.color: App.Style.accent
-                                border.width: 1
-                            }
-
-                            contentItem: Item {
-                                Image {
-                                    id: homeButtonImageVertical
-                                    anchors.centerIn: parent
-                                    width: parent.width * 0.7
-                                    height: parent.height * 0.7
-                                    source: "./assets/home_button.svg"
-                                    sourceSize: Qt.size(width * 2, height * 2)
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    antialiasing: true
-                                    mipmap: true
-                                    visible: false
-                                }
-                                
-                                ColorOverlay {
-                                    anchors.fill: homeButtonImageVertical
-                                    source: homeButtonImageVertical
-                                    color: App.Style.bottomBarHomeButton
-                                }
-                            }
-                            
-                            PressBounce { id: homeButtonVerticalBounce; target: homeButtonVertical }
-
-                            MouseArea {
-                                id: mouseAreaHomeVertical
-                                width: parent.width * 1.5
-                                height: parent.height * 1.5
-                                anchors.centerIn: parent
-                                hoverEnabled: true
-                                onPressed: { homeButtonVerticalBounce.restart(); bottomBar.navAfterFrame(bottomBar.openHomeSection) }
-                            }
-                        }
-                        // OBD Button
-                        Control {
-                            id: obdButtonVertical
-                            implicitWidth: App.Spacing.bottomBarNavButtonWidth*1.5
-                            implicitHeight: App.Spacing.bottomBarNavButtonHeight
-                            Layout.alignment: Qt.AlignHCenter
-
-                            background: Rectangle {
-                                color: "transparent"
-                                radius: dpMin(8, 2)
-                                border.color: App.Style.accent
-                                border.width: 1
-                            }
-
-                            contentItem: Item {
-                                Image {
-                                    id: obdButtonImageVertical
-                                    anchors.centerIn: parent
-                                    width: parent.width * 0.7
-                                    height: parent.height * 0.7
-                                    source: "./assets/obd_button.svg"
-                                    sourceSize: Qt.size(width * 2, height * 2)
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    antialiasing: true
-                                    mipmap: true
-                                    visible: false
-                                }
-                                
-                                ColorOverlay {
-                                    anchors.fill: obdButtonImageVertical
-                                    source: obdButtonImageVertical
-                                    color: App.Style.bottomBarOBDButton
-                                }
-                            }
-                            
-                            PressBounce { id: obdButtonVerticalBounce; target: obdButtonVertical }
-
-                            MouseArea {
-                                id: mouseAreaOBDVertical
-                                width: parent.width * 1.5
-                                height: parent.height * 1.5
-                                anchors.centerIn: parent
-                                hoverEnabled: true
-                                onPressed: { obdButtonVerticalBounce.restart(); bottomBar.navAfterFrame(bottomBar.openOBDSection) }
-                            }
-                        }
-
-                        // Media Button
-                        Control {
-                            id: mediaButtonVertical
-                            implicitWidth: App.Spacing.bottomBarNavButtonWidth*1.5
-                            implicitHeight: App.Spacing.bottomBarNavButtonHeight
-                            Layout.alignment: Qt.AlignHCenter
-                            
-                            background: Rectangle {
-                                color: "transparent"
-                                radius: dpMin(8, 2)
-                                border.color: App.Style.accent
-                                border.width: 1
-                            }
-
-                            contentItem: Item {
-                                Image {
-                                    id: mediaButtonImageVertical
-                                    anchors.centerIn: parent
-                                    width: parent.width * 0.7
-                                    height: parent.height * 0.7
-                                    source: "./assets/media_button.svg"
-                                    sourceSize: Qt.size(width * 2, height * 2)
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    antialiasing: true
-                                    mipmap: true
-                                    visible: false
-                                }
-                                
-                                ColorOverlay {
-                                    anchors.fill: mediaButtonImageVertical
-                                    source: mediaButtonImageVertical
-                                    color: App.Style.bottomBarMediaButton
-                                }
-                            }
-                            
-                            PressBounce { id: mediaButtonVerticalBounce; target: mediaButtonVertical }
-
-                            MouseArea {
-                                id: mouseAreaMediaVertical
-                                width: parent.width * 1.5
-                                height: parent.height * 1.5
-                                anchors.centerIn: parent
-                                hoverEnabled: true
-                                onPressed: { mediaButtonVerticalBounce.restart(); bottomBar.navAfterFrame(bottomBar.openMediaSection) }
-                            }
-                        }
-
-                        // Sensor Button
-                        Control {
-                            id: sensorButtonVertical
-                            implicitWidth: App.Spacing.bottomBarNavButtonWidth*1.5
-                            implicitHeight: App.Spacing.bottomBarNavButtonHeight
-                            Layout.alignment: Qt.AlignHCenter
-
-                            background: Rectangle {
-                                color: "transparent"
-                                radius: dpMin(8, 2)
-                                border.color: App.Style.accent
-                                border.width: 1
-                            }
-
-                            contentItem: Item {
-                                Image {
-                                    id: sensorButtonImageVertical
-                                    anchors.centerIn: parent
-                                    width: parent.width * 0.7
-                                    height: parent.height * 0.7
-                                    source: "./assets/sensor_button.svg"
-                                    sourceSize: Qt.size(width * 2, height * 2)
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    antialiasing: true
-                                    mipmap: true
-                                    visible: false
-                                }
-
-                                ColorOverlay {
-                                    anchors.fill: sensorButtonImageVertical
-                                    source: sensorButtonImageVertical
-                                    color: App.Style.bottomBarSensorButton
-                                }
-                            }
-
-                            PressBounce { id: sensorButtonVerticalBounce; target: sensorButtonVertical }
-
-                            MouseArea {
-                                id: mouseAreaSensorVertical
-                                width: parent.width * 1.5
-                                height: parent.height * 1.5
-                                anchors.centerIn: parent
-                                hoverEnabled: true
-                                onPressed: { sensorButtonVerticalBounce.restart(); bottomBar.navAfterFrame(bottomBar.openSensorSection) }
-                            }
-                        }
-
-                        // Settings Button
-                        Control {
-                            id: settingsButtonVertical
-                            implicitWidth: App.Spacing.bottomBarNavButtonWidth*1.5
-                            implicitHeight: App.Spacing.bottomBarNavButtonHeight
-                            Layout.alignment: Qt.AlignHCenter
-
-                            background: Rectangle {
-                                color: "transparent"
-                                radius: dpMin(8, 2)
-                                border.color: App.Style.accent
-                                border.width: 1
-                            }
-
-                            contentItem: Item {
-                                Image {
-                                    id: settingsButtonImageVertical
-                                    anchors.centerIn: parent
-                                    width: parent.width * 0.7
-                                    height: parent.height * 0.7
-                                    source: "./assets/settings_button.svg"
-                                    sourceSize: Qt.size(width * 2, height * 2)
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    antialiasing: true
-                                    mipmap: true
-                                    visible: false
-                                }
-
-                                ColorOverlay {
-                                    anchors.fill: settingsButtonImageVertical
-                                    source: settingsButtonImageVertical
-                                    color: App.Style.bottomBarSettingsButton
-                                }
-                            }
-
-                            // Update notification dot
-                            Rectangle {
-                                width: dp(8)
-                                height: dp(8)
-                                radius: width / 2
-                                color: "#FF9800"
-                                z: 10
-                                anchors.top: parent.top
-                                anchors.right: parent.right
-                                anchors.topMargin: dp(-1)
-                                anchors.rightMargin: dp(-1)
-                                visible: networkManager && networkManager.updateStatus === "update-available"
-
-                                SequentialAnimation on opacity {
-                                    running: networkManager && networkManager.updateStatus === "update-available"
-                                    loops: Animation.Infinite
-                                    NumberAnimation { from: 1.0; to: 0.3; duration: 1200 }
-                                    NumberAnimation { from: 0.3; to: 1.0; duration: 1200 }
-                                }
-                            }
-
-                            PressBounce { id: settingsButtonVerticalBounce; target: settingsButtonVertical }
-
-                            MouseArea {
-                                id: mouseAreaSettingsVertical
-                                width: parent.width * 1.5
-                                height: parent.height * 1.5
-                                anchors.centerIn: parent
-                                hoverEnabled: true
-                                onPressAndHold: settingsVisibilityPopup.open()
-                                onPressed: { settingsButtonVerticalBounce.restart(); bottomBar.navAfterFrame(bottomBar.openSettingsSection) }
-                            }
-                        }
-
-                        // Android Auto Button
-                        Control {
-                            id: androidAutoButtonVertical
-                            implicitWidth: App.Spacing.bottomBarNavButtonWidth*1.5
-                            implicitHeight: App.Spacing.bottomBarNavButtonHeight
-                            visible: settingsManager ? settingsManager.androidAutoEnabled : false  // Settings > Accessories > Phone Dock > Android Auto
-                            Layout.alignment: Qt.AlignHCenter
-
-                            background: Rectangle {
-                                color: "transparent"
-                                radius: dpMin(8, 2)
-                                border.color: App.Style.accent
-                                border.width: 1
-                            }
-
-                            contentItem: Item {
-                                Image {
-                                    id: androidAutoButtonImageVertical
-                                    anchors.centerIn: parent
-                                    width: parent.width * 0.7
-                                    height: parent.height * 0.7
-                                    source: "./assets/android_auto_button.svg"
-                                    sourceSize: Qt.size(width * 2, height * 2)
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    antialiasing: true
-                                    mipmap: true
-                                    visible: false
-                                }
-
-                                ColorOverlay {
-                                    anchors.fill: androidAutoButtonImageVertical
-                                    source: androidAutoButtonImageVertical
-                                    color: App.Style.bottomBarAndroidAutoButton
-                                }
-                            }
-
-                            PressBounce { id: androidAutoButtonVerticalBounce; target: androidAutoButtonVertical }
-
-                            MouseArea {
-                                id: mouseAreaAndroidAutoVertical
-                                width: parent.width * 1.5
-                                height: parent.height * 1.5
-                                anchors.centerIn: parent
-                                hoverEnabled: true
-                                onPressed: { androidAutoButtonVerticalBounce.restart(); bottomBar.navAfterFrame(bottomBar.openAndroidAutoSection) }
-                            }
-                        }
-
-                        // Phone Mirror Button (Vertical)
-                        Control {
-                            id: phoneMirrorButtonVertical
-                            implicitWidth: App.Spacing.bottomBarNavButtonWidth*1.5
-                            implicitHeight: App.Spacing.bottomBarNavButtonHeight
-                            visible: typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null && phoneMirrorManager.nativeAvailable
-                                     && (settingsManager ? settingsManager.phoneMirrorEnabled : false)
-                            Layout.alignment: Qt.AlignHCenter
-
-                            background: Rectangle {
-                                color: "transparent"
-                                radius: dpMin(8, 2)
-                                border.color: App.Style.accent
-                                border.width: 1
-                            }
-
-                            contentItem: Item {
-                                Image {
-                                    id: phoneMirrorButtonImageVertical
-                                    anchors.centerIn: parent
-                                    width: parent.width * 0.7
-                                    height: parent.height * 0.7
-                                    source: "./assets/phone_mirror_button.svg"
-                                    sourceSize: Qt.size(width * 2, height * 2)
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    antialiasing: true
-                                    mipmap: true
-                                    visible: false
-                                }
-
-                                ColorOverlay {
-                                    anchors.fill: phoneMirrorButtonImageVertical
-                                    source: phoneMirrorButtonImageVertical
-                                    color: App.Style.bottomBarPhoneMirrorButton
-                                }
-                            }
-
-                            PressBounce { id: phoneMirrorButtonVerticalBounce; target: phoneMirrorButtonVertical }
-
-                            MouseArea {
-                                id: mouseAreaPhoneMirrorVertical
-                                width: parent.width * 1.5
-                                height: parent.height * 1.5
-                                anchors.centerIn: parent
-                                hoverEnabled: true
-                                onPressed: { phoneMirrorButtonVerticalBounce.restart(); bottomBar.navAfterFrame(bottomBar.openPhoneMirrorSection) }
-                            }
-                        }
-                    }
-                }
-
-                // SECTION 3: Clock (Bottom section when vertical)
-                Item {
-                    id: clockSlotVertical
-                    Layout.preferredHeight: parent.height * 0.1
-                    Layout.fillWidth: true
-                    
-                    Item {
-                        anchors {
-                            bottom: parent.bottom
-                            bottomMargin: App.Spacing.overallMargin
-                            horizontalCenter: parent.horizontalCenter
-                        }
-                        width: parent.width
-                        height: clockTextVertical.implicitHeight + dp(20)
-
-                        Item {
-                            id: clockContainerVertical
-                            anchors.centerIn: parent
-                            width: clockTextVertical.implicitWidth + dp(20)
-                            height: parent.height
-                            
-                            Rectangle {
-                                anchors.fill: parent
-                                color: mouseAreaClockVertical.pressed ? App.Style.hoverColor : "transparent"
-                                radius: 4
-                            }
-                            
-                            Text {
-                                id: clockTextVertical
-                                anchors.centerIn: parent
-                                visible: settingsManager ? settingsManager.showClock : true
-                                font.pixelSize: bottomBar.clockSizeAuto
-                                    ? bottomBar.autoClockSize(clockSlotVertical.width - dp(20),
-                                                              clockSlotVertical.height - dp(20))
-                                    : bottomBar.manualClockSize
-                                font.family: bottomBar.globalFont
-                                color: App.Style.clockTextColor
-                                text: bottomBar.clockTimeText
-                            }
-                            
-                            MouseArea {
-                                id: mouseAreaClockVertical
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onPressed: bottomBar.navAfterFrame(bottomBar.openClockSection)
-                            }
-                        }
-                    }
-                }
-                
-                // Helper functions for vertical layout
-                function updateMuteButtonImageVertical() {
-                    muteButtonImageVertical.source = getUpdatedMuteSourceVertical()
-                }
-
-                // Volume set anywhere else (knob, gesture, media room)
-                Connections {
-                    target: volumeController
-                    function onPercentChanged(percent) {
-                        if (!volumeSliderVertical.pressed)
-                            volumeSliderVertical.value = percent
-                        updateMuteButtonImageVertical()
-                    }
-                    function onEffectivelyMutedChanged() { updateMuteButtonImageVertical() }
-                }
-                
-                function getUpdatedMuteSourceVertical() {
-                    if (!volumeController || volumeController.effectivelyMuted) {   // null at shutdown
-                        return "./assets/mute_on.svg"
-                    }
-                    const volume = volumeControlVertical.currentValue
-                    if (volume < 33) {
-                        return "./assets/mute_off_low.svg"
-                    } else if (volume < 66) {
-                        return "./assets/mute_off_med.svg"
-                    } else {
-                        return "./assets/mute_off_high.svg"
-                    }
-                }
-                
-
-
+    }
+
+    // ── Clock ──
+    BarSlot {
+        id: clockSlot
+        face: bottomBar.geo.items.clock; hit: bottomBar.geo.hits.clock
+        Rectangle {
+            anchors.fill: parent
+            color: clockArea.pressed ? App.Style.hoverColor : "transparent"
+            radius: Math.min(width, height) * 0.12
+        }
+        Text {
+            anchors.centerIn: parent
+            font.pixelSize: bottomBar.geo.clockPx
+            font.family: bottomBar.globalFont
+            color: App.Style.clockTextColor
+            text: bottomBar.clockTimeText
+        }
+        MouseArea {
+            id: clockArea
+            parent: clockSlot
+            anchors.fill: parent
+            onPressed: bottomBar.navAfterFrame(bottomBar.openClockSection)
+        }
+    }
+
+    // ── Volume popup ── opened by tapping the volume %
+    Popup {
+        id: popupSlider
+        parent: Overlay.overlay
+        width: parent ? parent.width : 0
+        height: Math.min(dp(140), parent ? parent.height * 0.5 : dp(140))
+        anchors.centerIn: parent
+        modal: true
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        background: Rectangle {
+            color: App.Style.backgroundColor
+            radius: dpMin(8, 2)
+            border.color: App.Style.accent
+            border.width: 1
+        }
+
+        contentItem: Item {
+            Label {
+                id: percentLabel
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.top: parent.top
+                anchors.topMargin: dp(15)
+                text: Math.round(volumeSlider.value) + "%"
+                color: App.Style.accent
+                font.pixelSize: dp(32)
+                font.bold: true
             }
+
+            Item {
+                id: sliderContainer
+                anchors.top: percentLabel.bottom
+                anchors.topMargin: dp(15)
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: dp(15)
+
+                Slider {
+                    id: volumeSlider
+                    anchors.centerIn: parent
+                    width: parent.width * 0.95
+                    height: dp(50)
+                    from: 0
+                    to: 100
+                    stepSize: 1
+                    value: bottomBar.volumePercent
+
+                    background: Rectangle {
+                        x: volumeSlider.leftPadding
+                        y: volumeSlider.topPadding + volumeSlider.availableHeight / 2 - height / 2
+                        width: volumeSlider.availableWidth
+                        height: dp(16)
+                        radius: dpMin(8, 2)
+                        color: App.Style.hoverColor
+
+                        Rectangle {
+                            // Ends at the handle's center so the rounded end stays under it
+                            width: volumeSlider.visualPosition * (parent.width - volumeSlider.handle.width) + volumeSlider.handle.width / 2
+                            height: parent.height
+                            color: App.Style.volumeSliderColor
+                            radius: dpMin(8, 2)
+                        }
+                    }
+
+                    // Larger handle for better touch
+                    handle: Rectangle {
+                        x: volumeSlider.leftPadding + volumeSlider.visualPosition * (volumeSlider.availableWidth - width)
+                        y: volumeSlider.topPadding + volumeSlider.availableHeight / 2 - height / 2
+                        width: dp(40)
+                        height: dp(40)
+                        radius: width / 2
+                        color: App.Style.accent
+                    }
+
+                    onValueChanged: {
+                        // Single dispatch to settings + every audio output;
+                        // raising it while muted unmutes (VolumeController)
+                        // null at shutdown: the binding to percent drops to 0 as the managers go
+                        if (volumeController)
+                            volumeController.applyVolume(Math.round(value))
+                    }
+                }
+
+                // Touch areas along the track, so a drag that starts a little
+                // off the slider still moves it
+                Repeater {
+                    model: 9
+                    MouseArea {
+                        x: (index * (volumeSlider.width / 8)) - width / 2 + volumeSlider.x
+                        y: volumeSlider.y + volumeSlider.height / 2 - height / 2
+                        width: dp(80)
+                        height: dp(80)
+                        preventStealing: false
+                        onMouseXChanged: {
+                            if (pressed) {
+                                var sliderX = mapToItem(volumeSlider, mouseX, mouseY).x
+                                volumeSlider.value = Math.max(0, Math.min(1,
+                                    (sliderX - volumeSlider.leftPadding) / volumeSlider.availableWidth)) * 100
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Volume set anywhere else (knob, gesture, media room): the slider's own
+    // writes break its binding, so follow along here
+    Connections {
+        target: volumeController
+        function onPercentChanged(percent) {
+            if (!volumeSlider.pressed)
+                volumeSlider.value = percent
         }
     }
 

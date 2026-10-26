@@ -808,24 +808,6 @@ ApplicationWindow {
             stackView: stackView
             mainWindow: mainWindow
             isVertical: isVerticalLayout
-
-            // Force update on orientation change
-            onIsVerticalChanged: {
-                // Trigger a layout update
-                if (isVertical) {
-                    anchors.left = parent.left
-                    anchors.top = parent.top
-                    anchors.bottom = parent.bottom
-                    anchors.right = undefined
-                    width = parent.width * 0.1
-                } else {
-                    anchors.bottom = parent.bottom
-                    anchors.left = parent.left
-                    anchors.right = parent.right
-                    anchors.top = undefined
-                    height = parent.height * App.Spacing.bottomBarHeightPercent
-                }
-            }
         }
 
         // ── Now Playing Studio: window-filling immersive editor ──

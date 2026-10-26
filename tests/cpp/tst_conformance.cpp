@@ -183,7 +183,7 @@ private slots:
                 }
             }
         }
-        QVERIFY2(checked > 150, qPrintable(QString::number(checked)));
+        QVERIFY2(checked > 130, qPrintable(QString::number(checked)));   // the scan still finds the handlers
         QVERIFY2(offenders.isEmpty(), qPrintable("Connections handlers for signals the service doesn't publish: "
                                                  + offenders.join("; ")));
     }

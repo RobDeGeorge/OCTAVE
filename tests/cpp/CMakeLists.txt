@@ -117,6 +117,8 @@ octave_add_test(tst_musicdeviceassets)
 octave_add_test(tst_vehiclegate SOURCES managers/themecatalog.h managers/themecatalog.cpp managers/dashboardmanager.h managers/dashboardmanager.cpp util/dashboardgrid.h util/dashboardgrid.cpp managers/parametercatalog.h managers/parametercatalog.cpp managers/parameterstore.h managers/parameterstore.cpp LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
 
 octave_add_test(tst_phonemirrorview SOURCES managers/themecatalog.h managers/themecatalog.cpp LIBS Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Multimedia)
+# The bottom / side bar's geometry (frontend/BottomBarLayout.js) over a grid of sizes
+octave_add_test(tst_bottombarlayout LIBS Qt6::Qml)
 octave_add_test(tst_errortoast SOURCES managers/themecatalog.h managers/themecatalog.cpp LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
 # The theme table as data and the palette in force
 octave_add_test(tst_themecatalog SOURCES managers/themecatalog.h managers/themecatalog.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
