@@ -1,4 +1,5 @@
 #include "webdemo.h"
+#include "webbluetooth.h"
 
 #include "../../sim/carsim.h"
 #include "../../sim/simulator.h"
@@ -27,6 +28,15 @@ WebDemo::WebDemo(Simulator *sim, OBDManager *obd, BerryIMUManager *imu, QObject 
     connect(&m_autopilot, &QTimer::timeout, this, &WebDemo::drive);
     m_autopilot.start(kTickMs);
     enter(Phase::Idle);
+
+    // A real adapter over Web Bluetooth (Settings > OBD > Find Bluetooth
+    // Adapters) takes over from the demo car: no more autopilot, and no
+    // simulated motion on the g-force and compass gauges
+    WebBluetoothLink::registerTransport();
+    connect(WebBluetoothLink::instance(), &WebBluetoothLink::linkUp, this, [this, sim] {
+        m_autopilot.stop();
+        sim->setImu(false);
+    });
 }
 
 void WebDemo::enter(Phase phase)

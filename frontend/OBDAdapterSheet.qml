@@ -146,6 +146,9 @@ Popup {
             visible: text !== ""
             wrapMode: Text.WordWrap
             text: {
+                if (!sheet.finderSupported && Qt.platform.os === "wasm")
+                    return "This browser has no Bluetooth access. Open OCTAVE in Chrome or Edge (computer or "
+                           + "Android) to connect a Bluetooth LE OBD2 adapter."
                 if (!sheet.finderSupported)
                     return "Pair your adapter in the system's Bluetooth settings, then pick it below."
                 if (!obdAdapterFinder.bluetoothOn)

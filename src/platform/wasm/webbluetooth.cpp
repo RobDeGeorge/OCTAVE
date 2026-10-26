@@ -1,0 +1,436 @@
+#include "webbluetooth.h"
+
+#include "../../managers/obdmanager.h"
+
+#include <QDeadlineTimer>
+#include <QIODevice>
+#include <QLoggingCategory>
+#include <QMutex>
+#include <QThread>
+#include <QWaitCondition>
+
+#include <emscripten.h>
+#include <emscripten/bind.h>
+#include <emscripten/val.h>
+
+#include <cstring>
+#include <string>
+#include <vector>
+
+Q_LOGGING_CATEGORY(lcWebBt, "octave.obd.webbt")
+
+namespace {
+
+constexpr const char *kScheme = "webbt://";
+// A GATT connect plus service discovery takes 1-5 s; give a slow dongle room
+constexpr int kConnectMs = 20000;
+
+// What the main thread (notifications, link events) shares with the port
+// device on the OBD worker thread
+struct Shared {
+    QMutex mutex;
+    QWaitCondition changed;
+    QByteArray rx;
+    bool up = false;
+    bool failed = false;   // the last connect attempt gave up
+    QString error;
+};
+
+Shared &shared()
+{
+    static Shared s;
+    return s;
+}
+
+WebBluetoothLink *g_link = nullptr;
+
+// clang-format off
+// The JS half. Promise chains keep one GATT operation in flight at a time,
+// which Chrome requires ("GATT operation already in progress").
+EM_JS(void, octave_webbt_install, (), {
+    if (Module.octaveWebBt)
+        return;
+    // Serial-over-GATT services of ELM327 BLE adapters, with the notify / write
+    // characteristics to prefer when a service has more than one of each
+    const canon = function (u) { return typeof u === "number" ? BluetoothUUID.canonicalUUID(u) : u; };
+    const PROFILES = [
+        { service: "49535343-fe7d-4ae5-8fa9-9fafd205e455",   // ISSC / Microchip transparent UART (OBDLink, NEXAS)
+          notify: "49535343-1e4d-4bd9-ba61-23c647249616", write: "49535343-8841-43f4-a8d4-ecbe34729bb3" },
+        { service: 0xfff0, notify: 0xfff1, write: 0xfff2 },  // Vgate, Konnwei, many clones
+        { service: 0xffe0, notify: 0xffe1, write: 0xffe1 },  // HM-10 style, one characteristic both ways
+        { service: 0x18f0, notify: 0x2af0, write: 0x2af1 },  // some v2.x clones
+        { service: "e7810a71-73ae-499d-8c15-faa9aef0c3f2",   // vLinker / IOS-Vlink
+          notify: "bef8d6c9-9c21-4c9e-b632-bd58c1009f9f", write: "bef8d6c9-9c21-4c9e-b632-bd58c1009f9f" },
+    ];
+    const SERVICES = PROFILES.map(function (p) { return p.service; });
+    // Name prefixes are case sensitive
+    const NAMES = ["OBD", "Obd", "obd", "ELM", "elm", "V-LINK", "VLINK", "vLinker", "IOS-Vlink", "Android-Vlink",
+                   "Vgate", "vgate", "iCar", "Veepeak", "VEEPEAK", "OBDLink", "NEXAS", "NexLink", "KONNWEI",
+                   "Konnwei", "LELink", "Viecar", "Carista", "BAFX", "Kiwi"];
+    const CHUNK = 20;   // the smallest BLE payload; every adapter takes it
+    const event = function (kind, a, b) { Module.octaveWebBtEvent(kind, a || "", b || ""); };
+    const errText = function (e) { return (e && e.message) ? e.message : String(e); };
+    const listening = new WeakSet();
+
+    const bt = {
+        known: new Map(),   // id -> BluetoothDevice the user picked this session
+        device: null, rxChar: null, txChar: null,
+        chain: Promise.resolve(),
+        gen: 0,
+
+        available: function () {
+            return !!(window.isSecureContext && navigator.bluetooth && navigator.bluetooth.requestDevice);
+        },
+
+        choose: async function (every) {
+            try {
+                const options = every
+                    ? { acceptAllDevices: true, optionalServices: SERVICES }
+                    : { filters: SERVICES.map(function (s) { return { services: [s] }; })
+                                 .concat(NAMES.map(function (n) { return { namePrefix: n }; })),
+                        optionalServices: SERVICES };
+                const d = await navigator.bluetooth.requestDevice(options);
+                bt.known.set(d.id, d);
+                event("chosen", d.id, d.name || "Bluetooth LE adapter");
+            } catch (e) {
+                event("chooseFailed", e.name || "", errText(e));
+            }
+        },
+
+        drop: function () {
+            const d = bt.device;
+            bt.device = null; bt.rxChar = null; bt.txChar = null;
+            if (d && d.gatt.connected)
+                d.gatt.disconnect();
+        },
+
+        disconnect: function () { ++bt.gen; bt.drop(); },
+
+        pick: async function (server) {
+            for (const p of PROFILES) {
+                let service;
+                try { service = await server.getPrimaryService(p.service); } catch (e) { continue; }
+                const chars = await service.getCharacteristics();
+                const byUuid = function (u) {
+                    return chars.find(function (c) { return c.uuid === canon(u); });
+                };
+                let notify = byUuid(p.notify);
+                let write = byUuid(p.write);
+                if (!notify || !(notify.properties.notify || notify.properties.indicate))
+                    notify = chars.find(function (c) { return c.properties.notify || c.properties.indicate; });
+                if (!write || !(write.properties.write || write.properties.writeWithoutResponse))
+                    write = chars.find(function (c) { return c.properties.writeWithoutResponse || c.properties.write; });
+                if (notify && write)
+                    return { service: service, notify: notify, write: write };
+            }
+            return null;
+        },
+
+        connect: async function (id) {
+            const gen = ++bt.gen;
+            bt.drop();
+            const d = bt.known.get(id);
+            if (!d) {
+                event("error", "The browser no longer knows that adapter. Scan again and pick it.");
+                return;
+            }
+            if (!listening.has(d)) {
+                listening.add(d);
+                d.addEventListener("gattserverdisconnected", function () {
+                    if (bt.device !== d)
+                        return;   // dropped on purpose
+                    bt.device = null; bt.rxChar = null; bt.txChar = null;
+                    event("down", "The Bluetooth adapter disconnected.");
+                });
+            }
+            try {
+                const server = await d.gatt.connect();
+                const found = await bt.pick(server);
+                if (gen !== bt.gen)
+                    return;   // superseded
+                if (!found) {
+                    d.gatt.disconnect();
+                    event("error", (d.name || "That device") + " has no OBD serial service. It may not be an ELM327 adapter.");
+                    return;
+                }
+                found.notify.addEventListener("characteristicvaluechanged", bt.onValue);
+                await found.notify.startNotifications();
+                if (gen !== bt.gen)
+                    return;
+                bt.device = d; bt.rxChar = found.notify; bt.txChar = found.write;
+                bt.chain = Promise.resolve();
+                event("up", found.service.uuid, d.name || "");
+            } catch (e) {
+                if (gen === bt.gen) {
+                    if (d.gatt.connected)
+                        d.gatt.disconnect();
+                    event("error", "Couldn't connect to " + (d.name || "the adapter") + ": " + errText(e));
+                }
+            }
+        },
+
+        onValue: function (e) {
+            if (e.target !== bt.rxChar)
+                return;
+            const v = e.target.value;
+            Module.octaveWebBtRx(new Uint8Array(v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength)));
+        },
+
+        // `bytes` may view the wasm heap (shared memory); slice() copies,
+        // which writeValue needs anyway
+        write: function (bytes) {
+            const c = bt.txChar;
+            if (!c)
+                return;
+            const noResponse = c.properties.writeWithoutResponse;
+            for (let i = 0; i < bytes.length; i += CHUNK) {
+                const part = bytes.slice(i, i + CHUNK);
+                bt.chain = bt.chain
+                    .then(function () {
+                        return noResponse ? c.writeValueWithoutResponse(part) : c.writeValueWithResponse(part);
+                    })
+                    .catch(function (e) {
+                        if (bt.txChar === c)
+                            event("log", "write failed: " + errText(e));
+                    });
+            }
+        },
+    };
+    Module.octaveWebBt = bt;
+});
+// clang-format on
+
+emscripten::val helper()
+{
+    return emscripten::val::module_property("octaveWebBt");
+}
+
+QString qs(const std::string &s)
+{
+    return QString::fromStdString(s);
+}
+
+void onEvent(const std::string &kind, const std::string &a, const std::string &b)
+{
+    if (g_link)
+        g_link->handleEvent(qs(kind), qs(a), qs(b));
+}
+
+void onBytes(emscripten::val bytes)
+{
+    const std::vector<uint8_t> v = emscripten::convertJSArrayToNumberVector<uint8_t>(bytes);
+    if (g_link && !v.empty())
+        g_link->handleBytes(QByteArray(reinterpret_cast<const char *>(v.data()), qsizetype(v.size())));
+}
+
+// The ELM327 as the OBD worker sees it. Lives on the worker thread.
+class PortDevice : public QIODevice
+{
+public:
+    using QIODevice::QIODevice;
+
+    bool isSequential() const override { return true; }
+
+    bool open(OpenMode mode) override
+    {
+        Shared &s = shared();
+        QMutexLocker lock(&s.mutex);
+        if (!s.up) {
+            s.failed = false;
+            s.error.clear();
+            lock.unlock();
+            QMetaObject::invokeMethod(g_link, [] { g_link->reconnect(); }, Qt::QueuedConnection);
+            lock.relock();
+            const QDeadlineTimer deadline(kConnectMs);
+            while (!s.up && !s.failed && !deadline.hasExpired()
+                   && !QThread::currentThread()->isInterruptionRequested())
+                s.changed.wait(&s.mutex, QDeadlineTimer(qMin<qint64>(200, deadline.remainingTime())));
+            if (!s.up) {
+                setErrorString(s.error.isEmpty() ? QStringLiteral("The Bluetooth adapter did not answer") : s.error);
+                return false;
+            }
+        }
+        s.rx.clear();
+        return QIODevice::open(mode);
+    }
+
+    qint64 bytesAvailable() const override
+    {
+        Shared &s = shared();
+        QMutexLocker lock(&s.mutex);
+        return s.rx.size() + QIODevice::bytesAvailable();
+    }
+
+    bool waitForReadyRead(int msecs) override
+    {
+        Shared &s = shared();
+        QMutexLocker lock(&s.mutex);
+        if (s.rx.isEmpty() && s.up)
+            s.changed.wait(&s.mutex, QDeadlineTimer(msecs));
+        if (!s.rx.isEmpty())
+            return true;
+        if (!s.up) {
+            // OBDConnectionWorker::sendCommand() reports a closed custom
+            // transport as a lost connection, with this error
+            const QString err = s.error.isEmpty() ? QStringLiteral("The Bluetooth adapter disconnected") : s.error;
+            lock.unlock();
+            setErrorString(err);
+            close();
+        }
+        return false;
+    }
+
+protected:
+    qint64 readData(char *data, qint64 maxSize) override
+    {
+        Shared &s = shared();
+        QMutexLocker lock(&s.mutex);
+        const qint64 n = qMin<qint64>(maxSize, s.rx.size());
+        std::memcpy(data, s.rx.constData(), size_t(n));
+        s.rx.remove(0, n);
+        return n;
+    }
+
+    qint64 writeData(const char *data, qint64 size) override
+    {
+        const QByteArray bytes(data, size);
+        QMetaObject::invokeMethod(g_link, [bytes] { g_link->write(bytes); }, Qt::QueuedConnection);
+        return size;
+    }
+};
+
+} // namespace
+
+EMSCRIPTEN_BINDINGS(octave_webbt)
+{
+    emscripten::function("octaveWebBtEvent", &onEvent);
+    emscripten::function("octaveWebBtRx", &onBytes);
+}
+
+WebBluetoothLink::WebBluetoothLink(QObject *parent)
+    : QObject(parent)
+{
+    octave_webbt_install();
+}
+
+WebBluetoothLink *WebBluetoothLink::instance()
+{
+    if (!g_link)
+        g_link = new WebBluetoothLink;
+    return g_link;
+}
+
+void WebBluetoothLink::registerTransport()
+{
+    instance();
+    OBDConnectionWorker::addCustomTransport(
+        [](const QString &port) { return port.startsWith(QLatin1String(kScheme)); },
+        [](const QString &, QObject *parent) -> QIODevice * { return new PortDevice(parent); });
+}
+
+QString WebBluetoothLink::portFor(const QString &deviceId)
+{
+    return QLatin1String(kScheme) + deviceId;
+}
+
+bool WebBluetoothLink::available() const
+{
+    return helper().call<bool>("available");
+}
+
+void WebBluetoothLink::choose(bool everyDevice)
+{
+    helper().call<void>("choose", everyDevice);
+}
+
+void WebBluetoothLink::connectDevice(const QString &id)
+{
+    {
+        Shared &s = shared();
+        QMutexLocker lock(&s.mutex);
+        s.up = false;
+        s.failed = false;
+        s.error.clear();
+        s.changed.wakeAll();
+    }
+    m_connectingId = id;
+    qCInfo(lcWebBt) << "connecting" << id;
+    helper().call<void>("connect", id.toStdString());
+}
+
+void WebBluetoothLink::disconnectDevice()
+{
+    helper().call<void>("disconnect");
+    m_connectingId.clear();
+    handleEvent(QStringLiteral("down"), QStringLiteral("Disconnected"), QString());
+}
+
+void WebBluetoothLink::reconnect()
+{
+    if (m_lastId.isEmpty()) {
+        handleEvent(QStringLiteral("error"), QStringLiteral("No Bluetooth adapter picked yet"), QString());
+        return;
+    }
+    connectDevice(m_lastId);
+}
+
+void WebBluetoothLink::write(const QByteArray &bytes)
+{
+    helper().call<void>("write", emscripten::val(emscripten::typed_memory_view(
+                                     size_t(bytes.size()), reinterpret_cast<const uint8_t *>(bytes.constData()))));
+}
+
+void WebBluetoothLink::handleBytes(const QByteArray &bytes)
+{
+    Shared &s = shared();
+    QMutexLocker lock(&s.mutex);
+    s.rx.append(bytes);
+    s.changed.wakeAll();
+}
+
+void WebBluetoothLink::handleEvent(const QString &kind, const QString &a, const QString &b)
+{
+    if (kind == QLatin1String("chosen")) {
+        qCInfo(lcWebBt) << "picked" << b << a;
+        emit chosen(a, b);
+    } else if (kind == QLatin1String("chooseFailed")) {
+        // a = DOMException name, b = message
+        qCInfo(lcWebBt) << "chooser:" << a << b;
+        if (a == QLatin1String("NotFoundError") && b.contains(QLatin1String("cancel"), Qt::CaseInsensitive))
+            emit chooseFailed(QString(), true);
+        else if (a == QLatin1String("SecurityError"))
+            emit chooseFailed(QStringLiteral("Tap Scan Again to open the browser's Bluetooth list."), false);
+        else if (a == QLatin1String("NotFoundError"))
+            emit chooseFailed(QStringLiteral("The browser can't reach Bluetooth. Check that Bluetooth is on. On "
+                                             "Linux, Chrome may need Web Bluetooth turned on in chrome://flags."),
+                              false);
+        else
+            emit chooseFailed(QStringLiteral("Bluetooth: %1").arg(b), false);
+    } else if (kind == QLatin1String("up")) {
+        const QString id = m_connectingId;
+        m_lastId = id;
+        qCInfo(lcWebBt) << "link up to" << b << "service" << a;
+        {
+            Shared &s = shared();
+            QMutexLocker lock(&s.mutex);
+            s.rx.clear();
+            s.up = true;
+            s.error.clear();
+            s.changed.wakeAll();
+        }
+        emit linkUp(id, b);
+    } else if (kind == QLatin1String("down") || kind == QLatin1String("error")) {
+        qCWarning(lcWebBt) << kind << a;
+        {
+            Shared &s = shared();
+            QMutexLocker lock(&s.mutex);
+            s.up = false;
+            s.failed = true;
+            s.error = a;
+            s.changed.wakeAll();
+        }
+        emit linkDown(a);
+    } else {
+        qCInfo(lcWebBt) << a;
+    }
+}

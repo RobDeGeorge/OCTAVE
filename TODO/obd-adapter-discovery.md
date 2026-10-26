@@ -1,8 +1,8 @@
 # OBD adapter discovery: scan, pair, trust, connect on every platform
 
 **Goal:** anyone can plug in a Bluetooth OBD-II dongle, tap "Connect Bluetooth OBD2", pick it from a list and have OCTAVE pair and connect, on every platform, without touching OS Bluetooth settings or typing a MAC.
-**Status:** active. Desktop Linux / Pi code is done but not yet proven in the car; Android, Windows/macOS and BLE-on-desktop are not started.
-**Last updated:** 2026-10-18
+**Status:** active. Desktop Linux / Pi code is done but not yet proven in the car; the browser demo (Web Bluetooth, BLE) is done in code but untested on a real dongle; Android, Windows/macOS and BLE-on-desktop are not started.
+**Last updated:** 2026-10-26
 
 Done (desktop Linux, `78558d9`, `da94533`): `OBDAdapterFinder` (`src/managers/obdadapterfinder.{h,cpp}`, QML `obdAdapterFinder`), `BluezPairer` / PIN agent (`src/platform/bluezpairer.{h,cpp}`, `OCTAVE_BLUEZ` only), `frontend/OBDAdapterSheet.qml`, `tests/cpp/tst_obdadapterfinder.cpp`. On success it saves an `rfcomm://MAC/channel` adapter (`RfcommSocket`). The sheet is platform-agnostic; on unsupported platforms it lists `obdManager.availableAdapters`.
 
@@ -45,8 +45,19 @@ Today Android lists only already-bonded devices (`OctaveOBDBridge.bondedDevices`
 
 **Effort:** L (desktop BLE), XL with iOS. **Needs:** a BLE OBD dongle on a desktop; an iPhone and a working iOS build for the second step.
 
+## 5. Browser demo (Web Bluetooth): verify with real dongles
+
+Done in code: `src/platform/wasm/webbluetooth.{h,cpp}` + `obdadapterfinder_wasm.cpp` (BLE only; Chrome / Edge). Verified in headless Chromium against a mocked GATT ELM327 (init, polling, gauges, reconnect after a dropped link); never against a real radio.
+
+1. Desktop Chrome (Windows or macOS; on Linux Web Bluetooth may need enabling in chrome://flags) and Android Chrome with a BLE dongle in the car: Settings > OBD > Find Bluetooth Adapters, pick, connect. Check the chooser opens from the tap (user activation) and live PIDs flow.
+2. The NEXAS over its LE side (ISSC service): does it serve ELM327 there or only on Classic?
+3. Throughput: BLE adds latency per command; compare PIDs/s to the Pi. Ignition cycle: does the automatic GATT reconnect come back?
+4. Later, if wanted: Web Serial for USB cables and paired Classic dongles on desktop Chrome, as a second `webserial://` transport beside it.
+
+**Effort:** S (M if a dongle's GATT layout differs). **Needs:** a BLE OBD dongle, a laptop or Android phone with Chrome, the Jeep.
+
 ## Order
 
-1 → 2 (Android Classic is the biggest gap for real users) → 3 → 4. Update `wiki/obd-manager.html#adapter-finder` and `wiki/signals-slots-reference.html` with each phase.
+1 → 2 (Android Classic is the biggest gap for real users) → 3 → 4; 5 whenever a BLE dongle is at hand. Update `wiki/obd-manager.html#adapter-finder` and `wiki/signals-slots-reference.html` with each phase.
 
-Delete this file when all four sections are done.
+Delete this file when all five sections are done.

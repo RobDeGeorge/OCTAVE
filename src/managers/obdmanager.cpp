@@ -2035,22 +2035,36 @@ struct CustomTransport {
     std::function<bool(const QString &)> claims;
     OBDConnectionWorker::TransportCreate create;
 };
-CustomTransport &customTransport()
+QList<CustomTransport> &customTransports()
 {
-    static CustomTransport transport;
-    return transport;
+    static QList<CustomTransport> transports;
+    return transports;
+}
+const CustomTransport *transportFor(const QString &port)
+{
+    for (const CustomTransport &t : customTransports()) {
+        if (t.claims && t.create && t.claims(port))
+            return &t;
+    }
+    return nullptr;
 }
 } // namespace
 
 void OBDConnectionWorker::setCustomTransport(std::function<bool(const QString &)> claims, TransportCreate create)
 {
-    customTransport() = {std::move(claims), std::move(create)};
+    customTransports().clear();
+    addCustomTransport(std::move(claims), std::move(create));
+}
+
+void OBDConnectionWorker::addCustomTransport(std::function<bool(const QString &)> claims, TransportCreate create)
+{
+    if (claims && create)
+        customTransports().append({std::move(claims), std::move(create)});
 }
 
 bool OBDConnectionWorker::transportClaims(const QString &port)
 {
-    const CustomTransport &t = customTransport();
-    return t.claims && t.create && t.claims(port);
+    return transportFor(port) != nullptr;
 }
 
 void OBDConnectionWorker::updatePidsToWatch(const QList<PidKey> &pids, const QList<PidKey> &background)
@@ -2080,7 +2094,7 @@ void OBDConnectionWorker::doConnect()
     qDebug() << "[OBD Worker] Connecting to" << m_portName;
 
     if (transportClaims(m_portName)) {
-        m_custom = customTransport().create(m_portName, this);
+        m_custom = transportFor(m_portName)->create(m_portName, this);
         if (!m_custom || !m_custom->open(QIODevice::ReadWrite)) {
             const QString err = QStringLiteral("Failed to open %1: %2")
                                     .arg(m_portName, m_custom ? m_custom->errorString() : QStringLiteral("no device"));

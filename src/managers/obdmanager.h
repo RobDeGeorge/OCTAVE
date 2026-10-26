@@ -748,8 +748,12 @@ public:
     // QIODevice for it. Dev tooling registers the simulated ELM327
     // ("sim://elm327") this way; nothing is registered in a normal run. Set
     // before the first connection; `create` runs on the worker thread.
+    // setCustomTransport() replaces every registered transport (empty
+    // functions clear them), addCustomTransport() adds one beside them (the
+    // browser demo serves the simulated car and Web Bluetooth adapters).
     using TransportCreate = std::function<QIODevice *(const QString &port, QObject *parent)>;
     static void setCustomTransport(std::function<bool(const QString &port)> claims, TransportCreate create);
+    static void addCustomTransport(std::function<bool(const QString &port)> claims, TransportCreate create);
     static bool transportClaims(const QString &port);
 
 signals:

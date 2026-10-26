@@ -453,6 +453,9 @@ if(EMSCRIPTEN)
         # the demo car: the --sim simulator (src/sim/), driven by an autopilot
         src/platform/wasm/webdemo.h
         src/platform/wasm/webdemo.cpp
+        # a real Bluetooth LE OBD adapter over Web Bluetooth
+        src/platform/wasm/webbluetooth.h
+        src/platform/wasm/webbluetooth.cpp
     )
     set_source_files_properties(src/managers/obdadapterfinder.cpp src/managers/networkmanager.cpp
                                 PROPERTIES HEADER_FILE_ONLY ON)

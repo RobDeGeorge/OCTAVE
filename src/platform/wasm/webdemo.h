@@ -6,8 +6,9 @@
 // `--sim` (src/sim/simulator.h, AppCore's `sim`) and an autopilot drives it
 // round a loop: pull away, run up through the gears to
 // a road speed (35-70 mph), cruise there, coast, brake to a stop, idle with the odd blip of the throttle. The
-// simulator's IMU feed gives the matching motion. Built from main.cpp before
-// Main.qml loads.
+// simulator's IMU feed gives the matching motion. A Bluetooth LE adapter
+// picked over Web Bluetooth (webbluetooth.h) replaces the demo car. Built
+// from main.cpp before Main.qml loads.
 
 #include <QElapsedTimer>
 #include <QObject>

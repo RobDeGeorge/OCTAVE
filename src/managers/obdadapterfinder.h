@@ -16,8 +16,10 @@
 //                      exists.
 //
 // Phase 1 of TODO/obd-adapter-discovery.md: the full flow runs on desktop
-// Linux (Pi / Orange Pi included). Elsewhere `supported` is false and the QML
-// sheet falls back to obdManager.availableAdapters.
+// Linux (Pi / Orange Pi included). The browser build has its own over Web
+// Bluetooth (src/platform/wasm/obdadapterfinder_wasm.cpp). Elsewhere
+// `supported` is false and the QML sheet falls back to
+// obdManager.availableAdapters.
 // QML context property "obdAdapterFinder".
 
 #include <QObject>
@@ -119,6 +121,9 @@ private:
     QString m_pairError;  // pairing failed but we're trying to connect anyway
     QString m_status;
     bool m_statusIsError = false;
+    // Browser build: the next chooser lists every device, not likely
+    // adapters only (after the user closed one without a pick)
+    bool m_everyDevice = false;
 };
 
 #endif  // OCTAVE_OBDADAPTERFINDER_H
