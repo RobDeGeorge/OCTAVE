@@ -216,10 +216,12 @@ Rectangle {
 
     // OBD nav button. On an OBD subpage it steps back to OBD Home; from
     // anywhere else it jumps to the last-visited OBD page (falling back to
-    // OBD Home when that page can no longer load).
+    // OBD Home when that page can no longer load). With no adapter connected
+    // it always goes to OBD Home, which is then the connect prompt.
     function openOBDSection() {
         var currentItem = stackView.currentItem
         var name = currentItem ? currentItem.objectName : ""
+        var connected = typeof obdManager !== "undefined" && obdManager && obdManager.connected === true
 
         if (name === "obdHome")
             return  // already on OBD Home
@@ -235,7 +237,7 @@ Rectangle {
             return
         }
 
-        var lastPage = settingsManager ? settingsManager.get_setting_with_default("lastOBDPage", "") : ""
+        var lastPage = connected && settingsManager ? settingsManager.get_setting_with_default("lastOBDPage", "") : ""
         if (lastPage !== "" && stackView.openPage(lastPage))
             return
         stackView.openPage("OBDHome.qml")

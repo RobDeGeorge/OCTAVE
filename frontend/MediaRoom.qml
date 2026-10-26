@@ -4,7 +4,9 @@ import QtQuick.Controls.Basic 2.15
 import QtQuick.Layouts 1.15
 import Qt5Compat.GraphicalEffects
 import QtQuick.Effects
+import QtQuick.Dialogs
 import "." as App
+import "settings" as Settings
 
 Item {
     // Local dp/dpMin wrappers — work around Qt Android singleton-function bug.
@@ -106,6 +108,19 @@ Item {
     // Empty playlist detection — swaps the controls for the empty message
     property int localSongCount: 0
     property bool playlistEmpty: !useRemote && localSongCount === 0
+
+    // Library folder picked from the empty-playlist message (same rules and
+    // wording as the settings page's Browse)
+    property string _folderError: ""
+    FolderDialog {
+        id: emptyFolderDialog
+        title: "Select Music Library Folder"
+        onAccepted: {
+            if (!settingsManager) return
+            mediaRoom._folderError = settingsManager.save_media_folder_url(selectedFolder)
+                ? "" : "That folder can't be used as the music library: pick one on the device's storage or SD card."
+        }
+    }
 
     // Track info from nowPlaying (the phone while it has the controls, else
     // local media); this page only picks the wording
@@ -937,15 +952,41 @@ Item {
 
         }
 
-        // Empty playlist message
-        Text {
+        // Empty playlist message, with the library folder picker from
+        // Settings > Media > Library & Playback so an empty library is one
+        // tap from music (the manager rescans when the folder changes)
+        Column {
             visible: playlistEmpty
             anchors.centerIn: parent
-            text: "No songs in this playlist yet"
-            color: App.Style.metadataColor
-            font.pixelSize: dp(16)
-            font.family: mediaRoom.globalFont
-            opacity: 0.6
+            spacing: dp(14)
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "No songs in this playlist yet"
+                color: App.Style.metadataColor
+                font.pixelSize: dp(16)
+                font.family: mediaRoom.globalFont
+                opacity: 0.6
+            }
+
+            Settings.SettingsButton {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: dp(120)
+                height: dp(40)
+                text: "Browse"
+                onClicked: emptyFolderDialog.open()
+            }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: Math.min(implicitWidth, mediaRoom.width - dp(32))
+                visible: mediaRoom._folderError !== ""
+                text: mediaRoom._folderError
+                color: App.Style.statusDanger
+                font.pixelSize: dp(13)
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+            }
         }
 
         // Waveform Visualizer

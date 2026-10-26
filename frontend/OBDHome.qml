@@ -51,7 +51,35 @@ Item {
         anchors.fill: parent
         color: backgroundColor
 
+        // No adapter connected: the page is just the connect prompt; the
+        // status bar, log and cards come back once the link is up
+        Column {
+            objectName: "obdHomeDisconnected"
+            visible: !obdHome.connected
+            anchors.centerIn: parent
+            width: Math.min(parent.width - dp(40), dp(560))
+            spacing: dp(16)
+
+            Text {
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                text: "No vehicle connected"
+                color: textColor
+                font.pixelSize: App.Spacing.overallText * 1.2
+                font.bold: true
+                font.family: obdHome.globalFont
+            }
+
+            App.OBDConnectButton {
+                anchors.horizontalCenter: parent.horizontalCenter
+                mainWindow: obdHome.mainWindow
+                fontFamily: obdHome.globalFont
+            }
+        }
+
         ColumnLayout {
+            visible: obdHome.connected
             anchors.fill: parent
             anchors.margins: dp(20)
             spacing: dp(20)

@@ -261,7 +261,7 @@ thickness: isVertical
             </tr>
             <tr>
               <td>OBD</td><td><code>obd_button.svg</code> / <code>bottomBarOBDButton</code></td>
-              <td><code>openOBDSection()</code>: reads <code>stackView.currentItem.objectName</code>. On <code>"obdHome"</code>: nothing. On any page whose name starts with <code>"obd"</code>: pops until <code>obdHome</code> is on top (opens <code>OBDHome.qml</code> if it was not on the stack). From anywhere else: opens the remembered subpage stored in the generic setting <code>lastOBDPage</code> (written by <span class="file-path">OBDHome.qml</span>), falling back to <code>OBDHome.qml</code> if none is stored or it fails to load.</td>
+              <td><code>openOBDSection()</code>: reads <code>stackView.currentItem.objectName</code>. On <code>"obdHome"</code>: nothing. On any page whose name starts with <code>"obd"</code>: pops until <code>obdHome</code> is on top (opens <code>OBDHome.qml</code> if it was not on the stack). From anywhere else: opens the remembered subpage stored in the generic setting <code>lastOBDPage</code> (written by <span class="file-path">OBDHome.qml</span>), falling back to <code>OBDHome.qml</code> if none is stored or it fails to load. While no adapter is connected (<code>obdManager.connected</code> false) it skips the remembered subpage and opens <code>OBDHome.qml</code>, which is then only the connect prompt.</td>
             </tr>
             <tr>
               <td>Media</td><td><code>media_button.svg</code> / <code>bottomBarMediaButton</code></td>
