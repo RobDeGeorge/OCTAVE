@@ -17,7 +17,10 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QtNetwork/qtnetworkglobal.h>
+#if QT_CONFIG(networkinterface)
 #include <QNetworkInterface>
+#endif
 #include <QRandomGenerator>
 #include <QRegularExpression>
 #include <QSaveFile>
@@ -350,13 +353,14 @@ void AirPlayManager::updateState()
 
 QStringList AirPlayManager::addresses() const
 {
+    QStringList out;
+#if QT_CONFIG(networkinterface)   // not in the WebAssembly Qt
     // The networks an iPhone could share: up, not loopback, and not a
     // container bridge or VPN tunnel (docker0, br-*, veth*, tailscale0, ...)
     static const QStringList virtualPrefixes = {
         QStringLiteral("docker"), QStringLiteral("br-"), QStringLiteral("veth"), QStringLiteral("virbr"),
         QStringLiteral("tailscale"), QStringLiteral("tun"), QStringLiteral("tap"), QStringLiteral("wg"),
         QStringLiteral("zt"), QStringLiteral("lxc"), QStringLiteral("podman")};
-    QStringList out;
     const QList<QNetworkInterface> ifaces = QNetworkInterface::allInterfaces();
     for (const QNetworkInterface &iface : ifaces) {
         const auto flags = iface.flags();
@@ -370,6 +374,7 @@ QStringList AirPlayManager::addresses() const
                 out.append(e.ip().toString());
         }
     }
+#endif
     return out;
 }
 

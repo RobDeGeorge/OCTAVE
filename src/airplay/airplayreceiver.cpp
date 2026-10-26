@@ -14,12 +14,17 @@
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavutil/channel_layout.h>
+#include <libavutil/version.h>
 #include "dnssd.h"
 #include "logger.h"
 #include "raop.h"
 }
 
 Q_LOGGING_CATEGORY(lcAirPlay, "octave.airplay")
+
+// FFmpeg 5.1 (libavutil 57.24) replaced channels / channel_layout with
+// ch_layout; Ubuntu 22.04 (CI, the AppImage base) still has 4.4
+#define OCTAVE_AV_CH_LAYOUT (LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(57, 24, 100))
 
 namespace {
 constexpr int kAudioQueueMaxMs = 500;       // older audio is dropped beyond this
@@ -89,7 +94,12 @@ public:
             return false;
         }
         m_ctx->sample_rate = kSampleRate;
+#if OCTAVE_AV_CH_LAYOUT
         av_channel_layout_default(&m_ctx->ch_layout, 2);
+#else
+        m_ctx->channels = 2;
+        m_ctx->channel_layout = AV_CH_LAYOUT_STEREO;
+#endif
         m_ctx->extradata = static_cast<uint8_t *>(av_mallocz(configLen + AV_INPUT_BUFFER_PADDING_SIZE));
         if (!m_ctx->extradata) {
             close();
@@ -144,7 +154,11 @@ private:
     void append(QByteArray &out) const
     {
         const int n = m_frame->nb_samples;
+#if OCTAVE_AV_CH_LAYOUT
         const int channels = m_frame->ch_layout.nb_channels;
+#else
+        const int channels = m_frame->channels;
+#endif
         if (n <= 0 || channels <= 0)
             return;
         const qsizetype start = out.size();
