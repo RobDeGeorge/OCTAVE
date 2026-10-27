@@ -142,6 +142,8 @@ bool OBDAdapterFinder::supported() const
 #endif
 }
 
+bool OBDAdapterFinder::canScan() const { return supported(); }
+
 bool OBDAdapterFinder::bluetoothOn() const
 {
     return m_local && m_local->isValid() && m_local->hostMode() != QBluetoothLocalDevice::HostPoweredOff;

@@ -364,6 +364,8 @@ Popup {
             spacing: sheet.dp(10)
 
             SheetButton {
+                // A browser without Web Bluetooth has only the simulated car
+                visible: !sheet.finderSupported || obdAdapterFinder.canScan
                 label: sheet.finderSupported && obdAdapterFinder.scanning ? "Scanning…"
                        : sheet.browser ? "Pick Bluetooth Adapter" : "Scan Again"
                 active: !sheet.finderSupported || (!obdAdapterFinder.scanning && obdAdapterFinder.busyAddress === "")

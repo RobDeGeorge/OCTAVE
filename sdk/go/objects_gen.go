@@ -1737,6 +1737,12 @@ func (o ObdAdapterFinder) GetSupported() (v bool, err error) {
 	return
 }
 
+// GetCanScan reads the property "canScan" (bool).
+func (o ObdAdapterFinder) GetCanScan() (v bool, err error) {
+	err = o.c.Get("obdAdapterFinder", "canScan", &v)
+	return
+}
+
 // GetBluetoothOn reads the property "bluetoothOn" (bool).
 func (o ObdAdapterFinder) GetBluetoothOn() (v bool, err error) {
 	err = o.c.Get("obdAdapterFinder", "bluetoothOn", &v)

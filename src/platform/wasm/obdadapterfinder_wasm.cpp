@@ -4,8 +4,9 @@
 // the adapter picked there is listed and connected at once; tapping the row
 // later reconnects it. Pairing is the browser's business (BLE ELM327
 // adapters need none). Replaces src/managers/obdadapterfinder.cpp when
-// OCTAVE_WASM. Without Web Bluetooth (Safari, Firefox) the sheet still
-// offers the simulated car and startScan() says which browsers can do more.
+// OCTAVE_WASM. Without Web Bluetooth (Safari, Firefox, Linux Chromium without
+// its flag) the sheet offers only the simulated car (canScan false) and the
+// status says what this browser would need.
 
 #include "../../managers/obdadapterfinder.h"
 
@@ -22,6 +23,21 @@ namespace {
 QString simAddress() { return QString::fromLatin1(OctaveSim::kSimPort); }
 QString noBluetooth()
 {
+    const QString kind = WebBluetoothLink::instance()->browserKind();
+    if (kind == QLatin1String("linux-chromium"))
+        return QStringLiteral("Bluetooth is switched off in Chrome / Chromium on Linux: open "
+                              "chrome://flags/#enable-experimental-web-platform-features, set it to Enabled, relaunch "
+                              "and reload this page. The simulated car works meanwhile.");
+    if (kind == QLatin1String("firefox"))
+        return QStringLiteral("Firefox can't reach Bluetooth devices from a web page. Open OCTAVE in Chrome or Edge, "
+                              "or install the OCTAVE app, to connect a Bluetooth OBD2 adapter. The simulated car "
+                              "works here.");
+    if (kind == QLatin1String("apple"))
+        return QStringLiteral("Safari can't reach Bluetooth devices from a web page. Open OCTAVE in Chrome or Edge on "
+                              "a computer or Android to connect a Bluetooth LE OBD2 adapter. The simulated car works "
+                              "here.");
+    if (kind == QLatin1String("insecure"))
+        return QStringLiteral("Bluetooth needs the page over https (or localhost). The simulated car works here.");
     return QStringLiteral("This browser has no Bluetooth access: open OCTAVE in Chrome or Edge (computer or Android) "
                           "to connect a Bluetooth LE OBD2 adapter. The simulated car works in any browser.");
 }
@@ -101,6 +117,7 @@ OBDAdapterFinder::~OBDAdapterFinder() = default;
 bool OBDAdapterFinder::supported() const { return true; }
 // The browser can't say until its chooser opens; it explains a radio that's off
 bool OBDAdapterFinder::bluetoothOn() const { return true; }
+bool OBDAdapterFinder::canScan() const { return WebBluetoothLink::instance()->available(); }
 bool OBDAdapterFinder::looksLikeObd(const QString &, const QStringList &) { return false; }
 
 void OBDAdapterFinder::startScan()

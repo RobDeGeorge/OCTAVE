@@ -704,6 +704,8 @@ export interface OBDAdapterFinder {
   properties: {
     /** bool, constant */
     supported: boolean
+    /** bool, constant */
+    canScan: boolean
     /** bool, notify bluetoothOnChanged */
     bluetoothOn: boolean
     /** bool, notify scanningChanged */

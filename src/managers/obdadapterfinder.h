@@ -43,6 +43,9 @@ class OBDAdapterFinder : public QObject
     Q_CLASSINFO("octave.scope", "vehicle")
     // Discovery + pairing + connect work on this platform
     Q_PROPERTY(bool supported READ supported CONSTANT)
+    // startScan() can look for adapters (false in a browser without Web
+    // Bluetooth, where the sheet offers only the simulated car)
+    Q_PROPERTY(bool canScan READ canScan CONSTANT)
     // A Bluetooth controller exists and is powered
     Q_PROPERTY(bool bluetoothOn READ bluetoothOn NOTIFY bluetoothOnChanged)
     Q_PROPERTY(bool scanning READ scanning NOTIFY scanningChanged)
@@ -59,6 +62,7 @@ public:
     ~OBDAdapterFinder() override;
 
     bool supported() const;
+    bool canScan() const;
     bool bluetoothOn() const;
     bool scanning() const { return m_scanning; }
     QVariantList devices() const { return m_deviceList; }

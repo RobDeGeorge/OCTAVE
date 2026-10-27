@@ -45,6 +45,8 @@ public:
 
     // navigator.bluetooth exists (Chrome / Edge in a secure context)
     bool available() const;
+    // Why it isn't: "insecure", "linux-chromium", "firefox", "apple" or "other"
+    QString browserKind() const;
 
     // Opens the browser's chooser; `everyDevice` lists every Bluetooth LE
     // device nearby instead of likely OBD adapters only
@@ -56,7 +58,7 @@ public:
     void write(const QByteArray &bytes);
 
     // From the JS helper (embind)
-    void handleEvent(const QString &kind, const QString &a, const QString &b);
+    void handleEvent(const QString &kind, const QString &a, const QString &b, const QString &c = QString());
     void handleBytes(const QByteArray &bytes);
 
 signals:

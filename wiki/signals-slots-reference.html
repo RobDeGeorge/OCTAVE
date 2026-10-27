@@ -1103,6 +1103,7 @@
           <thead><tr><th>Name</th><th>Type</th><th>Notify</th><th>Description</th></tr></thead>
           <tbody>
             <tr><td><code>supported</code></td><td><code>bool</code></td><td>constant</td><td>Discovery + pairing + connect work here (desktop Linux). False elsewhere; the sheet then falls back to <code>obdManager.availableAdapters</code></td></tr>
+            <tr><td><code>canScan</code></td><td><code>bool</code></td><td>constant</td><td><code>startScan()</code> can look for adapters: <code>supported</code> on desktop; in the browser demo, whether the browser has Web Bluetooth (false in Firefox, Safari and Linux Chromium without its flag, where the sheet hides "Pick Bluetooth Adapter" and offers only the simulated car)</td></tr>
             <tr><td><code>bluetoothOn</code></td><td><code>bool</code></td><td><code>bluetoothOnChanged</code></td><td>A controller exists and is powered</td></tr>
             <tr><td><code>scanning</code></td><td><code>bool</code></td><td><code>scanningChanged</code></td><td>Discovery running (15 s)</td></tr>
             <tr><td><code>devices</code></td><td><code>QVariantList</code></td><td><code>devicesChanged</code></td><td><code>[{address, name, rssi, kind: "classic"|"ble"|"dual", likelyObd, paired, connectable, note}]</code>; likely adapters first, then by signal (<code>rssi</code> 0 = cached, not heard this scan)</td></tr>

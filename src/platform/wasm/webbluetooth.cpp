@@ -34,6 +34,7 @@ struct Shared {
     bool up = false;
     bool failed = false;   // the last connect attempt gave up
     QString error;
+    QString describe;   // the characteristics in use, for the connection log
 };
 
 Shared &shared()
@@ -68,7 +69,7 @@ EM_JS(void, octave_webbt_install, (), {
                    "Vgate", "vgate", "iCar", "Veepeak", "VEEPEAK", "OBDLink", "NEXAS", "NexLink", "KONNWEI",
                    "Konnwei", "LELink", "Viecar", "Carista", "BAFX", "Kiwi"];
     const CHUNK = 20;   // the smallest BLE payload; every adapter takes it
-    const event = function (kind, a, b) { Module.octaveWebBtEvent(kind, a || "", b || ""); };
+    const event = function (kind, a, b, c) { Module.octaveWebBtEvent(kind, a || "", b || "", c || ""); };
     const errText = function (e) { return (e && e.message) ? e.message : String(e); };
     const listening = new WeakSet();
 
@@ -80,6 +81,23 @@ EM_JS(void, octave_webbt_install, (), {
 
         available: function () {
             return !!(window.isSecureContext && navigator.bluetooth && navigator.bluetooth.requestDevice);
+        },
+
+        // Why available() is false, for the message: "insecure", "linux-chromium"
+        // (Web Bluetooth is behind a flag there), "firefox", "apple" or "other"
+        browserKind: function () {
+            const ua = navigator.userAgent || "";
+            const has = function (t) { return ua.indexOf(t) >= 0; };
+            const chromium = has("Chrome/") || has("Chromium/");
+            if (!window.isSecureContext)
+                return "insecure";
+            if (has("Firefox/"))
+                return "firefox";
+            if (has("iPhone") || has("iPad") || (has("Safari/") && !chromium))
+                return "apple";
+            if (has("Linux") && !has("Android") && chromium)
+                return "linux-chromium";
+            return "other";
         },
 
         choose: async function (every) {
@@ -159,7 +177,11 @@ EM_JS(void, octave_webbt_install, (), {
                     return;
                 bt.device = d; bt.rxChar = found.notify; bt.txChar = found.write;
                 bt.chain = Promise.resolve();
-                event("up", found.service.uuid, d.name || "");
+                const shortId = function (u) { return u.length === 36 && u.endsWith("-0000-1000-8000-00805f9b34fb") ? u.slice(4, 8) : u.slice(0, 8); };
+                const w = found.write.properties;
+                event("up", found.service.uuid, d.name || "",
+                      "service " + shortId(found.service.uuid) + ", notify " + shortId(found.notify.uuid) +
+                      ", write " + shortId(found.write.uuid) + (w.writeWithoutResponse ? " (no response)" : " (with response)"));
             } catch (e) {
                 if (gen === bt.gen) {
                     if (d.gatt.connected)
@@ -210,10 +232,10 @@ QString qs(const std::string &s)
     return QString::fromStdString(s);
 }
 
-void onEvent(const std::string &kind, const std::string &a, const std::string &b)
+void onEvent(const std::string &kind, const std::string &a, const std::string &b, const std::string &c)
 {
     if (g_link)
-        g_link->handleEvent(qs(kind), qs(a), qs(b));
+        g_link->handleEvent(qs(kind), qs(a), qs(b), qs(c));
 }
 
 void onBytes(emscripten::val bytes)
@@ -251,6 +273,7 @@ public:
             }
         }
         s.rx.clear();
+        setObjectName(s.describe);
         return QIODevice::open(mode);
     }
 
@@ -338,6 +361,11 @@ bool WebBluetoothLink::available() const
     return helper().call<bool>("available");
 }
 
+QString WebBluetoothLink::browserKind() const
+{
+    return QString::fromStdString(helper().call<std::string>("browserKind"));
+}
+
 void WebBluetoothLink::choose(bool everyDevice)
 {
     helper().call<void>("choose", everyDevice);
@@ -388,7 +416,7 @@ void WebBluetoothLink::handleBytes(const QByteArray &bytes)
     s.changed.wakeAll();
 }
 
-void WebBluetoothLink::handleEvent(const QString &kind, const QString &a, const QString &b)
+void WebBluetoothLink::handleEvent(const QString &kind, const QString &a, const QString &b, const QString &c)
 {
     if (kind == QLatin1String("chosen")) {
         qCInfo(lcWebBt) << "picked" << b << a;
@@ -409,11 +437,12 @@ void WebBluetoothLink::handleEvent(const QString &kind, const QString &a, const 
     } else if (kind == QLatin1String("up")) {
         const QString id = m_connectingId;
         m_lastId = id;
-        qCInfo(lcWebBt) << "link up to" << b << "service" << a;
+        qCInfo(lcWebBt) << "link up to" << b << c;
         {
             Shared &s = shared();
             QMutexLocker lock(&s.mutex);
             s.rx.clear();
+            s.describe = c;
             s.up = true;
             s.error.clear();
             s.changed.wakeAll();

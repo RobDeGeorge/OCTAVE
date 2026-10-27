@@ -2102,7 +2102,11 @@ void OBDConnectionWorker::doConnect()
             emit initComplete(false, err);
             return;
         }
-        emit logLine(QStringLiteral("Opened %1").arg(m_portName));
+        // A transport may describe its link in objectName (Web Bluetooth: the
+        // GATT characteristics it picked)
+        emit logLine(m_custom->objectName().isEmpty()
+                         ? QStringLiteral("Opened %1").arg(m_portName)
+                         : QStringLiteral("Opened %1 (%2)").arg(m_portName, m_custom->objectName()));
         m_io = m_custom;
     } else if (RfcommSocket::isUrl(m_portName)) {
         QString mac;
@@ -2150,6 +2154,9 @@ void OBDConnectionWorker::doConnect()
     // Try to read a PID to verify vehicle connection. Send RPM request as a
     // quick check, waiting up to the configured connection timeout.
     QString response = sendCommand(ELM327Protocol::formatPidRequest(1, 0x0C), m_timeout * 1000);
+    emit logLine(QStringLiteral("Vehicle check (010C): %1")
+                     .arg(response.trimmed().isEmpty() ? QStringLiteral("no answer")
+                                                       : response.simplified().left(60)));
     if (response.isEmpty() || response.toUpper().contains(QStringLiteral("NO DATA")) ||
         response.toUpper().contains(QStringLiteral("UNABLE"))) {
         // Adapter is connected but no vehicle. Release the port: an open
@@ -2245,6 +2252,8 @@ void OBDConnectionWorker::doDisconnect()
 bool OBDConnectionWorker::sendInitSequence()
 {
     const auto cmds = ELM327Protocol::initCommands();
+    int answered = 0;
+    QString resetAnswer;
     for (const InitCommand &cmd : cmds) {
         // A bound /dev/rfcommN opens instantly but the kernel only brings the
         // Bluetooth link up on the first write, so ATZ's answer includes the
@@ -2253,12 +2262,22 @@ bool OBDConnectionWorker::sendInitSequence()
         const bool reset = cmd.command.startsWith("ATZ");
         QString response = sendCommand(cmd.command, reset ? qMax(cmd.timeoutMs, 5000) : cmd.timeoutMs);
         qDebug() << "[OBD Worker] Init:" << cmd.command.trimmed() << "->" << response;
+        if (!response.trimmed().isEmpty())
+            ++answered;
         // ATZ response usually contains "ELM327" -- verify
         if (cmd.command.startsWith("ATZ") && !response.toUpper().contains(QStringLiteral("ELM"))) {
             // Not necessarily fatal -- some clones don't report ELM in reset response
             qDebug() << "[OBD Worker] Warning: ATZ response doesn't contain 'ELM'";
         }
+        if (cmd.command.startsWith("ATZ"))
+            resetAnswer = response.simplified().left(40);
     }
+    // In the connection log: "No Vehicle" alone can't tell a silent adapter
+    // from a silent car
+    emit logLine(QStringLiteral("ELM327: %1 of %2 setup commands answered (ATZ: %3)")
+                     .arg(answered)
+                     .arg(cmds.size())
+                     .arg(resetAnswer.isEmpty() ? QStringLiteral("no answer") : resetAnswer));
     return true;  // Init commands sent; adapter at least responded to serial
 }
 

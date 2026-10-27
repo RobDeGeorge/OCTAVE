@@ -56,6 +56,13 @@
             "writable": false
         },
         {
+            "constant": true,
+            "name": "canScan",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
             "constant": false,
             "name": "bluetoothOn",
             "notify": "bluetoothOnChanged",
