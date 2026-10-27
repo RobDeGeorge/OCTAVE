@@ -2151,12 +2151,19 @@ void OBDConnectionWorker::doConnect()
     }
 
 
-    // Try to read a PID to verify vehicle connection. Send RPM request as a
-    // quick check, waiting up to the configured connection timeout.
-    QString response = sendCommand(ELM327Protocol::formatPidRequest(1, 0x0C), m_timeout * 1000);
-    emit logLine(QStringLiteral("Vehicle check (010C): %1")
-                     .arg(response.trimmed().isEmpty() ? QStringLiteral("no answer")
-                                                       : response.simplified().left(60)));
+    // Try to read a PID to verify vehicle connection: RPM. After ATSP0 this
+    // first request is the adapter's protocol search ("SEARCHING..."),
+    // which takes 10 s and more on a J1850 / ISO 9141 / KWP car; giving up
+    // sooner meant the next attempt's ATZ restarted the search, forever.
+    QString response = sendCommand(ELM327Protocol::formatPidRequest(1, 0x0C), qMax(m_timeout, 20) * 1000);
+    // A timeout returns nothing; show what did arrive (e.g. "SEARCHING...")
+    const QString shown = response.isEmpty()
+                              ? QString::fromLatin1(m_responseBuffer.pending()).simplified()
+                              : response.simplified();
+    emit logLine(QStringLiteral("Vehicle check (010C): %1%2")
+                     .arg(shown.isEmpty() ? QStringLiteral("no answer") : shown.left(60),
+                          response.isEmpty() && !shown.isEmpty() ? QStringLiteral(" (no prompt, timed out)")
+                                                                 : QString()));
     if (response.isEmpty() || response.toUpper().contains(QStringLiteral("NO DATA")) ||
         response.toUpper().contains(QStringLiteral("UNABLE"))) {
         // Adapter is connected but no vehicle. Release the port: an open
@@ -2374,7 +2381,8 @@ QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
         if (spent < 100)
             QThread::msleep(static_cast<unsigned long>(100 - spent));
     }
-    qCWarning(lcElm327) << "no response to" << cmd.trimmed() << "within" << timeoutMs << "ms";
+    qCWarning(lcElm327) << "no response to" << cmd.trimmed() << "within" << timeoutMs << "ms"
+                        << "(partial:" << m_responseBuffer.pending().simplified().left(80) << ")";
 
     // Timeout -- return whatever we have
     auto resp = m_responseBuffer.getResponse();

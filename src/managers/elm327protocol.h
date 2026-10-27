@@ -208,6 +208,9 @@ public:
     // (multi-line replies: several ECUs, CAN multi-frame DTC lists)
     QStringList lastLines() const { return m_lastLines; }
 
+    // What has arrived since the last complete response (no prompt yet)
+    QByteArray pending() const { return m_buffer; }
+
     // Clear the buffer
     void clear();
 
