@@ -20,10 +20,11 @@
 //                       "webbt://<id>" (registerTransport(), through
 //                       OBDConnectionWorker::addCustomTransport()). Reads
 //                       wait on the notifications; writes are queued to the
-//                       link. Opening it while the link is down reconnects
-//                       the last adapter (the browser allows that without a
-//                       new pick), so OBDManager's retries survive an
-//                       ignition cycle.
+//                       link. Opening it while the link is down starts a
+//                       reconnect to the last adapter (the browser allows
+//                       that without a new pick) and fails; OBDManager's
+//                       next retry finds the link up, so its retries
+//                       survive an ignition cycle.
 //
 // The chooser needs a user gesture: OBDAdapterFinder::startScan() (the
 // wasm one, obdadapterfinder_wasm.cpp) calls choose() from the tap that
@@ -72,6 +73,7 @@ private:
     explicit WebBluetoothLink(QObject *parent = nullptr);
 
     QString m_connectingId;
+    bool m_connecting = false;   // a connect() is under way in the JS helper
     QString m_lastId;   // the adapter reconnect() goes back to
 };
 

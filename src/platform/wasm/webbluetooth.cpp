@@ -2,7 +2,6 @@
 
 #include "../../managers/obdmanager.h"
 
-#include <QDeadlineTimer>
 #include <QIODevice>
 #include <QLoggingCategory>
 #include <QMutex>
@@ -22,9 +21,6 @@ Q_LOGGING_CATEGORY(lcWebBt, "octave.obd.webbt")
 namespace {
 
 constexpr const char *kScheme = "webbt://";
-// A GATT connect plus service discovery takes 1-5 s; give a slow dongle room
-constexpr int kConnectMs = 20000;
-
 // What the main thread (notifications, link events) shares with the port
 // device on the OBD worker thread
 struct Shared {
@@ -32,7 +28,6 @@ struct Shared {
     QWaitCondition changed;
     QByteArray rx;
     bool up = false;
-    bool failed = false;   // the last connect attempt gave up
     QString error;
     QString describe;   // the characteristics in use, for the connection log
 };
@@ -124,24 +119,75 @@ EM_JS(void, octave_webbt_install, (), {
 
         disconnect: function () { ++bt.gen; bt.drop(); },
 
+        // Every known serial service the adapter has, as {service, notify,
+        // write}. Some adapters carry several (the NEXAS NexLINK has ISSC and
+        // FFF0, and its ISSC side never answered), so with more than one the
+        // first that answers "ATI" wins.
         pick: async function (server) {
+            const canNotify = function (c) { return c && (c.properties.notify || c.properties.indicate); };
+            const canWrite = function (c) { return c && (c.properties.write || c.properties.writeWithoutResponse); };
+            const found = [];
             for (const p of PROFILES) {
-                let service;
-                try { service = await server.getPrimaryService(p.service); } catch (e) { continue; }
-                const chars = await service.getCharacteristics();
+                let service, chars;
+                try {
+                    service = await server.getPrimaryService(p.service);
+                    chars = await service.getCharacteristics();
+                } catch (e) {
+                    if (e && e.name === "NotFoundError")
+                        continue;
+                    throw e;   // a link that went away, not a missing service
+                }
                 const byUuid = function (u) {
                     return chars.find(function (c) { return c.uuid === canon(u); });
                 };
-                let notify = byUuid(p.notify);
-                let write = byUuid(p.write);
-                if (!notify || !(notify.properties.notify || notify.properties.indicate))
-                    notify = chars.find(function (c) { return c.properties.notify || c.properties.indicate; });
-                if (!write || !(write.properties.write || write.properties.writeWithoutResponse))
-                    write = chars.find(function (c) { return c.properties.writeWithoutResponse || c.properties.write; });
-                if (notify && write)
-                    return { service: service, notify: notify, write: write };
+                // The profile's own pair, then any notify + write pair of the
+                // service (a vendor that moved its characteristics)
+                const n = byUuid(p.notify), w = byUuid(p.write);
+                if (canNotify(n) && canWrite(w))
+                    found.push({ service: service, notify: n, write: w });
+                const gn = chars.find(canNotify), gw = chars.find(canWrite);
+                if (gn && gw && (gn !== n || gw !== w))
+                    found.push({ service: service, notify: gn, write: gw });
             }
-            return null;
+            if (found.length < 2)
+                return found[0] || null;
+            for (const f of found) {
+                if (await bt.probe(f))
+                    return f;
+            }
+            return found[0];
+        },
+
+        describe: function (f) {
+            // 16-bit ids as "fff1", 128-bit ones by their first two groups
+            const id = function (u) {
+                return u.endsWith("-0000-1000-8000-00805f9b34fb") ? u.slice(4, 8) : u.slice(0, 13);
+            };
+            return "service " + id(f.service.uuid) + ", notify " + id(f.notify.uuid) + ", write " + id(f.write.uuid)
+                + (f.write.properties.writeWithoutResponse ? " (no response)" : " (with response)");
+        },
+
+        // Does this service answer an ELM327? Leaves notifications on if so.
+        probe: async function (f) {
+            let got = 0;
+            const count = function (e) { got += e.target.value.byteLength; };
+            f.notify.addEventListener("characteristicvaluechanged", count);
+            try {
+                await f.notify.startNotifications();
+                const ati = new TextEncoder().encode("ATI" + String.fromCharCode(13));
+                await (f.write.properties.writeWithoutResponse ? f.write.writeValueWithoutResponse(ati)
+                                                               : f.write.writeValueWithResponse(ati));
+                for (let i = 0; i < 15 && !got; ++i)
+                    await new Promise(function (r) { setTimeout(r, 100); });
+            } catch (e) {
+                event("log", "probe " + bt.describe(f) + ": " + errText(e));
+            }
+            f.notify.removeEventListener("characteristicvaluechanged", count);
+            if (!got) {
+                try { await f.notify.stopNotifications(); } catch (e) {}
+            }
+            event("log", "probe " + bt.describe(f) + ": " + (got ? got + " bytes back" : "silent"));
+            return got > 0;
         },
 
         connect: async function (id) {
@@ -177,11 +223,7 @@ EM_JS(void, octave_webbt_install, (), {
                     return;
                 bt.device = d; bt.rxChar = found.notify; bt.txChar = found.write;
                 bt.chain = Promise.resolve();
-                const shortId = function (u) { return u.length === 36 && u.endsWith("-0000-1000-8000-00805f9b34fb") ? u.slice(4, 8) : u.slice(0, 8); };
-                const w = found.write.properties;
-                event("up", found.service.uuid, d.name || "",
-                      "service " + shortId(found.service.uuid) + ", notify " + shortId(found.notify.uuid) +
-                      ", write " + shortId(found.write.uuid) + (w.writeWithoutResponse ? " (no response)" : " (with response)"));
+                event("up", found.service.uuid, d.name || "", bt.describe(found));
             } catch (e) {
                 if (gen === bt.gen) {
                     if (d.gatt.connected)
@@ -258,19 +300,15 @@ public:
         Shared &s = shared();
         QMutexLocker lock(&s.mutex);
         if (!s.up) {
-            s.failed = false;
-            s.error.clear();
+            // Ask the main thread to bring the last adapter back and fail
+            // now: OBDManager retries the port on its own schedule. Waiting
+            // here for the main thread let a main thread that waits on this
+            // worker (a reconnect tearing it down) freeze the page for the
+            // whole connect timeout.
             lock.unlock();
             QMetaObject::invokeMethod(g_link, [] { g_link->reconnect(); }, Qt::QueuedConnection);
-            lock.relock();
-            const QDeadlineTimer deadline(kConnectMs);
-            while (!s.up && !s.failed && !deadline.hasExpired()
-                   && !QThread::currentThread()->isInterruptionRequested())
-                s.changed.wait(&s.mutex, QDeadlineTimer(qMin<qint64>(200, deadline.remainingTime())));
-            if (!s.up) {
-                setErrorString(s.error.isEmpty() ? QStringLiteral("The Bluetooth adapter did not answer") : s.error);
-                return false;
-            }
+            setErrorString(QStringLiteral("Reconnecting the Bluetooth adapter"));
+            return false;
         }
         s.rx.clear();
         setObjectName(s.describe);
@@ -377,11 +415,11 @@ void WebBluetoothLink::connectDevice(const QString &id)
         Shared &s = shared();
         QMutexLocker lock(&s.mutex);
         s.up = false;
-        s.failed = false;
         s.error.clear();
         s.changed.wakeAll();
     }
     m_connectingId = id;
+    m_connecting = true;
     qCInfo(lcWebBt) << "connecting" << id;
     helper().call<void>("connect", id.toStdString());
 }
@@ -390,11 +428,15 @@ void WebBluetoothLink::disconnectDevice()
 {
     helper().call<void>("disconnect");
     m_connectingId.clear();
+    m_connecting = false;
     handleEvent(QStringLiteral("down"), QStringLiteral("Disconnected"), QString());
 }
 
 void WebBluetoothLink::reconnect()
 {
+    // The OBD worker asks on every retry; let a connect under way finish
+    if (m_connecting)
+        return;
     if (m_lastId.isEmpty()) {
         handleEvent(QStringLiteral("error"), QStringLiteral("No Bluetooth adapter picked yet"), QString());
         return;
@@ -437,6 +479,7 @@ void WebBluetoothLink::handleEvent(const QString &kind, const QString &a, const 
     } else if (kind == QLatin1String("up")) {
         const QString id = m_connectingId;
         m_lastId = id;
+        m_connecting = false;
         qCInfo(lcWebBt) << "link up to" << b << c;
         {
             Shared &s = shared();
@@ -450,11 +493,12 @@ void WebBluetoothLink::handleEvent(const QString &kind, const QString &a, const 
         emit linkUp(id, b);
     } else if (kind == QLatin1String("down") || kind == QLatin1String("error")) {
         qCWarning(lcWebBt) << kind << a;
+        if (kind == QLatin1String("error"))
+            m_connecting = false;
         {
             Shared &s = shared();
             QMutexLocker lock(&s.mutex);
             s.up = false;
-            s.failed = true;
             s.error = a;
             s.changed.wakeAll();
         }
