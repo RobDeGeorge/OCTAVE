@@ -766,9 +766,11 @@ Item {
 
             // Manual entry — universal escape hatch. Accepts a MAC, a
             // /dev/... path, or a COM port. The manager classifies and
-            // dispatches accordingly.
+            // dispatches accordingly. Not in the browser, which can only
+            // reach the adapter through its own Bluetooth chooser.
             RowLayout {
                 Layout.fillWidth: true
+                visible: Qt.platform.os !== "wasm"
                 spacing: dp(8)
 
                 SettingsTextField {
@@ -929,6 +931,9 @@ Item {
             // platform variation. Drives copy, never structure.
             SettingDescription {
                 text: {
+                    if (Qt.platform.os === "wasm")
+                        return "In the browser, Find Bluetooth Adapters connects a Bluetooth LE OBD2 adapter "
+                               + "(Chrome or Edge) or the simulated car."
                     var hint = (obdManager && typeof obdManager.platform_hint === "function")
                         ? obdManager.platform_hint() : ""
                     if (hint === "android")

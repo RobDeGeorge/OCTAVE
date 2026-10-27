@@ -43,9 +43,13 @@ Popup {
     padding: 0
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
+    // The browser's Bluetooth chooser is a modal of its own: open it from
+    // the button, not over the list (which offers the simulated car there)
+    readonly property bool browser: Qt.platform.os === "wasm"
+
     onAboutToShow: {
         showAll = false
-        if (finderSupported)
+        if (finderSupported && !browser)
             obdAdapterFinder.startScan()
         else if (typeof obdManager !== "undefined" && obdManager)
             obdManager.scan()
@@ -146,9 +150,6 @@ Popup {
             visible: text !== ""
             wrapMode: Text.WordWrap
             text: {
-                if (!sheet.finderSupported && Qt.platform.os === "wasm")
-                    return "This browser has no Bluetooth access. Open OCTAVE in Chrome or Edge (computer or "
-                           + "Android) to connect a Bluetooth LE OBD2 adapter."
                 if (!sheet.finderSupported)
                     return "Pair your adapter in the system's Bluetooth settings, then pick it below."
                 if (!obdAdapterFinder.bluetoothOn)
@@ -255,7 +256,7 @@ Popup {
 
                     // Signal strength, 0-4 bars (rssi 0 = not heard this scan)
                     Row {
-                        visible: row.finderRow
+                        visible: row.finderRow && modelData.kind !== "sim"
                         spacing: sheet.dp(2)
                         Layout.alignment: Qt.AlignVCenter
                         readonly property int bars: {
@@ -293,6 +294,7 @@ Popup {
                             Layout.fillWidth: true
                             text: {
                                 if (!row.finderRow) return (modelData.kind || "").toUpperCase() + " · " + row.address
+                if (modelData.kind === "sim") return modelData.note
                                 var parts = [row.address]
                                 parts.push(modelData.kind === "ble" ? "Bluetooth LE"
                                            : modelData.kind === "dual" ? "Classic + LE" : "Classic")
@@ -362,7 +364,8 @@ Popup {
             spacing: sheet.dp(10)
 
             SheetButton {
-                label: sheet.finderSupported && obdAdapterFinder.scanning ? "Scanning…" : "Scan Again"
+                label: sheet.finderSupported && obdAdapterFinder.scanning ? "Scanning…"
+                       : sheet.browser ? "Pick Bluetooth Adapter" : "Scan Again"
                 active: !sheet.finderSupported || (!obdAdapterFinder.scanning && obdAdapterFinder.busyAddress === "")
                 onClicked: {
                     if (sheet.finderSupported) obdAdapterFinder.startScan()

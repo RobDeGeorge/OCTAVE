@@ -1,26 +1,53 @@
-// WebAssembly build: OBDAdapterFinder over Web Bluetooth (webbluetooth.h).
-// The browser does the scanning in its own chooser, so startScan() opens it
-// and the adapter picked there is listed and connected at once; tapping the
-// row later reconnects it. Pairing is the browser's business (BLE ELM327
+// WebAssembly build: OBDAdapterFinder over Web Bluetooth (webbluetooth.h),
+// plus a "Simulated car" row that starts the demo drive (webdemo.h). The
+// browser does the scanning in its own chooser, so startScan() opens it and
+// the adapter picked there is listed and connected at once; tapping the row
+// later reconnects it. Pairing is the browser's business (BLE ELM327
 // adapters need none). Replaces src/managers/obdadapterfinder.cpp when
-// OCTAVE_WASM. Without Web Bluetooth (Safari, Firefox) `supported` is false
-// and the QML sheet says so.
+// OCTAVE_WASM. Without Web Bluetooth (Safari, Firefox) the sheet still
+// offers the simulated car and startScan() says which browsers can do more.
 
 #include "../../managers/obdadapterfinder.h"
 
 #include "../../managers/obdmanager.h"
+#include "../../sim/simelm327.h"
 #include "webbluetooth.h"
+#include "webdemo.h"
 
 #include <QDebug>
 
 #include <algorithm>
+
+namespace {
+QString simAddress() { return QString::fromLatin1(OctaveSim::kSimPort); }
+QString noBluetooth()
+{
+    return QStringLiteral("This browser has no Bluetooth access: open OCTAVE in Chrome or Edge (computer or Android) "
+                          "to connect a Bluetooth LE OBD2 adapter. The simulated car works in any browser.");
+}
+}
 
 OBDAdapterFinder::OBDAdapterFinder(OBDManager *obd, SettingsManager *settings, QObject *parent)
     : QObject(parent)
     , m_obd(obd)
     , m_settings(settings)
 {
+    m_devices.insert(simAddress(), QVariantMap{
+                                       {QStringLiteral("address"), simAddress()},
+                                       {QStringLiteral("name"), QStringLiteral("Simulated car")},
+                                       {QStringLiteral("rssi"), 0},
+                                       {QStringLiteral("kind"), QStringLiteral("sim")},
+                                       {QStringLiteral("likelyObd"), true},
+                                       {QStringLiteral("paired"), false},
+                                       {QStringLiteral("connectable"), true},
+                                       {QStringLiteral("note"), QStringLiteral("No hardware: a demo drive")},
+                                   });
+    rebuildList();
     WebBluetoothLink *link = WebBluetoothLink::instance();
+    m_status = link->available()
+                   ? QStringLiteral("Pick your Bluetooth LE OBD2 adapter in the browser's list, or try the "
+                                    "simulated car.")
+                   : noBluetooth();
     connect(link, &WebBluetoothLink::chosen, this, [this](const QString &id, const QString &name) {
         setScanning(false);
         m_everyDevice = false;
@@ -41,7 +68,7 @@ OBDAdapterFinder::OBDAdapterFinder(OBDManager *obd, SettingsManager *settings, Q
         setScanning(false);
         if (cancelled) {
             m_everyDevice = true;
-            setStatus(QStringLiteral("No adapter picked. Scan Again lists every Bluetooth device nearby, for an "
+            setStatus(QStringLiteral("No adapter picked. Next time the list shows every Bluetooth device nearby, for an "
                                      "adapter with an unusual name."));
         } else {
             setStatus(message, true);
@@ -53,7 +80,7 @@ OBDAdapterFinder::OBDAdapterFinder(OBDManager *obd, SettingsManager *settings, Q
         m_handedOff = true;
         m_sawConnecting = false;
         setStatus(QStringLiteral("Connecting to the vehicle…"));
-        // An override, not the saved port: a reload brings the demo car back
+        // An override, not the saved port (nothing persists in the browser)
         m_obd->setPortOverride(WebBluetoothLink::portFor(id));
         m_obd->force_connect();
     });
@@ -70,15 +97,18 @@ OBDAdapterFinder::OBDAdapterFinder(OBDManager *obd, SettingsManager *settings, Q
 
 OBDAdapterFinder::~OBDAdapterFinder() = default;
 
-bool OBDAdapterFinder::supported() const { return WebBluetoothLink::instance()->available(); }
+// The sheet always has the simulated car to offer
+bool OBDAdapterFinder::supported() const { return true; }
 // The browser can't say until its chooser opens; it explains a radio that's off
-bool OBDAdapterFinder::bluetoothOn() const { return supported(); }
+bool OBDAdapterFinder::bluetoothOn() const { return true; }
 bool OBDAdapterFinder::looksLikeObd(const QString &, const QStringList &) { return false; }
 
 void OBDAdapterFinder::startScan()
 {
-    if (!supported())
+    if (!WebBluetoothLink::instance()->available()) {
+        setStatus(noBluetooth(), true);
         return;
+    }
     if (!m_busyAddress.isEmpty() && !m_handedOff)
         return;  // connecting
     setScanning(true);
@@ -95,12 +125,22 @@ void OBDAdapterFinder::connectAdapter(const QString &address)
 {
     const QVariantMap d = m_devices.value(address);
     if (d.isEmpty()) {
-        setStatus(QStringLiteral("Scan again: that adapter is no longer in the list."), true);
+        setStatus(QStringLiteral("That adapter is no longer in the list: pick it again."), true);
         return;
     }
     if (!m_busyAddress.isEmpty() && !m_handedOff)
         return;  // one at a time
     m_busyName = d.value(QStringLiteral("name")).toString();
+    if (address == simAddress()) {
+        // Straight to OBDManager: judged by onObdStatus() like a handed-off adapter
+        m_handedOff = true;
+        m_sawConnecting = false;
+        setBusy(address);
+        setStatus(QStringLiteral("Starting the demo drive…"));
+        if (WebDemo *demo = WebDemo::instance())
+            demo->start();
+        return;
+    }
     m_handedOff = false;
     setBusy(address);
     qDebug() << "[OBD-BT] Connect" << m_busyName << "over Web Bluetooth";
@@ -123,7 +163,7 @@ void OBDAdapterFinder::onObdStatus(const QString &status)
     const QString name = m_busyName;
     setBusy(QString());
     if (status == QLatin1String("Connected"))
-        setStatus(QStringLiteral("Connected to %1. Reload the page to go back to the demo car.").arg(name));
+        setStatus(QStringLiteral("Connected to %1.").arg(name));
     else if (status == QLatin1String("No Vehicle"))
         setStatus(QStringLiteral("%1 is connected, but the vehicle isn't answering. Turn the ignition on.").arg(name));
     else
@@ -146,7 +186,12 @@ void OBDAdapterFinder::powerOn() {}
 void OBDAdapterFinder::rebuildList()
 {
     QList<QVariantMap> rows = m_devices.values();
+    // Real adapters first, the simulated car last
     std::sort(rows.begin(), rows.end(), [](const QVariantMap &a, const QVariantMap &b) {
+        const bool sa = a.value(QStringLiteral("kind")).toString() == QLatin1String("sim");
+        const bool sb = b.value(QStringLiteral("kind")).toString() == QLatin1String("sim");
+        if (sa != sb)
+            return sb;
         return a.value(QStringLiteral("name")).toString() < b.value(QStringLiteral("name")).toString();
     });
     QVariantList list;

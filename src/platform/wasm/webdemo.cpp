@@ -1,7 +1,9 @@
 #include "webdemo.h"
 #include "webbluetooth.h"
 
+#include "../../managers/obdmanager.h"
 #include "../../sim/carsim.h"
+#include "../../sim/simelm327.h"
 #include "../../sim/simulator.h"
 
 #include <QRandomGenerator>
@@ -16,27 +18,59 @@ constexpr int kTickMs = 100;
 int between(int lo, int hi) { return QRandomGenerator::global()->bounded(lo, hi + 1); }
 }
 
+namespace {
+WebDemo *g_demo = nullptr;
+}
+
 WebDemo::WebDemo(Simulator *sim, OBDManager *obd, BerryIMUManager *imu, QObject *parent)
     : QObject(parent)
+    , m_simulator(sim)
+    , m_obd(obd)
+    , m_imu(imu)
 {
-    sim->start(obd, imu, nullptr, true);
-    m_sim = sim->car();
-    // A browser has nothing to wait for on the link, so no Bluetooth-style
-    // latency or NO DATA: the gauges move from the first frame
-    m_sim->setRealisticMode(false);
-
+    g_demo = this;
     connect(&m_autopilot, &QTimer::timeout, this, &WebDemo::drive);
+
+    // A real adapter over Web Bluetooth takes over from the demo car: no
+    // more autopilot, and no simulated motion on the g-force and compass
+    // gauges
+    WebBluetoothLink::registerTransport();
+    connect(WebBluetoothLink::instance(), &WebBluetoothLink::linkUp, this, [this] {
+        if (!m_sim)
+            return;
+        m_autopilot.stop();
+        m_simulator->setImu(false);
+    });
+}
+
+WebDemo::~WebDemo()
+{
+    if (g_demo == this)
+        g_demo = nullptr;
+}
+
+WebDemo *WebDemo::instance()
+{
+    return g_demo;
+}
+
+void WebDemo::start()
+{
+    // The demo car replaces a Bluetooth adapter rather than racing it
+    WebBluetoothLink::instance()->disconnectDevice();
+    if (!m_sim) {
+        m_simulator->start(m_obd, m_imu, nullptr, true);
+        m_sim = m_simulator->car();
+        // A browser has nothing to wait for on the link, so no Bluetooth-style
+        // latency or NO DATA: the gauges move from the first frame
+        m_sim->setRealisticMode(false);
+    } else {
+        m_obd->setPortOverride(QString::fromLatin1(kSimPort));
+        m_simulator->setImu(true);
+    }
     m_autopilot.start(kTickMs);
     enter(Phase::Idle);
-
-    // A real adapter over Web Bluetooth (Settings > OBD > Find Bluetooth
-    // Adapters) takes over from the demo car: no more autopilot, and no
-    // simulated motion on the g-force and compass gauges
-    WebBluetoothLink::registerTransport();
-    connect(WebBluetoothLink::instance(), &WebBluetoothLink::linkUp, this, [this, sim] {
-        m_autopilot.stop();
-        sim->setImu(false);
-    });
+    m_obd->force_connect();
 }
 
 void WebDemo::enter(Phase phase)

@@ -32,7 +32,9 @@ void Simulator::start(OBDManager *obd, BerryIMUManager *imu, ServicePairing *pai
     // as they would in the car
     m_car = new CarSim(this);
     const std::shared_ptr<CarState> state = m_car->state();
-    OBDConnectionWorker::setCustomTransport(
+    // Added beside any other transport (the browser demo's Web Bluetooth
+    // one is registered first); start() runs once per run
+    OBDConnectionWorker::addCustomTransport(
         [](const QString &port) { return port == QLatin1String(kSimPort); },
         [state](const QString &, QObject *parent) -> QIODevice * { return new SimElm327Device(state, parent); });
     if (obd)

@@ -131,7 +131,7 @@ EM_JS(void, octave_webbt_install, (), {
             bt.drop();
             const d = bt.known.get(id);
             if (!d) {
-                event("error", "The browser no longer knows that adapter. Scan again and pick it.");
+                event("error", "The browser no longer knows that adapter. Pick it again from the Bluetooth list.");
                 return;
             }
             if (!listening.has(d)) {
@@ -399,7 +399,7 @@ void WebBluetoothLink::handleEvent(const QString &kind, const QString &a, const 
         if (a == QLatin1String("NotFoundError") && b.contains(QLatin1String("cancel"), Qt::CaseInsensitive))
             emit chooseFailed(QString(), true);
         else if (a == QLatin1String("SecurityError"))
-            emit chooseFailed(QStringLiteral("Tap Scan Again to open the browser's Bluetooth list."), false);
+            emit chooseFailed(QStringLiteral("Tap Pick Bluetooth Adapter to open the browser's list."), false);
         else if (a == QLatin1String("NotFoundError"))
             emit chooseFailed(QStringLiteral("The browser can't reach Bluetooth. Check that Bluetooth is on. On "
                                              "Linux, Chrome may need Web Bluetooth turned on in chrome://flags."),

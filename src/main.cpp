@@ -770,7 +770,8 @@ int main(int argc, char *argv[])
 #endif
 
 #ifdef OCTAVE_WASM
-    // ---- Browser demo: the simulated car on the real OBDManager ----
+    // ---- Browser demo: no car until the adapter sheet picks the simulated
+    // one or a Web Bluetooth adapter ----
     WebDemo webDemo(&core.sim, &core.obdManager, &core.berryIMU);
 #endif
 

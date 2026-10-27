@@ -49,7 +49,7 @@ Today Android lists only already-bonded devices (`OctaveOBDBridge.bondedDevices`
 
 Done in code: `src/platform/wasm/webbluetooth.{h,cpp}` + `obdadapterfinder_wasm.cpp` (BLE only; Chrome / Edge). Verified in headless Chromium against a mocked GATT ELM327 (init, polling, gauges, reconnect after a dropped link); never against a real radio.
 
-1. Desktop Chrome (Windows or macOS; on Linux Web Bluetooth may need enabling in chrome://flags) and Android Chrome with a BLE dongle in the car: Settings > OBD > Find Bluetooth Adapters, pick, connect. Check the chooser opens from the tap (user activation) and live PIDs flow.
+1. Desktop Chrome (Windows or macOS; on Linux Web Bluetooth may need enabling in chrome://flags) and Android Chrome with a BLE dongle in the car: OBD Home > Connect Bluetooth OBD2 > Pick Bluetooth Adapter, pick, connect. Check the chooser opens from the tap (user activation) and live PIDs flow.
 2. The NEXAS over its LE side (ISSC service): does it serve ELM327 there or only on Classic?
 3. Throughput: BLE adds latency per command; compare PIDs/s to the Pi. Ignition cycle: does the automatic GATT reconnect come back?
 4. Later, if wanted: Web Serial for USB cables and paired Classic dongles on desktop Chrome, as a second `webserial://` transport beside it.
