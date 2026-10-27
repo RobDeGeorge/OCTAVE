@@ -230,8 +230,14 @@ ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
           ELM327 response count (<code>010C1</code>, <code>formatPidRequest(mode, pid, 1)</code>): the adapter answers at
           the first ECU's reply instead of waiting out its timeout for more ECUs, which is most of the round trip on a
           Bluetooth LE adapter. Multi-value PIDs (multi-frame on CAN) go without it, and an adapter that answers
-          <code>?</code> loses it for the rest of the connection. Every 30 s the worker logs
-          <code>OBD polling: N requests in 30 s (x/s), round trip mean ... ms, max ... ms; ... NO DATA, ... unanswered</code>
+          <code>?</code> loses it for the rest of the connection. On CAN (the connect asks <code>ATDPN</code>;
+          <code>ELM327Protocol::isCanProtocol()</code>) fast mode also puts up to six consecutive single-value Mode 01
+          PIDs in one request (<code>010C0D05</code>, <code>formatMultiPidRequest()</code>), split by
+          <code>parseMultiPidResponse()</code> with the table's byte counts (0x50 stays out: 4 bytes on the wire, 1 in
+          the table); a PID that can't join (ATRV, a multi-value PID, a repeat) is polled next on its own. An ECU that
+          answers one PID per request three times running ends batching for the connection. The simulator answers
+          multi-PID requests too. 10 s into a connection and every 30 s after, the worker logs
+          <code>OBD polling: N requests in 30 s (x/s), M values (y/s), round trip mean ... ms, max ... ms; ... NO DATA, ... unanswered</code>
           at info level, so a user's log shows the poll rate; the data watchdog's reconnect (30 s without a value) and
           connect / reconnect requests are logged there too.
         </p>
@@ -1002,7 +1008,7 @@ std::optional&lt;QString&gt; ResponseBuffer::<span class="fn">getResponse</span>
           <thead><tr><th>Key</th><th>Default</th><th>Used by</th></tr></thead>
           <tbody>
             <tr><td><code>obdBluetoothPort</code></td><td>empty -&gt; per-platform default <code>/dev/rfcomm0</code>, <code>COM3</code>, <code>/dev/tty.OBD</code>, Android: none (MAC required)</td><td>Configured port/MAC; <code>obdBluetoothPortChanged</code> triggers the 1 s debounced reconnect, which is skipped when the new port is already the one the live or in-flight connection uses (<code>m_activePort</code>). <code>connect_to_adapter()</code> saves the port and connects at once, so without the skip the debounce killed its fresh attempt mid-handshake.</td></tr>
-            <tr><td><code>obdFastMode</code></td><td><code>true</code></td><td>Poll timer interval: 0 ms when on, 50 ms when off. On, polls also ask for a single reply (<code>010C1</code>).</td></tr>
+            <tr><td><code>obdFastMode</code></td><td><code>true</code></td><td>Poll timer interval: 0 ms when on, 50 ms when off. On, polls also ask for a single reply (<code>010C1</code>) and, on CAN, carry up to six PIDs each.</td></tr>
             <tr><td><code>blackBoxEnabled</code></td><td><code>true</code></td><td><a href="#black-box">Trip recorder</a> on / off; turning it off ends the trip being recorded.</td></tr>
             <tr><td><code>blackBoxSweepAll</code></td><td><code>true</code></td><td>Register every scanned PID as background demand so the record covers PIDs not on screen.</td></tr>
             <tr><td><code>blackBoxMaxMB</code></td><td><code>500</code></td><td>Cap (50&ndash;5000 MB) for the database plus trip files; oldest closed trips are pruned first.</td></tr>

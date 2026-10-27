@@ -110,6 +110,21 @@ public:
     // its timeout for more ECUs, which saves most of each round trip.
     static QByteArray formatPidRequest(int mode, int pid, int replies = 0);
 
+    // Several Mode 01 PIDs in one request ("010C0D05\r", up to 6, CAN
+    // only): one round trip for all of them
+    static constexpr int kMaxPidsPerRequest = 6;
+    static QByteArray formatMultiPidRequest(int mode, const QList<int> &pids);
+    // A PID that can share a request: a single-value Mode 01 PID whose reply
+    // length the table knows
+    static bool isBatchable(const PidKey &key);
+    // The values of a multi-PID reply ("410C1AF80D32"), CAN multi-frame
+    // joined: each requested PID with its table length of data bytes, in
+    // the order the ECU sent them. Stops at a byte that isn't a requested
+    // PID, so a garbled reply yields the values before it and no more.
+    static QList<ParsedResponse> parseMultiPidResponse(const QStringList &lines, int mode, const QList<int> &pids);
+    // ATDPN's answer ("A6", "6") names a CAN protocol (ISO 15765, 6-C)
+    static bool isCanProtocol(const QString &dpn);
+
     // Parse raw ELM327 response string.
     // Returns std::nullopt on error/invalid.
     static std::optional<ParsedResponse> parseResponse(const QString &raw);

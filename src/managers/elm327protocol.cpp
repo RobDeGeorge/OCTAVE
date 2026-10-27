@@ -4,6 +4,7 @@
 #include <QRegularExpression>
 #include <cctype>
 #include <QMap>
+#include <QSet>
 #include <QDate>
 
 #include <cmath>
@@ -278,6 +279,62 @@ QByteArray ELM327Protocol::formatPidRequest(int mode, int pid, int replies)
         .arg(replies >= 1 && replies <= 15 ? QString::number(replies, 16) : QString())
         .toUpper()
         .toLatin1();
+}
+
+QByteArray ELM327Protocol::formatMultiPidRequest(int mode, const QList<int> &pids)
+{
+    QString out = QStringLiteral("%1").arg(mode, 2, 16, QLatin1Char('0'));
+    for (int pid : pids)
+        out += QStringLiteral("%1").arg(pid, 2, 16, QLatin1Char('0'));
+    return out.toUpper().toLatin1() + '\r';
+}
+
+bool ELM327Protocol::isBatchable(const PidKey &key)
+{
+    // 0x50 (Max MAF) is 4 bytes on the wire but the table decodes only 1:
+    // in a shared reply that would shift every value after it
+    if (key.first != 1 || key.second == 0x50 || extendedPidTable().contains(key))
+        return false;
+    const auto it = pidTable().constFind(key);
+    return it != pidTable().constEnd() && it->decoder && it->expectedBytes > 0;
+}
+
+QList<ParsedResponse> ELM327Protocol::parseMultiPidResponse(const QStringList &lines, int mode,
+                                                            const QList<int> &pids)
+{
+    QList<ParsedResponse> out;
+    QSet<int> seen;
+    for (const QString &msg : splitMessages(lines)) {
+        const QByteArray bytes = QByteArray::fromHex(msg.toLatin1());
+        if (bytes.size() < 2 || uint8_t(bytes[0]) != mode + 0x40)
+            continue;
+        int i = 1;
+        while (i < bytes.size()) {
+            const int pid = uint8_t(bytes[i]);
+            if (!pids.contains(pid))
+                break;   // padding, or a reply this parser can't follow
+            const int n = pidTable().value({mode, pid}).expectedBytes;
+            if (n <= 0 || i + 1 + n > bytes.size())
+                break;
+            if (!seen.contains(pid)) {   // a second ECU answering the same PID
+                seen.insert(pid);
+                QVector<uint8_t> data;
+                for (int k = 0; k < n; ++k)
+                    data.append(uint8_t(bytes[i + 1 + k]));
+                out.append({mode, pid, data});
+            }
+            i += 1 + n;
+        }
+    }
+    return out;
+}
+
+bool ELM327Protocol::isCanProtocol(const QString &dpn)
+{
+    QString p = dpn.trimmed().toUpper();
+    if (p.startsWith(QLatin1Char('A')) && p.size() == 2)
+        p = p.mid(1);   // "A6": chosen by the automatic search
+    return p.size() == 1 && QStringLiteral("6789ABC").contains(p);
 }
 
 std::optional<ParsedResponse> ELM327Protocol::parseResponse(const QString &raw)

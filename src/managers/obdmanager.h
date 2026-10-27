@@ -12,6 +12,8 @@
 #include <QStringList>
 #include <QThread>
 #include <QTimer>
+
+#include <optional>
 #include <QVariantList>
 #include <QVariantMap>
 #include <QVector>
@@ -849,14 +851,25 @@ private:
     // ECU instead of waiting out ATST for more. Fast mode only; dropped for
     // the connection when the adapter answers "?" (a clone without it).
     bool m_singleReply = true;
-    // Poll round trips, logged every 30 s at info level ("OBD polling: ...")
+    // On CAN, consecutive batchable PIDs share one request ("010C0D05",
+    // up to 6): one round trip for a whole page. Fast mode only; dropped for
+    // the connection when the ECU keeps answering one PID per request.
+    bool m_isCan = false;
+    bool m_multiPid = true;
+    int m_batchMisses = 0;
+    std::optional<PidKey> m_carry;   // drawn by a batch it couldn't join; polled next
+    void pollBatch(const QList<int> &pids);
+    // Poll round trips, logged at info level ("OBD polling: ...") 10 s
+    // into the connection and every 30 s after
     QElapsedTimer m_statsWindow;
+    bool m_statsLogged = false;
+    int m_statValues = 0;
     int m_statReplies = 0;
     int m_statNoData = 0;
     int m_statSilent = 0;
     qint64 m_statMs = 0;
     qint64 m_statMaxMs = 0;
-    void notePoll(qint64 ms, const QString &response);
+    void notePoll(qint64 ms, const QString &response, int values);
 
     // State
     bool m_initialized = false;

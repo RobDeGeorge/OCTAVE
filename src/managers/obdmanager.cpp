@@ -2178,8 +2178,13 @@ void OBDConnectionWorker::doConnect()
         return;
     }
 
+    // The protocol the search settled on: CAN takes several PIDs per request
+    const QString dpn = sendCommand(QByteArrayLiteral("ATDPN\r"), 500).simplified().section(QLatin1Char(' '), -1);
+    m_isCan = ELM327Protocol::isCanProtocol(dpn);
+
     m_initialized = true;
-    qCInfo(lcElm327) << "ELM327 initialised, vehicle answered on" << m_portName;
+    qCInfo(lcElm327) << "ELM327 initialised, vehicle answered on" << m_portName << "protocol" << dpn
+                     << (m_isCan ? "(CAN: several PIDs per request)" : "");
     emit logLine(QStringLiteral("Connected: the vehicle is answering"));
     emit initComplete(true, QStringLiteral("Connected"));
     // Queued startPolling() from the manager runs after this returns
@@ -2437,7 +2442,29 @@ void OBDConnectionWorker::onPollTimer()
         return;
 
     // Get next PID to poll
-    const PidKey pid = nextPollPid();
+    PidKey pid;
+    if (m_carry) {
+        pid = *m_carry;
+        m_carry.reset();
+    } else {
+        pid = nextPollPid();
+    }
+
+    if (m_fastMode && m_isCan && m_multiPid && ELM327Protocol::isBatchable(pid)) {
+        QList<int> batch{pid.second};
+        while (batch.size() < ELM327Protocol::kMaxPidsPerRequest) {
+            const PidKey next = nextPollPid();
+            if (!ELM327Protocol::isBatchable(next) || batch.contains(next.second)) {
+                m_carry = next;
+                break;
+            }
+            batch.append(next.second);
+        }
+        if (batch.size() > 1) {
+            pollBatch(batch);
+            return;
+        }
+    }
 
     if (pid == kElmVoltageKey) {
         // ELM_VOLTAGE is the adapter's own "ATRV" -- a text reply, not a PID.
@@ -2457,7 +2484,7 @@ void OBDConnectionWorker::onPollTimer()
     QElapsedTimer roundTrip;
     roundTrip.start();
     QString response = sendCommand(request, 500);
-    notePoll(roundTrip.elapsed(), response);
+    notePoll(roundTrip.elapsed(), response, 1);
 
     if (response.isEmpty())
         return;
@@ -2495,7 +2522,36 @@ void OBDConnectionWorker::onPollTimer()
     emit dataReceived(decoded->signalName, static_cast<float>(decoded->value));
 }
 
-void OBDConnectionWorker::notePoll(qint64 ms, const QString &response)
+void OBDConnectionWorker::pollBatch(const QList<int> &pids)
+{
+    const QByteArray request = ELM327Protocol::formatMultiPidRequest(1, pids);
+    QElapsedTimer roundTrip;
+    roundTrip.start();
+    // Longer than a single poll: the reply can be several CAN frames
+    const QString response = sendCommand(request, 1000);
+    const QList<ParsedResponse> values =
+        response.isEmpty() ? QList<ParsedResponse>()
+                           : ELM327Protocol::parseMultiPidResponse(m_responseBuffer.lastLines(), 1, pids);
+    notePoll(roundTrip.elapsed(), response, values.size());
+    for (const ParsedResponse &v : values) {
+        if (const auto decoded = ELM327Protocol::decodePid(v.mode, v.pid, v.dataBytes))
+            emit dataReceived(decoded->signalName, static_cast<float>(decoded->value));
+    }
+    if (response.isEmpty() || response.contains(QLatin1String("NO DATA"), Qt::CaseInsensitive))
+        return;
+    // Some ECUs answer only the first PID of a request (or "?"): poll one
+    // at a time rather than starve the rest
+    if (values.size() >= 2) {
+        m_batchMisses = 0;
+    } else if (++m_batchMisses >= 3) {
+        m_multiPid = false;
+        qCInfo(lcElm327) << "ECU answers one PID per request (" << request.trimmed() << "->"
+                         << response.simplified().left(60) << "); polling one at a time";
+        emit logLine(QStringLiteral("Vehicle takes one PID per request"));
+    }
+}
+
+void OBDConnectionWorker::notePoll(qint64 ms, const QString &response, int values)
 {
     if (!m_statsWindow.isValid())
         m_statsWindow.start();
@@ -2503,22 +2559,29 @@ void OBDConnectionWorker::notePoll(qint64 ms, const QString &response)
         ++m_statSilent;
     else if (response.contains(QLatin1String("NO DATA"), Qt::CaseInsensitive))
         ++m_statNoData;
-    else
+    else {
         ++m_statReplies;
+        m_statValues += values;
+    }
     m_statMs += ms;
     m_statMaxMs = qMax(m_statMaxMs, ms);
     const qint64 window = m_statsWindow.elapsed();
-    if (window < 30000)
+    // The first after 10 s, so a short session's log has one too
+    if (window < (m_statsLogged ? 30000 : 10000))
         return;
+    m_statsLogged = true;
     const int polls = m_statReplies + m_statNoData + m_statSilent;
-    qCInfo(lcElm327).nospace() << "OBD polling: " << polls << " requests in " << window / 1000 << " s ("
-                               << QString::number(polls * 1000.0 / window, 'f', 1) << "/s), round trip mean "
+    qCInfo(lcElm327).nospace().noquote() << "OBD polling: " << polls << " requests in " << window / 1000 << " s ("
+                               << QString::number(polls * 1000.0 / window, 'f', 1) << "/s), " << m_statValues
+                               << " values (" << QString::number(m_statValues * 1000.0 / window, 'f', 1)
+                               << "/s), round trip mean "
                                << m_statMs / qMax(1, polls) << " ms, max " << m_statMaxMs << " ms; "
                                << m_statNoData << " NO DATA, " << m_statSilent << " unanswered; "
                                << m_pidsToWatch.size() << " PIDs shown + " << m_backgroundPids.size()
-                               << " background" << (m_fastMode && m_singleReply ? ", single reply" : "");
+                               << " background" << (m_fastMode && m_singleReply ? ", single reply" : "")
+                               << (m_fastMode && m_isCan && m_multiPid ? ", batched" : "");
     m_statsWindow.restart();
-    m_statReplies = m_statNoData = m_statSilent = 0;
+    m_statValues = m_statReplies = m_statNoData = m_statSilent = 0;
     m_statMs = m_statMaxMs = 0;
 }
 

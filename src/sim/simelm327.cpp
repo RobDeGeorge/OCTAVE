@@ -266,6 +266,29 @@ QByteArray SimElm327Device::respond(const QByteArray &command)
         return formatMessage(payload + data);
     };
 
+    // Several PIDs in one request ("010C0D05", CAN): one reply with each
+    // supported PID and its data, NO DATA if none is. An odd length ends in
+    // a response count ("010C1"), which a single request may carry.
+    const QByteArray pidHex = cmd.mid(2, (cmd.size() - 2) & ~1);
+    if (mode == 0x01 && pidHex.size() >= 4 && pidHex.size() <= 12) {
+        QByteArray payload(1, '\x41');
+        for (int i = 0; i < pidHex.size(); i += 2) {
+            const int p = pidHex.mid(i, 2).toInt(&ok, 16);
+            if (!ok)
+                return "?";
+            const QByteArray data = mode01(p);
+            if (!data.isEmpty())
+                payload += char(p) + data;
+        }
+        if (payload.size() == 1)
+            return "NO DATA";
+        const LinkSettings link = m_state->link();
+        if (m_probed && link.realistic && QRandomGenerator::global()->generateDouble() < link.failureRate)
+            return "NO DATA";
+        m_state->notePoll();
+        return formatMessage(payload);
+    }
+
     if (mode == 0x01 && pid >= 0) {
         const QByteArray data = mode01(pid);
         if (data.isEmpty())

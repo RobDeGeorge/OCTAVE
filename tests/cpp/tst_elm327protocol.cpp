@@ -46,6 +46,8 @@ class TstElm327Protocol : public QObject
 
 private slots:
     void formatPidRequest();
+    void multiPidRequest();
+    void multiPidResponse();
     void parseDtcResponse_data();
     void parseDtcResponse();
     void parseFreezeFrameDtc_data();
@@ -70,6 +72,51 @@ void TstElm327Protocol::formatPidRequest()
     QCOMPARE(ELM327Protocol::formatPidRequest(1, 0x0C, 1), QByteArray("010C1\r"));
     QCOMPARE(ELM327Protocol::formatPidRequest(1, 0x0d, 15), QByteArray("010DF\r"));
     QCOMPARE(ELM327Protocol::formatPidRequest(1, 0x0C, 16), QByteArray("010C\r"));
+}
+
+void TstElm327Protocol::multiPidRequest()
+{
+    QCOMPARE(ELM327Protocol::formatMultiPidRequest(1, {0x0C, 0x0D, 0x05}), QByteArray("010C0D05\r"));
+    QVERIFY(ELM327Protocol::isBatchable({1, 0x0C}));
+    QVERIFY(!ELM327Protocol::isBatchable({1, 0x50}));   // 4 bytes on the wire, 1 in the table
+    QVERIFY(!ELM327Protocol::isBatchable(kElmVoltageKey));
+    QVERIFY(!ELM327Protocol::isBatchable({1, 0x01}));   // not a value PID
+    QVERIFY(ELM327Protocol::isCanProtocol(QStringLiteral("A6")));
+    QVERIFY(ELM327Protocol::isCanProtocol(QStringLiteral("8")));
+    QVERIFY(ELM327Protocol::isCanProtocol(QStringLiteral("AC")));
+    QVERIFY(!ELM327Protocol::isCanProtocol(QStringLiteral("A3")));   // ISO 9141
+    QVERIFY(!ELM327Protocol::isCanProtocol(QStringLiteral("OK")));
+    QVERIFY(!ELM327Protocol::isCanProtocol(QString()));
+}
+
+void TstElm327Protocol::multiPidResponse()
+{
+    const QList<int> pids{0x0C, 0x0D, 0x05, 0x11};
+    // One frame, an unsupported PID left out by the ECU
+    auto v = ELM327Protocol::parseMultiPidResponse({"410C1AF80D32"}, 1, pids);
+    QCOMPARE(v.size(), 2);
+    QCOMPARE(v[0].pid, 0x0C);
+    QCOMPARE(v[0].dataBytes, (QVector<uint8_t>{0x1A, 0xF8}));
+    QCOMPARE(v[1].pid, 0x0D);
+    QCOMPARE(v[1].dataBytes, (QVector<uint8_t>{0x32}));
+
+    // CAN multi-frame, padded, in the ECU's own order
+    v = ELM327Protocol::parseMultiPidResponse({"00A", "0:410D320C1AF8", "1:057B1140000000"}, 1, pids);
+    QCOMPARE(v.size(), 4);
+    QCOMPARE(v[0].pid, 0x0D);
+    QCOMPARE(v[1].pid, 0x0C);
+    QCOMPARE(v[1].dataBytes, (QVector<uint8_t>{0x1A, 0xF8}));
+    QCOMPARE(v[2].pid, 0x05);
+    QCOMPARE(v[3].pid, 0x11);
+    QCOMPARE(v[3].dataBytes, (QVector<uint8_t>{0x40}));
+
+    // A second ECU repeating one; a stray byte ends the walk; a short tail
+    v = ELM327Protocol::parseMultiPidResponse({"410D32", "410D33"}, 1, pids);
+    QCOMPARE(v.size(), 1);
+    QCOMPARE(v[0].dataBytes, (QVector<uint8_t>{0x32}));
+    QCOMPARE(ELM327Protocol::parseMultiPidResponse({"410D32FF0C1AF8"}, 1, pids).size(), 1);
+    QCOMPARE(ELM327Protocol::parseMultiPidResponse({"410D320C1A"}, 1, pids).size(), 1);
+    QVERIFY(ELM327Protocol::parseMultiPidResponse({"NO DATA"}, 1, pids).isEmpty());
 }
 
 void TstElm327Protocol::parseDtcResponse_data()
