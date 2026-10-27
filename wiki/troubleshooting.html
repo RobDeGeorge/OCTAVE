@@ -195,7 +195,7 @@ ls -la /dev/rfcomm0</code></pre>
         <ul>
           <li>The connection runs on a dedicated worker thread (<code>OBDConnectionWorker</code> on a <code>QThread</code>) so the UI never blocks; progress is reported through <code>connectionProgress</code> / <code>connectionDetail</code>.</li>
           <li>The connection timeout is 5 s by default and is set at runtime through <code>obdManager.set_connection_timeout(seconds)</code>, clamped to 5&ndash;60 s (there is no <code>obdConnectionTimeout</code> settings key). The worker uses it for the vehicle-verify wait (the RPM probe after init) and fixed per-command timeouts otherwise (300&ndash;1500 ms for init commands, 500 ms per poll).</li>
-          <li><code>obdFastMode</code> (default on): the worker polls with a 0 ms interval instead of 50 ms.</li>
+          <li><code>obdFastMode</code> (default on): the worker polls with a 0 ms interval instead of 50 ms, and asks the adapter for a single reply per PID (<code>010C1</code>), so it doesn't wait out its timeout for more ECUs. Turn it off for an adapter that misreads that.</li>
           <li>The last successful protocol is not cached: every connect sends the fixed init sequence ending in <code>ATSP0</code> (auto-detect).</li>
           <li><code>obdAutoReconnectAttempts</code> is 0&ndash;10 and <strong>defaults to 0 = off</strong> (shown as "Off" on the slider). With 0, the active retry loop is off, but the 10 s passive scan remains: a saved direct <code>rfcomm://</code> address can be retried on each scan. Serial-node discovery retries when the detected list changes. With 1&ndash;10 a failed connect is retried that many times with a <code>min(10, 2 + 2n)</code> s backoff before falling back to the passive scan.</li>
         </ul>

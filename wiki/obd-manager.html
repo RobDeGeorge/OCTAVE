@@ -226,7 +226,14 @@ ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
           <code>decodePid()</code>, and emits <code>dataReceived</code>. The <code>ELM_VOLTAGE</code> pseudo-PID
           (<code>kElmVoltageKey</code>) is special-cased: the tick sends <code>ATRV</code> instead and parses the
           <code>"12.6V"</code> text reply with <code>parseElmVoltage()</code> into <code>elmVoltageChanged</code>. Because <code>sendCommand()</code> blocks inside the
-          tick, the effective rate is one PID per adapter round-trip.
+          tick, the effective rate is one PID per adapter round-trip. In fast mode each single-value poll carries the
+          ELM327 response count (<code>010C1</code>, <code>formatPidRequest(mode, pid, 1)</code>): the adapter answers at
+          the first ECU's reply instead of waiting out its timeout for more ECUs, which is most of the round trip on a
+          Bluetooth LE adapter. Multi-value PIDs (multi-frame on CAN) go without it, and an adapter that answers
+          <code>?</code> loses it for the rest of the connection. Every 30 s the worker logs
+          <code>OBD polling: N requests in 30 s (x/s), round trip mean ... ms, max ... ms; ... NO DATA, ... unanswered</code>
+          at info level, so a user's log shows the poll rate; the data watchdog's reconnect (30 s without a value) and
+          connect / reconnect requests are logged there too.
         </p>
         <p>
           <code>sendCommand()</code> clears the <code>ResponseBuffer</code>, logs <code>TX</code>, writes + flushes, then loops
@@ -995,7 +1002,7 @@ std::optional&lt;QString&gt; ResponseBuffer::<span class="fn">getResponse</span>
           <thead><tr><th>Key</th><th>Default</th><th>Used by</th></tr></thead>
           <tbody>
             <tr><td><code>obdBluetoothPort</code></td><td>empty -&gt; per-platform default <code>/dev/rfcomm0</code>, <code>COM3</code>, <code>/dev/tty.OBD</code>, Android: none (MAC required)</td><td>Configured port/MAC; <code>obdBluetoothPortChanged</code> triggers the 1 s debounced reconnect, which is skipped when the new port is already the one the live or in-flight connection uses (<code>m_activePort</code>). <code>connect_to_adapter()</code> saves the port and connects at once, so without the skip the debounce killed its fresh attempt mid-handshake.</td></tr>
-            <tr><td><code>obdFastMode</code></td><td><code>true</code></td><td>Poll timer interval: 0 ms when on, 50 ms when off.</td></tr>
+            <tr><td><code>obdFastMode</code></td><td><code>true</code></td><td>Poll timer interval: 0 ms when on, 50 ms when off. On, polls also ask for a single reply (<code>010C1</code>).</td></tr>
             <tr><td><code>blackBoxEnabled</code></td><td><code>true</code></td><td><a href="#black-box">Trip recorder</a> on / off; turning it off ends the trip being recorded.</td></tr>
             <tr><td><code>blackBoxSweepAll</code></td><td><code>true</code></td><td>Register every scanned PID as background demand so the record covers PIDs not on screen.</td></tr>
             <tr><td><code>blackBoxMaxMB</code></td><td><code>500</code></td><td>Cap (50&ndash;5000 MB) for the database plus trip files; oldest closed trips are pruned first.</td></tr>

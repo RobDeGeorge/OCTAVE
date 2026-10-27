@@ -1189,7 +1189,7 @@ void OBDManager::onDataWatchdog()
     qint64 elapsed = now - m_lastDataReceived;
 
     if (m_lastDataReceived > 0 && elapsed > DATA_WATCHDOG_TIMEOUT_MS) {
-        qDebug() << "[OBD] Data watchdog triggered -- no data for" << elapsed << "ms";
+        qCWarning(lcElm327) << "no data for" << elapsed << "ms; reconnecting";
         emit connectionStatusChanged(QStringLiteral("Stale Connection"));
         emit connectionStatusDetailChanged(QStringLiteral("No data received, reconnecting..."));
         m_dataWatchdogTimer.stop();
@@ -1276,7 +1276,7 @@ void OBDManager::connect_obd()
 
 void OBDManager::reconnect()
 {
-    qDebug() << "[OBD] Manual reconnect requested";
+    qCInfo(lcElm327) << "reconnect requested";
     cleanupConnection();
     m_connectionAttempts = 0;
     startConnection();
@@ -1284,7 +1284,7 @@ void OBDManager::reconnect()
 
 void OBDManager::force_connect()
 {
-    qDebug() << "[OBD] Force connect requested";
+    qCInfo(lcElm327) << "connect requested";
     m_connectionAttempts = 0;
     // Always clear the in-progress flag — without this, a previous attempt
     // that wedged (BLE controller never reported back, GATT timed out
@@ -2449,15 +2449,28 @@ void OBDConnectionWorker::onPollTimer()
         return;
     }
 
-    // Send request and get response
-    QByteArray request = ELM327Protocol::formatPidRequest(pid.first, pid.second);
+    // Multi-value PIDs can be several CAN frames, each one a "reply" to
+    // the count: those keep the adapter's own timeout
+    const bool extended = ELM327Protocol::extendedPidTable().contains(pid);
+    const bool single = m_fastMode && m_singleReply && !extended;
+    QByteArray request = ELM327Protocol::formatPidRequest(pid.first, pid.second, single ? 1 : 0);
+    QElapsedTimer roundTrip;
+    roundTrip.start();
     QString response = sendCommand(request, 500);
+    notePoll(roundTrip.elapsed(), response);
 
     if (response.isEmpty())
         return;
+    if (single && response.trimmed() == QLatin1String("?")) {
+        m_singleReply = false;
+        qCInfo(lcElm327) << "adapter refused the response count (" << request.trimmed()
+                         << "-> ?); polling without it";
+        emit logLine(QStringLiteral("Adapter has no response count; polling at its own timeout"));
+        return;
+    }
 
     // Multi-value PIDs: several values per reply, often CAN multi-frame
-    if (ELM327Protocol::extendedPidTable().contains(pid)) {
+    if (extended) {
         const auto ext = ELM327Protocol::parseResponseLines(m_responseBuffer.lastLines(),
                                                             pid.first, pid.second);
         if (!ext.has_value())
@@ -2480,6 +2493,33 @@ void OBDConnectionWorker::onPollTimer()
 
     // Emit the data
     emit dataReceived(decoded->signalName, static_cast<float>(decoded->value));
+}
+
+void OBDConnectionWorker::notePoll(qint64 ms, const QString &response)
+{
+    if (!m_statsWindow.isValid())
+        m_statsWindow.start();
+    if (response.isEmpty())
+        ++m_statSilent;
+    else if (response.contains(QLatin1String("NO DATA"), Qt::CaseInsensitive))
+        ++m_statNoData;
+    else
+        ++m_statReplies;
+    m_statMs += ms;
+    m_statMaxMs = qMax(m_statMaxMs, ms);
+    const qint64 window = m_statsWindow.elapsed();
+    if (window < 30000)
+        return;
+    const int polls = m_statReplies + m_statNoData + m_statSilent;
+    qCInfo(lcElm327).nospace() << "OBD polling: " << polls << " requests in " << window / 1000 << " s ("
+                               << QString::number(polls * 1000.0 / window, 'f', 1) << "/s), round trip mean "
+                               << m_statMs / qMax(1, polls) << " ms, max " << m_statMaxMs << " ms; "
+                               << m_statNoData << " NO DATA, " << m_statSilent << " unanswered; "
+                               << m_pidsToWatch.size() << " PIDs shown + " << m_backgroundPids.size()
+                               << " background" << (m_fastMode && m_singleReply ? ", single reply" : "");
+    m_statsWindow.restart();
+    m_statReplies = m_statNoData = m_statSilent = 0;
+    m_statMs = m_statMaxMs = 0;
 }
 
 void OBDConnectionWorker::onSerialReadyRead()

@@ -270,11 +270,12 @@ const QStringList &ELM327Protocol::errorResponses()
     return errors;
 }
 
-QByteArray ELM327Protocol::formatPidRequest(int mode, int pid)
+QByteArray ELM327Protocol::formatPidRequest(int mode, int pid, int replies)
 {
-    return QStringLiteral("%1%2\r")
+    return QStringLiteral("%1%2%3\r")
         .arg(mode, 2, 16, QLatin1Char('0'))
         .arg(pid, 2, 16, QLatin1Char('0'))
+        .arg(replies >= 1 && replies <= 15 ? QString::number(replies, 16) : QString())
         .toUpper()
         .toLatin1();
 }

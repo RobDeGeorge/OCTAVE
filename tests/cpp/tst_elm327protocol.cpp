@@ -45,6 +45,7 @@ class TstElm327Protocol : public QObject
     Q_OBJECT
 
 private slots:
+    void formatPidRequest();
     void parseDtcResponse_data();
     void parseDtcResponse();
     void parseFreezeFrameDtc_data();
@@ -61,6 +62,15 @@ private slots:
     void decodeVin();
     void everyExtendedParameterIsWired();
 };
+
+void TstElm327Protocol::formatPidRequest()
+{
+    QCOMPARE(ELM327Protocol::formatPidRequest(1, 0x0C), QByteArray("010C\r"));
+    // The response count: a single hex digit, ignored out of range
+    QCOMPARE(ELM327Protocol::formatPidRequest(1, 0x0C, 1), QByteArray("010C1\r"));
+    QCOMPARE(ELM327Protocol::formatPidRequest(1, 0x0d, 15), QByteArray("010DF\r"));
+    QCOMPARE(ELM327Protocol::formatPidRequest(1, 0x0C, 16), QByteArray("010C\r"));
+}
 
 void TstElm327Protocol::parseDtcResponse_data()
 {

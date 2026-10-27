@@ -104,8 +104,11 @@ public:
     // Error response tokens
     static const QStringList &errorResponses();
 
-    // Format a PID request (e.g. mode=1, pid=0x0C -> "010C\r")
-    static QByteArray formatPidRequest(int mode, int pid);
+    // Format a PID request (e.g. mode=1, pid=0x0C -> "010C\r"). `replies`
+    // 1-15 appends the ELM327's response count ("010C1\r"): the adapter
+    // answers as soon as that many messages are in instead of waiting out
+    // its timeout for more ECUs, which saves most of each round trip.
+    static QByteArray formatPidRequest(int mode, int pid, int replies = 0);
 
     // Parse raw ELM327 response string.
     // Returns std::nullopt on error/invalid.

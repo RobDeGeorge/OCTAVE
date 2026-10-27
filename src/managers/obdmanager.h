@@ -1,6 +1,7 @@
 #ifndef OBDMANAGER_H
 #define OBDMANAGER_H
 
+#include <QElapsedTimer>
 #include <QHash>
 #include <QObject>
 #include <QMutex>
@@ -843,6 +844,19 @@ private:
     // Poll timer
     QTimer m_pollTimer;
     bool m_polling = false;
+
+    // Polls ask for one reply ("010C1"): the adapter answers at the first
+    // ECU instead of waiting out ATST for more. Fast mode only; dropped for
+    // the connection when the adapter answers "?" (a clone without it).
+    bool m_singleReply = true;
+    // Poll round trips, logged every 30 s at info level ("OBD polling: ...")
+    QElapsedTimer m_statsWindow;
+    int m_statReplies = 0;
+    int m_statNoData = 0;
+    int m_statSilent = 0;
+    qint64 m_statMs = 0;
+    qint64 m_statMaxMs = 0;
+    void notePoll(qint64 ms, const QString &response);
 
     // State
     bool m_initialized = false;
