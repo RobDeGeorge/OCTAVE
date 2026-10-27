@@ -164,7 +164,7 @@ EM_JS(void, octave_webbt_install, (), {
                 return u.endsWith("-0000-1000-8000-00805f9b34fb") ? u.slice(4, 8) : u.slice(0, 13);
             };
             return "service " + id(f.service.uuid) + ", notify " + id(f.notify.uuid) + ", write " + id(f.write.uuid)
-                + (f.write.properties.writeWithoutResponse ? " (no response)" : " (with response)");
+                + (f.write.properties.write ? " (with response)" : " (no response)");
         },
 
         // Does this service answer an ELM327? Leaves notifications on if so.
@@ -175,8 +175,8 @@ EM_JS(void, octave_webbt_install, (), {
             try {
                 await f.notify.startNotifications();
                 const ati = new TextEncoder().encode("ATI" + String.fromCharCode(13));
-                await (f.write.properties.writeWithoutResponse ? f.write.writeValueWithoutResponse(ati)
-                                                               : f.write.writeValueWithResponse(ati));
+                await (f.write.properties.write ? f.write.writeValueWithResponse(ati)
+                                                : f.write.writeValueWithoutResponse(ati));
                 for (let i = 0; i < 15 && !got; ++i)
                     await new Promise(function (r) { setTimeout(r, 100); });
             } catch (e) {
@@ -246,13 +246,27 @@ EM_JS(void, octave_webbt_install, (), {
             const c = bt.txChar;
             if (!c)
                 return;
-            const noResponse = c.properties.writeWithoutResponse;
+            // With response where the adapter allows it: the promise then
+            // settles when the adapter has the bytes, so the chain really
+            // keeps one write in flight. Without response it settles at
+            // once, and Android Chrome refused the next write ("GATT
+            // operation already in progress"), dropping whole commands.
+            const noResponse = !c.properties.write;
+            const send = async function (part) {
+                for (let attempt = 0; ; ++attempt) {
+                    try {
+                        return await (noResponse ? c.writeValueWithoutResponse(part) : c.writeValueWithResponse(part));
+                    } catch (e) {
+                        if (attempt >= 5 || bt.txChar !== c || errText(e).indexOf("in progress") < 0)
+                            throw e;
+                        await new Promise(function (r) { setTimeout(r, 20 * (attempt + 1)); });
+                    }
+                }
+            };
             for (let i = 0; i < bytes.length; i += CHUNK) {
                 const part = bytes.slice(i, i + CHUNK);
                 bt.chain = bt.chain
-                    .then(function () {
-                        return noResponse ? c.writeValueWithoutResponse(part) : c.writeValueWithResponse(part);
-                    })
+                    .then(function () { return send(part); })
                     .catch(function (e) {
                         if (bt.txChar === c)
                             event("log", "write failed: " + errText(e));

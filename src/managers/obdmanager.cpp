@@ -2312,8 +2312,16 @@ QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
     QElapsedTimer timer;
     timer.start();
 
+    // A protocol search ("SEARCHING...", after ATSP0 or an adapter reset)
+    // ends in an answer or UNABLE TO CONNECT within ~15 s. Any byte sent
+    // before then aborts it and the next request searches again, so a poll
+    // with a 500 ms timeout never let it finish: let a search run out.
+    constexpr int kSearchMs = 15000;
+    const auto limit = [&] {
+        return m_responseBuffer.pending().contains("SEARCHING") ? qMax(timeoutMs, kSearchMs) : timeoutMs;
+    };
     int emptyReads = 0;
-    while (timer.elapsed() < timeoutMs) {
+    while (timer.elapsed() < limit()) {
         if (QThread::currentThread()->isInterruptionRequested())
             return QString();
         QElapsedTimer waitTimer;
