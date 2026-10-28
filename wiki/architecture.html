@@ -406,7 +406,10 @@ watcher-&gt;setFuture(QtConcurrent::run([<span class="kw">this</span>, imagePath
           right after <code>SettingsManager</code> and stopped first in cleanup (after the dev runtime, when present). A worker thread posts
           a queued call to the GUI thread every 2&nbsp;s and records when it is answered; if the GUI thread has been
           silent for more than 5&nbsp;s it logs <code>UI thread blocked for N s and counting</code> on
-          <code>octave.ui_watchdog</code>, then <code>responsive again after N s</code> when the loop drains. It is
+          <code>octave.ui_watchdog</code>, then <code>responsive again after N s</code> when the loop drains. In the
+          browser build a hidden page (phone locked, tab in the background), which the browser all but stops, logs
+          <code>page hidden; the browser paused it</code> and <code>page running again after N s</code> at info level
+          instead (<code>visibilitychange</code>, read through embind). It is
           purely observational &mdash; it never kills or restarts anything.
         </p>
 

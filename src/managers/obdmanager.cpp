@@ -2169,8 +2169,12 @@ void OBDConnectionWorker::doConnect()
                      .arg(shown.isEmpty() ? QStringLiteral("no answer") : shown.left(60),
                           response.isEmpty() && !shown.isEmpty() ? QStringLiteral(" (no prompt, timed out)")
                                                                  : QString()));
-    if (response.isEmpty() || response.toUpper().contains(QStringLiteral("NO DATA")) ||
-        response.toUpper().contains(QStringLiteral("UNABLE"))) {
+    // Only an RPM reply ("410C...") is a vehicle answering: after a
+    // reconnect with the ignition off, "STOPPED" and a search's leftovers
+    // passed for one and left a connection that never had data
+    const bool answered = !response.isEmpty()
+                          && ELM327Protocol::parseResponseLines(m_responseBuffer.lastLines(), 1, 0x0C).has_value();
+    if (!answered) {
         // Adapter is connected but no vehicle. Release the port: an open
         // QSerialPort keeps a read notifier in this thread's event loop, and
         // an rfcomm node with no remote reports readable-with-zero-bytes
@@ -2184,7 +2188,9 @@ void OBDConnectionWorker::doConnect()
     }
 
     // The protocol the search settled on: CAN takes several PIDs per request
-    const QString dpn = sendCommand(QByteArrayLiteral("ATDPN\r"), 500).simplified().section(QLatin1Char(' '), -1);
+    QString dpn = sendCommand(QByteArrayLiteral("ATDPN\r"), 500).simplified().section(QLatin1Char(' '), -1);
+    if (dpn.size() > 2)   // not a protocol number: a late reply to something else
+        dpn = sendCommand(QByteArrayLiteral("ATDPN\r"), 500).simplified().section(QLatin1Char(' '), -1);
     m_isCan = ELM327Protocol::isCanProtocol(dpn);
 
     m_initialized = true;

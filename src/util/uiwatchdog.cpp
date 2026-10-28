@@ -17,7 +17,41 @@
 #include <unistd.h>
 #endif
 
+#ifdef OCTAVE_WASM
+#include <atomic>
+#include <emscripten.h>
+#include <emscripten/bind.h>
+#endif
+
 Q_LOGGING_CATEGORY(lcWatchdog, "octave.ui_watchdog")
+
+#ifdef OCTAVE_WASM
+namespace {
+// The browser all but stops a hidden page's main thread (phone locked, tab
+// in the background): that is no hang. Set from the main thread's
+// visibilitychange; read by the watchdog thread.
+std::atomic<bool> g_pageHidden{false};
+std::atomic<bool> g_hiddenSinceCheck{false};
+} // namespace
+
+void pageHidden(bool hidden)
+{
+    g_pageHidden = hidden;
+    if (hidden)
+        g_hiddenSinceCheck = true;
+}
+
+EMSCRIPTEN_BINDINGS(octave_watchdog)
+{
+    emscripten::function("octaveWatchdogPageHidden", &pageHidden);
+}
+
+EM_JS(void, octave_watchdog_watch_visibility, (), {
+    const report = function () { Module.octaveWatchdogPageHidden(!!document.hidden); };
+    document.addEventListener("visibilitychange", report);
+    report();
+});
+#endif
 
 UiWatchdog::UiWatchdog(QObject *parent, int pingMs, int stallMs, int dumpMs, int abortMs,
                        int startupGraceMs)
@@ -37,6 +71,9 @@ void UiWatchdog::start()
         return;
     m_clock.start();
     m_lastPong = 0;
+#ifdef OCTAVE_WASM
+    octave_watchdog_watch_visibility();
+#endif
     // The worker owns nothing Qt-side; it only posts queued calls to `this`,
     // which lives on the GUI thread.
     QObject::connect(&m_thread, &QThread::started, [this] { loop(); });
@@ -57,6 +94,7 @@ void UiWatchdog::loop()
     bool stalled = false;
     bool dumped = false;
     bool graceLogged = false;
+    bool browserPaused = false;   // wasm: the stall is a hidden page
     qint64 stallStart = 0;
     while (m_running.load()) {
         QThread::msleep(static_cast<unsigned long>(m_pingMs));
@@ -67,6 +105,20 @@ void UiWatchdog::loop()
                                   Qt::QueuedConnection);
         const qint64 now = m_clock.elapsed();
         const qint64 silent = now - m_lastPong.load();
+#ifdef OCTAVE_WASM
+        // Hidden now, or at any point since the last pong: say so once, at
+        // info level, rather than report the pause as a hang
+        if (silent > m_stallMs && (g_pageHidden.load() || g_hiddenSinceCheck.load())) {
+            if (!stalled)
+                qCInfo(lcWatchdog) << "page hidden; the browser paused it";
+            stalled = true;
+            browserPaused = true;
+            stallStart = m_lastPong.load();
+            continue;
+        }
+        if (silent <= m_pingMs)
+            g_hiddenSinceCheck = false;
+#endif
         if (!stalled && silent > m_stallMs) {
             stalled = true;
             stallStart = m_lastPong.load();
@@ -75,8 +127,13 @@ void UiWatchdog::loop()
             stalled = false;
             dumped = false;
             graceLogged = false;
-            qCWarning(lcWatchdog) << "UI thread responsive again after"
-                                  << (m_lastPong.load() - stallStart) / 1000.0 << "s";
+            if (browserPaused)
+                qCInfo(lcWatchdog) << "page running again after" << (m_lastPong.load() - stallStart) / 1000.0
+                                   << "s";
+            else
+                qCWarning(lcWatchdog) << "UI thread responsive again after"
+                                      << (m_lastPong.load() - stallStart) / 1000.0 << "s";
+            browserPaused = false;
         }
         if (!stalled)
             continue;
