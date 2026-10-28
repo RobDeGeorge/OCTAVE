@@ -2157,6 +2157,10 @@ void OBDConnectionWorker::doConnect()
     // which takes 10 s and more on a J1850 / ISO 9141 / KWP car; giving up
     // sooner meant the next attempt's ATZ restarted the search, forever.
     QString response = sendCommand(ELM327Protocol::formatPidRequest(1, 0x0C), qMax(m_timeout, 20) * 1000);
+    // STOPPED: a byte reached the adapter mid-search and cut it short. The
+    // search starts over on the next request; give it one.
+    if (response.contains(QLatin1String("STOPPED"), Qt::CaseInsensitive))
+        response = sendCommand(ELM327Protocol::formatPidRequest(1, 0x0C), qMax(m_timeout, 20) * 1000);
     // A timeout returns nothing; show what did arrive (e.g. "SEARCHING...")
     const QString shown = response.isEmpty()
                               ? QString::fromLatin1(m_responseBuffer.pending()).simplified()
@@ -2274,6 +2278,15 @@ bool OBDConnectionWorker::sendInitSequence()
         // the 1.5 s the protocol table allows. Returns as soon as it answers.
         const bool reset = cmd.command.startsWith("ATZ");
         QString response = sendCommand(cmd.command, reset ? qMax(cmd.timeoutMs, 5000) : cmd.timeoutMs);
+        if (reset) {
+            // Some adapters go on talking after the reset banner; let them
+            // finish so it isn't taken for the next command's answer
+            QThread::msleep(200);
+        } else if (response.trimmed().isEmpty()) {
+            // Lost over Bluetooth, or the adapter was still busy: once more,
+            // so echo / spaces / headers really are off
+            response = sendCommand(cmd.command, qMax(cmd.timeoutMs, 1000));
+        }
         qDebug() << "[OBD Worker] Init:" << cmd.command.trimmed() << "->" << response;
         if (!response.trimmed().isEmpty())
             ++answered;
@@ -2309,6 +2322,14 @@ QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
     if (m_serial)
         m_serial->clearError();
     m_responseBuffer.clear();
+    // Bytes nobody asked for (the tail of a reply that timed out, an
+    // adapter's banner) would be read as this command's answer, and every
+    // answer after it would be one behind
+    if (m_io->bytesAvailable() > 0) {
+        const QByteArray stale = m_io->readAll();
+        qCDebug(lcElm327) << "dropped" << stale.size() << "stale bytes before" << cmd.trimmed() << ":"
+                          << stale.simplified().left(80);
+    }
     qCDebug(lcElm327) << "TX" << cmd.trimmed();
     m_io->write(cmd);
     if (m_serial)
@@ -2735,11 +2756,15 @@ QSet<int> OBDConnectionWorker::querySupportedPids()
     // Query supported PIDs in ranges: 00, 20, 40, 60, 80, A0, C0, E0
     const int ranges[] = {0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0, 0xE0};
     for (int base : ranges) {
-        const QString response = sendCommand(ELM327Protocol::formatPidRequest(1, base), 3000);
         bool more = false;
-        const QSet<int> supported =
-            response.isEmpty() ? QSet<int>()
-                               : ELM327Protocol::supportedPidsFromLines(m_responseBuffer.lastLines(), base, &more);
+        QSet<int> supported;
+        // Every vehicle answers 0100; without a bitmap (STOPPED, a reply
+        // lost over Bluetooth) ask again before calling the car empty
+        for (int attempt = 0; attempt < (base == 0 ? 3 : 1) && supported.isEmpty(); ++attempt) {
+            const QString response = sendCommand(ELM327Protocol::formatPidRequest(1, base), 5000);
+            if (!response.isEmpty())
+                supported = ELM327Protocol::supportedPidsFromLines(m_responseBuffer.lastLines(), base, &more);
+        }
         if (supported.isEmpty() && base == 0)
             qCWarning(lcElm327) << "no supported-PID bitmap in the reply to 0100:"
                                 << m_responseBuffer.lastLines().join(QLatin1Char('|')).left(200);

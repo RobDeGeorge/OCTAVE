@@ -241,7 +241,11 @@ ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
           (<code>7F0112</code>): the supported-PID scan joins every ECU's bitmap
           (<code>supportedPidsFromLines()</code>, logged as <code>vehicle reports N supported PIDs</code>), and single
           polls and <code>0101</code> pick their own line with <code>parseResponseLines()</code>. Reading only the last
-          line found no PIDs on a 2022 Hyundai. 10 s into a connection and every 30 s after, the worker logs
+          line found no PIDs on a 2022 Hyundai. The scan asks <code>0100</code> up to three times before calling a car
+          empty. <code>sendCommand()</code> drops bytes waiting before it writes (a timed-out reply's tail would
+          otherwise answer the next command, and every answer after it would be one behind); an init command with no
+          answer is sent once more, <code>ATZ</code> is followed by 200 ms for the adapter to finish, and a vehicle check
+          cut short (<code>STOPPED</code>) is asked once more. 10 s into a connection and every 30 s after, the worker logs
           <code>OBD polling: N requests in 30 s (x/s), M values (y/s), round trip mean ... ms, max ... ms; ... NO DATA, ... unanswered</code>
           at info level, so a user's log shows the poll rate; the data watchdog's reconnect (30 s without a value) and
           connect / reconnect requests are logged there too.

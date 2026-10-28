@@ -151,11 +151,28 @@ EM_JS(void, octave_webbt_install, (), {
             }
             if (found.length < 2)
                 return found[0] || null;
+            // The pair that answered last time on this adapter first: no
+            // probe of a service known to stay silent
+            const remembered = bt.recall(server.device.id);
+            found.sort(function (x, y) {
+                return (bt.describe(y) === remembered) - (bt.describe(x) === remembered);
+            });
             for (const f of found) {
-                if (await bt.probe(f))
+                if (await bt.probe(f)) {
+                    bt.remember(server.device.id, bt.describe(f));
                     return f;
+                }
             }
             return found[0];
+        },
+
+        // Per-adapter memory of the serial service that answered. Browser
+        // storage may be off (private window): then every connect probes.
+        recall: function (id) {
+            try { return localStorage.getItem("octave.webbt." + id) || ""; } catch (e) { return ""; }
+        },
+        remember: function (id, what) {
+            try { localStorage.setItem("octave.webbt." + id, what); } catch (e) {}
         },
 
         describe: function (f) {
@@ -168,19 +185,32 @@ EM_JS(void, octave_webbt_install, (), {
         },
 
         // Does this service answer an ELM327? Leaves notifications on if so.
+        // Waits for the whole answer (the ">" prompt): a tail arriving after
+        // the link is up was read as the answer to ATZ, and the commands
+        // after it went to an adapter still resetting.
         probe: async function (f) {
-            let got = 0;
-            const count = function (e) { got += e.target.value.byteLength; };
+            let got = 0, prompt = false;
+            const count = function (e) {
+                const v = new Uint8Array(e.target.value.buffer, e.target.value.byteOffset, e.target.value.byteLength);
+                got += v.length;
+                if (v.indexOf(62) >= 0)
+                    prompt = true;
+            };
             f.notify.addEventListener("characteristicvaluechanged", count);
             try {
                 await f.notify.startNotifications();
                 const ati = new TextEncoder().encode("ATI" + String.fromCharCode(13));
                 await (f.write.properties.write ? f.write.writeValueWithResponse(ati)
                                                 : f.write.writeValueWithoutResponse(ati));
-                for (let i = 0; i < 15 && !got; ++i)
+                for (let i = 0; i < 15 && !prompt; ++i)
                     await new Promise(function (r) { setTimeout(r, 100); });
             } catch (e) {
                 event("log", "probe " + bt.describe(f) + ": " + errText(e));
+                // A busy stack, not a silent service: let connect() retry
+                if (errText(e).indexOf("unknown reason") >= 0 || errText(e).indexOf("in progress") >= 0) {
+                    f.notify.removeEventListener("characteristicvaluechanged", count);
+                    throw e;
+                }
             }
             f.notify.removeEventListener("characteristicvaluechanged", count);
             if (!got) {
@@ -207,30 +237,54 @@ EM_JS(void, octave_webbt_install, (), {
                     event("down", "The Bluetooth adapter disconnected.");
                 });
             }
-            try {
-                const server = await d.gatt.connect();
-                const found = await bt.pick(server);
-                if (gen !== bt.gen)
-                    return;   // superseded
-                if (!found) {
-                    d.gatt.disconnect();
-                    event("error", (d.name || "That device") + " has no OBD serial service. It may not be an ELM327 adapter.");
+            // Android's stack is often still busy with the last link (a page
+            // reload, a reconnect): "GATT operation failed for unknown reason",
+            // "already in progress". Drop the link, give it a moment, again.
+            const transient = function (e) {
+                const m = errText(e);
+                return m.indexOf("unknown reason") >= 0 || m.indexOf("in progress") >= 0
+                    || m.indexOf("disconnected") >= 0 || (e && e.name === "NetworkError");
+            };
+            for (let attempt = 1; ; ++attempt) {
+                try {
+                    await bt.connectOnce(d, gen);
                     return;
-                }
-                found.notify.addEventListener("characteristicvaluechanged", bt.onValue);
-                await found.notify.startNotifications();
-                if (gen !== bt.gen)
-                    return;
-                bt.device = d; bt.rxChar = found.notify; bt.txChar = found.write;
-                bt.chain = Promise.resolve();
-                event("up", found.service.uuid, d.name || "", bt.describe(found));
-            } catch (e) {
-                if (gen === bt.gen) {
+                } catch (e) {
+                    if (gen !== bt.gen)
+                        return;
                     if (d.gatt.connected)
                         d.gatt.disconnect();
-                    event("error", "Couldn't connect to " + (d.name || "the adapter") + ": " + errText(e));
+                    if (attempt >= 4 || !transient(e)) {
+                        event("error", "Couldn't connect to " + (d.name || "the adapter") + ": " + errText(e));
+                        return;
+                    }
+                    event("log", "connect attempt " + attempt + ": " + errText(e) + "; retrying");
+                    await new Promise(function (r) { setTimeout(r, 700 * attempt); });
+                    if (gen !== bt.gen)
+                        return;
                 }
             }
+        },
+
+        // One try: GATT connect, pick the serial service, notifications on.
+        // Throws on a failure worth retrying; reports the rest itself.
+        connectOnce: async function (d, gen) {
+            const server = await d.gatt.connect();
+            const found = await bt.pick(server);
+            if (gen !== bt.gen)
+                return;   // superseded
+            if (!found) {
+                d.gatt.disconnect();
+                event("error", (d.name || "That device") + " has no OBD serial service. It may not be an ELM327 adapter.");
+                return;
+            }
+            found.notify.addEventListener("characteristicvaluechanged", bt.onValue);
+            await found.notify.startNotifications();
+            if (gen !== bt.gen)
+                return;
+            bt.device = d; bt.rxChar = found.notify; bt.txChar = found.write;
+            bt.chain = Promise.resolve();
+            event("up", found.service.uuid, d.name || "", bt.describe(found));
         },
 
         onValue: function (e) {
