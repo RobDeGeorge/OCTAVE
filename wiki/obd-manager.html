@@ -234,9 +234,14 @@ ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
           <code>ELM327Protocol::isCanProtocol()</code>) fast mode also puts up to six consecutive single-value Mode 01
           PIDs in one request (<code>010C0D05</code>, <code>formatMultiPidRequest()</code>), split by
           <code>parseMultiPidResponse()</code> with the table's byte counts (0x50 stays out: 4 bytes on the wire, 1 in
-          the table); a PID that can't join (ATRV, a multi-value PID, a repeat) is polled next on its own. An ECU that
+          the table); a PID that can't join (ATRV, a multi-value PID) waits in <code>m_deferred</code> and is polled on its own
+          next, while the batch fills from the PIDs after it; a repeat ends the batch. An ECU that
           answers one PID per request three times running ends batching for the connection. The simulator answers
-          multi-PID requests too. 10 s into a connection and every 30 s after, the worker logs
+          multi-PID requests too. On CAN every module answers a functional request, and some refuse
+          (<code>7F0112</code>): the supported-PID scan joins every ECU's bitmap
+          (<code>supportedPidsFromLines()</code>, logged as <code>vehicle reports N supported PIDs</code>), and single
+          polls and <code>0101</code> pick their own line with <code>parseResponseLines()</code>. Reading only the last
+          line found no PIDs on a 2022 Hyundai. 10 s into a connection and every 30 s after, the worker logs
           <code>OBD polling: N requests in 30 s (x/s), M values (y/s), round trip mean ... ms, max ... ms; ... NO DATA, ... unanswered</code>
           at info level, so a user's log shows the poll rate; the data watchdog's reconnect (30 s without a value) and
           connect / reconnect requests are logged there too.

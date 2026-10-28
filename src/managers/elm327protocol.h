@@ -122,6 +122,11 @@ public:
     // the order the ECU sent them. Stops at a byte that isn't a requested
     // PID, so a garbled reply yields the values before it and no more.
     static QList<ParsedResponse> parseMultiPidResponse(const QStringList &lines, int mode, const QList<int> &pids);
+    // A supported-PID query's reply ("0100", "0120", ...): every ECU's
+    // bitmap joined, as PID numbers (base + 1 ... base + 0x20). Several ECUs
+    // answer on CAN, and one may refuse ("7F0112"), so no single line
+    // speaks for the car. `nextRange`: some ECU announced base + 0x20.
+    static QSet<int> supportedPidsFromLines(const QStringList &lines, int base, bool *nextRange = nullptr);
     // ATDPN's answer ("A6", "6") names a CAN protocol (ISO 15765, 6-C)
     static bool isCanProtocol(const QString &dpn);
 

@@ -48,6 +48,7 @@ private slots:
     void formatPidRequest();
     void multiPidRequest();
     void multiPidResponse();
+    void supportedPidsFromSeveralEcus();
     void parseDtcResponse_data();
     void parseDtcResponse();
     void parseFreezeFrameDtc_data();
@@ -117,6 +118,27 @@ void TstElm327Protocol::multiPidResponse()
     QCOMPARE(ELM327Protocol::parseMultiPidResponse({"410D32FF0C1AF8"}, 1, pids).size(), 1);
     QCOMPARE(ELM327Protocol::parseMultiPidResponse({"410D320C1A"}, 1, pids).size(), 1);
     QVERIFY(ELM327Protocol::parseMultiPidResponse({"NO DATA"}, 1, pids).isEmpty());
+}
+
+void TstElm327Protocol::supportedPidsFromSeveralEcus()
+{
+    // 2022 Hyundai: the engine ECU's bitmap, then a module refusing 0100.
+    // Reading only the last line found no PIDs at all.
+    bool more = false;
+    QSet<int> pids = ELM327Protocol::supportedPidsFromLines({"4100BE3FA813", "7F0112"}, 0, &more);
+    QVERIFY(pids.contains(0x0C));
+    QVERIFY(pids.contains(0x0D));
+    QVERIFY(pids.contains(0x20));
+    QVERIFY(more);
+    // Two bitmaps joined; only the second announces the next range
+    pids = ELM327Protocol::supportedPidsFromLines({"412080000000", "412000000001"}, 0x20, &more);
+    QCOMPARE(pids, (QSet<int>{0x21, 0x40}));
+    QVERIFY(more);
+    pids = ELM327Protocol::supportedPidsFromLines({"NO DATA"}, 0x40, &more);
+    QVERIFY(pids.isEmpty());
+    QVERIFY(!more);
+    // Another range's reply doesn't count
+    QVERIFY(ELM327Protocol::supportedPidsFromLines({"4120BE3FA813"}, 0, &more).isEmpty());
 }
 
 void TstElm327Protocol::parseDtcResponse_data()

@@ -857,7 +857,7 @@ private:
     bool m_isCan = false;
     bool m_multiPid = true;
     int m_batchMisses = 0;
-    std::optional<PidKey> m_carry;   // drawn by a batch it couldn't join; polled next
+    QList<PidKey> m_deferred;   // drawn by a batch they couldn't join; polled next, in order
     void pollBatch(const QList<int> &pids);
     // Poll round trips, logged at info level ("OBD polling: ...") 10 s
     // into the connection and every 30 s after

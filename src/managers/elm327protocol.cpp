@@ -329,6 +329,27 @@ QList<ParsedResponse> ELM327Protocol::parseMultiPidResponse(const QStringList &l
     return out;
 }
 
+QSet<int> ELM327Protocol::supportedPidsFromLines(const QStringList &lines, int base, bool *nextRange)
+{
+    QSet<int> all;
+    bool more = false;
+    const QString prefix = QStringLiteral("41%1").arg(base, 2, 16, QLatin1Char('0')).toUpper();
+    for (const QString &msg : splitMessages(lines)) {
+        if (!msg.startsWith(prefix))
+            continue;   // a refusal ("7F0112"), another reply
+        const auto parsed = parseResponse(msg);
+        if (!parsed || parsed->dataBytes.size() < 4)
+            continue;
+        const QSet<int> bits = parseSupportedPids(parsed->dataBytes);
+        for (int pid : bits)
+            all.insert(base + pid);
+        more = more || bits.contains(32);
+    }
+    if (nextRange)
+        *nextRange = more;
+    return all;
+}
+
 bool ELM327Protocol::isCanProtocol(const QString &dpn)
 {
     QString p = dpn.trimmed().toUpper();

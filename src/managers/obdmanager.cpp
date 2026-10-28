@@ -2011,6 +2011,7 @@ void OBDConnectionWorker::setPidsToWatch(const QList<PidKey> &pids, const QList<
     m_currentPidIndex = 0;
     m_backgroundIndex = 0;
     m_backgroundNext = false;
+    m_deferred.clear();
 }
 
 PidKey OBDConnectionWorker::nextPollPid()
@@ -2442,23 +2443,24 @@ void OBDConnectionWorker::onPollTimer()
         return;
 
     // Get next PID to poll
-    PidKey pid;
-    if (m_carry) {
-        pid = *m_carry;
-        m_carry.reset();
-    } else {
-        pid = nextPollPid();
-    }
+    const PidKey pid = m_deferred.isEmpty() ? nextPollPid() : m_deferred.takeFirst();
 
     if (m_fastMode && m_isCan && m_multiPid && ELM327Protocol::isBatchable(pid)) {
+        // Fill the request from the next PIDs in turn. One that can't join
+        // (ATRV, a multi-value PID) waits for the next ticks; a repeat means
+        // the list has gone round.
         QList<int> batch{pid.second};
-        while (batch.size() < ELM327Protocol::kMaxPidsPerRequest) {
+        const int lookahead = m_pidsToWatch.size() + 1;
+        for (int i = 0; i < lookahead && batch.size() < ELM327Protocol::kMaxPidsPerRequest; ++i) {
             const PidKey next = nextPollPid();
-            if (!ELM327Protocol::isBatchable(next) || batch.contains(next.second)) {
-                m_carry = next;
+            if (batch.contains(next.second) && next.first == 1) {
+                m_deferred.append(next);
                 break;
             }
-            batch.append(next.second);
+            if (ELM327Protocol::isBatchable(next))
+                batch.append(next.second);
+            else
+                m_deferred.append(next);
         }
         if (batch.size() > 1) {
             pollBatch(batch);
@@ -2508,8 +2510,9 @@ void OBDConnectionWorker::onPollTimer()
         return;
     }
 
-    // Parse response
-    auto parsed = ELM327Protocol::parseResponse(response);
+    // Parse response: this PID's line, wherever it sits among the ECUs'
+    // (the last line can be another module's refusal, "7F0112")
+    auto parsed = ELM327Protocol::parseResponseLines(m_responseBuffer.lastLines(), pid.first, pid.second);
     if (!parsed.has_value())
         return;
 
@@ -2667,7 +2670,11 @@ void OBDConnectionWorker::doReadStatus()
     bool mil = false;
     int dtcCount = 0;
 
-    auto parsed = ELM327Protocol::parseResponse(response);
+    // The engine ECU's line among every module's (Byte A of each ECU
+    // carries its own MIL / count; the first that answers is the ECM)
+    const auto parsed = response.isEmpty()
+                            ? std::nullopt
+                            : ELM327Protocol::parseResponseLines(m_responseBuffer.lastLines(), 1, 0x01);
     if (parsed.has_value() && parsed->dataBytes.size() >= 4) {
         // Byte A, bit 7 = MIL, bits 0-6 = DTC count
         uint8_t byteA = parsed->dataBytes[0];
@@ -2728,21 +2735,20 @@ QSet<int> OBDConnectionWorker::querySupportedPids()
     // Query supported PIDs in ranges: 00, 20, 40, 60, 80, A0, C0, E0
     const int ranges[] = {0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0, 0xE0};
     for (int base : ranges) {
-        QString response = sendCommand(ELM327Protocol::formatPidRequest(1, base), 3000);
-        auto parsed = ELM327Protocol::parseResponse(response);
-        if (!parsed.has_value() || parsed->dataBytes.size() < 4)
-            break;  // Vehicle doesn't support this range
-
-        QSet<int> supported = ELM327Protocol::parseSupportedPids(parsed->dataBytes);
-        for (int pid : supported) {
-            allSupported.insert(base + pid);
-        }
-
-        // If the last PID in the bitmap (bit 32 = base+0x20) is not set,
-        // the vehicle doesn't support the next range query
-        if (!supported.contains(32))
+        const QString response = sendCommand(ELM327Protocol::formatPidRequest(1, base), 3000);
+        bool more = false;
+        const QSet<int> supported =
+            response.isEmpty() ? QSet<int>()
+                               : ELM327Protocol::supportedPidsFromLines(m_responseBuffer.lastLines(), base, &more);
+        if (supported.isEmpty() && base == 0)
+            qCWarning(lcElm327) << "no supported-PID bitmap in the reply to 0100:"
+                                << m_responseBuffer.lastLines().join(QLatin1Char('|')).left(200);
+        allSupported.unite(supported);
+        // Bit 32 (base + 0x20) set by no ECU: no next range to ask
+        if (!more)
             break;
     }
+    qCInfo(lcElm327) << "vehicle reports" << allSupported.size() << "supported PIDs";
 
     return allSupported;
 }
