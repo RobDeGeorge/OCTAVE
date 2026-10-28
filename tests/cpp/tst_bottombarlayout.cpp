@@ -63,6 +63,7 @@ private:
         // "12:45 PM" and "100%" in a typical sans at 1 px
         p.setProperty("clockWidthPerPx", 4.3);
         p.setProperty("clockHeightPerPx", 1.17);
+        p.setProperty("clockDigitHeightPerPx", 0.72);
         p.setProperty("volumeWidthPerPx", 2.5);
         p.setProperty("volumeHeightPerPx", 1.17);
         p.setProperty("minUnit", 36);
@@ -190,6 +191,28 @@ private slots:
                 QVERIFY(qAbs(b.w - first.w) <= 1 && qAbs(b.h - first.h) <= 1);
                 QVERIFY(qAbs((vertical ? b.y - a.y : b.x - a.x) - step) <= 1);
             }
+        }
+    }
+
+    // Along the bottom, the media buttons are nav buttons: the same size,
+    // the same step from one to the next; the auto clock is as tall
+    void mediaButtonsMatchNav()
+    {
+        for (int w : { 1280, 1600, 1920 }) {
+            const QJSValue g = compute(false, w, 100, 5, true, true, true);
+            QCOMPARE(g.property("dropped").property("length").toInt(), 0);
+            const QJSValue items = g.property("items"), nav = g.property("nav");
+            const Rect n0 = toRect(nav.property(0)), n1 = toRect(nav.property(1));
+            const double step = n1.x - n0.x;
+            const char *order[] = { "prev", "play", "next", "shuffle", "mute" };
+            for (int i = 0; i < 5; ++i) {
+                const Rect m = toRect(items.property(order[i]));
+                QVERIFY2(qAbs(m.w - n0.w) <= 1 && qAbs(m.h - n0.h) <= 1, order[i]);
+                QCOMPARE(m.y, n0.y);
+                if (i > 0)
+                    QVERIFY2(qAbs(m.x - toRect(items.property(order[i - 1])).x - step) <= 1, order[i]);
+            }
+            QVERIFY(qAbs(toRect(items.property("clock")).h - n0.h) <= 1);
         }
     }
 };

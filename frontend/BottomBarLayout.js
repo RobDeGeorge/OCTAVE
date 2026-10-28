@@ -10,6 +10,9 @@
 //   - no two faces overlap, and no two hit areas overlap
 //   - sizes stay in proportion: everything is a multiple of one unit (the
 //     nav button), so the bar shrinks as a whole instead of piece by piece
+//   - the media buttons are nav buttons in all but colour: the same size,
+//     the same gap between them; the auto clock's digits stand as tall as
+//     the nav buttons' icons
 //
 // How it fits, along the bar's length:
 //   1. at the ideal unit (from the bar's thickness) with comfortable gaps
@@ -23,16 +26,17 @@
 //      prev / play / next across a narrow side bar) is dropped by itself.
 
 // Sizes in nav-button units (the nav button is 1 x 1)
-var PREV = 0.55, PLAY = 0.8, NEXT = 0.55, SHUFFLE = 0.6, MUTE = 0.6
+var MEDIA = 1                // prev / play / next / shuffle / mute
+var ICON = 0.7               // icon in a nav or media button (BottomBar.qml draws it)
 var VOLUME_FONT = 0.36       // volume % pixel size
-var CLOCK_FONT = 0.8         // auto clock pixel size...
-var CLOCK_FONT_MIN = 0.5     // ...and as far as it may give way
+var CLOCK_DIGITS = ICON      // auto clock digit height...
+var CLOCK_DIGITS_MIN = 0.45  // ...and as far as it may give way
 var CLOCK_PAD = 0.3          // around the clock text (its tap area)
 var VOLUME_PAD = 0.1
 var SIDE_NAV_ASPECT = 1.4    // side bar: nav buttons are wider than tall
 
 // [preferred, minimum] gaps in units
-var MARGIN = [0.3, 0.12], GROUP_GAP = [0.6, 0.2], MEDIA_GAP = [0.25, 0.1], NAV_GAP = [0.3, 0.1]
+var MARGIN = [0.3, 0.12], GROUP_GAP = [0.6, 0.2], NAV_GAP = [0.3, 0.1]   // NAV_GAP between media buttons too
 
 // Squeeze tiers: lower tiers give way first
 var TIER_OUTER = 1, TIER_INNER = 2, TIER_CLOCK = 3
@@ -133,21 +137,21 @@ function _horizontal(p, on) {
     var u = Math.min(0.68 * t * p.scale, 0.85 * t)
     var volPx = VOLUME_FONT * u
     var clockCap = 0.8 * t / p.clockHeightPerPx      // text no taller than 80% of the bar
-    var clockPref = Math.min(p.clockAuto ? CLOCK_FONT * u : p.clockPx, clockCap)
-    var clockMin = p.clockAuto ? Math.min(clockPref, CLOCK_FONT_MIN * u) : 0.7 * clockPref
+    var clockPref = Math.min(p.clockAuto ? CLOCK_DIGITS * u / p.clockDigitHeightPerPx : p.clockPx, clockCap)
+    var clockMin = p.clockAuto ? Math.min(clockPref, CLOCK_DIGITS_MIN * u / p.clockDigitHeightPerPx) : 0.7 * clockPref
 
     // Along the length, in order
     var media = []
-    if (on.media) media.push(["prev", PREV * u], ["play", PLAY * u], ["next", NEXT * u])
-    if (on.shuffle) media.push(["shuffle", SHUFFLE * u])
-    if (on.mute) media.push(["mute", MUTE * u])
+    if (on.media) media.push(["prev", MEDIA * u], ["play", MEDIA * u], ["next", MEDIA * u])
+    if (on.shuffle) media.push(["shuffle", MEDIA * u])
+    if (on.mute) media.push(["mute", MEDIA * u])
     if (on.volume) media.push(["volume", p.volumeWidthPerPx * volPx + VOLUME_PAD * u])
 
     var parts = [], mediaParts = [], navParts = [], clockPart = null
     var margin = _gap(u, MARGIN, TIER_OUTER)
     parts.push(margin)
     for (var i = 0; i < media.length; ++i) {
-        if (i > 0) { var g = _gap(u, MEDIA_GAP, TIER_INNER); parts.push(g); mediaParts.push(g) }
+        if (i > 0) { var g = _gap(u, NAV_GAP, TIER_INNER); parts.push(g); mediaParts.push(g) }
         var mp = _part(media[i][1], media[i][1], TIER_INNER)
         parts.push(mp); mediaParts.push(mp)
     }
@@ -189,8 +193,9 @@ function _horizontal(p, on) {
     if (on.clock) {
         var cw = _size(clockPart, s)
         clockPxOut = (cw - CLOCK_PAD * ku) / p.clockWidthPerPx
-        var ch = p.clockHeightPerPx * clockPxOut + CLOCK_PAD * ku
-        faces.clock = _rect(rightEdge - cw, cy - Math.min(ch, t) / 2, cw, Math.min(ch, t))
+        // As tall as a nav button unless the digits need more
+        var ch = Math.min(t, Math.max(ku, p.clockDigitHeightPerPx * clockPxOut + CLOCK_PAD * ku))
+        faces.clock = _rect(rightEdge - cw, cy - ch / 2, cw, ch)
         rightEdge -= cw + _size(gapRight, s)
     }
 
@@ -215,26 +220,26 @@ function _vertical(p, on) {
     var mx = 0.08 * t, w = t - 2 * mx
     var u = Math.min(w / SIDE_NAV_ASPECT * p.scale, w)
     // prev / play / next share one row, so the media unit is set by the width
-    var rowUnits = PREV + PLAY + NEXT + 2 * MEDIA_GAP[1]
+    var rowUnits = 3 * MEDIA + 2 * NAV_GAP[1]
     var um = Math.min(u, w / rowUnits)
     var volPx = VOLUME_FONT * um
     var clockFit = (w - CLOCK_PAD * u) / p.clockWidthPerPx
-    var clockPref = Math.max(0, Math.min(p.clockAuto ? CLOCK_FONT * u : p.clockPx, clockFit))
+    var clockPref = Math.max(0, Math.min(p.clockAuto ? CLOCK_DIGITS * u / p.clockDigitHeightPerPx : p.clockPx, clockFit))
     var clockMin = 0.7 * clockPref
 
     var rows = []
-    if (on.media) rows.push({ h: PLAY * um, items: [["prev", PREV * um], ["play", PLAY * um], ["next", NEXT * um]] })
+    if (on.media) rows.push({ h: MEDIA * um, items: [["prev", MEDIA * um], ["play", MEDIA * um], ["next", MEDIA * um]] })
     var row2 = []
-    if (on.shuffle) row2.push(["shuffle", SHUFFLE * um])
-    if (on.mute) row2.push(["mute", MUTE * um])
-    if (row2.length) rows.push({ h: Math.max(on.shuffle ? SHUFFLE * um : 0, on.mute ? MUTE * um : 0), items: row2 })
+    if (on.shuffle) row2.push(["shuffle", MEDIA * um])
+    if (on.mute) row2.push(["mute", MEDIA * um])
+    if (row2.length) rows.push({ h: MEDIA * um, items: row2 })
     if (on.volume) rows.push({ h: p.volumeHeightPerPx * volPx, items: [["volume", Math.min(w, p.volumeWidthPerPx * volPx + VOLUME_PAD * um)]] })
 
     var parts = [], rowParts = [], navParts = [], clockPart = null
     var margin = _gap(u, MARGIN, TIER_OUTER)
     parts.push(margin)
     for (var r = 0; r < rows.length; ++r) {
-        if (r > 0) { var g = _gap(um, MEDIA_GAP, TIER_INNER); parts.push(g); rowParts.push(g) }
+        if (r > 0) { var g = _gap(um, NAV_GAP, TIER_INNER); parts.push(g); rowParts.push(g) }
         var rp = _part(rows[r].h, rows[r].h, TIER_INNER)
         parts.push(rp); rowParts.push(rp)
     }
@@ -257,7 +262,7 @@ function _vertical(p, on) {
 
     var s = _solve(parts, L)
     var faces = {}, cx = t / 2
-    var rowGap = MEDIA_GAP[1] * um * s.k   // between items in a row (across the bar)
+    var rowGap = NAV_GAP[1] * um * s.k     // between items in a row (across the bar)
 
     var y = _size(margin, s), ri = 0
     for (r = 0; r < rows.length; ++r) {
@@ -306,7 +311,7 @@ function _vertical(p, on) {
 // name in DROP_ORDER, or a control that is too small however much room the
 // rest gets (prev / play / next in a narrow side bar, the clock)
 function _toDrop(g, on, minUnit, idealUnit) {
-    if (on.media && PREV * g.mediaUnit < 0.45 * minUnit) return "media"
+    if (on.media && MEDIA * g.mediaUnit < 0.6 * minUnit) return "media"
     if (on.clock && g.clockPx < Math.max(12, 0.35 * minUnit)) return "clock"
     if (g.unit >= Math.min(minUnit, idealUnit) - 0.01) return ""
     for (var d = 0; d < DROP_ORDER.length; ++d)
@@ -315,8 +320,8 @@ function _toDrop(g, on, minUnit, idealUnit) {
 }
 
 // p: {vertical, width, height, navCount, showMedia, showClock, clockAuto,
-//     clockPx, clockWidthPerPx, clockHeightPerPx, volumeWidthPerPx,
-//     volumeHeightPerPx, minUnit, scale}
+//     clockPx, clockWidthPerPx, clockHeightPerPx, clockDigitHeightPerPx,
+//     volumeWidthPerPx, volumeHeightPerPx, minUnit, scale}
 // Returns {unit, items: {prev, play, next, shuffle, mute, volume, clock},
 //          hits: {same keys, nav0..}, nav: [rect], navHits: [rect],
 //          clockPx, volumePx, dropped: [names]}
@@ -333,6 +338,7 @@ function compute(p) {
         clockPx: Math.max(1, _num(p.clockPx, 18)),
         clockWidthPerPx: Math.max(0.1, _num(p.clockWidthPerPx, 2.6)),
         clockHeightPerPx: Math.max(0.1, _num(p.clockHeightPerPx, 1.2)),
+        clockDigitHeightPerPx: Math.max(0.1, _num(p.clockDigitHeightPerPx, 0.72)),
         volumeWidthPerPx: Math.max(0.1, _num(p.volumeWidthPerPx, 2.4)),
         volumeHeightPerPx: Math.max(0.1, _num(p.volumeHeightPerPx, 1.2)),
         minUnit: Math.max(1, _num(p.minUnit, 32)),

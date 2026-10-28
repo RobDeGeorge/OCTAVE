@@ -123,12 +123,11 @@ thickness: isVertical
           <thead><tr><th>Control</th><th>Size (units)</th></tr></thead>
           <tbody>
             <tr><td>Nav button</td><td>1 &times; 1 (side bar: up to 1.4 wide, never wider than the bar)</td></tr>
-            <tr><td>Play</td><td>0.8</td></tr>
-            <tr><td>Previous, Next</td><td>0.55</td></tr>
-            <tr><td>Shuffle, Mute</td><td>0.6</td></tr>
+            <tr><td>Previous, Play, Next, Shuffle, Mute</td><td>1 &times; 1, as a nav button (side bar: square, three to a row)</td></tr>
+            <tr><td>Icon in a nav or media button</td><td>0.7 of the button</td></tr>
             <tr><td>Volume %</td><td>0.36 font size</td></tr>
-            <tr><td>Clock (Auto)</td><td>0.8 font size, may give way to 0.5</td></tr>
-            <tr><td>Gaps: margin / between groups / inside a group</td><td>0.3 / 0.6 / 0.25&ndash;0.3, each with a smaller minimum</td></tr>
+            <tr><td>Clock (Auto)</td><td>digits 0.7 tall (as the icons), may give way to 0.45; its face is 1 tall</td></tr>
+            <tr><td>Gaps: margin / between groups / between buttons</td><td>0.3 / 0.6 / 0.3, each with a smaller minimum; media buttons use the nav gap</td></tr>
           </tbody>
         </table>
 
@@ -147,12 +146,12 @@ thickness: isVertical
         <p>Each control's touch area is its face grown by half a unit along the bar and by the full thickness across it, clipped to the bar. Any two that would overlap are cut at the midpoint between their faces, so neighbouring controls never share a touch point and every press lands on exactly one control. Within those limits the areas are as large as they can be, which matters on a car touchscreen.</p>
 
         <h3>Tested Promises</h3>
-        <p><span class="file-path">tests/cpp/tst_bottombarlayout.cpp</span> runs <code>compute()</code> in a <code>QJSEngine</code> over a grid of sizes (horizontal 320&ndash;3840 &times; 32&ndash;220 px, side 40&ndash;320 &times; 240&ndash;2160 px), 5 and 7 nav buttons, and every combination of media / clock / Auto clock. At each one it checks that every face and touch area lies inside the bar, that no two faces and no two touch areas overlap, and that each face lies inside its own touch area. It also checks a UI scale of 0.5&ndash;2, a 500&nbsp;px manual clock, a zero-size bar, that 1280&times;800 keeps every control at full size, that shuffle is the first thing dropped, and that the nav buttons are one size and evenly spaced. Change the proportions in <code>BottomBarLayout.js</code> and run <code>ctest -R tst_bottombarlayout</code>.</p>
+        <p><span class="file-path">tests/cpp/tst_bottombarlayout.cpp</span> runs <code>compute()</code> in a <code>QJSEngine</code> over a grid of sizes (horizontal 320&ndash;3840 &times; 32&ndash;220 px, side 40&ndash;320 &times; 240&ndash;2160 px), 5 and 7 nav buttons, and every combination of media / clock / Auto clock. At each one it checks that every face and touch area lies inside the bar, that no two faces and no two touch areas overlap, and that each face lies inside its own touch area. It also checks a UI scale of 0.5&ndash;2, a 500&nbsp;px manual clock, a zero-size bar, that 1280&times;800 keeps every control at full size, that shuffle is the first thing dropped, that the nav buttons are one size and evenly spaced, and that along the bottom the media buttons match the nav buttons in size and step and the Auto clock in height. Change the proportions in <code>BottomBarLayout.js</code> and run <code>ctest -R tst_bottombarlayout</code>.</p>
 
         <!-- Media Transport Controls -->
         <h2 id="media-controls">Media Transport Controls</h2>
 
-        <p>The media group contains, in order: Previous, Play/Pause, Next, Shuffle, Mute and the volume percentage. Each transport button is a <code>MediaButton</code>: a tinted SVG (<code>TintedIcon</code>, see <a href="#svg-pattern">SVG Icon Pattern</a>) inside a face that squishes while pressed (see <a href="#animation-pattern">Button Animation Pattern</a>), and a <code>MouseArea</code> over the whole touch area:</p>
+        <p>The media group contains, in order: Previous, Play/Pause, Next, Shuffle, Mute and the volume percentage. Each transport button is a <code>MediaButton</code>, drawn as a nav button is: the same size, gap and accent outline, with a tinted SVG (<code>TintedIcon</code>, see <a href="#svg-pattern">SVG Icon Pattern</a>) at 0.7 of the face, inside a face that squishes while pressed (see <a href="#animation-pattern">Button Animation Pattern</a>), and a <code>MouseArea</code> over the whole touch area:</p>
 
         <pre><code><span class="cls">MediaButton</span> {
     <span class="prop">face</span>: bottomBar.geo.items.prev; <span class="prop">hit</span>: bottomBar.geo.hits.prev
@@ -314,7 +313,7 @@ thickness: isVertical
         <!-- Clock -->
         <h2 id="clock">Clock Section</h2>
 
-        <p>The clock is a <code>Text</code> fed by the <code>clock</code> context property (<code>Clock</code> emits <code>timeChanged(QString)</code>; the format and seconds options live in Display &rarr; Clock). It uses <code>clockTextColor</code> (the theme accent), the global font, and automatic sizing by default (<code>clockSizeAuto</code>): 0.8 of the unit, giving way when room is short (see <a href="#fitting">Fitting Any Size</a>). With Auto off, <code>settingsManager.clockSize</code> (default 18, slider 10&ndash;85 px) is used as a ceiling: the clock never grows past the bar. Tapping the clock opens <code>ClockMenu.qml</code> (<code>openClockSection()</code>). A press highlight uses <code>hoverColor</code>.</p>
+        <p>The clock is a <code>Text</code> fed by the <code>clock</code> context property (<code>Clock</code> emits <code>timeChanged(QString)</code>; the format and seconds options live in Display &rarr; Clock). It uses <code>clockTextColor</code> (the theme accent), the global font, and automatic sizing by default (<code>clockSizeAuto</code>): its digits stand as tall as the nav icons (0.7 of the unit, measured from the font's own digit height via <code>TextMetrics.tightBoundingRect</code>, so a custom font with a tall or short line height still lines up), giving way when room is short (see <a href="#fitting">Fitting Any Size</a>). With Auto off, <code>settingsManager.clockSize</code> (default 18, slider 10&ndash;85 px) is used as a ceiling: the clock never grows past the bar. Tapping the clock opens <code>ClockMenu.qml</code> (<code>openClockSection()</code>). A press highlight uses <code>hoverColor</code>.</p>
 
         <p>The text binds <code>bottomBar.clockTimeText</code>, which binds <code>clock.time</code>, so it shows the current time from the first frame. The layout measures the text with every digit replaced by "8" (and <code>"88:88 PM"</code> before the first tick), so the bar does not shift as the minutes change.</p>
 

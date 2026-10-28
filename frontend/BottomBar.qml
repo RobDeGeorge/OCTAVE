@@ -74,6 +74,14 @@ Rectangle {
         font.pixelSize: 100
         text: (bottomBar.clockTimeText || "88:88 PM").replace(/[0-9]/g, "8")
     }
+    // How tall the digits stand, ink only: the auto clock matches it to the
+    // nav icons, whatever the font's line height
+    TextMetrics {
+        id: clockDigitMetrics
+        font.family: bottomBar.globalFont
+        font.pixelSize: 100
+        text: "8"
+    }
     TextMetrics {
         id: volumeMetrics
         font.family: bottomBar.globalFont
@@ -104,6 +112,7 @@ Rectangle {
         clockPx: manualClockSize,
         clockWidthPerPx: clockMetrics.advanceWidth / 100,
         clockHeightPerPx: clockMetrics.height / 100,
+        clockDigitHeightPerPx: clockDigitMetrics.tightBoundingRect.height / 100,
         volumeWidthPerPx: volumeMetrics.advanceWidth / 100,
         volumeHeightPerPx: volumeMetrics.height / 100,
         // Smallest nav button before controls are dropped: in proportion
@@ -429,12 +438,12 @@ Rectangle {
         }
     }
 
-    // A media control: squishes while pressed, acts on release
+    // A media control: drawn as a nav button is (outline, icon at 70 %),
+    // squishes while pressed, acts on release
     component MediaButton: BarSlot {
         id: mb
         property url source
         property color color
-        property real iconScale: 1.0
         property bool toggled: false
         property real restOpacity: 1.0
         signal tapped()
@@ -448,13 +457,15 @@ Rectangle {
 
             Rectangle {
                 anchors.fill: parent
-                radius: width * 0.12
+                radius: Math.min(width, height) * 0.14  // as the nav buttons
                 color: mb.toggled ? App.Style.bottomBarToggleShade : "transparent"
+                border.color: App.Style.accent
+                border.width: 1
             }
             TintedIcon {
                 anchors.centerIn: parent
-                width: parent.width * mb.iconScale
-                height: parent.height * mb.iconScale
+                width: Math.min(parent.width, parent.height) * 0.7
+                height: width
                 source: mb.source
                 color: mb.color
             }
@@ -504,7 +515,6 @@ Rectangle {
         face: bottomBar.geo.items.shuffle; hit: bottomBar.geo.hits.shuffle
         source: "./assets/shuffle_button.svg"
         color: bottomBar.isShuffleEnabled ? App.Style.bottomBarActiveToggleButton : App.Style.bottomBarShuffleButton
-        iconScale: 0.7
         toggled: bottomBar.isShuffleEnabled
         restOpacity: bottomBar.useRemote ? 0.35 : 1.0
         onTapped: bottomBar.mediaToggleShuffle()
@@ -619,7 +629,7 @@ Rectangle {
         Rectangle {
             anchors.fill: parent
             color: clockArea.pressed ? App.Style.hoverColor : "transparent"
-            radius: Math.min(width, height) * 0.12
+            radius: Math.min(width, height) * 0.14
         }
         Text {
             anchors.centerIn: parent
