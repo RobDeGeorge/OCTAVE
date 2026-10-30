@@ -8,9 +8,11 @@
 // the grid, invalid drops bounce back); tap a widget to select it and edit
 // PID / position / size / curated props in the side panel.
 //
-// This page owns the working spec. All mutations reassign `cells` wholesale
-// (never in place) so the canvas Repeater rebuilds and every binding stays
-// honest. DashboardManager already provides save/delete/duplicate, so
+// This page owns the working spec. Every mutation builds a new `cells` array
+// and goes through _apply(), which records it for undo and updates the
+// canvas's ListModel only where cells changed (see EditorCanvas). Moves and
+// resizes go through dashboardManager.arrange(): the widgets they land on
+// swap or move aside. DashboardManager provides save/delete/duplicate, so
 // this page is pure QML.
 // saveDashboard() requires a unique `id`; built-in ids are rejected and user
 // ids overwrite, so a new dashboard takes its id from
@@ -48,8 +50,7 @@ Item {
     property var specMargins: undefined
     property var specSpacing: undefined
 
-    // Working cell list. Reassign the whole array (never mutate in place) so
-    // the canvas Repeater rebuilds.
+    // Working cell list. Never mutated in place: _apply() a new array.
     property var cells: []
 
     property int selectedIndex: -1
@@ -86,6 +87,11 @@ Item {
     property int _pendingRow: 0
 
     Component.onCompleted: {
+        _load()
+        _resetHistory()
+    }
+
+    function _load() {
         if (draftJson.length > 0 && _restoreDraft(draftJson)) return
         if (editingId.length === 0) return
         if (typeof dashboardManager === "undefined" || !dashboardManager) return
@@ -106,7 +112,7 @@ Item {
         gridRows = spec.gridRows
         specMargins = spec.margins
         specSpacing = spec.spacing
-        cells = spec.cells
+        _show(spec.cells)
         nameField.text = spec.label ? spec.label : ""
     }
 
@@ -154,7 +160,7 @@ Item {
             gridRows = spec.gridRows
             specMargins = spec.margins
             specSpacing = spec.spacing
-            cells = spec.cells
+            _show(spec.cells)
             nameField.text = draft.label ? draft.label : ""
             dirty = true
             return true
@@ -173,17 +179,111 @@ Item {
             settingsManager.save_setting("dashboardEditorDraft", "")
     }
 
+    // ── The canvas model ─────────────────────────────────────────────────
+    // One row per cell, in `cells` order. _show() brings it in line with a
+    // new array touching only rows that differ, so the canvas keeps every
+    // other widget as it is.
+    ListModel { id: cellModel }
+
+    function _row(c) {
+        return {
+            "type": c.type !== undefined ? String(c.type) : "",
+            "paramId": c.paramId ? String(c.paramId) : "",
+            // Not "row"/"column": views give delegates those names themselves
+            "cellCol": c.col !== undefined ? c.col : 0,
+            "cellRow": c.row !== undefined ? c.row : 0,
+            "cellColSpan": c.colSpan !== undefined ? c.colSpan : 1,
+            "cellRowSpan": c.rowSpan !== undefined ? c.rowSpan : 1,
+            "propsJson": JSON.stringify(c.props || {})
+        }
+    }
+
+    // A plain row (from _row) against a model element
+    function _sameRow(row, element) {
+        for (var k in row) if (row[k] !== element[k]) return false
+        return true
+    }
+
+    function _show(next) {
+        var rows = next.map(_row)
+        var n = cellModel.count
+        var i
+        if (rows.length === n + 1 || rows.length === n - 1) {
+            // One cell added or removed: find where, then check the rest lines up
+            var longer = rows.length > n ? rows : null
+            var first = 0
+            while (first < Math.min(n, rows.length) && _sameRow(rows[first], cellModel.get(first))) ++first
+            var ok = true
+            if (longer) {
+                for (i = first; i < n && ok; ++i) ok = _sameRow(rows[i + 1], cellModel.get(i))
+                if (ok) cellModel.insert(first, rows[first])
+            } else {
+                for (i = first; i < rows.length && ok; ++i) ok = _sameRow(rows[i], cellModel.get(i + 1))
+                if (ok) cellModel.remove(first)
+            }
+            if (ok) { cells = next; return }
+        }
+        if (rows.length === n) {
+            for (i = 0; i < n; ++i) {
+                var cur = cellModel.get(i)
+                for (var k in rows[i])
+                    if (cur[k] !== rows[i][k]) cellModel.setProperty(i, k, rows[i][k])
+            }
+        } else {
+            cellModel.clear()
+            for (i = 0; i < rows.length; ++i) cellModel.append(rows[i])
+        }
+        cells = next
+    }
+
+    // ── Undo / redo ──────────────────────────────────────────────────────
+    // Snapshots of the cell list (JSON), newest last; _historyIndex is the
+    // one on screen. A new edit drops anything after it.
+    readonly property int maxUndo: 50
+    property var _history: []
+    property int _historyIndex: -1
+    readonly property bool canUndo: _historyIndex > 0
+    readonly property bool canRedo: _historyIndex >= 0 && _historyIndex < _history.length - 1
+
+    function _resetHistory() {
+        _history = [JSON.stringify(cells)]
+        _historyIndex = 0
+    }
+
+    // Every edit lands here: show it, mark the work unsaved, record it
+    function _apply(next) {
+        _show(next)
+        dirty = true
+        var h = _history.slice(0, _historyIndex + 1)
+        h.push(JSON.stringify(next))
+        while (h.length > maxUndo + 1) h.shift()
+        _history = h
+        _historyIndex = h.length - 1
+    }
+
+    function _restore(index) {
+        _historyIndex = index
+        _show(JSON.parse(_history[index]))
+        dirty = true
+        if (selectedIndex >= cells.length) selectedIndex = -1
+    }
+
+    function undo() { if (canUndo) _restore(_historyIndex - 1) }
+    function redo() { if (canRedo) _restore(_historyIndex + 1) }
+
+    Shortcut { sequences: [StandardKey.Undo]; onActivated: editor.undo() }
+    Shortcut { sequences: [StandardKey.Redo, "Ctrl+Shift+Z"]; onActivated: editor.redo() }
+
     // ── Cell mutations (single owner of the working spec) ───────────────
 
-    // Replace cells[index] with a shallow-merged copy. Reassigns the array.
+    // Replace cells[index] with a shallow-merged copy
     function _patchCell(index, patch) {
         var next = cells.slice()
         var merged = {}
         for (var k in next[index]) merged[k] = next[index][k]
         for (var p in patch) merged[p] = patch[p]
         next[index] = merged
-        cells = next
-        dirty = true
+        _apply(next)
     }
 
     function addCellAt(type, col, row) {
@@ -202,13 +302,28 @@ Item {
             "colSpan": cs, "rowSpan": rs,
             "props": {}
         })
-        cells = next
-        dirty = true
+        _apply(next)
         selectedIndex = next.length - 1
         // A gauge without a PID is useless — pick one now. Self-binding
         // widgets (supportedKinds: []) skip this.
         if (meta.supportedKinds.length > 0)
             openPidPicker()
+    }
+
+    // Cell `index` to (col, row, colSpan, rowSpan); the widgets it lands on
+    // swap with it or move aside. Refused: nothing changes and the reason
+    // is shown (the canvas has already put the dragged widget back).
+    function _arrangeCell(index, col, row, cs, rs) {
+        var c = cells[index]
+        if (!c) return false
+        if (c.col === col && c.row === row && c.colSpan === cs && c.rowSpan === rs) return true
+        var result = dashboardManager.arrange(cells, gridColumns, gridRows, index, col, row, cs, rs)
+        if (!result.ok) {
+            _showError(result.reason)
+            return false
+        }
+        _apply(result.cells)
+        return true
     }
 
     function moveCell(index, col, row) {
@@ -218,13 +333,7 @@ Item {
         var rs = c.rowSpan !== undefined ? c.rowSpan : 1
         col = Math.max(0, Math.min(gridColumns - cs, col))
         row = Math.max(0, Math.min(gridRows - rs, row))
-        if (editorCanvas.canPlace(col, row, cs, rs, index)) {
-            _patchCell(index, { "col": col, "row": row })
-        } else {
-            // Rejected drop: reassign anyway so the canvas rebuilds and the
-            // dragged delegate snaps back to its origin.
-            cells = cells.slice()
-        }
+        _arrangeCell(index, col, row, cs, rs)
     }
 
     function nudgeCell(index, dCol, dRow) {
@@ -241,13 +350,10 @@ Item {
         var row = c.row !== undefined ? c.row : 0
         var cs = Math.max(1, Math.min(gridColumns - col, (c.colSpan !== undefined ? c.colSpan : 1) + dColSpan))
         var rs = Math.max(1, Math.min(gridRows - row, (c.rowSpan !== undefined ? c.rowSpan : 1) + dRowSpan))
-        if (cs === c.colSpan && rs === c.rowSpan) return
-        if (editorCanvas.canPlace(col, row, cs, rs, index))
-            _patchCell(index, { "colSpan": cs, "rowSpan": rs })
+        _arrangeCell(index, col, row, cs, rs)
     }
 
-    // Absolute resize (drag handles). Same clamping/overlap rule as the
-    // steppers; a rejected size reassigns so the canvas snaps back.
+    // Absolute resize (drag handles), by the same rules as the steppers
     function resizeCellTo(index, colSpan, rowSpan) {
         var c = cells[index]
         if (!c) return
@@ -255,18 +361,13 @@ Item {
         var row = c.row !== undefined ? c.row : 0
         var cs = Math.max(1, Math.min(gridColumns - col, colSpan))
         var rs = Math.max(1, Math.min(gridRows - row, rowSpan))
-        if (cs === c.colSpan && rs === c.rowSpan) { cells = cells.slice(); return }
-        if (editorCanvas.canPlace(col, row, cs, rs, index))
-            _patchCell(index, { "colSpan": cs, "rowSpan": rs })
-        else
-            cells = cells.slice()
+        _arrangeCell(index, col, row, cs, rs)
     }
 
     function removeCell(index) {
         var next = cells.slice()
         next.splice(index, 1)
-        cells = next
-        dirty = true
+        _apply(next)
         selectedIndex = -1
     }
 
@@ -406,6 +507,22 @@ Item {
                 onClicked: editor.cancel()
             }
 
+            Button {
+                objectName: "editorUndoButton"
+                text: "Undo"
+                enabled: editor.canUndo
+                font.family: App.Style.fontFamily
+                onClicked: editor.undo()
+            }
+
+            Button {
+                objectName: "editorRedoButton"
+                text: "Redo"
+                enabled: editor.canRedo
+                font.family: App.Style.fontFamily
+                onClicked: editor.redo()
+            }
+
             TextField {
                 id: nameField
                 objectName: "editorNameField"
@@ -468,6 +585,7 @@ Item {
             margins: editor.specMargins
             spacing: editor.specSpacing
             cells: editor.cells
+            model: cellModel
             selectedIndex: editor.selectedIndex
 
             onEmptyCellTapped: function(col, row) {

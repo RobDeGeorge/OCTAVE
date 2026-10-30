@@ -44,7 +44,9 @@ Item {
     property string unit: _pInfo ? _pInfo.unit : ""
     property real min: _pInfo ? _pInfo.min : 0
     property real max: _pInfo ? _pInfo.max : 100
-    property real value: paramId ? (App.OBDParameterModel.liveValue(paramId) || 0) : 0
+    // NaN = no reading: "--", and a gap in the trace (never a fake 0)
+    property real value: App.OBDParameterModel.sample(paramId)
+    readonly property bool hasValue: isFinite(value)
     property int decimals: 0
 
     // ── Style ───────────────────────────────────────────────────────
@@ -86,23 +88,20 @@ Item {
     }
 
     // ── Layout math ─────────────────────────────────────────────────
-    // Shrink typography in cells smaller than the size the default type was
-    // tuned for, so labels never spill out of a small editor cell.
-    readonly property real _fontFit: Math.max(0.1, Math.min(1,
-        height / App.Spacing.dp(70), width / App.Spacing.dp(160)))
-
     readonly property real _headerH:
-        showHeader ? Math.min(Math.max(App.Spacing.overallText, App.Spacing.dp(14)),
+        showHeader ? Math.min(Math.max(App.Spacing.overallText, App.Spacing.dp(14)) * 1.25,
                               height * 0.4)
                    : 0
+    readonly property real _fontPx: Math.max(1, _headerH * 0.72)
     readonly property real _plotTop: _headerH + (showHeader ? App.Spacing.dp(4) : 0)
 
+    readonly property var _finiteSamples: _samples.filter(function(v) { return isFinite(v) })
     readonly property real _rangeMin: {
-        if (autoScale && _samples.length > 0) return Math.min.apply(null, _samples)
+        if (autoScale && _finiteSamples.length > 0) return Math.min.apply(null, _finiteSamples)
         return min
     }
     readonly property real _rangeMax: {
-        if (autoScale && _samples.length > 0) return Math.max.apply(null, _samples)
+        if (autoScale && _finiteSamples.length > 0) return Math.max.apply(null, _finiteSamples)
         return max
     }
     readonly property real _rangeSpan: Math.max(0.0001, _rangeMax - _rangeMin)
@@ -110,31 +109,41 @@ Item {
     // ── Header (compact, left-aligned) ──────────────────────────────
     // "Title  Value Unit" adjacent — a wide cell doesn't scatter the text
     // to opposite edges the way edge-anchored layouts would.
-    Row {
+    Item {
         id: header
         visible: root.showHeader
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.leftMargin: App.Spacing.dp(4)
+        anchors.rightMargin: App.Spacing.dp(4)
         height: root._headerH
-        spacing: App.Spacing.dp(6)
 
+        // The value keeps its width, the title gets the rest
         Text {
-            text: root.title
-            color: root.labelColor
-            font.pixelSize: Math.max(1, App.Spacing.overallText * 0.9 * root._fontFit)
-            font.family: App.Style.fontFamily
+            id: valueText
+            anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            elide: Text.ElideRight
-        }
-        Text {
-            text: root.value.toFixed(root.decimals) + (root.unit ? " " + root.unit : "")
+            width: Math.min(implicitWidth, parent.width)
+            text: (root.hasValue ? root.value.toFixed(Math.max(0, Math.min(4, root.decimals))) : "--")
+                  + (root.unit ? " " + root.unit : "")
             color: root.valueColor
-            font.pixelSize: Math.max(1, App.Spacing.overallText * 0.95 * root._fontFit)
+            font.pixelSize: root._fontPx
             font.bold: true
             font.family: App.Style.fontFamily
+            fontSizeMode: Text.HorizontalFit
+            minimumPixelSize: 1
+            horizontalAlignment: Text.AlignRight
+        }
+        Text {
+            anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
+            width: Math.max(0, parent.width - valueText.width - App.Spacing.dp(6))
+            text: root.title
+            color: root.labelColor
+            font.pixelSize: root._fontPx * 0.92
+            font.family: App.Style.fontFamily
+            elide: Text.ElideRight
         }
     }
 
@@ -169,6 +178,12 @@ Item {
             onSamplesChanged: requestPaint()
             onWidthChanged: requestPaint()
             onHeightChanged: requestPaint()
+            onRangeMinChanged: requestPaint()
+            onRangeSpanChanged: requestPaint()
+            onLineColorChanged: requestPaint()
+            onFillColorChanged: requestPaint()
+            onFillBelowChanged: requestPaint()
+            onMaxSamplesChanged: requestPaint()
 
             onPaint: {
                 var ctx = getContext("2d")
@@ -190,22 +205,38 @@ Item {
                     return h - inset - t * (h - 2 * inset)
                 }
 
-                if (fillBelow) {
-                    ctx.beginPath()
-                    ctx.moveTo(xStart, h)
-                    for (var i = 0; i < n; i++) {
-                        ctx.lineTo(xStart + i * xStep, mapY(samples[i]))
+                // Runs of finite samples; a missing reading breaks the line
+                var runs = [], run = []
+                for (var i = 0; i < n; i++) {
+                    if (isFinite(samples[i])) {
+                        run.push(i)
+                    } else if (run.length > 0) {
+                        runs.push(run); run = []
                     }
-                    ctx.lineTo(xStart + (n - 1) * xStep, h)
-                    ctx.closePath()
-                    ctx.fillStyle = fillColor.toString()
-                    ctx.fill()
+                }
+                if (run.length > 0) runs.push(run)
+
+                for (var r = 0; r < runs.length; r++) {
+                    var idx = runs[r]
+                    if (idx.length < 2) continue
+                    if (fillBelow) {
+                        ctx.beginPath()
+                        ctx.moveTo(xStart + idx[0] * xStep, h)
+                        for (var k = 0; k < idx.length; k++)
+                            ctx.lineTo(xStart + idx[k] * xStep, mapY(samples[idx[k]]))
+                        ctx.lineTo(xStart + idx[idx.length - 1] * xStep, h)
+                        ctx.closePath()
+                        ctx.fillStyle = fillColor.toString()
+                        ctx.fill()
+                    }
                 }
 
                 ctx.beginPath()
-                ctx.moveTo(xStart, mapY(samples[0]))
-                for (var j = 1; j < n; j++) {
-                    ctx.lineTo(xStart + j * xStep, mapY(samples[j]))
+                for (var q = 0; q < runs.length; q++) {
+                    var line = runs[q]
+                    ctx.moveTo(xStart + line[0] * xStep, mapY(samples[line[0]]))
+                    for (var j = 1; j < line.length; j++)
+                        ctx.lineTo(xStart + line[j] * xStep, mapY(samples[line[j]]))
                 }
                 ctx.lineWidth = App.Spacing.dp(2)
                 ctx.strokeStyle = lineColor.toString()

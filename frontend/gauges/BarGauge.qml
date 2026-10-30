@@ -45,7 +45,9 @@ Item {
     property string unit: _pInfo ? _pInfo.unit : ""
     property real min: _pInfo ? _pInfo.min : 0
     property real max: _pInfo ? _pInfo.max : 100
-    property real value: paramId ? (App.OBDParameterModel.liveValue(paramId) || 0) : 0
+    // NaN = no reading yet: "--", an empty track, no warning colour
+    property real value: App.OBDParameterModel.sample(paramId)
+    readonly property bool hasValue: isFinite(value)
 
     // ── Style ───────────────────────────────────────────────────────
     property string orientation: "horizontal"  // "horizontal" or "vertical"
@@ -58,15 +60,14 @@ Item {
     property int decimals: 0
     property bool showLabel: true
     property bool showValue: true
-    // Max bar thickness in dp. 0 = fill container (default). Set this for
-    // horizontal-mode bars in tall cells so the pill doesn't get chunky —
-    // e.g. a 40dp maxThickness keeps bars reading as "bar" not "capsule".
+    // Max bar thickness in dp. 0 = fill the space (default). Caps the
+    // height of a horizontal bar / the width of a vertical one.
     property real maxThickness: 0
 
     // ── Computed ────────────────────────────────────────────────────
     readonly property real _normalized: {
         var r = max - min
-        if (r <= 0) return 0
+        if (!hasValue || !(r > 0)) return 0
         return Math.max(0, Math.min(1, (value - min) / r))
     }
 
@@ -75,159 +76,124 @@ Item {
         NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
     }
 
-    readonly property color _activeFill:
-        (!isNaN(warnAbove) && value >= warnAbove) ? warnColor : fillColor
+    readonly property bool _warning: hasValue && !isNaN(warnAbove) && value >= warnAbove
+    readonly property color _activeFill: _warning ? warnColor : fillColor
+    readonly property string _formatted: hasValue ? value.toFixed(Math.max(0, Math.min(4, decimals))) : "--"
+    readonly property string _valueText: _formatted + (unit ? " " + unit : "")
 
-    readonly property bool _horizontal: orientation === "horizontal"
+    readonly property bool _horizontal: orientation !== "vertical"
+    readonly property real _gap: Math.min(App.Spacing.dp(4), height * 0.05)
+    readonly property real _maxPx: maxThickness > 0 ? App.Spacing.dp(maxThickness) : 0
 
-    // Shrink typography in cells smaller than the size the default type was
-    // tuned for, so labels never spill out of a small editor cell.
-    readonly property real _fontFit: Math.max(0.1, Math.min(1,
-        height / App.Spacing.dp(70), width / App.Spacing.dp(140)))
-
-    // ── Layout ──────────────────────────────────────────────────────
-    // Horizontal:  [ Title ........ Value Unit ]
-    //              [ ===========════════════    ]   ← bar
+    // Explicit geometry per orientation (no anchors that change with it, so
+    // switching orientation after creation lays out like creating it so).
     //
-    // Vertical:    Title
-    //              [ |======|  ]   ← bar
-    //              Value Unit
+    // Horizontal:  [ Title ........ Value Unit ]
+    //              [ ███████████░░░░░░░░░░░░░░ ]   ← track
+    // Vertical:    Title / track (bottom-up) / Value Unit
+    readonly property real _lineH: Math.max(1, Math.min(
+        Math.max(App.Spacing.overallText, App.Spacing.dp(14)) * 1.25,
+        height * (_horizontal ? 0.4 : 0.22)))
+    readonly property real _topTextH: (_horizontal ? (showLabel || showValue) : showLabel) ? _lineH : 0
+    readonly property real _bottomTextH: (!_horizontal && showValue) ? _lineH : 0
+    readonly property real _fontPx: Math.max(1, _lineH * 0.72)
 
+    readonly property rect _trackRect: {
+        var top = _topTextH > 0 ? _topTextH + _gap : 0
+        var bottom = _bottomTextH > 0 ? _bottomTextH + _gap : 0
+        var availH = Math.max(0, height - top - bottom)
+        if (_horizontal) {
+            var h = _maxPx > 0 ? Math.min(_maxPx, availH) : availH
+            return Qt.rect(0, top + (availH - h) / 2, width, h)
+        }
+        var w = _maxPx > 0 ? Math.min(_maxPx, width)
+                           : Math.min(width, Math.max(App.Spacing.dp(10), width * 0.4))
+        return Qt.rect((width - w) / 2, top, w, availH)
+    }
+
+    // Title + value: the value keeps its width, the title gets the rest
     Item {
-        anchors.fill: parent
+        id: header
+        visible: root._topTextH > 0
+        width: parent.width
+        height: root._topTextH
 
-        // Header row (compact, left-aligned) — "Title  Value Unit" next to
-        // each other so a wide cell doesn't scatter the text to opposite
-        // edges. Always positioned at the top of the BarGauge.
-        Row {
-            id: header
-            visible: root._horizontal && (root.showLabel || root.showValue)
-            anchors.left: parent.left
-            anchors.top: parent.top
+        Text {
+            id: valueText
+            visible: root._horizontal && root.showValue
             anchors.right: parent.right
-            height: root.showLabel || root.showValue
-                    ? Math.min(Math.max(App.Spacing.overallText, App.Spacing.dp(14)),
-                               root.height * 0.4)
-                    : 0
-            spacing: App.Spacing.dp(6)
-
-            Text {
-                id: hTitle
-                visible: root.showLabel
-                text: root.title
-                color: root.labelColor
-                font.pixelSize: Math.max(1, App.Spacing.overallText * 0.9 * root._fontFit)
-                font.family: App.Style.fontFamily
-                anchors.verticalCenter: parent.verticalCenter
-                elide: Text.ElideRight
-            }
-            Text {
-                visible: root.showValue
-                text: root.value.toFixed(root.decimals) + (root.unit ? " " + root.unit : "")
-                color: root.valueColor
-                font.pixelSize: Math.max(1, App.Spacing.overallText * 0.95 * root._fontFit)
-                font.bold: true
-                font.family: App.Style.fontFamily
-                anchors.verticalCenter: parent.verticalCenter
-            }
-        }
-
-        // Vertical mode: title at top
-        Text {
-            id: vTitleTop
-            visible: !root._horizontal && root.showLabel
-            text: root.title
-            color: root.labelColor
-            font.pixelSize: Math.max(1, App.Spacing.overallText * 0.85 * root._fontFit)
-            font.family: App.Style.fontFamily
-            anchors.top: parent.top
-            anchors.horizontalCenter: parent.horizontalCenter
-            elide: Text.ElideRight
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-        }
-
-        // Vertical mode: value at bottom
-        Text {
-            id: vValueBottom
-            visible: !root._horizontal && root.showValue
-            text: root.value.toFixed(root.decimals) + (root.unit ? " " + root.unit : "")
-            color: root.valueColor
-            font.pixelSize: Math.max(1, App.Spacing.overallText * 0.95 * root._fontFit)
+            anchors.verticalCenter: parent.verticalCenter
+            width: Math.min(implicitWidth, parent.width)
+            text: root._valueText
+            color: root._warning ? root.warnColor : root.valueColor
+            font.pixelSize: root._fontPx
             font.bold: true
             font.family: App.Style.fontFamily
-            anchors.bottom: parent.bottom
-            anchors.horizontalCenter: parent.horizontalCenter
+            fontSizeMode: Text.HorizontalFit
+            minimumPixelSize: 1
+            horizontalAlignment: Text.AlignRight
         }
+        Text {
+            visible: root.showLabel
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            width: Math.max(0, parent.width - (valueText.visible ? valueText.width + App.Spacing.dp(6) : 0))
+            text: root.title
+            color: root.labelColor
+            font.pixelSize: root._fontPx * 0.92
+            font.family: App.Style.fontFamily
+            elide: Text.ElideRight
+            horizontalAlignment: root._horizontal ? Text.AlignLeft : Text.AlignHCenter
+        }
+    }
 
-        // The track.
-        // Horizontal mode: anchored full-width below header. When
-        // maxThickness > 0, the track stays full-height-anchored but the
-        // top/bottom margins squeeze it down to the desired pill height
-        // and keep it vertically centered in its space.
-        // Vertical mode: centered column between title and value; width
-        // is capped (either by maxThickness or a default 40%).
-        Rectangle {
-            id: track
-            color: root.trackColor
-            radius: root._horizontal ? height / 2 : width / 2
+    Text {
+        objectName: "barValueBottom"
+        visible: root._bottomTextH > 0
+        y: parent.height - root._bottomTextH
+        width: parent.width
+        height: root._bottomTextH
+        verticalAlignment: Text.AlignVCenter
+        horizontalAlignment: Text.AlignHCenter
+        text: root._valueText
+        color: root._warning ? root.warnColor : root.valueColor
+        font.pixelSize: root._fontPx
+        font.bold: true
+        font.family: App.Style.fontFamily
+        fontSizeMode: Text.HorizontalFit
+        minimumPixelSize: 1
+    }
 
-            readonly property real _maxPx: root.maxThickness > 0
-                                           ? App.Spacing.dp(root.maxThickness) : 0
-            readonly property real _hAvail: Math.max(
-                0, parent.height - header.height - App.Spacing.dp(4))
-            readonly property real _hExtra: (_maxPx > 0 && _hAvail > _maxPx)
-                                            ? (_hAvail - _maxPx) : 0
+    Rectangle {
+        id: track
+        objectName: "barTrack"
+        x: root._trackRect.x
+        y: root._trackRect.y
+        width: root._trackRect.width
+        height: root._trackRect.height
+        color: root.trackColor
+        radius: Math.min(width, height) / 2
 
-            anchors.left:  root._horizontal ? parent.left  : undefined
-            anchors.right: root._horizontal ? parent.right : undefined
-            anchors.horizontalCenter: root._horizontal ? undefined : parent.horizontalCenter
-
-            anchors.top:    root._horizontal
-                            ? header.bottom
-                            : (vTitleTop.visible ? vTitleTop.bottom : parent.top)
-            anchors.bottom: root._horizontal
-                            ? parent.bottom
-                            : (vValueBottom.visible ? vValueBottom.top : parent.bottom)
-
-            // Horizontal: base top/bottom margins + extra padding to squeeze
-            // the pill to `maxThickness` centered in the available space.
-            anchors.topMargin:    root._horizontal
-                                  ? App.Spacing.dp(4) + _hExtra / 2
-                                  : App.Spacing.dp(4)
-            anchors.bottomMargin: root._horizontal
-                                  ? _hExtra / 2
-                                  : App.Spacing.dp(4)
-
-            width: root._horizontal
-                   ? parent.width
-                   : (_maxPx > 0 ? _maxPx
-                                 : Math.max(App.Spacing.dp(10), parent.width * 0.4))
+        // The fill is the track's own shape revealed by a clip that grows
+        // from the start: exactly proportional (no minimum blob at small
+        // values) and always inside the track.
+        Item {
+            id: fillClip
+            objectName: "barFill"
+            clip: true
+            visible: root._animNorm > 0
+            x: 0
+            width: root._horizontal ? track.width * root._animNorm : track.width
+            height: root._horizontal ? track.height : track.height * root._animNorm
+            y: track.height - height
 
             Rectangle {
-                id: fill
-                // Hide entirely when value is at (or near) min — otherwise
-                // the radius*2 floor that keeps the pill cap intact at mid
-                // values would render as a big blob at 0.
-                visible: root._animNorm > 0.01
+                y: fillClip.height - track.height
+                width: track.width
+                height: track.height
+                radius: track.radius
                 color: root._activeFill
-                radius: parent.radius
                 Behavior on color { ColorAnimation { duration: 200 } }
-
-                // Horizontal: grow rightward. Floor at diameter=cap*2 keeps
-                // the fill readable (rounded pill) once it's visible.
-                width: root._horizontal
-                       ? Math.max(track.radius * 2, parent.width * root._animNorm)
-                       : parent.width
-                // Vertical: grow upward (anchored to bottom)
-                height: root._horizontal
-                        ? parent.height
-                        : Math.max(track.radius * 2, parent.height * root._animNorm)
-
-                anchors.left: root._horizontal ? parent.left : undefined
-                anchors.bottom: root._horizontal ? undefined : parent.bottom
-                anchors.horizontalCenter: root._horizontal ? undefined : parent.horizontalCenter
-                anchors.verticalCenter: root._horizontal ? parent.verticalCenter : undefined
             }
         }
     }

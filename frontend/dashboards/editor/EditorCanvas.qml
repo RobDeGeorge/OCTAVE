@@ -7,15 +7,18 @@
 //   - free grid cells show a [+] tap target        → emptyCellTapped(col, row)
 //   - tapping a placed widget selects it           → cellTapped(index)
 //   - dragging a placed widget moves it, snapping
-//     to the grid on release                       → cellMoveRequested(index, col, row)
+//     to the grid on release; widgets it lands on
+//     swap with it or move aside                   → cellMoveRequested(index, col, row)
 //   - dragging the selected widget's corner grip
 //     resizes it, snapping to the grid on release  → cellResizeRequested(index, colSpan, rowSpan)
 //   - tapping the background clears the selection  → backgroundTapped()
 //
-// The canvas never mutates `cells` itself — DashboardEditor owns the working
-// spec and always reassigns the whole array, which rebuilds the delegates here
-// (and snaps a rejected drag back to its origin for free, since the dragged
-// delegate's broken x/y bindings die with it).
+// The canvas never mutates the spec itself; DashboardEditor owns it. The
+// widgets come from `model`, a ListModel the editor keeps in step with its
+// `cells` one row at a time, so a move or resize only repositions a widget
+// and a data or option change reloads only that widget (rebuilding them all
+// reset every trace and replayed every needle on each edit). `cells` is the
+// same list as a plain array, for the occupancy map and placement checks.
 //
 // Grid geometry mirrors DashboardRenderer's defaults (20dp margin, 16dp
 // spacing) so the layout you edit is the layout that renders.
@@ -33,6 +36,7 @@ Item {
     property int gridColumns: 12
     property int gridRows: 6
     property var cells: []
+    property var model: null
     property int selectedIndex: -1
 
     signal emptyCellTapped(int col, int row)
@@ -68,6 +72,23 @@ Item {
         if (typeof dashboardManager === "undefined" || !dashboardManager) return false
         return dashboardManager.canPlace(cells, gridColumns, gridRows, col, row, colSpan, rowSpan, exceptIndex)
     }
+
+    // Whether cell `index` can go to this rectangle, the widgets it lands on
+    // swapping or moving aside (DashboardGrid::arrange, as the drop does).
+    // Asked on every pointer move, so the last answer is kept.
+    property string _arrangeKey: ""
+    property bool _arrangeOk: false
+    function canArrange(index, col, row, colSpan, rowSpan) {
+        if (typeof dashboardManager === "undefined" || !dashboardManager) return false
+        var key = [index, col, row, colSpan, rowSpan, gridColumns, gridRows].join(",")
+        if (key !== _arrangeKey) {
+            _arrangeKey = key
+            _arrangeOk = dashboardManager.arrange(cells, gridColumns, gridRows, index,
+                                                  col, row, colSpan, rowSpan).ok
+        }
+        return _arrangeOk
+    }
+    onCellsChanged: _arrangeKey = ""
 
     // Occupancy map: index (row * gridColumns + col) → true when covered by a
     // placed cell. Drives the [+] targets. Recomputed whenever `cells` is
@@ -166,22 +187,27 @@ Item {
 
     // ── Placed widgets ──────────────────────────────────────────────────
     Repeater {
-        model: canvas.cells
+        model: canvas.model
         delegate: Item {
             id: cellRoot
             objectName: "editorCell_" + index
 
             readonly property int cellIndex: index
-            readonly property int _c:  modelData.col     !== undefined ? modelData.col     : 0
-            readonly property int _r:  modelData.row     !== undefined ? modelData.row     : 0
-            readonly property int _cs: modelData.colSpan !== undefined ? modelData.colSpan : 1
-            readonly property int _rs: modelData.rowSpan !== undefined ? modelData.rowSpan : 1
+            readonly property int _c:  model.cellCol
+            readonly property int _r:  model.cellRow
+            readonly property int _cs: model.cellColSpan
+            readonly property int _rs: model.cellRowSpan
             readonly property bool selected: canvas.selectedIndex === cellIndex
 
+            // Bound until a drag takes over x / y; _rebind() restores them
             x: canvas._cellX(_c)
             y: canvas._cellY(_r)
             width: canvas._spanW(_cs)
             height: canvas._spanH(_rs)
+            function _rebind() {
+                x = Qt.binding(function() { return canvas._cellX(cellRoot._c) })
+                y = Qt.binding(function() { return canvas._cellY(cellRoot._r) })
+            }
             // Selected sits above neighbours so its resize grip (which pokes
             // past the cell corner) stays grabbable.
             z: dragArea.drag.active ? 10 : (selected ? 5 : 1)
@@ -194,40 +220,47 @@ Item {
                 row = Math.max(0, Math.min(canvas.gridRows - _rs, row))
                 canvas.dragCol = col
                 canvas.dragRow = row
-                canvas.dragValid = canvas.canPlace(col, row, _cs, _rs, cellIndex)
+                canvas.dragValid = canvas.canArrange(cellIndex, col, row, _cs, _rs)
             }
 
-            // Live widget preview — same load/bind logic as DashboardRenderer.
-            // Synchronous so prop tweaks from the panel (which rebuild the
-            // whole Repeater) don't flicker. Clipped so widget content can
-            // never paint outside its cell (mirrors the renderer backstop).
+            // Live widget preview, loaded and bound as DashboardRenderer does.
+            // Synchronous so a reload doesn't flicker; clipped so content
+            // never paints outside its cell (mirrors the renderer backstop).
+            // Reloaded only when this cell's type, PID or props change.
+            readonly property string _content: model.type + "\n" + model.paramId + "\n" + model.propsJson
+            on_ContentChanged: {
+                widgetLoader.source = ""
+                widgetLoader.source = App.WidgetCatalog.urlFor(model.type)
+            }
+
             Loader {
                 id: widgetLoader
+                objectName: "editorWidgetLoader"
                 anchors.fill: parent
                 clip: true
-                source: App.WidgetCatalog.urlFor(modelData.type)
+                source: App.WidgetCatalog.urlFor(model.type)
 
                 onLoaded: {
                     if (!item) return
                     item.width  = Qt.binding(function() { return widgetLoader.width  })
                     item.height = Qt.binding(function() { return widgetLoader.height })
+                    var paramId = model.paramId
                     // An unknown PID (a newer build's) stays in the spec
                     // but unbound, as in the renderer
-                    if (modelData.paramId !== undefined && modelData.paramId !== ""
-                            && item.paramId !== undefined
-                            && App.OBDParameterModel.hasParameter(modelData.paramId))
-                        item.paramId = modelData.paramId
+                    if (paramId !== "" && item.paramId !== undefined
+                            && App.OBDParameterModel.hasParameter(paramId))
+                        item.paramId = paramId
                     // Range props (min, max, thresholds) are in the PID's own
                     // unit in the spec: bound through the gauges' unit, so
                     // they follow a unit setting change too
-                    var props = modelData.props || {}
-                    var unitKeys = modelData.paramId ? App.WidgetCatalog.paramUnitProps(modelData.type) : []
+                    var props = JSON.parse(model.propsJson || "{}")
+                    var unitKeys = paramId ? App.WidgetCatalog.paramUnitProps(model.type) : []
                     for (var key in props) {
                         if (!props.hasOwnProperty(key)) continue
                         if (item[key] === undefined) continue
                         var v = canvas._coerce(props[key])
                         if (unitKeys.indexOf(key) !== -1)
-                            item[key] = canvas._unitBinding(modelData.paramId, v)
+                            item[key] = canvas._unitBinding(paramId, v)
                         else
                             item[key] = v
                     }
@@ -241,8 +274,8 @@ Item {
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: canvas.dp(4)
                 visible: {
-                    if (modelData.paramId && modelData.paramId !== "") return false
-                    var m = App.WidgetCatalog.metaFor(modelData.type)
+                    if (model.paramId !== "") return false
+                    var m = App.WidgetCatalog.metaFor(model.type)
                     return m !== null && m.supportedKinds.length > 0
                 }
                 text: "no PID"
@@ -289,12 +322,18 @@ Item {
                 onReleased: {
                     if (canvas.dragActive) {
                         canvas.dragActive = false
+                        // Back on the grid: at the new cell if the drop is
+                        // taken, else where it was
+                        cellRoot._rebind()
                         canvas.cellMoveRequested(cellRoot.cellIndex,
                                                  canvas.dragCol, canvas.dragRow)
                     }
                 }
 
-                onCanceled: canvas.dragActive = false
+                onCanceled: {
+                    canvas.dragActive = false
+                    cellRoot._rebind()
+                }
             }
 
             // ── Resize grip (selected widget only) ──────────────────────
@@ -347,7 +386,7 @@ Item {
                         canvas.dragRow = cellRoot._r
                         canvas.dragColSpan = cs
                         canvas.dragRowSpan = rs
-                        canvas.dragValid = canvas.canPlace(cellRoot._c, cellRoot._r, cs, rs, cellRoot.cellIndex)
+                        canvas.dragValid = canvas.canArrange(cellRoot.cellIndex, cellRoot._c, cellRoot._r, cs, rs)
                     }
 
                     onPressed: function(mouse) {

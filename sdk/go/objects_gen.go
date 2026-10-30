@@ -784,6 +784,30 @@ func (o DashboardManager) FitAt(cells []any, gridColumns int, gridRows int, col 
 	return
 }
 
+// Arrange calls arrange(QVariantList, int, int, int, int, int, int, int) -> QVariantMap.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) Arrange(cells []any, gridColumns int, gridRows int, index int, col int, row int, colSpan int, rowSpan int) (v map[string]any, err error) {
+	err = o.c.Call("dashboardManager", "arrange", &v, cells, gridColumns, gridRows, index, col, row, colSpan, rowSpan)
+	return
+}
+
+// MinSpan calls minSpan(QString, int, int, double, double, double) -> QVariantMap.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) MinSpan(type_ string, gridColumns int, gridRows int, cellWidth float64, cellHeight float64, spacing float64) (v map[string]any, err error) {
+	err = o.c.Call("dashboardManager", "minSpan", &v, type_, gridColumns, gridRows, cellWidth, cellHeight, spacing)
+	return
+}
+
+// SizeOptions calls sizeOptions(QString, int, int, double, double, double) -> QVariantList.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) SizeOptions(type_ string, gridColumns int, gridRows int, cellWidth float64, cellHeight float64, spacing float64) (v []any, err error) {
+	err = o.c.Call("dashboardManager", "sizeOptions", &v, type_, gridColumns, gridRows, cellWidth, cellHeight, spacing)
+	return
+}
+
 // DiagnosticsManager is the service object "diagnosticsManager" (C++ DiagnosticsManager); NewDiagnosticsManager(c) binds it to a client.
 type DiagnosticsManager struct{ c *Client }
 

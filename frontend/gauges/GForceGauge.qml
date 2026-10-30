@@ -24,10 +24,10 @@ Item {
     readonly property var octaveSupportedKinds: []   // self-binding, no PID
 
     // ── Data binding ────────────────────────────────────────────────
-    readonly property real lateralG:
-        App.OBDParameterModel.liveValue("LATERAL_G") || 0
-    readonly property real longitudinalG:
-        App.OBDParameterModel.liveValue("LONGITUDINAL_G") || 0
+    // NaN until the IMU reports: no dot, no trail, "--" (not a centred 0 g)
+    readonly property real lateralG: App.OBDParameterModel.sample("LATERAL_G")
+    readonly property real longitudinalG: App.OBDParameterModel.sample("LONGITUDINAL_G")
+    readonly property bool hasValue: isFinite(lateralG) && isFinite(longitudinalG)
 
     // ── Features ────────────────────────────────────────────────────
     property real maxG: 1.5         // g at the outer ring
@@ -41,9 +41,9 @@ Item {
     property color valueColor: App.Style.obdValueColor
 
     // ── Computed ────────────────────────────────────────────────────
-    property real _animLat: lateralG
+    property real _animLat: hasValue ? lateralG : 0
     Behavior on _animLat { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
-    property real _animLon: longitudinalG
+    property real _animLon: hasValue ? longitudinalG : 0
     Behavior on _animLon { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
 
     readonly property real _r: Math.min(width, height) / 2 - App.Spacing.dp(6)
@@ -52,9 +52,15 @@ Item {
     readonly property real _totalG: Math.sqrt(lateralG * lateralG
                                               + longitudinalG * longitudinalG)
 
-    function _clampNorm(g) {
-        return Math.max(-1, Math.min(1, maxG > 0 ? g / maxG : 0))
+    // (lat, lon) in ring units, clamped to the outer ring along the vector
+    // (clamping each axis alone let a diagonal sit outside the circle)
+    function _ringPos(lat, lon) {
+        if (!(maxG > 0)) return Qt.point(0, 0)
+        var x = lat / maxG, y = lon / maxG
+        var len = Math.sqrt(x * x + y * y)
+        return len > 1 ? Qt.point(x / len, y / len) : Qt.point(x, y)
     }
+    readonly property point _dotPos: _ringPos(_animLat, _animLon)
 
     // ── Rings + crosshair ───────────────────────────────────────────
     Repeater {
@@ -101,8 +107,9 @@ Item {
         repeat: true
         running: root.visible && root.showTrail
         onTriggered: {
-            trailModel.append({ "tx": root._clampNorm(root.lateralG),
-                                "ty": root._clampNorm(root.longitudinalG) })
+            if (!root.hasValue) return
+            var p = root._ringPos(root.lateralG, root.longitudinalG)
+            trailModel.append({ "tx": p.x, "ty": p.y })
             while (trailModel.count > 20) trailModel.remove(0)
         }
     }
@@ -124,8 +131,9 @@ Item {
     // ── The dot ─────────────────────────────────────────────────────
     Rectangle {
         readonly property real _d: Math.max(App.Spacing.dp(6), root._r * 0.16)
-        x: root._cx + root._clampNorm(root._animLat) * root._r - _d / 2
-        y: root._cy + root._clampNorm(root._animLon) * root._r - _d / 2
+        visible: root.hasValue
+        x: root._cx + root._dotPos.x * root._r - _d / 2
+        y: root._cy + root._dotPos.y * root._r - _d / 2
         width: _d; height: _d; radius: _d / 2
         color: root.dotColor
         border.color: Qt.lighter(root.dotColor, 1.4)
@@ -137,7 +145,7 @@ Item {
         visible: root.showValue
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        text: root._totalG.toFixed(2) + " g"
+        text: root.hasValue ? root._totalG.toFixed(2) + " g" : "-- g"
         color: root.valueColor
         font.bold: true
         font.family: App.Style.fontFamily

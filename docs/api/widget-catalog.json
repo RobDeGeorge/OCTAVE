@@ -12,6 +12,7 @@
     "schema": 1,
     "widgets": [
         {
+            "aspect": 1,
             "colorProps": [
                 "fillColor",
                 "needleColor"
@@ -88,6 +89,10 @@
             ],
             "glyph": "◯",
             "labelProps": true,
+            "minSize": {
+                "h": 110,
+                "w": 110
+            },
             "rangeProps": true,
             "supportedKinds": [
                 "*"
@@ -95,6 +100,7 @@
             "type": "CircularGauge"
         },
         {
+            "aspect": 1.5,
             "colorProps": [
                 "fillColor",
                 "needleColor"
@@ -155,6 +161,10 @@
             ],
             "glyph": "◠",
             "labelProps": true,
+            "minSize": {
+                "h": 90,
+                "w": 130
+            },
             "rangeProps": true,
             "supportedKinds": [
                 "*"
@@ -162,6 +172,7 @@
             "type": "ArcGauge"
         },
         {
+            "aspect": 3,
             "colorProps": [
                 "fillColor"
             ],
@@ -205,10 +216,22 @@
                     "label": "Decimals",
                     "max": 4,
                     "min": 0
+                },
+                {
+                    "def": 0,
+                    "key": "maxThickness",
+                    "kind": "real",
+                    "label": "Max thickness (dp, 0 = fill)",
+                    "max": 200,
+                    "min": 0
                 }
             ],
             "glyph": "▮",
             "labelProps": true,
+            "minSize": {
+                "h": 48,
+                "w": 120
+            },
             "rangeProps": true,
             "supportedKinds": [
                 "percentage",
@@ -220,6 +243,7 @@
             "type": "BarGauge"
         },
         {
+            "aspect": 3,
             "colorProps": [
                 "fillColor"
             ],
@@ -265,6 +289,10 @@
             ],
             "glyph": "▮",
             "labelProps": true,
+            "minSize": {
+                "h": 48,
+                "w": 130
+            },
             "rangeProps": true,
             "supportedKinds": [
                 "*"
@@ -272,6 +300,7 @@
             "type": "SegmentedGauge"
         },
         {
+            "aspect": 2.5,
             "colorProps": [
                 "fillColor"
             ],
@@ -312,6 +341,10 @@
             ],
             "glyph": "↔",
             "labelProps": true,
+            "minSize": {
+                "h": 60,
+                "w": 130
+            },
             "rangeProps": true,
             "supportedKinds": [
                 "bidirectional"
@@ -319,6 +352,7 @@
             "type": "LinearGauge"
         },
         {
+            "aspect": 1.6,
             "colorProps": [
                 "valueColor"
             ],
@@ -365,6 +399,10 @@
             ],
             "glyph": "88",
             "labelProps": true,
+            "minSize": {
+                "h": 60,
+                "w": 90
+            },
             "rangeProps": false,
             "supportedKinds": [
                 "*"
@@ -372,6 +410,7 @@
             "type": "DigitalReadout"
         },
         {
+            "aspect": 2.5,
             "colorProps": [
                 "lineColor"
             ],
@@ -424,6 +463,10 @@
             ],
             "glyph": "∿",
             "labelProps": true,
+            "minSize": {
+                "h": 72,
+                "w": 150
+            },
             "rangeProps": true,
             "supportedKinds": [
                 "*"
@@ -431,6 +474,7 @@
             "type": "SparklineGauge"
         },
         {
+            "aspect": 1,
             "colorProps": [
                 "activeColor"
             ],
@@ -463,10 +507,22 @@
                     "key": "pulse",
                     "kind": "bool",
                     "label": "Pulse"
+                },
+                {
+                    "def": 0,
+                    "key": "maxSize",
+                    "kind": "real",
+                    "label": "Max size (dp, 0 = fill)",
+                    "max": 400,
+                    "min": 0
                 }
             ],
             "glyph": "⚠",
             "labelProps": false,
+            "minSize": {
+                "h": 44,
+                "w": 44
+            },
             "rangeProps": false,
             "supportedKinds": [
                 "*"
@@ -474,6 +530,7 @@
             "type": "WarningLight"
         },
         {
+            "aspect": 1,
             "colorProps": [
                 "dotColor"
             ],
@@ -504,12 +561,17 @@
             ],
             "glyph": "◎",
             "labelProps": false,
+            "minSize": {
+                "h": 110,
+                "w": 110
+            },
             "rangeProps": false,
             "supportedKinds": [
             ],
             "type": "GForceGauge"
         },
         {
+            "aspect": 1,
             "colorProps": [
                 "northColor"
             ],
@@ -526,12 +588,17 @@
             ],
             "glyph": "N",
             "labelProps": false,
+            "minSize": {
+                "h": 110,
+                "w": 110
+            },
             "rangeProps": false,
             "supportedKinds": [
             ],
             "type": "CompassGauge"
         },
         {
+            "aspect": 3.5,
             "colorProps": [
                 "progressColor"
             ],
@@ -560,12 +627,17 @@
             ],
             "glyph": "♪",
             "labelProps": false,
+            "minSize": {
+                "h": 72,
+                "w": 220
+            },
             "rangeProps": false,
             "supportedKinds": [
             ],
             "type": "NowPlayingWidget"
         },
         {
+            "aspect": 3,
             "colorProps": [
                 "accentColor"
             ],
@@ -576,12 +648,17 @@
             ],
             "glyph": "▶",
             "labelProps": false,
+            "minSize": {
+                "h": 52,
+                "w": 150
+            },
             "rangeProps": false,
             "supportedKinds": [
             ],
             "type": "MediaControlsWidget"
         },
         {
+            "aspect": 2,
             "colorProps": [
                 "valueColor"
             ],
@@ -604,6 +681,10 @@
             ],
             "glyph": "12",
             "labelProps": false,
+            "minSize": {
+                "h": 52,
+                "w": 100
+            },
             "rangeProps": false,
             "supportedKinds": [
             ],

@@ -8,6 +8,11 @@
       "glyph": "◯",
       "defaultColSpan": 4,
       "defaultRowSpan": 4,
+      "minSize": {
+        "w": 110,
+        "h": 110
+      },
+      "aspect": 1.0,
       "supportedKinds": [
         "*"
       ],
@@ -91,6 +96,11 @@
       "glyph": "◠",
       "defaultColSpan": 6,
       "defaultRowSpan": 3,
+      "minSize": {
+        "w": 130,
+        "h": 90
+      },
+      "aspect": 1.5,
       "supportedKinds": [
         "*"
       ],
@@ -158,6 +168,11 @@
       "glyph": "▮",
       "defaultColSpan": 3,
       "defaultRowSpan": 2,
+      "minSize": {
+        "w": 120,
+        "h": 48
+      },
+      "aspect": 3.0,
       "supportedKinds": [
         "percentage",
         "temperature",
@@ -207,6 +222,14 @@
           "def": 0,
           "min": 0,
           "max": 4
+        },
+        {
+          "key": "maxThickness",
+          "label": "Max thickness (dp, 0 = fill)",
+          "kind": "real",
+          "def": 0,
+          "min": 0,
+          "max": 200
         }
       ]
     },
@@ -216,6 +239,11 @@
       "glyph": "▮",
       "defaultColSpan": 6,
       "defaultRowSpan": 2,
+      "minSize": {
+        "w": 130,
+        "h": 48
+      },
+      "aspect": 3.0,
       "supportedKinds": [
         "*"
       ],
@@ -268,6 +296,11 @@
       "glyph": "↔",
       "defaultColSpan": 4,
       "defaultRowSpan": 2,
+      "minSize": {
+        "w": 130,
+        "h": 60
+      },
+      "aspect": 2.5,
       "supportedKinds": [
         "bidirectional"
       ],
@@ -315,6 +348,11 @@
       "glyph": "88",
       "defaultColSpan": 4,
       "defaultRowSpan": 2,
+      "minSize": {
+        "w": 90,
+        "h": 60
+      },
+      "aspect": 1.6,
       "supportedKinds": [
         "*"
       ],
@@ -368,6 +406,11 @@
       "glyph": "∿",
       "defaultColSpan": 6,
       "defaultRowSpan": 2,
+      "minSize": {
+        "w": 150,
+        "h": 72
+      },
+      "aspect": 2.5,
       "supportedKinds": [
         "*"
       ],
@@ -427,6 +470,11 @@
       "glyph": "⚠",
       "defaultColSpan": 2,
       "defaultRowSpan": 2,
+      "minSize": {
+        "w": 44,
+        "h": 44
+      },
+      "aspect": 1.0,
       "supportedKinds": [
         "*"
       ],
@@ -461,6 +509,14 @@
           "label": "Pulse",
           "kind": "bool",
           "def": false
+        },
+        {
+          "key": "maxSize",
+          "label": "Max size (dp, 0 = fill)",
+          "kind": "real",
+          "def": 0,
+          "min": 0,
+          "max": 400
         }
       ]
     },
@@ -470,6 +526,11 @@
       "glyph": "◎",
       "defaultColSpan": 4,
       "defaultRowSpan": 4,
+      "minSize": {
+        "w": 110,
+        "h": 110
+      },
+      "aspect": 1.0,
       "supportedKinds": [],
       "labelProps": false,
       "rangeProps": false,
@@ -505,6 +566,11 @@
       "glyph": "N",
       "defaultColSpan": 4,
       "defaultRowSpan": 4,
+      "minSize": {
+        "w": 110,
+        "h": 110
+      },
+      "aspect": 1.0,
       "supportedKinds": [],
       "labelProps": false,
       "rangeProps": false,
@@ -526,6 +592,11 @@
       "glyph": "♪",
       "defaultColSpan": 6,
       "defaultRowSpan": 2,
+      "minSize": {
+        "w": 220,
+        "h": 72
+      },
+      "aspect": 3.5,
       "supportedKinds": [],
       "labelProps": false,
       "rangeProps": false,
@@ -559,6 +630,11 @@
       "glyph": "▶",
       "defaultColSpan": 4,
       "defaultRowSpan": 2,
+      "minSize": {
+        "w": 150,
+        "h": 52
+      },
+      "aspect": 3.0,
       "supportedKinds": [],
       "labelProps": false,
       "rangeProps": false,
@@ -573,6 +649,11 @@
       "glyph": "12",
       "defaultColSpan": 4,
       "defaultRowSpan": 2,
+      "minSize": {
+        "w": 100,
+        "h": 52
+      },
+      "aspect": 2.0,
       "supportedKinds": [],
       "labelProps": false,
       "rangeProps": false,

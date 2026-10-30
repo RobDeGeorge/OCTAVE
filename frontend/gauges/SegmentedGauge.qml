@@ -17,10 +17,7 @@ Item {
     property string unit: _pInfo ? _pInfo.unit : ""
     property real min: _pInfo ? _pInfo.min : 0
     property real max: _pInfo ? _pInfo.max : 100
-    property real value: {
-        var v = App.OBDParameterModel.liveValue(paramId)
-        return typeof v === "number" && isFinite(v) ? v : NaN
-    }
+    property real value: App.OBDParameterModel.sample(paramId)
     property int decimals: 0
     property int segmentCount: 20
     property real warnAbove: NaN

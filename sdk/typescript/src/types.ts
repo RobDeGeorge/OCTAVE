@@ -366,6 +366,12 @@ export interface DashboardManager {
     normalizedSpec: { args: [spec: Record<string, unknown>]; returns: Record<string, unknown> }
     canPlace: { args: [cells: unknown[], gridColumns: number, gridRows: number, col: number, row: number, colSpan: number, rowSpan: number, exceptIndex: number]; returns: boolean }
     fitAt: { args: [cells: unknown[], gridColumns: number, gridRows: number, col: number, row: number, colSpan: number, rowSpan: number]; returns: Record<string, unknown> }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    arrange: { args: [cells: unknown[], gridColumns: number, gridRows: number, index: number, col: number, row: number, colSpan: number, rowSpan: number]; returns: Record<string, unknown> }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    minSpan: { args: [type: string, gridColumns: number, gridRows: number, cellWidth: number, cellHeight: number, spacing: number]; returns: Record<string, unknown> }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    sizeOptions: { args: [type: string, gridColumns: number, gridRows: number, cellWidth: number, cellHeight: number, spacing: number]; returns: unknown[] }
   }
   signals: {
     dashboardsChanged: []

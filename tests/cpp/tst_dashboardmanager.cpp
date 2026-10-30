@@ -14,6 +14,7 @@
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QRegularExpression>
+#include <QRandomGenerator>
 #include <QTest>
 
 #include <memory>
@@ -222,9 +223,12 @@ private slots:
         for (const QVariant &w : catalog.value("widgets").toList()) {
             const QVariantMap m = w.toMap();
             types << m.value("type").toString();
-            for (const char *key : {"displayName", "glyph", "defaultColSpan", "defaultRowSpan", "supportedKinds",
-                                    "labelProps", "rangeProps", "colorProps", "editableProps"})
+            for (const char *key : {"displayName", "glyph", "defaultColSpan", "defaultRowSpan", "minSize", "aspect",
+                                    "supportedKinds", "labelProps", "rangeProps", "colorProps", "editableProps"})
                 QVERIFY2(m.contains(key), qPrintable(m.value("type").toString() + ": " + key));
+            QVERIFY(m.value("minSize").toMap().value("w").toDouble() > 0);
+            QVERIFY(m.value("minSize").toMap().value("h").toDouble() > 0);
+            QVERIFY(m.value("aspect").toDouble() > 0);
             QVERIFY(!m.contains("url"));   // QML's business
         }
         QCOMPARE(types.first(), QStringLiteral("CircularGauge"));   // palette order
@@ -446,6 +450,172 @@ private slots:
         // Off the grid edge: cut to it
         QCOMPARE(m_dm->fitAt({}, 4, 4, 3, 3, 6, 6),
                  (QVariantMap{{"col", 3}, {"row", 3}, {"colSpan", 1}, {"rowSpan", 1}}));
+    }
+
+    // ── arrange: move / resize with swap and push ──
+
+    static QVariantMap cell(int col, int row, int cs, int rs, const char *tag)
+    {
+        return {{"col", col}, {"row", row}, {"colSpan", cs}, {"rowSpan", rs}, {"tag", tag}};
+    }
+    static QString at(const QVariantMap &c)
+    {
+        return QStringLiteral("%1,%2 %3x%4").arg(c.value("col").toInt()).arg(c.value("row").toInt())
+            .arg(c.value("colSpan").toInt()).arg(c.value("rowSpan").toInt());
+    }
+
+    void arrangeMovesIntoFreeSpace()
+    {
+        const QVariantList cells{cell(0, 0, 2, 2, "a"), cell(2, 0, 2, 2, "b")};
+        const QVariantMap r = m_dm->arrange(cells, 6, 4, 0, 0, 2, 2, 2);
+        QVERIFY(r.value("ok").toBool());
+        QVERIFY(r.value("moved").toList().isEmpty());
+        QCOMPARE(at(r.value("cells").toList().at(0).toMap()), QStringLiteral("0,2 2x2"));
+        QCOMPARE(r.value("cells").toList().at(1).toMap(), cells.at(1).toMap());   // untouched
+        QCOMPARE(r.value("cells").toList().at(0).toMap().value("tag").toString(), QStringLiteral("a"));
+    }
+
+    void arrangeSwapsEqualNeighbours()
+    {
+        // a | b | c on a full row: dropping a onto b swaps them, c stays
+        const QVariantList cells{cell(0, 0, 2, 2, "a"), cell(2, 0, 2, 2, "b"), cell(4, 0, 2, 2, "c")};
+        const QVariantMap r = m_dm->arrange(cells, 6, 2, 0, 2, 0, 2, 2);
+        QVERIFY(r.value("ok").toBool());
+        QVERIFY(r.value("swapped").toBool());
+        const QVariantList out = r.value("cells").toList();
+        QCOMPARE(at(out.at(0).toMap()), QStringLiteral("2,0 2x2"));
+        QCOMPARE(at(out.at(1).toMap()), QStringLiteral("0,0 2x2"));
+        QCOMPARE(out.at(2).toMap(), cells.at(2).toMap());
+        QCOMPARE(r.value("moved").toList(), (QVariantList{1}));
+    }
+
+    void arrangeSwapsWhenTheOtherFitsTheGap()
+    {
+        // A 1x1 dropped on a 2x2 whose span fits where the 1x1 was: they swap
+        const QVariantList cells{cell(0, 0, 1, 1, "small"), cell(2, 0, 2, 2, "big")};
+        QVariantMap r = m_dm->arrange(cells, 6, 2, 0, 2, 0, 1, 1);
+        QVERIFY(r.value("ok").toBool());
+        QVERIFY(r.value("swapped").toBool());
+        QCOMPARE(at(r.value("cells").toList().at(0).toMap()), QStringLiteral("2,0 1x1"));
+        QCOMPARE(at(r.value("cells").toList().at(1).toMap()), QStringLiteral("0,0 2x2"));
+
+        // ...and pushed instead when it doesn't (the 1x1 sat in the last
+        // column, too narrow for a 2x2): the big one goes to the nearest
+        // free 2x2
+        const QVariantList edge{cell(5, 0, 1, 1, "small"), cell(2, 0, 2, 2, "big")};
+        r = m_dm->arrange(edge, 6, 2, 0, 2, 0, 1, 1);
+        QVERIFY(r.value("ok").toBool());
+        QVERIFY(!r.value("swapped").toBool());
+        QCOMPARE(at(r.value("cells").toList().at(0).toMap()), QStringLiteral("2,0 1x1"));
+        QCOMPARE(at(r.value("cells").toList().at(1).toMap()), QStringLiteral("3,0 2x2"));
+    }
+
+    void arrangePushesOnlyCoveredCells()
+    {
+        // Growing a to 4 wide covers b; d (not covered) never moves even
+        // though moving it would make a tidier layout
+        const QVariantList cells{cell(0, 0, 2, 1, "a"), cell(2, 0, 2, 1, "b"), cell(0, 2, 2, 1, "d")};
+        const QVariantMap r = m_dm->arrange(cells, 4, 3, 0, 0, 0, 4, 1);
+        QVERIFY(r.value("ok").toBool());
+        const QVariantList out = r.value("cells").toList();
+        QCOMPARE(at(out.at(0).toMap()), QStringLiteral("0,0 4x1"));
+        QCOMPARE(at(out.at(1).toMap()), QStringLiteral("2,1 2x1"));   // straight down, nearest
+        QCOMPARE(out.at(2).toMap(), cells.at(2).toMap());
+        QCOMPARE(r.value("moved").toList(), (QVariantList{1}));
+    }
+
+    void arrangeRefusesWithAReason()
+    {
+        // A full 2x1 grid: making a 2 wide leaves nowhere for b
+        const QVariantList cells{cell(0, 0, 1, 1, "a"), cell(1, 0, 1, 1, "b")};
+        QVariantMap r = m_dm->arrange(cells, 2, 1, 0, 0, 0, 2, 1);
+        QVERIFY(!r.value("ok").toBool());
+        QVERIFY(r.value("reason").toString().contains("No room"));
+        QCOMPARE(r.value("cells").toList(), cells);   // unchanged
+        r = m_dm->arrange(cells, 2, 1, 0, 1, 0, 2, 1);
+        QVERIFY(!r.value("ok").toBool());
+        QVERIFY(r.value("reason").toString().contains("edge"));
+        QVERIFY(!m_dm->arrange(cells, 2, 1, 5, 0, 0, 1, 1).value("ok").toBool());
+    }
+
+    void arrangeNeverOverlaps_data()
+    {
+        QTest::addColumn<int>("seed");
+        for (int i = 0; i < 40; ++i)
+            QTest::newRow(qPrintable(QString::number(i))) << i;
+    }
+
+    void arrangeNeverOverlaps()
+    {
+        // Random layouts and random targets: a result is either refused or
+        // valid (inside the grid, no overlaps, every cell kept)
+        QFETCH(int, seed);
+        QRandomGenerator rng(seed);
+        const int cols = 4 + rng.bounded(9), rows = 3 + rng.bounded(6);
+        QVariantList cells;
+        for (int tries = 0; tries < 60; ++tries) {
+            const int cs = 1 + rng.bounded(3), rs = 1 + rng.bounded(3);
+            const int c = rng.bounded(cols), r = rng.bounded(rows);
+            if (m_dm->canPlace(cells, cols, rows, c, r, cs, rs, -1))
+                cells.append(cell(c, r, cs, rs, "x"));
+        }
+        if (cells.isEmpty())
+            return;
+        for (int step = 0; step < 30; ++step) {
+            const int i = rng.bounded(cells.size());
+            const int cs = 1 + rng.bounded(4), rs = 1 + rng.bounded(4);
+            const QVariantMap r = m_dm->arrange(cells, cols, rows, i, rng.bounded(cols), rng.bounded(rows), cs, rs);
+            if (!r.value("ok").toBool())
+                continue;
+            const QVariantList out = r.value("cells").toList();
+            QCOMPARE(out.size(), cells.size());
+            for (int a = 0; a < out.size(); ++a)
+                QVERIFY2(m_dm->canPlace(out, cols, rows, out.at(a).toMap().value("col").toInt(),
+                                        out.at(a).toMap().value("row").toInt(),
+                                        out.at(a).toMap().value("colSpan").toInt(),
+                                        out.at(a).toMap().value("rowSpan").toInt(), a),
+                         qPrintable(at(out.at(a).toMap())));
+            cells = out;
+        }
+    }
+
+    // ── sizes ──
+
+    void minSpanReachesTheReadableSize()
+    {
+        // CircularGauge minSize 110x110 dp; 40 dp cells with 16 dp gutters:
+        // 2 cells = 96, 3 cells = 152
+        QCOMPARE(m_dm->minSpan("CircularGauge", 12, 8, 40, 40, 16),
+                 (QVariantMap{{"colSpan", 3}, {"rowSpan", 3}}));
+        // Held to the grid on a tiny one
+        QCOMPARE(m_dm->minSpan("CircularGauge", 2, 2, 20, 20, 0),
+                 (QVariantMap{{"colSpan", 2}, {"rowSpan", 2}}));
+        // Unknown type: any size
+        QCOMPARE(m_dm->minSpan("Nope", 12, 8, 40, 40, 16), (QVariantMap{{"colSpan", 1}, {"rowSpan", 1}}));
+    }
+
+    void sizeOptionsGrowAndKeepShape()
+    {
+        // 12x8 grid of 80x60 dp cells (a 1280x720-ish canvas)
+        const QVariantList dial = m_dm->sizeOptions("CircularGauge", 12, 8, 80, 60, 16);
+        QCOMPARE(dial.size(), 3);
+        int lastArea = 0;
+        for (const QVariant &v : dial) {
+            const QVariantMap o = v.toMap();
+            const int cs = o.value("colSpan").toInt(), rs = o.value("rowSpan").toInt();
+            QVERIFY(cs * rs > lastArea);
+            lastArea = cs * rs;
+            const double w = cs * 80 + (cs - 1) * 16, h = rs * 60 + (rs - 1) * 16;
+            QVERIFY2(w / h > 0.6 && w / h < 1.6, qPrintable(QString("%1x%2").arg(cs).arg(rs)));   // roughly round
+            QVERIFY(w >= 110 && h >= 110);
+        }
+        QCOMPARE(dial.first().toMap().value("label").toString(), QStringLiteral("S"));
+        // A bar is wide
+        const QVariantMap bar = m_dm->sizeOptions("BarGauge", 12, 8, 80, 60, 16).first().toMap();
+        QVERIFY(bar.value("colSpan").toInt() > bar.value("rowSpan").toInt());
+        // A tiny grid offers what fits, no repeats
+        const QVariantList tiny = m_dm->sizeOptions("CircularGauge", 2, 2, 60, 60, 8);
+        QVERIFY(!tiny.isEmpty() && tiny.size() <= 3);
     }
 
 private:

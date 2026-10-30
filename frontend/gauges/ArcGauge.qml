@@ -47,7 +47,10 @@ Item {
     property string unit: _pInfo ? _pInfo.unit : ""
     property real min: _pInfo ? _pInfo.min : 0
     property real max: _pInfo ? _pInfo.max : 100
-    property real value: paramId ? (App.OBDParameterModel.liveValue(paramId) || 0) : 0
+    // NaN = no reading yet: "--", no fill or needle, no redline colour
+    property real value: App.OBDParameterModel.sample(paramId)
+    readonly property bool hasValue: isFinite(value)
+    readonly property string _formatted: hasValue ? value.toFixed(Math.max(0, Math.min(4, decimals))) : "--"
 
     // ── Geometry (top-arc "n" shape by default) ─────────────────────
     // PathAngleArc: 0° = 3 o'clock, positive sweep = CW.
@@ -77,7 +80,7 @@ Item {
     // ── Computed ────────────────────────────────────────────────────
     readonly property real _normalized: {
         var r = max - min
-        if (r <= 0) return 0
+        if (!hasValue || !(r > 0)) return 0
         return Math.max(0, Math.min(1, (value - min) / r))
     }
 
@@ -143,7 +146,7 @@ Item {
         anchors.fill: parent
         visible: root._animNorm > 0.001
         ShapePath {
-            strokeColor: (!isNaN(root.redlineStart) && root.value >= root.redlineStart)
+            strokeColor: (root.hasValue && !isNaN(root.redlineStart) && root.value >= root.redlineStart)
                          ? root.redlineColor : root.fillColor
             strokeWidth: root._arcWidth
             fillColor: "transparent"
@@ -182,7 +185,7 @@ Item {
 
     // ── Needle ──────────────────────────────────────────────────────
     Rectangle {
-        visible: root.showNeedle
+        visible: root.showNeedle && root.hasValue
         width: App.Spacing.dp(3)
         height: root._arcR * 0.92
         radius: width / 2
@@ -207,11 +210,16 @@ Item {
 
     // ── Readout (below the arc, in the lower portion of the item) ──
     Column {
+        id: readout
         visible: root.showReadout
         anchors.horizontalCenter: parent.horizontalCenter
         y: root._cy + App.Spacing.dp(6)
         spacing: App.Spacing.dp(2)
         width: root._outerR * 1.6
+        // Measured fit: shrink the whole block into the space under the arc
+        // (font sizes alone leave line spacing out and spill in short cells)
+        transformOrigin: Item.Top
+        scale: Math.max(0.01, Math.min(1, (root.height - y) / Math.max(1, implicitHeight)))
 
         // Font sizes capped by the arc radius so the readout scales with
         // the gauge instead of spilling out of a small editor cell.
@@ -227,13 +235,16 @@ Item {
             width: parent.width
         }
         Text {
-            text: root.value.toFixed(root.decimals)
+            text: root._formatted
             color: root.valueColor
             font.pixelSize: Math.max(1, Math.min(App.Spacing.overallText * 1.6,
                                                  root._outerR * 0.36))
             font.bold: true
             font.family: App.Style.fontFamily
-            anchors.horizontalCenter: parent.horizontalCenter
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            fontSizeMode: Text.HorizontalFit
+            minimumPixelSize: 1
         }
         Text {
             text: root.unit
@@ -241,7 +252,9 @@ Item {
             font.pixelSize: Math.max(1, Math.min(App.Spacing.overallText * 0.75,
                                                  root._outerR * 0.16))
             font.family: App.Style.fontFamily
-            anchors.horizontalCenter: parent.horizontalCenter
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            elide: Text.ElideRight
             visible: root.unit !== ""
         }
     }

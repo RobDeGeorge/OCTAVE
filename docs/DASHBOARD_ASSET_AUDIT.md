@@ -9,6 +9,17 @@ missing readings expose the largest problems.
 This pass audits the 11 original widgets and five presets, and adds two
 widgets: Segmented and Clock. The legacy defects listed below remain open.
 
+## Status, 2026-10-30
+
+Done in the dashboard editor's Phase 0 ([DASHBOARD_EDITOR_REVIEW.md](DASHBOARD_EDITOR_REVIEW.md) §6):
+
+- **1. Missing data:** done for every widget (`OBDParameterModel.sample()`, `hasValue`, `--`, no fill or threshold; sparkline gaps; G-force and compass).
+- **2. BarGauge geometry:** done (explicit geometry per orientation, clipped proportional fill; `barGeometry` test at 0/1/8/50/100 % both ways).
+- **3. Readable layouts:** text fit done for every widget (`smallCellBounds` at five sizes); minimum spans are now catalog data (`minSize`), enforced by the editor in Phase 1. Portrait layouts for the presets: still open (review Phase 3).
+- **5. Editor and theme behaviour:** `maxThickness` / `maxSize` are in the catalog; sparkline repaints on colour / range / option changes; WarningLight picks a dark label on light lamps and fits the label in the disc.
+
+Still open: 4 (needle crossing the circular readout, scale labels) and the MediaControlsWidget font / minimum size.
+
 ## What was checked
 
 - The actual C++ app with a separate `--sim --profile` session: all five

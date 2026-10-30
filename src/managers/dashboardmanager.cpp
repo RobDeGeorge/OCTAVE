@@ -827,3 +827,65 @@ QVariantMap DashboardManager::fitAt(const QVariantList &cells, int gridColumns, 
     return {{QStringLiteral("col"), r.col}, {QStringLiteral("row"), r.row},
             {QStringLiteral("colSpan"), r.colSpan}, {QStringLiteral("rowSpan"), r.rowSpan}};
 }
+
+QVariantMap DashboardManager::arrange(const QVariantList &cells, int gridColumns, int gridRows, int index,
+                                      int col, int row, int colSpan, int rowSpan) const
+{
+    const DashboardGrid::Arrangement a =
+        DashboardGrid::arrange(cells, gridColumns, gridRows, index, {col, row, colSpan, rowSpan});
+    QVariantList moved;
+    for (int i : a.moved)
+        moved.append(i);
+    return {{QStringLiteral("ok"), a.ok}, {QStringLiteral("cells"), a.cells}, {QStringLiteral("moved"), moved},
+            {QStringLiteral("swapped"), a.swapped}, {QStringLiteral("reason"), a.reason}};
+}
+
+namespace {
+// The catalog's minSize {w, h} (dp) and aspect (w / h) for a type; a type
+// without them (or unknown) reads as any size, square
+struct SizeHints
+{
+    double minW = 0;
+    double minH = 0;
+    double aspect = 1;
+};
+
+SizeHints sizeHints(const QVariantMap &catalog, const QString &type)
+{
+    for (const QVariant &w : catalog.value(QStringLiteral("widgets")).toList()) {
+        const QVariantMap m = w.toMap();
+        if (m.value(QStringLiteral("type")).toString() != type)
+            continue;
+        const QVariantMap min = m.value(QStringLiteral("minSize")).toMap();
+        SizeHints h;
+        h.minW = min.value(QStringLiteral("w")).toDouble();
+        h.minH = min.value(QStringLiteral("h")).toDouble();
+        h.aspect = m.value(QStringLiteral("aspect"), 1.0).toDouble();
+        if (!(h.aspect > 0))
+            h.aspect = 1;
+        return h;
+    }
+    return {};
+}
+} // namespace
+
+QVariantMap DashboardManager::minSpan(const QString &type, int gridColumns, int gridRows, double cellWidth,
+                                      double cellHeight, double spacing) const
+{
+    const SizeHints h = sizeHints(m_widgetCatalog, type);
+    const DashboardGrid::Rect r =
+        DashboardGrid::minSpan(gridColumns, gridRows, cellWidth, cellHeight, spacing, h.minW, h.minH);
+    return {{QStringLiteral("colSpan"), r.colSpan}, {QStringLiteral("rowSpan"), r.rowSpan}};
+}
+
+QVariantList DashboardManager::sizeOptions(const QString &type, int gridColumns, int gridRows, double cellWidth,
+                                           double cellHeight, double spacing) const
+{
+    const SizeHints h = sizeHints(m_widgetCatalog, type);
+    QVariantList out;
+    for (const DashboardGrid::SizeOption &o : DashboardGrid::sizeOptions(gridColumns, gridRows, cellWidth, cellHeight,
+                                                                        spacing, h.minW, h.minH, h.aspect))
+        out.append(QVariantMap{{QStringLiteral("label"), o.label}, {QStringLiteral("colSpan"), o.colSpan},
+                               {QStringLiteral("rowSpan"), o.rowSpan}});
+    return out;
+}

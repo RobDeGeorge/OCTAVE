@@ -15,6 +15,8 @@ Breaking:
 Settings: `downloadSubfolder`, `downloadFormat` and `downloadBitrate` are gone, and are dropped from an existing settings file at start-up.
 
 Added:
+- `dashboardManager.arrange` (experimental): moves or resizes a cell, the cells it lands on swapping with it or moving to the nearest free space; `{ok, cells, moved, swapped, reason}`.
+- `dashboardManager.minSpan` / `sizeOptions` (experimental): a widget type's smallest readable span and its S / M / L spans on a given grid. The widget catalog gains `minSize` (`{w, h}` dp) and `aspect` on every widget, and the `editableProps` `BarGauge.maxThickness` and `WarningLight.maxSize`.
 - `obdManager.simulated` / `simulatedChanged` / `simulatedAdapterRequested`: the built-in simulated car (`sim://elm327`) is an adapter in every build, picked in the adapter sheet or by `obdAdapterFinder.connectAdapter("sim://elm327")`; it is never saved as the OBD port.
 - `mediaManager.pick_browser_library`: in the browser demo, the browser's folder picker makes the folder picked the library for the visit (true); elsewhere it returns false.
 - The audio output picker: `settingsManager.audioOutputDevice` / `audioOutputDeviceChanged` / `save_audio_output_device` (a QAudioDevice id, empty = the system default), `mediaManager.audioOutputs` / `currentAudioOutput` / `audioOutputsChanged`, `phoneMirrorManager.setAudioOutputDevice`.

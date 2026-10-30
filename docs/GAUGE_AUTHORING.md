@@ -26,9 +26,15 @@ You do **not** wire signals yourself. `src/appcore.cpp` feeds every decoded valu
 `App.OBDParameterModel.liveValue(paramId)` gets live, animated updates for
 free: it reads `paramStore[paramId]` (or the dashboard editor's demo sweep),
 re-evaluates only when that id changes, and is `undefined` until the first
-reading (show "--", not 0) and at shutdown. `SegmentedGauge` handles this
-explicitly. The older primitives still coerce missing samples to zero; see
-[the dashboard asset audit](DASHBOARD_ASSET_AUDIT.md) for the repair list.
+reading and at shutdown.
+
+**No reading is not zero.** Gauges bind
+`value: App.OBDParameterModel.sample(paramId)`, which is `NaN` until there is a
+finite reading, and expose `readonly property bool hasValue: isFinite(value)`.
+Without a value: show `--`, draw no fill / needle / marker, and evaluate no
+threshold (a missing fuel level must not light a low-fuel warning). Zero is a
+valid reading. Every primitive in §3 follows this; a new one must too
+(`tst_dashboardwidgets` `missingIsNotZero`).
 
 Every PID-bound gauge primitive takes a `paramId` and handles the rest — title, unit,
 min, max, and current value all come from the model. You can override any
@@ -380,10 +386,11 @@ Per cell: `type` matches a widget registered in `WidgetCatalog` — the gauge pr
 chooser (square Dashboards button at the top-right of `OBDMenu.qml`), tap
 **+ New** — or **Edit** on a user dashboard, or **Copy** to fork a built-in.
 The editor is hybrid tap-and-drag: tap an empty grid cell to place a widget
-from the palette, drag a placed widget to move it (snaps to the grid, invalid
-drops bounce back), drag the selected widget's corner grip to resize it
-(snaps to the grid; a red preview means overlap / out of bounds and the size
-is refused), tap a widget to select it and edit it in the side panel. The
+from the palette, drag a placed widget to move it (snaps to the grid; a widget it lands on
+swaps places with it or moves to the nearest free space, and a drop with no
+room is refused with the reason), drag the selected widget's corner grip to
+resize it (the same rules), tap a widget to select it and edit it in the side
+panel. Undo / Redo (top bar, Ctrl+Z / Ctrl+Y) step through up to 50 edits. The
 panel runs, top to bottom: **PID** → **Position & Size** steppers →
 **Options** (the widget's `editableProps`) → **Label & Range** (title / unit /
 min / max overrides; empty = follow the PID; warns when min ≥ max) → **Color**
@@ -685,6 +692,11 @@ polled as PID 0x0E and counts as supported whenever timing advance does.
    missing there won't render or be placeable. Then regenerate
    `docs/api/` (`./build/octave --dump-api docs/api`). Each entry declares:
    - `type`, `displayName`, `glyph`, `defaultColSpan` / `defaultRowSpan`
+   - `minSize` — `{ "w", "h" }` in dp: the smallest size the widget stays
+     readable at (check it with `tst_dashboardwidgets` `smallCellBounds`);
+     `aspect` — its natural width / height. The editor's minimum span and
+     S / M / L size presets come from these (`dashboardManager.minSpan`,
+     `sizeOptions`).
    - `supportedKinds` — must mirror step 5 (`[]` = self-binding, no PID picker)
    - `labelProps` — `true` if the widget has `title` + `unit` string props
      that default to the PID's metadata (enables the Title / Unit overrides)

@@ -25,8 +25,12 @@ Item {
     readonly property var octaveSupportedKinds: []   // self-binding, no PID
 
     // ── Data binding ────────────────────────────────────────────────
-    readonly property real heading:
-        App.OBDParameterModel.liveValue("HEADING") || 0
+    // NaN until the magnetometer reports: the card stays put and the
+    // readout says "--" (an unknown heading is not north)
+    readonly property real heading: App.OBDParameterModel.sample("HEADING")
+    readonly property bool hasValue: isFinite(heading)
+    // Whole degrees 0-359 (359.6 rounds to 0, never "360°")
+    readonly property int _degrees: hasValue ? ((Math.round(heading) % 360) + 360) % 360 : 0
 
     // ── Features ────────────────────────────────────────────────────
     property bool showDegrees: true
@@ -39,7 +43,7 @@ Item {
     property color valueColor: App.Style.obdValueColor
 
     // ── Computed ────────────────────────────────────────────────────
-    property real _animHeading: heading
+    property real _animHeading: hasValue ? heading : 0
     Behavior on _animHeading {
         // Shortest path across the 359° → 0° wrap.
         RotationAnimation { duration: 150; direction: RotationAnimation.Shortest }
@@ -151,7 +155,7 @@ Item {
 
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: Math.round(((root.heading % 360) + 360) % 360) + "°"
+            text: root.hasValue ? root._degrees + "°" : "--°"
             color: root.valueColor
             font.bold: true
             font.family: App.Style.fontFamily
@@ -161,9 +165,9 @@ Item {
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: {
-                var h = ((root.heading % 360) + 360) % 360
+                if (!root.hasValue) return ""
                 var dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
-                return dirs[Math.round(h / 45) % 8]
+                return dirs[Math.round(root._degrees / 45) % 8]
             }
             color: root.labelColor
             font.family: App.Style.fontFamily

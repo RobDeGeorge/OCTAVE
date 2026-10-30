@@ -88,6 +88,15 @@ QtObject {
         return toDisplay(paramId, rawValue(paramId));
     }
 
+    // liveValue as a number gauges can bind a `real` to: NaN until there is
+    // a finite reading, so "no sample yet" never looks like a real 0 (gauges
+    // show "--", draw no fill and evaluate no threshold while !isFinite)
+    function sample(paramId) {
+        if (!paramId) return NaN;
+        var v = liveValue(paramId);
+        return (typeof v === "number" && isFinite(v)) ? v : NaN;
+    }
+
     // The same reading in the parameter's own unit (MPH, °C, m), for code
     // that needs the native value whatever the gauges show (the 3D Jeep's
     // wheel speed)

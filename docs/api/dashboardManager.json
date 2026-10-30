@@ -236,6 +236,113 @@
             ],
             "returns": "QVariantMap",
             "scope": "read"
+        },
+        {
+            "kind": "invokable",
+            "name": "arrange",
+            "params": [
+                {
+                    "name": "cells",
+                    "type": "QVariantList"
+                },
+                {
+                    "name": "gridColumns",
+                    "type": "int"
+                },
+                {
+                    "name": "gridRows",
+                    "type": "int"
+                },
+                {
+                    "name": "index",
+                    "type": "int"
+                },
+                {
+                    "name": "col",
+                    "type": "int"
+                },
+                {
+                    "name": "row",
+                    "type": "int"
+                },
+                {
+                    "name": "colSpan",
+                    "type": "int"
+                },
+                {
+                    "name": "rowSpan",
+                    "type": "int"
+                }
+            ],
+            "returns": "QVariantMap",
+            "scope": "read",
+            "stability": "experimental"
+        },
+        {
+            "kind": "invokable",
+            "name": "minSpan",
+            "params": [
+                {
+                    "name": "type",
+                    "type": "QString"
+                },
+                {
+                    "name": "gridColumns",
+                    "type": "int"
+                },
+                {
+                    "name": "gridRows",
+                    "type": "int"
+                },
+                {
+                    "name": "cellWidth",
+                    "type": "double"
+                },
+                {
+                    "name": "cellHeight",
+                    "type": "double"
+                },
+                {
+                    "name": "spacing",
+                    "type": "double"
+                }
+            ],
+            "returns": "QVariantMap",
+            "scope": "read",
+            "stability": "experimental"
+        },
+        {
+            "kind": "invokable",
+            "name": "sizeOptions",
+            "params": [
+                {
+                    "name": "type",
+                    "type": "QString"
+                },
+                {
+                    "name": "gridColumns",
+                    "type": "int"
+                },
+                {
+                    "name": "gridRows",
+                    "type": "int"
+                },
+                {
+                    "name": "cellWidth",
+                    "type": "double"
+                },
+                {
+                    "name": "cellHeight",
+                    "type": "double"
+                },
+                {
+                    "name": "spacing",
+                    "type": "double"
+                }
+            ],
+            "returns": "QVariantList",
+            "scope": "read",
+            "stability": "experimental"
         }
     ],
     "object": "dashboardManager",

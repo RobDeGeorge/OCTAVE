@@ -50,7 +50,10 @@ Item {
     property string unit: _pInfo ? _pInfo.unit : ""
     property real min: _pInfo ? _pInfo.min : 0
     property real max: _pInfo ? _pInfo.max : 100
-    property real value: paramId ? (App.OBDParameterModel.liveValue(paramId) || 0) : 0
+    // NaN = no reading yet: "--", no fill or needle, no redline colour
+    property real value: App.OBDParameterModel.sample(paramId)
+    readonly property bool hasValue: isFinite(value)
+    readonly property string _formatted: hasValue ? value.toFixed(Math.max(0, Math.min(4, decimals))) : "--"
 
     // ── Geometry ────────────────────────────────────────────────────
     property real startAngle: 135    // PathAngleArc degrees, 0=3 o'clock CW
@@ -78,7 +81,7 @@ Item {
     // ── Computed ────────────────────────────────────────────────────
     readonly property real _normalized: {
         var r = max - min
-        if (r <= 0) return 0
+        if (!hasValue || !(r > 0)) return 0
         return Math.max(0, Math.min(1, (value - min) / r))
     }
 
@@ -139,7 +142,7 @@ Item {
         visible: root._animNorm > 0.001
         ShapePath {
             // Turn red once we cross the redline value
-            strokeColor: (!isNaN(root.redlineStart) && root.value >= root.redlineStart)
+            strokeColor: (root.hasValue && !isNaN(root.redlineStart) && root.value >= root.redlineStart)
                          ? root.redlineColor : root.fillColor
             strokeWidth: root._arcWidth
             fillColor: "transparent"
@@ -178,7 +181,7 @@ Item {
 
     // ── Needle ──────────────────────────────────────────────────────
     Rectangle {
-        visible: root.showNeedle
+        visible: root.showNeedle && root.hasValue
         width: App.Spacing.dp(3)
         height: root._arcR * 0.92
         radius: width / 2
@@ -224,7 +227,11 @@ Item {
             width: root._arcR * 1.6
         }
         Text {
-            text: root.value.toFixed(root.decimals)
+            text: root._formatted
+            width: root._arcR * 1.6
+            horizontalAlignment: Text.AlignHCenter
+            fontSizeMode: Text.HorizontalFit
+            minimumPixelSize: 1
             color: root.valueColor
             font.pixelSize: root.showNeedle
                             ? Math.max(1, Math.min(App.Spacing.overallText * 1.3, root._arcR * 0.3))

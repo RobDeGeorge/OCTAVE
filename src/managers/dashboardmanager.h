@@ -36,7 +36,8 @@ class DashboardManager : public QObject
     Q_OBJECT
     // Service permissions (src/service/servicescopes.h)
     Q_CLASSINFO("octave.scope", "files")
-    Q_CLASSINFO("octave.scope.read", "canPlace fitAt isBuiltIn loadDashboard normalizedSpec refresh uniqueIdForLabel")
+    Q_CLASSINFO("octave.scope.read", "arrange canPlace fitAt isBuiltIn loadDashboard minSpan normalizedSpec refresh sizeOptions uniqueIdForLabel")
+    Q_CLASSINFO("octave.experimental", "arrange minSpan sizeOptions")
     Q_PROPERTY(QVariantList dashboards READ dashboards NOTIFY dashboardsChanged)
     // Human-readable reason the last export/import failed ("" after a
     // success) — the chooser shows it in its status line.
@@ -103,6 +104,21 @@ public:
                               int colSpan, int rowSpan, int exceptIndex) const;
     Q_INVOKABLE QVariantMap fitAt(const QVariantList &cells, int gridColumns, int gridRows, int col, int row,
                                   int colSpan, int rowSpan) const;
+
+    // Cell `index` moved / resized to (col, row, colSpan, rowSpan), the
+    // cells it lands on swapped or pushed aside (DashboardGrid::arrange):
+    // {ok, cells, moved: [indexes], swapped, reason}. Nothing is saved.
+    Q_INVOKABLE QVariantMap arrange(const QVariantList &cells, int gridColumns, int gridRows, int index,
+                                    int col, int row, int colSpan, int rowSpan) const;
+
+    // Sizes for a widget type on a grid whose cells are cellWidth x
+    // cellHeight dp with `spacing` dp gutters, from the catalog's minSize
+    // and aspect: the smallest readable span {colSpan, rowSpan}, and the
+    // S / M / L options [{label, colSpan, rowSpan}]
+    Q_INVOKABLE QVariantMap minSpan(const QString &type, int gridColumns, int gridRows, double cellWidth,
+                                    double cellHeight, double spacing) const;
+    Q_INVOKABLE QVariantList sizeOptions(const QString &type, int gridColumns, int gridRows, double cellWidth,
+                                         double cellHeight, double spacing) const;
 
     QString lastShareError() const { return m_lastShareError; }
     QString lastError() const { return m_lastError; }

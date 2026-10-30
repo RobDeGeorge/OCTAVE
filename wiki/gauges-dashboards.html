@@ -102,7 +102,7 @@ frontend/
       PIDPicker.qml              searchable, kind-filtered, vehicle-gated PID list
       PropertiesPanel.qml        PID / position &amp; size / options / label &amp; range / color inspector
 src/managers/dashboardmanager.{h,cpp}   DashboardManager
-src/util/dashboardgrid.{h,cpp}          grid placement (canPlace, fitAt), shared with the editor
+src/util/dashboardgrid.{h,cpp}          grid placement (canPlace, fitAt, arrange: swap / push), sizes (minSpan, sizeOptions)
 docs/GAUGE_AUTHORING.md                 authoring spec (source of truth for the API)
 dev/tests/drive_dashboard_editor.py     end-to-end editor scenario (command server)
 dev/tests/drive_dashboard_features.py   overrides, resize, swipe, sharing scenario (command server)
@@ -227,9 +227,26 @@ berryIMU (8 signals) ─────────┴─> paramStore (C++, 33 ms f
           Normalisation and animation are also shared: <code>_normalized = clamp((value - min) / (max - min), 0, 1)</code>
           and a <code>_animNorm</code> property with a <code>Behavior { NumberAnimation { duration: 120-140; easing: OutCubic } }</code>.
           The raw <code>value</code> is never animated (readouts show the true number; only the geometry eases).
-          Typography scales down with the cell through a <code>_fontFit</code> / <code>_vfit</code> factor or an
-          arc-radius cap, so an editor cell of any size keeps its text inside the widget; the renderer additionally clips
-          every cell.
+        </p>
+        <p>
+          <strong>No reading is not zero.</strong> Every PID-bound primitive binds
+          <code>value: App.OBDParameterModel.sample(paramId)</code>, which is <code>NaN</code> until there is a finite
+          reading, and exposes <code>hasValue</code>. Without one the readout shows <code>--</code>, no fill, needle or
+          marker is drawn, <code>_normalized</code> is 0 and no threshold (redline, <code>warnAbove</code>,
+          <code>triggerAbove</code> / <code>triggerBelow</code>) is evaluated, so a missing fuel level never lights a
+          low-fuel warning. A real 0 is a value. <code>SparklineGauge</code> records a missing sample as a gap in the trace;
+          <code>GForceGauge</code> and <code>CompassGauge</code> hide the dot / keep the card still and show
+          <code>-- g</code> / <code>--°</code>.
+        </p>
+        <p>
+          <strong>Text stays inside the cell.</strong> Header rows give the value its width and elide the title in what is
+          left; <code>ArcGauge</code> and <code>DigitalReadout</code> scale their readout block by its measured height
+          against the space they have; values use <code>fontSizeMode: Text.HorizontalFit</code>. <code>BarGauge</code> and
+          <code>LinearGauge</code> lay out with explicit geometry per orientation, so switching <code>orientation</code>
+          after creation lays out as creating it so, and a bar's fill is the track's own shape revealed by a clip (exactly
+          proportional, never outside the track). <code>tst_dashboardwidgets</code> checks every widget's text bounds with a
+          long title and a wide value at 160&times;50, 80&times;32, 320&times;100, 164&times;103 and 100&times;240.
+          The renderer additionally clips every cell.
         </p>
 
         <h2 id="primitives">Gauge Primitives</h2>
@@ -591,6 +608,7 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
         <table>
           <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
           <tbody>
+            <tr><td><code>minSize</code>, <code>aspect</code></td><td>The smallest size (dp, <code>{w, h}</code>) the widget reads at, and its natural width / height. <code>dashboardManager.minSpan(type, ...)</code> turns <code>minSize</code> into the smallest span on a given grid and <code>sizeOptions(type, ...)</code> offers S / M / L spans (about 1/12, 1/6 and 1/3 of the grid, nearest the aspect, never below the minimum) for the editor's size presets.</td></tr>
             <tr><td><code>labelProps</code></td><td><code>true</code> if the widget has <code>title</code> + <code>unit</code> string props that default to the PID metadata: the panel offers Title / Unit overrides.</td></tr>
             <tr><td><code>rangeProps</code></td><td><code>true</code> if it has <code>min</code> + <code>max</code> real props: the panel offers Min / Max overrides and warns when min &ge; max.</td></tr>
             <tr><td><code>colorProps</code></td><td>Props the single Color swatch row writes, all to the same value (e.g. <code>["fillColor", "needleColor"]</code>). Unset = the live theme color.</td></tr>
@@ -647,7 +665,9 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
         <table>
           <thead><tr><th>State</th><th>Meaning</th></tr></thead>
           <tbody>
-            <tr><td><code>cells</code></td><td>The working cell array. <strong>Every mutation reassigns the whole array</strong> (<code>_patchCell</code> builds a shallow-merged copy); nothing mutates in place. This keeps the canvas <code>Repeater</code> and every binding honest, and it is what makes a rejected drag snap back for free.</td></tr>
+            <tr><td><code>cells</code></td><td>The working cell array, never mutated in place. Every edit builds a new array and goes through <code>_apply(next)</code>, which records it for undo, marks the work unsaved and calls <code>_show(next)</code>.</td></tr>
+            <tr><td><code>cellModel</code></td><td>A <code>ListModel</code> mirroring <code>cells</code> for the canvas, one row per cell (roles <code>type</code>, <code>paramId</code>, <code>cellCol</code> / <code>cellRow</code> / <code>cellColSpan</code> / <code>cellRowSpan</code>, <code>propsJson</code>). <code>_show()</code> inserts, removes or sets only the rows that differ, so a move repositions one widget and an option change reloads one widget; every other widget keeps its instance (sparkline history, needle state). Rebuilding the whole canvas on each edit was the old behaviour.</td></tr>
+            <tr><td><code>canUndo</code> / <code>canRedo</code>, <code>undo()</code> / <code>redo()</code></td><td>Up to 50 snapshots of <code>cells</code>; a new edit after an undo drops the redo branch. Top-bar Undo / Redo buttons and the platform shortcuts (Ctrl+Z, Ctrl+Y / Ctrl+Shift+Z).</td></tr>
             <tr><td><code>gridColumns</code>, <code>gridRows</code></td><td>12 × 6 for a new dashboard, or the loaded spec's values.</td></tr>
             <tr><td><code>editingId</code></td><td>Non-empty when editing an existing user dashboard (the id is kept on save).</td></tr>
             <tr><td><code>selectedIndex</code> / <code>selectedCell</code></td><td>Drives the properties panel and the PID picker.</td></tr>
@@ -660,9 +680,9 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
           <thead><tr><th>Function</th><th>Behaviour</th></tr></thead>
           <tbody>
             <tr><td><code>addCellAt(type, col, row)</code></td><td>Starts from the catalog's default span; <code>dashboardManager.fitAt()</code> cuts it to the grid, then shrinks it toward 1 × 1 (wider side first) until it fits; the tapped cell itself is guaranteed free. Selects the new cell and opens the PID picker unless the widget is self-binding.</td></tr>
-            <tr><td><code>moveCell(index, col, row)</code></td><td>Clamps, checks <code>canPlace</code> excluding the cell itself, patches -- or, on a rejected drop, reassigns <code>cells = cells.slice()</code> so the dragged delegate is rebuilt at its origin.</td></tr>
+            <tr><td><code>moveCell(index, col, row)</code></td><td>Clamps into the grid and calls <code>dashboardManager.arrange()</code>: the widgets the cell lands on swap with it (one widget, whose span fits where the moved one was) or move to the nearest free spot of their size; widgets it doesn't cover never move. Refused (no room): nothing changes and the reason shows in the error banner; the canvas has already put the dragged widget back.</td></tr>
             <tr><td><code>nudgeCell</code>, <code>resizeCell</code></td><td>Stepper helpers (±1 column/row/span) built on the same checks.</td></tr>
-            <tr><td><code>resizeCellTo(index, colSpan, rowSpan)</code></td><td>Absolute resize for the drag grip: clamps into the grid, applies if <code>canPlace</code> passes, otherwise reassigns <code>cells</code> so the canvas snaps back.</td></tr>
+            <tr><td><code>resizeCellTo(index, colSpan, rowSpan)</code></td><td>Absolute resize for the drag grip, through the same <code>arrange()</code> as a move: growing over a neighbour pushes it aside.</td></tr>
             <tr><td><code>removeCell</code>, <code>setCellParam</code>, <code>setCellProp</code>, <code>clearCellProp</code></td><td>Patch helpers; clearing a prop removes the key so the gauge default applies again.</td></tr>
             <tr><td><code>setCellProps(index, keys, value)</code></td><td>Writes one value to several props in a single mutation (the Color row's <code>colorProps</code>); <code>value === undefined</code> removes them all (back to theme).</td></tr>
             <tr><td><code>save()</code></td><td>Label defaults to "Untitled"; id = <code>editingId</code> or <code>dashboardManager.uniqueIdForLabel(label)</code>; builds <code>{ schema: 1, id, label, gridColumns, gridRows, cells }</code> plus <code>margins</code> / <code>spacing</code> when the loaded spec carried them; on success clears <code>dirty</code>, clears the stored draft if this session resumed one, calls <code>callerPage.setActiveDashboard(savedId)</code> and pops. Failure shows a 3 s error banner.</td></tr>
@@ -690,9 +710,9 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
         <h3>EditorCanvas.qml</h3>
         <ul>
           <li>Geometry mirrors the renderer exactly: the canvas takes the spec's optional <code>margins</code> / <code>spacing</code> (<code>undefined</code> keeps the 20 dp / 16 dp defaults) and uses the same cell formulas, so the layout you edit is the layout that renders.</li>
-          <li><code>canPlace(col, row, colSpan, rowSpan, exceptIndex)</code>: inside the grid and no rectangle overlap with any other cell; it calls <code>dashboardManager.canPlace()</code>, the rule save and load use too.</li>
+          <li><code>canPlace(col, row, colSpan, rowSpan, exceptIndex)</code>: inside the grid and no rectangle overlap with any other cell; it calls <code>dashboardManager.canPlace()</code>, the rule save and load use too. <code>canArrange(index, col, row, colSpan, rowSpan)</code> asks <code>dashboardManager.arrange()</code> whether a drop or resize would go through (swapping or pushing), caching the last answer; it colours the drag highlight.</li>
           <li><code>_occupied</code>: a flat <code>row * cols + col</code> boolean map recomputed whenever <code>cells</code> is reassigned; a <code>Repeater</code> over <code>gridColumns * gridRows</code> shows a <code>[+]</code> target on every free index (dimmed while dragging).</li>
-          <li>Placed cells: a synchronous <code>Loader</code> (synchronous so panel tweaks, which rebuild the Repeater, do not flicker) with the same bind/props logic as the renderer, a "no PID" hint for unbound PID widgets, a selection frame, and a <code>MouseArea</code> with <code>drag.target: cellRoot</code>. <code>onPressed</code> selects; while dragging, <code>_updateDragCandidate()</code> rounds the item position to the nearest cell, clamps, and sets <code>dragCol/dragRow/dragValid</code> for the highlight rectangle (accent when valid, <code>statusDanger</code> when not); <code>onReleased</code> emits <code>cellMoveRequested</code>.</li>
+          <li>Placed cells: a <code>Repeater</code> over the editor's <code>cellModel</code>. Each delegate has a synchronous <code>Loader</code> with the same bind/props logic as the renderer, reloaded only when its own <code>type</code> / <code>paramId</code> / <code>propsJson</code> change; a "no PID" hint for unbound PID widgets; a selection frame; and a <code>MouseArea</code> with <code>drag.target: cellRoot</code>. <code>onPressed</code> selects; while dragging, <code>_updateDragCandidate()</code> rounds the item position to the nearest cell, clamps, and sets <code>dragCol/dragRow/dragValid</code> for the highlight rectangle (accent when the drop would go through, <code>statusDanger</code> when not); <code>onReleased</code> re-binds the delegate's <code>x</code> / <code>y</code> to its cell and emits <code>cellMoveRequested</code>.</li>
           <li><strong>Resize grip</strong> (<code>editorResizeGrip_&lt;index&gt;</code>): on the selected cell only, a 22 dp accent square on the bottom-right corner with a 44 dp touch target. Its <code>MouseArea</code> (<code>preventStealing</code>) maps the pointer into canvas coordinates, snaps the far corner to the cell under it, and drives the same drop highlight (accent = valid, <code>statusDanger</code> = overlap / out of bounds); release emits <code>cellResizeRequested</code>. The selected cell gets <code>z: 5</code> so the grip, which pokes past the corner, stays above neighbours.</li>
           <li>Signals: <code>emptyCellTapped(col, row)</code>, <code>cellTapped(index)</code>, <code>cellMoveRequested(index, col, row)</code>, <code>cellResizeRequested(index, colSpan, rowSpan)</code>, <code>backgroundTapped()</code>. The canvas never mutates <code>cells</code>.</li>
         </ul>

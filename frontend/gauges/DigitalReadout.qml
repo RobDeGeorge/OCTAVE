@@ -39,7 +39,9 @@ Item {
 
     property string title: _pInfo ? _pInfo.title : ""
     property string unit: _pInfo ? _pInfo.unit : ""
-    property real value: paramId ? (App.OBDParameterModel.liveValue(paramId) || 0) : 0
+    // NaN = no reading yet (shows "--")
+    property real value: App.OBDParameterModel.sample(paramId)
+    readonly property bool hasValue: isFinite(value)
 
     // ── Style ───────────────────────────────────────────────────────
     property color labelColor: App.Style.obdLabelColor
@@ -66,7 +68,8 @@ Item {
     readonly property real _vfit: Math.min(1, height / Math.max(1, _naturalH))
 
     readonly property string _formatted: {
-        var v = value.toFixed(decimals)
+        if (!hasValue) return "--"
+        var v = value.toFixed(Math.max(0, Math.min(4, decimals)))
         if (padDigits > 0) {
             var dotIdx = v.indexOf(".")
             var intPart = dotIdx >= 0 ? v.substring(0, dotIdx) : v
@@ -80,8 +83,12 @@ Item {
     }
 
     Column {
-        anchors.fill: parent
+        width: parent.width
         spacing: App.Spacing.dp(2)
+        // _vfit sizes the fonts; this takes up what it misses (line
+        // spacing, the gaps) so the unit never falls out of a short cell
+        transformOrigin: Item.Top
+        scale: Math.max(0.01, Math.min(1, root.height / Math.max(1, implicitHeight)))
 
         Text {
             visible: root.showTitle && root.title.length > 0
@@ -116,6 +123,7 @@ Item {
             font.family: App.Style.fontFamily
             width: parent.width
             horizontalAlignment: root.alignment
+            elide: Text.ElideRight
         }
     }
 }

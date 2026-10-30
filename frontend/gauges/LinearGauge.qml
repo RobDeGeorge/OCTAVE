@@ -42,7 +42,9 @@ Item {
     property string unit: _pInfo ? _pInfo.unit : ""
     property real min: _pInfo ? _pInfo.min : 0
     property real max: _pInfo ? _pInfo.max : 100
-    property real value: paramId ? (App.OBDParameterModel.liveValue(paramId) || 0) : 0
+    // NaN = no reading yet: "--", no fill or marker
+    property real value: App.OBDParameterModel.sample(paramId)
+    readonly property bool hasValue: isFinite(value)
 
     // ── Style ───────────────────────────────────────────────────────
     property color trackColor: Qt.darker(App.Style.obdBoxBackground, 1.15)
@@ -62,7 +64,7 @@ Item {
     // ── Computed ────────────────────────────────────────────────────
     readonly property real _normalized: {
         var r = max - min
-        if (r <= 0) return 0
+        if (!hasValue || !(r > 0)) return 0
         return Math.max(0, Math.min(1, (value - min) / r))
     }
     property real _animNorm: _normalized
@@ -71,118 +73,122 @@ Item {
     }
 
     readonly property real _zeroT: (min < 0 && max > 0) ? (-min) / (max - min) : 0
+    readonly property string _formatted: hasValue ? value.toFixed(Math.max(0, Math.min(4, decimals))) : "--"
 
-    // Shrink typography in cells smaller than the size the default type was
-    // tuned for, so labels never spill out of a small editor cell.
-    readonly property real _fontFit: Math.max(0.1, Math.min(1,
-        height / App.Spacing.dp(80), width / App.Spacing.dp(160)))
+    // Explicit vertical budget: header, marker, track, ticks — each sized
+    // from what the cell has, so a short cell shrinks them instead of
+    // pushing the ticks or the marker outside it
+    readonly property real _gap: Math.min(App.Spacing.dp(4), height * 0.04)
+    readonly property real _headerH: Math.max(1, Math.min(
+        Math.max(App.Spacing.overallText, App.Spacing.dp(14)) * 1.25, height * 0.4))
+    readonly property real _bodyH: Math.max(0, height - _headerH - _gap)
+    readonly property real _markerH: Math.min(App.Spacing.dp(10), _bodyH * 0.25)
+    readonly property real _tickH: showTicks ? Math.min(App.Spacing.dp(8), _bodyH * 0.22) : 0
+    readonly property real _trackH: Math.max(1, Math.min(App.Spacing.dp(14),
+        _bodyH - _markerH - _tickH - 2 * _gap))
+    readonly property real _fontPx: Math.max(1, _headerH * 0.72)
 
-    Column {
-        anchors.fill: parent
-        spacing: App.Spacing.dp(4)
+    // Header: the value keeps its width, the title gets the rest
+    Item {
+        width: parent.width
+        height: root._headerH
 
-        // Header
-        Item {
+        Text {
+            id: valueText
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            width: Math.min(implicitWidth, parent.width)
+            text: root._formatted + (root.unit ? " " + root.unit : "")
+            color: root.valueColor
+            font.pixelSize: root._fontPx
+            font.bold: true
+            font.family: App.Style.fontFamily
+            fontSizeMode: Text.HorizontalFit
+            minimumPixelSize: 1
+            horizontalAlignment: Text.AlignRight
+        }
+        Text {
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            width: Math.max(0, parent.width - valueText.width - App.Spacing.dp(6))
+            text: root.title
+            color: root.labelColor
+            font.pixelSize: root._fontPx * 0.92
+            font.family: App.Style.fontFamily
+            elide: Text.ElideRight
+        }
+    }
+
+    Item {
+        id: trackArea
+        y: root._headerH + root._gap
+        width: parent.width
+        height: root._bodyH
+
+        // Value marker above the track, kept inside the cell at the ends
+        Rectangle {
+            visible: root.hasValue && root._markerH >= 2
+            width: root._markerH
+            height: root._markerH
+            radius: width / 2
+            color: root.fillColor
+            border.color: Qt.darker(root.fillColor, 1.4)
+            border.width: 1
+            x: Math.max(0, Math.min(trackArea.width - width, trackArea.width * root._animNorm - width / 2))
+            y: track.y - root._gap - height
+        }
+
+        Rectangle {
+            id: track
+            y: root._markerH + root._gap
             width: parent.width
-            height: Math.min(Math.max(App.Spacing.overallText, App.Spacing.dp(14)),
-                             root.height * 0.35)
+            height: root._trackH
+            color: root.trackColor
+            radius: height / 2
 
-            Text {
-                text: root.title
-                color: root.labelColor
-                font.pixelSize: Math.max(1, App.Spacing.overallText * 0.9 * root._fontFit)
-                font.family: App.Style.fontFamily
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                elide: Text.ElideRight
-                width: parent.width * 0.55
+            Rectangle {
+                id: fill
+                visible: root.hasValue
+                color: root.fillColor
+                radius: parent.radius
+                height: parent.height
+                x: {
+                    if (!root.centerOriginAtZero) return 0
+                    var zeroX = parent.width * root._zeroT
+                    return root.value >= 0 ? zeroX : parent.width * root._animNorm
+                }
+                width: {
+                    if (!root.centerOriginAtZero) return parent.width * root._animNorm
+                    var zeroX = parent.width * root._zeroT
+                    var nowX = parent.width * root._animNorm
+                    return Math.max(2, Math.abs(nowX - zeroX))
+                }
             }
-            Text {
-                text: root.value.toFixed(root.decimals) + (root.unit ? " " + root.unit : "")
-                color: root.valueColor
-                font.pixelSize: Math.max(1, App.Spacing.overallText * 0.95 * root._fontFit)
-                font.bold: true
-                font.family: App.Style.fontFamily
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
+
+            // Centre origin marker (bidirectional)
+            Rectangle {
+                visible: root.centerOriginAtZero
+                width: App.Spacing.dp(2)
+                height: parent.height
+                color: root.labelColor
+                opacity: 0.5
+                x: parent.width * root._zeroT - width / 2
             }
         }
 
-        // Track
-        Item {
-            id: trackArea
-            width: parent.width
-            height: Math.max(App.Spacing.dp(28), parent.height * 0.45)
-
-            Rectangle {
-                id: track
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                height: Math.max(App.Spacing.dp(6), parent.height * 0.32)
-                color: root.trackColor
-                radius: height / 2
-
-                Rectangle {
-                    id: fill
-                    color: root.fillColor
-                    radius: parent.radius
-                    height: parent.height
-                    Behavior on width { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
-                    Behavior on x { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
-                    x: {
-                        if (!root.centerOriginAtZero) return 0
-                        var zeroX = parent.width * root._zeroT
-                        return root.value >= 0 ? zeroX : parent.width * root._animNorm
-                    }
-                    width: {
-                        if (!root.centerOriginAtZero) return parent.width * root._animNorm
-                        var zeroX = parent.width * root._zeroT
-                        var nowX = parent.width * root._animNorm
-                        return Math.max(2, Math.abs(nowX - zeroX))
-                    }
-                }
-
-                // Center origin marker (when bidirectional)
-                Rectangle {
-                    visible: root.centerOriginAtZero
-                    width: App.Spacing.dp(2)
-                    height: parent.height + App.Spacing.dp(6)
-                    color: root.labelColor
-                    opacity: 0.5
-                    x: parent.width * root._zeroT - width / 2
-                    anchors.verticalCenter: parent.verticalCenter
-                }
-            }
-
-            // Tick marks below the track
-            Repeater {
-                model: root.showTicks ? (Math.max(1, root.majorTickCount - 1) * root._tickSteps + 1) : 0
-                delegate: Rectangle {
-                    property bool _major: (index % root._tickSteps) === 0
-                    property real _t: index / (Math.max(1, root.majorTickCount - 1) * root._tickSteps)
-                    width: _major ? App.Spacing.dp(2) : App.Spacing.dp(1)
-                    height: _major ? App.Spacing.dp(8) : App.Spacing.dp(5)
-                    color: root.labelColor
-                    opacity: _major ? 0.7 : 0.4
-                    x: trackArea.width * _t - width / 2
-                    anchors.top: track.bottom
-                    anchors.topMargin: App.Spacing.dp(2)
-                }
-            }
-
-            // Indicator (small arrow above the track at the value position)
-            Rectangle {
-                width: App.Spacing.dp(10)
-                height: App.Spacing.dp(10)
-                radius: width / 2
-                color: root.fillColor
-                border.color: Qt.darker(root.fillColor, 1.4)
-                border.width: 1
-                x: trackArea.width * root._animNorm - width / 2
-                anchors.bottom: track.top
-                anchors.bottomMargin: App.Spacing.dp(2)
-                Behavior on x { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+        // Tick marks below the track
+        Repeater {
+            model: root.showTicks && root._tickH >= 2
+                   ? (Math.max(1, root.majorTickCount - 1) * root._tickSteps + 1) : 0
+            delegate: Rectangle {
+                property bool _major: (index % root._tickSteps) === 0
+                property real _t: index / (Math.max(1, root.majorTickCount - 1) * root._tickSteps)
+                width: _major ? App.Spacing.dp(2) : App.Spacing.dp(1)
+                height: _major ? root._tickH : root._tickH * 0.6
+                color: root.labelColor
+                opacity: _major ? 0.7 : 0.4
+                x: Math.max(0, Math.min(trackArea.width - width, trackArea.width * _t - width / 2))
+                y: track.y + track.height + root._gap
             }
         }
     }

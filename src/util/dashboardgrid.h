@@ -10,6 +10,8 @@
 #ifndef DASHBOARDGRID_H
 #define DASHBOARDGRID_H
 
+#include <QList>
+#include <QString>
 #include <QVariantList>
 #include <QVariantMap>
 
@@ -36,6 +38,45 @@ bool canPlace(const QVariantList &cells, int cols, int rows, const Rect &r, int 
 // edge, then shrunk toward 1x1 (the wider side first) until it fits. The
 // result may still not fit if (col, row) itself is taken.
 Rect fitAt(const QVariantList &cells, int cols, int rows, int col, int row, int colSpan, int rowSpan);
+
+// ── Moving and resizing with neighbours (the editor's drag / resize) ──
+//
+// Put cell `index` at `target`. When `target` covers other cells:
+//   - swap: exactly one cell is covered and it fits where the moved cell
+//     was, so the two trade places;
+//   - push: otherwise each covered cell goes to the nearest free spot of
+//     its own size (by distance from where it was).
+// Cells the target does not cover never move, so the rest of the layout
+// stays where the user put it. `ok` false = no arrangement fits: `reason`
+// says why and `cells` is the input unchanged.
+struct Arrangement
+{
+    bool ok = false;
+    QVariantList cells;
+    QList<int> moved;     // indexes of the other cells that moved
+    bool swapped = false;
+    QString reason;
+};
+Arrangement arrange(const QVariantList &cells, int cols, int rows, int index, const Rect &target);
+
+// ── Sizes ──
+//
+// The smallest span whose on-screen size reaches minW x minH (any unit, the
+// same as cellW / cellH / spacing), held to the grid
+Rect minSpan(int cols, int rows, double cellW, double cellH, double spacing, double minW, double minH);
+
+// Small / Medium / Large for a widget on this grid: about 1/12, 1/6 and 1/3
+// of the grid's cells, the span nearest the widget's aspect ratio (w / h,
+// on screen), never below minSpan nor past the grid. Repeats are dropped,
+// so a small grid may offer fewer.
+struct SizeOption
+{
+    QString label;
+    int colSpan = 1;
+    int rowSpan = 1;
+};
+QList<SizeOption> sizeOptions(int cols, int rows, double cellW, double cellH, double spacing,
+                              double minW, double minH, double aspect);
 
 } // namespace DashboardGrid
 

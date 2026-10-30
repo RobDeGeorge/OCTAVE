@@ -46,7 +46,10 @@ Item {
     property string unit: _pInfo ? _pInfo.unit : ""
     property real min: _pInfo ? _pInfo.min : 0
     property real max: _pInfo ? _pInfo.max : 100
-    property real value: paramId ? (App.OBDParameterModel.liveValue(paramId) || 0) : 0
+    // NaN = no reading yet: the light stays off (a missing fuel level is
+    // not a low one)
+    property real value: App.OBDParameterModel.sample(paramId)
+    readonly property bool hasValue: isFinite(value)
 
     // ── Threshold ───────────────────────────────────────────────────
     // Light turns on when value >= triggerAbove OR value <= triggerBelow.
@@ -59,7 +62,9 @@ Item {
     property color activeColor: App.Style.statusDanger   // theme danger color (red by default)
     property color inactiveColor: Qt.darker(App.Style.obdBoxBackground, 1.3)
     property color labelColor: App.Style.obdLabelColor
-    property color activeLabelColor: "white"
+    // Dark text on a light lamp (amber, yellow), white on a dark one
+    property color activeLabelColor: (0.299 * activeColor.r + 0.587 * activeColor.g + 0.114 * activeColor.b) > 0.6
+                                     ? "#141414" : "white"
     property bool pulse: false                // optional attention pulse when lit
     // Max diameter in dp. 0 = fill parent's smaller dim (default). Set this
     // when a WarningLight lives in a big cell and should stay a compact
@@ -68,6 +73,7 @@ Item {
 
     // ── Computed ────────────────────────────────────────────────────
     readonly property bool _active: {
+        if (!hasValue) return false
         if (!isNaN(triggerAbove) && value >= triggerAbove) return true
         if (!isNaN(triggerBelow) && value <= triggerBelow) return true
         return false
@@ -107,7 +113,12 @@ Item {
             anchors.centerIn: parent
             text: root.label
             color: root._active ? root.activeLabelColor : root.labelColor
-            font.pixelSize: Math.max(App.Spacing.dp(8), parent.width * 0.38)
+            // Fitted inside the disc (a long label used to overflow it)
+            width: parent.width * 0.74
+            horizontalAlignment: Text.AlignHCenter
+            font.pixelSize: Math.max(1, parent.width * 0.3)
+            fontSizeMode: Text.HorizontalFit
+            minimumPixelSize: 1
             font.bold: true
             font.family: App.Style.fontFamily
             Behavior on color { ColorAnimation { duration: 160 } }
