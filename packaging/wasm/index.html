@@ -14,7 +14,14 @@
   <title>OCTAVE</title>
   <!-- Threaded WebAssembly needs cross-origin isolation (COOP/COEP). GitHub Pages
        cannot send those headers, so this service worker adds them and reloads once.
-       Must be the first script. Vendored, MIT: LICENSE.coi-serviceworker. -->
+       Must be the first script. Vendored, MIT: LICENSE.coi-serviceworker.
+       Always COEP require-corp: the worker's default sends "credentialless" to
+       every browser that has no window.chrome / window.netscape, which is every
+       WebKit browser (Safari, and Chrome / Firefox / Edge on iPhone and iPad),
+       and WebKit doesn't support credentialless, so isolation never came up
+       there. Everything this page loads is its own, so require-corp costs
+       nothing. -->
+  <script>window.coi = { coepCredentialless: () => false };</script>
   <script src="coi-serviceworker.js"></script>
   <style>
     :root {
@@ -149,17 +156,30 @@
         // coi-serviceworker registers and reloads the page; this text only shows
         // if that failed (service workers off, private window on some browsers).
         status.textContent = 'Enabling cross-origin isolation';
+        const ios = /iPhone|iPad|iPod/.test(navigator.userAgent)
+                    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        const iosHint = ios ? ' On iPhone and iPad, Safari is the browser most likely to work.' : '';
         if (!('serviceWorker' in navigator)) {
-          fail('This page needs cross-origin isolation for multithreaded WebAssembly, and service workers are not available in this browser or mode.');
+          fail('This page needs cross-origin isolation for multithreaded WebAssembly, and service workers are not available in this browser or mode.' + iosHint);
+          return;
+        }
+        // The worker controls this page but this load isn't isolated: a worker
+        // installed by an older version of this page (it could send WebKit the
+        // "credentialless" header) served it. The script above has just told
+        // it to send require-corp, so one more load comes up isolated.
+        if (navigator.serviceWorker.controller && !sessionStorage.getItem('octaveCoiRetried')) {
+          sessionStorage.setItem('octaveCoiRetried', '1');
+          window.location.reload();
           return;
         }
         // Give the service worker time to install and reload before giving up.
         setTimeout(() => {
           if (!window.crossOriginIsolated)
-            fail('Cross-origin isolation did not come up. Reload the page; if it keeps failing, your browser may block service workers here.');
+            fail('Cross-origin isolation did not come up. Reload the page; if it keeps failing, your browser may block service workers here (private windows often do).' + iosHint);
         }, 8000);
         return;
       }
+      sessionStorage.removeItem('octaveCoiRetried');
 
       try {
         render();
