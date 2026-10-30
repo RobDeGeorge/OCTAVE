@@ -185,9 +185,11 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           <code>play_file_at_path()</code> has a filename-only fallback for the same reason.
         </p>
         <p>
-          <code>get_media_files(emitSignal)</code> is the older flat listing of the current <code>m_mediaDir</code>; it is still
-          called by <span class="file-path">MediaPlayer.qml</span> on load and used as a fallback by shuffle and sorting
-          when no playlist is selected. Both it and <code>scan_library(resetDisplayNames)</code> can be called from QML
+          <code>get_media_files(emitSignal)</code> is the older flat listing of the current <code>m_mediaDir</code>, used as a fallback by shuffle and sorting
+          when no playlist is selected. QML no longer calls it: for "All Music" <code>m_mediaDir</code> is the library
+          root, so over a library of subfolders it emitted an empty <code>mediaListChanged</code> that emptied the music
+          list and put Home back to "No music yet"; <span class="file-path">MediaPlayer.qml</span> loads
+          <code>get_current_song_list()</code> on each visit instead. Both it and <code>scan_library(resetDisplayNames)</code> can be called from QML
           with or without their boolean: the methods have default arguments.
         </p>
 

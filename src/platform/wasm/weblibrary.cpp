@@ -48,8 +48,9 @@ struct Decode {
 struct Shared {
     QMutex mutex;
     QWaitCondition decoded;
-    int generation = 0;   // one per pick; placeholders of an older pick are gone
-    QHash<int, TagParts> tags;   // by File index, this generation
+    int generation = 0;   // one per pick: the newest, maybe still reading its tags
+    int active = 0;       // the pick the library is scanned from (0: none yet)
+    QHash<int, QHash<int, TagParts>> tags;   // by generation, then File index
     int nextDecode = 0;
     QHash<int, Decode> decodes;
 };
@@ -77,7 +78,7 @@ EM_JS(void, octave_webmusic_install, (), {
     const AROUND = 65536;            // audio kept after the tags, and the end of each file
 
     const lib = {
-        files: [],
+        files: {},         // generation -> the File objects of that pick
         input: null,
         lastUrl: null,
         gen: 0,
@@ -92,8 +93,9 @@ EM_JS(void, octave_webmusic_install, (), {
                 input.addEventListener("change", function () {
                     const files = Array.from(input.files || []);
                     input.value = "";   // so picking the same folder again is a change too
-                    lib.files = files;
                     const r = Module.octaveWebMusicPicked(files.map(function (f) { return f.webkitRelativePath || f.name; }));
+                    lib.files[r.gen] = files;
+                    lib.keep([r.active, r.gen]);
                     lib.readAll(r.gen, r.audio);
                 });
                 document.body.appendChild(input);
@@ -158,15 +160,24 @@ EM_JS(void, octave_webmusic_install, (), {
             return parts;
         },
 
+        // Let go of the files of every pick but these generations
+        keep: function (gens) {
+            Object.keys(lib.files).forEach(function (g) {
+                if (gens.indexOf(Number(g)) < 0)
+                    delete lib.files[g];
+            });
+        },
+
         readAll: async function (gen, audio) {
             lib.gen = gen;
+            const files = lib.files[gen];
             let total = 0;
             let next = 0;
             const worker = async function () {
                 while (next < audio.length && lib.gen === gen && total < TOTAL_CAP) {
                     const i = audio[next++];
                     try {
-                        const parts = await lib.tagParts(lib.files[i]);
+                        const parts = await lib.tagParts(files[i]);
                         if (lib.gen !== gen)
                             return;
                         const offsets = [];
@@ -176,9 +187,9 @@ EM_JS(void, octave_webmusic_install, (), {
                         let at = 0;
                         parts.forEach(function (p) { bytes.set(p[1], at); at += p[1].length; });
                         total += len;
-                        Module.octaveWebMusicTags(gen, i, lib.files[i].size, offsets, bytes);
+                        Module.octaveWebMusicTags(gen, i, files[i].size, offsets, bytes);
                     } catch (e) {
-                        console.warn("OCTAVE: could not read the tags of " + lib.files[i].name + ": " + e);
+                        console.warn("OCTAVE: could not read the tags of " + files[i].name + ": " + e);
                     }
                 }
             };
@@ -187,10 +198,10 @@ EM_JS(void, octave_webmusic_install, (), {
                 Module.octaveWebMusicReady(gen);
         },
 
-        // A fresh blob: URL for file i (Qt's player revokes the one it was
-        // given once it has loaded); the previous one is let go here
-        url: function (i) {
-            const f = lib.files[i];
+        // A fresh blob: URL for file i of pick gen (Qt's player revokes the
+        // one it was given once it has loaded); the previous one is let go here
+        url: function (gen, i) {
+            const f = (lib.files[gen] || [])[i];
             if (!f)
                 return "";
             if (lib.lastUrl)
@@ -201,8 +212,8 @@ EM_JS(void, octave_webmusic_install, (), {
 
         // File i decoded by the browser, resampled to 8 kHz (an offline
         // context decodes at its own rate) and mixed to mono
-        decode: function (id, i) {
-            const f = lib.files[i];
+        decode: function (id, gen, i) {
+            const f = (lib.files[gen] || [])[i];
             const fail = function (e) {
                 console.warn("OCTAVE: the browser could not decode " + (f ? f.name : i) + ": " + e);
                 Module.octaveWebMusicDecoded(id, 0, new Float32Array(0));
@@ -232,6 +243,26 @@ EM_JS(void, octave_webmusic_install, (), {
 // clang-format on
 
 // clang-format off
+// Qt's browser player makes a new <audio> element on every setSource and
+// leaves it at full volume until the volume next changes, so a track started
+// after the volume was set played at 100 % until the slider was touched.
+// Every <audio> element gets the volume last set here, now and when it loads.
+EM_JS(void, octave_webmusic_set_volume, (double volume), {
+    if (!Module.octaveWebVolumeHook) {
+        Module.octaveWebVolumeHook = true;
+        const apply = function (e) {
+            if (e.target && e.target.tagName === "AUDIO" && Module.octaveWebVolume !== undefined)
+                e.target.volume = Module.octaveWebVolume;
+        };
+        // media events don't bubble, so they are caught on the way down
+        document.addEventListener("loadstart", apply, true);
+        document.addEventListener("play", apply, true);
+    }
+    Module.octaveWebVolume = Math.max(0, Math.min(1, volume));
+    const all = document.getElementsByTagName("audio");
+    for (let k = 0; k < all.length; ++k)
+        all[k].volume = Module.octaveWebVolume;
+});
 EM_JS(double, octave_webmusic_position, (), {
     const all = document.getElementsByTagName("audio");
     return all.length ? all[all.length - 1].currentTime * 1000 : -1;
@@ -245,6 +276,24 @@ EM_JS(int, octave_webmusic_playing, (), {
 emscripten::val helper()
 {
     return emscripten::val::module_property("octaveWebMusic");
+}
+
+// Forget every pick but generations a and b: their placeholders and tag
+// parts (the page lets go of their files in lib.keep). s.mutex held.
+void dropAllBut(Shared &s, int a, int b)
+{
+    for (auto it = s.tags.begin(); it != s.tags.end();) {
+        if (it.key() == a || it.key() == b)
+            ++it;
+        else
+            it = s.tags.erase(it);
+    }
+    const QStringList dirs = QDir(kBase).entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const QString &d : dirs) {
+        const int g = d.toInt();
+        if (g == 0 || (g != a && g != b))
+            QDir(kBase + QLatin1Char('/') + d).removeRecursively();
+    }
 }
 
 bool isAudio(const QString &path)
@@ -280,14 +329,18 @@ emscripten::val onPicked(emscripten::val jsPaths)
 {
     const std::vector<std::string> paths = emscripten::vecFromJSArray<std::string>(jsPaths);
 
-    int generation;
+    // The library in use stays until this pick is read and scanned (and
+    // stays for good if this pick has no music): what is playing, and every
+    // other track, keep their placeholders and files. Only an older pick
+    // still being read is dropped.
+    int generation, active;
     {
         Shared &s = shared();
         QMutexLocker lock(&s.mutex);
         generation = ++s.generation;
-        s.tags.clear();
+        active = s.active;
+        dropAllBut(s, active, generation);
     }
-    QDir(kBase).removeRecursively();
     const QString base = kBase + QLatin1Char('/') + QString::number(generation);
 
     QString root;
@@ -319,6 +372,7 @@ emscripten::val onPicked(emscripten::val jsPaths)
 
     emscripten::val result = emscripten::val::object();
     result.set("gen", generation);
+    result.set("active", active);
     result.set("audio", emscripten::val::array(audio));
     return result;
 }
@@ -343,20 +397,31 @@ void onTags(int generation, int index, double size, emscripten::val jsOffsets, e
     Shared &s = shared();
     QMutexLocker lock(&s.mutex);
     if (generation == s.generation)
-        s.tags.insert(index, parts);
+        s.tags[generation].insert(index, parts);
 }
 
 void onReady(int generation)
 {
+    Shared &s = shared();
     {
-        Shared &s = shared();
         QMutexLocker lock(&s.mutex);
         if (generation != s.generation)
             return;
-        qCInfo(lcWebMusic) << "Read the tags of" << s.tags.size() << "of" << g_songs << "songs";
+        qCInfo(lcWebMusic) << "Read the tags of" << s.tags.value(generation).size() << "of" << g_songs << "songs";
     }
+    // The library is rescanned from the new placeholders before the old ones
+    // go. A pick with no music leaves the library as it was.
     if (g_imported)
         g_imported(g_root, g_songs);
+    int keep;
+    {
+        QMutexLocker lock(&s.mutex);
+        if (g_songs > 0)
+            s.active = generation;
+        keep = s.active;
+        dropAllBut(s, keep, keep);
+    }
+    helper().call<void>("keep", emscripten::val::array(std::vector<int>{keep}));
 }
 
 void onDecoded(int id, int sampleRate, emscripten::val mono)
@@ -443,11 +508,9 @@ QUrl WebMusicLibrary::sourceUrl(const QString &filePath)
 {
     int generation = 0, index = 0;
     if (readPlaceholder(filePath, &generation, &index)) {
-        if (generation == shared().generation) {   // written on this (main) thread only
-            const std::string url = helper().call<std::string>("url", index);
-            if (!url.empty())
-                return QUrl(QString::fromStdString(url));
-        }
+        const std::string url = helper().call<std::string>("url", generation, index);
+        if (!url.empty())
+            return QUrl(QString::fromStdString(url));
         qCWarning(lcWebMusic) << "No browser file behind" << filePath;
     }
     return QUrl::fromLocalFile(filePath);
@@ -460,8 +523,11 @@ std::unique_ptr<TagLib::IOStream> WebMusicLibrary::tagStream(const QString &file
         return nullptr;
     Shared &s = shared();
     QMutexLocker lock(&s.mutex);
-    const auto it = s.tags.constFind(index);
-    if (generation != s.generation || it == s.tags.constEnd())
+    const auto gen = s.tags.constFind(generation);
+    if (gen == s.tags.constEnd())
+        return nullptr;
+    const auto it = gen->constFind(index);
+    if (it == gen->constEnd())
         return nullptr;
     return std::make_unique<PartsStream>(filePath, *it);
 }
@@ -478,12 +544,13 @@ bool WebMusicLibrary::decodeMono(const QString &filePath, std::vector<float> *sa
 
     Shared &s = shared();
     QMutexLocker lock(&s.mutex);
-    if (generation != s.generation)
+    if (generation != s.active && generation != s.generation)
         return false;
     const int id = ++s.nextDecode;
     s.decodes.insert(id, {});
     QMetaObject::invokeMethod(QCoreApplication::instance(),
-                              [id, index] { helper().call<void>("decode", id, index); }, Qt::QueuedConnection);
+                              [id, generation, index] { helper().call<void>("decode", id, generation, index); },
+                              Qt::QueuedConnection);
     QDeadlineTimer deadline(kDecodeTimeoutMs);
     while (!s.decodes.find(id)->done && !deadline.hasExpired())
         s.decoded.wait(&s.mutex, deadline);
@@ -507,4 +574,9 @@ qint64 WebMusicLibrary::playerPositionMs()
 int WebMusicLibrary::playerPlaying()
 {
     return octave_webmusic_playing();
+}
+
+void WebMusicLibrary::setPlayerVolume(float volume)
+{
+    octave_webmusic_set_volume(double(volume));
 }

@@ -38,6 +38,8 @@ namespace WebMusicLibrary {
 // picker during a user gesture). When the visitor has picked a folder and
 // its tags are read, `imported` gets the library root to scan and how many
 // audio files (by `audioExtensions`, lower case with the dot) it holds.
+// The library picked before stays playable until `imported` returns (and
+// for good if the new pick holds no audio, songCount 0: don't switch to it).
 // Nothing happens if the picker is cancelled. Main thread only.
 void pick(const QStringList &audioExtensions,
           std::function<void(const QString &root, int songCount)> imported);
@@ -62,6 +64,10 @@ bool decodeMono(const QString &filePath, std::vector<float> *samples, int *sampl
 // is 0 and its playbackState() StoppedState while it plays. Main thread only.
 qint64 playerPositionMs();
 int playerPlaying();
+
+// Sets the volume (0..1) of the player's <audio> elements, including the ones
+// Qt makes later; Qt leaves a new one at full volume. Main thread only.
+void setPlayerVolume(float volume);
 
 } // namespace WebMusicLibrary
 

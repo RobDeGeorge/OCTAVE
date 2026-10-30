@@ -1905,7 +1905,11 @@ void MediaManager::setDucking(float factor)
 
 void MediaManager::applyOutputVolume()
 {
-    m_audioOutput->setVolume(m_isMuted ? 0.0f : m_volume * m_duckCurrent);
+    const float level = m_isMuted ? 0.0f : m_volume * m_duckCurrent;
+    m_audioOutput->setVolume(level);
+#ifdef OCTAVE_WASM
+    WebMusicLibrary::setPlayerVolume(level);
+#endif
 }
 
 float MediaManager::getVolume()
@@ -3281,8 +3285,10 @@ bool MediaManager::pick_browser_library()
             emit scanProgress(QStringLiteral("[ERROR] The folder picked is empty"));
             return;
         }
-        if (songCount == 0)
+        if (songCount == 0) {   // the library in use stays
             emit scanProgress(QStringLiteral("[ERROR] No music in the folder picked"));
+            return;
+        }
         // A new root on every pick (/weblibrary/<n>/...), so this always rescans
         if (m_settingsManager)
             m_settingsManager->save_media_folder(root);

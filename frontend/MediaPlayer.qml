@@ -235,7 +235,11 @@ Item {
             playlistNames = mediaManager.get_playlist_names()
             currentPlaylistName = mediaManager.get_current_playlist_name()
 
-            mediaManager.get_media_files()
+            // The loaded playlist, as every other list emitter sends it.
+            // get_media_files() would emit only the files directly in the
+            // media folder: none for "All Music" over a library of subfolders,
+            // which emptied this list and put Home back to "No music yet".
+            mediaListConnections.onMediaListChanged(mediaManager.get_current_song_list())
             var currentFile = mediaManager.get_current_file()
             if (currentFile) {
                 lastPlayedSong = currentFile
@@ -1406,6 +1410,7 @@ Item {
 
     // Connect to mediaManager signals
     Connections {
+        id: mediaListConnections
         target: mediaManager
 
         // Media list updated
