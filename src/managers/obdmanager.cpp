@@ -39,9 +39,12 @@ OBDManager::OBDManager(SettingsManager *settingsManager, QObject *parent)
     }
 
     // Cache the latest status / detail / progress so the Q_PROPERTY readers
-    // reflect whatever was last emitted (emit sites are numerous; hook once
-    // here). Connected first so QML handlers of the same signal already see
-    // the new value in connectionStatus / get_connection_status().
+    // reflect whatever was last emitted. OBDManager's own emits go through
+    // setConnectionStatus() & co., which store before emitting: QML bindings
+    // are notified before any connected slot runs, so a cache filled only
+    // here left connectionStatus / connectionState one change behind in QML
+    // (a connected car read "Connecting"). These hooks keep the cache right
+    // for a signal emitted from outside (the tests do).
     connect(this, &OBDManager::connectionStatusChanged, this,
             [this](const QString &status) { m_connectionStatus = status; });
     connect(this, &OBDManager::connectionStatusDetailChanged, this,
@@ -580,7 +583,7 @@ void OBDManager::scanForDevices()
                 m_connectionAttempts = 0;
                 startConnection();
             } else {
-                emit connectionStatusDetailChanged(
+                setConnectionDetail(
                     QStringLiteral("Device at %1 not found. Available: %2")
                         .arg(configured, ports.join(QStringLiteral(", "))));
             }
@@ -626,10 +629,10 @@ void OBDManager::startConnection()
     m_connectionAttempts++;
     qDebug() << "[OBD] Starting connection attempt #" << m_connectionAttempts;
 
-    emit connectionStatusChanged(QStringLiteral("Connecting"));
-    emit connectionStatusDetailChanged(
+    setConnectionStatus(QStringLiteral("Connecting"));
+    setConnectionDetail(
         QStringLiteral("Attempt %1...").arg(m_connectionAttempts));
-    emit connectionProgressChanged(10);
+    setConnectionProgress(10);
 
 #ifdef Q_OS_ANDROID
     // Android: skip the QSerialPort + worker-thread flow entirely; the BLE
@@ -645,9 +648,9 @@ void OBDManager::startConnection()
     // Check if device exists
     if (!checkPortExists(port)) {
         m_connected = false;
-        emit connectionStatusChanged(QStringLiteral("Device Not Found"));
-        emit connectionStatusDetailChanged(QStringLiteral("Port %1 not available").arg(port));
-        emit connectionProgressChanged(0);
+        setConnectionStatus(QStringLiteral("Device Not Found"));
+        setConnectionDetail(QStringLiteral("Port %1 not available").arg(port));
+        setConnectionProgress(0);
         emit devicePresenceChanged(false);
         qDebug() << "[OBD] Port" << port << "not found";
         {
@@ -659,8 +662,8 @@ void OBDManager::startConnection()
     }
 
     emit devicePresenceChanged(true);
-    emit connectionProgressChanged(15);
-    emit connectionStatusDetailChanged(QStringLiteral("Found %1, connecting...").arg(port));
+    setConnectionProgress(15);
+    setConnectionDetail(QStringLiteral("Found %1, connecting...").arg(port));
 
     // Clean up previous worker thread
     cleanupWorkerThread();
@@ -952,20 +955,20 @@ void OBDManager::scheduleAutoReconnect()
 
     if (!isAutoReconnectEnabled()) {
         qDebug() << "[OBD] Auto-reconnect disabled, switching to passive scanning";
-        emit connectionStatusDetailChanged(QStringLiteral("Auto-reconnect disabled"));
+        setConnectionDetail(QStringLiteral("Auto-reconnect disabled"));
         m_deviceScannerTimer.start();
         return;
     }
 
     if (m_connectionAttempts >= maxAttempts) {
         qDebug() << "[OBD] Max attempts reached, switching to passive scanning";
-        emit connectionStatusDetailChanged(QStringLiteral("Max retries reached. Scanning..."));
+        setConnectionDetail(QStringLiteral("Max retries reached. Scanning..."));
         m_deviceScannerTimer.start();
         return;
     }
 
     int delay = qMin(10, 2 + m_connectionAttempts * 2);
-    emit connectionStatusDetailChanged(
+    setConnectionDetail(
         QStringLiteral("Retry in %1s... (%2/%3)")
             .arg(delay).arg(m_connectionAttempts).arg(maxAttempts));
     qDebug() << "[OBD] Auto-reconnect in" << delay << "s";
@@ -986,9 +989,9 @@ void OBDManager::onWorkerInitComplete(bool success, const QString &message)
         m_connectionAttempts = 0;
         m_reconnectingAfterDiagnostic = false;
 
-        emit connectionStatusChanged(QStringLiteral("Connected"));
-        emit connectionStatusDetailChanged(QStringLiteral("OBD interface connected successfully"));
-        emit connectionProgressChanged(100);
+        setConnectionStatus(QStringLiteral("Connected"));
+        setConnectionDetail(QStringLiteral("OBD interface connected successfully"));
+        setConnectionProgress(100);
 
         // Start polling
         if (m_worker)
@@ -1009,21 +1012,21 @@ void OBDManager::onWorkerInitComplete(bool success, const QString &message)
 
         // Check for partial connection (adapter found but no vehicle)
         if (message.contains(QStringLiteral("adapter"))) {
-            emit connectionStatusChanged(QStringLiteral("No Vehicle"));
-            emit connectionStatusDetailChanged(
+            setConnectionStatus(QStringLiteral("No Vehicle"));
+            setConnectionDetail(
                 QStringLiteral("Connected to adapter, waiting for vehicle..."));
-            emit connectionProgressChanged(50);
+            setConnectionProgress(50);
         } else {
-            emit connectionStatusChanged(QStringLiteral("Connection Failed"));
-            emit connectionStatusDetailChanged(
+            setConnectionStatus(QStringLiteral("Connection Failed"));
+            setConnectionDetail(
                 QStringLiteral("Could not connect to OBD adapter"));
-            emit connectionProgressChanged(0);
+            setConnectionProgress(0);
         }
 
         // Post-diagnostic retry logic
         if (m_reconnectingAfterDiagnostic && m_connectionAttempts < 3) {
             qDebug() << "[OBD] Post-diagnostic retry" << (m_connectionAttempts + 1) << "/3";
-            emit connectionStatusDetailChanged(
+            setConnectionDetail(
                 QStringLiteral("Reconnecting after diagnostic mode... (%1/3)")
                     .arg(m_connectionAttempts + 1));
             QTimer::singleShot(2000, this, &OBDManager::startConnection);
@@ -1130,11 +1133,11 @@ void OBDManager::onWorkerConnectionLost(const QString &reason)
     const bool wasConnected = m_connected;
     m_connected = false;
     setVehicleSupport({}, false);
-    emit connectionStatusChanged(QStringLiteral("Disconnected"));
-    emit connectionStatusDetailChanged(reason);
+    setConnectionStatus(QStringLiteral("Disconnected"));
+    setConnectionDetail(reason);
     if (wasConnected)
         emit connectionLostUnexpectedly(reason);
-    emit connectionProgressChanged(0);
+    setConnectionProgress(0);
     m_dataWatchdogTimer.stop();
     m_deviceScannerTimer.start();
     scheduleAutoReconnect();
@@ -1190,8 +1193,8 @@ void OBDManager::onDataWatchdog()
 
     if (m_lastDataReceived > 0 && elapsed > DATA_WATCHDOG_TIMEOUT_MS) {
         qCWarning(lcElm327) << "no data for" << elapsed << "ms; reconnecting";
-        emit connectionStatusChanged(QStringLiteral("Stale Connection"));
-        emit connectionStatusDetailChanged(QStringLiteral("No data received, reconnecting..."));
+        setConnectionStatus(QStringLiteral("Stale Connection"));
+        setConnectionDetail(QStringLiteral("No data received, reconnecting..."));
         m_dataWatchdogTimer.stop();
         cleanupConnection();
         m_connectionAttempts = 0;
@@ -1308,9 +1311,9 @@ void OBDManager::close()
     // after it); here nothing follows, so say it, or connected,
     // connectionState and connectionStatus stay "Connected" for subscribers
     if (m_connectionStatus != QLatin1String("Disconnected")) {
-        emit connectionStatusChanged(QStringLiteral("Disconnected"));
-        emit connectionStatusDetailChanged(QStringLiteral("Closed"));
-        emit connectionProgressChanged(0);
+        setConnectionStatus(QStringLiteral("Disconnected"));
+        setConnectionDetail(QStringLiteral("Closed"));
+        setConnectionProgress(0);
     }
 }
 
@@ -1322,6 +1325,24 @@ void OBDManager::reset_connection()
 bool OBDManager::isConnected() const
 {
     return m_connected;
+}
+
+void OBDManager::setConnectionStatus(const QString &status)
+{
+    m_connectionStatus = status;
+    emit connectionStatusChanged(status);
+}
+
+void OBDManager::setConnectionDetail(const QString &detail)
+{
+    m_connectionDetail = detail;
+    emit connectionStatusDetailChanged(detail);
+}
+
+void OBDManager::setConnectionProgress(int progress)
+{
+    m_connectionProgress = progress;
+    emit connectionProgressChanged(progress);
 }
 
 QString OBDManager::get_connection_status() const
@@ -1566,8 +1587,8 @@ void OBDManager::finishRfcommBind(quint64 generation, const QString &bound)
         return;
 
     if (bound.isEmpty()) {
-        emit connectionStatusChanged(QStringLiteral("Error"));
-        emit connectionStatusDetailChanged(
+        setConnectionStatus(QStringLiteral("Error"));
+        setConnectionDetail(
             QStringLiteral("rfcomm bind failed — see Connection Log"));
         return;
     }
@@ -1803,8 +1824,8 @@ void OBDManager::exit_diagnostic_mode()
     bool wasConnected = m_connected;
     if (wasConnected) {
         m_connected = false;
-        emit connectionStatusChanged(QStringLiteral("Reconnecting"));
-        emit connectionStatusDetailChanged(QStringLiteral("Reconnecting after diagnostic mode..."));
+        setConnectionStatus(QStringLiteral("Reconnecting"));
+        setConnectionDetail(QStringLiteral("Reconnecting after diagnostic mode..."));
 
         {
             QMutexLocker locker(&m_lock);
@@ -2860,7 +2881,7 @@ void OBDManager::logAndroid(const QString &line)
     emit connectionLogLineAppended(line);
     // Mirror to the existing detail text element on the OBD page so the user
     // sees the latest state transition without needing a new QML widget.
-    emit connectionStatusDetailChanged(line);
+    setConnectionDetail(line);
 }
 
 QStringList OBDManager::listAndroidPairedDevices()
@@ -2903,10 +2924,10 @@ void OBDManager::startAndroidConnection()
     QString address = getConfiguredPort();
     if (!checkPortExists(address)) {
         m_connected = false;
-        emit connectionStatusChanged(QStringLiteral("No MAC Address"));
-        emit connectionStatusDetailChanged(
+        setConnectionStatus(QStringLiteral("No MAC Address"));
+        setConnectionDetail(
             QStringLiteral("Enter your ELM327 MAC in OBD Settings, then tap Connect"));
-        emit connectionProgressChanged(0);
+        setConnectionProgress(0);
         emit devicePresenceChanged(false);
         qDebug() << "[OBD] Android: no/invalid MAC configured:" << address;
         {
@@ -2926,8 +2947,8 @@ void OBDManager::startAndroidConnection()
     m_androidSupportedPids.clear();
     m_bleLastJavaState = -1;
 
-    emit connectionProgressChanged(20);
-    emit connectionStatusChanged(QStringLiteral("Connecting BLE..."));
+    setConnectionProgress(20);
+    setConnectionStatus(QStringLiteral("Connecting BLE..."));
     logAndroid(QStringLiteral("BLE connect → %1 (via OctaveOBDBridge)").arg(address));
 
     // Hand off to the Java bridge — bypasses Qt's broken BLE permission gate.
@@ -2944,8 +2965,8 @@ void OBDManager::startAndroidConnection()
             "org/octave/app/OctaveOBDBridge", "lastError",
             "()Ljava/lang/String;").toString();
         logAndroid(QStringLiteral("connect() failed: %1").arg(err));
-        emit connectionStatusChanged(QStringLiteral("BLE connect failed"));
-        emit connectionProgressChanged(0);
+        setConnectionStatus(QStringLiteral("BLE connect failed"));
+        setConnectionProgress(0);
         QMutexLocker locker(&m_lock);
         m_isConnecting = false;
         return;
@@ -3032,8 +3053,8 @@ void OBDManager::onAndroidBlePoll()
         m_bleNotifyPoller.stop();
         m_androidPollWatchdog.stop();
         setVehicleSupport({}, false);
-        emit connectionStatusChanged(QStringLiteral("Disconnected"));
-        emit connectionProgressChanged(0);
+        setConnectionStatus(QStringLiteral("Disconnected"));
+        setConnectionProgress(0);
         // A user disconnect clears m_connected in cleanupConnection() before
         // the bridge reports DISCONNECTED, so wasConnected means a real drop
         if (wasConnected)
@@ -3047,8 +3068,8 @@ void OBDManager::onAndroidBlePoll()
     }
     case 2: { // DISCOVERING (GATT connected, services pending)
         logAndroid(QStringLiteral("GATT connected, discovering services…"));
-        emit connectionProgressChanged(50);
-        emit connectionStatusChanged(QStringLiteral("Discovering services..."));
+        setConnectionProgress(50);
+        setConnectionStatus(QStringLiteral("Discovering services..."));
         break;
     }
     case 3: { // READY (FFE0 + FFE1 + notifications enabled)
@@ -3057,8 +3078,8 @@ void OBDManager::onAndroidBlePoll()
             QMutexLocker locker(&m_lock);
             m_isConnecting = false;
         }
-        emit connectionProgressChanged(70);
-        emit connectionStatusChanged(QStringLiteral("Initializing ELM327..."));
+        setConnectionProgress(70);
+        setConnectionStatus(QStringLiteral("Initializing ELM327..."));
 
         // Don't re-save the MAC back to settings here — it was already
         // persisted when the user entered it. Saving the same value triggers
@@ -3083,8 +3104,8 @@ void OBDManager::onAndroidBlePoll()
             "org/octave/app/OctaveOBDBridge", "lastError",
             "()Ljava/lang/String;").toString();
         logAndroid(QStringLiteral("BLE error: %1").arg(err));
-        emit connectionStatusChanged(QStringLiteral("BLE error"));
-        emit connectionProgressChanged(0);
+        setConnectionStatus(QStringLiteral("BLE error"));
+        setConnectionProgress(0);
         m_bleNotifyPoller.stop();
         {
             QMutexLocker locker(&m_lock);
@@ -3130,8 +3151,8 @@ void OBDManager::sendNextAndroidInitCommand()
     if (m_androidInitStep >= cmds.size()) {
         m_androidElmInitialized = true;
         qDebug() << "[OBD] Android: ELM327 init complete, querying supported PIDs";
-        emit connectionProgressChanged(80);
-        emit connectionStatusChanged(QStringLiteral("Querying PIDs..."));
+        setConnectionProgress(80);
+        setConnectionStatus(QStringLiteral("Querying PIDs..."));
         queryAndroidSupportedPids();
         return;
     }
@@ -3162,8 +3183,8 @@ void OBDManager::finalizeAndroidConnection()
     m_androidReconnectAttempts = 0;
     qDebug() << "[OBD] Android: connected with"
              << m_androidSupportedPids.size() << "supported PIDs";
-    emit connectionStatusChanged(QStringLiteral("Connected"));
-    emit connectionProgressChanged(100);
+    setConnectionStatus(QStringLiteral("Connected"));
+    setConnectionProgress(100);
     emit devicePresenceChanged(true);
 
     // Build poll list from settings (same logic as desktop) intersected with

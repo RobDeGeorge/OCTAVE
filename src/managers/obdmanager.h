@@ -465,6 +465,10 @@ private:
     void cleanupConnection();
     void cleanupWorkerThread();
     void scheduleAutoReconnect();
+    // Store, then emit: what QML reads on the change must be the new value
+    void setConnectionStatus(const QString &status);
+    void setConnectionDetail(const QString &detail);
+    void setConnectionProgress(int progress);
 
     // Port scanning
     void scanForDevices();

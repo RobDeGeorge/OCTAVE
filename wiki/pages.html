@@ -87,6 +87,10 @@
     <span class="cls">Rectangle</span> { <span class="cls">HomeOBDView</span> { <span class="prop">anchors.fill</span>: parent; <span class="prop">anchors.margins</span>: <span class="fn">dp</span>(<span class="num">5</span>) } }
 }</code></pre>
 
+        <h3>First-run prompts</h3>
+
+        <p>Each panel asks for its connection while it has nothing to show, so a fresh install is one tap from a car and music. While <code>obdManager.connectionState</code> is not <code>Connected</code>, the OBD panel hides <code>HomeOBDView</code> (dropping its poll demand) and shows "No vehicle connected" with <code>OBDConnectButton</code> (<code>homeOBDConnectButton</code>), which opens the adapter sheet; a tap elsewhere on the panel still opens OBDMenu. While the active playlist is empty and no phone has the media controls (<code>musicEmpty</code>: <code>get_current_song_list()</code> at load, then <code>mediaListChanged</code>), the media panel swaps its art and controls for "No music yet" with <b>Browse Music</b> (a <code>FolderDialog</code> into <code>save_media_folder_url()</code>, same rules and error wording as Media Room's Browse) and, when phone mirroring or AirPlay is on, <b>Connect Phone</b> (PhoneMirrorView, else AirPlayView). The panel's tap-to-open-player is off meanwhile. Object names for the dev tools: <code>homeOBDPrompt</code>, <code>homeMusicPrompt</code>, <code>homeMusicBrowseButton</code>, <code>homeConnectPhoneButton</code>.</p>
+
         <h3>Media panel</h3>
         <ul>
           <li><strong>Blurred album art background</strong> &mdash; an <code>Image</code> of the current art with <code>layer.effect: MultiEffect { blurEnabled: true; blurMax: 64; blur: min(1, settingsManager.backgroundBlurRadius / 64) }</code> under a <code>#C0000000</code> overlay; the panel border is drawn by a separate border-only rectangle at <code>z: 10</code> so it stays crisp above the blur.</li>

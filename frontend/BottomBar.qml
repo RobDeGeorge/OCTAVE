@@ -197,6 +197,7 @@ Rectangle {
         }
 
         stackView.openPage("MainMenu.qml", {
+            mainWindow: bottomBar.mainWindow,
             windowWidth: bottomBar.mainWindow.width,
             windowHeight: bottomBar.mainWindow.height
         })

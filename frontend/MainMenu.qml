@@ -4,7 +4,9 @@ import QtQuick.Layouts 1.15
 import QtQuick.Controls.Basic 2.15
 import Qt5Compat.GraphicalEffects
 import QtQuick.Effects
+import QtQuick.Dialogs
 import "." as App
+import OCTAVE.OBD 1.0
 
 Item {
     // Local dp/dpMin wrappers — work around Qt Android singleton-function bug.
@@ -48,6 +50,74 @@ Item {
     readonly property int durationMs: _np ? _np.durationMs : 0
 
     function formatTime(ms) { return units.formatDuration(ms) }
+
+    // First-run prompts: each card asks for its connection while it has
+    // nothing to show, so a fresh install is one tap from a car and music
+    readonly property bool obdConnected: typeof obdManager !== "undefined" && !!obdManager
+                                         && obdManager.connectionState === OBDManager.Connected
+    // The active playlist's length (not a raw directory scan, which misses
+    // "All Music"); the phone or Android Auto counts as music
+    property int localSongCount: 0
+    readonly property bool musicEmpty: !useRemote && localSongCount === 0
+    readonly property bool phoneOffered: (!!settingsManager && settingsManager.phoneMirrorEnabled)
+                                         || (typeof airPlayManager !== "undefined" && !!airPlayManager
+                                             && airPlayManager.available && airPlayManager.enabled)
+    function openPhone() {
+        if (settingsManager && settingsManager.phoneMirrorEnabled)
+            stackView.openPage("PhoneMirrorView.qml")
+        else
+            stackView.openPage("AirPlayView.qml")
+    }
+
+    // Library folder picker (same rules and wording as Media Room's Browse)
+    property string _folderError: ""
+    FolderDialog {
+        id: homeFolderDialog
+        title: "Select Music Library Folder"
+        onAccepted: {
+            if (!settingsManager) return
+            mainMenu._folderError = settingsManager.save_media_folder_url(selectedFolder)
+                ? "" : "That folder can't be used as the music library: pick one on the device's storage or SD card."
+        }
+    }
+    Connections {
+        target: typeof mediaManager !== "undefined" ? mediaManager : null
+        function onMediaListChanged(files) { mainMenu.localSongCount = files.length }
+    }
+
+    // Outlined accent button, the look of OBDConnectButton
+    component PromptButton: Rectangle {
+        id: promptButton
+        property string text: ""
+        signal clicked()
+        height: App.Spacing.bottomBarNavButtonHeight
+        width: Math.min(promptLabel.implicitWidth + mainMenu.dp(32), mediaSection.width - mainMenu.dp(24))
+        radius: mainMenu.dpMin(8, 2)
+        color: "transparent"
+        border.color: App.Style.accent
+        border.width: 1
+        scale: promptMouse.pressed ? 0.9 : 1.0
+        Behavior on scale {
+            NumberAnimation { duration: 200; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
+        }
+        Text {
+            id: promptLabel
+            anchors.centerIn: parent
+            width: Math.min(implicitWidth, parent.width - mainMenu.dp(12))
+            elide: Text.ElideRight
+            text: promptButton.text
+            color: App.Style.accent
+            font.pixelSize: App.Spacing.overallText
+            font.bold: true
+            font.family: mainMenu.globalFont
+        }
+        MouseArea {
+            id: promptMouse
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: promptButton.clicked()
+        }
+    }
 
     // Dark background with subtle gradient
     Rectangle {
@@ -115,6 +185,7 @@ Item {
 
             // Media content - vertical layout for narrow panel
             ColumnLayout {
+                visible: !mainMenu.musicEmpty
                 anchors.fill: parent
                 anchors.margins: dp(15)
                 spacing: dp(10)
@@ -376,10 +447,64 @@ Item {
             // interactions, so the progress slider + scrolling title stay
             // usable while still letting an empty-space tap open the player.
             TapHandler {
+                enabled: !mainMenu.musicEmpty   // the prompt's buttons own the taps
                 onTapped: {
                     var defaultPage = settingsManager ? settingsManager.musicButtonDefaultPage : "mediaRoom"
                     var targetPage = defaultPage === "mediaPlayer" ? "MediaPlayer.qml" : "MediaRoom.qml"
                     stackView.openPage(targetPage)
+                }
+            }
+
+            // No music yet: pick the library folder or bring the phone
+            Column {
+                objectName: "homeMusicPrompt"
+                visible: mainMenu.musicEmpty
+                anchors.centerIn: parent
+                width: parent.width - dp(24)
+                spacing: dp(16)
+
+                Text {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                    text: "No music yet"
+                    color: App.Style.metadataColor
+                    font.pixelSize: App.Spacing.overallText * 1.2
+                    font.bold: true
+                    font.family: mainMenu.globalFont
+                }
+                Text {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                    text: mainMenu.phoneOffered ? "Pick a music folder or connect your phone"
+                                                : "Pick the folder your music is in"
+                    color: App.Style.secondaryTextColor
+                    font.pixelSize: App.Spacing.overallText * 0.9
+                    font.family: mainMenu.globalFont
+                }
+                PromptButton {
+                    objectName: "homeMusicBrowseButton"
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "Browse Music"
+                    onClicked: homeFolderDialog.open()
+                }
+                PromptButton {
+                    objectName: "homeConnectPhoneButton"
+                    visible: mainMenu.phoneOffered
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "Connect Phone"
+                    onClicked: mainMenu.openPhone()
+                }
+                Text {
+                    width: parent.width
+                    visible: mainMenu._folderError !== ""
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                    text: mainMenu._folderError
+                    color: App.Style.statusDanger
+                    font.pixelSize: App.Spacing.overallText * 0.8
+                    font.family: mainMenu.globalFont
                 }
             }
         }
@@ -395,7 +520,10 @@ Item {
             radius: dpMin(8, 2)
 
             // Use the HomeOBDView component (stacked vertically)
+            // Hidden while no adapter is connected (its cards would all read
+            // "--"); hiding it also drops its poll demand
             HomeOBDView {
+                visible: mainMenu.obdConnected
                 anchors.fill: parent
                 anchors.margins: dp(5)
             }
@@ -406,10 +534,48 @@ Item {
                     stackView.openPage("OBDMenu.qml")
                 }
             }
+
+            // No adapter: connect straight from Home (scan, pair, connect);
+            // above the MouseArea so the button gets its taps
+            Column {
+                objectName: "homeOBDPrompt"
+                visible: !mainMenu.obdConnected
+                anchors.centerIn: parent
+                width: Math.min(parent.width - dp(40), dp(560))
+                spacing: dp(16)
+
+                Text {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                    text: "No vehicle connected"
+                    color: App.Style.primaryTextColor
+                    font.pixelSize: App.Spacing.overallText * 1.2
+                    font.bold: true
+                    font.family: mainMenu.globalFont
+                }
+                Text {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                    text: "Plug in your OBD2 adapter and connect it to see live readings here"
+                    color: App.Style.secondaryTextColor
+                    font.pixelSize: App.Spacing.overallText * 0.9
+                    font.family: mainMenu.globalFont
+                }
+                App.OBDConnectButton {
+                    objectName: "homeOBDConnectButton"
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    mainWindow: mainMenu.mainWindow
+                    fontFamily: mainMenu.globalFont
+                }
+            }
         }
     }
 
     Component.onCompleted: {
+        if (typeof mediaManager !== "undefined" && mediaManager)
+            localSongCount = mediaManager.get_current_song_list().length
         if (obdManager && obdManager.refresh_values) {
             obdManager.refresh_values()
         }
