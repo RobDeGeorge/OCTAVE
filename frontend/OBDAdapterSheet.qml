@@ -150,13 +150,16 @@ Popup {
             visible: text !== ""
             wrapMode: Text.WordWrap
             text: {
+                if (typeof obdManager !== "undefined" && obdManager && obdManager.simulated)
+                    return "Simulated car · " + obdManager.connectionStatus + " — demo data"
                 if (!sheet.finderSupported)
                     return "Pair your adapter in the system's Bluetooth settings, then pick it below."
                 if (!obdAdapterFinder.bluetoothOn)
-                    return "Bluetooth is off."
+                    return "Bluetooth is off. You can still connect the simulated car."
                 return obdAdapterFinder.status
             }
-            color: sheet.finderSupported && (obdAdapterFinder.statusIsError || !obdAdapterFinder.bluetoothOn)
+            color: sheet.finderSupported && !(typeof obdManager !== "undefined" && obdManager && obdManager.simulated)
+                   && (obdAdapterFinder.statusIsError || !obdAdapterFinder.bluetoothOn)
                    ? App.Style.statusError : App.Style.secondaryTextColor
             font.pixelSize: App.Spacing.overallText * 0.85
             font.family: App.Style.fontFamily
@@ -236,10 +239,11 @@ Popup {
             delegate: Rectangle {
                 id: row
                 width: deviceList.width
-                height: sheet.dp(60)
+                height: Math.max(sheet.dp(60), rowContents.implicitHeight + sheet.dp(16))
                 radius: sheet.dpMin(6, 2)
                 readonly property bool finderRow: sheet.finderSupported
                 readonly property string address: finderRow ? modelData.address : (modelData.identifier || "")
+                objectName: modelData.kind === "sim" ? "simulatedObdAdapter" : ""
                 readonly property bool busy: finderRow && obdAdapterFinder.busyAddress === address
                 readonly property bool connectable: !finderRow || modelData.connectable
                 color: rowMouse.pressed ? Qt.darker(App.Style.hoverColor, 1.2) : App.Style.hoverColor
@@ -249,6 +253,7 @@ Popup {
                 opacity: connectable ? 1.0 : 0.5
 
                 RowLayout {
+                    id: rowContents
                     anchors.fill: parent
                     anchors.leftMargin: sheet.dp(12)
                     anchors.rightMargin: sheet.dp(12)
@@ -293,8 +298,8 @@ Popup {
                         Text {
                             Layout.fillWidth: true
                             text: {
+                                if (modelData.kind === "sim") return modelData.note
                                 if (!row.finderRow) return (modelData.kind || "").toUpperCase() + " · " + row.address
-                if (modelData.kind === "sim") return modelData.note
                                 var parts = [row.address]
                                 parts.push(modelData.kind === "ble" ? "Bluetooth LE"
                                            : modelData.kind === "dual" ? "Classic + LE" : "Classic")

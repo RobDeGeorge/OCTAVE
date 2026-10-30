@@ -159,6 +159,70 @@ private slots:
 #endif
     }
 
+    void simulatedAdapterCanBeSelectedWithoutDevFlags()
+    {
+        QTemporaryDir tmp;
+        const quint16 port = freePort();
+        QProcess app;
+        app.setProcessEnvironment(env(tmp));
+        app.setProcessChannelMode(QProcess::MergedChannels);
+        app.start(kApp, {"--headless", "--service", QString::number(port)});
+        QVERIFY(app.waitForStarted(10000));
+        auto result = [&](const QByteArray &command) {
+            return QJsonDocument::fromJson(request(app, port, command)).object().value("result");
+        };
+        auto simulated = [&] {
+            return result("{\"op\":\"get\",\"object\":\"obdManager\",\"property\":\"simulated\"}").toBool();
+        };
+        auto connected = [&] {
+            return result("{\"op\":\"get\",\"object\":\"obdManager\",\"property\":\"connected\"}").toBool();
+        };
+        auto imu = [&] {
+            return result("{\"op\":\"call\",\"object\":\"sim\",\"method\":\"status\"}")
+                .toObject().value("imu").toObject().value("on").toBool();
+        };
+        QVERIFY(!simulated());
+        const QJsonValue saved = result("{\"op\":\"get\",\"object\":\"settingsManager\",\"property\":\"obdBluetoothPort\"}");
+        result("{\"op\":\"call\",\"object\":\"obdAdapterFinder\",\"method\":\"connectAdapter\",\"args\":[\"sim://elm327\"]}");
+        QTRY_VERIFY_WITH_TIMEOUT(connected(), 15000);
+        QVERIFY(simulated());
+        QVERIFY(imu());
+        QCOMPARE(result("{\"op\":\"get\",\"object\":\"settingsManager\",\"property\":\"obdBluetoothPort\"}"), saved);
+        result("{\"op\":\"call\",\"object\":\"obdManager\",\"method\":\"setParameterDemand\",\"args\":[\"test\",[\"SPEED\",\"RPM\"]]}");
+        // The demo moves without any throttle commands or dev tooling.
+        auto speed = [&] {
+            return result("{\"op\":\"call\",\"object\":\"obdManager\",\"method\":\"speedMPH\"}").toDouble();
+        };
+        QTRY_VERIFY_WITH_TIMEOUT(speed() > 2, 20000);
+
+        result("{\"op\":\"call\",\"object\":\"obdManager\",\"method\":\"connect_to_adapter\",\"args\":[\"/octave-test-missing-adapter\"]}");
+        QVERIFY(!simulated());
+        QVERIFY(!imu());
+        QVERIFY(!connected());
+        const QJsonValue hardware = result("{\"op\":\"get\",\"object\":\"settingsManager\",\"property\":\"obdBluetoothPort\"}");
+        // Re-select after dev fault injection; the picker promises a working demo.
+        result("{\"op\":\"call\",\"object\":\"sim\",\"method\":\"setLinkUp\",\"args\":[false]}");
+        result("{\"op\":\"call\",\"object\":\"sim\",\"method\":\"setEngineOn\",\"args\":[false]}");
+        result("{\"op\":\"call\",\"object\":\"obdManager\",\"method\":\"connect_to_adapter\",\"args\":[\"sim://elm327\"]}");
+        QTRY_VERIFY_WITH_TIMEOUT(connected(), 15000);
+        QVERIFY(simulated());
+        QVERIFY(imu());
+        QCOMPARE(result("{\"op\":\"get\",\"object\":\"settingsManager\",\"property\":\"obdBluetoothPort\"}"), hardware);
+        result("{\"op\":\"call\",\"object\":\"obdManager\",\"method\":\"close\"}");
+        QVERIFY(!connected());
+        QVERIFY(!simulated());
+        QVERIFY(!imu());
+        QTest::qWait(1200); // a pending port-change debounce cannot restart it
+        QVERIFY(!connected());
+        result("{\"op\":\"call\",\"object\":\"obdManager\",\"method\":\"connect_to_adapter\",\"args\":[\"sim://elm327\"]}");
+        QTRY_VERIFY_WITH_TIMEOUT(connected(), 15000);
+
+        app.terminate();
+        QVERIFY2(finished(app), "did not shut down within 60 s");
+        const QString out = QString::fromUtf8(app.readAll());
+        QVERIFY2(app.exitStatus() == QProcess::NormalExit && app.exitCode() == 0, qPrintable(out.right(3000)));
+    }
+
     void headlessSimRunsInEveryBuild()
     {
         QTemporaryDir tmp;

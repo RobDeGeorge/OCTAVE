@@ -15,6 +15,7 @@
 #include "managers/obdadapterfinder.h"
 #include "managers/obdmanager.h"
 #include "managers/settingsmanager.h"
+#include "managers/rfcommsocket.h"
 
 namespace {
 const QString kMac = QStringLiteral("88:1B:99:66:DD:5F");
@@ -37,7 +38,8 @@ private slots:
         m_sim->setRealisticMode(false);
         const std::shared_ptr<OctaveSim::CarState> state = m_sim->state();
         OBDConnectionWorker::setCustomTransport(
-            [](const QString &port) { return port == QLatin1String(OctaveSim::kSimPort); },
+            [](const QString &port) { return port == QLatin1String(OctaveSim::kSimPort)
+                                             || RfcommSocket::isUrl(port); },
             [state](const QString &, QObject *parent) -> QIODevice * {
                 return new OctaveSim::SimElm327Device(state, parent);
             });
@@ -76,7 +78,21 @@ private slots:
         QStringList order;
         for (const QVariant &d : f.devices())
             order << d.toMap().value("name").toString();
-        QCOMPARE(order, (QStringList{"NEXAS", "OBDII", "Dryer", "Washer"}));
+        QCOMPARE(order, (QStringList{"NEXAS", "OBDII", "Dryer", "Washer", "Simulated car"}));
+    }
+
+    void simulatedAdapterIsAvailableBeforeScanning()
+    {
+        OBDManager obd(nullptr);
+        obd.close();
+        OBDAdapterFinder finder(&obd, nullptr);
+        QCOMPARE(finder.devices().size(), 1);
+        QCOMPARE(finder.devices().first().toMap().value("kind").toString(), QStringLiteral("sim"));
+        QVERIFY(finder.devices().first().toMap().value("connectable").toBool());
+        QVERIFY(obd.availableAdapters().contains(OBDManager::simulatedAdapter()));
+        QSignalSpy requested(&obd, &OBDManager::simulatedAdapterRequested);
+        finder.connectAdapter(QString::fromLatin1(OctaveSim::kSimPort));
+        QCOMPARE(requested.size(), 1); // no Bluetooth prerequisites
     }
 
     void handOffConnectsAndNamesTheSavedChip()

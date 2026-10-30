@@ -742,6 +742,8 @@ export interface OBDManager {
   properties: {
     /** bool, notify connectionStatusChanged */
     connected: boolean
+    /** bool, notify simulatedChanged */
+    simulated: boolean
     /** QString, notify connectionStatusChanged */
     connectionStatus: string
     /** OBDManager::ConnectionState, notify connectionStatusChanged */
@@ -915,6 +917,8 @@ export interface OBDManager {
     hybridBatteryRemainingChanged: [value: number]
     elmVoltageChanged: [value: number]
     connectionStatusChanged: [status: string]
+    simulatedChanged: []
+    simulatedAdapterRequested: []
     connectionLostUnexpectedly: [reason: string]
     connectionStatusDetailChanged: [detail: string]
     connectionProgressChanged: [progress: number]

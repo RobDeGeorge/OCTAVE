@@ -381,7 +381,7 @@ Item {
 
             Text {
                 anchors.centerIn: parent
-                text: obdPage.activeDashboardLabel
+                text: (obdManager && obdManager.simulated ? "Simulated · " : "") + obdPage.activeDashboardLabel
                 color: App.Style.obdValueColor
                 font.pixelSize: App.Spacing.overallText * 1.15
                 font.bold: true

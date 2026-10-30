@@ -148,7 +148,7 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(m_obd->vehicleScanComplete(), 15000);
     }
 
-    void closeSaysDisconnectedAndResetReconnects()
+    void closeExitsSimulationAndExplicitSelectionReconnects()
     {
         QTRY_VERIFY_WITH_TIMEOUT(m_obd->isConnected(), 25000);
         QCOMPARE(m_obd->connectionState(), OBDManager::ConnectionState::Connected);
@@ -167,6 +167,9 @@ private slots:
         m_obd->close();   // again: nothing new to say
         QCOMPARE(status.size(), 1);
 
+        QVERIFY(!m_obd->isSimulated());
+        // Close exits demo mode; explicitly select it again before reconnecting.
+        m_obd->setPortOverride(QString::fromLatin1(kSimPort));
         m_obd->reset_connection();
         QTRY_VERIFY_WITH_TIMEOUT(m_obd->isConnected(), 15000);
         QCOMPARE(m_obd->connectionState(), OBDManager::ConnectionState::Connected);

@@ -55,6 +55,8 @@ class OBDManager : public QObject
 
     // Expose connection state as QML-readable properties
     Q_PROPERTY(bool connected READ isConnected NOTIFY connectionStatusChanged)
+    // The selected adapter is the built-in demo; never persisted as a real port.
+    Q_PROPERTY(bool simulated READ isSimulated NOTIFY simulatedChanged)
     Q_PROPERTY(QString connectionStatus READ getConnectionStatus NOTIFY connectionStatusChanged)
     // connectionStatus classified (stateFor): what a frontend colours and
     // animates by; the text stays the label. QML: import OCTAVE.OBD 1.0 for
@@ -197,6 +199,8 @@ signals:
     // Connection status signals
     // ======================================================================
     void connectionStatusChanged(const QString &status);
+    void simulatedChanged();
+    void simulatedAdapterRequested();
     // A live link dropped on its own (adapter unplugged or out of range, port
     // error, BLE drop). Not emitted for disconnect(), port changes,
     // diagnostic-mode switches or shutdown, which tear the worker down first.
@@ -303,7 +307,9 @@ public:
     // Use `port` instead of the saved obdBluetoothPort, without writing it
     // to settings (dev tooling points this at the simulated adapter, see
     // src/dev/). Takes effect on the next connection attempt.
-    void setPortOverride(const QString &port) { m_portOverride = port; }
+    void setPortOverride(const QString &port);
+    bool isSimulated() const;
+    static QVariantMap simulatedAdapter();
 
 public slots:
     // ======================================================================

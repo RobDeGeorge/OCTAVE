@@ -67,7 +67,7 @@ extern "C" {
 #include "dev/devruntime.h"
 #endif
 #ifdef OCTAVE_WASM
-#include "platform/wasm/webdemo.h"   // the browser demo's simulated car
+#include "platform/wasm/webbluetooth.h"
 #endif
 
 namespace {
@@ -770,9 +770,11 @@ int main(int argc, char *argv[])
 #endif
 
 #ifdef OCTAVE_WASM
-    // ---- Browser demo: no car until the adapter sheet picks the simulated
-    // one or a Web Bluetooth adapter ----
-    WebDemo webDemo(&core.sim, &core.obdManager, &core.berryIMU);
+    WebBluetoothLink::registerTransport();
+    QObject::connect(&core.obdManager, &OBDManager::simulatedChanged, &core.obdManager, [&core] {
+        if (core.obdManager.isSimulated())
+            WebBluetoothLink::instance()->disconnectDevice();
+    });
 #endif
 
     // ---- Service (makeService: off unless asked for) ----

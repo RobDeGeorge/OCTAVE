@@ -1,10 +1,9 @@
-#include "webdemo.h"
-#include "webbluetooth.h"
+#include "demodrive.h"
 
-#include "../../managers/obdmanager.h"
-#include "../../sim/carsim.h"
-#include "../../sim/simelm327.h"
-#include "../../sim/simulator.h"
+#include "../managers/obdmanager.h"
+#include "carsim.h"
+#include "simelm327.h"
+#include "simulator.h"
 
 #include <QRandomGenerator>
 
@@ -18,62 +17,54 @@ constexpr int kTickMs = 100;
 int between(int lo, int hi) { return QRandomGenerator::global()->bounded(lo, hi + 1); }
 }
 
-namespace {
-WebDemo *g_demo = nullptr;
-}
-
-WebDemo::WebDemo(Simulator *sim, OBDManager *obd, BerryIMUManager *imu, QObject *parent)
-    : QObject(parent)
-    , m_simulator(sim)
-    , m_obd(obd)
-    , m_imu(imu)
+DemoDrive::DemoDrive(Simulator *sim, OBDManager *obd, BerryIMUManager *imu,
+                     ServicePairing *pairing, QObject *parent)
+    : QObject(parent), m_simulator(sim), m_pairing(pairing), m_obd(obd), m_imu(imu)
 {
-    g_demo = this;
-    connect(&m_autopilot, &QTimer::timeout, this, &WebDemo::drive);
-
-    // A real adapter over Web Bluetooth takes over from the demo car: no
-    // more autopilot, and no simulated motion on the g-force and compass
-    // gauges
-    WebBluetoothLink::registerTransport();
-    connect(WebBluetoothLink::instance(), &WebBluetoothLink::linkUp, this, [this] {
-        if (!m_sim)
-            return;
-        m_autopilot.stop();
-        m_simulator->setImu(false);
+    connect(&m_autopilot, &QTimer::timeout, this, &DemoDrive::drive);
+    connect(m_obd, &OBDManager::simulatedAdapterRequested, this, &DemoDrive::start);
+    connect(m_obd, &OBDManager::simulatedChanged, this, [this] {
+        if (!m_obd->isSimulated()) stop();
     });
 }
 
-WebDemo::~WebDemo()
+DemoDrive::~DemoDrive()
 {
-    if (g_demo == this)
-        g_demo = nullptr;
+    stop();
 }
 
-WebDemo *WebDemo::instance()
+void DemoDrive::start()
 {
-    return g_demo;
-}
-
-void WebDemo::start()
-{
-    // The demo car replaces a Bluetooth adapter rather than racing it
-    WebBluetoothLink::instance()->disconnectDevice();
-    if (!m_sim) {
-        m_simulator->start(m_obd, m_imu, nullptr, true);
-        m_sim = m_simulator->car();
-        // A browser has nothing to wait for on the link, so no Bluetooth-style
-        // latency or NO DATA: the gauges move from the first frame
-        m_sim->setRealisticMode(false);
-    } else {
-        m_obd->setPortOverride(QString::fromLatin1(kSimPort));
-        m_simulator->setImu(true);
-    }
+    m_simulator->start(m_obd, m_imu, m_pairing, true);
+    m_sim = m_simulator->car();
+    // A new selection is always a working car, even after a dev tool has
+    // unplugged it, stopped the engine or introduced faults.
+    m_sim->resetToNormal();
+    m_sim->setLinkUp(true);
+    m_sim->setSimulateDropouts(false);
+    m_sim->setRealisticMode(false);
+    m_sim->setFailureRate(0);
+    m_sim->setEngineOn(true);
+    m_sim->setSpeed(0);
+    m_sim->setGear(1);
+    m_obd->setPortOverride(QString::fromLatin1(kSimPort));
+    m_simulator->setImu(true);
     m_autopilot.start(kTickMs);
     enter(Phase::Idle);
     m_obd->force_connect();
 }
 
-void WebDemo::enter(Phase phase)
+void DemoDrive::stop()
+{
+    m_autopilot.stop();
+    m_simulator->setImu(false);
+    if (m_sim) {
+        m_sim->setThrottle(0);
+        m_sim->setBrake(0);
+    }
+}
+
+void DemoDrive::enter(Phase phase)
 {
     m_phase = phase;
     m_inPhase.start();
@@ -89,7 +80,7 @@ void WebDemo::enter(Phase phase)
     m_sim->setBrake(phase == Phase::Brake ? m_target : 0);
 }
 
-void WebDemo::drive()
+void DemoDrive::drive()
 {
     const bool done = m_inPhase.elapsed() >= m_phaseMs;
     switch (m_phase) {

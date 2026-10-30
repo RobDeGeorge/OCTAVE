@@ -1,15 +1,9 @@
-#ifndef OCTAVE_WASM_WEBDEMO_H
-#define OCTAVE_WASM_WEBDEMO_H
+#ifndef OCTAVE_SIM_DEMODRIVE_H
+#define OCTAVE_SIM_DEMODRIVE_H
 
-// The browser demo's car (WebAssembly build only). The page opens with no
-// car connected; the adapter sheet offers a Bluetooth LE adapter over Web
-// Bluetooth (webbluetooth.h) and "Simulated car", which calls start(): the
-// real OBDManager is pointed at the simulated car of `--sim`
-// (src/sim/simulator.h, AppCore's `sim`) and an autopilot drives it round a
-// loop: pull away, run up through the gears to a road speed (35-70 mph),
-// cruise there, coast, brake to a stop, idle with the odd blip of the
-// throttle. The simulator's IMU feed gives the matching motion. Picking a
-// real adapter later stops both. Built from main.cpp before Main.qml loads.
+// The adapter picker's demo drive, shared by every build. Selecting
+// sim://elm327 starts the real OBD protocol stack and a driving loop.
+// Switching to a real adapter or closing OBD stops the automatic motion.
 
 #include <QElapsedTimer>
 #include <QObject>
@@ -18,23 +12,25 @@
 class OBDManager;
 class BerryIMUManager;
 class Simulator;
+class ServicePairing;
 namespace OctaveSim {
 class CarSim;
 }
 
-class WebDemo : public QObject
+class DemoDrive : public QObject
 {
     Q_OBJECT
 
 public:
     // Nothing runs until start()
-    WebDemo(Simulator *sim, OBDManager *obd, BerryIMUManager *imu, QObject *parent = nullptr);
-    ~WebDemo() override;
+    DemoDrive(Simulator *sim, OBDManager *obd, BerryIMUManager *imu, ServicePairing *pairing, QObject *parent = nullptr);
+    ~DemoDrive() override;
 
-    static WebDemo *instance();
     // Connects OBDManager to the simulated car and drives it (again, after
     // a real adapter took over)
     void start();
+    void stop();
+    bool running() const { return m_autopilot.isActive(); }
 
 private slots:
     void drive();
@@ -44,6 +40,7 @@ private:
     void enter(Phase phase);
 
     Simulator *m_simulator = nullptr;
+    ServicePairing *m_pairing = nullptr;
     OBDManager *m_obd = nullptr;
     BerryIMUManager *m_imu = nullptr;
     OctaveSim::CarSim *m_sim = nullptr;   // once started

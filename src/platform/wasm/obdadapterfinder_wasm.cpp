@@ -1,5 +1,5 @@
 // WebAssembly build: OBDAdapterFinder over Web Bluetooth (webbluetooth.h),
-// plus a "Simulated car" row that starts the demo drive (webdemo.h). The
+// plus the shared "Simulated car" demo drive (src/sim/demodrive.h). The
 // browser does the scanning in its own chooser, so startScan() opens it and
 // the adapter picked there is listed and connected at once; tapping the row
 // later reconnects it. Pairing is the browser's business (BLE ELM327
@@ -13,7 +13,6 @@
 #include "../../managers/obdmanager.h"
 #include "../../sim/simelm327.h"
 #include "webbluetooth.h"
-#include "webdemo.h"
 
 #include <QDebug>
 
@@ -48,16 +47,7 @@ OBDAdapterFinder::OBDAdapterFinder(OBDManager *obd, SettingsManager *settings, Q
     , m_obd(obd)
     , m_settings(settings)
 {
-    m_devices.insert(simAddress(), QVariantMap{
-                                       {QStringLiteral("address"), simAddress()},
-                                       {QStringLiteral("name"), QStringLiteral("Simulated car")},
-                                       {QStringLiteral("rssi"), 0},
-                                       {QStringLiteral("kind"), QStringLiteral("sim")},
-                                       {QStringLiteral("likelyObd"), true},
-                                       {QStringLiteral("paired"), false},
-                                       {QStringLiteral("connectable"), true},
-                                       {QStringLiteral("note"), QStringLiteral("No hardware: a demo drive")},
-                                   });
+    m_devices.insert(simAddress(), OBDManager::simulatedAdapter());
     rebuildList();
     WebBluetoothLink *link = WebBluetoothLink::instance();
     m_status = link->available()
@@ -145,17 +135,17 @@ void OBDAdapterFinder::connectAdapter(const QString &address)
         setStatus(QStringLiteral("That adapter is no longer in the list: pick it again."), true);
         return;
     }
-    if (!m_busyAddress.isEmpty() && !m_handedOff)
-        return;  // one at a time
+    if (!m_busyAddress.isEmpty() && !m_handedOff && address != simAddress())
+        return;  // the simulated adapter can always take over
     m_busyName = d.value(QStringLiteral("name")).toString();
     if (address == simAddress()) {
+        WebBluetoothLink::instance()->disconnectDevice();
         // Straight to OBDManager: judged by onObdStatus() like a handed-off adapter
         m_handedOff = true;
         m_sawConnecting = false;
         setBusy(address);
         setStatus(QStringLiteral("Starting the demo drive…"));
-        if (WebDemo *demo = WebDemo::instance())
-            demo->start();
+        if (m_obd) m_obd->connect_to_adapter(address);
         return;
     }
     m_handedOff = false;

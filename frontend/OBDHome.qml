@@ -115,7 +115,7 @@ Item {
                     }
 
                     Text {
-                        text: obdHome.connectionStatus
+                        text: (obdManager && obdManager.simulated ? "Simulated · " : "") + obdHome.connectionStatus
                         color: textColor
                         font.pixelSize: App.Spacing.overallText
                         font.bold: true

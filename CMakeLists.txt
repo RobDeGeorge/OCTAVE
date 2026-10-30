@@ -16,8 +16,8 @@ if(ANDROID)
     list(APPEND OCTAVE_QT_COMPONENTS Sensors)
 endif()
 # WebAssembly (the browser demo at robdegeorge.com/OCTAVE/): no serial ports
-# or Bluetooth in a browser, so the OBD transports are compiled out and the
-# simulated car is the only adapter (OCTAVE_WASM).
+# or native Bluetooth in a browser. Custom transports provide the simulated
+# car and Web Bluetooth adapters (OCTAVE_WASM).
 if(EMSCRIPTEN)
     list(REMOVE_ITEM OCTAVE_QT_COMPONENTS SerialPort Bluetooth)
 endif()
@@ -387,6 +387,8 @@ qt_add_executable(octave
     # build, inert unless started
     src/sim/simulator.h
     src/sim/simulator.cpp
+    src/sim/demodrive.h
+    src/sim/demodrive.cpp
     src/sim/simconfig.h
     src/sim/simconfig.cpp
     src/sim/carsim.h
@@ -472,9 +474,6 @@ if(EMSCRIPTEN)
         src/platform/wasm/QSerialPortInfo
         src/platform/wasm/obdadapterfinder_wasm.cpp
         src/platform/wasm/networkmanager_wasm.cpp
-        # the demo car: the --sim simulator (src/sim/), driven by an autopilot
-        src/platform/wasm/webdemo.h
-        src/platform/wasm/webdemo.cpp
         # a real Bluetooth LE OBD adapter over Web Bluetooth
         src/platform/wasm/webbluetooth.h
         src/platform/wasm/webbluetooth.cpp

@@ -6,18 +6,11 @@
 #include <algorithm>
 #include <cmath>
 
-#if defined(Q_OS_MOBILE) && !defined(OCTAVE_WASM)   // wasm runs the desktop IMU manager
-
-// The QtSensors-backed mobile manager has no I2C worker to stand in for
-namespace OctaveSim {
-ImuFeed::ImuFeed(BerryIMUManager *imu, CarSim *sim, QObject *parent)
-    : QObject(parent), m_imu(imu), m_sim(sim) {}
-void ImuFeed::setEnabled(bool) {}
-QVariantMap ImuFeed::status() const { return {{QStringLiteral("on"), false}}; }
-void ImuFeed::tick() {}
-} // namespace OctaveSim
-
-#else
+#if defined(Q_OS_MOBILE) && !defined(OCTAVE_WASM)
+#include <QAccelerometer>
+#include <QCompass>
+#include <QPressureSensor>
+#endif
 
 // Friend of BerryIMUManager (see berryimumanager.h); global namespace so the
 // friend declaration there matches.
@@ -26,18 +19,35 @@ class SimImuAccess
 public:
     static void take(BerryIMUManager *imu)
     {
+#if defined(Q_OS_MOBILE) && !defined(OCTAVE_WASM)
+        imu->m_simulated = true;
+        imu->m_accel->stop();
+        imu->m_compass->stop();
+        imu->m_pressure->stop();
+        imu->m_connected = true;
+        emit imu->hasTemperatureChanged(true);
+#else
         imu->stopWorker();          // nothing else may emit while we do
         imu->m_shuttingDown = true; // makes startSensor() / scheduleRetry() no-ops
         imu->m_running = true;
+#endif
         emit imu->connectionStatusChanged(QStringLiteral("Connected"));
     }
     static void release(BerryIMUManager *imu)
     {
+#if defined(Q_OS_MOBILE) && !defined(OCTAVE_WASM)
+        imu->m_simulated = false;
+        const bool enabled = imu->m_enabled;
+        imu->m_enabled = !enabled; // reapply the current preference to hardware
+        imu->setEnabled(enabled);
+        emit imu->hasTemperatureChanged(imu->m_hasTemperature);
+#else
         imu->m_running = false;
         imu->m_shuttingDown = false;
         imu->m_retryCount = 0;
         emit imu->connectionStatusChanged(QStringLiteral("Disconnected"));
         imu->startSensor();         // back to the real I2C path
+#endif
     }
 };
 
@@ -127,5 +137,3 @@ void ImuFeed::tick()
 }
 
 } // namespace OctaveSim
-
-#endif // Q_OS_MOBILE

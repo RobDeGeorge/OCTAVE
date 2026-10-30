@@ -24,6 +24,7 @@ AppCore::AppCore(const QDir &frontendDir, Units *units)
     , fontCatalog(frontendDir.absoluteFilePath(QStringLiteral("assets/fonts")))
     , themeCatalog(frontendDir.absoluteFilePath(QStringLiteral("themes.json")), &settingsManager)
     , servicePairing(&settingsManager)
+    , demoDrive(&sim, &obdManager, &berryIMU, &servicePairing)
 {
     // Settings Manager — central settings store, everything depends on this
     expose("settingsManager", &settingsManager);
@@ -419,6 +420,7 @@ void AppCore::wireKnobLed()
 
 void AppCore::shutdown()
 {
+    demoDrive.stop(); // release simulated sensors before hardware cleanup
     // Sources stopping below must not overwrite who owned the music
     nowPlaying.stopSaving();
     // Stubs make all calls no-op on mobile

@@ -390,7 +390,7 @@ Item {
                         Text {
                             id: statusText
                             anchors.verticalCenter: parent.verticalCenter
-                            text: connectionStatusRect.status
+                            text: (obdManager && obdManager.simulated ? "Simulated · " : "") + connectionStatusRect.status
                             color: "white"
                             font.pixelSize: App.Spacing.overallText
                             font.family: App.Style.fontFamily

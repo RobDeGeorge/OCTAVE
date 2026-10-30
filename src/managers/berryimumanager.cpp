@@ -1119,6 +1119,7 @@ bool BerryIMUManager::idleThrottled(QElapsedTimer &last) const
 
 void BerryIMUManager::onAccelReading()
 {
+    if (m_simulated) return;
     QAccelerometerReading *r = m_accel->reading();
     if (!r) return;
     if (idleThrottled(m_lastAccelEmit)) return;
@@ -1156,6 +1157,7 @@ void BerryIMUManager::onAccelReading()
 
 void BerryIMUManager::onCompassReading()
 {
+    if (m_simulated) return;
     QCompassReading *r = m_compass->reading();
     if (!r) return;
     if (idleThrottled(m_lastCompassEmit)) return;
@@ -1169,6 +1171,7 @@ void BerryIMUManager::onCompassReading()
 
 void BerryIMUManager::onPressureReading()
 {
+    if (m_simulated) return;
     QPressureReading *r = m_pressure->reading();
     if (!r) return;
     const double p = r->pressure();
@@ -1194,6 +1197,7 @@ void BerryIMUManager::setEnabled(bool enabled)
 {
     if (enabled == m_enabled) return;
     m_enabled = enabled;
+    if (m_simulated) return;
     if (enabled) {
         // start() is also the availability probe; while no page uses the
         // values, stop again straight away (see setActive)
@@ -1243,6 +1247,7 @@ void BerryIMUManager::setActive(bool active)
     if (active == m_active)
         return;
     m_active = active;
+    if (m_simulated) return;
     if (!m_accel || !m_compass || !m_pressure)
         return;
     if (m_active) {

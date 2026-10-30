@@ -259,7 +259,7 @@ public:
 
     void connect_settings_manager(SettingsManager *sm);
 
-    bool hasTemperature() const { return m_hasTemperature; }
+    bool hasTemperature() const { return m_simulated || m_hasTemperature; }
 
 signals:
     void orientationChanged(float w, float x, float y, float z);
@@ -301,6 +301,9 @@ private slots:
 
 private:
     bool getConnected() const;
+
+    friend class SimImuAccess;
+    bool m_simulated = false;
 
     SettingsManager *m_settingsManager;
     QAccelerometer  *m_accel;

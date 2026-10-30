@@ -1825,6 +1825,12 @@ func (o ObdManager) GetConnected() (v bool, err error) {
 	return
 }
 
+// GetSimulated reads the property "simulated" (bool).
+func (o ObdManager) GetSimulated() (v bool, err error) {
+	err = o.c.Get("obdManager", "simulated", &v)
+	return
+}
+
 // GetConnectionStatus reads the property "connectionStatus" (QString).
 func (o ObdManager) GetConnectionStatus() (v string, err error) {
 	err = o.c.Get("obdManager", "connectionStatus", &v)

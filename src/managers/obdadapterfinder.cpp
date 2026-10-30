@@ -50,6 +50,9 @@ OBDAdapterFinder::OBDAdapterFinder(OBDManager *obd, SettingsManager *settings, Q
     , m_obd(obd)
     , m_settings(settings)
 {
+    rebuildList(); // the simulated adapter needs neither Bluetooth nor a scan
+    if (m_obd)
+        connect(m_obd, &OBDManager::connectionStatusChanged, this, &OBDAdapterFinder::onObdStatus);
     if (!supported())
         return;
 
@@ -70,8 +73,6 @@ OBDAdapterFinder::OBDAdapterFinder(OBDManager *obd, SettingsManager *settings, Q
         handOff(1);
     });
 
-    if (m_obd)
-        connect(m_obd, &OBDManager::connectionStatusChanged, this, &OBDAdapterFinder::onObdStatus);
 }
 
 bool OBDAdapterFinder::bluezRunning()
@@ -104,7 +105,7 @@ bool OBDAdapterFinder::ensureBluetooth()
     connect(m_agent, &QBluetoothDeviceDiscoveryAgent::finished, this, [this] {
         setScanning(false);
         if (m_busyAddress.isEmpty() && !m_statusIsError)
-            setStatus(m_deviceList.isEmpty() ? QStringLiteral("No Bluetooth devices found. Is the ignition on?")
+            setStatus(m_devices.isEmpty() ? QStringLiteral("No Bluetooth devices found. Is the ignition on?")
                                              : QString());
     });
     connect(m_agent, &QBluetoothDeviceDiscoveryAgent::canceled, this, [this] { setScanning(false); });
@@ -257,6 +258,7 @@ void OBDAdapterFinder::rebuildList()
     QVariantList list;
     for (const QVariantMap &r : rows)
         list.append(r);
+    list.append(OBDManager::simulatedAdapter());
     if (list != m_deviceList) {
         m_deviceList = list;
         emit devicesChanged();
@@ -265,6 +267,16 @@ void OBDAdapterFinder::rebuildList()
 
 void OBDAdapterFinder::connectAdapter(const QString &address)
 {
+    if (address == OBDManager::simulatedAdapter().value(QStringLiteral("address")).toString()) {
+        cancel();
+        m_busyName = QStringLiteral("Simulated car");
+        setBusy(address);
+        m_handedOff = true;
+        m_sawConnecting = false;
+        setStatus(QStringLiteral("Starting the demo drive…"));
+        if (m_obd) m_obd->connect_to_adapter(address);
+        return;
+    }
     if (!supported() || !ensureBluetooth())
         return;
     const QString addr = address.trimmed().toUpper();

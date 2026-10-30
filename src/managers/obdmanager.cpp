@@ -1,4 +1,5 @@
 #include "obdmanager.h"
+#include "../sim/simelm327.h"
 #include "dtcdescriptions.h"
 #include "parametercatalog.h"
 #include "elm327protocol.h"
@@ -127,6 +128,31 @@ OBDManager::Platform OBDManager::detectPlatform() const
 // ---------------------------------------------------------------------------
 // Configuration helpers
 // ---------------------------------------------------------------------------
+
+bool OBDManager::isSimulated() const
+{
+    return m_portOverride == QLatin1String(OctaveSim::kSimPort);
+}
+
+void OBDManager::setPortOverride(const QString &port)
+{
+    const bool wasSimulated = isSimulated();
+    m_portOverride = port;
+    // An explicit choice supersedes a pending settings change / rfcomm bind.
+    m_portChangeTimer.stop();
+    m_pendingPort.clear();
+    ++m_rfcommBindGeneration;
+    if (wasSimulated != isSimulated())
+        emit simulatedChanged();
+}
+
+QVariantMap OBDManager::simulatedAdapter()
+{
+    const QString address = QString::fromLatin1(OctaveSim::kSimPort);
+    return {{"address", address}, {"identifier", address}, {"name", "Simulated car"},
+            {"rssi", 0}, {"kind", "sim"}, {"likelyObd", true}, {"paired", false},
+            {"connectable", true}, {"note", "No hardware: a demo drive"}};
+}
 
 QString OBDManager::getConfiguredPort() const
 {
@@ -617,6 +643,8 @@ void OBDManager::onDeviceScanTimer()
 
 void OBDManager::startConnection()
 {
+    if (m_forceStopReconnect)
+        return;
     {
         QMutexLocker locker(&m_lock);
         if (m_isConnecting) {
@@ -635,10 +663,12 @@ void OBDManager::startConnection()
     setConnectionProgress(10);
 
 #ifdef Q_OS_ANDROID
-    // Android: skip the QSerialPort + worker-thread flow entirely; the BLE
-    // link is driven from this thread through OctaveOBDBridge.java.
-    startAndroidConnection();
-    return;
+    // Real Android BLE uses Java; custom adapters (including the simulator)
+    // use the same worker and ELM327 protocol as desktop and WebAssembly.
+    if (!OBDConnectionWorker::transportClaims(getConfiguredPort())) {
+        startAndroidConnection();
+        return;
+    }
 #endif
 
     QString port = getConfiguredPort();
@@ -1211,6 +1241,8 @@ void OBDManager::onSettingsPortChanged()
     if (!m_settingsManager)
         return;
     QString newPort = m_settingsManager->obdBluetoothPort();
+    if (isSimulated())
+        setPortOverride(QString());
     if (!newPort.isEmpty() && newPort != m_pendingPort) {
         m_pendingPort = newPort;
         m_portChangeTimer.start();
@@ -1250,12 +1282,14 @@ void OBDManager::applyPollList()
         return;
     }
 #ifdef Q_OS_ANDROID
-    rebuildAndroidPollList();
-    qDebug() << "[OBD] Poll set refreshed live," << m_androidEnabledPids.size() << "PIDs";
-    // If the response-driven chain died on an empty list, restart it.
-    if (m_androidPolling && !m_androidEnabledPids.isEmpty() && !m_androidPollWatchdog.isActive())
-        pollNextAndroidPid();
-#else
+    if (!m_worker) {
+        rebuildAndroidPollList();
+        qDebug() << "[OBD] Poll set refreshed live," << m_androidEnabledPids.size() << "PIDs";
+        if (m_androidPolling && !m_androidEnabledPids.isEmpty() && !m_androidPollWatchdog.isActive())
+            pollNextAndroidPid();
+        return;
+    }
+#endif
     if (!m_worker)
         return;
     const QList<PidKey> pids = buildPidsToWatch();
@@ -1265,7 +1299,6 @@ void OBDManager::applyPollList()
     OBDConnectionWorker *worker = m_worker;
     QMetaObject::invokeMethod(worker, [worker, pids, background]() { worker->updatePidsToWatch(pids, background); },
                               Qt::QueuedConnection);
-#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -1274,11 +1307,13 @@ void OBDManager::applyPollList()
 
 void OBDManager::connect_obd()
 {
+    m_forceStopReconnect = false;
     startConnection();
 }
 
 void OBDManager::reconnect()
 {
+    m_forceStopReconnect = false;
     qCInfo(lcElm327) << "reconnect requested";
     cleanupConnection();
     m_connectionAttempts = 0;
@@ -1287,6 +1322,7 @@ void OBDManager::reconnect()
 
 void OBDManager::force_connect()
 {
+    m_forceStopReconnect = false;
     qCInfo(lcElm327) << "connect requested";
     m_connectionAttempts = 0;
     // Always clear the in-progress flag — without this, a previous attempt
@@ -1307,6 +1343,8 @@ void OBDManager::close()
     m_deviceScannerTimer.stop();
     m_dataWatchdogTimer.stop();
     cleanupConnection();
+    if (isSimulated())
+        setPortOverride(QString());
     // cleanupConnection() is silent (a reconnect says "Connecting" right
     // after it); here nothing follows, so say it, or connected,
     // connectionState and connectionStatus stay "Connected" for subscribers
@@ -1392,6 +1430,7 @@ void OBDManager::scan()
 
 QString OBDManager::kindForIdentifier(const QString &id) const
 {
+    if (id == QLatin1String(OctaveSim::kSimPort)) return QStringLiteral("sim");
     static const QRegularExpression macRe(
         QStringLiteral("^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$"));
     if (macRe.match(id).hasMatch())                     return QStringLiteral("ble");
@@ -1408,6 +1447,7 @@ QString OBDManager::kindForIdentifier(const QString &id) const
 QString OBDManager::displayNameForIdentifier(const QString &id) const
 {
     const QString kind = kindForIdentifier(id);
+    if (kind == QLatin1String("sim")) return QStringLiteral("Simulated car");
 #ifdef Q_OS_ANDROID
     if (kind == QStringLiteral("ble") && m_androidDeviceNames.contains(id))
         return QStringLiteral("%1 · %2").arg(m_androidDeviceNames.value(id), id);
@@ -1431,12 +1471,15 @@ QVariantList OBDManager::buildAdapterList(const QStringList &ports) const
 {
     QVariantList result;
     for (const QString &p : ports) {
+        if (p == QLatin1String(OctaveSim::kSimPort))
+            continue;
         QVariantMap entry;
         entry[QStringLiteral("identifier")] = p;
         entry[QStringLiteral("name")]       = displayNameForIdentifier(p);
         entry[QStringLiteral("kind")]       = kindForIdentifier(p);
         result.append(entry);
     }
+    result.append(simulatedAdapter());
     return result;
 }
 
@@ -1617,6 +1660,14 @@ void OBDManager::connect_to_adapter(const QString &identifier)
         return;
     }
 
+    if (trimmed == QLatin1String(OctaveSim::kSimPort)) {
+        emit simulatedAdapterRequested();
+        return;
+    }
+    // A hardware selection must take over from a previous demo override.
+    if (isSimulated())
+        setPortOverride(QString());
+
     static const QRegularExpression macRe(
         QStringLiteral("^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$"));
     const bool isMac = macRe.match(trimmed).hasMatch();
@@ -1687,28 +1738,30 @@ void OBDManager::scan_vehicle()
     emit scanProgressChanged(0, QStringLiteral("Starting vehicle scan..."));
 
 #ifdef Q_OS_ANDROID
-    // No worker thread here: the supported-PID bitmaps were read during
-    // connect (queryAndroidSupportedPids), so answer from that cache.
-    emit scanOutputChanged(QStringLiteral("[SCAN] Starting vehicle PID scan..."));
-    if (m_androidSupportedPids.isEmpty()) {
-        emit scanOutputChanged(QStringLiteral("[WARN] No supported PIDs returned from vehicle"));
-        emit scanProgressChanged(100, QStringLiteral("No supported PIDs found"));
-        onWorkerScanComplete(QStringList());
+    if (!m_worker) {
+        // No worker thread here: the supported-PID bitmaps were read during
+        // connect (queryAndroidSupportedPids), so answer from that cache.
+        emit scanOutputChanged(QStringLiteral("[SCAN] Starting vehicle PID scan..."));
+        if (m_androidSupportedPids.isEmpty()) {
+            emit scanOutputChanged(QStringLiteral("[WARN] No supported PIDs returned from vehicle"));
+            emit scanProgressChanged(100, QStringLiteral("No supported PIDs found"));
+            onWorkerScanComplete(QStringList());
+            return;
+        }
+        emit scanOutputChanged(QStringLiteral("[INFO] Vehicle reports %1 supported PIDs")
+                                   .arg(m_androidSupportedPids.size()));
+        const QStringList names = ELM327Protocol::supportedCommandNames(m_androidSupportedPids);
+        for (const QString &n : names)
+            emit scanOutputChanged(QStringLiteral("[OK] %1").arg(n));
+        emit scanOutputChanged(QStringLiteral("[DONE] Scan complete!"));
+        onWorkerScanComplete(names);
         return;
     }
-    emit scanOutputChanged(QStringLiteral("[INFO] Vehicle reports %1 supported PIDs")
-                               .arg(m_androidSupportedPids.size()));
-    const QStringList names = ELM327Protocol::supportedCommandNames(m_androidSupportedPids);
-    for (const QString &n : names)
-        emit scanOutputChanged(QStringLiteral("[OK] %1").arg(n));
-    emit scanOutputChanged(QStringLiteral("[DONE] Scan complete!"));
-    onWorkerScanComplete(names);
-#else
+#endif
     if (!invokeWorker("doScanVehicle")) {
         m_isScanning = false;
         emit scanProgressChanged(0, QStringLiteral("Scan unavailable"));
     }
-#endif
 }
 
 bool OBDManager::is_scanning() const
@@ -1920,10 +1973,12 @@ void OBDManager::read_vin()
         return;
     }
 #ifdef Q_OS_ANDROID
-    m_androidVinRequested = true;
-#else
-    invokeWorker("doReadVin");
+    if (!m_worker) {
+        m_androidVinRequested = true;
+        return;
+    }
 #endif
+    invokeWorker("doReadVin");
 }
 
 // ---------------------------------------------------------------------------
@@ -2922,6 +2977,9 @@ QStringList OBDManager::listAndroidPairedDevices()
 void OBDManager::startAndroidConnection()
 {
     QString address = getConfiguredPort();
+    // A delayed BLE retry must not take over after Close or a demo selection.
+    if (m_forceStopReconnect || OBDConnectionWorker::transportClaims(address))
+        return;
     if (!checkPortExists(address)) {
         m_connected = false;
         setConnectionStatus(QStringLiteral("No MAC Address"));

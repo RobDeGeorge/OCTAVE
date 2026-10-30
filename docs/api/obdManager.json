@@ -575,6 +575,14 @@
         },
         {
             "constant": false,
+            "name": "simulated",
+            "notify": "simulatedChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
             "name": "connectionStatus",
             "notify": "connectionStatusChanged",
             "readable": true,
@@ -1433,6 +1441,16 @@
                     "name": "status",
                     "type": "QString"
                 }
+            ]
+        },
+        {
+            "name": "simulatedChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "simulatedAdapterRequested",
+            "params": [
             ]
         },
         {

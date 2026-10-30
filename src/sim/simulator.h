@@ -7,7 +7,7 @@
 // berryIMU manager, a test H.264 loop into the phone's video stream, and
 // pairing codes without the Settings page. Built in every configuration,
 // release and app store included, and inert unless start() is called
-// (main.cpp does, for --sim / --dev; the browser demo always does).
+// (main.cpp does for --sim / --dev; DemoDrive does when the adapter is selected).
 //
 // Served as the `sim` object (AppCore exposes it in every build, `active`
 // false unless this run is simulated). Experimental: not covered by the
@@ -43,7 +43,8 @@ class Simulator : public QObject
     Q_CLASSINFO("octave.scope", "vehicle")
     Q_CLASSINFO("octave.scope.read", "status")
     Q_CLASSINFO("octave.scope.full", "pairingCode")
-    // Whether this run is simulated (--sim, --dev, the browser demo)
+    // Whether the simulator has been initialized; obdManager.simulated
+    // identifies whether its adapter is currently selected.
     Q_PROPERTY(bool active READ active NOTIFY activeChanged)
 
 public:
