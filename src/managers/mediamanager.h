@@ -37,6 +37,12 @@ struct PlaylistInfo {
     bool isCombined = false;
 };
 
+// TagLib reads tags and covers on desktop and in the browser demo; Android
+// reads them through the platform (JNI), other mobile targets use file names
+#if !defined(Q_OS_MOBILE) || defined(OCTAVE_WASM)
+#define OCTAVE_TAGLIB 1
+#endif
+
 class MediaManager : public QObject
 {
     Q_OBJECT
@@ -52,7 +58,7 @@ class MediaManager : public QObject
                 "get_song_playlist_name get_total_duration is_muted is_paused is_playing is_shuffled")
     Q_CLASSINFO("octave.scope.files",
                 "create_playlist delete_playlist delete_song flush_metadata_store move_song_to_playlist "
-                "set_library_root strip_filenames")
+                "pick_browser_library set_library_root strip_filenames")
     Q_CLASSINFO("octave.scope.full",
                 "_clear_temp_files _save_playback_state connect_settings_manager "
                 "extract_colors_from_album_art extract_colors_from_image invalidate_stats_cache setDucking "
@@ -191,6 +197,11 @@ public slots:
     // truncated}, anything else {error}. Choose one with
     // settingsManager.save_media_folder(path).
     Q_INVOKABLE QVariantMap browse_music_folders(const QString &path);
+    // The browser demo: opens the browser's folder picker (call from a tap)
+    // and makes the folder picked the library for this visit
+    // (platform/wasm/weblibrary.h); true. Elsewhere does nothing and returns
+    // false: pick a folder with a folder dialog or browse_music_folders.
+    Q_INVOKABLE bool pick_browser_library();
     Q_INVOKABLE QString get_total_duration();
     Q_INVOKABLE int get_album_count();
     Q_INVOKABLE int get_artist_count();
@@ -234,10 +245,12 @@ private:
     QString _cached_art_url_for(const QString &albumId) const;
     QString _extract_art_for(const QString &filePath, const QString &albumId);
     void _apply_album_colors(const QString &themeJson, const QString &filename);
-#if !defined(Q_OS_MOBILE)
+#ifdef OCTAVE_TAGLIB
     static MediaMetadata _read_tags(const QString &filePath, const QString &baseName);
 #endif
     void _emit_metadata(const QString &filename);
+    qint64 _player_position() const;
+    bool _player_playing() const;
     QString _get_album_id(const QString &filename);
     void _manage_cache(const QString &newAlbumId);
     void _attempt_playback_recovery(bool force = false);

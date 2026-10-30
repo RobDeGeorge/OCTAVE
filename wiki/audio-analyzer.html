@@ -115,6 +115,9 @@
         <h3>QAudioDecoder in the native format</h3>
         <p>The analyzer runs Qt Multimedia's <code>QAudioDecoder</code> <strong>in the file's native format</strong> &mdash; no <code>setAudioFormat()</code> &mdash; and does the rest itself. <code>QAudioDecoder</code> uses the platform backend: MediaCodec on Android, FFmpeg or GStreamer on Linux, Windows Media Foundation on Windows, AVFoundation on macOS, so supported inputs depend on that backend.</p>
 
+        <h3>In the browser demo</h3>
+        <p>Qt has no <code>QAudioDecoder</code> backend for WebAssembly, so there (<code>OCTAVE_WASM</code>) <code>analyzeAudio()</code> asks the page instead: <code>WebMusicLibrary::decodeMono()</code> (<span class="file-path">src/platform/wasm/weblibrary.{h,cpp}</span>) queues a decode on the main thread, where the visitor's <code>File</code> is decoded by Web Audio in an <code>OfflineAudioContext</code> at 8&nbsp;kHz (it resamples to its own rate) and mixed to mono, while the analysis worker waits (at most 60&nbsp;s). The samples go into the same <code>ChunkStream</code> (factor 1 at 8&nbsp;kHz), so the FFT, bands and levels below are the same as on the device. Only songs of a folder picked in the browser can be decoded.</p>
+
         <h3>Preprocessing</h3>
         <ol class="steps">
           <li><strong>Mix to mono</strong> - <code>appendMono()</code> averages the channels of each <code>QAudioBuffer</code> into a float vector holding just that buffer. Float, Int16, Int32 and UInt8 sources are handled (integer samples are scaled to -1..1); nothing at the native rate is kept beyond the current buffer.</li>

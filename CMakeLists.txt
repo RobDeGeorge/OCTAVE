@@ -117,6 +117,28 @@ if(NOT ANDROID AND NOT EMSCRIPTEN)
         pkg_check_modules(TAGLIB REQUIRED IMPORTED_TARGET taglib)
     endif()
 endif()
+# The browser demo builds TagLib from source (the release tarball bundles
+# utfcpp). Its tags are read from parts of the visitor's files, not from disk
+# (src/platform/wasm/weblibrary.cpp). A source build has no include/taglib/
+# layout, so the public headers are copied flat into one for
+# #include <taglib/...>.
+if(EMSCRIPTEN)
+    include(FetchContent)
+    FetchContent_Declare(taglib
+        URL https://github.com/taglib/taglib/releases/download/v2.3.2/taglib-2.3.2.tar.gz
+        URL_HASH SHA256=3ca2d8afaa7f1cf7f6ed10e511ebc368bfacd6dcaa3dbfa690b89e502e8963dc)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+    set(BUILD_BINDINGS OFF CACHE BOOL "" FORCE)
+    set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(WITH_ZLIB OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(taglib)
+    # the multithreaded Qt kit links with shared memory: every object needs atomics
+    target_compile_options(tag PRIVATE -pthread -w)
+    file(GLOB_RECURSE _taglib_headers "${taglib_SOURCE_DIR}/taglib/*.h" "${taglib_SOURCE_DIR}/taglib/*.tcc")
+    file(COPY ${_taglib_headers} "${taglib_BINARY_DIR}/taglib_config.h"
+         DESTINATION "${CMAKE_BINARY_DIR}/taglib_include/taglib")
+endif()
 
 # ---- FFmpeg (libavcodec) for the built-in phone-mirror client ----
 # Optional: without it the C++ backend still builds and reports
@@ -456,6 +478,9 @@ if(EMSCRIPTEN)
         # a real Bluetooth LE OBD adapter over Web Bluetooth
         src/platform/wasm/webbluetooth.h
         src/platform/wasm/webbluetooth.cpp
+        # the music library: a folder picked in the browser, played from blob: URLs
+        src/platform/wasm/weblibrary.h
+        src/platform/wasm/weblibrary.cpp
     )
     set_source_files_properties(src/managers/obdadapterfinder.cpp src/managers/networkmanager.cpp
                                 PROPERTIES HEADER_FILE_ONLY ON)
@@ -545,7 +570,8 @@ if(ANDROID)
 elseif(WIN32)
     target_link_libraries(octave PRIVATE TagLib::tag)
 elseif(EMSCRIPTEN)
-    # no TagLib: MediaManager falls back to Qt's metadata as on Android
+    target_link_libraries(octave PRIVATE tag)
+    target_include_directories(octave PRIVATE "${CMAKE_BINARY_DIR}/taglib_include")
 else()
     target_link_libraries(octave PRIVATE PkgConfig::TAGLIB)
 endif()

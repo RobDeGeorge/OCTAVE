@@ -573,6 +573,7 @@ export interface MediaManager {
     get_default_media_dir: { args: []; returns: string }
     get_media_folder_name: { args: []; returns: string }
     browse_music_folders: { args: [path: string]; returns: Record<string, unknown> }
+    pick_browser_library: { args: []; returns: boolean }
     get_total_duration: { args: []; returns: string }
     get_album_count: { args: []; returns: number }
     get_artist_count: { args: []; returns: number }

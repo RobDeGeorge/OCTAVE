@@ -113,7 +113,8 @@ Flickable {
                         SettingsButton {
                             text: "Browse"
                             Layout.preferredHeight: mediaFolderField.height
-                            onClicked: folderDialog.open()
+                            // the browser demo opens the browser's own folder picker instead
+                            onClicked: if (!mediaManager || !mediaManager.pick_browser_library()) folderDialog.open()
                         }
 
                         SettingsButton {

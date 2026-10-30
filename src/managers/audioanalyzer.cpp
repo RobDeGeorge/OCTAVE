@@ -6,6 +6,9 @@
 #include <QtConcurrent>
 #include <QLoggingCategory>
 #include <QAudioDecoder>
+#ifdef OCTAVE_WASM
+#include "../platform/wasm/weblibrary.h"
+#endif
 #include <QAudioFormat>
 #include <QAudioBuffer>
 #include <QEventLoop>
@@ -386,12 +389,24 @@ AudioAnalyzer::AnalysisResult AudioAnalyzer::analyzeAudio(
     // the decimation happen below in appendMono() and ChunkStream, so the
     // decoder's choice of rate, channel count and sample format no longer
     // matters — on Android this also sidesteps MediaCodec's format quirks.
-    QAudioDecoder decoder;
-    decoder.setSource(QUrl::fromLocalFile(filePath));
-
     ChunkStream stream(numBars, chunkDuration);
     std::vector<float> mono;       // one buffer, mixed to mono, native rate
     int  nativeRate = 0;
+#ifdef OCTAVE_WASM
+    // The browser has no QAudioDecoder backend: the page decodes the track
+    // (Web Audio, mono at 8 kHz) while this worker waits
+    if (!WebMusicLibrary::decodeMono(filePath, &mono, &nativeRate))
+        return result;
+    if (mono.empty() || !stream.init(nativeRate)) {
+        qCWarning(lcAudioAnalyzer) << "The browser decoded no usable audio for" << filePath;
+        return result;
+    }
+    stream.add(mono);
+    mono = {};
+#else
+    QAudioDecoder decoder;
+    decoder.setSource(QUrl::fromLocalFile(filePath));
+
     bool errorFlag  = false;
     bool timedOut   = false;
     bool badRate    = false;
@@ -451,6 +466,7 @@ AudioAnalyzer::AnalysisResult AudioAnalyzer::analyzeAudio(
         qCWarning(lcAudioAnalyzer) << "QAudioDecoder produced no usable audio data for" << filePath;
         return result;
     }
+#endif
     if (stream.full())
         qCInfo(lcAudioAnalyzer) << "Analysing only the first" << kMaxAnalysisSeconds
                                 << "s of" << filePath;

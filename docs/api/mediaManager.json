@@ -567,6 +567,14 @@
         },
         {
             "kind": "slot",
+            "name": "pick_browser_library",
+            "params": [
+            ],
+            "returns": "bool",
+            "scope": "files"
+        },
+        {
+            "kind": "slot",
             "name": "get_total_duration",
             "params": [
             ],

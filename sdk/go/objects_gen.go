@@ -1471,6 +1471,12 @@ func (o MediaManager) BrowseMusicFolders(path string) (v map[string]any, err err
 	return
 }
 
+// PickBrowserLibrary calls pick_browser_library() -> bool.
+func (o MediaManager) PickBrowserLibrary() (v bool, err error) {
+	err = o.c.Call("mediaManager", "pick_browser_library", &v)
+	return
+}
+
 // GetTotalDuration calls get_total_duration() -> QString.
 func (o MediaManager) GetTotalDuration() (v string, err error) {
 	err = o.c.Call("mediaManager", "get_total_duration", &v)

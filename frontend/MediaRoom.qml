@@ -974,7 +974,8 @@ Item {
                 width: dp(120)
                 height: dp(40)
                 text: "Browse"
-                onClicked: emptyFolderDialog.open()
+                // the browser demo opens the browser's own folder picker instead
+                onClicked: if (!mediaManager || !mediaManager.pick_browser_library()) emptyFolderDialog.open()
             }
 
             Text {

@@ -5,6 +5,9 @@
 #include "../util/perfscope.h"
 #include "../util/units.h"
 #include "settingsmanager.h"
+#ifdef OCTAVE_WASM
+#include "../platform/wasm/weblibrary.h"
+#endif
 
 #include <QDir>
 #include <QDirIterator>
@@ -27,8 +30,9 @@
 #include <QMediaDevices>
 #include <QAudioDevice>
 
-#ifndef Q_OS_MOBILE
+#ifdef OCTAVE_TAGLIB
 #include <taglib/fileref.h>
+#include <taglib/tiostream.h>
 #include <taglib/tag.h>
 #include <taglib/tpropertymap.h>
 #include <taglib/mpegfile.h>
@@ -43,7 +47,24 @@
 #include <taglib/vorbisfile.h>
 #include <taglib/opusfile.h>
 #include <taglib/xiphcomment.h>
-#endif // Q_OS_MOBILE
+
+// A TagLib file of type F for `filePath`. In the browser demo a song of the
+// picked folder is read from the parts of the visitor's file read at pick
+// time (WebMusicLibrary::tagStream), kept alive in `stream`; elsewhere TagLib
+// opens the path. Declare `stream` before the result so it outlives it.
+template <typename F>
+static std::unique_ptr<F> openTags(const QString &filePath, std::unique_ptr<TagLib::IOStream> &stream)
+{
+#ifdef OCTAVE_WASM
+    stream = WebMusicLibrary::tagStream(filePath);
+    if (stream)
+        return std::make_unique<F>(stream.get());
+#else
+    Q_UNUSED(stream);
+#endif
+    return std::make_unique<F>(filePath.toUtf8().constData());
+}
+#endif // OCTAVE_TAGLIB
 
 #ifdef Q_OS_ANDROID
 #include "../platform/androidmediabridge.h"
@@ -119,6 +140,17 @@ static const QStringList s_audioExts = {
     QStringLiteral(".flac"), QStringLiteral(".ogg"), QStringLiteral(".opus"),
     QStringLiteral(".wav")
 };
+
+// What the player is given for a library file: in the browser demo a file
+// of the picked folder plays from the browser's blob: URL
+static QUrl sourceUrl(const QString &filePath)
+{
+#ifdef OCTAVE_WASM
+    return WebMusicLibrary::sourceUrl(filePath);
+#else
+    return QUrl::fromLocalFile(filePath);
+#endif
+}
 
 static bool hasAudioExtension(const QString &filename)
 {
@@ -383,11 +415,36 @@ void MediaManager::clearTempFilesInternal()
 
 // ─── Position timer ────────────────────────────────────────────────
 
+// Where playback is, and whether it is playing. For audio, Qt's browser
+// player reports position 0 and StoppedState while it plays (only the page's
+// timeupdate events, ~4 a second, carry the time), so the 100 ms tick never
+// fed the visualizer and every resume looked like a failed start: there the
+// <audio> element is asked
+qint64 MediaManager::_player_position() const
+{
+#ifdef OCTAVE_WASM
+    const qint64 web = WebMusicLibrary::playerPositionMs();
+    if (web >= 0)
+        return web;
+#endif
+    return m_player->position();
+}
+
+bool MediaManager::_player_playing() const
+{
+#ifdef OCTAVE_WASM
+    const int web = WebMusicLibrary::playerPlaying();
+    if (web >= 0)
+        return web == 1;
+#endif
+    return m_player->playbackState() == QMediaPlayer::PlayingState;
+}
+
 void MediaManager::_update_position()
 {
     OCTAVE_PERF_SCOPE("media._update_position");
-    if (m_player->playbackState() == QMediaPlayer::PlayingState) {
-        emit positionChanged(m_player->position());
+    if (_player_playing()) {
+        emit positionChanged(_player_position());
     }
 }
 
@@ -469,7 +526,7 @@ void MediaManager::_reseat_source(const QString &filePath, qint64 position)
     m_player->setSource(QUrl());
     m_pendingSeekFile = position > 0 ? filePath : QString();
     m_pendingSeekMs = position;
-    m_player->setSource(QUrl::fromLocalFile(filePath));
+    m_player->setSource(sourceUrl(filePath));
 }
 static constexpr int kMaxConsecutiveBadTracks = 10;   // then stop instead of looping the library
 
@@ -500,7 +557,7 @@ void MediaManager::_attempt_playback_recovery(bool force)
         return;
     }
 
-    const qint64 position = m_player->position();
+    const qint64 position = _player_position();
     const bool wasPlaying = m_isPlaying;
 
     const QString filePath = _get_file_path(currentFile);
@@ -737,7 +794,7 @@ void MediaManager::_cache_metadata_from_file(const QString &filename)
         }
     }
     return;
-#elif defined(Q_OS_MOBILE)
+#elif !defined(OCTAVE_TAGLIB)
     // Non-Android mobile (iOS, future): no TagLib yet. Filename-only fallback.
     m_metadataCache.insert(filename, {baseName, QStringLiteral("Unknown Artist"),
                                       QStringLiteral("Unknown Album"), 0});
@@ -758,19 +815,20 @@ void MediaManager::_cache_metadata_from_file(const QString &filename)
             m_albumArtCache.insert(albumId, artUrl);
         }
     }
-#endif // Q_OS_MOBILE
+#endif // OCTAVE_TAGLIB
 }
 
-#if !defined(Q_OS_MOBILE)
+#ifdef OCTAVE_TAGLIB
 MediaMetadata MediaManager::_read_tags(const QString &filePath, const QString &baseName)
 {
     // Pure TagLib read; safe on a worker thread.
-    TagLib::FileRef fileRef(filePath.toUtf8().constData());
-    if (fileRef.isNull() || !fileRef.tag())
+    std::unique_ptr<TagLib::IOStream> stream;
+    const auto fileRef = openTags<TagLib::FileRef>(filePath, stream);
+    if (fileRef->isNull() || !fileRef->tag())
         return {baseName, QStringLiteral("Unknown Artist"), QStringLiteral("Unknown Album"), 0};
 
-    TagLib::Tag *tag = fileRef.tag();
-    TagLib::AudioProperties *props = fileRef.audioProperties();
+    TagLib::Tag *tag = fileRef->tag();
+    TagLib::AudioProperties *props = fileRef->audioProperties();
 
     QString artist = QString::fromStdString(tag->artist().to8Bit(true));
     QString album = QString::fromStdString(tag->album().to8Bit(true));
@@ -846,9 +904,9 @@ void MediaManager::_manage_cache(const QString &newAlbumId)
 }
 
 // ─── Album art extraction via TagLib ───────────────────────────────
-// On mobile (Q_OS_MOBILE), all four extractors return empty — TagLib isn't linked.
+// Without TagLib (Android, iOS) all four extractors return empty.
 
-#ifdef Q_OS_MOBILE
+#ifndef OCTAVE_TAGLIB
 QString MediaManager::_extract_album_art_mp3(const QString &, const QString &) { return {}; }
 QString MediaManager::_extract_album_art_mp4(const QString &, const QString &) { return {}; }
 QString MediaManager::_extract_album_art_flac(const QString &, const QString &) { return {}; }
@@ -874,11 +932,12 @@ static QString writeCoverFile(const QString &path, const TagLib::ByteVector &dat
 
 QString MediaManager::_extract_album_art_mp3(const QString &filePath, const QString &albumId)
 {
-    TagLib::MPEG::File file(filePath.toUtf8().constData());
-    if (!file.isValid())
+    std::unique_ptr<TagLib::IOStream> stream;
+    const auto file = openTags<TagLib::MPEG::File>(filePath, stream);
+    if (!file->isValid())
         return {};
 
-    TagLib::ID3v2::Tag *id3v2 = file.ID3v2Tag();
+    TagLib::ID3v2::Tag *id3v2 = file->ID3v2Tag();
     if (!id3v2)
         return {};
 
@@ -907,11 +966,12 @@ QString MediaManager::_extract_album_art_mp3(const QString &filePath, const QStr
 
 QString MediaManager::_extract_album_art_mp4(const QString &filePath, const QString &albumId)
 {
-    TagLib::MP4::File file(filePath.toUtf8().constData());
-    if (!file.isValid())
+    std::unique_ptr<TagLib::IOStream> stream;
+    const auto file = openTags<TagLib::MP4::File>(filePath, stream);
+    if (!file->isValid())
         return {};
 
-    TagLib::MP4::Tag *tag = file.tag();
+    TagLib::MP4::Tag *tag = file->tag();
     if (!tag)
         return {};
 
@@ -937,11 +997,12 @@ QString MediaManager::_extract_album_art_mp4(const QString &filePath, const QStr
 
 QString MediaManager::_extract_album_art_flac(const QString &filePath, const QString &albumId)
 {
-    TagLib::FLAC::File file(filePath.toUtf8().constData());
-    if (!file.isValid())
+    std::unique_ptr<TagLib::IOStream> stream;
+    const auto file = openTags<TagLib::FLAC::File>(filePath, stream);
+    if (!file->isValid())
         return {};
 
-    const TagLib::List<TagLib::FLAC::Picture *> &pics = file.pictureList();
+    const TagLib::List<TagLib::FLAC::Picture *> &pics = file->pictureList();
     if (pics.isEmpty())
         return {};
 
@@ -968,11 +1029,12 @@ QString MediaManager::_extract_album_art_ogg(const QString &filePath, const QStr
     // an Opus stream (no Vorbis identification header), so pick the reader by
     // extension; the picture handling below is shared.
     const QString suffix = QFileInfo(filePath).suffix().toLower();
+    std::unique_ptr<TagLib::IOStream> stream;
     std::unique_ptr<TagLib::Ogg::File> file;
     if (suffix == QStringLiteral("opus"))
-        file = std::make_unique<TagLib::Ogg::Opus::File>(filePath.toUtf8().constData());
+        file = openTags<TagLib::Ogg::Opus::File>(filePath, stream);
     else
-        file = std::make_unique<TagLib::Ogg::Vorbis::File>(filePath.toUtf8().constData());
+        file = openTags<TagLib::Ogg::Vorbis::File>(filePath, stream);
     if (!file->isValid())
         return {};
 
@@ -1000,7 +1062,7 @@ QString MediaManager::_extract_album_art_ogg(const QString &filePath, const QStr
     return writeCoverFile(tempPath, pic->data());
 }
 
-#endif // Q_OS_MOBILE
+#endif // OCTAVE_TAGLIB
 
 // ─── Album art public API ──────────────────────────────────────────
 
@@ -1658,7 +1720,7 @@ void MediaManager::play_file(const QString &filename)
         return;
     }
 
-    m_player->setSource(QUrl::fromLocalFile(filePath));
+    m_player->setSource(sourceUrl(filePath));
     m_player->play();
     m_isPlaying = true;
     m_isPaused = false;
@@ -1767,7 +1829,7 @@ void MediaManager::toggle_play()
         const bool reseated = pausedFor >= kLongPauseMs && !filePath.isEmpty() && QFile::exists(filePath);
         if (reseated) {
             qCInfo(lcMedia) << "Resuming after a" << pausedFor / 1000 << "s pause: reloading the track";
-            _reseat_source(filePath, m_player->position());
+            _reseat_source(filePath, _player_position());
         }
         m_player->play();
         m_isPaused = false;
@@ -1783,7 +1845,7 @@ void MediaManager::toggle_play()
         }
 
         // Verify player started
-        if (m_player->playbackState() != QMediaPlayer::PlayingState) {
+        if (!_player_playing()) {
             qCWarning(lcMedia) << "Player did not start - recovering";
             _attempt_playback_recovery(true);
             return;
@@ -1801,7 +1863,7 @@ void MediaManager::toggle_play()
 bool MediaManager::is_playing() { return m_isPlaying; }
 bool MediaManager::is_paused() { return m_isPaused; }
 float MediaManager::get_duration() { return static_cast<float>(m_player->duration()); }
-float MediaManager::get_position() { return static_cast<float>(m_player->position()); }
+float MediaManager::get_position() { return static_cast<float>(_player_position()); }
 void MediaManager::set_position(int positionMs) { m_player->setPosition(positionMs); }
 
 // ─── Mute ──────────────────────────────────────────────────────────
@@ -2910,7 +2972,7 @@ void MediaManager::_save_playback_state_now()
         return;
 
     const QString currentSong = get_current_file();
-    const int currentPosition = static_cast<int>(m_player->position());
+    const int currentPosition = static_cast<int>(_player_position());
     const QString currentPlaylist = m_currentPlaylistName;
 
     if (!currentSong.isEmpty()) {
@@ -2981,7 +3043,7 @@ void MediaManager::_restore_playback_state()
     }
 
     m_currentIndex = m_currentPlaylist.indexOf(lastSong);
-    m_player->setSource(QUrl::fromLocalFile(filePath));
+    m_player->setSource(sourceUrl(filePath));
 
     emit currentMediaChanged(lastSong);
     _emit_metadata(lastSong);
@@ -3046,7 +3108,7 @@ void MediaManager::_precache_neighbors_start()
     if (neighbors.isEmpty())
         return;
 
-#if defined(Q_OS_MOBILE)
+#ifndef OCTAVE_TAGLIB
     // Mobile reads tags through the platform (cheap); keep it on this thread.
     _precache_tracks(neighbors);
 #else
@@ -3209,6 +3271,28 @@ QString MediaManager::libraryArtFile(const QString &filename)
 QVariantMap MediaManager::browse_music_folders(const QString &path)
 {
     return FolderBrowser::list(path, musicBrowseRoots(), s_audioExtensions);
+}
+
+bool MediaManager::pick_browser_library()
+{
+#ifdef OCTAVE_WASM
+    WebMusicLibrary::pick(s_audioExts, [this](const QString &root, int songCount) {
+        if (root.isEmpty()) {
+            emit scanProgress(QStringLiteral("[ERROR] The folder picked is empty"));
+            return;
+        }
+        if (songCount == 0)
+            emit scanProgress(QStringLiteral("[ERROR] No music in the folder picked"));
+        // A new root on every pick (/weblibrary/<n>/...), so this always rescans
+        if (m_settingsManager)
+            m_settingsManager->save_media_folder(root);
+        else
+            set_library_root(root);
+    });
+    return true;
+#else
+    return false;
+#endif
 }
 
 QString MediaManager::get_media_folder_name()

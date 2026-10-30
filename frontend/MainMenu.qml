@@ -487,7 +487,9 @@ Item {
                     objectName: "homeMusicBrowseButton"
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: "Browse Music"
-                    onClicked: homeFolderDialog.open()
+                    // the browser demo opens the browser's own folder picker instead
+                    onClicked: if (typeof mediaManager === "undefined" || !mediaManager
+                                   || !mediaManager.pick_browser_library()) homeFolderDialog.open()
                 }
                 PromptButton {
                     objectName: "homeConnectPhoneButton"
