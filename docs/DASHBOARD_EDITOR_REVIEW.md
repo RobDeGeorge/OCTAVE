@@ -143,7 +143,7 @@ Ordered so each phase is shippable and the next one builds on it. Effort: S < 1 
 - Editor model: an incremental update per cell (keyed `ListModel` or per-delegate props) instead of rebuilding the Repeater; then an **undo/redo stack** of spec snapshots (50 steps).
 - Tests: `tst_dashboardeditor` (QtQuickTest or the existing QML fixture style) for undo, swap/push placement rules and size presets; extend `src/util/dashboardgrid.h` with the push/swap solver in C++, unit-tested.
 
-**Phase 1 — touch interaction core (L, desktop then Galaxy S22 and the 7" Pi screen)**
+**Phase 1 — touch interaction core (L, desktop then Galaxy S22 and the 7" Pi screen)** — built and tested on the desktop 2026-10-30; the device checks are in `TODO/dashboards-roadmap.md`. The density setting is per dashboard (Coarse 4×3 / Normal 6×4 / Fine 12×8, turned for portrait) in the editor's Grid menu, not a global setting
 - Full-screen editor, the new top bar, Done/Close semantics.
 - Select-then-drag, drag threshold, lift, ghost, swap/push, red-with-reason.
 - Floating toolbar with size chips, duplicate, delete + undo snackbar, tap-tap swap/move.

@@ -1,12 +1,20 @@
 // DashboardEditor.qml
 //
-// Phase 3 "create-a-park" dashboard editor — full-screen page, StackView-pushed
-// from the chooser in OBDMenu.qml. See TODO/dashboards-roadmap.md.
+// The dashboard editor: a full-screen page (no nav bar; left through Done
+// or Close), StackView-pushed from the chooser in OBDMenu.qml. Design and
+// rationale: docs/DASHBOARD_EDITOR_REVIEW.md §4.2.
 //
-// Interaction model (hybrid, decided 2026-06-10): tap an empty grid cell to
-// place a widget from the palette; drag a placed widget to move it (snaps to
-// the grid, invalid drops bounce back); tap a widget to select it and edit
-// PID / position / size / curated props in the side panel.
+// Interaction model (touch first, select then manipulate):
+//   - tap a widget to select it: it lifts and a floating toolbar appears
+//     beside it (Data · Settings · S/M/L · Duplicate · Delete);
+//   - drag the selected widget to move it (press and hold drags any
+//     widget): neighbours swap or slide aside, live, as you go;
+//   - with a widget selected, tap another one to Swap with it, or tap free
+//     space to Move it there; with nothing selected, tap free space to Add
+//     a widget there (or + Add, which finds room by itself);
+//   - Settings opens a side sheet (bottom sheet on a portrait screen) and
+//     zooms the dashboard to fit beside it;
+//   - Delete can be undone from the snackbar, and every edit from Undo.
 //
 // This page owns the working spec. Every mutation builds a new `cells` array
 // and goes through _apply(), which records it for undo and updates the
@@ -21,16 +29,22 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import QtQuick.Window 2.15
 import "../.." as App
 
 Item {
     id: editor
     objectName: "dashboardEditor"
 
+    // Main.qml hides the nav bar while this page is on top
+    readonly property bool hidesNavigation: true
+
     // Local dp/dpMin wrappers — mirror OBDMenu's Android singleton-function bug
     // workaround so this page scales identically to the one that pushes it.
     function dp(size) { return Math.round(size * (App.Spacing.effectiveScale || 1.0)) }
     function dpMin(size, floor) { return Math.max(floor, Math.round(size * (App.Spacing.effectiveScale || 1.0))) }
+
+    readonly property real touchSize: editorCanvas.touchSize
 
     // Injected by StackView.push() from OBDMenu.qml.
     property StackView stackView: null
@@ -44,6 +58,10 @@ Item {
     property int gridColumns: 12
     property int gridRows: 6
 
+    // A new dashboard starts at the grid density that suits this screen
+    // (defaultDensity()); false keeps gridColumns / gridRows as given
+    property bool autoDensity: true
+
     // Optional grid geometry (dp) carried through from a loaded spec so a
     // hand-authored margins/spacing survives a save. undefined = not in the
     // spec; the renderer (and canvas) then fall back to their 20/16 defaults.
@@ -56,9 +74,14 @@ Item {
     property int selectedIndex: -1
     readonly property var selectedCell:
         (selectedIndex >= 0 && selectedIndex < cells.length) ? cells[selectedIndex] : null
+    readonly property var selectedMeta: selectedCell ? App.WidgetCatalog.metaFor(selectedCell.type) : null
 
-    // Unsaved-changes flag — gates the two-tap "Discard?" on Cancel and the
-    // draft rescue on destruction.
+    // The settings sheet for the selected widget
+    property bool sheetOpen: false
+    readonly property bool _sheetShown: sheetOpen && selectedCell !== null
+
+    // Unsaved-changes flag — gates the "Save changes?" question on Close and
+    // the draft rescue on destruction.
     property bool dirty: false
 
     // Serialized working state injected by the chooser's "Resume draft"
@@ -82,13 +105,22 @@ Item {
     }
     on_DemandIdsChanged: _pushDemand(_demandIds)
 
-    // Cell the next palette pick lands in (set by emptyCellTapped).
-    property int _pendingCol: 0
-    property int _pendingRow: 0
+    // Where the next palette pick lands: a grid cell, or -1 for "find room"
+    property int _pendingCol: -1
+    property int _pendingRow: -1
+
+    // A tap on free space: {col, row} while its Add here / Move here is shown
+    property var _tapCell: null
+    // A tap on another widget while one is selected: its Swap / Select
+    property int _swapTarget: -1
+
+    property bool _densityPending: false
 
     Component.onCompleted: {
         _load()
         _resetHistory()
+        _densityPending = autoDensity && editingId.length === 0 && draftJson.length === 0
+        Qt.callLater(_pickDefaultDensity)
     }
 
     function _load() {
@@ -116,11 +148,72 @@ Item {
         nameField.text = spec.label ? spec.label : ""
     }
 
+    // ── Grid density ─────────────────────────────────────────────────────
+    // Coarse / Normal / Fine, per dashboard (review §5 decision 1). The
+    // grids are for a landscape screen and turned for a portrait one. A
+    // dashboard on some other grid (hand-written, imported) reads "custom"
+    // until a density is picked.
+    readonly property var _densities: ({
+        "coarse": [4, 3], "normal": [6, 4], "fine": [12, 8]
+    })
+    readonly property bool _portrait: canvasFrame.height > canvasFrame.width
+    function densityGrid(name) {
+        var d = _densities[name]
+        if (!d) return null
+        return _portrait ? { "cols": d[1], "rows": d[0] } : { "cols": d[0], "rows": d[1] }
+    }
+    readonly property string density: {
+        for (var name in _densities) {
+            var d = _densities[name]
+            if ((gridColumns === d[0] && gridRows === d[1]) || (gridColumns === d[1] && gridRows === d[0]))
+                return name
+        }
+        return "custom"
+    }
+
+    // The finest density whose cells are at least 12 mm on this screen
+    // (normal where the screen doesn't say how big it is)
+    function defaultDensity() {
+        var mm = Screen.pixelDensity
+        if (!(mm > 1) || canvasFrame.width <= 0 || canvasFrame.height <= 0) return "normal"
+        var names = ["fine", "normal", "coarse"]
+        var m = editorCanvas._margin, s = editorCanvas._spacing
+        for (var i = 0; i < names.length; i++) {
+            var g = densityGrid(names[i])
+            var w = (canvasFrame.width - 2 * m - s * (g.cols - 1)) / g.cols
+            var h = (canvasFrame.height - 2 * m - s * (g.rows - 1)) / g.rows
+            if (Math.min(w, h) / mm >= 12) return names[i]
+        }
+        return "coarse"
+    }
+
+    function _pickDefaultDensity() {
+        if (!_densityPending || canvasFrame.width <= 0 || canvasFrame.height <= 0) return
+        _densityPending = false
+        if (cells.length > 0) return
+        var g = densityGrid(defaultDensity())
+        gridColumns = g.cols
+        gridRows = g.rows
+        _resetHistory()
+    }
+
+    function setDensity(name) {
+        var g = densityGrid(name)
+        if (!g || (g.cols === gridColumns && g.rows === gridRows)) return
+        var r = dashboardManager.rescale(cells, gridColumns, gridRows, g.cols, g.rows)
+        if (!r.ok) {
+            _showError(r.reason)
+            return
+        }
+        _hideChoosers()
+        _apply(r.cells, g.cols, g.rows)
+    }
+
     // ── Draft rescue ─────────────────────────────────────────────────────
-    // Switching menus mid-build destroys this page (BottomBar pops the whole
-    // StackView), so unsaved work is stashed as a draft on destruction and
-    // offered back via "Resume draft" in the chooser. Normal exits (Save,
-    // confirmed Discard) clear `dirty` first, so they don't leave a draft.
+    // Leaving without Done / Close (the app closing, a page change from
+    // outside) destroys this page, so unsaved work is stashed as a draft on
+    // destruction and offered back via "Resume draft" in the chooser. Normal
+    // exits (Done, Discard) clear `dirty` first, so they don't leave a draft.
     Component.onDestruction: {
         _pushDemand([])
         // Never let editor demo data leak into the real OBD views.
@@ -171,7 +264,7 @@ Item {
     }
 
     // Clear the stored draft — only when this session owned one (resumed it),
-    // so opening and immediately cancelling a fresh editor can't wipe a draft
+    // so opening and immediately closing a fresh editor can't wipe a draft
     // from an earlier session.
     function _clearStoredDraft() {
         if (draftJson.length === 0) return
@@ -237,25 +330,34 @@ Item {
     }
 
     // ── Undo / redo ──────────────────────────────────────────────────────
-    // Snapshots of the cell list (JSON), newest last; _historyIndex is the
-    // one on screen. A new edit drops anything after it.
+    // Snapshots of the grid and its cells (JSON), newest last; _historyIndex
+    // is the one on screen. A new edit drops anything after it.
     readonly property int maxUndo: 50
     property var _history: []
     property int _historyIndex: -1
     readonly property bool canUndo: _historyIndex > 0
     readonly property bool canRedo: _historyIndex >= 0 && _historyIndex < _history.length - 1
 
+    function _snapshot() {
+        return JSON.stringify({ "cols": gridColumns, "rows": gridRows, "cells": cells })
+    }
+
     function _resetHistory() {
-        _history = [JSON.stringify(cells)]
+        _history = [_snapshot()]
         _historyIndex = 0
     }
 
-    // Every edit lands here: show it, mark the work unsaved, record it
-    function _apply(next) {
+    // Every edit lands here: show it (on a new grid size when given), mark
+    // the work unsaved, record it
+    function _apply(next, cols, rows) {
+        if (cols !== undefined) {
+            gridColumns = cols
+            gridRows = rows
+        }
         _show(next)
         dirty = true
         var h = _history.slice(0, _historyIndex + 1)
-        h.push(JSON.stringify(next))
+        h.push(_snapshot())
         while (h.length > maxUndo + 1) h.shift()
         _history = h
         _historyIndex = h.length - 1
@@ -263,9 +365,13 @@ Item {
 
     function _restore(index) {
         _historyIndex = index
-        _show(JSON.parse(_history[index]))
+        var snap = JSON.parse(_history[index])
+        gridColumns = snap.cols
+        gridRows = snap.rows
+        _show(snap.cells)
         dirty = true
-        if (selectedIndex >= cells.length) selectedIndex = -1
+        _hideChoosers()
+        if (selectedIndex >= cells.length) clearSelection()
     }
 
     function undo() { if (canUndo) _restore(_historyIndex - 1) }
@@ -273,6 +379,62 @@ Item {
 
     Shortcut { sequences: [StandardKey.Undo]; onActivated: editor.undo() }
     Shortcut { sequences: [StandardKey.Redo, "Ctrl+Shift+Z"]; onActivated: editor.redo() }
+    Shortcut {
+        sequence: "Escape"
+        onActivated: {
+            if (editor._tapCell || editor._swapTarget >= 0) editor._hideChoosers()
+            else if (editor.sheetOpen) editor.closeSheet()
+            else editor.clearSelection()
+        }
+    }
+    Shortcut {
+        sequences: [StandardKey.Delete]
+        enabled: editor.selectedCell !== null && !nameField.activeFocus
+        onActivated: editor.deleteCell(editor.selectedIndex)
+    }
+    Shortcut {
+        sequence: "Ctrl+D"
+        enabled: editor.selectedCell !== null
+        onActivated: editor.duplicateCell(editor.selectedIndex)
+    }
+    Shortcut { sequence: "Left";  enabled: editor.selectedCell !== null && !nameField.activeFocus; onActivated: editor.nudgeCell(editor.selectedIndex, -1, 0) }
+    Shortcut { sequence: "Right"; enabled: editor.selectedCell !== null && !nameField.activeFocus; onActivated: editor.nudgeCell(editor.selectedIndex, 1, 0) }
+    Shortcut { sequence: "Up";    enabled: editor.selectedCell !== null && !nameField.activeFocus; onActivated: editor.nudgeCell(editor.selectedIndex, 0, -1) }
+    Shortcut { sequence: "Down";  enabled: editor.selectedCell !== null && !nameField.activeFocus; onActivated: editor.nudgeCell(editor.selectedIndex, 0, 1) }
+
+    // ── Sizes ────────────────────────────────────────────────────────────
+    // From the catalog's minSize / aspect and this canvas's cell size
+
+    function minSpanFor(type) {
+        return dashboardManager.minSpan(type, gridColumns, gridRows, editorCanvas.cellWidthDp,
+                                        editorCanvas.cellHeightDp, editorCanvas.spacingDp)
+    }
+    function sizeOptionsFor(type) {
+        return dashboardManager.sizeOptions(type, gridColumns, gridRows, editorCanvas.cellWidthDp,
+                                            editorCanvas.cellHeightDp, editorCanvas.spacingDp)
+    }
+
+    // Spans to try for a new widget, best first: its catalog default (given
+    // for a 12 x 6 grid) scaled to this one, then S, then the smallest
+    // readable; none below that
+    function _newSpans(type) {
+        var meta = App.WidgetCatalog.metaFor(type)
+        var least = minSpanFor(type)
+        var out = []
+        function add(cs, rs) {
+            cs = Math.max(least.colSpan, Math.min(gridColumns, cs))
+            rs = Math.max(least.rowSpan, Math.min(gridRows, rs))
+            for (var i = 0; i < out.length; i++)
+                if (out[i].colSpan === cs && out[i].rowSpan === rs) return
+            out.push({ "colSpan": cs, "rowSpan": rs })
+        }
+        add(Math.max(1, Math.round(meta.defaultColSpan * gridColumns / 12)),
+            Math.max(1, Math.round(meta.defaultRowSpan * gridRows / 6)))
+        var options = sizeOptionsFor(type)
+        if (options.length > 0) add(options[0].colSpan, options[0].rowSpan)
+        add(least.colSpan, least.rowSpan)
+        return out
+    }
 
     // ── Cell mutations (single owner of the working spec) ───────────────
 
@@ -286,20 +448,46 @@ Item {
         _apply(next)
     }
 
+    // A new widget at grid cell (col, row), or wherever there is room when
+    // col < 0. At the tapped cell it shrinks (not below readable) before
+    // going elsewhere. Returns whether it was placed.
     function addCellAt(type, col, row) {
         var meta = App.WidgetCatalog.metaFor(type)
-        if (!meta) return
-        // Shrunk toward 1×1 until it fits the free space around the tapped
-        // cell (the tapped cell itself is guaranteed free)
-        var fit = dashboardManager.fitAt(cells, gridColumns, gridRows, col, row,
-                                         meta.defaultColSpan, meta.defaultRowSpan)
-        var cs = fit.colSpan
-        var rs = fit.rowSpan
+        if (!meta) return false
+        var spans = _newSpans(type)
+        var place = null
+        var i
+        if (col >= 0 && row >= 0) {
+            // Shifted left / up to stay on the grid, still over the tapped cell
+            for (i = 0; i < spans.length && !place; i++) {
+                var c0 = Math.min(col, gridColumns - spans[i].colSpan)
+                var r0 = Math.min(row, gridRows - spans[i].rowSpan)
+                if (c0 >= 0 && r0 >= 0 && editorCanvas.canPlace(c0, r0, spans[i].colSpan, spans[i].rowSpan, -1))
+                    place = { "col": c0, "row": r0, "colSpan": spans[i].colSpan, "rowSpan": spans[i].rowSpan }
+            }
+            if (!place) {
+                var least = spans[spans.length - 1]
+                var fit = dashboardManager.fitAt(cells, gridColumns, gridRows, col, row,
+                                                 spans[0].colSpan, spans[0].rowSpan)
+                if (fit.colSpan >= least.colSpan && fit.rowSpan >= least.rowSpan
+                        && editorCanvas.canPlace(fit.col, fit.row, fit.colSpan, fit.rowSpan, -1))
+                    place = fit
+            }
+        }
+        for (i = 0; i < spans.length && !place; i++) {
+            var nf = dashboardManager.nearestFree(cells, gridColumns, gridRows, Math.max(0, col), Math.max(0, row),
+                                                  spans[i].colSpan, spans[i].rowSpan, -1)
+            if (nf.ok) place = nf
+        }
+        if (!place) {
+            _showError("No room for a " + meta.displayName + ": make a widget smaller or remove one")
+            return false
+        }
         var next = cells.slice()
         next.push({
             "type": type, "paramId": "",
-            "col": col, "row": row,
-            "colSpan": cs, "rowSpan": rs,
+            "col": place.col, "row": place.row,
+            "colSpan": place.colSpan, "rowSpan": place.rowSpan,
             "props": {}
         })
         _apply(next)
@@ -308,6 +496,7 @@ Item {
         // widgets (supportedKinds: []) skip this.
         if (meta.supportedKinds.length > 0)
             openPidPicker()
+        return true
     }
 
     // Cell `index` to (col, row, colSpan, rowSpan); the widgets it lands on
@@ -343,32 +532,87 @@ Item {
                         (c.row !== undefined ? c.row : 0) + dRow)
     }
 
+    // The smallest a cell may be made: its readable minimum, or its current
+    // size if that is already smaller (a dashboard from a bigger screen)
+    function _floorSpan(c) {
+        var least = minSpanFor(c.type)
+        return { "colSpan": Math.min(least.colSpan, c.colSpan !== undefined ? c.colSpan : 1),
+                 "rowSpan": Math.min(least.rowSpan, c.rowSpan !== undefined ? c.rowSpan : 1) }
+    }
+
     function resizeCell(index, dColSpan, dRowSpan) {
         var c = cells[index]
         if (!c) return
-        var col = c.col !== undefined ? c.col : 0
-        var row = c.row !== undefined ? c.row : 0
-        var cs = Math.max(1, Math.min(gridColumns - col, (c.colSpan !== undefined ? c.colSpan : 1) + dColSpan))
-        var rs = Math.max(1, Math.min(gridRows - row, (c.rowSpan !== undefined ? c.rowSpan : 1) + dRowSpan))
-        _arrangeCell(index, col, row, cs, rs)
+        resizeCellTo(index, (c.colSpan !== undefined ? c.colSpan : 1) + dColSpan,
+                            (c.rowSpan !== undefined ? c.rowSpan : 1) + dRowSpan)
     }
 
-    // Absolute resize (drag handles), by the same rules as the steppers
+    // Absolute resize (drag handles, steppers), from the top-left corner
     function resizeCellTo(index, colSpan, rowSpan) {
         var c = cells[index]
         if (!c) return
         var col = c.col !== undefined ? c.col : 0
         var row = c.row !== undefined ? c.row : 0
-        var cs = Math.max(1, Math.min(gridColumns - col, colSpan))
-        var rs = Math.max(1, Math.min(gridRows - row, rowSpan))
+        var floor = _floorSpan(c)
+        var cs = Math.max(floor.colSpan, Math.min(gridColumns - col, colSpan))
+        var rs = Math.max(floor.rowSpan, Math.min(gridRows - row, rowSpan))
         _arrangeCell(index, col, row, cs, rs)
+    }
+
+    // A size chip: the new size from the same top-left, moved in from the
+    // edge when it would pass it
+    function setCellSize(index, colSpan, rowSpan) {
+        var c = cells[index]
+        if (!c) return
+        var col = Math.max(0, Math.min(c.col !== undefined ? c.col : 0, gridColumns - colSpan))
+        var row = Math.max(0, Math.min(c.row !== undefined ? c.row : 0, gridRows - rowSpan))
+        _arrangeCell(index, col, row, colSpan, rowSpan)
+    }
+
+    // Tap-tap swap: `index` goes where `other` is; `other` takes its place
+    // when it fits there, else moves aside (DashboardGrid::arrange)
+    function swapCells(index, other) {
+        var o = cells[other]
+        if (!o || !cells[index]) return
+        moveCell(index, o.col !== undefined ? o.col : 0, o.row !== undefined ? o.row : 0)
+    }
+
+    // A copy beside the original (the nearest free spot of its size)
+    function duplicateCell(index) {
+        var c = cells[index]
+        if (!c) return false
+        var cs = c.colSpan !== undefined ? c.colSpan : 1
+        var rs = c.rowSpan !== undefined ? c.rowSpan : 1
+        var nf = dashboardManager.nearestFree(cells, gridColumns, gridRows,
+                                              Math.min(gridColumns - cs, (c.col || 0) + cs), c.row || 0, cs, rs, -1)
+        if (!nf.ok) {
+            _showError("No room for a copy: make something smaller first")
+            return false
+        }
+        var copy = JSON.parse(JSON.stringify(c))
+        copy.col = nf.col
+        copy.row = nf.row
+        var next = cells.slice()
+        next.push(copy)
+        _apply(next)
+        selectedIndex = next.length - 1
+        return true
     }
 
     function removeCell(index) {
         var next = cells.slice()
         next.splice(index, 1)
         _apply(next)
-        selectedIndex = -1
+        clearSelection()
+    }
+
+    // Delete from the toolbar / sheet / keyboard: undoable from the snackbar
+    function deleteCell(index) {
+        var c = cells[index]
+        if (!c) return
+        var meta = App.WidgetCatalog.metaFor(c.type)
+        removeCell(index)
+        _notify((meta ? meta.displayName : "Widget") + " removed", "Undo", editor.undo)
     }
 
     function setCellParam(index, paramId) {
@@ -411,7 +655,28 @@ Item {
         _patchCell(index, { "props": props })
     }
 
-    function clearSelection() { selectedIndex = -1 }
+    function _hideChoosers() {
+        _tapCell = null
+        _swapTarget = -1
+    }
+
+    function clearSelection() {
+        _hideChoosers()
+        sheetOpen = false
+        selectedIndex = -1
+    }
+
+    function select(index) {
+        _hideChoosers()
+        selectedIndex = index
+    }
+
+    function openSheet() {
+        if (!selectedCell) return
+        _hideChoosers()
+        sheetOpen = true
+    }
+    function closeSheet() { sheetOpen = false }
 
     function openPidPicker() {
         if (!selectedCell) return
@@ -419,6 +684,19 @@ Item {
         pidPicker.supportedKinds = meta ? meta.supportedKinds : ["*"]
         pidPicker.currentParamId = selectedCell.paramId ? selectedCell.paramId : ""
         pidPicker.open()
+    }
+
+    function openPalette(col, row) {
+        _hideChoosers()
+        _pendingCol = col
+        _pendingRow = row
+        widgetPalette.open()
+    }
+
+    function _pidTitle(paramId) {
+        if (!paramId) return ""
+        var info = App.OBDParameterModel.getParamInfo(paramId)
+        return info && info.title ? info.title : paramId
     }
 
     function save() {
@@ -451,30 +729,86 @@ Item {
         }
     }
 
-    // Two-tap discard guard: first tap arms "Discard?", second tap (within
-    // 3 s) actually leaves. Editing in a car — accidental data loss hurts.
-    property bool confirmingCancel: false
-    Timer {
-        id: cancelConfirmTimer
-        interval: 3000
-        onTriggered: editor.confirmingCancel = false
-    }
-
-    function cancel() {
-        if (dirty && !confirmingCancel) {
-            confirmingCancel = true
-            cancelConfirmTimer.restart()
+    // Close: straight out when nothing changed, else ask once
+    function close() {
+        if (dirty) {
+            closeDialog.open()
             return
         }
+        discard()
+    }
+
+    function discard() {
         dirty = false              // confirmed discard — don't rescue a draft
         _clearStoredDraft()
         if (stackView) stackView.pop()
     }
 
+    // ── Snackbar ─────────────────────────────────────────────────────────
+    function _notify(msg, actionText, action) {
+        snackText.text = msg
+        snackbar.danger = false
+        snackbar.actionText = actionText || ""
+        snackbar.action = action || null
+        snackbar.visible = true
+        snackTimer.interval = actionText ? 5000 : 3000
+        snackTimer.restart()
+    }
+
     function _showError(msg) {
-        errorText.text = msg
-        errorBanner.visible = true
-        errorTimer.restart()
+        _notify(msg)
+        snackbar.danger = true
+    }
+
+    // ── Pieces ──────────────────────────────────────────────────────────
+    // A touch-sized pill button for the toolbar, choosers and top bar
+    component Pill: Rectangle {
+        id: pill
+        property string text: ""
+        property bool checked: false
+        property bool danger: false
+        property bool primary: false
+        property real maxLabelWidth: editor.dp(220)
+        signal clicked()
+        implicitHeight: editor.touchSize
+        implicitWidth: Math.max(editor.touchSize, Math.min(pillText.implicitWidth, maxLabelWidth) + editor.dp(24))
+        radius: height / 2
+        opacity: enabled ? 1.0 : 0.4
+        color: pillMouse.pressed ? Qt.lighter(_base, 1.25) : _base
+        readonly property color _base: primary || checked ? App.Style.accent
+                                       : Qt.darker(App.Style.obdBoxBackground, 1.25)
+        border.width: (primary || checked) ? 0 : 1
+        border.color: danger ? App.Style.statusDanger : Qt.darker(App.Style.obdBarColor, 1.5)
+
+        Text {
+            id: pillText
+            anchors.centerIn: parent
+            width: Math.min(implicitWidth, pill.maxLabelWidth)
+            text: pill.text
+            elide: Text.ElideRight
+            color: pill.primary || pill.checked ? App.Style.obdBoxBackground
+                   : pill.danger ? App.Style.statusDanger : App.Style.primaryTextColor
+            font.family: App.Style.fontFamily
+            font.bold: pill.primary || pill.checked
+            font.pixelSize: App.Spacing.overallText * 0.95
+        }
+        MouseArea {
+            id: pillMouse
+            anchors.fill: parent
+            enabled: pill.enabled
+            onClicked: pill.clicked()
+        }
+    }
+
+    // A grid density in the More menu
+    component DensityItem: MenuItem {
+        property string density: ""
+        objectName: "editorDensity_" + density
+        implicitHeight: editor.touchSize
+        checkable: true
+        checked: editor.density === density
+        font.family: App.Style.fontFamily
+        onTriggered: editor.setDensity(density)
     }
 
     // No anchors here on purpose: StackView sizes pushed items itself and
@@ -486,40 +820,36 @@ Item {
     }
 
     // ── Top bar ─────────────────────────────────────────────────────────
+    // Close · Undo · Redo · name · More (grid density, demo data) · Done
     Rectangle {
         id: topBar
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: App.Spacing.bottomBarNavButtonHeight + dp(20)
+        height: editor.touchSize + dp(16)
         color: App.Style.obdBoxBackground
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: dp(16)
-            anchors.rightMargin: dp(16)
-            spacing: dp(12)
+            anchors.leftMargin: dp(10)
+            anchors.rightMargin: dp(10)
+            spacing: dp(8)
 
-            Button {
-                objectName: "editorCancelButton"
-                text: editor.confirmingCancel ? "Discard?" : "Cancel"
-                font.family: App.Style.fontFamily
-                onClicked: editor.cancel()
+            Pill {
+                objectName: "editorCloseButton"
+                text: "Close"
+                onClicked: editor.close()
             }
-
-            Button {
+            Pill {
                 objectName: "editorUndoButton"
                 text: "Undo"
                 enabled: editor.canUndo
-                font.family: App.Style.fontFamily
                 onClicked: editor.undo()
             }
-
-            Button {
+            Pill {
                 objectName: "editorRedoButton"
                 text: "Redo"
                 enabled: editor.canRedo
-                font.family: App.Style.fontFamily
                 onClicked: editor.redo()
             }
 
@@ -527,6 +857,7 @@ Item {
                 id: nameField
                 objectName: "editorNameField"
                 Layout.fillWidth: true
+                Layout.preferredHeight: editor.touchSize
                 placeholderText: "Dashboard name"
                 placeholderTextColor: Qt.darker(App.Style.obdLabelColor, 1.4)
                 background: Rectangle {
@@ -538,25 +869,51 @@ Item {
                 font.family: App.Style.fontFamily
                 font.pixelSize: App.Spacing.overallText * 1.1
                 color: App.Style.primaryTextColor
+                onTextEdited: editor.dirty = true
+                onAccepted: focus = false
             }
 
-            // Fake live values for every PID so widgets can be laid out and
-            // sized without a real OBD connection. Editor-scoped: force-disabled
-            // when this page is destroyed.
-            Button {
-                objectName: "editorDemoButton"
-                text: checked ? "Demo data: ON" : "Demo data"
-                checkable: true
-                checked: App.OBDParameterModel.simulationActive
-                font.family: App.Style.fontFamily
-                onToggled: App.OBDParameterModel.simulationActive = checked
+            Pill {
+                id: moreButton
+                objectName: "editorMoreButton"
+                text: "Grid · Demo"
+                onClicked: moreMenu.open()
+
+                Menu {
+                    id: moreMenu
+                    y: moreButton.height
+                    DensityItem {
+                        density: "coarse"
+                        text: "Coarse grid (" + editor.densityGrid("coarse").cols + " × " + editor.densityGrid("coarse").rows + ")"
+                    }
+                    DensityItem {
+                        density: "normal"
+                        text: "Normal grid (" + editor.densityGrid("normal").cols + " × " + editor.densityGrid("normal").rows + ")"
+                    }
+                    DensityItem {
+                        density: "fine"
+                        text: "Fine grid (" + editor.densityGrid("fine").cols + " × " + editor.densityGrid("fine").rows + ")"
+                    }
+                    MenuSeparator {}
+                    // Fake live values for every PID so widgets can be laid
+                    // out and sized without a real OBD connection.
+                    // Editor-scoped: force-disabled when this page is destroyed.
+                    MenuItem {
+                        objectName: "editorDemoButton"
+                        implicitHeight: editor.touchSize
+                        text: "Demo data"
+                        checkable: true
+                        checked: App.OBDParameterModel.simulationActive
+                        font.family: App.Style.fontFamily
+                        onTriggered: App.OBDParameterModel.simulationActive = checked
+                    }
+                }
             }
 
-            Button {
+            Pill {
                 objectName: "editorSaveButton"
-                text: "Save"
-                font.family: App.Style.fontFamily
-                enabled: nameField.text.trim().length > 0
+                text: "Done"
+                primary: true
                 onClicked: editor.save()
             }
         }
@@ -569,17 +926,39 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        anchors.margins: dp(16)
+        anchors.margins: dp(8)
         color: App.Style.obdBoxBackground
         radius: dpMin(10, 3)
         border.color: Qt.darker(App.Style.obdBarColor, 1.6)
         border.width: 1
         clip: true
+        onWidthChanged: editor._pickDefaultDensity()
+        onHeightChanged: editor._pickDefaultDensity()
+
+        // The settings sheet: beside the dashboard on a landscape screen,
+        // under it on a portrait one
+        readonly property bool sheetSide: width >= height
+        readonly property real sheetSize: sheetSide ? Math.min(dp(380), width * 0.45)
+                                                    : Math.min(dp(420), height * 0.5)
+        readonly property real availW: editor._sheetShown && sheetSide ? width - sheetSize : width
+        readonly property real availH: editor._sheetShown && !sheetSide ? height - sheetSize : height
+        // The canvas keeps its full-size layout and is zoomed to fit what
+        // the sheet leaves, so nothing reflows while it is open
+        readonly property real zoom: Math.min(availW / Math.max(1, width), availH / Math.max(1, height))
 
         EditorCanvas {
             id: editorCanvas
             objectName: "editorCanvas"
-            anchors.fill: parent
+            width: canvasFrame.width
+            height: canvasFrame.height
+            transformOrigin: Item.TopLeft
+            scale: canvasFrame.zoom
+            x: (canvasFrame.availW - width * scale) / 2
+            y: (canvasFrame.availH - height * scale) / 2
+            Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+            Behavior on x { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+            Behavior on y { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+
             gridColumns: editor.gridColumns
             gridRows: editor.gridRows
             margins: editor.specMargins
@@ -587,71 +966,244 @@ Item {
             cells: editor.cells
             model: cellModel
             selectedIndex: editor.selectedIndex
+            interactive: !editor._sheetShown
+            minSpanFor: function(index) {
+                var c = editor.cells[index]
+                return c ? editor.minSpanFor(c.type) : null
+            }
 
             onEmptyCellTapped: function(col, row) {
-                editor._pendingCol = col
-                editor._pendingRow = row
-                palette.open()
+                if (editor._tapCell || editor._swapTarget >= 0 || editor._sheetShown) {
+                    editor.clearSelection()
+                    return
+                }
+                editor._swapTarget = -1
+                editor._tapCell = { "col": col, "row": row }
             }
-            onCellTapped: function(index) { editor.selectedIndex = index }
+            onCellTapped: function(index) {
+                if (editor.selectedIndex >= 0 && index !== editor.selectedIndex && !editor._sheetShown) {
+                    editor._tapCell = null
+                    editor._swapTarget = editor._swapTarget === index ? -1 : index
+                    return
+                }
+                editor.select(index)
+            }
+            onCellHeld: function(index) { editor.select(index) }
             onCellMoveRequested: function(index, col, row) { editor.moveCell(index, col, row) }
             onCellResizeRequested: function(index, cs, rs) { editor.resizeCellTo(index, cs, rs) }
             onBackgroundTapped: editor.clearSelection()
+            onDragActiveChanged: if (dragActive) editor._hideChoosers()
         }
 
         // Empty-state hint.
         Text {
             anchors.centerIn: parent
-            visible: editor.cells.length === 0
-            text: "Tap any  +  cell to place your first widget"
+            width: parent.width * 0.8
+            visible: editor.cells.length === 0 && !editor._tapCell
+            text: "Tap anywhere on the grid, or + Add, to place your first widget"
+            wrapMode: Text.WordWrap
             horizontalAlignment: Text.AlignHCenter
             color: App.Style.obdLabelColor
             font.family: App.Style.fontFamily
             font.pixelSize: App.Spacing.overallText
             opacity: 0.7
         }
-    }
 
-    // ── Properties panel ────────────────────────────────────────────────
-    // Floats OVER the canvas rather than docking beside it — a docked panel
-    // resized the canvas every time the selection changed, which rescaled
-    // the whole dashboard mid-edit and made drag snapping unstable. It docks
-    // to whichever side is away from the selected widget so the widget being
-    // configured stays visible.
-    PropertiesPanel {
-        id: sidePanel
-        objectName: "editorPanel"
-        parent: canvasFrame
-        z: 20
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.topMargin: dp(10)
-        anchors.bottomMargin: dp(10)
-        width: dp(300)
-        visible: editor.selectedCell !== null
-        editorPage: editor
-        cellIndex: editor.selectedIndex
-        cell: editor.selectedCell
+        // ── Free-space chooser: Add here / Move here ────────────────────
+        Item {
+            id: tapChooser
+            objectName: "editorTapChooser"
+            visible: editor._tapCell !== null && !editorCanvas.dragActive
+            z: 30
+            readonly property var _cell: editor._tapCell || { "col": 0, "row": 0 }
+            readonly property rect _r: Qt.rect(editorCanvas._cellX(_cell.col), editorCanvas._cellY(_cell.row),
+                                               editorCanvas._cellW, editorCanvas._cellH)
+            anchors.fill: parent
 
-        // Dock right when the selected widget sits in the left half of the
-        // grid, and vice versa.
-        readonly property bool dockRight: {
-            var c = editor.selectedCell
-            if (!c) return true
-            var center = (c.col !== undefined ? c.col : 0)
-                       + (c.colSpan !== undefined ? c.colSpan : 1) / 2
-            return center < editor.gridColumns / 2
+            Rectangle {
+                x: tapChooser._r.x
+                y: tapChooser._r.y
+                width: tapChooser._r.width
+                height: tapChooser._r.height
+                radius: editor.dp(6)
+                color: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.18)
+                border.color: App.Style.accent
+                border.width: editor.dp(2)
+            }
+            Row {
+                id: tapButtons
+                spacing: editor.dp(8)
+                x: Math.max(editor.dp(6), Math.min(parent.width - width - editor.dp(6),
+                            tapChooser._r.x + tapChooser._r.width / 2 - width / 2))
+                y: {
+                    var below = tapChooser._r.y + tapChooser._r.height + editor.dp(8)
+                    return below + height <= parent.height - editor.dp(6)
+                           ? below : Math.max(editor.dp(6), tapChooser._r.y - height - editor.dp(8))
+                }
+                Pill {
+                    objectName: "editorAddHere"
+                    text: "+ Add here"
+                    primary: true
+                    onClicked: editor.openPalette(tapChooser._cell.col, tapChooser._cell.row)
+                }
+                Pill {
+                    objectName: "editorMoveHere"
+                    visible: editor.selectedCell !== null
+                    text: "Move here"
+                    onClicked: {
+                        var c = tapChooser._cell
+                        editor._hideChoosers()
+                        editor.moveCell(editor.selectedIndex, c.col, c.row)
+                    }
+                }
+            }
         }
-        x: dockRight ? parent.width - width - dp(10) : dp(10)
-        Behavior on x {
-            enabled: sidePanel.visible
-            NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+
+        // ── Tap-tap chooser on another widget: Swap / Select ────────────
+        Row {
+            id: swapChooser
+            objectName: "editorSwapChooser"
+            visible: editor._swapTarget >= 0 && editor._swapTarget < editor.cells.length && !editorCanvas.dragActive
+            z: 30
+            spacing: editor.dp(8)
+            readonly property rect _r: editorCanvas.rectOf(editor.cells[editor._swapTarget])
+            x: Math.max(editor.dp(6), Math.min(parent.width - width - editor.dp(6),
+                        _r.x + _r.width / 2 - width / 2))
+            y: Math.max(editor.dp(6), Math.min(parent.height - height - editor.dp(6),
+                        _r.y + _r.height / 2 - height / 2))
+            Pill {
+                objectName: "editorSwapButton"
+                text: "Swap"
+                primary: true
+                onClicked: {
+                    var a = editor.selectedIndex, b = editor._swapTarget
+                    editor._hideChoosers()
+                    editor.swapCells(a, b)
+                }
+            }
+            Pill {
+                objectName: "editorSelectButton"
+                text: "Select"
+                onClicked: editor.select(editor._swapTarget)
+            }
+        }
+
+        // ── Floating toolbar for the selected widget ────────────────────
+        // Above the widget when there is room, else below, else at the top
+        // of the canvas; never over the resize grip.
+        Rectangle {
+            id: toolbar
+            objectName: "editorToolbar"
+            visible: editor.selectedCell !== null && !editor._sheetShown && !editorCanvas.dragActive
+                     && editor._swapTarget < 0 && !editor._tapCell
+            z: 30
+            readonly property rect _r: editorCanvas.selectedRect
+            readonly property real _gap: editor.touchSize / 2 + editor.dp(6)
+            readonly property real _maxW: parent.width - editor.dp(12)
+            width: Math.min(_maxW, toolFlow._natural + 2 * editor.dp(6))
+            height: toolFlow.implicitHeight + 2 * editor.dp(6)
+            radius: editor.dp(12)
+            color: App.Style.obdBoxBackground
+            border.color: Qt.darker(App.Style.obdBarColor, 1.4)
+            border.width: 1
+            x: Math.max(editor.dp(6), Math.min(parent.width - width - editor.dp(6),
+                        _r.x + _r.width / 2 - width / 2))
+            y: {
+                if (_r.y - height - _gap >= editor.dp(6)) return _r.y - height - _gap
+                if (_r.y + _r.height + _gap + height <= parent.height - editor.dp(6)) return _r.y + _r.height + _gap
+                return editor.dp(6)
+            }
+
+            readonly property var _sizes: editor.selectedCell ? editor.sizeOptionsFor(editor.selectedCell.type) : []
+
+            Flow {
+                id: toolFlow
+                anchors.fill: parent
+                anchors.margins: editor.dp(6)
+                spacing: editor.dp(6)
+                // One row when it fits
+                readonly property real _natural: {
+                    var w = 0, n = 0
+                    for (var i = 0; i < children.length; i++) {
+                        var c = children[i]
+                        if (!c.visible || c.implicitWidth <= 0) continue
+                        w += c.implicitWidth
+                        n++
+                    }
+                    return w + Math.max(0, n - 1) * spacing
+                }
+
+                Pill {
+                    objectName: "editorToolData"
+                    visible: editor.selectedMeta !== null && editor.selectedMeta.supportedKinds.length > 0
+                    maxLabelWidth: editor.dp(160)
+                    text: editor.selectedCell && editor.selectedCell.paramId
+                          ? editor._pidTitle(editor.selectedCell.paramId) : "Choose data"
+                    danger: !(editor.selectedCell && editor.selectedCell.paramId)
+                    onClicked: editor.openPidPicker()
+                }
+                Pill {
+                    objectName: "editorToolSettings"
+                    text: "Settings"
+                    onClicked: editor.openSheet()
+                }
+                Repeater {
+                    model: toolbar._sizes
+                    delegate: Pill {
+                        objectName: "editorToolSize_" + modelData.label
+                        text: modelData.label
+                        checked: editor.selectedCell !== null
+                                 && editor.selectedCell.colSpan === modelData.colSpan
+                                 && editor.selectedCell.rowSpan === modelData.rowSpan
+                        onClicked: editor.setCellSize(editor.selectedIndex, modelData.colSpan, modelData.rowSpan)
+                    }
+                }
+                Pill {
+                    objectName: "editorToolDuplicate"
+                    text: "Duplicate"
+                    onClicked: editor.duplicateCell(editor.selectedIndex)
+                }
+                Pill {
+                    objectName: "editorToolDelete"
+                    text: "Delete"
+                    danger: true
+                    onClicked: editor.deleteCell(editor.selectedIndex)
+                }
+            }
+        }
+
+        // ── + Add: finds room by itself ─────────────────────────────────
+        Pill {
+            objectName: "editorAddButton"
+            z: 25
+            visible: !editor._sheetShown && !editorCanvas.dragActive
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.margins: editor.dp(12)
+            text: "+ Add"
+            primary: true
+            onClicked: editor.openPalette(-1, -1)
+        }
+
+        // ── Settings sheet ──────────────────────────────────────────────
+        PropertiesPanel {
+            id: sidePanel
+            objectName: "editorPanel"
+            z: 40
+            visible: editor._sheetShown
+            x: canvasFrame.sheetSide ? canvasFrame.width - width : 0
+            y: canvasFrame.sheetSide ? 0 : canvasFrame.height - height
+            width: canvasFrame.sheetSide ? canvasFrame.sheetSize : canvasFrame.width
+            height: canvasFrame.sheetSide ? canvasFrame.height : canvasFrame.sheetSize
+            editorPage: editor
+            cellIndex: editor.selectedIndex
+            cell: editor.selectedCell
         }
     }
 
     // ── Popups ──────────────────────────────────────────────────────────
     PalettePopup {
-        id: palette
+        id: widgetPalette
         onWidgetPicked: function(type) {
             editor.addCellAt(type, editor._pendingCol, editor._pendingRow)
         }
@@ -665,31 +1217,108 @@ Item {
         }
     }
 
-    // ── Error banner ────────────────────────────────────────────────────
+    // Close with unsaved changes
+    Popup {
+        id: closeDialog
+        objectName: "editorCloseDialog"
+        parent: Overlay.overlay
+        modal: true
+        focus: true
+        padding: editor.dp(20)
+        x: Math.round((parent.width - width) / 2)
+        y: Math.round((parent.height - height) / 2)
+        width: Math.min(parent.width - editor.dp(32), editor.dp(460))
+        background: Rectangle {
+            color: App.Style.obdBoxBackground
+            radius: editor.dpMin(12, 4)
+            border.color: Qt.darker(App.Style.obdBarColor, 1.5)
+            border.width: 1
+        }
+        contentItem: ColumnLayout {
+            spacing: editor.dp(16)
+            Text {
+                Layout.fillWidth: true
+                text: "Save your changes?"
+                color: App.Style.primaryTextColor
+                font.family: App.Style.fontFamily
+                font.pixelSize: App.Spacing.overallText * 1.2
+                font.bold: true
+                wrapMode: Text.WordWrap
+            }
+            Flow {
+                Layout.fillWidth: true
+                spacing: editor.dp(8)
+                layoutDirection: Qt.RightToLeft
+                Pill {
+                    objectName: "editorCloseSave"
+                    text: "Save"
+                    primary: true
+                    onClicked: { closeDialog.close(); editor.save() }
+                }
+                Pill {
+                    objectName: "editorCloseDiscard"
+                    text: "Discard"
+                    danger: true
+                    onClicked: { closeDialog.close(); editor.discard() }
+                }
+                Pill {
+                    objectName: "editorCloseKeep"
+                    text: "Keep editing"
+                    onClicked: closeDialog.close()
+                }
+            }
+        }
+    }
+
+    // ── Snackbar: errors, and "removed · Undo" ──────────────────────────
     Rectangle {
-        id: errorBanner
+        id: snackbar
         objectName: "editorErrorBanner"
         visible: false
+        z: 50
+        property bool danger: false
+        property string actionText: ""
+        property var action: null
         anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottomMargin: dp(24)
-        width: errorText.implicitWidth + dp(32)
-        height: errorText.implicitHeight + dp(20)
-        radius: dpMin(8, 2)
-        color: App.Style.statusDanger
+        width: Math.min(parent.width - dp(32), snackRow.implicitWidth + dp(32))
+        height: Math.max(editor.touchSize, snackRow.implicitHeight + dp(16))
+        radius: dpMin(10, 3)
+        color: danger ? App.Style.statusDanger : Qt.darker(App.Style.obdBoxBackground, 1.6)
+        border.color: Qt.darker(App.Style.obdBarColor, 1.4)
+        border.width: danger ? 0 : 1
 
-        Text {
-            id: errorText
+        RowLayout {
+            id: snackRow
             anchors.centerIn: parent
-            color: "white"
-            font.family: App.Style.fontFamily
-            font.pixelSize: App.Spacing.overallText
+            width: parent.width - dp(32)
+            spacing: dp(16)
+            Text {
+                id: snackText
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: "white"
+                font.family: App.Style.fontFamily
+                font.pixelSize: App.Spacing.overallText
+            }
+            Pill {
+                objectName: "editorSnackAction"
+                visible: snackbar.actionText.length > 0
+                text: snackbar.actionText
+                primary: true
+                onClicked: {
+                    var act = snackbar.action
+                    snackbar.visible = false
+                    if (act) act()
+                }
+            }
         }
 
         Timer {
-            id: errorTimer
+            id: snackTimer
             interval: 3000
-            onTriggered: errorBanner.visible = false
+            onTriggered: snackbar.visible = false
         }
     }
 }

@@ -579,6 +579,69 @@ private slots:
         }
     }
 
+    // ── nearest free spot, density ──
+
+    void nearestFreeFindsTheClosestGap()
+    {
+        const QVariantList cells{cell(0, 0, 2, 2, "a"), cell(2, 0, 2, 2, "b")};
+        // Free already: stays
+        QVariantMap r = m_dm->nearestFree(cells, 6, 4, 4, 0, 2, 2, -1);
+        QVERIFY(r.value("ok").toBool());
+        QCOMPARE(at(r), QStringLiteral("4,0 2x2"));
+        // Taken: the closest gap of that size, the same row first
+        r = m_dm->nearestFree(cells, 6, 4, 1, 0, 2, 2, -1);
+        QCOMPARE(at(r), QStringLiteral("1,2 2x2"));
+        // Its own cell doesn't block it
+        r = m_dm->nearestFree(cells, 6, 4, 0, 0, 2, 2, 0);
+        QCOMPARE(at(r), QStringLiteral("0,0 2x2"));
+        // Nothing that big is free
+        QVERIFY(!m_dm->nearestFree(cells, 6, 4, 0, 0, 6, 4, -1).value("ok").toBool());
+        QVERIFY(!m_dm->nearestFree(cells, 6, 4, 0, 0, 7, 1, -1).value("ok").toBool());
+    }
+
+    void rescaleKeepsTheLayout()
+    {
+        // 12 x 8 halved to 6 x 4: everything exactly half
+        const QVariantList cells{cell(0, 0, 6, 4, "a"), cell(6, 0, 6, 4, "b"), cell(0, 4, 4, 4, "c"),
+                                 cell(4, 4, 4, 4, "d"), cell(8, 4, 4, 4, "e")};
+        QVariantMap r = m_dm->rescale(cells, 12, 8, 6, 4);
+        QVERIFY(r.value("ok").toBool());
+        QVariantList out = r.value("cells").toList();
+        QCOMPARE(at(out.at(0).toMap()), QStringLiteral("0,0 3x2"));
+        QCOMPARE(at(out.at(1).toMap()), QStringLiteral("3,0 3x2"));
+        QCOMPARE(at(out.at(2).toMap()), QStringLiteral("0,2 2x2"));
+        QCOMPARE(at(out.at(3).toMap()), QStringLiteral("2,2 2x2"));
+        QCOMPARE(at(out.at(4).toMap()), QStringLiteral("4,2 2x2"));
+        QCOMPARE(out.at(4).toMap().value("tag").toString(), QStringLiteral("e"));   // the rest of the cell kept
+        // ...and back up again
+        r = m_dm->rescale(out, 6, 4, 12, 8);
+        QCOMPARE(r.value("cells").toList(), cells);
+    }
+
+    void rescaleResolvesCollisions()
+    {
+        // Two 1-column cells side by side on 12 columns round onto the same
+        // column of 4: one of them moves aside, nothing overlaps
+        const QVariantList cells{cell(0, 0, 1, 1, "a"), cell(1, 0, 1, 1, "b")};
+        const QVariantMap r = m_dm->rescale(cells, 12, 8, 4, 3);
+        QVERIFY(r.value("ok").toBool());
+        const QVariantList out = r.value("cells").toList();
+        for (int i = 0; i < out.size(); ++i) {
+            const QVariantMap c = out.at(i).toMap();
+            QVERIFY2(m_dm->canPlace(out, 4, 3, c.value("col").toInt(), c.value("row").toInt(),
+                                    c.value("colSpan").toInt(), c.value("rowSpan").toInt(), i),
+                     qPrintable(at(c)));
+        }
+        // More widgets than cells: refused, with a reason
+        QVariantList many;
+        for (int i = 0; i < 13; ++i)
+            many.append(cell(i % 12, i / 12, 1, 1, "x"));
+        const QVariantMap no = m_dm->rescale(many, 12, 8, 4, 3);
+        QVERIFY(!no.value("ok").toBool());
+        QVERIFY(!no.value("reason").toString().isEmpty());
+        QCOMPARE(no.value("cells").toList(), many);
+    }
+
     // ── sizes ──
 
     void minSpanReachesTheReadableSize()

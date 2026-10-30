@@ -792,6 +792,22 @@ func (o DashboardManager) Arrange(cells []any, gridColumns int, gridRows int, in
 	return
 }
 
+// NearestFree calls nearestFree(QVariantList, int, int, int, int, int, int, int) -> QVariantMap.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) NearestFree(cells []any, gridColumns int, gridRows int, col int, row int, colSpan int, rowSpan int, exceptIndex int) (v map[string]any, err error) {
+	err = o.c.Call("dashboardManager", "nearestFree", &v, cells, gridColumns, gridRows, col, row, colSpan, rowSpan, exceptIndex)
+	return
+}
+
+// Rescale calls rescale(QVariantList, int, int, int, int) -> QVariantMap.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) Rescale(cells []any, fromColumns int, fromRows int, toColumns int, toRows int) (v map[string]any, err error) {
+	err = o.c.Call("dashboardManager", "rescale", &v, cells, fromColumns, fromRows, toColumns, toRows)
+	return
+}
+
 // MinSpan calls minSpan(QString, int, int, double, double, double) -> QVariantMap.
 //
 // Experimental: not covered by the protocol version; may change or go in any release.

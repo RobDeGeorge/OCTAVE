@@ -840,6 +840,22 @@ QVariantMap DashboardManager::arrange(const QVariantList &cells, int gridColumns
             {QStringLiteral("swapped"), a.swapped}, {QStringLiteral("reason"), a.reason}};
 }
 
+QVariantMap DashboardManager::nearestFree(const QVariantList &cells, int gridColumns, int gridRows, int col, int row,
+                                          int colSpan, int rowSpan, int exceptIndex) const
+{
+    DashboardGrid::Rect r{col, row, colSpan, rowSpan};
+    const bool ok = DashboardGrid::nearestFree(cells, gridColumns, gridRows, r, exceptIndex);
+    return {{QStringLiteral("ok"), ok}, {QStringLiteral("col"), r.col}, {QStringLiteral("row"), r.row},
+            {QStringLiteral("colSpan"), r.colSpan}, {QStringLiteral("rowSpan"), r.rowSpan}};
+}
+
+QVariantMap DashboardManager::rescale(const QVariantList &cells, int fromColumns, int fromRows, int toColumns,
+                                      int toRows) const
+{
+    const DashboardGrid::Rescaled r = DashboardGrid::rescale(cells, fromColumns, fromRows, toColumns, toRows);
+    return {{QStringLiteral("ok"), r.ok}, {QStringLiteral("cells"), r.cells}, {QStringLiteral("reason"), r.reason}};
+}
+
 namespace {
 // The catalog's minSize {w, h} (dp) and aspect (w / h) for a type; a type
 // without them (or unknown) reads as any size, square

@@ -378,7 +378,7 @@ private slots:
             ApplicationWindow {
                 width: 1280; height: 720; visible: true
                 property alias editor: ed
-                Editor.DashboardEditor { id: ed; anchors.fill: parent }
+                Editor.DashboardEditor { id: ed; anchors.fill: parent; autoDensity: false }
             }
         )qml").arg(QUrl::fromLocalFile(frontend).toString()).toUtf8(), QUrl());
         root.reset(component.create());
@@ -474,7 +474,143 @@ private slots:
         QVERIFY(QString(widgetAt(0)->metaObject()->className()).startsWith("CompassGauge"));
     }
 
+    // Touch rules: an unselected widget doesn't move under a passing drag,
+    // the selected one does; density, duplicate, swap and delete + undo
+    void editorTouchEditing()
+    {
+        QQmlComponent component(engine.get());
+        component.setData(QString(R"qml(
+            import QtQuick
+            import QtQuick.Controls
+            import "%1/dashboards/editor" as Editor
+            ApplicationWindow {
+                width: 1280; height: 720; visible: true
+                property alias editor: ed
+                Editor.DashboardEditor { id: ed; anchors.fill: parent; autoDensity: false }
+            }
+        )qml").arg(QUrl::fromLocalFile(frontend).toString()).toUtf8(), QUrl());
+        root.reset(component.create());
+        QVERIFY2(root, qPrintable(component.errorString()));
+        auto *window = qobject_cast<QQuickWindow *>(root.get());
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QObject *editor = qvariant_cast<QObject *>(root->property("editor"));
+        QVERIFY(editor);
+        auto cells = [editor] { return editor->property("cells").toList(); };
+        auto cellAt = [&cells](int i) { return cells().at(i).toMap(); };
+        auto center = [window](const QString &name) {
+            auto *item = findVisual(window->contentItem(), name);
+            return item ? item->mapToScene(QPointF(item->width() / 2, item->height() / 2)).toPoint() : QPoint(-1, -1);
+        };
+        auto drag = [window](QPoint from, QPoint to) {
+            QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, from);
+            for (int i = 1; i <= 12; ++i)
+                QTest::mouseMove(window, from + (to - from) * i / 12, 16);
+            QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, to, 16);
+        };
+
+        QVERIFY(invoke(editor, "addCellAt", {"ClockWidget", 0, 0}).toBool());     // 4x2 at 0,0
+        QVERIFY(invoke(editor, "addCellAt", {"CompassGauge", 4, 0}).toBool());    // 4x4 at 4,0
+        QCOMPARE(editor->property("selectedIndex").toInt(), 1);
+        QTRY_VERIFY(findVisual(window->contentItem(), "editorCell_1"));
+
+        auto *canvas = findVisual(window->contentItem(), "editorCanvas");
+        QVERIFY(canvas);
+        const double stepY = canvas->property("_cellH").toDouble() + canvas->property("_spacing").toDouble();
+
+        // The clock isn't selected: dragging over it moves nothing
+        QPoint from = center("editorCell_0");
+        drag(from, from + QPoint(0, int(stepY * 3)));
+        QCOMPARE(cellAt(0).value("row").toInt(), 0);
+        QCOMPARE(cellAt(0).value("col").toInt(), 0);
+
+        // Selected, it follows the finger and lands on the cell under it
+        invoke(editor, "select", {0});
+        QTRY_VERIFY(findVisual(window->contentItem(), "editorToolbar")->isVisible());
+        from = center("editorCell_0");
+        drag(from, from + QPoint(0, int(stepY * 3)));
+        QTRY_COMPARE(cellAt(0).value("row").toInt(), 3);
+        QCOMPARE(cellAt(0).value("col").toInt(), 0);
+
+        // Tap-tap swap: the clock (4x2) goes where the compass (4x4) was;
+        // the compass doesn't fit the clock's spot, so it moves aside
+        invoke(editor, "swapCells", {0, 1});
+        QCOMPARE(cellAt(0).value("col").toInt(), 4);
+        QCOMPARE(cellAt(0).value("row").toInt(), 0);
+        for (int i = 0; i < 2; ++i)
+            QVERIFY(dashboards->canPlace(cells(), 12, 6, cellAt(i).value("col").toInt(), cellAt(i).value("row").toInt(),
+                                         cellAt(i).value("colSpan").toInt(), cellAt(i).value("rowSpan").toInt(), i));
+
+        // Duplicate lands beside, overlapping nothing
+        QVERIFY(invoke(editor, "duplicateCell", {1}).toBool());
+        QCOMPARE(cells().size(), 3);
+        QCOMPARE(cellAt(2).value("type").toString(), QStringLiteral("CompassGauge"));
+        QVERIFY(dashboards->canPlace(cells(), 12, 6, cellAt(2).value("col").toInt(), cellAt(2).value("row").toInt(),
+                                     4, 4, 2));
+
+        // A new widget with no place given finds room by itself
+        // (a widget without a PID to pick, so no picker opens over the test)
+        QVERIFY(invoke(editor, "addCellAt", {"ClockWidget", -1, -1}).toBool());
+        QCOMPARE(cells().size(), 4);
+
+        // Density: the same layout on 6 x 4, and undo puts the grid back
+        invoke(editor, "setDensity", {"normal"});
+        QCOMPARE(editor->property("gridColumns").toInt(), 6);
+        QCOMPARE(editor->property("gridRows").toInt(), 4);
+        QCOMPARE(editor->property("density").toString(), QStringLiteral("normal"));
+        for (int i = 0; i < cells().size(); ++i)
+            QVERIFY(dashboards->canPlace(cells(), 6, 4, cellAt(i).value("col").toInt(), cellAt(i).value("row").toInt(),
+                                         cellAt(i).value("colSpan").toInt(), cellAt(i).value("rowSpan").toInt(), i));
+        invoke(editor, "undo");
+        QCOMPARE(editor->property("gridColumns").toInt(), 12);
+        QCOMPARE(editor->property("gridRows").toInt(), 6);
+        QCOMPARE(editor->property("density").toString(), QStringLiteral("custom"));
+
+        // Delete shows "removed · Undo"; Undo brings it back
+        invoke(editor, "deleteCell", {0});
+        QCOMPARE(cells().size(), 3);
+        QTRY_VERIFY(findVisual(window->contentItem(), "editorSnackAction")->isVisible());
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, center("editorSnackAction"));
+        QTRY_COMPARE(cells().size(), 4);
+        QCOMPARE(cellAt(0).value("type").toString(), QStringLiteral("ClockWidget"));
+
+        // Settings: the sheet opens beside the dashboard, which zooms out to
+        // fit what is left and takes no drags meanwhile
+        invoke(editor, "select", {1});
+        invoke(editor, "openSheet");
+        QTRY_VERIFY(findVisual(window->contentItem(), "editorPanel")->isVisible());
+        QTRY_VERIFY(canvas->scale() < 0.9);
+        QVERIFY(!canvas->property("interactive").toBool());
+        QVERIFY(!findVisual(window->contentItem(), "editorToolbar")->isVisible());
+        invoke(editor, "closeSheet");
+        QTRY_COMPARE(canvas->scale(), 1.0);
+        QVERIFY(canvas->property("interactive").toBool());
+
+        // Close with changes asks first
+        auto *dialog = root->findChild<QObject *>("editorCloseDialog");
+        QVERIFY(dialog);
+        invoke(editor, "close");
+        QTRY_VERIFY(dialog->property("opened").toBool());
+    }
+
 private:
+    // A QML method of `obj` with up to three arguments, its result as a variant
+    static QVariant invoke(QObject *obj, const char *method, const QVariantList &args = {})
+    {
+        QVariant ret;
+        bool ok = false;
+        switch (args.size()) {
+        case 0: ok = QMetaObject::invokeMethod(obj, method, Q_RETURN_ARG(QVariant, ret)); break;
+        case 1: ok = QMetaObject::invokeMethod(obj, method, Q_RETURN_ARG(QVariant, ret), Q_ARG(QVariant, args[0])); break;
+        case 2: ok = QMetaObject::invokeMethod(obj, method, Q_RETURN_ARG(QVariant, ret), Q_ARG(QVariant, args[0]),
+                                               Q_ARG(QVariant, args[1])); break;
+        default: ok = QMetaObject::invokeMethod(obj, method, Q_RETURN_ARG(QVariant, ret), Q_ARG(QVariant, args[0]),
+                                                Q_ARG(QVariant, args[1]), Q_ARG(QVariant, args[2])); break;
+        }
+        if (!ok)
+            qWarning() << "no" << method << "with" << args.size() << "args";
+        return ret;
+    }
+
     bool load(const QString &file)
     {
         QQmlComponent component(engine.get(), QUrl::fromLocalFile(frontend + '/' + file));

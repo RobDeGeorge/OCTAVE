@@ -59,6 +59,25 @@ struct Arrangement
 };
 Arrangement arrange(const QVariantList &cells, int cols, int rows, int index, const Rect &target);
 
+// The free spot of r's span nearest (r.col, r.row), ignoring cell
+// `exceptIndex`; r is moved there. False when no spot of that span is free.
+bool nearestFree(const QVariantList &cells, int cols, int rows, Rect &r, int exceptIndex = -1);
+
+// ── Density ──
+//
+// The same layout on a toCols x toRows grid (the editor's Coarse / Normal /
+// Fine): every edge scaled by the grid ratio and rounded, then the cells
+// placed biggest first where they land, else at the nearest free spot, else
+// a step smaller. `ok` false = they don't all fit even at 1x1: `reason`
+// says so and `cells` is the input unchanged.
+struct Rescaled
+{
+    bool ok = false;
+    QVariantList cells;
+    QString reason;
+};
+Rescaled rescale(const QVariantList &cells, int fromCols, int fromRows, int toCols, int toRows);
+
 // ── Sizes ──
 //
 // The smallest span whose on-screen size reaches minW x minH (any unit, the

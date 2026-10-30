@@ -13,7 +13,7 @@
 | Error | Where the user sees it today |
 |---|---|
 | Phone mirror error / dropped link | `PhoneMirrorView.qml`: dismissable notice banner (`phoneMirrorManager.mirrorNotice`, `dismissNotice()`), and on a dropped link it holds the last frame and reconnects quietly (`onScrcpyError`) |
-| Dashboard editor / share errors | `DashboardEditor.qml` `errorBanner`, `OBDMenu.qml` `shareStatusBanner` |
+| Dashboard editor / share errors | `DashboardEditor.qml` `snackbar` (`_showError`, also "removed · Undo"), `OBDMenu.qml` `shareStatusBanner` |
 | Update available | Pulsing dot on the Settings About card (`SettingsMenu.qml` `updateAvailable`, `AboutPage.qml`) |
 | "What went wrong earlier?" | Settings > About > Diagnostics: recent log lines, copy, export (`DiagnosticsManager`) |
 | OBD status | `OBDHome.qml`, `OBDSettingsPage.qml`, `OBDMenu.qml`: only visible on those pages |

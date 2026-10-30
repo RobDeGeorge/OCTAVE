@@ -385,13 +385,21 @@ Per cell: `type` matches a widget registered in `WidgetCatalog` — the gauge pr
 **Primary path — the in-app editor (Phase 3, shipped).** In the dashboard
 chooser (square Dashboards button at the top-right of `OBDMenu.qml`), tap
 **+ New** — or **Edit** on a user dashboard, or **Copy** to fork a built-in.
-The editor is hybrid tap-and-drag: tap an empty grid cell to place a widget
-from the palette, drag a placed widget to move it (snaps to the grid; a widget it lands on
-swaps places with it or moves to the nearest free space, and a drop with no
-room is refused with the reason), drag the selected widget's corner grip to
-resize it (the same rules), tap a widget to select it and edit it in the side
-panel. Undo / Redo (top bar, Ctrl+Z / Ctrl+Y) step through up to 50 edits. The
-panel runs, top to bottom: **PID** → **Position & Size** steppers →
+The editor is full screen and touch first (select, then manipulate): tap a
+widget to select it, and a floating toolbar offers **Data** (the PID picker),
+**Settings**, **S / M / L** sizes (from the catalog's `minSize` / `aspect`),
+**Duplicate** and **Delete** (undoable from the snackbar). Drag the selected
+widget to move it (press and hold drags any widget); neighbours slide aside
+live, a widget it lands on swaps with it when it fits the gap, and a drop
+with no room turns the ghost red with the reason. With a widget selected, tap
+another one to **Swap**, or free space to **Move here**; with nothing selected,
+tap free space to **Add here**, or use **+ Add**. The corner grip resizes,
+never below the widget's readable minimum. The grid is Coarse / Normal / Fine
+(4 × 3, 6 × 4, 12 × 8; a new dashboard starts at the finest whose cells are at
+least 12 mm on the screen). Undo / Redo (top bar, Ctrl+Z / Ctrl+Y) step
+through up to 50 edits. **Settings** opens the properties panel as a side
+sheet (bottom sheet in portrait) and zooms the dashboard to fit beside it.
+The panel runs, top to bottom: **PID** → **Position & Size** steppers →
 **Options** (the widget's `editableProps`) → **Label & Range** (title / unit /
 min / max overrides; empty = follow the PID; warns when min ≥ max) → **Color**
 (swatches; "T" = theme/unset; one pick writes every `colorProps` key) →

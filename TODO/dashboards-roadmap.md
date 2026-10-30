@@ -2,7 +2,7 @@
 
 **Goal:** prove the dashboard editor and demand-driven polling work on a real touchscreen and a real car.
 **Status:** active. Primitives, JSON dashboards, the in-app editor, renderer validation and user-folder hot-reload are all done and verified on desktop (2026-09-08 and 2026-10-04 passes).
-**Last updated:** 2026-10-18
+**Last updated:** 2026-10-30
 
 Done 2026-10-18: the Primitives Gallery is gone, and a dashboard with a newer `schema` shows "needs a newer OCTAVE" instead of its cells (`tst_vehiclegate`).
 
@@ -12,10 +12,14 @@ Dropped: the `"source": "Custom.qml"` QML fallback. It would load arbitrary code
 
 None of these can be done on the desktop rig.
 
-**Touch (Galaxy S22, sideload APK):** effort M for the lot.
-- [ ] Drag feel, palette and PID-picker sizing on a phone-sized screen.
+**Touch (Galaxy S22 and the 7" Pi touchscreen):** effort M for the lot. The editor's touch redesign (`docs/DASHBOARD_EDITOR_REVIEW.md` Phase 1) has only run on the desktop and in `tst_dashboardwidgets`.
+- [ ] Select-then-drag feel: the 8 dp threshold, press-and-hold to drag an unselected widget, the lift and the neighbours sliding aside live; zero accidental moves while tapping and swiping for 5 minutes.
+- [ ] The floating toolbar never lands under the finger or off screen; every control is at least 9 mm on the 7" screen (`touchSize` uses `Screen.pixelDensity`: check the value it reports on each device).
+- [ ] The default grid density a new dashboard gets on each screen, and Coarse / Normal / Fine rescaling an existing dashboard sensibly.
+- [ ] Settings sheet: side sheet in landscape, bottom sheet in portrait, the zoomed canvas still readable; the on-screen keyboard doesn't cover the field being typed in.
+- [ ] Palette and PID-picker sizing on a phone-sized screen.
 - [ ] Finger swipe between dashboards: a 20% drag or a flick past 8% commits, a short drag snaps back; taps on Media Keys / Now Playing inside a dashboard still register (the DragHandler sits on the page).
-- [ ] Resize grip (44dp target) reachable at the canvas edges.
+- [ ] Resize grip reachable at the canvas edges.
 - [ ] Import "From file…" through the Android picker (content:// URL into `importDashboard`), and Export landing in Downloads/OCTAVE-dashboards.
 
 **Real car (Orange Pi 5 Plus in the Jeep, or the Pi with an ECU simulator):** effort M for the lot.

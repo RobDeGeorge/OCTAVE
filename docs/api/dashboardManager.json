@@ -280,6 +280,76 @@
         },
         {
             "kind": "invokable",
+            "name": "nearestFree",
+            "params": [
+                {
+                    "name": "cells",
+                    "type": "QVariantList"
+                },
+                {
+                    "name": "gridColumns",
+                    "type": "int"
+                },
+                {
+                    "name": "gridRows",
+                    "type": "int"
+                },
+                {
+                    "name": "col",
+                    "type": "int"
+                },
+                {
+                    "name": "row",
+                    "type": "int"
+                },
+                {
+                    "name": "colSpan",
+                    "type": "int"
+                },
+                {
+                    "name": "rowSpan",
+                    "type": "int"
+                },
+                {
+                    "name": "exceptIndex",
+                    "type": "int"
+                }
+            ],
+            "returns": "QVariantMap",
+            "scope": "read",
+            "stability": "experimental"
+        },
+        {
+            "kind": "invokable",
+            "name": "rescale",
+            "params": [
+                {
+                    "name": "cells",
+                    "type": "QVariantList"
+                },
+                {
+                    "name": "fromColumns",
+                    "type": "int"
+                },
+                {
+                    "name": "fromRows",
+                    "type": "int"
+                },
+                {
+                    "name": "toColumns",
+                    "type": "int"
+                },
+                {
+                    "name": "toRows",
+                    "type": "int"
+                }
+            ],
+            "returns": "QVariantMap",
+            "scope": "read",
+            "stability": "experimental"
+        },
+        {
+            "kind": "invokable",
             "name": "minSpan",
             "params": [
                 {

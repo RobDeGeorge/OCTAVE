@@ -36,8 +36,8 @@ class DashboardManager : public QObject
     Q_OBJECT
     // Service permissions (src/service/servicescopes.h)
     Q_CLASSINFO("octave.scope", "files")
-    Q_CLASSINFO("octave.scope.read", "arrange canPlace fitAt isBuiltIn loadDashboard minSpan normalizedSpec refresh sizeOptions uniqueIdForLabel")
-    Q_CLASSINFO("octave.experimental", "arrange minSpan sizeOptions")
+    Q_CLASSINFO("octave.scope.read", "arrange canPlace fitAt isBuiltIn loadDashboard minSpan nearestFree normalizedSpec refresh rescale sizeOptions uniqueIdForLabel")
+    Q_CLASSINFO("octave.experimental", "arrange minSpan nearestFree rescale sizeOptions")
     Q_PROPERTY(QVariantList dashboards READ dashboards NOTIFY dashboardsChanged)
     // Human-readable reason the last export/import failed ("" after a
     // success) — the chooser shows it in its status line.
@@ -110,6 +110,16 @@ public:
     // {ok, cells, moved: [indexes], swapped, reason}. Nothing is saved.
     Q_INVOKABLE QVariantMap arrange(const QVariantList &cells, int gridColumns, int gridRows, int index,
                                     int col, int row, int colSpan, int rowSpan) const;
+
+    // The free spot of colSpan x rowSpan nearest (col, row), cell
+    // `exceptIndex` ignored (-1 for none): {ok, col, row, colSpan, rowSpan}
+    Q_INVOKABLE QVariantMap nearestFree(const QVariantList &cells, int gridColumns, int gridRows, int col, int row,
+                                        int colSpan, int rowSpan, int exceptIndex) const;
+
+    // The cells laid out again on a toColumns x toRows grid (the editor's
+    // grid density, DashboardGrid::rescale): {ok, cells, reason}
+    Q_INVOKABLE QVariantMap rescale(const QVariantList &cells, int fromColumns, int fromRows, int toColumns,
+                                    int toRows) const;
 
     // Sizes for a widget type on a grid whose cells are cellWidth x
     // cellHeight dp with `spacing` dp gutters, from the catalog's minSize

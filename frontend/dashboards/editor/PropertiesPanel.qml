@@ -1,7 +1,8 @@
 // PropertiesPanel.qml
 //
-// Inspector for the selected canvas cell (Phase 3 Milestones B + D). Shows:
-//   - the widget type and a deselect button
+// Inspector for the selected canvas cell: the editor's settings sheet
+// (beside the dashboard, or under it on a portrait screen). Shows:
+//   - the widget type and a close button
 //   - the bound PID (button opens the PIDPicker)
 //   - position / size steppers (◄ value ► — no drag handles, per roadmap)
 //   - label & range overrides (title / unit / min / max) for PID-bound
@@ -11,7 +12,7 @@
 //   - the widget's curated editable props from WidgetCatalog `editableProps`
 //     (bool → switch, enum → segmented buttons, int/real/string → text field;
 //     empty field = unset, so the gauge's own default applies)
-//   - a delete button
+//   - a delete button (undoable from the editor's snackbar)
 //
 // The panel never mutates the cell itself — every control calls back into
 // DashboardEditor (`editorPage`), which owns the working spec.
@@ -293,8 +294,8 @@ Rectangle {
                     font.bold: true
                 }
                 Rectangle {
-                    Layout.preferredWidth: panel.dp(32)
-                    Layout.preferredHeight: panel.dp(32)
+                    Layout.preferredWidth: panel.dp(44)
+                    Layout.preferredHeight: panel.dp(44)
                     radius: panel.dpMin(6, 2)
                     color: "transparent"
                     border.color: Qt.darker(App.Style.obdBarColor, 1.6)
@@ -307,7 +308,7 @@ Rectangle {
                     }
                     MouseArea {
                         anchors.fill: parent
-                        onClicked: if (panel.editorPage) panel.editorPage.clearSelection()
+                        onClicked: if (panel.editorPage) panel.editorPage.closeSheet()
                     }
                 }
             }
@@ -631,7 +632,7 @@ Rectangle {
                 MouseArea {
                     id: deleteMouse
                     anchors.fill: parent
-                    onClicked: if (panel.editorPage) panel.editorPage.removeCell(panel.cellIndex)
+                    onClicked: if (panel.editorPage) panel.editorPage.deleteCell(panel.cellIndex)
                 }
             }
         }

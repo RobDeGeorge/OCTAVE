@@ -77,7 +77,45 @@ bool freeOf(const QList<Rect> &rects, const QList<bool> &fixed, const Rect &r)
             return false;
     return true;
 }
+
+// The free spot of `want`'s span nearest `want` (centre distance; a
+// same-row move wins a tie, then reading order). False when there is none.
+bool nearestFreeOf(const QList<Rect> &rects, const QList<bool> &fixed, int cols, int rows, Rect &want)
+{
+    Rect best;
+    double bestDist = std::numeric_limits<double>::max();
+    for (int row = 0; row + want.rowSpan <= rows; ++row) {
+        for (int col = 0; col + want.colSpan <= cols; ++col) {
+            const Rect r{col, row, want.colSpan, want.rowSpan};
+            if (!freeOf(rects, fixed, r))
+                continue;
+            const double dc = col - want.col, dr = row - want.row;
+            const double dist = std::hypot(dc, dr) + (dr == 0 ? 0.0 : 0.001);
+            if (dist < bestDist) {
+                bestDist = dist;
+                best = r;
+            }
+        }
+    }
+    if (bestDist == std::numeric_limits<double>::max())
+        return false;
+    want = best;
+    return true;
+}
 } // namespace
+
+bool nearestFree(const QVariantList &cells, int cols, int rows, Rect &r, int exceptIndex)
+{
+    if (r.colSpan < 1 || r.rowSpan < 1 || r.colSpan > cols || r.rowSpan > rows)
+        return false;
+    QList<Rect> rects;
+    QList<bool> fixed;
+    for (int i = 0; i < cells.size(); ++i) {
+        rects.append(rectOf(cells.at(i).toMap()));
+        fixed.append(i != exceptIndex);
+    }
+    return nearestFreeOf(rects, fixed, cols, rows, r);
+}
 
 Arrangement arrange(const QVariantList &cells, int cols, int rows, int index, const Rect &target)
 {
@@ -136,24 +174,8 @@ Arrangement arrange(const QVariantList &cells, int cols, int rows, int index, co
         return rects.at(a).colSpan * rects.at(a).rowSpan > rects.at(b).colSpan * rects.at(b).rowSpan;
     });
     for (int i : covered) {
-        const Rect was = rects.at(i);
-        Rect best;
-        double bestDist = std::numeric_limits<double>::max();
-        for (int row = 0; row + was.rowSpan <= rows; ++row) {
-            for (int col = 0; col + was.colSpan <= cols; ++col) {
-                const Rect r{col, row, was.colSpan, was.rowSpan};
-                if (!freeOf(rects, fixed, r))
-                    continue;
-                // Centre distance; a same-row move wins a tie, then reading order
-                const double dc = col - was.col, dr = row - was.row;
-                const double dist = std::hypot(dc, dr) + (dr == 0 ? 0.0 : 0.001);
-                if (dist < bestDist) {
-                    bestDist = dist;
-                    best = r;
-                }
-            }
-        }
-        if (bestDist == std::numeric_limits<double>::max()) {
+        Rect best = rects.at(i);
+        if (!nearestFreeOf(rects, fixed, cols, rows, best)) {
             out.reason = QStringLiteral("No room: make a widget smaller or move something first");
             return out;
         }
@@ -163,6 +185,66 @@ Arrangement arrange(const QVariantList &cells, int cols, int rows, int index, co
         out.moved.append(i);
     }
     std::sort(out.moved.begin(), out.moved.end());
+    out.ok = true;
+    out.cells = next;
+    return out;
+}
+
+Rescaled rescale(const QVariantList &cells, int fromCols, int fromRows, int toCols, int toRows)
+{
+    Rescaled out;
+    out.cells = cells;
+    if (fromCols < 1 || fromRows < 1 || toCols < 1 || toRows < 1) {
+        out.reason = QStringLiteral("That grid size is not valid");
+        return out;
+    }
+    const double kx = double(toCols) / fromCols, ky = double(toRows) / fromRows;
+    // Each edge scaled and rounded, so neighbours that touched still touch
+    auto scaled = [](int start, int span, double k, int limit, int &outStart, int &outSpan) {
+        outStart = qBound(0, int(std::lround(start * k)), limit - 1);
+        const int end = qBound(outStart + 1, int(std::lround((start + span) * k)), limit);
+        outSpan = end - outStart;
+    };
+    QList<Rect> want;
+    for (const QVariant &c : cells) {
+        const Rect r = rectOf(c.toMap());
+        Rect s;
+        scaled(r.col, r.colSpan, kx, toCols, s.col, s.colSpan);
+        scaled(r.row, r.rowSpan, ky, toRows, s.row, s.rowSpan);
+        want.append(s);
+    }
+
+    // Biggest first: they are the hardest to place
+    QList<int> order;
+    for (int i = 0; i < want.size(); ++i)
+        order.append(i);
+    std::stable_sort(order.begin(), order.end(), [&want](int a, int b) {
+        return want.at(a).colSpan * want.at(a).rowSpan > want.at(b).colSpan * want.at(b).rowSpan;
+    });
+
+    QList<Rect> placed(want.size());
+    QList<bool> fixed(want.size(), false);
+    QVariantList next = cells;
+    for (int i : order) {
+        Rect r = want.at(i);
+        // Its own size anywhere near, else a step smaller (the longer side
+        // first) until something fits
+        while (!nearestFreeOf(placed, fixed, toCols, toRows, r)) {
+            if (r.colSpan == 1 && r.rowSpan == 1) {
+                out.reason = QStringLiteral("Not every widget fits on a grid that size: remove one first");
+                return out;
+            }
+            if (r.colSpan >= r.rowSpan && r.colSpan > 1)
+                --r.colSpan;
+            else
+                --r.rowSpan;
+            r.col = want.at(i).col;
+            r.row = want.at(i).row;
+        }
+        placed[i] = r;
+        fixed[i] = true;
+        next[i] = withRect(cells.at(i).toMap(), r);
+    }
     out.ok = true;
     out.cells = next;
     return out;

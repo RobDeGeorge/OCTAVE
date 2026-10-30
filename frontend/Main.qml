@@ -47,6 +47,12 @@ ApplicationWindow {
     // animation (matches SettingsCardPopup): studio grows from the clicked
     // tile's rect to fill the window.
     property bool nowPlayingStudioOpen: false
+
+    // A page that declares `hidesNavigation: true` (the dashboard editor)
+    // gets the whole window while it is on top: no nav bar, so it is left
+    // only through its own Done / Close
+    readonly property bool navigationHidden:
+        !!stackView.currentItem && stackView.currentItem.hidesNavigation === true
     property rect nowPlayingStudioOriginRect: Qt.rect(0, 0, 0, 0)
     function openNowPlayingStudio(originRect) {
         if (originRect && originRect.width > 0)
@@ -489,12 +495,13 @@ ApplicationWindow {
                 return page
             }
 
-            // Different anchoring based on orientation
+            // Different anchoring based on orientation; the whole window
+            // for a page that hides the navigation (the dashboard editor)
             anchors {
-                left: isVerticalLayout ? bottomBar.right : parent.left
+                left: (isVerticalLayout && !mainWindow.navigationHidden) ? bottomBar.right : parent.left
                 right: parent.right
                 top: parent.top
-                bottom: isVerticalLayout ? parent.bottom : bottomBar.top
+                bottom: (isVerticalLayout || mainWindow.navigationHidden) ? parent.bottom : bottomBar.top
             }
 
             initialItem: MainMenu {
@@ -778,7 +785,7 @@ ApplicationWindow {
         Rectangle {
             id: bottomBarShadow
             z: 2
-            visible: !isVerticalLayout
+            visible: !isVerticalLayout && bottomBar.visible
             anchors.bottom: bottomBar.top
             anchors.left: parent.left
             anchors.right: parent.right
@@ -791,7 +798,7 @@ ApplicationWindow {
         Rectangle {
             id: sideBarShadow
             z: 2
-            visible: isVerticalLayout
+            visible: isVerticalLayout && bottomBar.visible
             anchors.left: bottomBar.right
             anchors.top: parent.top
             anchors.bottom: parent.bottom
@@ -807,6 +814,7 @@ ApplicationWindow {
         BottomBar {
             id: bottomBar
             z: 0
+            visible: !mainWindow.navigationHidden
             stackView: stackView
             mainWindow: mainWindow
             isVertical: isVerticalLayout
