@@ -1,6 +1,9 @@
 // Widget behavior against the real catalog/store and renderer, including
 // missing samples, converted thresholds, small cells and clock preferences.
 #include <QDateTime>
+#include <QJsonObject>
+#include <QJsonDocument>
+#include <QFile>
 #include <QQmlComponent>
 #include <QQmlContext>
 #include <QQmlEngine>
@@ -779,6 +782,124 @@ private slots:
         QCOMPARE(spec.value("label").toString(), QStringLiteral("2 up"));
         QCOMPARE(spec.value("cells").toList().size(), 2);
         QCOMPARE(spec.value("cells").toList().at(0).toMap().value("paramId").toString(), QStringLiteral("RPM"));
+    }
+
+    // Phase 3: the portrait layout in the renderer and the editor, the
+    // polling-cost numbers, the driving lock
+    void portraitLayoutsAndDrivingLock()
+    {
+        // Renderer: an upright area lays the cells out by layouts.portrait
+        QVERIFY(load("dashboards/DashboardRenderer.qml"));
+        QFile sport(frontend + "/dashboards/presets/sport.json");
+        QVERIFY(sport.open(QIODevice::ReadOnly));
+        QVariantMap spec = dashboards->normalizedSpec(QJsonDocument::fromJson(sport.readAll()).object().toVariantMap());
+        // The grids only: no widgets loading while the shape flips
+        spec["cells"] = QVariantList();
+        QVariantMap layouts = spec.value("layouts").toMap();
+        QVariantMap portraitLayout = layouts.value("portrait").toMap();
+        portraitLayout["cells"] = QVariantList();
+        layouts["portrait"] = portraitLayout;
+        spec["layouts"] = layouts;
+        root->setProperty("width", 400);
+        root->setProperty("height", 800);
+        root->setProperty("spec", spec);
+        QVERIFY(root->property("portrait").toBool());
+        QCOMPARE(root->property("_cols").toInt(), 8);
+        QCOMPARE(root->property("_rows").toInt(), 12);
+        root->setProperty("width", 1200);
+        root->setProperty("height", 600);
+        QCOMPARE(root->property("_cols").toInt(), 12);
+
+        QQmlComponent component(engine.get());
+        component.setData(QString(R"qml(
+            import QtQuick
+            import QtQuick.Controls
+            import "%1/dashboards/editor" as Editor
+            ApplicationWindow {
+                width: 1280; height: 720; visible: true
+                property alias editor: ed
+                Editor.DashboardEditor { id: ed; anchors.fill: parent; autoDensity: false }
+            }
+        )qml").arg(QUrl::fromLocalFile(frontend).toString()).toUtf8(), QUrl());
+        root.reset(component.create());
+        QVERIFY2(root, qPrintable(component.errorString()));
+        auto *window = qobject_cast<QQuickWindow *>(root.get());
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QObject *editor = qvariant_cast<QObject *>(root->property("editor"));
+        auto cellAt = [editor](int i) { return editor->property("cells").toList().at(i).toMap(); };
+        auto rect = [](const QVariantMap &c) {
+            return QStringLiteral("%1,%2 %3x%4").arg(c.value("col").toInt()).arg(c.value("row").toInt())
+                .arg(c.value("colSpan").toInt()).arg(c.value("rowSpan").toInt());
+        };
+
+        QVERIFY(invoke(editor, "addForParam", {"RPM"}).toBool());
+        QVERIFY(invoke(editor, "addForParam", {"COOLANT_TEMP"}).toBool());
+        const QString landRpm = rect(cellAt(0));
+
+        // Polling cost: two values from the car share the adapter
+        QCOMPARE(editor->property("polledCount").toInt(), 2);
+        QCOMPARE(editor->property("updatesPerValue").toDouble(), 7.5);
+
+        // Portrait: derived the first time, on the turned grid, in an
+        // upright canvas
+        invoke(editor, "setLayoutMode", {"portrait"});
+        QCOMPARE(editor->property("layoutMode").toString(), QStringLiteral("portrait"));
+        QCOMPARE(editor->property("gridColumns").toInt(), 6);
+        QCOMPARE(editor->property("gridRows").toInt(), 12);
+        auto *canvas = findVisual(window->contentItem(), "editorCanvas");
+        QTRY_VERIFY(canvas->height() > canvas->width());
+        QCOMPARE(cellAt(0).value("paramId").toString(), QStringLiteral("RPM"));
+        // Moving in portrait leaves the landscape layout alone...
+        const int derivedRow = cellAt(0).value("row").toInt();
+        invoke(editor, "moveCell", {0, 0, 99});   // to the bottom (clamped)
+        const QString portRpm = rect(cellAt(0));
+        QVERIFY(cellAt(0).value("row").toInt() > derivedRow);
+        // ...and an option set here is the widget's in both
+        invoke(editor, "setCellProp", {0, "critAbove", 6000});
+        invoke(editor, "setLayoutMode", {"landscape"});
+        QCOMPARE(editor->property("gridColumns").toInt(), 12);
+        QCOMPARE(rect(cellAt(0)), landRpm);
+        QCOMPARE(cellAt(0).value("props").toMap().value("critAbove").toInt(), 6000);
+        // A widget added in landscape gets a place in portrait too
+        QVERIFY(invoke(editor, "addForParam", {"SPEED"}).toBool());
+        invoke(editor, "setLayoutMode", {"portrait"});
+        QCOMPARE(editor->property("cells").toList().size(), 3);
+        QCOMPARE(rect(cellAt(0)), portRpm);
+        for (int i = 0; i < 3; ++i)
+            QVERIFY(dashboards->canPlace(editor->property("cells").toList(), 6, 12, cellAt(i).value("col").toInt(),
+                                         cellAt(i).value("row").toInt(), cellAt(i).value("colSpan").toInt(),
+                                         cellAt(i).value("rowSpan").toInt(), i));
+        // Undo walks back through the switch
+        invoke(editor, "undo");
+        QCOMPARE(editor->property("layoutMode").toString(), QStringLiteral("landscape"));
+
+        // What is saved: landscape cells, a placement each in portrait
+        invoke(editor, "redo");
+        QVariantMap saved = invoke(editor, "specToSave").toMap();
+        QCOMPARE(saved.value("schema").toInt(), 2);
+        QCOMPARE(saved.value("gridColumns").toInt(), 12);
+        QCOMPARE(rect(saved.value("cells").toList().at(0).toMap()), landRpm);
+        const QVariantMap portrait = saved.value("layouts").toMap().value("portrait").toMap();
+        QCOMPARE(portrait.value("cells").toList().size(), 3);
+        QCOMPARE(rect(portrait.value("cells").toList().at(0).toMap()), portRpm);
+        QVERIFY(!saved.value("cells").toList().at(0).toMap().contains("_uid"));
+        saved.insert("label", "Round trip");
+        const QVariantMap normal = dashboards->normalizedSpec(saved);
+        QCOMPARE(normal.value("layouts").toMap().value("portrait").toMap().value("cells").toList().size(), 3);
+
+        // Driving lock: moving, nothing changes; a passenger can edit
+        store->ingest("SPEED", 30);   // MPH
+        QTRY_VERIFY(editor->property("drivingLocked").toBool());
+        QTRY_VERIFY(findVisual(window->contentItem(), "editorDrivingLock")->isVisible());
+        QVERIFY(!canvas->property("interactive").toBool());
+        invoke(editor, "addForParam", {"MAF"});   // refused: "Editing is paused..."
+        QCOMPARE(editor->property("cells").toList().size(), 3);
+        editor->setProperty("passengerOverride", true);
+        QVERIFY(!editor->property("drivingLocked").toBool());
+        QVERIFY(canvas->property("interactive").toBool());
+        editor->setProperty("passengerOverride", false);
+        store->ingest("SPEED", 0);
+        QTRY_VERIFY(!editor->property("drivingLocked").toBool());
     }
 
 private:

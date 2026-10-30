@@ -346,7 +346,7 @@ automatically look correct.
 
 As of Phase 2, dashboards are **JSON specs**, not hand-written QML. `DashboardRenderer.qml` reads a spec and instantiates widgets into a grid. `OBDMenu.qml` hosts the renderer and a modal chooser popup; the active dashboard id persists under the `activeDashboard` setting. The default choice (`"grid"`) shows the built-in Parameter Cards view in `OBDMenu.qml` itself: one card for every PID the connected vehicle reported in this session's supported-PID scan (empty, with an explanatory message, until a vehicle answers). A horizontal swipe anywhere on the page cycles Parameter Cards and every dashboard (wrapping); page dots under the header show the position. Nothing renders until `obdManager.connected` is true (`obdPage.obdConnected`): while disconnected the renderer is hidden with a `null` spec (widgets unloaded), swipe and the dots are off, and the page shows the "No vehicle connected" prompt with the connect button in place of the active dashboard. The chooser and editor still work offline.
 
-### 5.1 Dashboard JSON schema (v1)
+### 5.1 Dashboard JSON schema (1 and 2)
 
 ```json
 {
@@ -369,6 +369,34 @@ As of Phase 2, dashboards are **JSON specs**, not hand-written QML. `DashboardRe
 ```
 
 Required fields: `id`, `label`, `schema`, `cells`. Optional: `gridColumns` (default 12), `gridRows` (default 6), `margins` (default 20 dp, outer padding), `spacing` (default 16 dp, gap between cells).
+
+**Portrait layout (schema 2).** A spec may add where each cell goes on a
+portrait screen (taller than wide), one placement per cell, in the same
+order as `cells`; data and options stay the cells' own:
+
+```json
+{
+  "schema": 2,
+  "gridColumns": 12, "gridRows": 8,
+  "cells": [ ... ],
+  "layouts": {
+    "portrait": {
+      "gridColumns": 8, "gridRows": 12,
+      "cells": [ { "col": 0, "row": 0, "colSpan": 8, "rowSpan": 5 }, ... ]
+    }
+  }
+}
+```
+
+The placements follow the cells' rules (in the grid, no overlaps; a missing
+or colliding one goes to the nearest free spot). Without `layouts`, a
+portrait screen gets a layout derived from the landscape one by fixed rules
+(`dashboardManager.derivePortrait`: the grid turned, every widget its
+on-screen shape, reading order), the same every time. The editor's
+**Portrait** button derives it once and from then on edits and saves it.
+Write `schema: 1` for a spec without `layouts`, so builds before 2 read it;
+every built-in has a portrait layout. JSON Schema:
+`docs/api/dashboard-spec.schema.json`.
 
 **Per-widget overrides are just `props` keys.** The editor's Label & Range and
 Color sections write ordinary props — a cell that renames, rescales and
@@ -435,7 +463,15 @@ and its live value) · **Look** (title / unit overrides, colour swatches, the
 critical limits, flash, and a **Test value** slider that drives this widget
 only and is never saved) · **Advanced** (the other options, position and
 size steppers) · **JSON** (the props as text, applied through the spec
-rules) → **Remove**. Saving writes the JSON below through
+rules) → **Remove**. **Portrait** (top bar) switches the canvas to the
+portrait layout, shown as an upright screen (derived the first time from the
+landscape one; the editor opens on it on an upright screen); data and
+options are shared, positions are each layout's own. A status line says
+what each value on the dashboard gets from the adapter ("6 values from the
+car · about 2.5 updates a second each", amber under one a second). Editing
+pauses while the car moves (above about 5 km/h): "I'm a passenger" lifts it
+for the session, and the Grid · Demo menu's *Allow editing while driving*
+(the `dashboardEditWhileDriving` setting) for good. Saving writes the JSON below through
 `dashboardManager.saveDashboard()` and the chooser refreshes immediately.
 Editor sources live in `frontend/dashboards/editor/` (`DashboardEditor`,
 `EditorCanvas`, `PalettePopup`, `PIDPicker`, `PropertiesPanel`); the widget

@@ -816,6 +816,22 @@ func (o DashboardManager) NearestFree(cells []any, gridColumns int, gridRows int
 	return
 }
 
+// DerivePortrait calls derivePortrait(QVariantList, int, int) -> QVariantMap.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) DerivePortrait(cells []any, gridColumns int, gridRows int) (v map[string]any, err error) {
+	err = o.c.Call("dashboardManager", "derivePortrait", &v, cells, gridColumns, gridRows)
+	return
+}
+
+// OrientedSpec calls orientedSpec(QVariantMap, bool) -> QVariantMap.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) OrientedSpec(spec map[string]any, portrait bool) (v map[string]any, err error) {
+	err = o.c.Call("dashboardManager", "orientedSpec", &v, spec, portrait)
+	return
+}
+
 // Rescale calls rescale(QVariantList, int, int, int, int) -> QVariantMap.
 //
 // Experimental: not covered by the protocol version; may change or go in any release.

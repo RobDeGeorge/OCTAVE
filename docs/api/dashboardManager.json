@@ -338,6 +338,44 @@
         },
         {
             "kind": "invokable",
+            "name": "derivePortrait",
+            "params": [
+                {
+                    "name": "cells",
+                    "type": "QVariantList"
+                },
+                {
+                    "name": "gridColumns",
+                    "type": "int"
+                },
+                {
+                    "name": "gridRows",
+                    "type": "int"
+                }
+            ],
+            "returns": "QVariantMap",
+            "scope": "read",
+            "stability": "experimental"
+        },
+        {
+            "kind": "invokable",
+            "name": "orientedSpec",
+            "params": [
+                {
+                    "name": "spec",
+                    "type": "QVariantMap"
+                },
+                {
+                    "name": "portrait",
+                    "type": "bool"
+                }
+            ],
+            "returns": "QVariantMap",
+            "scope": "read",
+            "stability": "experimental"
+        },
+        {
+            "kind": "invokable",
             "name": "rescale",
             "params": [
                 {

@@ -156,7 +156,7 @@ Ordered so each phase is shippable and the next one builds on it. Effort: S < 1 
 - PID picker by system, with recents, live values and no auto-keyboard.
 - Settings reorganised (Data / Look / Range & alerts / Advanced / JSON); warning + critical bands in the spec; per-widget Test value slider.
 
-**Phase 3 — every screen (L)**
+**Phase 3 — every screen (L)** — built and tested on the desktop 2026-10-30: schema 2 `layouts.portrait` (positions only, one per cell), `derivePortrait` / `orientedSpec`, the renderer on upright screens, the editor's Portrait switch (derive once, then the user's), portrait layouts in every preset, the polling-cost line, and the driving lock with a passenger override
 - The portrait variant in the spec; preview switcher; derive-once; presets get portrait layouts.
 - Polling-cost status line.
 - Driving lock.

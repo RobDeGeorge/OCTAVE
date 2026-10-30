@@ -96,7 +96,7 @@ private slots:
     {
         QTest::addColumn<QString>("raw");
         QTest::addColumn<QString>("reason");
-        QTest::newRow("newer schema") << R"json({"schema": 2, "cells": []})json" << "newer version";
+        QTest::newRow("newer schema") << R"json({"schema": 3, "cells": []})json" << "newer version";
         QTest::newRow("bad schema") << R"json({"schema": 0, "cells": []})json" << "bad schema";
         QTest::newRow("no cells") << R"json({"label": "x"})json" << "no cells";
         QString many = QStringLiteral("{\"cells\": [");
@@ -209,7 +209,6 @@ private slots:
             QFile f(presets.filePath(name));
             QVERIFY(f.open(QIODevice::ReadOnly));
             QJsonObject raw = QJsonDocument::fromJson(f.readAll()).object();
-            raw.insert("schema", 1);
             const QJsonObject loaded =
                 QJsonObject::fromVariantMap(m_dm->loadDashboard(raw.value("id").toString()).toMap());
             QVERIFY2(loaded == raw, qPrintable(name));
@@ -424,10 +423,10 @@ private slots:
     {
         // The renderer shows "needs a newer OCTAVE" for it; saving it here
         // would strip what this build doesn't know
-        writeUserFile("future", R"json({"schema": 2, "id": "future", "label": "Future",
+        writeUserFile("future", R"json({"schema": 3, "id": "future", "label": "Future",
             "cells": [{"type": "X", "col": 99, "wild": true}]})json");
         const QVariantMap spec = m_dm->loadDashboard("future").toMap();
-        QCOMPARE(spec.value("schema").toInt(), 2);
+        QCOMPARE(spec.value("schema").toInt(), 3);
         QCOMPARE(spec.value("cells").toList().value(0).toMap().value("col").toInt(), 99);
         QCOMPARE(m_dm->saveDashboard(spec), QString());
     }
@@ -713,6 +712,130 @@ private slots:
         QVERIFY(!no.value("ok").toBool());
         QVERIFY(!no.value("reason").toString().isEmpty());
         QCOMPARE(no.value("cells").toList(), many);
+    }
+
+    // ── portrait ──
+
+    void derivePortraitKeepsShapeAndOrder()
+    {
+        // Hero + 4 on 6 x 4: the dial on top keeps its round shape, the four
+        // readouts follow two by two, on the turned 4 x 6 grid
+        const QVariantList cells{cell(0, 0, 4, 4, "dial"), cell(4, 0, 2, 1, "a"), cell(4, 1, 2, 1, "b"),
+                                 cell(4, 2, 2, 1, "c"), cell(4, 3, 2, 1, "d")};
+        const QVariantMap p = m_dm->derivePortrait(cells, 6, 4);
+        QCOMPARE(p.value("gridColumns").toInt(), 4);
+        QCOMPARE(p.value("gridRows").toInt(), 6);
+        const QVariantList places = p.value("cells").toList();
+        QCOMPARE(places.size(), 5);
+        QCOMPARE(at(places.at(0).toMap()), QStringLiteral("0,0 4x3"));
+        QCOMPARE(at(places.at(1).toMap()), QStringLiteral("0,3 2x1"));
+        QCOMPARE(at(places.at(2).toMap()), QStringLiteral("2,3 2x1"));
+        QCOMPARE(at(places.at(3).toMap()), QStringLiteral("0,4 2x1"));
+        QCOMPARE(at(places.at(4).toMap()), QStringLiteral("2,4 2x1"));
+        // The same every time
+        QCOMPARE(m_dm->derivePortrait(cells, 6, 4), p);
+    }
+
+    void derivePortraitAlwaysFits_data()
+    {
+        QTest::addColumn<int>("seed");
+        for (int i = 0; i < 30; ++i)
+            QTest::newRow(qPrintable(QString::number(i))) << i;
+    }
+
+    void derivePortraitAlwaysFits()
+    {
+        QFETCH(int, seed);
+        QRandomGenerator rng(seed);
+        const int cols = 4 + rng.bounded(9), rows = 3 + rng.bounded(6);
+        QVariantList cells;
+        for (int tries = 0; tries < 80; ++tries) {
+            const int cs = 1 + rng.bounded(4), rs = 1 + rng.bounded(4);
+            const int c = rng.bounded(cols), r = rng.bounded(rows);
+            if (m_dm->canPlace(cells, cols, rows, c, r, cs, rs, -1))
+                cells.append(cell(c, r, cs, rs, "x"));
+        }
+        const QVariantMap p = m_dm->derivePortrait(cells, cols, rows);
+        const int pc = p.value("gridColumns").toInt(), pr = p.value("gridRows").toInt();
+        QCOMPARE(pc, rows);
+        QVERIFY(pr >= cols);
+        const QVariantList places = p.value("cells").toList();
+        QCOMPARE(places.size(), cells.size());
+        for (int i = 0; i < places.size(); ++i) {
+            const QVariantMap c = places.at(i).toMap();
+            QVERIFY2(m_dm->canPlace(places, pc, pr, c.value("col").toInt(), c.value("row").toInt(),
+                                    c.value("colSpan").toInt(), c.value("rowSpan").toInt(), i),
+                     qPrintable(at(c)));
+        }
+    }
+
+    void portraitLayoutIsSchema2()
+    {
+        // Without layouts a spec stays schema 1, readable by older builds
+        QVariantMap plain = m_dm->normalizedSpec({{"gridColumns", 6}, {"gridRows", 4},
+                                                  {"cells", QVariantList{cell(0, 0, 2, 2, "a")}}});
+        QCOMPARE(plain.value("schema").toInt(), 1);
+        QVERIFY(!plain.contains("layouts"));
+
+        // With one: schema 2, a placement per kept cell. The second cell
+        // sits on the first and is dropped; its placement goes with it.
+        const QVariantList cells{QVariantMap{{"type", "DigitalReadout"}, {"col", 0}, {"row", 0}, {"colSpan", 2}, {"rowSpan", 2}},
+                                 QVariantMap{{"type", "DigitalReadout"}, {"col", 0}, {"row", 0}, {"colSpan", 6}, {"rowSpan", 4}},
+                                 QVariantMap{{"type", "ClockWidget"}, {"col", 2}, {"row", 0}, {"colSpan", 2}, {"rowSpan", 1}}};
+        // (cell 1 shrinks to 1x1 at 0,0, which is taken: dropped)
+        const QVariantList places{cell(0, 0, 4, 2, "p0"), cell(0, 2, 4, 2, "p1"), cell(0, 4, 4, 1, "p2")};
+        QVariantMap spec = m_dm->normalizedSpec({{"schema", 2}, {"gridColumns", 6}, {"gridRows", 4}, {"cells", cells},
+            {"layouts", QVariantMap{{"portrait", QVariantMap{{"gridColumns", 4}, {"gridRows", 6}, {"cells", places}}}}}});
+        QCOMPARE(spec.value("schema").toInt(), 2);
+        QCOMPARE(spec.value("cells").toList().size(), 2);
+        QVariantList kept = spec.value("layouts").toMap().value("portrait").toMap().value("cells").toList();
+        QCOMPARE(kept.size(), 2);
+        QCOMPARE(at(kept.at(0).toMap()), QStringLiteral("0,0 4x2"));
+        QCOMPARE(at(kept.at(1).toMap()), QStringLiteral("0,4 4x1"));
+
+        // A missing or colliding placement goes to the nearest free spot
+        spec = m_dm->normalizedSpec({{"gridColumns", 6}, {"gridRows", 4}, {"cells", QVariantList{cells.at(0), cells.at(2)}},
+            {"layouts", QVariantMap{{"portrait", QVariantMap{{"cells", QVariantList{cell(0, 0, 4, 2, "p0")}}}}}}});
+        kept = spec.value("layouts").toMap().value("portrait").toMap().value("cells").toList();
+        QCOMPARE(kept.size(), 2);
+        QCOMPARE(spec.value("layouts").toMap().value("portrait").toMap().value("gridColumns").toInt(), 4);   // default: turned
+        QVERIFY(m_dm->canPlace(kept, 4, 6, kept.at(1).toMap().value("col").toInt(), kept.at(1).toMap().value("row").toInt(),
+                               kept.at(1).toMap().value("colSpan").toInt(), kept.at(1).toMap().value("rowSpan").toInt(), 1));
+    }
+
+    void orientedSpecSwapsInThePortraitLayout()
+    {
+        const QVariantMap spec{{"schema", 2}, {"gridColumns", 6}, {"gridRows", 4},
+            {"cells", QVariantList{QVariantMap{{"type", "ClockWidget"}, {"col", 0}, {"row", 0}, {"colSpan", 2}, {"rowSpan", 1},
+                                               {"props", QVariantMap{{"showDate", true}}}}}},
+            {"layouts", QVariantMap{{"portrait", QVariantMap{{"gridColumns", 4}, {"gridRows", 6},
+                {"cells", QVariantList{cell(1, 2, 3, 2, "")}}}}}}};
+        QCOMPARE(m_dm->orientedSpec(spec, false), spec);
+        const QVariantMap p = m_dm->orientedSpec(spec, true);
+        QCOMPARE(p.value("gridColumns").toInt(), 4);
+        QCOMPARE(p.value("gridRows").toInt(), 6);
+        QVERIFY(!p.contains("layouts"));
+        const QVariantMap c = p.value("cells").toList().first().toMap();
+        QCOMPARE(at(c), QStringLiteral("1,2 3x2"));
+        QCOMPARE(c.value("props").toMap().value("showDate").toBool(), true);   // the cell's own options
+        // No portrait layout: derived (the same rules as derivePortrait)
+        QVariantMap noLayout = spec;
+        noLayout.remove("layouts");
+        const QVariantMap d = m_dm->orientedSpec(noLayout, true);
+        QCOMPARE(d.value("gridColumns").toInt(), 4);
+        QCOMPARE(at(d.value("cells").toList().first().toMap()),
+                 at(m_dm->derivePortrait(noLayout.value("cells").toList(), 6, 4).value("cells").toList().first().toMap()));
+    }
+
+    void presetsHavePortraitLayouts()
+    {
+        for (const QString id : {"sport", "minimal", "fullgrid", "performance", "tj-wrangler"}) {
+            const QVariantMap spec = m_dm->loadDashboard(id).toMap();
+            QVERIFY2(spec.value("schema").toInt() == 2, qPrintable(id));
+            const QVariantMap portrait = spec.value("layouts").toMap().value("portrait").toMap();
+            QCOMPARE(portrait.value("cells").toList().size(), spec.value("cells").toList().size());
+            QVERIFY(portrait.value("gridRows").toInt() >= portrait.value("gridColumns").toInt());
+        }
     }
 
     // ── sizes ──

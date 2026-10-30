@@ -384,6 +384,7 @@ EV_BATTERY_HEALTH</code></pre>
             <tr><td>activeDashboard</td><td>string</td><td>"grid"</td><td>OBDMenu</td><td>OBDMenu</td><td>Dashboard ID shown in the OBD view (<a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>)</td></tr>
             <tr><td>dashboardEditorDraft</td><td>string (JSON)</td><td>""</td><td>DashboardEditor (saved on exit when there are unsaved changes; <code>_clearStoredDraft()</code> blanks it)</td><td>OBDMenu</td><td>Unsaved dashboard-editor state</td></tr>
             <tr><td>dashboardRecentPids</td><td>string (JSON array)</td><td>"[]"</td><td>PIDPicker (each pick, newest first, six at most)</td><td>PIDPicker</td><td>The dashboard editor's recently picked parameters, listed first under Recent</td></tr>
+            <tr><td>dashboardEditWhileDriving</td><td>bool</td><td>false</td><td>DashboardEditor (Grid · Demo menu, "Allow editing while driving")</td><td>DashboardEditor</td><td>Keep the dashboard editor usable while the car moves (for a passenger); off, editing pauses above about 5 km/h</td></tr>
           </tbody>
         </table>
         <p>The seven "read only" <code>rpm_*</code> keys have no writer in the current QML; they take effect only if added to the JSON by hand.</p>

@@ -1,7 +1,7 @@
 {
   "id": "fullgrid",
   "label": "Full Grid",
-  "schema": 1,
+  "schema": 2,
   "gridColumns": 12,
   "gridRows": 8,
   "cells": [
@@ -36,5 +36,21 @@
     { "type": "CircularGauge", "paramId": "CONTROL_MODULE_VOLTAGE",
       "col": 9, "row": 4, "colSpan": 3, "rowSpan": 4,
       "props": { "majorTickCount": 7, "minorTicksPerMajor": 4, "decimals": 1 } }
-  ]
+  ],
+  "layouts": {
+    "portrait": {
+      "gridColumns": 8,
+      "gridRows": 12,
+      "cells": [
+        { "col": 0, "row": 0, "colSpan": 4, "rowSpan": 3 },
+        { "col": 4, "row": 0, "colSpan": 4, "rowSpan": 3 },
+        { "col": 0, "row": 3, "colSpan": 4, "rowSpan": 3 },
+        { "col": 4, "row": 3, "colSpan": 4, "rowSpan": 3 },
+        { "col": 0, "row": 6, "colSpan": 4, "rowSpan": 3 },
+        { "col": 4, "row": 6, "colSpan": 4, "rowSpan": 3 },
+        { "col": 0, "row": 9, "colSpan": 4, "rowSpan": 3 },
+        { "col": 4, "row": 9, "colSpan": 4, "rowSpan": 3 }
+      ]
+    }
+  }
 }

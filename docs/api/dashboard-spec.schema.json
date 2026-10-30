@@ -1,14 +1,21 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/RobDeGeorge/OCTAVE/blob/main/docs/api/dashboard-spec.schema.json",
-  "title": "OCTAVE dashboard spec, schema 1",
+  "title": "OCTAVE dashboard spec, schema 1 and 2",
   "description": "A dashboard file: built-ins in frontend/dashboards/presets/, user dashboards in <config>/dashboards/*.json, and what dashboardManager exports and imports. Hand-written from DashboardManager::normalizeSpec (src/managers/dashboardmanager.cpp), which is the authority: OCTAVE reads a spec by those rules and does not reject what this schema would. Out-of-range numbers are clamped, cells off the grid move back in, an overlapping cell shrinks toward 1x1 or is dropped, unknown cell types render as a placeholder, and non-scalar props are dropped. Writers should still produce specs that validate here.",
   "type": "object",
-  "required": ["schema", "label", "cells"],
+  "required": [
+    "schema",
+    "label",
+    "cells"
+  ],
   "properties": {
     "schema": {
-      "description": "Spec version. Missing reads as 1; a newer one is refused with 'needs a newer version of OCTAVE' (DashboardManager.supportedSchema).",
-      "const": 1
+      "description": "Spec version: 1, or 2 when the spec has `layouts`. Missing reads as 1; a newer one than this build reads is refused with 'needs a newer version of OCTAVE' (DashboardManager.supportedSchema, 2). Writers use the lowest that holds the spec, so a plain dashboard stays readable by builds before 2.",
+      "enum": [
+        1,
+        2
+      ]
     },
     "id": {
       "description": "File name without .json. Kept on save and load; an import always gets a new one, so a shared file need not carry it. 'grid' (the Parameter Cards page) is reserved.",
@@ -51,36 +58,145 @@
       "description": "The widgets, at most 256. In file order an earlier cell wins an overlap.",
       "type": "array",
       "maxItems": 256,
-      "items": { "$ref": "#/$defs/cell" }
+      "items": {
+        "$ref": "#/$defs/cell"
+      }
+    },
+    "layouts": {
+      "description": "Schema 2. Other layouts of the same cells for other screen shapes. Only positions: each cell's type, paramId and props are the cells' own.",
+      "type": "object",
+      "properties": {
+        "portrait": {
+          "$ref": "#/$defs/layout"
+        }
+      },
+      "additionalProperties": false
     }
   },
   "$defs": {
     "cell": {
       "type": "object",
-      "required": ["type", "col", "row"],
+      "required": [
+        "type",
+        "col",
+        "row"
+      ],
       "properties": {
         "type": {
           "description": "A WidgetCatalog type (frontend/dashboards/WidgetCatalog.qml; docs/GAUGE_AUTHORING.md lists each one's props). An unknown type is kept and renders as a placeholder.",
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "examples": ["CircularGauge", "ArcGauge", "BarGauge", "LinearGauge", "DigitalReadout", "SparklineGauge",
-                       "WarningLight", "GForceGauge", "CompassGauge", "NowPlayingWidget", "MediaControlsWidget"]
+          "examples": [
+            "CircularGauge",
+            "ArcGauge",
+            "BarGauge",
+            "LinearGauge",
+            "DigitalReadout",
+            "SparklineGauge",
+            "WarningLight",
+            "GForceGauge",
+            "CompassGauge",
+            "NowPlayingWidget",
+            "MediaControlsWidget"
+          ]
         },
         "paramId": {
           "description": "The value the widget shows: an id from parameters.json (e.g. RPM, SPEED). Empty for widgets that bind themselves (GForceGauge, CompassGauge, the media widgets).",
           "type": "string",
           "maxLength": 64
         },
-        "col": { "type": "integer", "minimum": 0, "maximum": 47 },
-        "row": { "type": "integer", "minimum": 0, "maximum": 47 },
-        "colSpan": { "type": "integer", "minimum": 1, "maximum": 48, "default": 1 },
-        "rowSpan": { "type": "integer", "minimum": 1, "maximum": 48, "default": 1 },
+        "col": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 47
+        },
+        "row": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 47
+        },
+        "colSpan": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 48,
+          "default": 1
+        },
+        "rowSpan": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 48,
+          "default": 1
+        },
         "props": {
           "description": "Per-widget overrides (the catalog's editableProps). Scalars only; strings are cut at 200 characters.",
           "type": "object",
-          "propertyNames": { "maxLength": 64 },
-          "additionalProperties": { "type": ["boolean", "number", "string"] }
+          "propertyNames": {
+            "maxLength": 64
+          },
+          "additionalProperties": {
+            "type": [
+              "boolean",
+              "number",
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "layout": {
+      "description": "Where each cell goes on a portrait screen (taller than wide), one placement per entry of `cells`, in the same order. Read by the same rules as the cells; a missing or colliding placement goes to the nearest free spot. Without one, OCTAVE derives a portrait layout from the landscape one by fixed rules (dashboardManager.derivePortrait).",
+      "type": "object",
+      "required": [
+        "cells"
+      ],
+      "properties": {
+        "gridColumns": {
+          "description": "Absent: the landscape gridRows (the grid turned).",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 48
+        },
+        "gridRows": {
+          "description": "Absent: the landscape gridColumns.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 48
+        },
+        "cells": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "object",
+            "required": [
+              "col",
+              "row"
+            ],
+            "properties": {
+              "col": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 47
+              },
+              "row": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 47
+              },
+              "colSpan": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 48,
+                "default": 1
+              },
+              "rowSpan": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 48,
+                "default": 1
+              }
+            }
+          }
         }
       }
     }

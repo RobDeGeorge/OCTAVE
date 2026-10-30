@@ -1,7 +1,7 @@
 {
   "id": "sport",
   "label": "Sport",
-  "schema": 1,
+  "schema": 2,
   "gridColumns": 12,
   "gridRows": 8,
   "cells": [
@@ -41,5 +41,19 @@
       "col": 9, "row": 7, "colSpan": 3, "rowSpan": 1,
       "props": { "maxThickness": 40 }
     }
-  ]
+  ],
+  "layouts": {
+    "portrait": {
+      "gridColumns": 8,
+      "gridRows": 12,
+      "cells": [
+        { "col": 0, "row": 0, "colSpan": 8, "rowSpan": 4 },
+        { "col": 0, "row": 4, "colSpan": 8, "rowSpan": 6 },
+        { "col": 0, "row": 10, "colSpan": 4, "rowSpan": 1 },
+        { "col": 4, "row": 10, "colSpan": 4, "rowSpan": 1 },
+        { "col": 0, "row": 11, "colSpan": 4, "rowSpan": 1 },
+        { "col": 4, "row": 11, "colSpan": 4, "rowSpan": 1 }
+      ]
+    }
+  }
 }

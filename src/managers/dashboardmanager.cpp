@@ -780,7 +780,9 @@ QVariantMap DashboardManager::normalizeSpec(const QVariantMap &raw, SpecUse use,
     }
 
     QVariantMap out;
-    out.insert(QStringLiteral("schema"), kSupportedSchema);
+    // The lowest schema that holds it (set again below with a portrait
+    // layout), so a plain dashboard stays readable by builds before 2
+    out.insert(QStringLiteral("schema"), 1);
 
     // The id names the file: imports get a new one from the caller, a save
     // or a load keeps it. A save writes <id>.json, so it must be a plain file
@@ -816,7 +818,9 @@ QVariantMap DashboardManager::normalizeSpec(const QVariantMap &raw, SpecUse use,
     }
 
     QVariantList cells;
-    for (const QVariant &cv : rawCells) {
+    QList<int> rawIndexOf;   // kept cell -> its index in the file (for layouts.portrait)
+    for (int rawIndex = 0; rawIndex < rawCells.size(); ++rawIndex) {
+        const QVariant &cv = rawCells.at(rawIndex);
         if (cv.typeId() != QMetaType::QVariantMap) continue;
         const QVariantMap c = cv.toMap();
         const QString type = c.value(QStringLiteral("type")).toString();
@@ -874,8 +878,68 @@ QVariantMap DashboardManager::normalizeSpec(const QVariantMap &raw, SpecUse use,
         }
         cell.insert(QStringLiteral("props"), props);
         cells.append(cell);
+        rawIndexOf.append(rawIndex);
     }
     out.insert(QStringLiteral("cells"), cells);
+
+    // Schema 2: layouts.portrait {gridColumns, gridRows, cells}, one
+    // placement {col, row, colSpan, rowSpan} per cell, in the same order.
+    // Held to the same rules as the cells; a cell whose placement is
+    // missing or taken goes to the nearest free spot of its size, then 1x1;
+    // if even that fails the layout is dropped (the renderer derives one).
+    const QVariantMap portraitRaw = raw.value(QStringLiteral("layouts")).toMap().value(QStringLiteral("portrait")).toMap();
+    if (!portraitRaw.isEmpty()) {
+        int pcols = intIn(portraitRaw.value(QStringLiteral("gridColumns")), 0, kMaxGrid, 0);
+        int prows = intIn(portraitRaw.value(QStringLiteral("gridRows")), 0, kMaxGrid, 0);
+        if (pcols < 1) pcols = rows;
+        if (prows < 1) prows = cols;
+        const QVariantList rawPlaces = portraitRaw.value(QStringLiteral("cells")).toList();
+        QVariantList places;
+        QList<int> missing;
+        for (int i = 0; i < cells.size(); ++i) {
+            const int ri = rawIndexOf.at(i);
+            const QVariantMap p = ri < rawPlaces.size() ? rawPlaces.at(ri).toMap() : QVariantMap();
+            DashboardGrid::Rect r;
+            r.colSpan = intIn(p.value(QStringLiteral("colSpan")), 1, pcols, 1);
+            r.rowSpan = intIn(p.value(QStringLiteral("rowSpan")), 1, prows, 1);
+            r.col = intIn(p.value(QStringLiteral("col")), 0, pcols - r.colSpan, 0);
+            r.row = intIn(p.value(QStringLiteral("row")), 0, prows - r.rowSpan, 0);
+            const bool given = !p.isEmpty();
+            if (given && !DashboardGrid::canPlace(places, pcols, prows, r))
+                r = DashboardGrid::fitAt(places, pcols, prows, r.col, r.row, r.colSpan, r.rowSpan);
+            if (!given || !DashboardGrid::canPlace(places, pcols, prows, r)) {
+                missing.append(i);
+                r = DashboardGrid::Rect{0, 0, 0, 0};   // placed below, overlaps nothing meanwhile
+            }
+            places.append(QVariantMap{{QStringLiteral("col"), r.col}, {QStringLiteral("row"), r.row},
+                                      {QStringLiteral("colSpan"), r.colSpan}, {QStringLiteral("rowSpan"), r.rowSpan}});
+        }
+        bool ok = true;
+        for (int i : missing) {
+            const QVariantMap c = cells.at(i).toMap();
+            DashboardGrid::Rect r{0, 0, qMin(pcols, c.value(QStringLiteral("colSpan")).toInt()),
+                                  qMin(prows, c.value(QStringLiteral("rowSpan")).toInt())};
+            if (!DashboardGrid::nearestFree(places, pcols, prows, r, i)) {
+                r = {0, 0, 1, 1};
+                if (!DashboardGrid::nearestFree(places, pcols, prows, r, i)) {
+                    ok = false;
+                    break;
+                }
+            }
+            places[i] = QVariantMap{{QStringLiteral("col"), r.col}, {QStringLiteral("row"), r.row},
+                                    {QStringLiteral("colSpan"), r.colSpan}, {QStringLiteral("rowSpan"), r.rowSpan}};
+        }
+        if (ok) {
+            out.insert(QStringLiteral("layouts"),
+                       QVariantMap{{QStringLiteral("portrait"),
+                                    QVariantMap{{QStringLiteral("gridColumns"), pcols},
+                                                {QStringLiteral("gridRows"), prows},
+                                                {QStringLiteral("cells"), places}}}});
+            out.insert(QStringLiteral("schema"), 2);
+        } else {
+            qCWarning(lcDashboards) << "Dropping the portrait layout of" << label << ": its widgets don't fit";
+        }
+    }
     return out;
 }
 
@@ -926,6 +990,43 @@ QVariantMap DashboardManager::nearestFree(const QVariantList &cells, int gridCol
     const bool ok = DashboardGrid::nearestFree(cells, gridColumns, gridRows, r, exceptIndex);
     return {{QStringLiteral("ok"), ok}, {QStringLiteral("col"), r.col}, {QStringLiteral("row"), r.row},
             {QStringLiteral("colSpan"), r.colSpan}, {QStringLiteral("rowSpan"), r.rowSpan}};
+}
+
+QVariantMap DashboardManager::derivePortrait(const QVariantList &cells, int gridColumns, int gridRows) const
+{
+    const DashboardGrid::Portrait p = DashboardGrid::derivePortrait(cells, gridColumns, gridRows);
+    QVariantList places;
+    for (const DashboardGrid::Rect &r : p.cells)
+        places.append(QVariantMap{{QStringLiteral("col"), r.col}, {QStringLiteral("row"), r.row},
+                                  {QStringLiteral("colSpan"), r.colSpan}, {QStringLiteral("rowSpan"), r.rowSpan}});
+    return {{QStringLiteral("gridColumns"), p.cols}, {QStringLiteral("gridRows"), p.rows},
+            {QStringLiteral("cells"), places}};
+}
+
+QVariantMap DashboardManager::orientedSpec(const QVariantMap &spec, bool portrait) const
+{
+    if (!portrait || spec.value(QStringLiteral("cells")).typeId() != QMetaType::QVariantList)
+        return spec;
+    const QVariantList cells = spec.value(QStringLiteral("cells")).toList();
+    QVariantMap layout = spec.value(QStringLiteral("layouts")).toMap().value(QStringLiteral("portrait")).toMap();
+    if (layout.value(QStringLiteral("cells")).toList().size() != cells.size())
+        layout = derivePortrait(cells, spec.value(QStringLiteral("gridColumns"), 12).toInt(),
+                                spec.value(QStringLiteral("gridRows"), 6).toInt());
+    const QVariantList places = layout.value(QStringLiteral("cells")).toList();
+    QVariantList merged;
+    for (int i = 0; i < cells.size(); ++i) {
+        QVariantMap c = cells.at(i).toMap();
+        const QVariantMap p = places.at(i).toMap();
+        for (const char *k : {"col", "row", "colSpan", "rowSpan"})
+            c.insert(QLatin1String(k), p.value(QLatin1String(k)));
+        merged.append(c);
+    }
+    QVariantMap out = spec;
+    out.insert(QStringLiteral("gridColumns"), layout.value(QStringLiteral("gridColumns")));
+    out.insert(QStringLiteral("gridRows"), layout.value(QStringLiteral("gridRows")));
+    out.insert(QStringLiteral("cells"), merged);
+    out.remove(QStringLiteral("layouts"));
+    return out;
 }
 
 QVariantMap DashboardManager::rescale(const QVariantList &cells, int fromColumns, int fromRows, int toColumns,

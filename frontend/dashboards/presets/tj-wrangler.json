@@ -1,7 +1,7 @@
 {
   "id": "tj-wrangler",
   "label": "TJ Wrangler 4.0",
-  "schema": 1,
+  "schema": 2,
   "gridColumns": 12,
   "gridRows": 12,
   "cells": [
@@ -72,5 +72,30 @@
     { "type": "SparklineGauge", "paramId": "O2_B2S2",
       "col": 9, "row": 10, "colSpan": 3, "rowSpan": 2,
       "props": { "maxSamples": 60, "sampleIntervalMs": 250 } }
-  ]
+  ],
+  "layouts": {
+    "portrait": {
+      "gridColumns": 12,
+      "gridRows": 12,
+      "cells": [
+        { "col": 0, "row": 0, "colSpan": 6, "rowSpan": 3 },
+        { "col": 6, "row": 0, "colSpan": 6, "rowSpan": 3 },
+        { "col": 0, "row": 3, "colSpan": 6, "rowSpan": 3 },
+        { "col": 6, "row": 3, "colSpan": 6, "rowSpan": 1 },
+        { "col": 6, "row": 4, "colSpan": 6, "rowSpan": 1 },
+        { "col": 6, "row": 5, "colSpan": 6, "rowSpan": 1 },
+        { "col": 0, "row": 6, "colSpan": 6, "rowSpan": 1 },
+        { "col": 6, "row": 6, "colSpan": 6, "rowSpan": 1 },
+        { "col": 0, "row": 7, "colSpan": 6, "rowSpan": 1 },
+        { "col": 6, "row": 7, "colSpan": 6, "rowSpan": 1 },
+        { "col": 0, "row": 8, "colSpan": 6, "rowSpan": 1 },
+        { "col": 6, "row": 8, "colSpan": 6, "rowSpan": 1 },
+        { "col": 0, "row": 9, "colSpan": 6, "rowSpan": 1 },
+        { "col": 6, "row": 9, "colSpan": 6, "rowSpan": 1 },
+        { "col": 0, "row": 10, "colSpan": 6, "rowSpan": 1 },
+        { "col": 6, "row": 10, "colSpan": 6, "rowSpan": 1 },
+        { "col": 0, "row": 11, "colSpan": 6, "rowSpan": 1 }
+      ]
+    }
+  }
 }

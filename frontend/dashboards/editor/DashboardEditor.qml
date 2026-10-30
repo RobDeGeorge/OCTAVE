@@ -61,6 +61,9 @@ Item {
     // A new dashboard starts at the grid density that suits this screen
     // (defaultDensity()); false keeps gridColumns / gridRows as given
     property bool autoDensity: true
+    // Open on the portrait layout when the screen is upright; false keeps
+    // landscape until setLayoutMode()
+    property bool autoLayoutMode: true
 
     // A new dashboard that starts from a spec instead of an empty grid
     // (a template, or a built-in being customized): its label, grid and
@@ -112,6 +115,42 @@ Item {
     }
     on_DemandIdsChanged: _pushDemand(_demandIds)
 
+    // ── Polling cost ─────────────────────────────────────────────────────
+    // An ELM327 answers about 15 requests a second in all, shared by every
+    // value on the screen: the status line says what each gets
+    readonly property real elmRequestsPerSecond: 15
+    readonly property int polledCount: _demandIds.filter(function(id) {
+        return !App.OBDParameterModel.isSensorParameter(id) }).length
+    readonly property real updatesPerValue: polledCount > 0 ? elmRequestsPerSecond / polledCount : 0
+
+    // ── Driving lock ─────────────────────────────────────────────────────
+    // Editing pauses while the car moves (above about 5 km/h, back under
+    // about 2.5): the dashboard stays visible, nothing can be changed, and
+    // Done / Close still work. "I'm a passenger" lifts it for this editor;
+    // the dashboardEditWhileDriving setting (Grid · Demo menu) for good.
+    // Read from the real store, so the editor's demo data never locks it.
+    readonly property real _speedMph: (typeof paramStore !== "undefined" && paramStore
+                                       && typeof paramStore.SPEED === "number") ? paramStore.SPEED : 0
+    property bool moving: false
+    on_SpeedMphChanged: moving = _speedMph > (moving ? 1.5 : 3)
+    property bool passengerOverride: false
+    property bool editWhileDriving: (typeof settingsManager !== "undefined" && settingsManager
+                                     && settingsManager.get_setting_with_default)
+                                    ? settingsManager.get_setting_with_default("dashboardEditWhileDriving", false) === true
+                                    : false
+    function setEditWhileDriving(on) {
+        editWhileDriving = on
+        if (typeof settingsManager !== "undefined" && settingsManager && settingsManager.save_setting)
+            settingsManager.save_setting("dashboardEditWhileDriving", on)
+    }
+    readonly property bool drivingLocked: moving && !passengerOverride && !editWhileDriving
+    onDrivingLockedChanged: {
+        if (!drivingLocked) return
+        clearSelection()
+        widgetPalette.close()
+        pidPicker.close()
+    }
+
     // Where the next palette pick lands: a grid cell, or -1 for "find room"
     property int _pendingCol: -1
     property int _pendingRow: -1
@@ -159,8 +198,137 @@ Item {
         gridRows = spec.gridRows
         specMargins = spec.margins
         specSpacing = spec.spacing
-        _show(spec.cells)
+        var land = _withUids(spec.cells)
+        _otherLayout = null
+        if (spec.layouts && spec.layouts.portrait) {
+            // The same cells (same uids) where the portrait layout puts them
+            var o = dashboardManager.orientedSpec(spec, true)
+            _otherLayout = { "cols": o.gridColumns, "rows": o.gridRows,
+                             "cells": o.cells.map(function(c, i) {
+                                 var m = Object.assign({}, c); m._uid = land[i]._uid; return m }) }
+        }
+        layoutMode = "landscape"
+        _show(land)
         nameField.text = spec.label ? spec.label : ""
+    }
+
+    // ── Landscape / portrait ─────────────────────────────────────────────
+    // A dashboard has a landscape layout (the spec's cells) and may have a
+    // portrait one (schema 2 layouts.portrait: a position per cell). The
+    // editor shows one, `layoutMode`, as `cells` / gridColumns / gridRows,
+    // and keeps the other aside in `_otherLayout` ({cols, rows, cells}).
+    // Cells carry an editor-only `_uid` (dropped on save) so the two stay
+    // matched through adds and deletes: on a switch the other layout takes
+    // every cell's data and options from the one on screen and keeps its own
+    // positions; a cell it lacks goes to the nearest free spot. The first
+    // switch to portrait derives that layout (dashboardManager.
+    // derivePortrait); from then on it is the user's, saved with the rest.
+    property string layoutMode: "landscape"
+    property var _otherLayout: null
+    property int _nextUid: 1
+
+    function _withUids(list) {
+        var out = []
+        for (var i = 0; i < list.length; i++) {
+            var c = Object.assign({}, list[i])
+            c._uid = _nextUid++
+            out.push(c)
+        }
+        return out
+    }
+
+    // `target`'s positions for `current`'s cells (in current's order), on
+    // target's grid, rows added only if a new cell finds no room at all
+    function _reconcile(target, current) {
+        var byUid = {}
+        for (var t = 0; t < target.cells.length; t++) byUid[target.cells[t]._uid] = target.cells[t]
+        var cols = target.cols, rows = target.rows
+        var out = [], pending = []
+        for (var i = 0; i < current.length; i++) {
+            var c = Object.assign({}, current[i])
+            var g = byUid[c._uid]
+            if (g) {
+                c.col = g.col; c.row = g.row; c.colSpan = g.colSpan; c.rowSpan = g.rowSpan
+            } else {
+                pending.push({ "index": i, "cs": c.colSpan || 1, "rs": c.rowSpan || 1 })
+                c.col = 0; c.row = 0; c.colSpan = 0; c.rowSpan = 0   // overlaps nothing until placed
+            }
+            out.push(c)
+        }
+        for (var n = 0; n < pending.length; n++) {
+            var p = pending[n], placed = null
+            while (!placed) {
+                var tries = [[Math.min(cols, p.cs), Math.min(rows, p.rs)], [1, 1]]
+                for (var k = 0; k < tries.length && !placed; k++) {
+                    var nf = dashboardManager.nearestFree(out, cols, rows, 0, 0, tries[k][0], tries[k][1], p.index)
+                    if (nf.ok) placed = nf
+                }
+                if (!placed) {
+                    if (rows >= 48) { placed = { "col": 0, "row": 0, "colSpan": 1, "rowSpan": 1 }; break }
+                    rows++
+                }
+            }
+            out[p.index].col = placed.col; out[p.index].row = placed.row
+            out[p.index].colSpan = placed.colSpan; out[p.index].rowSpan = placed.rowSpan
+        }
+        return { "cols": cols, "rows": rows, "cells": out }
+    }
+
+    function setLayoutMode(mode) {
+        if (mode === layoutMode || (mode !== "landscape" && mode !== "portrait") || drivingLocked) return
+        var target = _otherLayout
+        var created = false
+        if (!target) {
+            created = true
+            if (mode === "portrait") {
+                var d = dashboardManager.derivePortrait(cells, gridColumns, gridRows)
+                target = { "cols": d.gridColumns, "rows": d.gridRows, "cells": cells.map(function(c, i) {
+                    var m = Object.assign({}, c)
+                    m.col = d.cells[i].col; m.row = d.cells[i].row
+                    m.colSpan = d.cells[i].colSpan; m.rowSpan = d.cells[i].rowSpan
+                    return m }) }
+            } else {
+                var g = _densities[defaultDensity()]
+                target = { "cols": g[0], "rows": g[1], "cells": [] }
+            }
+        }
+        var r = _reconcile(target, cells)
+        _hideChoosers()
+        var wasDirty = dirty
+        _otherLayout = { "cols": gridColumns, "rows": gridRows, "cells": cells }
+        layoutMode = mode
+        _apply(r.cells, r.cols, r.rows)
+        // Only a layout made just now is new work; a plain switch isn't
+        dirty = wasDirty || (created && cells.length > 0)
+    }
+
+    // Both layouts as they would be saved: {land, port}, each {cols, rows,
+    // cells} in the same cell order; port null when there is none
+    function _layouts() {
+        var cur = { "cols": gridColumns, "rows": gridRows, "cells": cells }
+        if (layoutMode === "landscape")
+            return { "land": cur, "port": _otherLayout ? _reconcile(_otherLayout, cells) : null }
+        var g = _densities[defaultDensity()]
+        return { "land": _reconcile(_otherLayout || { "cols": g[0], "rows": g[1], "cells": [] }, cells),
+                 "port": cur }
+    }
+
+    // The spec to save (or keep as a draft): the landscape cells, and the
+    // portrait layout when there is one (schema 2). No id or label.
+    function specToSave() {
+        var L = _layouts()
+        function plain(c) {
+            var o = Object.assign({}, c)
+            delete o._uid
+            return o
+        }
+        var spec = { "schema": L.port ? 2 : 1, "gridColumns": L.land.cols, "gridRows": L.land.rows,
+                     "cells": L.land.cells.map(plain) }
+        if (L.port)
+            spec.layouts = { "portrait": { "gridColumns": L.port.cols, "gridRows": L.port.rows,
+                "cells": L.port.cells.map(function(c) {
+                    return { "col": c.col, "row": c.row, "colSpan": c.colSpan, "rowSpan": c.rowSpan } }) } }
+        return _withGridGeometry(spec)
     }
 
     // ── Grid density ─────────────────────────────────────────────────────
@@ -171,7 +339,7 @@ Item {
     readonly property var _densities: ({
         "coarse": [4, 3], "normal": [6, 4], "fine": [12, 8]
     })
-    readonly property bool _portrait: canvasFrame.height > canvasFrame.width
+    readonly property bool _portrait: layoutMode === "portrait"
     function densityGrid(name) {
         var d = _densities[name]
         if (!d) return null
@@ -190,33 +358,47 @@ Item {
     // (normal where the screen doesn't say how big it is)
     function defaultDensity() {
         var mm = Screen.pixelDensity
-        if (!(mm > 1) || canvasFrame.width <= 0 || canvasFrame.height <= 0) return "normal"
+        if (!(mm > 1) || canvasFrame.designW <= 0 || canvasFrame.designH <= 0) return "normal"
         var names = ["fine", "normal", "coarse"]
         var m = editorCanvas._margin, s = editorCanvas._spacing
         for (var i = 0; i < names.length; i++) {
             var g = densityGrid(names[i])
-            var w = (canvasFrame.width - 2 * m - s * (g.cols - 1)) / g.cols
-            var h = (canvasFrame.height - 2 * m - s * (g.rows - 1)) / g.rows
+            var w = (canvasFrame.designW - 2 * m - s * (g.cols - 1)) / g.cols
+            var h = (canvasFrame.designH - 2 * m - s * (g.rows - 1)) / g.rows
             if (Math.min(w, h) / mm >= 12) return names[i]
         }
         return "coarse"
     }
 
+    // Once the canvas has a size: open on the layout for this screen's
+    // shape (portrait on an upright one; derived there if the dashboard has
+    // none, saved only if the user saves), then a new dashboard's density
+    property bool _settled: false
     function _pickDefaultDensity() {
-        if (!_densityPending || canvasFrame.width <= 0 || canvasFrame.height <= 0) return
-        _densityPending = false
-        var g = densityGrid(defaultDensity())
-        if (cells.length > 0) {
-            // A template: the same layout on this screen's grid, when it fits
-            if (!fitToScreen || (g.cols === gridColumns && g.rows === gridRows)) return
-            var r = dashboardManager.rescale(cells, gridColumns, gridRows, g.cols, g.rows)
-            if (!r.ok) return
-            gridColumns = g.cols
-            gridRows = g.rows
-            _show(r.cells)
-        } else {
-            gridColumns = g.cols
-            gridRows = g.rows
+        if (_settled || canvasFrame.width <= 0 || canvasFrame.height <= 0) return
+        _settled = true
+        if (autoLayoutMode && canvasFrame.height > canvasFrame.width && layoutMode !== "portrait") {
+            var wasDirty = dirty
+            setLayoutMode("portrait")
+            dirty = wasDirty
+        }
+        if (_densityPending) {
+            _densityPending = false
+            var g = densityGrid(defaultDensity())
+            if (cells.length > 0) {
+                // A template: the same layout on this screen's grid, when it fits
+                if (fitToScreen && (g.cols !== gridColumns || g.rows !== gridRows)) {
+                    var r = dashboardManager.rescale(cells, gridColumns, gridRows, g.cols, g.rows)
+                    if (r.ok) {
+                        gridColumns = g.cols
+                        gridRows = g.rows
+                        _show(r.cells)
+                    }
+                }
+            } else {
+                gridColumns = g.cols
+                gridRows = g.rows
+            }
         }
         _resetHistory()
     }
@@ -244,13 +426,10 @@ Item {
         App.OBDParameterModel.simulationActive = false
         if (!dirty) return
         if (typeof settingsManager === "undefined" || !settingsManager) return
-        settingsManager.save_setting("dashboardEditorDraft", JSON.stringify(_withGridGeometry({
-            "editingId": editingId,
-            "label": nameField.text,
-            "gridColumns": gridColumns,
-            "gridRows": gridRows,
-            "cells": cells
-        })))
+        var draft = specToSave()
+        draft.editingId = editingId
+        draft.label = nameField.text
+        settingsManager.save_setting("dashboardEditorDraft", JSON.stringify(draft))
     }
 
     // Add margins/spacing to a spec-shaped object only when the loaded spec
@@ -267,17 +446,13 @@ Item {
             var draft = JSON.parse(json)
             // The same rules a save applies; the label is kept as typed
             var spec = dashboardManager.normalizedSpec({
-                "gridColumns": draft.gridColumns, "gridRows": draft.gridRows,
+                "schema": draft.schema, "gridColumns": draft.gridColumns, "gridRows": draft.gridRows,
                 "margins": draft.margins, "spacing": draft.spacing,
-                "cells": draft.cells || []
+                "cells": draft.cells || [], "layouts": draft.layouts
             })
             if (!spec.cells) return false
             editingId = draft.editingId ? draft.editingId : ""
-            gridColumns = spec.gridColumns
-            gridRows = spec.gridRows
-            specMargins = spec.margins
-            specSpacing = spec.spacing
-            _show(spec.cells)
+            _loadSpec(spec)
             nameField.text = draft.label ? draft.label : ""
             dirty = true
             return true
@@ -363,7 +538,8 @@ Item {
     readonly property bool canRedo: _historyIndex >= 0 && _historyIndex < _history.length - 1
 
     function _snapshot() {
-        return JSON.stringify({ "cols": gridColumns, "rows": gridRows, "cells": cells })
+        return JSON.stringify({ "mode": layoutMode, "cols": gridColumns, "rows": gridRows, "cells": cells,
+                                "other": _otherLayout })
     }
 
     function _resetHistory() {
@@ -374,6 +550,10 @@ Item {
     // Every edit lands here: show it (on a new grid size when given), mark
     // the work unsaved, record it
     function _apply(next, cols, rows) {
+        if (drivingLocked) {
+            _showError("Editing is paused while the car is moving")
+            return
+        }
         if (cols !== undefined) {
             gridColumns = cols
             gridRows = rows
@@ -390,6 +570,8 @@ Item {
     function _restore(index) {
         _historyIndex = index
         var snap = JSON.parse(_history[index])
+        layoutMode = snap.mode || "landscape"
+        _otherLayout = snap.other || null
         gridColumns = snap.cols
         gridRows = snap.rows
         _show(snap.cells)
@@ -398,8 +580,8 @@ Item {
         if (selectedIndex >= cells.length) clearSelection()
     }
 
-    function undo() { if (canUndo) _restore(_historyIndex - 1) }
-    function redo() { if (canRedo) _restore(_historyIndex + 1) }
+    function undo() { if (canUndo && !drivingLocked) _restore(_historyIndex - 1) }
+    function redo() { if (canRedo && !drivingLocked) _restore(_historyIndex + 1) }
 
     Shortcut { sequences: [StandardKey.Undo]; onActivated: editor.undo() }
     Shortcut { sequences: [StandardKey.Redo, "Ctrl+Shift+Z"]; onActivated: editor.redo() }
@@ -513,6 +695,7 @@ Item {
         var next = cells.slice()
         var bound = (paramId && meta.supportedKinds.length > 0) ? paramId : ""
         next.push({
+            "_uid": _nextUid++,
             "type": type, "paramId": bound,
             "col": place.col, "row": place.row,
             "colSpan": place.colSpan, "rowSpan": place.rowSpan,
@@ -618,6 +801,7 @@ Item {
             return false
         }
         var copy = JSON.parse(JSON.stringify(c))
+        copy._uid = _nextUid++
         copy.col = nf.col
         copy.row = nf.row
         var next = cells.slice()
@@ -802,14 +986,9 @@ Item {
         if (label.length === 0) label = "Untitled"
 
         var id = editingId.length > 0 ? editingId : dashboardManager.uniqueIdForLabel(label)
-        var spec = _withGridGeometry({
-            "schema": 1,
-            "id": id,
-            "label": label,
-            "gridColumns": gridColumns,
-            "gridRows": gridRows,
-            "cells": cells
-        })
+        var spec = specToSave()
+        spec.id = id
+        spec.label = label
 
         var savedId = dashboardManager.saveDashboard(spec)
         if (savedId && savedId.length > 0) {
@@ -901,6 +1080,7 @@ Item {
         implicitHeight: editor.touchSize
         checkable: true
         checked: editor.density === density
+        enabled: !editor.drivingLocked
         font.family: App.Style.fontFamily
         onTriggered: editor.setDensity(density)
     }
@@ -967,6 +1147,16 @@ Item {
                 onAccepted: focus = false
             }
 
+            // Which layout is on the canvas: the portrait one is made the
+            // first time (derived from landscape) and kept from then on
+            Pill {
+                objectName: "editorPortraitButton"
+                text: "Portrait"
+                checked: editor.layoutMode === "portrait"
+                enabled: !editor.drivingLocked
+                onClicked: editor.setLayoutMode(checked ? "landscape" : "portrait")
+            }
+
             Pill {
                 id: moreButton
                 objectName: "editorMoreButton"
@@ -989,6 +1179,15 @@ Item {
                         text: "Fine grid (" + editor.densityGrid("fine").cols + " × " + editor.densityGrid("fine").rows + ")"
                     }
                     MenuSeparator {}
+                    MenuItem {
+                        objectName: "editorEditWhileDriving"
+                        implicitHeight: editor.touchSize
+                        text: "Allow editing while driving (passenger)"
+                        checkable: true
+                        checked: editor.editWhileDriving
+                        font.family: App.Style.fontFamily
+                        onTriggered: editor.setEditWhileDriving(checked)
+                    }
                     // Fake live values for every PID so widgets can be laid
                     // out and sized without a real OBD connection.
                     // Editor-scoped: force-disabled when this page is destroyed.
@@ -1036,15 +1235,37 @@ Item {
                                                     : Math.min(dp(420), height * 0.5)
         readonly property real availW: editor._sheetShown && sheetSide ? width - sheetSize : width
         readonly property real availH: editor._sheetShown && !sheetSide ? height - sheetSize : height
-        // The canvas keeps its full-size layout and is zoomed to fit what
+        // The layout being edited is the other shape than this screen's (a
+        // portrait layout on a landscape screen, or the reverse): the canvas
+        // is that screen turned, fitted into the frame
+        readonly property bool rotated: (editor.layoutMode === "portrait") !== (height > width)
+        readonly property real designW: !rotated ? width : (width > height ? height * height / Math.max(1, width) : width)
+        readonly property real designH: !rotated ? height : (width > height ? height : width * width / Math.max(1, height))
+        // The canvas keeps its design-size layout and is zoomed to fit what
         // the sheet leaves, so nothing reflows while it is open
-        readonly property real zoom: Math.min(availW / Math.max(1, width), availH / Math.max(1, height))
+        readonly property real zoom: Math.min(1, availW / Math.max(1, designW), availH / Math.max(1, designH))
+        // A canvas rectangle in frame coordinates (toolbar, choosers)
+        function toFrame(r) { return Qt.rect(editorCanvas.x + r.x * zoom, editorCanvas.y + r.y * zoom,
+                                             r.width * zoom, r.height * zoom) }
+
+        // The turned screen's outline
+        Rectangle {
+            visible: canvasFrame.rotated
+            x: editorCanvas.x - 1
+            y: editorCanvas.y - 1
+            width: canvasFrame.designW * canvasFrame.zoom + 2
+            height: canvasFrame.designH * canvasFrame.zoom + 2
+            radius: editor.dpMin(10, 3)
+            color: App.Style.backgroundColor
+            border.color: Qt.darker(App.Style.obdBarColor, 1.3)
+            border.width: 1
+        }
 
         EditorCanvas {
             id: editorCanvas
             objectName: "editorCanvas"
-            width: canvasFrame.width
-            height: canvasFrame.height
+            width: canvasFrame.designW
+            height: canvasFrame.designH
             transformOrigin: Item.TopLeft
             scale: canvasFrame.zoom
             x: (canvasFrame.availW - width * scale) / 2
@@ -1060,7 +1281,7 @@ Item {
             cells: editor.cells
             model: cellModel
             selectedIndex: editor.selectedIndex
-            interactive: !editor._sheetShown
+            interactive: !editor._sheetShown && !editor.drivingLocked
             testValues: editor.testValues
             minSpanFor: function(index) {
                 var c = editor.cells[index]
@@ -1068,6 +1289,7 @@ Item {
             }
 
             onEmptyCellTapped: function(col, row) {
+                if (editor.drivingLocked) return
                 if (editor._tapCell || editor._swapTarget >= 0 || editor._sheetShown) {
                     editor.clearSelection()
                     return
@@ -1076,6 +1298,7 @@ Item {
                 editor._tapCell = { "col": col, "row": row }
             }
             onCellTapped: function(index) {
+                if (editor.drivingLocked) return
                 if (editor.selectedIndex >= 0 && index !== editor.selectedIndex && !editor._sheetShown) {
                     editor._tapCell = null
                     editor._swapTarget = editor._swapTarget === index ? -1 : index
@@ -1083,7 +1306,7 @@ Item {
                 }
                 editor.select(index)
             }
-            onCellHeld: function(index) { editor.select(index) }
+            onCellHeld: function(index) { if (!editor.drivingLocked) editor.select(index) }
             onCellMoveRequested: function(index, col, row) { editor.moveCell(index, col, row) }
             onCellResizeRequested: function(index, cs, rs) { editor.resizeCellTo(index, cs, rs) }
             onBackgroundTapped: editor.clearSelection()
@@ -1111,8 +1334,8 @@ Item {
             visible: editor._tapCell !== null && !editorCanvas.dragActive
             z: 30
             readonly property var _cell: editor._tapCell || { "col": 0, "row": 0 }
-            readonly property rect _r: Qt.rect(editorCanvas._cellX(_cell.col), editorCanvas._cellY(_cell.row),
-                                               editorCanvas._cellW, editorCanvas._cellH)
+            readonly property rect _r: canvasFrame.toFrame(Qt.rect(editorCanvas._cellX(_cell.col), editorCanvas._cellY(_cell.row),
+                                                                   editorCanvas._cellW, editorCanvas._cellH))
             anchors.fill: parent
 
             Rectangle {
@@ -1161,7 +1384,7 @@ Item {
             visible: editor._swapTarget >= 0 && editor._swapTarget < editor.cells.length && !editorCanvas.dragActive
             z: 30
             spacing: editor.dp(8)
-            readonly property rect _r: editorCanvas.rectOf(editor.cells[editor._swapTarget])
+            readonly property rect _r: canvasFrame.toFrame(editorCanvas.rectOf(editor.cells[editor._swapTarget]))
             x: Math.max(editor.dp(6), Math.min(parent.width - width - editor.dp(6),
                         _r.x + _r.width / 2 - width / 2))
             y: Math.max(editor.dp(6), Math.min(parent.height - height - editor.dp(6),
@@ -1190,9 +1413,9 @@ Item {
             id: toolbar
             objectName: "editorToolbar"
             visible: editor.selectedCell !== null && !editor._sheetShown && !editorCanvas.dragActive
-                     && editor._swapTarget < 0 && !editor._tapCell
+                     && editor._swapTarget < 0 && !editor._tapCell && !editor.drivingLocked
             z: 30
-            readonly property rect _r: editorCanvas.selectedRect
+            readonly property rect _r: canvasFrame.toFrame(editorCanvas.selectedRect)
             readonly property real _gap: editor.touchSize / 2 + editor.dp(6)
             readonly property real _maxW: parent.width - editor.dp(12)
             width: Math.min(_maxW, toolFlow._natural + 2 * editor.dp(6))
@@ -1271,13 +1494,67 @@ Item {
         Pill {
             objectName: "editorAddButton"
             z: 25
-            visible: !editor._sheetShown && !editorCanvas.dragActive
+            visible: !editor._sheetShown && !editorCanvas.dragActive && !editor.drivingLocked
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             anchors.margins: editor.dp(12)
             text: "+ Add"
             primary: true
             onClicked: editor.openPalette(-1, -1)
+        }
+
+        // ── Polling cost ────────────────────────────────────────────────
+        Text {
+            objectName: "editorPollingStatus"
+            z: 25
+            visible: editor.polledCount > 0 && !editor._sheetShown
+            anchors.left: parent.left
+            anchors.bottom: parent.bottom
+            anchors.margins: editor.dp(14)
+            width: Math.min(implicitWidth, parent.width * 0.6)
+            elide: Text.ElideRight
+            text: editor.polledCount + (editor.polledCount === 1 ? " value" : " values")
+                  + " from the car · about "
+                  + editor.updatesPerValue.toFixed(editor.updatesPerValue < 10 ? 1 : 0)
+                  + " updates a second each"
+            color: editor.updatesPerValue < 1 ? App.Style.statusWarning : App.Style.obdLabelColor
+            font.family: App.Style.fontFamily
+            font.pixelSize: App.Spacing.overallText * 0.8
+        }
+
+        // ── Driving lock banner ─────────────────────────────────────────
+        Rectangle {
+            objectName: "editorDrivingLock"
+            visible: editor.drivingLocked
+            z: 45
+            anchors.top: parent.top
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.topMargin: editor.dp(10)
+            width: Math.min(parent.width - editor.dp(20), lockRow.implicitWidth + editor.dp(28))
+            height: lockRow.implicitHeight + editor.dp(16)
+            radius: editor.dpMin(10, 3)
+            color: Qt.darker(App.Style.obdBoxBackground, 1.6)
+            border.color: App.Style.statusWarning
+            border.width: 1
+            RowLayout {
+                id: lockRow
+                anchors.centerIn: parent
+                width: parent.width - editor.dp(28)
+                spacing: editor.dp(14)
+                Text {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: "Editing is paused while the car is moving."
+                    color: App.Style.primaryTextColor
+                    font.family: App.Style.fontFamily
+                    font.pixelSize: App.Spacing.overallText
+                }
+                Pill {
+                    objectName: "editorPassengerButton"
+                    text: "I'm a passenger"
+                    onClicked: editor.passengerOverride = true
+                }
+            }
         }
 
         // ── Settings sheet ──────────────────────────────────────────────

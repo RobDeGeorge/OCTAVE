@@ -250,6 +250,84 @@ Rescaled rescale(const QVariantList &cells, int fromCols, int fromRows, int toCo
     return out;
 }
 
+namespace {
+// Reading order from a cursor row: the first free spot at or below `fromRow`
+bool placeFrom(QList<Rect> &placed, int cols, int rows, int fromRow, Rect &r)
+{
+    QList<bool> fixed(placed.size(), true);
+    for (int row = fromRow; row + r.rowSpan <= rows; ++row) {
+        for (int col = 0; col + r.colSpan <= cols; ++col) {
+            const Rect at{col, row, r.colSpan, r.rowSpan};
+            if (freeOf(placed, fixed, at)) {
+                r = at;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+} // namespace
+
+Portrait derivePortrait(const QVariantList &cells, int cols, int rows)
+{
+    Portrait out;
+    cols = qMax(1, cols);
+    rows = qMax(1, rows);
+    out.cols = rows;
+    out.rows = cols;
+    if (cells.isEmpty())
+        return out;
+
+    // Landscape cell width / height on a 16:9 screen; a portrait cell is the
+    // same box turned, so a span keeps its shape as cs * r by rs / r
+    const double r = (16.0 / 9.0) * rows / cols;
+    QList<Rect> source;
+    for (const QVariant &c : cells)
+        source.append(rectOf(c.toMap()));
+    QList<int> order;
+    for (int i = 0; i < source.size(); ++i)
+        order.append(i);
+    std::stable_sort(order.begin(), order.end(), [&source](int a, int b) {
+        return source.at(a).row != source.at(b).row ? source.at(a).row < source.at(b).row
+                                                    : source.at(a).col < source.at(b).col;
+    });
+
+    auto attempt = [&](double scale, int gridRows, QList<Rect> &result) {
+        QList<Rect> placed;
+        QList<Rect> byIndex(source.size());
+        int cursor = 0;
+        for (int i : order) {
+            double w = source.at(i).colSpan * r * scale;
+            double h = source.at(i).rowSpan / r * scale;
+            if (w > out.cols) {
+                h *= out.cols / w;
+                w = out.cols;
+            }
+            Rect want{0, 0, qBound(1, int(std::lround(w)), out.cols), qBound(1, int(std::lround(h)), gridRows)};
+            if (!placeFrom(placed, out.cols, gridRows, cursor, want))
+                return false;
+            placed.append(want);
+            byIndex[i] = want;
+            cursor = want.row;
+        }
+        result = byIndex;
+        return true;
+    };
+    for (double scale : {1.0, 0.85, 0.7, 0.55, 0.4, 0.25}) {
+        if (attempt(scale, out.rows, out.cells))
+            return out;
+    }
+    // Still too many: the smallest sizes on a grid with more rows
+    for (int gridRows = out.rows + 1; gridRows <= 48; ++gridRows) {
+        if (attempt(0.0, gridRows, out.cells)) {
+            out.rows = gridRows;
+            return out;
+        }
+    }
+    out.cells = QList<Rect>(source.size());   // 1x1 at 0,0: nothing sensible fits
+    return out;
+}
+
 Rect minSpan(int cols, int rows, double cellW, double cellH, double spacing, double minW, double minH)
 {
     auto span = [spacing](double cell, double want, int limit) {

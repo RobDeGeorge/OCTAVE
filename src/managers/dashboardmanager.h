@@ -36,8 +36,8 @@ class DashboardManager : public QObject
     Q_OBJECT
     // Service permissions (src/service/servicescopes.h)
     Q_CLASSINFO("octave.scope", "files")
-    Q_CLASSINFO("octave.scope.read", "arrange canPlace fitAt fromTemplate isBuiltIn loadDashboard minSpan nearestFree normalizedSpec refresh rescale sizeOptions uniqueIdForLabel")
-    Q_CLASSINFO("octave.experimental", "arrange fromTemplate minSpan nearestFree rescale sizeOptions templates")
+    Q_CLASSINFO("octave.scope.read", "arrange canPlace derivePortrait fitAt fromTemplate isBuiltIn loadDashboard minSpan nearestFree normalizedSpec orientedSpec refresh rescale sizeOptions uniqueIdForLabel")
+    Q_CLASSINFO("octave.experimental", "arrange derivePortrait fromTemplate minSpan nearestFree orientedSpec rescale sizeOptions templates")
     Q_PROPERTY(QVariantList dashboards READ dashboards NOTIFY dashboardsChanged)
     // Human-readable reason the last export/import failed ("" after a
     // success) — the chooser shows it in its status line.
@@ -131,6 +131,17 @@ public:
     Q_INVOKABLE QVariantMap nearestFree(const QVariantList &cells, int gridColumns, int gridRows, int col, int row,
                                         int colSpan, int rowSpan, int exceptIndex) const;
 
+    // A portrait layout for these landscape cells (DashboardGrid::
+    // derivePortrait): {gridColumns, gridRows, cells: [{col, row, colSpan,
+    // rowSpan}]}, one placement per cell, in order
+    Q_INVOKABLE QVariantMap derivePortrait(const QVariantList &cells, int gridColumns, int gridRows) const;
+
+    // The spec as it is laid out on a portrait (true) or landscape screen:
+    // portrait swaps in layouts.portrait (derived when there is none) as
+    // gridColumns / gridRows / the cells' positions, without `layouts`.
+    // Landscape returns the spec as it is.
+    Q_INVOKABLE QVariantMap orientedSpec(const QVariantMap &spec, bool portrait) const;
+
     // The cells laid out again on a toColumns x toRows grid (the editor's
     // grid density, DashboardGrid::rescale): {ok, cells, reason}
     Q_INVOKABLE QVariantMap rescale(const QVariantList &cells, int fromColumns, int fromRows, int toColumns,
@@ -157,7 +168,7 @@ public:
 
     // Highest dashboard `schema` this build understands. Imports declaring a
     // newer schema are refused rather than half-rendered.
-    static constexpr int kSupportedSchema = 1;
+    static constexpr int kSupportedSchema = 2;
 
 public slots:
     // Writes a user dashboard JSON file, normalised first (normalizeSpec).

@@ -78,6 +78,24 @@ struct Rescaled
 };
 Rescaled rescale(const QVariantList &cells, int fromCols, int fromRows, int toCols, int toRows);
 
+// ── Portrait ──
+//
+// A portrait layout for a landscape one, derived once (the editor saves it
+// as the spec's layouts.portrait; the renderer uses the same derivation for
+// a spec without one, so it never changes between runs). The grid is the
+// landscape one turned (cols x rows becomes rows x cols); every widget keeps
+// its on-screen shape as on a 16:9 landscape screen shown upright, in
+// reading order (top to bottom, left to right). If they don't all fit, every
+// widget is made smaller in steps; at the smallest the grid grows rows.
+// `cells` is one rect per input cell, in input order.
+struct Portrait
+{
+    int cols = 1;
+    int rows = 1;
+    QList<Rect> cells;
+};
+Portrait derivePortrait(const QVariantList &cells, int cols, int rows);
+
 // ── Sizes ──
 //
 // The smallest span whose on-screen size reaches minW x minH (any unit, the

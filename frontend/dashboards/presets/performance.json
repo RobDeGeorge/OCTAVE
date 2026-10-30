@@ -1,7 +1,7 @@
 {
   "id": "performance",
   "label": "Performance",
-  "schema": 1,
+  "schema": 2,
   "gridColumns": 12,
   "gridRows": 8,
   "cells": [
@@ -60,5 +60,21 @@
       "col": 6, "row": 6, "colSpan": 6, "rowSpan": 2,
       "props": { "fillBelow": true, "autoScale": true }
     }
-  ]
+  ],
+  "layouts": {
+    "portrait": {
+      "gridColumns": 8,
+      "gridRows": 12,
+      "cells": [
+        { "col": 0, "row": 0, "colSpan": 8, "rowSpan": 2 },
+        { "col": 0, "row": 2, "colSpan": 4, "rowSpan": 2 },
+        { "col": 4, "row": 2, "colSpan": 2, "rowSpan": 2 },
+        { "col": 6, "row": 2, "colSpan": 2, "rowSpan": 2 },
+        { "col": 0, "row": 4, "colSpan": 2, "rowSpan": 2 },
+        { "col": 2, "row": 4, "colSpan": 4, "rowSpan": 2 },
+        { "col": 0, "row": 6, "colSpan": 8, "rowSpan": 2 },
+        { "col": 0, "row": 8, "colSpan": 8, "rowSpan": 2 }
+      ]
+    }
+  }
 }

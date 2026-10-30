@@ -378,6 +378,10 @@ export interface DashboardManager {
     /** @experimental not covered by the protocol version; may change or go in any release */
     nearestFree: { args: [cells: unknown[], gridColumns: number, gridRows: number, col: number, row: number, colSpan: number, rowSpan: number, exceptIndex: number]; returns: Record<string, unknown> }
     /** @experimental not covered by the protocol version; may change or go in any release */
+    derivePortrait: { args: [cells: unknown[], gridColumns: number, gridRows: number]; returns: Record<string, unknown> }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    orientedSpec: { args: [spec: Record<string, unknown>, portrait: boolean]; returns: Record<string, unknown> }
+    /** @experimental not covered by the protocol version; may change or go in any release */
     rescale: { args: [cells: unknown[], fromColumns: number, fromRows: number, toColumns: number, toRows: number]; returns: Record<string, unknown> }
     /** @experimental not covered by the protocol version; may change or go in any release */
     minSpan: { args: [type: string, gridColumns: number, gridRows: number, cellWidth: number, cellHeight: number, spacing: number]; returns: Record<string, unknown> }

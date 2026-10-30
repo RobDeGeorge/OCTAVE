@@ -10,7 +10,7 @@
 // we want deterministic grid cells anyway — that's the snap-to-grid model
 // the eventual editor (Phase 3) will work against.
 //
-// Spec format (schema 1):
+// Spec format (schema 1; schema 2 adds the optional "layouts" below):
 // {
 //   "id":          "sport",
 //   "label":       "Sport",
@@ -28,15 +28,27 @@
 //       "props":    { "showNeedle": true, "redlineStart": 6500 }
 //     },
 //     ...
-//   ]
+//   ],
+//   "layouts": {             // schema 2, optional: where each cell goes on
+//     "portrait": {          // a portrait screen, one placement per cell
+//       "gridColumns": 8, "gridRows": 12,
+//       "cells": [ { "col": 0, "row": 0, "colSpan": 8, "rowSpan": 5 }, ... ]
+//     }
+//   }
 // }
+//
+// Portrait: when the renderer is taller than wide it lays the cells out by
+// dashboardManager.orientedSpec(spec, true): layouts.portrait, or, for a
+// spec without one, a layout derived from the landscape one by fixed rules
+// (DashboardGrid::derivePortrait), the same every time. Data and options
+// are the cells' own either way.
 //
 // Unknown cell `type` values render as nothing (logged). Cells without a
 // `paramId` are still placed — some widgets (WarningLight driven by
 // explicit `value`) can be used decoratively.
 //
 // Newer schema: a spec whose `schema` is above what this build reads
-// (dashboardManager.supportedSchema; 1 without a manager) renders no cells,
+// (dashboardManager.supportedSchema; 2 without a manager) renders no cells,
 // polls nothing, and shows one "needs a newer OCTAVE" message. Import
 // already refuses such files; this covers one copied into the folder by hand.
 //
@@ -56,8 +68,14 @@ Item {
     property var spec: null
 
     readonly property int supportedSchema:
-        (typeof dashboardManager !== "undefined" && dashboardManager) ? dashboardManager.supportedSchema : 1
+        (typeof dashboardManager !== "undefined" && dashboardManager) ? dashboardManager.supportedSchema : 2
     readonly property bool tooNew: !!spec && spec.schema !== undefined && Number(spec.schema) > supportedSchema
+
+    // Taller than wide: the portrait layout. `_laid` is the spec as laid
+    // out on this shape (positions and grid only; everything else is spec's)
+    readonly property bool portrait: height > width
+    readonly property var _laid: (spec && portrait && !tooNew && typeof dashboardManager !== "undefined"
+                                  && dashboardManager) ? dashboardManager.orientedSpec(spec, true) : spec
 
     // Every distinct paramId the spec binds — the host registers these with
     // obdManager.setParameterDemand() so exactly these PIDs get polled.
@@ -92,8 +110,8 @@ Item {
     // `margins` = outer padding around the whole grid.
     // `spacing` = gap between adjacent cells. Kept separate so callers can
     // have tight cells inside a roomy outer frame, or vice versa.
-    readonly property int _cols: (spec && spec.gridColumns) ? spec.gridColumns : 12
-    readonly property int _rows: (spec && spec.gridRows)    ? spec.gridRows    : 6
+    readonly property int _cols: (_laid && _laid.gridColumns) ? _laid.gridColumns : 12
+    readonly property int _rows: (_laid && _laid.gridRows)    ? _laid.gridRows    : 6
     readonly property real _margin:
         (spec && spec.margins !== undefined) ? App.Spacing.dp(spec.margins)
                                              : App.Spacing.dp(20)
@@ -125,7 +143,7 @@ Item {
     }
 
     Repeater {
-        model: (root.spec && root.spec.cells && !root.tooNew) ? root.spec.cells : []
+        model: (root._laid && root._laid.cells && !root.tooNew) ? root._laid.cells : []
         delegate: Item {
             id: cell
 

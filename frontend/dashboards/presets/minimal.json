@@ -1,7 +1,7 @@
 {
   "id": "minimal",
   "label": "Minimal",
-  "schema": 1,
+  "schema": 2,
   "gridColumns": 12,
   "gridRows": 8,
   "cells": [
@@ -23,5 +23,16 @@
       "col": 8, "row": 0, "colSpan": 4, "rowSpan": 8,
       "props": { "showTicks": true }
     }
-  ]
+  ],
+  "layouts": {
+    "portrait": {
+      "gridColumns": 8,
+      "gridRows": 12,
+      "cells": [
+        { "col": 0, "row": 0, "colSpan": 4, "rowSpan": 6 },
+        { "col": 4, "row": 0, "colSpan": 4, "rowSpan": 6 },
+        { "col": 0, "row": 6, "colSpan": 4, "rowSpan": 6 }
+      ]
+    }
+  }
 }

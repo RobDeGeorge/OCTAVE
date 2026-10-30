@@ -279,7 +279,7 @@ private slots:
         QVERIFY(renderer);
         QCOMPARE(renderer->property("paramIds").toStringList().size(), 3);
 
-        QVariantMap spec{{"schema", 2}, {"label", "Future"}, {"gridColumns", 12}, {"gridRows", 6},
+        QVariantMap spec{{"schema", 3}, {"label", "Future"}, {"gridColumns", 12}, {"gridRows", 6},
                          {"cells", QVariantList{QVariantMap{{"type", "DigitalReadout"}, {"paramId", "RPM"}}}}};
         renderer->setProperty("spec", spec);
         QCoreApplication::processEvents();
