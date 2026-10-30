@@ -115,6 +115,23 @@
         },
         {
             "kind": "invokable",
+            "name": "fromTemplate",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                },
+                {
+                    "name": "supported",
+                    "type": "QStringList"
+                }
+            ],
+            "returns": "QVariantMap",
+            "scope": "read",
+            "stability": "experimental"
+        },
+        {
+            "kind": "invokable",
             "name": "loadDashboard",
             "params": [
                 {
@@ -469,6 +486,14 @@
             "name": "widgetCatalog",
             "readable": true,
             "type": "QVariantMap",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "templates",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QVariantList",
             "writable": false
         }
     ],

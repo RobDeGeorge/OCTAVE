@@ -1,10 +1,14 @@
 // PIDPicker.qml
 //
-// Searchable PID list for the dashboard editor (Phase 3 Milestone B).
-// Lists OBDParameterModel.allParameters grouped by semantic `kind`, filtered
-// to the kinds the selected widget declares it supports (WidgetCatalog
-// `supportedKinds`, mirroring each gauge's `octaveSupportedKinds`). Tapping a
-// row emits pidPicked(paramId) and closes.
+// Searchable parameter list for the dashboard editor. Grouped by the car's
+// systems (ParameterCatalog `group`: Engine, Fuel & air, Temperatures, ...),
+// with the last few picks under Recent at the top, and each row's live value
+// when there is one (a connected car, or the editor's demo data). Filtered
+// to the kinds the widget accepts (WidgetCatalog `supportedKinds`, mirroring
+// each gauge's `octaveSupportedKinds`); ["*"] lists everything. The search
+// field is focused only when tapped, so a touch screen doesn't open its
+// keyboard over the list. Tapping a row emits pidPicked(paramId), records it
+// as recent (the dashboardRecentPids setting) and closes.
 //
 // Vehicle gate: with no vehicle scanned this session every PID is listed
 // normally (build for any car). Once a connected vehicle has been scanned,
@@ -19,6 +23,7 @@ import "../.." as App
 
 Popup {
     id: picker
+    objectName: "pidPicker"
 
     function dp(size) { return Math.round(size * (App.Spacing.effectiveScale || 1.0)) }
     function dpMin(size, floor) { return Math.max(floor, Math.round(size * (App.Spacing.effectiveScale || 1.0))) }
@@ -39,9 +44,44 @@ Popup {
     focus: true
     padding: dp(16)
 
-    onOpened: {
+    // Shown above the list ("Choose data" / "What do you want to see?")
+    property string title: "Choose data"
+
+    onAboutToShow: {
         searchField.text = ""
-        searchField.forceActiveFocus()
+        searchField.focus = false
+        _recent = _loadRecent()
+    }
+
+    // ── Recent picks ─────────────────────────────────────────────────────
+    readonly property int maxRecent: 6
+    property var _recent: []
+    function _loadRecent() {
+        if (typeof settingsManager === "undefined" || !settingsManager || !settingsManager.get_setting_with_default)
+            return []
+        try {
+            var list = JSON.parse(settingsManager.get_setting_with_default("dashboardRecentPids", "[]"))
+            return Array.isArray(list) ? list : []
+        } catch (e) {
+            return []
+        }
+    }
+    function _remember(pid) {
+        var list = [pid].concat(_recent.filter(function(x) { return x !== pid })).slice(0, maxRecent)
+        _recent = list
+        if (typeof settingsManager !== "undefined" && settingsManager && settingsManager.save_setting)
+            settingsManager.save_setting("dashboardRecentPids", JSON.stringify(list))
+    }
+    function _pick(pid) {
+        _remember(pid)
+        pidPicked(pid)
+        close()
+    }
+
+    // The live value as the gauges show it, "" with no reading
+    function _live(pid, decimals) {
+        var v = App.OBDParameterModel.sample(pid)
+        return isFinite(v) ? v.toFixed(Math.max(0, Math.min(3, decimals))) : ""
     }
 
     function _acceptsKind(kind) {
@@ -52,50 +92,52 @@ Popup {
         return false
     }
 
-    function _kindLabel(kind) {
-        switch (kind) {
-        case "percentage":    return "Percentage"
-        case "temperature":   return "Temperature"
-        case "voltage":       return "Voltage"
-        case "pressure":      return "Pressure"
-        case "bidirectional": return "Bidirectional (±)"
-        default:              return "General"
-        }
-    }
-
     // Flat row list: { header: true, label } separators followed by
-    // { header: false, pid, title, unit } entries. Built as a plain array so
-    // search filtering is a simple binding re-evaluation.
+    // { header: false, pid, title, unit, decimals, supported } entries,
+    // Recent first, then each group in ParameterCatalog.groups order. A
+    // plain array, so search filtering is a binding re-evaluation.
     readonly property var _rows: {
-        var kindOrder = ["numeric", "percentage", "temperature", "pressure", "voltage", "bidirectional"]
         var q = searchField.text.trim().toLowerCase()
         var gated = App.OBDParameterModel.vehicleKnown
-        var groups = {}
-        var all = App.OBDParameterModel.allParameters
+        var order = (typeof parameterCatalog !== "undefined" && parameterCatalog) ? parameterCatalog.groups : []
+        var byGroup = {}
+        var byId = {}
+        var all = App.OBDParameterModel.displayParameters   // in the gauges' units
         for (var i = 0; i < all.length; i++) {
             var p = all[i]
+            if (p.aliasOf) continue
             if (!_acceptsKind(p.kind)) continue
             if (q.length > 0 &&
                 p.title.toLowerCase().indexOf(q) < 0 &&
-                p.id.toLowerCase().indexOf(q) < 0) continue
-            if (!groups[p.kind]) groups[p.kind] = []
-            groups[p.kind].push(p)
+                p.id.toLowerCase().indexOf(q) < 0 &&
+                (p.group || "").toLowerCase().indexOf(q) < 0) continue
+            var g = p.group || "Other"
+            if (!byGroup[g]) byGroup[g] = []
+            byGroup[g].push(p)
+            byId[p.id] = p
+        }
+        function row(pp) {
+            return { "header": false, "pid": pp.id, "title": pp.title, "unit": pp.unit,
+                     "decimals": pp.decimals, "supported": !gated || App.OBDParameterModel.isSupported(pp.id) }
         }
         var rows = []
-        for (var k = 0; k < kindOrder.length; k++) {
-            var kind = kindOrder[k]
-            if (!groups[kind]) continue
+        var recent = _recent.filter(function(id) { return byId[id] !== undefined })
+        if (recent.length > 0 && q.length === 0) {
+            rows.push({ "header": true, "label": "Recent" })
+            for (var r = 0; r < recent.length; r++) rows.push(row(byId[recent[r]]))
+        }
+        var groups = order.slice()
+        for (var key in byGroup) if (groups.indexOf(key) === -1) groups.push(key)
+        for (var k = 0; k < groups.length; k++) {
+            var list = byGroup[groups[k]]
+            if (!list) continue
             if (gated) {
                 // Stable partition: this vehicle's PIDs first.
-                groups[kind] = groups[kind].filter(function(x) { return App.OBDParameterModel.isSupported(x.id) })
-                    .concat(groups[kind].filter(function(x) { return !App.OBDParameterModel.isSupported(x.id) }))
+                list = list.filter(function(x) { return App.OBDParameterModel.isSupported(x.id) })
+                    .concat(list.filter(function(x) { return !App.OBDParameterModel.isSupported(x.id) }))
             }
-            rows.push({ "header": true, "label": _kindLabel(kind) })
-            for (var n = 0; n < groups[kind].length; n++) {
-                var pp = groups[kind][n]
-                rows.push({ "header": false, "pid": pp.id, "title": pp.title, "unit": pp.unit,
-                            "supported": !gated || App.OBDParameterModel.isSupported(pp.id) })
-            }
+            rows.push({ "header": true, "label": groups[k] })
+            for (var n = 0; n < list.length; n++) rows.push(row(list[n]))
         }
         return rows
     }
@@ -112,7 +154,7 @@ Popup {
 
         Text {
             Layout.alignment: Qt.AlignHCenter
-            text: "Choose a PID"
+            text: picker.title
             color: App.Style.primaryTextColor
             font.family: App.Style.fontFamily
             font.pixelSize: App.Spacing.overallText * 1.2
@@ -137,7 +179,9 @@ Popup {
             id: searchField
             objectName: "pidSearchField"
             Layout.fillWidth: true
+            Layout.preferredHeight: picker.dp(44)
             placeholderText: "Search…"
+            focus: false
             font.family: App.Style.fontFamily
             font.pixelSize: App.Spacing.overallText
             color: App.Style.primaryTextColor
@@ -215,6 +259,16 @@ Popup {
                                 font.pixelSize: App.Spacing.overallText * 0.7
                             }
                         }
+                        // The live value, when there is one
+                        Text {
+                            objectName: modelData.header ? "" : "pidLive_" + modelData.pid
+                            text: modelData.header ? "" : picker._live(modelData.pid, modelData.decimals)
+                            visible: text.length > 0
+                            color: App.Style.accent
+                            font.family: App.Style.fontFamily
+                            font.bold: true
+                            font.pixelSize: App.Spacing.overallText * 0.95
+                        }
                         Text {
                             text: modelData.header ? "" : modelData.unit
                             color: App.Style.obdLabelColor
@@ -227,10 +281,7 @@ Popup {
                         id: rowMouse
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            picker.pidPicked(modelData.pid)
-                            picker.close()
-                        }
+                        onClicked: picker._pick(modelData.pid)
                     }
                 }
             }

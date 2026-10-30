@@ -27,7 +27,7 @@
 
     { "type": "BarGauge", "paramId": "INTAKE_TEMP",
       "col": 6, "row": 4, "colSpan": 3, "rowSpan": 2,
-      "props": { "orientation": "horizontal", "warnAbove": 60 } },
+      "props": { "orientation": "horizontal", "critAbove": 60 } },
 
     { "type": "LinearGauge", "paramId": "TIMING_ADVANCE",
       "col": 9, "row": 4, "colSpan": 3, "rowSpan": 2,

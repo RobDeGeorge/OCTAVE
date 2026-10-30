@@ -157,6 +157,38 @@ const Row kRows[] = {
 
 };
 
+// The system a parameter belongs to (ParameterCatalog::groups()): named
+// sets first, then by kind and id, Engine for the rest
+QString groupFor(const char *idRaw, const char *kind, ParameterCatalog::Source source)
+{
+    const QString id = QString::fromLatin1(idRaw);
+    if (source == ParameterCatalog::Source::Imu)
+        return QStringLiteral("Sensors");
+    static const QStringList speed{"SPEED", "TRANSMISSION_GEAR_RATIO", "RECOMMENDED_GEAR", "ODOMETER"};
+    static const QStringList electrical{"CONTROL_MODULE_VOLTAGE", "ELM_VOLTAGE", "HYBRID_BATTERY_REMAINING",
+                                        "HYBRID_BATTERY_VOLTAGE", "HYBRID_BATTERY_CURRENT", "EV_BATTERY_HEALTH"};
+    static const QStringList diagnostics{"RUN_TIME", "DISTANCE_W_MIL", "DISTANCE_SINCE_DTC_CLEAR",
+                                         "WARMUPS_SINCE_DTC_CLEAR", "RUN_TIME_MIL", "TIME_SINCE_DTC_CLEARED",
+                                         "ENGINE_RUN_TIME_TOTAL", "ENGINE_IDLE_TIME_TOTAL", "FUEL_TYPE"};
+    if (speed.contains(id))
+        return QStringLiteral("Speed & motion");
+    if (electrical.contains(id))
+        return QStringLiteral("Electrical");
+    if (diagnostics.contains(id))
+        return QStringLiteral("Diagnostics");
+    if (qstrcmp(kind, "temperature") == 0)
+        return QStringLiteral("Temperatures");
+    if (id.startsWith(QLatin1String("O2_")) || id.contains(QLatin1String("EGR")) || id.startsWith(QLatin1String("EVAP"))
+        || id.startsWith(QLatin1String("CATALYST")) || id.startsWith(QLatin1String("EXHAUST"))
+        || id.contains(QLatin1String("O2_TRIM")))
+        return QStringLiteral("Emissions");
+    if (id.contains(QLatin1String("FUEL")) || id.startsWith(QLatin1String("MAF")) || id.contains(QLatin1String("_MAF"))
+        || id == QLatin1String("INTAKE_PRESSURE") || id == QLatin1String("COMMANDED_EQUIV_RATIO")
+        || id == QLatin1String("BAROMETRIC_PRESSURE") || id == QLatin1String("ETHANOL_PERCENT")
+        || id.startsWith(QLatin1String("BOOST")) || id.startsWith(QLatin1String("WASTEGATE")))
+        return QStringLiteral("Fuel & air");
+    return QStringLiteral("Engine");
+}
 } // namespace
 
 ParameterCatalog::ParameterCatalog(QObject *parent)
@@ -181,6 +213,7 @@ const QList<ParameterCatalog::Parameter> &ParameterCatalog::all()
             p.decimals = r.decimals;
             p.source = r.source;
             p.aliasOf = QString::fromLatin1(r.aliasOf);
+            p.group = groupFor(r.id, r.kind, r.source);
             l.append(p);
         }
         return l;
@@ -210,6 +243,13 @@ QStringList ParameterCatalog::imuIds()
     return ids;
 }
 
+QStringList ParameterCatalog::groups()
+{
+    return {QStringLiteral("Engine"), QStringLiteral("Fuel & air"), QStringLiteral("Temperatures"),
+            QStringLiteral("Electrical"), QStringLiteral("Speed & motion"), QStringLiteral("Emissions"),
+            QStringLiteral("Diagnostics"), QStringLiteral("Sensors")};
+}
+
 QStringList ParameterCatalog::obdIds()
 {
     QStringList ids;
@@ -232,6 +272,7 @@ QVariantMap ParameterCatalog::toVariant(const Parameter &p)
         {QStringLiteral("decimals"), p.decimals},
         {QStringLiteral("source"), p.source == Source::Imu ? QStringLiteral("imu") : QStringLiteral("obd")},
         {QStringLiteral("aliasOf"), p.aliasOf},
+        {QStringLiteral("group"), p.group},
     };
 }
 

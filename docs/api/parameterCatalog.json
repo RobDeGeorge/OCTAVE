@@ -58,6 +58,13 @@
             "readable": true,
             "type": "QVariantList",
             "writable": false
+        },
+        {
+            "constant": true,
+            "name": "groups",
+            "readable": true,
+            "type": "QStringList",
+            "writable": false
         }
     ],
     "signals": [

@@ -104,6 +104,28 @@ private slots:
                                                + missing.join(", ")));
     }
 
+    void everyParameterHasAGroup()
+    {
+        // Pickers list parameters by system: each one is in a listed group,
+        // and every listed group has something in it
+        const QStringList groups = ParameterCatalog::groups();
+        QSet<QString> used;
+        for (const auto &p : ParameterCatalog::all()) {
+            QVERIFY2(groups.contains(p.group), qPrintable(p.id + " -> " + p.group));
+            used.insert(p.group);
+        }
+        QCOMPARE(used.size(), groups.size());
+        QCOMPARE(ParameterCatalog::find("RPM")->group, QStringLiteral("Engine"));
+        QCOMPARE(ParameterCatalog::find("MAF")->group, QStringLiteral("Fuel & air"));
+        QCOMPARE(ParameterCatalog::find("COOLANT_TEMP")->group, QStringLiteral("Temperatures"));
+        QCOMPARE(ParameterCatalog::find("CONTROL_MODULE_VOLTAGE")->group, QStringLiteral("Electrical"));
+        QCOMPARE(ParameterCatalog::find("SPEED")->group, QStringLiteral("Speed & motion"));
+        QCOMPARE(ParameterCatalog::find("O2_B1S1")->group, QStringLiteral("Emissions"));
+        QCOMPARE(ParameterCatalog::find("LATERAL_G")->group, QStringLiteral("Sensors"));
+        QCOMPARE(ParameterCatalog().parameters().first().toMap().value("group").toString(),
+                 ParameterCatalog::all().first().group);
+    }
+
     void displayUnitsDefaultToTheCatalogs()
     {
         // The defaults change nothing: every row's display unit, range and

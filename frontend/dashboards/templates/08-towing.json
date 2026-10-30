@@ -1,0 +1,105 @@
+{
+  "schema": 1,
+  "id": "towing",
+  "label": "Towing temps",
+  "description": "Temperatures and load for pulling a trailer",
+  "order": 8,
+  "gridColumns": 6,
+  "gridRows": 4,
+  "cells": [
+    {
+      "type": "ArcGauge",
+      "col": 0,
+      "row": 0,
+      "colSpan": 2,
+      "rowSpan": 2,
+      "slot": {
+        "prefer": [
+          "COOLANT_TEMP"
+        ],
+        "kinds": [
+          "temperature"
+        ]
+      }
+    },
+    {
+      "type": "ArcGauge",
+      "col": 2,
+      "row": 0,
+      "colSpan": 2,
+      "rowSpan": 2,
+      "slot": {
+        "prefer": [
+          "OIL_TEMP",
+          "CATALYST_TEMP_B1S1"
+        ],
+        "kinds": [
+          "temperature"
+        ]
+      }
+    },
+    {
+      "type": "ArcGauge",
+      "col": 4,
+      "row": 0,
+      "colSpan": 2,
+      "rowSpan": 2,
+      "slot": {
+        "prefer": [
+          "INTAKE_TEMP",
+          "AMBIANT_AIR_TEMP"
+        ],
+        "kinds": [
+          "temperature"
+        ]
+      }
+    },
+    {
+      "type": "BarGauge",
+      "col": 0,
+      "row": 2,
+      "colSpan": 6,
+      "rowSpan": 1,
+      "slot": {
+        "prefer": [
+          "ENGINE_LOAD",
+          "ABSOLUTE_LOAD"
+        ],
+        "kinds": [
+          "percentage"
+        ]
+      }
+    },
+    {
+      "type": "DigitalReadout",
+      "col": 0,
+      "row": 3,
+      "colSpan": 3,
+      "rowSpan": 1,
+      "slot": {
+        "prefer": [
+          "SPEED"
+        ],
+        "kinds": [
+          "numeric"
+        ]
+      }
+    },
+    {
+      "type": "DigitalReadout",
+      "col": 3,
+      "row": 3,
+      "colSpan": 3,
+      "rowSpan": 1,
+      "slot": {
+        "prefer": [
+          "CONTROL_MODULE_VOLTAGE",
+          "ELM_VOLTAGE"
+        ],
+        "kinds": [
+          "voltage"
+        ]
+      }
+    }
+  ]
+}

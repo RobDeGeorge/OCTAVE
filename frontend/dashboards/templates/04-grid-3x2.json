@@ -1,0 +1,102 @@
+{
+  "schema": 1,
+  "id": "grid-3x2",
+  "label": "3 × 2",
+  "description": "Six dials, the classic gauge pod",
+  "order": 4,
+  "gridColumns": 6,
+  "gridRows": 4,
+  "cells": [
+    {
+      "type": "CircularGauge",
+      "col": 0,
+      "row": 0,
+      "colSpan": 2,
+      "rowSpan": 2,
+      "slot": {
+        "prefer": [
+          "RPM"
+        ],
+        "kinds": [
+          "numeric"
+        ]
+      }
+    },
+    {
+      "type": "CircularGauge",
+      "col": 2,
+      "row": 0,
+      "colSpan": 2,
+      "rowSpan": 2,
+      "slot": {
+        "prefer": [
+          "SPEED"
+        ],
+        "kinds": [
+          "numeric"
+        ]
+      }
+    },
+    {
+      "type": "CircularGauge",
+      "col": 4,
+      "row": 0,
+      "colSpan": 2,
+      "rowSpan": 2,
+      "slot": {
+        "prefer": [
+          "COOLANT_TEMP"
+        ],
+        "kinds": [
+          "temperature"
+        ]
+      }
+    },
+    {
+      "type": "CircularGauge",
+      "col": 0,
+      "row": 2,
+      "colSpan": 2,
+      "rowSpan": 2,
+      "slot": {
+        "prefer": [
+          "ENGINE_LOAD"
+        ],
+        "kinds": [
+          "percentage"
+        ]
+      }
+    },
+    {
+      "type": "CircularGauge",
+      "col": 2,
+      "row": 2,
+      "colSpan": 2,
+      "rowSpan": 2,
+      "slot": {
+        "prefer": [
+          "THROTTLE_POS"
+        ],
+        "kinds": [
+          "percentage"
+        ]
+      }
+    },
+    {
+      "type": "CircularGauge",
+      "col": 4,
+      "row": 2,
+      "colSpan": 2,
+      "rowSpan": 2,
+      "slot": {
+        "prefer": [
+          "INTAKE_PRESSURE",
+          "CONTROL_MODULE_VOLTAGE"
+        ],
+        "kinds": [
+          "pressure"
+        ]
+      }
+    }
+  ]
+}

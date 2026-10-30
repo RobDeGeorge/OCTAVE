@@ -46,6 +46,9 @@ Item {
     property var model: null
     property int selectedIndex: -1
     property bool interactive: true
+    // cell index → a value its widget shows instead of the live one (the
+    // settings sheet's Test value); a cell without one shows live data
+    property var testValues: ({})
 
     // Smallest comfortable touch target: 9 mm where the screen reports its
     // size (Screen.pixelDensity is per logical pixel), never under 44 dp
@@ -364,9 +367,27 @@ Item {
             // never paints outside its cell (mirrors the renderer backstop).
             // Reloaded only when this cell's type, PID or props change.
             readonly property string _content: model.type + "\n" + model.paramId + "\n" + model.propsJson
-            on_ContentChanged: {
+            on_ContentChanged: _reload()
+            function _reload() {
                 widgetLoader.source = ""
                 widgetLoader.source = App.WidgetCatalog.urlFor(model.type)
+            }
+
+            // Test value: written over the widget's live binding; dropping
+            // it reloads the widget to get the binding back
+            readonly property var _test: canvas.testValues[cellIndex]
+            property bool _testing: false
+            on_TestChanged: _applyTest()
+            function _applyTest() {
+                var item = widgetLoader.item
+                if (!item || item.value === undefined) return
+                if (_test !== undefined) {
+                    item.value = _test
+                    _testing = true
+                } else if (_testing) {
+                    _testing = false
+                    _reload()
+                }
             }
 
             Loader {
@@ -400,6 +421,7 @@ Item {
                         else
                             item[key] = v
                     }
+                    if (cellRoot._test !== undefined) cellRoot._applyTest()
                 }
             }
 

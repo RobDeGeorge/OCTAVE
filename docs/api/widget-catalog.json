@@ -1,4 +1,13 @@
 {
+    "categories": [
+        "Gauges",
+        "Readouts",
+        "Graphs",
+        "Warnings",
+        "Motion",
+        "Media",
+        "Time"
+    ],
     "colorSwatches": [
         "#00BFFF",
         "#2ECC71",
@@ -10,41 +19,71 @@
         "#FFFFFF"
     ],
     "schema": 1,
+    "suggestions": {
+        "byId": {
+            "FUEL_LEVEL": "BarGauge",
+            "HEADING": "CompassGauge",
+            "LATERAL_G": "GForceGauge",
+            "LONGITUDINAL_G": "GForceGauge",
+            "RPM": "CircularGauge",
+            "SPEED": "DigitalReadout"
+        },
+        "byKind": {
+            "bidirectional": "LinearGauge",
+            "numeric": "CircularGauge",
+            "percentage": "BarGauge",
+            "pressure": "ArcGauge",
+            "temperature": "ArcGauge",
+            "voltage": "DigitalReadout"
+        }
+    },
     "widgets": [
         {
             "aspect": 1,
+            "category": "Gauges",
             "colorProps": [
                 "fillColor",
                 "needleColor"
             ],
             "defaultColSpan": 4,
             "defaultRowSpan": 4,
+            "demo": {
+                "paramId": "RPM",
+                "props": {
+                    "showNeedle": true
+                }
+            },
+            "description": "A round dial with a needle or a filled ring, for RPM, speed and boost",
             "displayName": "Circular",
             "editableProps": [
                 {
                     "def": false,
                     "key": "showNeedle",
                     "kind": "bool",
-                    "label": "Needle"
+                    "label": "Needle",
+                    "section": "look"
                 },
                 {
                     "def": true,
                     "key": "showTicks",
                     "kind": "bool",
-                    "label": "Ticks"
+                    "label": "Ticks",
+                    "section": "look"
                 },
                 {
                     "def": true,
                     "key": "showCenterReadout",
                     "kind": "bool",
-                    "label": "Readout"
+                    "label": "Readout",
+                    "section": "look"
                 },
                 {
                     "def": null,
                     "key": "redlineStart",
                     "kind": "real",
-                    "label": "Redline start",
-                    "paramUnit": true
+                    "label": "Red band from",
+                    "paramUnit": true,
+                    "section": "range"
                 },
                 {
                     "def": 0,
@@ -52,7 +91,8 @@
                     "kind": "int",
                     "label": "Decimals",
                     "max": 4,
-                    "min": 0
+                    "min": 0,
+                    "section": "look"
                 },
                 {
                     "def": 9,
@@ -60,7 +100,8 @@
                     "kind": "int",
                     "label": "Major ticks",
                     "max": 20,
-                    "min": 2
+                    "min": 2,
+                    "section": "advanced"
                 },
                 {
                     "def": 5,
@@ -68,7 +109,8 @@
                     "kind": "int",
                     "label": "Minor per major",
                     "max": 10,
-                    "min": 0
+                    "min": 0,
+                    "section": "advanced"
                 },
                 {
                     "def": 135,
@@ -76,7 +118,8 @@
                     "kind": "real",
                     "label": "Start angle",
                     "max": 360,
-                    "min": 0
+                    "min": 0,
+                    "section": "advanced"
                 },
                 {
                     "def": 270,
@@ -84,7 +127,47 @@
                     "kind": "real",
                     "label": "Sweep angle",
                     "max": 360,
-                    "min": 30
+                    "min": 30,
+                    "section": "advanced"
+                },
+                {
+                    "def": null,
+                    "key": "warnAbove",
+                    "kind": "real",
+                    "label": "Warning above",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": null,
+                    "key": "warnBelow",
+                    "kind": "real",
+                    "label": "Warning below",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": null,
+                    "key": "critAbove",
+                    "kind": "real",
+                    "label": "Critical above",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": null,
+                    "key": "critBelow",
+                    "kind": "real",
+                    "label": "Critical below",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": false,
+                    "key": "alertFlash",
+                    "kind": "bool",
+                    "label": "Flash when critical",
+                    "section": "range"
                 }
             ],
             "glyph": "◯",
@@ -101,38 +184,47 @@
         },
         {
             "aspect": 1.5,
+            "category": "Gauges",
             "colorProps": [
                 "fillColor",
                 "needleColor"
             ],
             "defaultColSpan": 6,
             "defaultRowSpan": 3,
+            "demo": {
+                "paramId": "COOLANT_TEMP"
+            },
+            "description": "A half-dial with the value in the middle, good for temperatures and pressures",
             "displayName": "Arc",
             "editableProps": [
                 {
                     "def": false,
                     "key": "showNeedle",
                     "kind": "bool",
-                    "label": "Needle"
+                    "label": "Needle",
+                    "section": "look"
                 },
                 {
                     "def": true,
                     "key": "showTicks",
                     "kind": "bool",
-                    "label": "Ticks"
+                    "label": "Ticks",
+                    "section": "look"
                 },
                 {
                     "def": true,
                     "key": "showReadout",
                     "kind": "bool",
-                    "label": "Readout"
+                    "label": "Readout",
+                    "section": "look"
                 },
                 {
                     "def": null,
                     "key": "redlineStart",
                     "kind": "real",
-                    "label": "Redline start",
-                    "paramUnit": true
+                    "label": "Red band from",
+                    "paramUnit": true,
+                    "section": "range"
                 },
                 {
                     "def": 0,
@@ -140,7 +232,8 @@
                     "kind": "int",
                     "label": "Decimals",
                     "max": 4,
-                    "min": 0
+                    "min": 0,
+                    "section": "look"
                 },
                 {
                     "def": 5,
@@ -148,7 +241,8 @@
                     "kind": "int",
                     "label": "Major ticks",
                     "max": 20,
-                    "min": 2
+                    "min": 2,
+                    "section": "advanced"
                 },
                 {
                     "def": 4,
@@ -156,7 +250,47 @@
                     "kind": "int",
                     "label": "Minor per major",
                     "max": 10,
-                    "min": 0
+                    "min": 0,
+                    "section": "advanced"
+                },
+                {
+                    "def": null,
+                    "key": "warnAbove",
+                    "kind": "real",
+                    "label": "Warning above",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": null,
+                    "key": "warnBelow",
+                    "kind": "real",
+                    "label": "Warning below",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": null,
+                    "key": "critAbove",
+                    "kind": "real",
+                    "label": "Critical above",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": null,
+                    "key": "critBelow",
+                    "kind": "real",
+                    "label": "Critical below",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": false,
+                    "key": "alertFlash",
+                    "kind": "bool",
+                    "label": "Flash when critical",
+                    "section": "range"
                 }
             ],
             "glyph": "◠",
@@ -173,11 +307,16 @@
         },
         {
             "aspect": 3,
+            "category": "Gauges",
             "colorProps": [
                 "fillColor"
             ],
             "defaultColSpan": 3,
             "defaultRowSpan": 2,
+            "demo": {
+                "paramId": "FUEL_LEVEL"
+            },
+            "description": "A horizontal or vertical bar, for levels like fuel, load and throttle",
             "displayName": "Bar",
             "editableProps": [
                 {
@@ -188,26 +327,30 @@
                     "options": [
                         "horizontal",
                         "vertical"
-                    ]
+                    ],
+                    "section": "look"
                 },
                 {
                     "def": null,
                     "key": "warnAbove",
                     "kind": "real",
-                    "label": "Warn above",
-                    "paramUnit": true
+                    "label": "Warning above",
+                    "paramUnit": true,
+                    "section": "range"
                 },
                 {
                     "def": true,
                     "key": "showLabel",
                     "kind": "bool",
-                    "label": "Label"
+                    "label": "Label",
+                    "section": "look"
                 },
                 {
                     "def": true,
                     "key": "showValue",
                     "kind": "bool",
-                    "label": "Value"
+                    "label": "Value",
+                    "section": "look"
                 },
                 {
                     "def": 0,
@@ -215,7 +358,8 @@
                     "kind": "int",
                     "label": "Decimals",
                     "max": 4,
-                    "min": 0
+                    "min": 0,
+                    "section": "look"
                 },
                 {
                     "def": 0,
@@ -223,7 +367,39 @@
                     "kind": "real",
                     "label": "Max thickness (dp, 0 = fill)",
                     "max": 200,
-                    "min": 0
+                    "min": 0,
+                    "section": "advanced"
+                },
+                {
+                    "def": null,
+                    "key": "warnBelow",
+                    "kind": "real",
+                    "label": "Warning below",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": null,
+                    "key": "critAbove",
+                    "kind": "real",
+                    "label": "Critical above",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": null,
+                    "key": "critBelow",
+                    "kind": "real",
+                    "label": "Critical below",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": false,
+                    "key": "alertFlash",
+                    "kind": "bool",
+                    "label": "Flash when critical",
+                    "section": "range"
                 }
             ],
             "glyph": "▮",
@@ -244,11 +420,16 @@
         },
         {
             "aspect": 3,
+            "category": "Gauges",
             "colorProps": [
                 "fillColor"
             ],
             "defaultColSpan": 6,
             "defaultRowSpan": 2,
+            "demo": {
+                "paramId": "RPM"
+            },
+            "description": "A row of lit segments, like a shift-light strip, for RPM or load",
             "displayName": "Segmented",
             "editableProps": [
                 {
@@ -257,26 +438,30 @@
                     "kind": "int",
                     "label": "Segments",
                     "max": 40,
-                    "min": 2
+                    "min": 2,
+                    "section": "advanced"
                 },
                 {
                     "def": null,
                     "key": "warnAbove",
                     "kind": "real",
-                    "label": "Warn above",
-                    "paramUnit": true
+                    "label": "Warning above",
+                    "paramUnit": true,
+                    "section": "range"
                 },
                 {
                     "def": true,
                     "key": "showLabel",
                     "kind": "bool",
-                    "label": "Label"
+                    "label": "Label",
+                    "section": "look"
                 },
                 {
                     "def": true,
                     "key": "showValue",
                     "kind": "bool",
-                    "label": "Value"
+                    "label": "Value",
+                    "section": "look"
                 },
                 {
                     "def": 0,
@@ -284,7 +469,39 @@
                     "kind": "int",
                     "label": "Decimals",
                     "max": 4,
-                    "min": 0
+                    "min": 0,
+                    "section": "look"
+                },
+                {
+                    "def": null,
+                    "key": "warnBelow",
+                    "kind": "real",
+                    "label": "Warning below",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": null,
+                    "key": "critAbove",
+                    "kind": "real",
+                    "label": "Critical above",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": null,
+                    "key": "critBelow",
+                    "kind": "real",
+                    "label": "Critical below",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": false,
+                    "key": "alertFlash",
+                    "kind": "bool",
+                    "label": "Flash when critical",
+                    "section": "range"
                 }
             ],
             "glyph": "▮",
@@ -301,18 +518,24 @@
         },
         {
             "aspect": 2.5,
+            "category": "Gauges",
             "colorProps": [
                 "fillColor"
             ],
             "defaultColSpan": 4,
             "defaultRowSpan": 2,
+            "demo": {
+                "paramId": "SHORT_FUEL_TRIM_1"
+            },
+            "description": "A centre-zero scale for values that go both ways, like fuel trims",
             "displayName": "Linear",
             "editableProps": [
                 {
                     "def": true,
                     "key": "showTicks",
                     "kind": "bool",
-                    "label": "Ticks"
+                    "label": "Ticks",
+                    "section": "look"
                 },
                 {
                     "def": 0,
@@ -320,7 +543,8 @@
                     "kind": "int",
                     "label": "Decimals",
                     "max": 4,
-                    "min": 0
+                    "min": 0,
+                    "section": "look"
                 },
                 {
                     "def": 5,
@@ -328,7 +552,8 @@
                     "kind": "int",
                     "label": "Major ticks",
                     "max": 20,
-                    "min": 2
+                    "min": 2,
+                    "section": "advanced"
                 },
                 {
                     "def": 4,
@@ -336,7 +561,47 @@
                     "kind": "int",
                     "label": "Minor per major",
                     "max": 10,
-                    "min": 0
+                    "min": 0,
+                    "section": "advanced"
+                },
+                {
+                    "def": null,
+                    "key": "warnAbove",
+                    "kind": "real",
+                    "label": "Warning above",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": null,
+                    "key": "warnBelow",
+                    "kind": "real",
+                    "label": "Warning below",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": null,
+                    "key": "critAbove",
+                    "kind": "real",
+                    "label": "Critical above",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": null,
+                    "key": "critBelow",
+                    "kind": "real",
+                    "label": "Critical below",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": false,
+                    "key": "alertFlash",
+                    "kind": "bool",
+                    "label": "Flash when critical",
+                    "section": "range"
                 }
             ],
             "glyph": "↔",
@@ -353,24 +618,31 @@
         },
         {
             "aspect": 1.6,
+            "category": "Readouts",
             "colorProps": [
                 "valueColor"
             ],
             "defaultColSpan": 4,
             "defaultRowSpan": 2,
+            "demo": {
+                "paramId": "SPEED"
+            },
+            "description": "The number, big and plain: speed, voltage, anything",
             "displayName": "Digital",
             "editableProps": [
                 {
                     "def": true,
                     "key": "showTitle",
                     "kind": "bool",
-                    "label": "Title"
+                    "label": "Title",
+                    "section": "look"
                 },
                 {
                     "def": true,
                     "key": "showUnit",
                     "kind": "bool",
-                    "label": "Unit"
+                    "label": "Unit",
+                    "section": "look"
                 },
                 {
                     "def": 0,
@@ -378,7 +650,8 @@
                     "kind": "int",
                     "label": "Decimals",
                     "max": 4,
-                    "min": 0
+                    "min": 0,
+                    "section": "look"
                 },
                 {
                     "def": 0,
@@ -386,7 +659,8 @@
                     "kind": "int",
                     "label": "Pad digits",
                     "max": 8,
-                    "min": 0
+                    "min": 0,
+                    "section": "advanced"
                 },
                 {
                     "def": 3.5,
@@ -394,7 +668,47 @@
                     "kind": "real",
                     "label": "Digit size",
                     "max": 12,
-                    "min": 0.5
+                    "min": 0.5,
+                    "section": "advanced"
+                },
+                {
+                    "def": null,
+                    "key": "warnAbove",
+                    "kind": "real",
+                    "label": "Warning above",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": null,
+                    "key": "warnBelow",
+                    "kind": "real",
+                    "label": "Warning below",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": null,
+                    "key": "critAbove",
+                    "kind": "real",
+                    "label": "Critical above",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": null,
+                    "key": "critBelow",
+                    "kind": "real",
+                    "label": "Critical below",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": false,
+                    "key": "alertFlash",
+                    "kind": "bool",
+                    "label": "Flash when critical",
+                    "section": "range"
                 }
             ],
             "glyph": "88",
@@ -411,30 +725,38 @@
         },
         {
             "aspect": 2.5,
+            "category": "Graphs",
             "colorProps": [
                 "lineColor"
             ],
             "defaultColSpan": 6,
             "defaultRowSpan": 2,
+            "demo": {
+                "paramId": "SPEED"
+            },
+            "description": "The value over the last minute as a line, to see trends",
             "displayName": "Sparkline",
             "editableProps": [
                 {
                     "def": false,
                     "key": "autoScale",
                     "kind": "bool",
-                    "label": "Auto-scale"
+                    "label": "Auto-scale",
+                    "section": "range"
                 },
                 {
                     "def": true,
                     "key": "fillBelow",
                     "kind": "bool",
-                    "label": "Area fill"
+                    "label": "Area fill",
+                    "section": "look"
                 },
                 {
                     "def": true,
                     "key": "showHeader",
                     "kind": "bool",
-                    "label": "Header"
+                    "label": "Header",
+                    "section": "look"
                 },
                 {
                     "def": 0,
@@ -442,7 +764,8 @@
                     "kind": "int",
                     "label": "Decimals",
                     "max": 4,
-                    "min": 0
+                    "min": 0,
+                    "section": "look"
                 },
                 {
                     "def": 60,
@@ -450,7 +773,8 @@
                     "kind": "int",
                     "label": "Samples",
                     "max": 300,
-                    "min": 10
+                    "min": 10,
+                    "section": "advanced"
                 },
                 {
                     "def": 500,
@@ -458,7 +782,47 @@
                     "kind": "int",
                     "label": "Sample (ms)",
                     "max": 5000,
-                    "min": 100
+                    "min": 100,
+                    "section": "advanced"
+                },
+                {
+                    "def": null,
+                    "key": "warnAbove",
+                    "kind": "real",
+                    "label": "Warning above",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": null,
+                    "key": "warnBelow",
+                    "kind": "real",
+                    "label": "Warning below",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": null,
+                    "key": "critAbove",
+                    "kind": "real",
+                    "label": "Critical above",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": null,
+                    "key": "critBelow",
+                    "kind": "real",
+                    "label": "Critical below",
+                    "paramUnit": true,
+                    "section": "range"
+                },
+                {
+                    "def": false,
+                    "key": "alertFlash",
+                    "kind": "bool",
+                    "label": "Flash when critical",
+                    "section": "range"
                 }
             ],
             "glyph": "∿",
@@ -475,38 +839,50 @@
         },
         {
             "aspect": 1,
+            "category": "Warnings",
             "colorProps": [
                 "activeColor"
             ],
             "defaultColSpan": 2,
             "defaultRowSpan": 2,
+            "demo": {
+                "paramId": "COOLANT_TEMP",
+                "props": {
+                    "triggerAbove": 40
+                }
+            },
+            "description": "A lamp that lights when a value crosses a limit",
             "displayName": "Warning",
             "editableProps": [
                 {
                     "def": "",
                     "key": "label",
                     "kind": "string",
-                    "label": "Light text"
+                    "label": "Light text",
+                    "section": "look"
                 },
                 {
                     "def": null,
                     "key": "triggerAbove",
                     "kind": "real",
                     "label": "Trigger above",
-                    "paramUnit": true
+                    "paramUnit": true,
+                    "section": "range"
                 },
                 {
                     "def": null,
                     "key": "triggerBelow",
                     "kind": "real",
                     "label": "Trigger below",
-                    "paramUnit": true
+                    "paramUnit": true,
+                    "section": "range"
                 },
                 {
                     "def": false,
                     "key": "pulse",
                     "kind": "bool",
-                    "label": "Pulse"
+                    "label": "Pulse",
+                    "section": "look"
                 },
                 {
                     "def": 0,
@@ -514,7 +890,8 @@
                     "kind": "real",
                     "label": "Max size (dp, 0 = fill)",
                     "max": 400,
-                    "min": 0
+                    "min": 0,
+                    "section": "advanced"
                 }
             ],
             "glyph": "⚠",
@@ -531,11 +908,15 @@
         },
         {
             "aspect": 1,
+            "category": "Motion",
             "colorProps": [
                 "dotColor"
             ],
             "defaultColSpan": 4,
             "defaultRowSpan": 4,
+            "demo": {
+            },
+            "description": "Cornering and braking forces from the motion sensor",
             "displayName": "G-Force",
             "editableProps": [
                 {
@@ -544,19 +925,22 @@
                     "kind": "real",
                     "label": "Max G",
                     "max": 5,
-                    "min": 0.2
+                    "min": 0.2,
+                    "section": "range"
                 },
                 {
                     "def": true,
                     "key": "showTrail",
                     "kind": "bool",
-                    "label": "Trail"
+                    "label": "Trail",
+                    "section": "look"
                 },
                 {
                     "def": true,
                     "key": "showValue",
                     "kind": "bool",
-                    "label": "Readout"
+                    "label": "Readout",
+                    "section": "look"
                 }
             ],
             "glyph": "◎",
@@ -572,18 +956,23 @@
         },
         {
             "aspect": 1,
+            "category": "Motion",
             "colorProps": [
                 "northColor"
             ],
             "defaultColSpan": 4,
             "defaultRowSpan": 4,
+            "demo": {
+            },
+            "description": "Heading from the motion sensor",
             "displayName": "Compass",
             "editableProps": [
                 {
                     "def": true,
                     "key": "showDegrees",
                     "kind": "bool",
-                    "label": "Degrees"
+                    "label": "Degrees",
+                    "section": "look"
                 }
             ],
             "glyph": "N",
@@ -599,30 +988,37 @@
         },
         {
             "aspect": 3.5,
+            "category": "Media",
             "colorProps": [
                 "progressColor"
             ],
             "defaultColSpan": 6,
             "defaultRowSpan": 2,
+            "demo": {
+            },
+            "description": "The song playing, with cover art and progress",
             "displayName": "Now Playing",
             "editableProps": [
                 {
                     "def": true,
                     "key": "showArt",
                     "kind": "bool",
-                    "label": "Album art"
+                    "label": "Album art",
+                    "section": "look"
                 },
                 {
                     "def": true,
                     "key": "showArtist",
                     "kind": "bool",
-                    "label": "Artist"
+                    "label": "Artist",
+                    "section": "look"
                 },
                 {
                     "def": true,
                     "key": "showProgress",
                     "kind": "bool",
-                    "label": "Progress"
+                    "label": "Progress",
+                    "section": "look"
                 }
             ],
             "glyph": "♪",
@@ -638,11 +1034,15 @@
         },
         {
             "aspect": 3,
+            "category": "Media",
             "colorProps": [
                 "accentColor"
             ],
             "defaultColSpan": 4,
             "defaultRowSpan": 2,
+            "demo": {
+            },
+            "description": "Previous, play / pause and next",
             "displayName": "Media Keys",
             "editableProps": [
             ],
@@ -659,24 +1059,30 @@
         },
         {
             "aspect": 2,
+            "category": "Time",
             "colorProps": [
                 "valueColor"
             ],
             "defaultColSpan": 4,
             "defaultRowSpan": 2,
+            "demo": {
+            },
+            "description": "The time, and the date if you like",
             "displayName": "Clock",
             "editableProps": [
                 {
                     "def": true,
                     "key": "showDate",
                     "kind": "bool",
-                    "label": "Date"
+                    "label": "Date",
+                    "section": "look"
                 },
                 {
                     "def": false,
                     "key": "showSeconds",
                     "kind": "bool",
-                    "label": "Seconds"
+                    "label": "Seconds",
+                    "section": "look"
                 }
             ],
             "glyph": "12",

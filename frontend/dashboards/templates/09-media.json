@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "id": "media",
+  "label": "Media + gauges",
+  "description": "The music on top, two dials under it",
+  "order": 9,
+  "gridColumns": 6,
+  "gridRows": 4,
+  "cells": [
+    {
+      "type": "NowPlayingWidget",
+      "col": 0,
+      "row": 0,
+      "colSpan": 4,
+      "rowSpan": 1
+    },
+    {
+      "type": "MediaControlsWidget",
+      "col": 4,
+      "row": 0,
+      "colSpan": 2,
+      "rowSpan": 1
+    },
+    {
+      "type": "CircularGauge",
+      "col": 0,
+      "row": 1,
+      "colSpan": 3,
+      "rowSpan": 3,
+      "slot": {
+        "prefer": [
+          "SPEED"
+        ],
+        "kinds": [
+          "numeric"
+        ]
+      }
+    },
+    {
+      "type": "CircularGauge",
+      "col": 3,
+      "row": 1,
+      "colSpan": 3,
+      "rowSpan": 3,
+      "slot": {
+        "prefer": [
+          "RPM"
+        ],
+        "kinds": [
+          "numeric"
+        ]
+      }
+    }
+  ]
+}

@@ -98,6 +98,24 @@ take no `paramId`):
 | `labelColor`   | color   | `App.Style.obdLabelColor`   | Override label tint.                                           |
 | `valueColor`   | color   | `App.Style.obdValueColor`   | Override value tint.                                           |
 
+**Alerts.** The value gauges (Circular, Arc, Bar, Segmented, Linear,
+DigitalReadout, Sparkline) share one warning / critical rule,
+`frontend/gauges/AlertLevel.js`:
+
+| Property | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `warnAbove`, `warnBelow` | real | `NaN` | Warning at or past this value (inclusive). |
+| `critAbove`, `critBelow` | real | `NaN` | Critical at or past this value; critical wins over warning. |
+| `alertFlash` | bool | `false` | Blink the value (400 ms on, 400 ms off) while critical. |
+| `warnColor`, `critColor` | color | `statusWarning` (amber), `statusDanger` (red) | |
+| `alertLevel` | int (read-only) | | 0 normal, 1 warning, 2 critical; always 0 without a reading. |
+
+At a warning or critical level the value text and the fill (arc, bar, line,
+lit segments) take that level's colour. Circular and Arc also draw each band
+as a thin arc on the inner edge of the scale (warning bands stop where a
+critical one starts); `redlineStart` stays a separate red zone. All four
+limits are `paramUnit` props (stored in the PID's own unit, §5.5).
+
 ### 3.1 `CircularGauge`
 
 Arc-sweep dial with optional ticks, needle, redline, and center readout.
@@ -124,10 +142,10 @@ Horizontal or vertical filled bar. Good for temperatures, fuel, throttle.
 | Property       | Type   | Default      | Notes                                                   |
 | -------------- | ------ | ------------ | ------------------------------------------------------- |
 | `orientation`  | string | `"horizontal"` | or `"vertical"`                                       |
-| `warnAbove`    | real   | `NaN`        | If set, bar turns `warnColor` once `value >= warnAbove`.|
+| `warnAbove`, `critAbove`, ... | real | `NaN` | The shared alerts (§3): the bar and its value turn amber / red. |
 | `showLabel`    | bool   | `true`       | Header/title.                                           |
 | `showValue`    | bool   | `true`       | Current value text.                                     |
-| `trackColor`, `fillColor`, `warnColor` | color | theme | Manual overrides.      |
+| `trackColor`, `fillColor`, `warnColor`, `critColor` | color | theme | Manual overrides. |
 
 ### 3.3 `LinearGauge`
 
@@ -264,10 +282,10 @@ plot or the vehicle's shift-light rules.
 | Property | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `segmentCount` | int | `20` | 2–40 segments. |
-| `warnAbove` | real | `NaN` | At or above this value, lit segments and the readout use `warnColor`. Upper-band segments have a dim warning outline. |
+| `warnAbove`, `critAbove`, ... | real | `NaN` | The shared alerts (§3). Each lit segment past `warnAbove` / `critAbove` takes that level's colour, like a shift-light strip, and has a dim outline when unlit. |
 | `showLabel`, `showValue` | bool | `true` | Header title / numeric value. |
 | `decimals` | int | `0` | 0–4 decimal places. |
-| `fillColor`, `trackColor`, `warnColor`, `labelColor`, `valueColor` | color | theme | The editor's Color row overrides `fillColor`. |
+| `fillColor`, `trackColor`, `warnColor`, `critColor`, `labelColor`, `valueColor` | color | theme | The editor's Color row overrides `fillColor`. |
 | `hasValue` | readonly bool | finite `value` | Missing and non-finite samples show `--`, fill no segments and never activate the warning. A real zero displays `0`. |
 
 The usual `paramId`, `title`, `unit`, `min`, `max`, and manual `value`
@@ -382,9 +400,16 @@ Per cell: `type` matches a widget registered in `WidgetCatalog` — the gauge pr
 
 ### 5.3 Add a user dashboard
 
-**Primary path — the in-app editor (Phase 3, shipped).** In the dashboard
-chooser (square Dashboards button at the top-right of `OBDMenu.qml`), tap
-**+ New** — or **Edit** on a user dashboard, or **Copy** to fork a built-in.
+**Primary path — the in-app editor.** In the dashboard chooser (square
+Dashboards button at the top-right of `OBDMenu.qml`), tap **+ New** — or
+**Edit** on a user dashboard, or **Customize** on a built-in (the editor
+opens on an unsaved copy named "… (mine)", saved under its own id on Done).
+**+ New** opens the template gallery (`TemplateGallery.qml`): live
+miniatures of `frontend/dashboards/templates/*.json` (Hero + 4, 2 up, 2 × 2,
+3 × 2, Six-field strip, Track, Economy, Towing temps, Media + gauges,
+Blank), each slot filled with the PIDs the connected car reports
+(`dashboardManager.fromTemplate(id, supported)`, see §5.6), laid out again
+on the screen's grid density when the editor opens.
 The editor is full screen and touch first (select, then manipulate): tap a
 widget to select it, and a floating toolbar offers **Data** (the PID picker),
 **Settings**, **S / M / L** sizes (from the catalog's `minSize` / `aspect`),
@@ -399,11 +424,18 @@ never below the widget's readable minimum. The grid is Coarse / Normal / Fine
 least 12 mm on the screen). Undo / Redo (top bar, Ctrl+Z / Ctrl+Y) step
 through up to 50 edits. **Settings** opens the properties panel as a side
 sheet (bottom sheet in portrait) and zooms the dashboard to fit beside it.
-The panel runs, top to bottom: **PID** → **Position & Size** steppers →
-**Options** (the widget's `editableProps`) → **Label & Range** (title / unit /
-min / max overrides; empty = follow the PID; warns when min ≥ max) → **Color**
-(swatches; "T" = theme/unset; one pick writes every `colorProps` key) →
-**Remove**. Saving writes the JSON below through
+The widget gallery (`PalettePopup.qml`, from Add here / + Add) shows every
+widget live on its catalog `demo` PID, by `category`, with its `description`
+and a search; **What do you want to see?** asks for a PID first and places
+the widget the catalog's `suggestions` propose for it, already bound. The
+PID picker lists parameters by system (`group`), the last few picks under
+Recent, with live values. The settings sheet has sections: **Data** (the PID
+and its live value) · **Look** (title / unit overrides, colour swatches, the
+`section: "look"` options) · **Range & alerts** (min / max, warning /
+critical limits, flash, and a **Test value** slider that drives this widget
+only and is never saved) · **Advanced** (the other options, position and
+size steppers) · **JSON** (the props as text, applied through the spec
+rules) → **Remove**. Saving writes the JSON below through
 `dashboardManager.saveDashboard()` and the chooser refreshes immediately.
 Editor sources live in `frontend/dashboards/editor/` (`DashboardEditor`,
 `EditorCanvas`, `PalettePopup`, `PIDPicker`, `PropertiesPanel`); the widget
@@ -465,12 +497,12 @@ is needed. `dashboardManager.refresh()` forces an immediate rescan.
 
 - **Range props are in the PID's own unit.** A spec's `min`, `max` (for
   widgets with `rangeProps`) and the thresholds a widget's `editableProps`
-  mark `"paramUnit": true` (`redlineStart`, `warnAbove`, `triggerAbove`,
-  `triggerBelow`) are written in the parameter's catalog unit (°C, MPH, m),
+  mark `"paramUnit": true` (`redlineStart`, `warnAbove` / `warnBelow` /
+  `critAbove` / `critBelow`, `triggerAbove`, `triggerBelow`) are written in the parameter's catalog unit (°C, MPH, m),
   whatever the user's display units. `WidgetCatalog.paramUnitProps(type)`
   lists them; `DashboardRenderer` and the editor canvas bind them through
   `OBDParameterModel.toDisplay`, and the properties panel shows and stores
-  them converted, so `sport.json`'s `warnAbove: 105` on coolant means 221 °F
+  them converted, so `sport.json`'s `critAbove: 105` on coolant means 221 °F
   for a °F user. A new threshold prop in parameter units needs the flag.
 - **Gate.** `OBDParameterModel` mirrors `obdManager.vehicleSupportedParameters`
   / `vehicleScanComplete` — this session's scan only, cleared on disconnect —
@@ -487,6 +519,26 @@ is needed. `dashboardManager.refresh()` forces an immediate rescan.
   (`DashboardEditor` canvas), `"home"` (`HomeOBDView`), `"carMenu"` (RPM/SPEED
   for the 3D Jeep while `CarMenu` is visible), `"settings"`
   (`OBDSettingsPage`). Backend side: `wiki/obd-manager.html`.
+
+### 5.6 Templates
+
+`frontend/dashboards/templates/*.json` are the starting points **+ New**
+offers, in their `order`. A template is a schema-1 spec on the Normal 6 × 4
+grid plus `id`, `label`, `description` and `order`, whose cells name a
+`slot` instead of (or as well as) a `paramId`:
+
+```json
+{ "type": "ArcGauge", "col": 0, "row": 0, "colSpan": 3, "rowSpan": 2,
+  "slot": { "prefer": ["COOLANT_TEMP", "OIL_TEMP"], "kinds": ["temperature"] } }
+```
+
+`dashboardManager.fromTemplate(id, supported)` fills each slot with the first
+`prefer` id the car reports (`supported`; empty = no car known, so the first
+preferred), else the first reported id of one of its `kinds`, never one
+another slot took; a slot nothing fits stays unbound and shows "Choose
+data" in the editor. IMU ids count as reported. The result has no `id` and
+goes through the spec rules. `tst_dashboardmanager` checks every template
+loads, fits its grid and names only known PIDs and widgets.
 
 ### Legacy recipe (pure-QML dashboard)
 
@@ -700,6 +752,11 @@ polled as PID 0x0E and counts as supported whenever timing advance does.
    missing there won't render or be placeable. Then regenerate
    `docs/api/` (`./build/octave --dump-api docs/api`). Each entry declares:
    - `type`, `displayName`, `glyph`, `defaultColSpan` / `defaultRowSpan`
+     (for a 12 × 6 grid; the editor scales them to the dashboard's)
+   - `category` — one of the catalog's `categories` (the gallery's tabs);
+     `description` — one line for the gallery card; `demo` —
+     `{ paramId, props }` the gallery miniature runs on (`{}` for
+     self-binding widgets)
    - `minSize` — `{ "w", "h" }` in dp: the smallest size the widget stays
      readable at (check it with `tst_dashboardwidgets` `smallCellBounds`);
      `aspect` — its natural width / height. The editor's minimum span and
@@ -712,11 +769,15 @@ polled as PID 0x0E and counts as supported whenever timing advance does.
    - `colorProps` — the color props the single Color swatch row writes, all
      set to the same value (e.g. `["fillColor", "needleColor"]`); `[]` hides
      the row. Swatches come from the catalog's `colorSwatches`.
-   - `editableProps` — `{ key, label, kind, def[, min, max][, options] }` with
+   - `editableProps` — `{ key, label, kind, def, section[, min, max][, options][, paramUnit] }` with
      `kind` ∈ `bool` (switch) · `int` / `real` (number field, clamped to
      `min`/`max`) · `string` (text field) · `enum` (segmented buttons over
      `options`). `def` is the gauge's real default (`null` for NaN-when-unset
-     thresholds). Keep it in step with the gauge's own `octaveEditableProps`.
+     thresholds). `section` ∈ `look` · `range` · `advanced`: where the
+     settings sheet shows it. A value gauge lists the shared alert props
+     (§3). Keep it in step with the gauge's own `octaveEditableProps`.
+   - If a kind of parameter suits the new widget best, point the catalog's
+     `suggestions.byKind` (or `byId`) at it: data-first add proposes it.
 7. Add an entry to this document under §3.
 
 ### Needle/angle math cheat sheet
@@ -769,23 +830,29 @@ frontend/
 │   ├── SparklineGauge.qml     rolling history line (timer-sampled)
 │   ├── WarningLight.qml       binary tell-tale indicator bound to a threshold
 │   ├── GForceGauge.qml        2D G-dot + trail (self-binding: LATERAL_G/LONGITUDINAL_G)
-│   └── CompassGauge.qml       rotating compass card (self-binding: HEADING)
+│   ├── CompassGauge.qml       rotating compass card (self-binding: HEADING)
+│   ├── SegmentedGauge.qml     row of lit segments (shift-light strip)
+│   └── AlertLevel.js          the value gauges' shared warning / critical rule and bands
 ├── dashboards/
 │   ├── widgets/               self-binding non-gauge dashboard widgets
 │   │   ├── NowPlayingWidget.qml    art + title + artist + progress (local/phone)
 │   │   └── MediaControlsWidget.qml prev / play-pause / next transport
 │   ├── DashboardRenderer.qml  JSON spec → grid of widget instances
-│   ├── widget-catalog.json    the catalog data: palette metadata, spans,
+│   ├── widget-catalog.json    the catalog data: gallery metadata (category,
+│   │                          description, demo), spans and sizes,
 │   │                          supportedKinds, label/range/color flags,
-│   │                          editableProps, colorSwatches
+│   │                          editableProps (with section), colorSwatches,
+│   │                          categories, suggestions
 │   ├── WidgetCatalog.qml      singleton: that data (dashboardManager.
 │   │                          widgetCatalog) + each type's url
-│   ├── editor/                Phase 3 in-app editor ("create-a-park")
-│   │   ├── DashboardEditor.qml   full-screen page; owns the working spec
-│   │   ├── EditorCanvas.qml      tap-to-place targets, drag-to-move, corner resize grip
-│   │   ├── PalettePopup.qml      widget palette (reads WidgetCatalog)
-│   │   ├── PIDPicker.qml         searchable PID list, kind-filtered, vehicle-gated
-│   │   └── PropertiesPanel.qml   PID / position & size / options / label & range / color
+│   ├── editor/                the in-app editor (docs/DASHBOARD_EDITOR_REVIEW.md)
+│   │   ├── DashboardEditor.qml   full-screen page; owns the working spec, toolbar, sheet, undo
+│   │   ├── EditorCanvas.qml      dot grid, select-then-drag with live push, resize grip
+│   │   ├── TemplateGallery.qml   "+ New": live template miniatures, filled from the car
+│   │   ├── PalettePopup.qml      widget gallery: live miniatures, categories, data first
+│   │   ├── PIDPicker.qml         PID list by system, recents, live values, vehicle-gated
+│   │   └── PropertiesPanel.qml   settings sheet: Data / Look / Range & alerts / Advanced / JSON
+│   ├── templates/             starting points for + New (slots filled by fromTemplate)
 │   └── presets/               built-in dashboard JSON specs (ship with bundle)
 │       ├── sport.json         big speed + RPM dial + vitals strip
 │       ├── minimal.json       three round gauges: speed, RPM, fuel

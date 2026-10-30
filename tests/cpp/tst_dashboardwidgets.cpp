@@ -41,6 +41,7 @@ private slots:
         themes = std::make_unique<ThemeCatalog>(frontend + "/themes.json");
         dashboards = std::make_unique<DashboardManager>();
         dashboards->setWidgetCatalogFile(frontend + "/dashboards/widget-catalog.json");
+        dashboards->setTemplatesDir(frontend + "/dashboards/templates");
         settings = std::make_unique<QQmlPropertyMap>();
         settings->insert("clockFormat24Hour", true);
         settings->insert("showClock", false);
@@ -79,10 +80,10 @@ private slots:
         QCOMPARE(root->property("_litSegments").toInt(), 10); // catalog RPM max = 8000
 
         root->setProperty("warnAbove", 3500);
-        QVERIFY(root->property("_warning").toBool());
+        QVERIFY(root->property("alertLevel").toInt() > 0);
         root->setProperty("value", qQNaN());
         QVERIFY(!root->property("hasValue").toBool());
-        QVERIFY(!root->property("_warning").toBool());
+        QVERIFY(!root->property("alertLevel").toInt() > 0);
         QCOMPARE(root->property("_litSegments").toInt(), 0);
         root->setProperty("value", qInf());
         QVERIFY(!root->property("hasValue").toBool());
@@ -126,13 +127,13 @@ private slots:
         auto *gauge = findVisual(item, "segmentedValue")->parentItem()->parentItem();
         store->ingest("COOLANT_TEMP", 100);
         QTRY_COMPARE(gauge->property("value").toDouble(), 100.0);
-        QVERIFY(gauge->property("_warning").toBool());
+        QVERIFY(gauge->property("alertLevel").toInt() > 0);
         catalog->setDisplayUnits("F", "mph", "m");
         QTRY_COMPARE(gauge->property("unit").toString(), QStringLiteral("°F"));
         QCOMPARE(gauge->property("warnAbove").toDouble(), 212.0);
         QCOMPARE(gauge->property("value").toDouble(), 212.0);
         QCOMPARE(gauge->property("min").toDouble(), 32.0);
-        QVERIFY(gauge->property("_warning").toBool());
+        QVERIFY(gauge->property("alertLevel").toInt() > 0);
     }
 
     // Every PID gauge: no sample is "--" with nothing drawn and no warning;
@@ -142,14 +143,55 @@ private slots:
         QTest::addColumn<QString>("file");
         QTest::addColumn<QString>("threshold"); // a warning prop set low enough to fire on 0
         QTest::addColumn<QString>("warningProp");
-        QTest::newRow("Circular") << "gauges/CircularGauge.qml" << "" << "";
-        QTest::newRow("Arc") << "gauges/ArcGauge.qml" << "" << "";
-        QTest::newRow("Bar") << "gauges/BarGauge.qml" << "warnAbove" << "_warning";
-        QTest::newRow("Linear") << "gauges/LinearGauge.qml" << "" << "";
-        QTest::newRow("Digital") << "gauges/DigitalReadout.qml" << "" << "";
-        QTest::newRow("Sparkline") << "gauges/SparklineGauge.qml" << "" << "";
+        for (const char *g : {"Circular", "Arc", "Bar", "Linear", "Segmented", "Sparkline"})
+            QTest::newRow(g) << QStringLiteral("gauges/%1Gauge.qml").arg(QLatin1String(g)) << "warnAbove" << "alertLevel";
+        QTest::newRow("Digital") << "gauges/DigitalReadout.qml" << "critAbove" << "alertLevel";
         QTest::newRow("Warning") << "gauges/WarningLight.qml" << "triggerBelow" << "_active";
-        QTest::newRow("Segmented") << "gauges/SegmentedGauge.qml" << "warnAbove" << "_warning";
+    }
+
+    // The shared alert rule: warning and critical limits, above and below,
+    // inclusive; critical wins; the dials draw a band for each
+    void alertLevels_data()
+    {
+        QTest::addColumn<QString>("file");
+        for (const char *g : {"Circular", "Arc", "Bar", "Linear", "Segmented", "Sparkline"})
+            QTest::newRow(g) << QStringLiteral("gauges/%1Gauge.qml").arg(QLatin1String(g));
+        QTest::newRow("Digital") << "gauges/DigitalReadout.qml";
+    }
+
+    void alertLevels()
+    {
+        QFETCH(QString, file);
+        QVERIFY(load(file));
+        root->setProperty("min", 0);
+        root->setProperty("max", 100);
+        root->setProperty("warnAbove", 70);
+        root->setProperty("critAbove", 90);
+        root->setProperty("warnBelow", 20);
+        root->setProperty("critBelow", 10);
+        const QList<QPair<double, int>> cases{{50, 0}, {70, 1}, {89, 1}, {90, 2}, {100, 2},
+                                              {20, 1}, {11, 1}, {10, 2}, {0, 2}};
+        for (const auto &c : cases) {
+            root->setProperty("value", c.first);
+            QVERIFY2(root->property("alertLevel").toInt() == c.second,
+                     qPrintable(QStringLiteral("%1 -> %2").arg(c.first).arg(root->property("alertLevel").toInt())));
+        }
+        root->setProperty("value", qQNaN());
+        QCOMPARE(root->property("alertLevel").toInt(), 0);
+        if (file.contains("Circular") || file.contains("Arc")) {
+            const QVariantList bands = root->property("_bands").toList();
+            QCOMPARE(bands.size(), 4);
+            // The warning band stops where the critical one starts
+            QCOMPARE(bands.at(0).toMap().value("from").toDouble(), 0.7);
+            QCOMPARE(bands.at(0).toMap().value("to").toDouble(), 0.9);
+        }
+        // Flash: the critical value blinks only when asked to
+        root->setProperty("value", 95);
+        QCOMPARE(root->property("_alertOpacity").toDouble(), 1.0);
+        root->setProperty("alertFlash", true);
+        QTRY_VERIFY(root->property("_alertOpacity").toDouble() < 1.0);
+        root->setProperty("value", 50);
+        QTRY_COMPARE(root->property("_alertOpacity").toDouble(), 1.0);
     }
 
     void missingIsNotZero()
@@ -590,6 +632,153 @@ private slots:
         QVERIFY(dialog);
         invoke(editor, "close");
         QTRY_VERIFY(dialog->property("opened").toBool());
+    }
+
+    // Phase 2: a dashboard from a template, data-first add, the settings
+    // sheet's sections, Test value and JSON, and the PID picker's groups
+    void editorCreationAndSettings()
+    {
+        QQmlComponent component(engine.get());
+        component.setData(QString(R"qml(
+            import QtQuick
+            import QtQuick.Controls
+            import "%1/dashboards/editor" as Editor
+            ApplicationWindow {
+                width: 1280; height: 720; visible: true
+                property alias editor: ed
+                property alias fromTemplate: tpl
+                property alias picker: pk
+                Editor.DashboardEditor { id: ed; anchors.fill: parent; autoDensity: false }
+                Editor.DashboardEditor {
+                    id: tpl; visible: false; width: 1280; height: 720; autoDensity: false
+                    initialSpec: dashboardManager.fromTemplate("hero-4", [])
+                }
+                Editor.PIDPicker { id: pk }
+            }
+        )qml").arg(QUrl::fromLocalFile(frontend).toString()).toUtf8(), QUrl());
+        root.reset(component.create());
+        QVERIFY2(root, qPrintable(component.errorString()));
+        auto *window = qobject_cast<QQuickWindow *>(root.get());
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QObject *editor = qvariant_cast<QObject *>(root->property("editor"));
+        QObject *tpl = qvariant_cast<QObject *>(root->property("fromTemplate"));
+        QObject *picker = qvariant_cast<QObject *>(root->property("picker"));
+        QVERIFY(editor && tpl && picker);
+        auto cellAt = [editor](int i) { return editor->property("cells").toList().at(i).toMap(); };
+
+        // From a template: its cells and name, nothing to save or undo yet
+        QCOMPARE(tpl->property("cells").toList().size(), 5);
+        QCOMPARE(tpl->property("editingId").toString(), QString());
+        QVERIFY(!tpl->property("dirty").toBool());
+        QVERIFY(!tpl->property("canUndo").toBool());
+
+        // Data first: the suggested widget, already bound, no picker
+        QVERIFY(invoke(editor, "addForParam", {"COOLANT_TEMP"}).toBool());
+        QCOMPARE(cellAt(0).value("type").toString(), QStringLiteral("ArcGauge"));
+        QCOMPARE(cellAt(0).value("paramId").toString(), QStringLiteral("COOLANT_TEMP"));
+        QVERIFY(invoke(editor, "addForParam", {"LATERAL_G"}).toBool());
+        QCOMPARE(cellAt(1).value("type").toString(), QStringLiteral("GForceGauge"));
+        QCOMPARE(cellAt(1).value("paramId").toString(), QString());   // reads its own data
+        QVERIFY(invoke(editor, "addForParam", {"SPEED"}).toBool());
+        QCOMPARE(cellAt(2).value("type").toString(), QStringLiteral("DigitalReadout"));
+        auto *pidPicker = root->findChild<QObject *>("pidPicker");
+        QVERIFY(!pidPicker || !pidPicker->property("opened").toBool());
+
+        auto widgetAt = [window](int i) -> QObject * {
+            auto *cell = findVisual(window->contentItem(), QStringLiteral("editorCell_%1").arg(i));
+            auto *loader = cell ? findVisual(cell, QStringLiteral("editorWidgetLoader")) : nullptr;
+            return loader ? qvariant_cast<QObject *>(loader->property("item")) : nullptr;
+        };
+
+        // The sheet: sections for what the widget has
+        invoke(editor, "select", {0});
+        invoke(editor, "openSheet");
+        QTRY_VERIFY(findVisual(window->contentItem(), "editorPanel")->isVisible());
+        QVERIFY(findVisual(window->contentItem(), "panelSection_data"));
+        QVERIFY(findVisual(window->contentItem(), "panelSection_range"));
+        QVERIFY(findVisual(window->contentItem(), "panelSection_json"));
+
+        // Test value: this widget shows it, with its alert level; Live drops it
+        invoke(editor, "setCellProp", {0, "critAbove", 90});
+        QTRY_VERIFY(widgetAt(0) && widgetAt(0)->property("critAbove").toDouble() == 90);
+        invoke(editor, "setTestValue", {0, 100});
+        QTRY_COMPARE(widgetAt(0)->property("value").toDouble(), 100.0);
+        QCOMPARE(widgetAt(0)->property("alertLevel").toInt(), 2);
+        invoke(editor, "clearTestValue", {0});
+        QTRY_VERIFY(widgetAt(0) && !widgetAt(0)->property("hasValue").toBool());   // live again: no reading
+        // ...and never in the spec
+        QVERIFY(!cellAt(0).value("props").toMap().contains("value"));
+
+        // JSON: applied through the spec rules, the rest reported
+        QString status = invoke(editor, "setCellPropsJson", {0, R"({"critAbove": 95, "bogus": {"a": 1}})"}).toString();
+        QVERIFY2(status.contains("bogus"), qPrintable(status));
+        QCOMPARE(cellAt(0).value("props").toMap().value("critAbove").toDouble(), 95.0);
+        QVERIFY(!cellAt(0).value("props").toMap().contains("bogus"));
+        status = invoke(editor, "setCellPropsJson", {0, "{ nope"}).toString();
+        QVERIFY(status.startsWith("Not valid JSON"));
+        QCOMPARE(cellAt(0).value("props").toMap().value("critAbove").toDouble(), 95.0);
+
+        // A widget without a PID has no Data section
+        invoke(editor, "select", {1});
+        QTRY_VERIFY(!findVisual(window->contentItem(), "panelSection_data"));
+
+        // PID picker: grouped by system in catalog order, recent picks first
+        picker->setProperty("supportedKinds", QStringList{"*"});
+        QVERIFY(QMetaObject::invokeMethod(picker, "open"));
+        QTRY_VERIFY(picker->property("opened").toBool());
+        QVariantList rows = picker->property("_rows").toList();
+        QCOMPARE(rows.first().toMap().value("label").toString(), QStringLiteral("Engine"));
+        QStringList headers;
+        for (const QVariant &r : rows)
+            if (r.toMap().value("header").toBool())
+                headers << r.toMap().value("label").toString();
+        QCOMPARE(headers, catalog->groups());
+        QVERIFY(QMetaObject::invokeMethod(picker, "_pick", Q_ARG(QVariant, QVariant("OIL_TEMP"))));
+        rows = picker->property("_rows").toList();
+        QCOMPARE(rows.at(0).toMap().value("label").toString(), QStringLiteral("Recent"));
+        QCOMPARE(rows.at(1).toMap().value("pid").toString(), QStringLiteral("OIL_TEMP"));
+        // Only temperatures for a widget that takes them
+        picker->setProperty("supportedKinds", QStringList{"temperature"});
+        for (const QVariant &r : picker->property("_rows").toList())
+            if (!r.toMap().value("header").toBool())
+                QVERIFY(ParameterCatalog::find(r.toMap().value("pid").toString())->kind == "temperature");
+    }
+
+    // "+ New": a live card per template; a tap hands over the filled spec;
+    // the demo data it ran on is put back as it was
+    void templateGalleryPicks()
+    {
+        QQmlComponent component(engine.get());
+        component.setData(QString(R"qml(
+            import QtQuick
+            import QtQuick.Controls
+            import "%1/dashboards/editor" as Editor
+            ApplicationWindow {
+                width: 1280; height: 720; visible: true
+                property alias gallery: g
+                property var picked: null
+                Editor.TemplateGallery { id: g; onTemplatePicked: function(spec) { picked = spec } }
+            }
+        )qml").arg(QUrl::fromLocalFile(frontend).toString()).toUtf8(), QUrl());
+        root.reset(component.create());
+        QVERIFY2(root, qPrintable(component.errorString()));
+        auto *window = qobject_cast<QQuickWindow *>(root.get());
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QObject *gallery = qvariant_cast<QObject *>(root->property("gallery"));
+        QVERIFY(QMetaObject::invokeMethod(gallery, "open"));
+        QTRY_VERIFY(gallery->property("opened").toBool());
+        QTRY_VERIFY(findVisual(window->contentItem(), "templateCard_hero-4"));
+        QVERIFY(findVisual(window->contentItem(), "templateCard_blank"));
+        auto *card = findVisual(window->contentItem(), "templateCard_two-up");
+        QVERIFY(card);
+        QTRY_VERIFY(card->width() > 0 && card->height() > card->width() * 0.62);   // laid out
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
+                          card->mapToScene(QPointF(card->width() / 2, card->height() / 2)).toPoint());
+        QTRY_VERIFY(!gallery->property("opened").toBool());
+        const QVariantMap spec = root->property("picked").toMap();
+        QCOMPARE(spec.value("label").toString(), QStringLiteral("2 up"));
+        QCOMPARE(spec.value("cells").toList().size(), 2);
+        QCOMPARE(spec.value("cells").toList().at(0).toMap().value("paramId").toString(), QStringLiteral("RPM"));
     }
 
 private:

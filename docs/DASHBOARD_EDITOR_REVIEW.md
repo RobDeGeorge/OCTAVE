@@ -150,7 +150,7 @@ Ordered so each phase is shippable and the next one builds on it. Effort: S < 1 
 - Density setting and the new default; dot grid; tap-empty "Add here".
 - Settings sheet with zoom-to-fit canvas.
 
-**Phase 2 — creation and settings (L)**
+**Phase 2 — creation and settings (L)** — built and tested on the desktop 2026-10-30: ten templates (`frontend/dashboards/templates/`, slots filled by `dashboardManager.fromTemplate`), Customize on built-ins (an unsaved copy), the widget gallery with live miniatures / categories / search / data-first, the PID picker by system with recents and live values, and the sheet in Data / Look / Range & alerts / Advanced / JSON with warning + critical limits (`warnAbove` / `warnBelow` / `critAbove` / `critBelow`, `alertFlash`) on every value gauge and a Test value slider
 - Template gallery with live previews and PID auto-fill from the car's supported list; "Customize" on built-ins.
 - Widget gallery with live miniatures, categories and descriptions; data-first add.
 - PID picker by system, with recents, live values and no auto-keyboard.

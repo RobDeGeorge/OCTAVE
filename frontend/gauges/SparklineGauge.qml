@@ -13,6 +13,7 @@
 
 import QtQuick 2.15
 import ".." as App
+import "AlertLevel.js" as Alerts
 
 Item {
     id: root
@@ -47,6 +48,28 @@ Item {
     // NaN = no reading: "--", and a gap in the trace (never a fake 0)
     property real value: App.OBDParameterModel.sample(paramId)
     readonly property bool hasValue: isFinite(value)
+
+    // ── Alerts (gauges/AlertLevel.js) ───────────────────────────────
+    // Limits in the display unit, NaN = unset. Level 1 colours the value
+    // warnColor, level 2 critColor; alertFlash blinks it while critical.
+    property real warnAbove: NaN
+    property real warnBelow: NaN
+    property real critAbove: NaN
+    property real critBelow: NaN
+    property bool alertFlash: false
+    property color warnColor: App.Style.statusWarning
+    property color critColor: App.Style.statusDanger
+    readonly property int alertLevel: Alerts.level(value, warnAbove, warnBelow, critAbove, critBelow)
+    readonly property color _alertColor: alertLevel === 2 ? critColor : warnColor
+    property bool _flashOn: true
+    readonly property real _alertOpacity: (alertFlash && alertLevel === 2 && !_flashOn) ? 0.3 : 1.0
+    Timer {
+        running: root.alertFlash && root.alertLevel === 2
+        interval: 400
+        repeat: true
+        onTriggered: root._flashOn = !root._flashOn
+        onRunningChanged: if (!running) root._flashOn = true
+    }
     property int decimals: 0
 
     // ── Style ───────────────────────────────────────────────────────
@@ -127,7 +150,8 @@ Item {
             width: Math.min(implicitWidth, parent.width)
             text: (root.hasValue ? root.value.toFixed(Math.max(0, Math.min(4, root.decimals))) : "--")
                   + (root.unit ? " " + root.unit : "")
-            color: root.valueColor
+            color: root.alertLevel > 0 ? root._alertColor : root.valueColor
+            opacity: root._alertOpacity
             font.pixelSize: root._fontPx
             font.bold: true
             font.family: App.Style.fontFamily
@@ -171,7 +195,7 @@ Item {
             property real rangeMin: root._rangeMin
             property real rangeSpan: root._rangeSpan
             property int maxSamples: root.maxSamples
-            property color lineColor: root.lineColor
+            property color lineColor: root.alertLevel > 0 ? root._alertColor : root.lineColor
             property color fillColor: root.fillColor
             property bool fillBelow: root.fillBelow
 

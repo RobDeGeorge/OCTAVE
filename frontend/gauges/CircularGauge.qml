@@ -13,6 +13,7 @@
 import QtQuick 2.15
 import QtQuick.Shapes 1.15
 import ".." as App
+import "AlertLevel.js" as Alerts
 
 Item {
     id: root
@@ -53,6 +54,28 @@ Item {
     // NaN = no reading yet: "--", no fill or needle, no redline colour
     property real value: App.OBDParameterModel.sample(paramId)
     readonly property bool hasValue: isFinite(value)
+
+    // ── Alerts (gauges/AlertLevel.js) ───────────────────────────────
+    // Limits in the display unit, NaN = unset. Level 1 colours the value
+    // warnColor, level 2 critColor; alertFlash blinks it while critical.
+    property real warnAbove: NaN
+    property real warnBelow: NaN
+    property real critAbove: NaN
+    property real critBelow: NaN
+    property bool alertFlash: false
+    property color warnColor: App.Style.statusWarning
+    property color critColor: App.Style.statusDanger
+    readonly property int alertLevel: Alerts.level(value, warnAbove, warnBelow, critAbove, critBelow)
+    readonly property color _alertColor: alertLevel === 2 ? critColor : warnColor
+    property bool _flashOn: true
+    readonly property real _alertOpacity: (alertFlash && alertLevel === 2 && !_flashOn) ? 0.3 : 1.0
+    Timer {
+        running: root.alertFlash && root.alertLevel === 2
+        interval: 400
+        repeat: true
+        onTriggered: root._flashOn = !root._flashOn
+        onRunningChanged: if (!running) root._flashOn = true
+    }
     readonly property string _formatted: hasValue ? value.toFixed(Math.max(0, Math.min(4, decimals))) : "--"
 
     // ── Geometry ────────────────────────────────────────────────────
@@ -136,14 +159,39 @@ Item {
         }
     }
 
+    // ── Warning / critical bands (static, thin, on the inner edge) ──
+    readonly property var _bands: Alerts.bands(min, max, warnAbove, warnBelow, critAbove, critBelow)
+    readonly property real _bandW: Math.max(App.Spacing.dp(2), _arcWidth * 0.3)
+    Repeater {
+        model: root._bands
+        delegate: Shape {
+            anchors.fill: parent
+            ShapePath {
+                strokeColor: modelData.level === 2 ? root.critColor : root.warnColor
+                strokeWidth: root._bandW
+                fillColor: "transparent"
+                capStyle: ShapePath.FlatCap
+                PathAngleArc {
+                    centerX: root._cx
+                    centerY: root._cy
+                    radiusX: root._arcR - root._arcWidth / 2 - root._bandW / 2 - App.Spacing.dp(1)
+                    radiusY: radiusX
+                    startAngle: root.startAngle + root.sweepAngle * modelData.from
+                    sweepAngle: root.sweepAngle * (modelData.to - modelData.from)
+                }
+            }
+        }
+    }
+
     // ── Filled value arc ────────────────────────────────────────────
     Shape {
         anchors.fill: parent
         visible: root._animNorm > 0.001
         ShapePath {
             // Turn red once we cross the redline value
-            strokeColor: (root.hasValue && !isNaN(root.redlineStart) && root.value >= root.redlineStart)
-                         ? root.redlineColor : root.fillColor
+            strokeColor: root.alertLevel > 0 ? root._alertColor
+                         : (root.hasValue && !isNaN(root.redlineStart) && root.value >= root.redlineStart)
+                           ? root.redlineColor : root.fillColor
             strokeWidth: root._arcWidth
             fillColor: "transparent"
             capStyle: ShapePath.RoundCap
@@ -232,7 +280,8 @@ Item {
             horizontalAlignment: Text.AlignHCenter
             fontSizeMode: Text.HorizontalFit
             minimumPixelSize: 1
-            color: root.valueColor
+            color: root.alertLevel > 0 ? root._alertColor : root.valueColor
+            opacity: root._alertOpacity
             font.pixelSize: root.showNeedle
                             ? Math.max(1, Math.min(App.Spacing.overallText * 1.3, root._arcR * 0.3))
                             : Math.max(1, Math.min(App.Spacing.overallText * 1.9, root._arcR * 0.42))

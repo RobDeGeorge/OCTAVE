@@ -26,7 +26,7 @@ class ParameterCatalog : public QObject
     // Service permissions (src/service/servicescopes.h)
     Q_CLASSINFO("octave.scope", "read")
     // Every parameter as {id, title, shortTitle, unit, min, max, kind,
-    // decimals, source, aliasOf}, in display order
+    // decimals, source, aliasOf, group}, in display order
     Q_PROPERTY(QVariantList parameters READ parameters CONSTANT)
     // The same rows in the units the gauges show (setDisplayUnits): unit,
     // min and max converted, plus displayScale / displayOffset so a value
@@ -34,6 +34,9 @@ class ParameterCatalog : public QObject
     // `parameters`, all() and find() stay in each parameter's own unit (the
     // black box, the poller, Trip History).
     Q_PROPERTY(QVariantList displayParameters READ displayParameters NOTIFY displayParametersChanged)
+    // The `group` values in the order pickers list them: the car's systems
+    // ("Engine", "Fuel & air", ...), then "Sensors" (the IMU)
+    Q_PROPERTY(QStringList groups READ groups CONSTANT)
 
 public:
     enum class Source { Obd, Imu };
@@ -53,6 +56,8 @@ public:
         // Not polled itself: carries the value of another id
         // (IGNITION_TIMING is TIMING_ADVANCE under its old name)
         QString aliasOf;
+        // The system it belongs to, one of groups(): how pickers sort it
+        QString group;
     };
 
     explicit ParameterCatalog(QObject *parent = nullptr);
@@ -61,6 +66,7 @@ public:
     static const Parameter *find(const QString &id);   // nullptr if unknown
     static QStringList imuIds();
     static QStringList obdIds();                        // polled OBD ids (no aliases)
+    static QStringList groups();
 
     QVariantList parameters() const;
     QVariantList displayParameters() const;

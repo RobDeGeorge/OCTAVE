@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "id": "hero-4",
+  "label": "Hero + 4",
+  "description": "One big dial and four readouts beside it",
+  "order": 1,
+  "gridColumns": 6,
+  "gridRows": 4,
+  "cells": [
+    {
+      "type": "CircularGauge",
+      "col": 0,
+      "row": 0,
+      "colSpan": 4,
+      "rowSpan": 4,
+      "slot": {
+        "prefer": [
+          "RPM",
+          "SPEED"
+        ],
+        "kinds": [
+          "numeric"
+        ]
+      },
+      "props": {
+        "showNeedle": true
+      }
+    },
+    {
+      "type": "DigitalReadout",
+      "col": 4,
+      "row": 0,
+      "colSpan": 2,
+      "rowSpan": 1,
+      "slot": {
+        "prefer": [
+          "SPEED"
+        ],
+        "kinds": [
+          "numeric"
+        ]
+      }
+    },
+    {
+      "type": "DigitalReadout",
+      "col": 4,
+      "row": 1,
+      "colSpan": 2,
+      "rowSpan": 1,
+      "slot": {
+        "prefer": [
+          "COOLANT_TEMP",
+          "OIL_TEMP"
+        ],
+        "kinds": [
+          "temperature"
+        ]
+      }
+    },
+    {
+      "type": "DigitalReadout",
+      "col": 4,
+      "row": 2,
+      "colSpan": 2,
+      "rowSpan": 1,
+      "slot": {
+        "prefer": [
+          "CONTROL_MODULE_VOLTAGE",
+          "ELM_VOLTAGE"
+        ],
+        "kinds": [
+          "voltage"
+        ]
+      }
+    },
+    {
+      "type": "DigitalReadout",
+      "col": 4,
+      "row": 3,
+      "colSpan": 2,
+      "rowSpan": 1,
+      "slot": {
+        "prefer": [
+          "FUEL_LEVEL",
+          "ENGINE_LOAD"
+        ],
+        "kinds": [
+          "percentage"
+        ]
+      }
+    }
+  ]
+}

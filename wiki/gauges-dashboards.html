@@ -239,6 +239,18 @@ berryIMU (8 signals) ─────────┴─> paramStore (C++, 33 ms f
           <code>-- g</code> / <code>--°</code>.
         </p>
         <p>
+          <strong>Alerts.</strong> The value gauges (Circular, Arc, Bar, Segmented, Linear, DigitalReadout, Sparkline)
+          share one rule, <span class="file-path">frontend/gauges/AlertLevel.js</span>: <code>warnAbove</code> /
+          <code>warnBelow</code> (level 1, <code>warnColor</code> = the theme's <code>statusWarning</code>, amber) and
+          <code>critAbove</code> / <code>critBelow</code> (level 2, <code>critColor</code> = <code>statusDanger</code>,
+          red), inclusive, critical winning; <code>alertLevel</code> is 0 without a reading. At a level the value text and
+          the fill take its colour, and <code>alertFlash</code> blinks the value while critical. Circular and Arc draw each
+          band as a thin arc on the inner edge of the scale (<code>Alerts.bands()</code>; a warning band stops where a
+          critical one starts); <code>redlineStart</code> stays a separate red zone. All four limits are stored in the
+          PID's own unit (<code>paramUnit</code>). Until 2026-10-30 Bar and Segmented had only <code>warnAbove</code>,
+          drawn red; the presets moved those limits to <code>critAbove</code>.
+        </p>
+        <p>
           <strong>Text stays inside the cell.</strong> Header rows give the value its width and elide the title in what is
           left; <code>ArcGauge</code> and <code>DigitalReadout</code> scale their readout block by its measured height
           against the space they have; values use <code>fontSizeMode: Text.HorizontalFit</code>. <code>BarGauge</code> and
@@ -304,10 +316,10 @@ berryIMU (8 signals) ─────────┴─> paramStore (C++, 33 ms f
           <thead><tr><th>Property</th><th>Type</th><th>Default</th><th>Notes</th></tr></thead>
           <tbody>
             <tr><td><code>orientation</code></td><td>string</td><td><code>"horizontal"</code></td><td>or <code>"vertical"</code>.</td></tr>
-            <tr><td><code>warnAbove</code></td><td>real</td><td>NaN</td><td>Fill switches to <code>warnColor</code> (200 ms colour animation) once <code>value &gt;= warnAbove</code>.</td></tr>
+            <tr><td><code>warnAbove</code>, <code>critAbove</code>, ...</td><td>real</td><td>NaN</td><td>The shared alerts (above): the fill (200 ms colour animation) and the value turn amber / red.</td></tr>
             <tr><td><code>showLabel</code>, <code>showValue</code></td><td>bool</td><td>true, true</td><td></td></tr>
             <tr><td><code>maxThickness</code></td><td>real (dp)</td><td>0 = fill</td><td>Caps the pill thickness so a bar in a tall cell stays a bar (the Sport preset uses 40).</td></tr>
-            <tr><td><code>trackColor</code>, <code>fillColor</code>, <code>warnColor</code></td><td>color</td><td>theme</td><td></td></tr>
+            <tr><td><code>trackColor</code>, <code>fillColor</code>, <code>warnColor</code>, <code>critColor</code></td><td>color</td><td>theme</td><td></td></tr>
           </tbody>
         </table>
 
@@ -346,8 +358,9 @@ berryIMU (8 signals) ─────────┴─> paramStore (C++, 33 ms f
 
         <h3>SegmentedGauge</h3>
         <p>A horizontal discrete level strip for any numeric PID. <code>segmentCount</code> defaults to 20 (2–40);
-          <code>warnAbove</code> defaults off. At the threshold, lit segments and the readout use the theme's danger color;
-          unlit upper-band segments retain a dim warning outline. <code>showLabel</code> and <code>showValue</code>
+          the shared alert limits default off. Each lit segment past <code>warnAbove</code> / <code>critAbove</code>
+          takes that level's colour, like a shift-light strip, the readout takes the value's level, and unlit segments
+          past a limit keep a dim outline. <code>showLabel</code> and <code>showValue</code>
           default on. Decimals default to 0 and can be set to 0–4. Range and threshold overrides are stored
           in native units and follow display-unit preferences. Missing/non-finite samples show <code>--</code>, with no
           lit segments or warning; a real zero remains zero. Invalid ranges fill no segments. Values outside a valid
@@ -604,10 +617,11 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
           <code>isKnownType(type)</code>. It is the single whitelist the renderer, the palette, the PID picker and the
           properties panel all consult, so "what can render" and "what can be placed" cannot drift.
         </p>
-        <p>Each entry declares, besides <code>type</code> / <code>url</code> / <code>displayName</code> / <code>glyph</code> / default span / <code>supportedKinds</code>:</p>
+        <p>Each entry declares, besides <code>type</code> / <code>url</code> / <code>displayName</code> / <code>glyph</code> / default span (for a 12 &times; 6 grid; the editor scales it) / <code>supportedKinds</code>:</p>
         <table>
           <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
           <tbody>
+            <tr><td><code>category</code>, <code>description</code>, <code>demo</code></td><td>The widget gallery's tab (one of the top-level <code>categories</code>), its one-line description, and <code>{paramId, props}</code> its live miniature runs on (<code>{}</code> for self-binding widgets).</td></tr>
             <tr><td><code>minSize</code>, <code>aspect</code></td><td>The smallest size (dp, <code>{w, h}</code>) the widget reads at, and its natural width / height. <code>dashboardManager.minSpan(type, ...)</code> turns <code>minSize</code> into the smallest span on a given grid and <code>sizeOptions(type, ...)</code> offers S / M / L spans (about 1/12, 1/6 and 1/3 of the grid, nearest the aspect, never below the minimum) for the editor's size presets.</td></tr>
             <tr><td><code>labelProps</code></td><td><code>true</code> if the widget has <code>title</code> + <code>unit</code> string props that default to the PID metadata: the panel offers Title / Unit overrides.</td></tr>
             <tr><td><code>rangeProps</code></td><td><code>true</code> if it has <code>min</code> + <code>max</code> real props: the panel offers Min / Max overrides and warns when min &ge; max.</td></tr>
@@ -615,14 +629,14 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
             <tr><td><code>editableProps</code></td><td><code>{ key, label, kind, def[, min, max][, options] }</code>; <code>kind</code> is <code>bool</code> (Switch), <code>int</code> / <code>real</code> (number field clamped to <code>min</code>/<code>max</code>), <code>string</code> (text field) or <code>enum</code> (segmented buttons over <code>options</code>). <code>def</code> is the gauge's real default (<code>null</code> = NaN-when-unset threshold, shown empty with placeholder "off").</td></tr>
           </tbody>
         </table>
-        <p>The catalog also carries <code>colorSwatches</code>: the eight colors after the panel's "T" (theme) swatch.</p>
+        <p>The catalog also carries <code>colorSwatches</code> (the eight colors after the panel's "T" (theme) swatch), <code>categories</code> (the gallery's tabs, in order) and <code>suggestions</code> (<code>byId</code> then <code>byKind</code>: the widget data-first add proposes for a parameter; <code>WidgetCatalog.suggestFor()</code>). Every <code>editableProps</code> entry has a <code>section</code> (<code>look</code> / <code>range</code> / <code>advanced</code>) that places it in the settings sheet, and the value gauges list the shared alert props (<code>warnAbove</code>, <code>warnBelow</code>, <code>critAbove</code>, <code>critBelow</code>, <code>alertFlash</code>) besides those in the table.</p>
         <table>
           <thead><tr><th>type</th><th>Palette name / glyph</th><th>Default span</th><th>supportedKinds</th><th>label / range</th><th>colorProps</th><th>editableProps</th></tr></thead>
           <tbody>
             <tr><td><code>CircularGauge</code></td><td>Circular ◯</td><td>4 × 4</td><td><code>*</code></td><td>yes / yes</td><td>fillColor, needleColor</td><td>showNeedle, showTicks, showCenterReadout, redlineStart, decimals (0-4), majorTickCount (2-20), minorTicksPerMajor (0-10), startAngle, sweepAngle</td></tr>
             <tr><td><code>ArcGauge</code></td><td>Arc ◠</td><td>6 × 3</td><td><code>*</code></td><td>yes / yes</td><td>fillColor, needleColor</td><td>showNeedle, showTicks, showReadout, redlineStart, decimals, majorTickCount, minorTicksPerMajor</td></tr>
-            <tr><td><code>BarGauge</code></td><td>Bar ▮</td><td>3 × 2</td><td>percentage, temperature, numeric, pressure, voltage</td><td>yes / yes</td><td>fillColor</td><td>orientation (enum horizontal/vertical), warnAbove, showLabel, showValue, decimals</td></tr>
-            <tr><td><code>SegmentedGauge</code></td><td>Segmented ▮</td><td>6 × 2</td><td><code>*</code></td><td>yes / yes</td><td>fillColor</td><td>segmentCount (2–40), warnAbove, showLabel, showValue, decimals (0–4)</td></tr>
+            <tr><td><code>BarGauge</code></td><td>Bar ▮</td><td>3 × 2</td><td>percentage, temperature, numeric, pressure, voltage</td><td>yes / yes</td><td>fillColor</td><td>orientation (enum horizontal/vertical), showLabel, showValue, decimals, maxThickness, the alerts</td></tr>
+            <tr><td><code>SegmentedGauge</code></td><td>Segmented ▮</td><td>6 × 2</td><td><code>*</code></td><td>yes / yes</td><td>fillColor</td><td>segmentCount (2–40), showLabel, showValue, decimals (0–4), the alerts</td></tr>
             <tr><td><code>LinearGauge</code></td><td>Linear ↔</td><td>4 × 2</td><td>bidirectional</td><td>yes / yes</td><td>fillColor</td><td>showTicks, decimals, majorTickCount, minorTicksPerMajor</td></tr>
             <tr><td><code>DigitalReadout</code></td><td>Digital 88</td><td>4 × 2</td><td><code>*</code></td><td>yes / no</td><td>valueColor</td><td>showTitle, showUnit, decimals, padDigits (0-8), valueScale ("Digit size", 0.5-12)</td></tr>
             <tr><td><code>SparklineGauge</code></td><td>Sparkline ∿</td><td>6 × 2</td><td><code>*</code></td><td>yes / yes</td><td>lineColor</td><td>autoScale, fillBelow, showHeader, decimals, maxSamples (10-300), sampleIntervalMs (100-5000)</td></tr>
@@ -750,21 +764,21 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
           <li>Signals: <code>emptyCellTapped(col, row)</code>, <code>cellTapped(index)</code>, <code>cellHeld(index)</code>, <code>cellMoveRequested(index, col, row)</code>, <code>cellResizeRequested(index, colSpan, rowSpan)</code>, <code>backgroundTapped()</code>. The canvas never mutates <code>cells</code>.</li>
         </ul>
 
-        <h3>PalettePopup, PIDPicker, PropertiesPanel</h3>
+        <h3>TemplateGallery, PalettePopup, PIDPicker, PropertiesPanel</h3>
         <ul>
-          <li><strong>PalettePopup</strong>: modal, scrolling 2–4-column grid of cards (height capped to 90% of the window) from <code>WidgetCatalog.widgets</code> (glyph + display name); tapping emits <code>widgetPicked(type)</code> and closes.</li>
-          <li><strong>PIDPicker</strong>: modal, 85 % of the window height, a search field focused on open, and a flat row model built from <code>allParameters</code> filtered by <code>supportedKinds</code> (<code>"*"</code> passes all) and by the query against title or id, grouped under headers in the order numeric, percentage, temperature, pressure, voltage, bidirectional. The current PID is highlighted; empty results show "No matching PIDs". Vehicle-gated (see <a href="#vehicle-gate">Vehicle Gate</a>): once a vehicle is scanned, its PIDs come first in each group and the rest are greyed (45 % opacity, "Not supported by this vehicle") but still pickable; a note under the title (<code>pidPickerVehicleNote</code>) explains which mode is active.</li>
-          <li><strong>PropertiesPanel</strong> (scrollable <code>Flickable</code>, <code>editorPanelScroll</code>), top to bottom, ordered by how often each section is used:
+          <li><strong>TemplateGallery</strong> (<code>templateGallery</code>, the chooser's <strong>+ New</strong>): a card per <code>dashboardManager.templates</code> entry (<span class="file-path">frontend/dashboards/templates/*.json</span>, in their <code>order</code>), each a <code>DashboardRenderer</code> miniature of <code>dashboardManager.fromTemplate(id, supported)</code>, with the PIDs the scanned car reports (or common ones with no car; the note <code>templateGalleryNote</code> says which). The miniatures run on the demo data while the gallery is open (restored as it was on close) and render only from <code>aboutToShow</code> until 1.5 s after closing (<code>_showing</code>; not <code>Popup.visible</code>, which changes more than once while opening). <code>templatePicked(spec)</code>: OBDMenu pushes the editor with <code>initialSpec</code> and <code>fitToScreen</code>, which lays the template's 6 &times; 4 grid out again on the screen's default density. Built-in cards have <strong>Customize</strong> instead of Edit: the editor opens on an unsaved copy named "&hellip; (mine)" (<code>initialSpec</code> without an id), saved under its own id on Done.</li>
+          <li><strong>PalettePopup</strong> (the widget gallery, <code>widgetPalette</code>): a search field (<code>paletteSearch</code>, focused only when tapped), category chips (<code>paletteCategory_&lt;name&gt;</code>, from the catalog's <code>categories</code>) and a scrolling 2&ndash;4-column grid of cards, each the real widget loaded on its catalog <code>demo</code> PID and props (demo data on while the gallery is open), its name and <code>description</code>. Tapping emits <code>widgetPicked(type)</code> and closes. <strong>What do you want to see?</strong> (<code>paletteDataFirst</code>) emits <code>dataFirstRequested()</code>: the editor opens the PID picker over every kind, and the pick places <code>WidgetCatalog.suggestFor(paramId, kind)</code> (the catalog's <code>suggestions.byId</code>, then <code>byKind</code>, else a readout) already bound (<code>addForParam</code>).</li>
+          <li><strong>PIDPicker</strong> (<code>pidPicker</code>): modal, 85 % of the window height, a search field that is focused only when tapped (no keyboard over the list on a touch screen), and a flat row model from <code>displayParameters</code> (aliases left out) filtered by <code>supportedKinds</code> (<code>"*"</code> passes all) and by the query against title, id or group. Rows are grouped by system in <code>parameterCatalog.groups</code> order (Engine, Fuel &amp; air, Temperatures, Electrical, Speed &amp; motion, Emissions, Diagnostics, Sensors), with the last six picks under <strong>Recent</strong> first (the <code>dashboardRecentPids</code> setting). Each row shows its live value when there is one (<code>pidLive_&lt;id&gt;</code>). The current PID is highlighted; empty results show "No matching PIDs". Vehicle-gated (see <a href="#vehicle-gate">Vehicle Gate</a>): once a vehicle is scanned, its PIDs come first in each group and the rest are greyed (45 % opacity, "Not supported by this vehicle") but still pickable; a note under the title (<code>pidPickerVehicleNote</code>) explains which mode is active.</li>
+          <li><strong>PropertiesPanel</strong> (the settings sheet, scrollable <code>Flickable</code>, <code>editorPanelScroll</code>): a header (glyph, name, ✕ closes the sheet), section chips (<code>panelSection_&lt;id&gt;</code>; the choice is kept across selections, falling back to the widget's first section), then one section at a time:
             <ol>
-              <li>Header (glyph, name, ✕ closes the sheet).</li>
-              <li><strong>PID</strong> button (red border while unbound; hidden for self-binding widgets), plus a red note (<code>panelPidUnsupported</code>) when the connected vehicle doesn't report the bound PID.</li>
-              <li><strong>Position &amp; Size</strong>: Column / Row / Width / Height <code>◄ value ►</code> steppers calling <code>nudgeCell</code> / <code>resizeCell</code>.</li>
-              <li><strong>Options</strong>: the catalog's <code>editableProps</code> -- <code>Switch</code> for bool, segmented buttons for enum (<code>panelOptEnum_&lt;key&gt;_&lt;value&gt;</code>), a text field for string, a number field for int/real (empty = unset = gauge default; values are clamped to the option's <code>min</code>/<code>max</code> on <code>editingFinished</code>).</li>
-              <li><strong>Label &amp; Range</strong> (when the catalog sets <code>labelProps</code> / <code>rangeProps</code>): Title, Unit, Min, Max override fields (<code>panelOverride_&lt;key&gt;</code>) whose placeholders show the bound PID's own values; empty = follow the PID. A warning (<code>panelRangeWarning</code>) appears when the effective min &ge; max.</li>
-              <li><strong>Color</strong>: a "T" (theme) swatch plus <code>WidgetCatalog.colorSwatches</code> (<code>panelSwatch_theme</code>, <code>panelSwatch_&lt;hex&gt;</code>); a pick writes every <code>colorProps</code> key through <code>setCellProps</code>, "T" removes them.</li>
+              <li><strong>Data</strong> (PID widgets only): the PID button (red border while unbound), its live value (<code>panelLiveValue</code>), a red note (<code>panelPidUnsupported</code>) when the connected vehicle doesn't report it.</li>
+              <li><strong>Look</strong>: Title / Unit overrides (<code>panelOverride_&lt;key&gt;</code>, placeholders show the PID's own; empty = follow it), the Color swatches (a "T" theme swatch plus <code>WidgetCatalog.colorSwatches</code>, <code>panelSwatch_&lt;hex&gt;</code>; a pick writes every <code>colorProps</code> key through <code>setCellProps</code>), and the <code>editableProps</code> with <code>section: "look"</code>.</li>
+              <li><strong>Range &amp; alerts</strong>: Min / Max overrides with the min &ge; max warning (<code>panelRangeWarning</code>), the <code>"range"</code> options (warning / critical limits, flash, red band, lamp triggers), and <strong>Test value</strong> (<code>panelTestSlider</code>, <code>panelTestReset</code>): a slider over the effective range that drives this widget only (<code>editor.testValues</code>, written over the widget's live binding by the canvas; never saved, not in undo, cleared when the sheet closes, the selection changes or the cells change).</li>
+              <li><strong>Advanced</strong>: the other options and the Column / Row / Width / Height <code>◄ value ►</code> steppers (<code>nudgeCell</code> / <code>resizeCell</code>).</li>
+              <li><strong>JSON</strong> (<code>panelJson</code>, <code>panelJsonApply</code>): the props as text; Apply calls <code>setCellPropsJson(index, text)</code>, which runs them through <code>normalizedSpec</code> and reports what it dropped (<code>panelJsonStatus</code>).</li>
               <li>"Remove widget" (<code>deleteCell</code>, undoable from the snackbar).</li>
             </ol>
-            Text fields use a dark field background so typed values stay readable against the light theme text color. Because <code>Repeater</code> delegates survive selection changes between same-type cells and user input breaks bindings, each control re-syncs from the cell on a <code>_cellRef</code> change. The panel never mutates the cell; every control calls back into the editor page.</li>
+            Options are a <code>Switch</code> for bool, segmented buttons for enum (<code>panelOptEnum_&lt;key&gt;_&lt;value&gt;</code>), a text field for string, a number field for int/real (empty = unset = gauge default; clamped to the option's <code>min</code>/<code>max</code> on <code>editingFinished</code>). Text fields use a dark field background so typed values stay readable against the light theme text color. Because <code>Repeater</code> delegates survive selection changes between same-type cells and user input breaks bindings, each control re-syncs from the cell on a <code>_cellRef</code> change. The panel never mutates the cell; every control calls back into the editor page.</li>
         </ul>
         <p>Every interactive control carries an <code>objectName</code> (<code>newDashboardButton</code>, <code>dashCard_&lt;id&gt;_edit</code>, <code>editorAddHere</code>, <code>editorToolbar</code>, <code>editorToolSize_M</code>, <code>editorCloseButton</code>, <code>paletteCard_&lt;type&gt;</code>, <code>pidRow_&lt;id&gt;</code>, <code>stepper_Width_inc</code>, <code>panelOpt_&lt;key&gt;</code>, ...) for the command-server test driver.</p>
 

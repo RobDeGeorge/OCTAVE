@@ -227,6 +227,7 @@
             <tr><td><code>hiddenBuiltInCount</code></td><td>int</td><td>read</td><td><code>dashboardsChanged</code></td></tr>
             <tr><td><code>supportedSchema</code></td><td>int</td><td>constant</td><td>&ndash;</td></tr>
             <tr><td><code>widgetCatalog</code></td><td>QVariantMap</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>templates</code> <span class="cmt">(experimental)</span></td><td>QVariantList</td><td>constant</td><td>&ndash;</td></tr>
           </tbody>
         </table>
         <table>
@@ -242,6 +243,7 @@
             <tr><td><code>importDashboardFromClipboard()</code></td><td><code>QString</code></td><td>slot</td><td><code>files</code></td></tr>
             <tr><td><code>importDashboardFromText(QString json)</code></td><td><code>QString</code></td><td>slot</td><td><code>files</code></td></tr>
             <tr><td><code>refresh()</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>fromTemplate(QString id, QStringList supported)</code> <span class="cmt">(experimental)</span></td><td><code>QVariantMap</code></td><td>invokable</td><td><code>read</code></td></tr>
             <tr><td><code>loadDashboard(QString id)</code></td><td><code>QVariant</code></td><td>invokable</td><td><code>read</code></td></tr>
             <tr><td><code>isBuiltIn(QString id)</code></td><td><code>bool</code></td><td>invokable</td><td><code>read</code></td></tr>
             <tr><td><code>uniqueIdForLabel(QString label)</code></td><td><code>QString</code></td><td>invokable</td><td><code>read</code></td></tr>
@@ -653,6 +655,7 @@
           <tbody>
             <tr><td><code>parameters</code></td><td>QVariantList</td><td>constant</td><td>&ndash;</td></tr>
             <tr><td><code>displayParameters</code></td><td>QVariantList</td><td>read</td><td><code>displayParametersChanged</code></td></tr>
+            <tr><td><code>groups</code></td><td>QStringList</td><td>constant</td><td>&ndash;</td></tr>
           </tbody>
         </table>
         <table>

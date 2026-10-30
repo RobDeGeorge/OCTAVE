@@ -36,8 +36,8 @@ class DashboardManager : public QObject
     Q_OBJECT
     // Service permissions (src/service/servicescopes.h)
     Q_CLASSINFO("octave.scope", "files")
-    Q_CLASSINFO("octave.scope.read", "arrange canPlace fitAt isBuiltIn loadDashboard minSpan nearestFree normalizedSpec refresh rescale sizeOptions uniqueIdForLabel")
-    Q_CLASSINFO("octave.experimental", "arrange minSpan nearestFree rescale sizeOptions")
+    Q_CLASSINFO("octave.scope.read", "arrange canPlace fitAt fromTemplate isBuiltIn loadDashboard minSpan nearestFree normalizedSpec refresh rescale sizeOptions uniqueIdForLabel")
+    Q_CLASSINFO("octave.experimental", "arrange fromTemplate minSpan nearestFree rescale sizeOptions templates")
     Q_PROPERTY(QVariantList dashboards READ dashboards NOTIFY dashboardsChanged)
     // Human-readable reason the last export/import failed ("" after a
     // success) — the chooser shows it in its status line.
@@ -59,6 +59,11 @@ class DashboardManager : public QObject
     // defaultRowSpan, supportedKinds, labelProps, rangeProps, colorProps,
     // editableProps}], colorSwatches}. Empty if the file is missing.
     Q_PROPERTY(QVariantMap widgetCatalog READ widgetCatalog CONSTANT)
+    // Starting points for a new dashboard (frontend/dashboards/templates/
+    // *.json, in their `order`): [{id, label, description, order,
+    // gridColumns, gridRows, cells}]. A cell's data is a `slot`
+    // {prefer: [ids], kinds: [kinds]} that fromTemplate() fills.
+    Q_PROPERTY(QVariantList templates READ templates CONSTANT)
 
 public:
     explicit DashboardManager(QObject *parent = nullptr);
@@ -72,6 +77,16 @@ public:
     // frontend/dashboards/widget-catalog.json
     void setWidgetCatalogFile(const QString &absolutePath);
     QVariantMap widgetCatalog() const { return m_widgetCatalog; }
+    void setTemplatesDir(const QString &absolutePath);
+    QVariantList templates() const { return m_templates; }
+
+    // A new dashboard from template `id`: {schema, label, gridColumns,
+    // gridRows, cells}, no id. Each slot takes the first of its `prefer`
+    // ids the car reports (`supported`; empty = no car known, so the first
+    // preferred), else the first reported id of one of its `kinds`, never
+    // an id another slot took; a slot nothing fits stays unbound ("Choose
+    // data" in the editor). Empty map for an unknown id.
+    Q_INVOKABLE QVariantMap fromTemplate(const QString &id, const QStringList &supported) const;
 
     // Merged list: each entry is { id, label, builtIn, path }. Sorted so
     // built-ins come first (in file-name order), then user dashboards.
@@ -224,6 +239,7 @@ private:
 
     QString m_presetsDir;
     QVariantMap m_widgetCatalog;
+    QVariantList m_templates;
     QString m_userDir;
     QVariantList m_dashboards;
 

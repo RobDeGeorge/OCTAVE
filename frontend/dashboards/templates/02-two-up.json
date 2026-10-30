@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "id": "two-up",
+  "label": "2 up",
+  "description": "Two big dials side by side",
+  "order": 2,
+  "gridColumns": 6,
+  "gridRows": 4,
+  "cells": [
+    {
+      "type": "CircularGauge",
+      "col": 0,
+      "row": 0,
+      "colSpan": 3,
+      "rowSpan": 4,
+      "slot": {
+        "prefer": [
+          "RPM"
+        ],
+        "kinds": [
+          "numeric"
+        ]
+      },
+      "props": {
+        "showNeedle": true
+      }
+    },
+    {
+      "type": "CircularGauge",
+      "col": 3,
+      "row": 0,
+      "colSpan": 3,
+      "rowSpan": 4,
+      "slot": {
+        "prefer": [
+          "SPEED"
+        ],
+        "kinds": [
+          "numeric"
+        ]
+      },
+      "props": {
+        "showNeedle": true
+      }
+    }
+  ]
+}

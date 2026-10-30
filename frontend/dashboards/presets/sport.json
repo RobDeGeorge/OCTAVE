@@ -21,13 +21,13 @@
       "type": "BarGauge",
       "paramId": "COOLANT_TEMP",
       "col": 0, "row": 7, "colSpan": 3, "rowSpan": 1,
-      "props": { "warnAbove": 105, "maxThickness": 40 }
+      "props": { "critAbove": 105, "maxThickness": 40 }
     },
     {
       "type": "BarGauge",
       "paramId": "OIL_TEMP",
       "col": 3, "row": 7, "colSpan": 3, "rowSpan": 1,
-      "props": { "warnAbove": 130, "maxThickness": 40 }
+      "props": { "critAbove": 130, "maxThickness": 40 }
     },
     {
       "type": "BarGauge",

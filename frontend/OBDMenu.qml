@@ -6,6 +6,7 @@ import QtQuick.Dialogs
 import Qt5Compat.GraphicalEffects
 import "." as App
 import "dashboards" as Dashboards
+import "dashboards/editor" as Editor
 import OCTAVE.OBD 1.0
 
 Item {
@@ -922,6 +923,23 @@ Item {
     }
 
     // ── Dashboard Chooser Popup ──────────────────────────────────────
+    // "+ New": pick a starting point, then the editor opens on it, fitted
+    // to this screen's grid density
+    Editor.TemplateGallery {
+        id: templateGallery
+        stageWidth: obdPage.width
+        stageHeight: Math.max(1, obdPage.height - dp(80))
+        onTemplatePicked: function(spec) {
+            dashboardChooserPopup.close()
+            obdPage.stackView.push("dashboards/editor/DashboardEditor.qml", {
+                stackView: obdPage.stackView,
+                callerPage: obdPage,
+                initialSpec: spec,
+                fitToScreen: true
+            })
+        }
+    }
+
     Popup {
         id: dashboardChooserPopup
         parent: Overlay.overlay
@@ -1053,13 +1071,9 @@ Item {
                     id: newDashboardMouse
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        dashboardChooserPopup.close()
-                        obdPage.stackView.push("dashboards/editor/DashboardEditor.qml", {
-                            stackView: obdPage.stackView,
-                            callerPage: obdPage
-                        })
-                    }
+                    // A template first (Blank among them); the editor
+                    // opens on the one picked
+                    onClicked: templateGallery.open()
                 }
             }
 
@@ -1249,7 +1263,21 @@ Item {
                             }
 
                             function triggerAction(action) {
-                                if (action === "edit") {
+                                if (action === "customize") {
+                                    // A built-in is read-only: the editor opens
+                                    // on an unsaved copy, saved under its own id
+                                    // on Done ("Sport (mine)")
+                                    var spec = dashboardManager.loadDashboard(card.dash.id)
+                                    if (!spec || !spec.cells) return
+                                    spec.label = (spec.label || card.dash.label) + " (mine)"
+                                    delete spec.id
+                                    dashboardChooserPopup.close()
+                                    obdPage.stackView.push("dashboards/editor/DashboardEditor.qml", {
+                                        stackView: obdPage.stackView,
+                                        callerPage: obdPage,
+                                        initialSpec: spec
+                                    })
+                                } else if (action === "edit") {
                                     dashboardChooserPopup.close()
                                     obdPage.stackView.push("dashboards/editor/DashboardEditor.qml", {
                                         stackView: obdPage.stackView,
@@ -1433,6 +1461,7 @@ Item {
                                 Repeater {
                                     model: [
                                         { "action": "edit",      "label": "Edit",   "danger": false, "show": card.dash.builtIn === false },
+                                        { "action": "customize", "label": "Customize", "danger": false, "show": card.dash.builtIn === true },
                                         { "action": "duplicate", "label": "Copy",   "danger": false, "show": true },
                                         { "action": "share",     "label": "Share",  "danger": false, "show": true },
                                         { "action": "delete",    "label": "Delete", "danger": true,  "show": true }

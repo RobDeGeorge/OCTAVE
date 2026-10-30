@@ -20,6 +20,7 @@
 #include <memory>
 
 #include "managers/dashboardmanager.h"
+#include "managers/parametercatalog.h"
 
 class TstDashboardManager : public QObject
 {
@@ -37,6 +38,7 @@ private slots:
         m_dm = std::make_unique<DashboardManager>();
         m_dm->setPresetsDir(QStringLiteral(OCTAVE_SOURCE_DIR "/frontend/dashboards/presets"));
         m_dm->setWidgetCatalogFile(QStringLiteral(OCTAVE_SOURCE_DIR "/frontend/dashboards/widget-catalog.json"));
+        m_dm->setTemplatesDir(QStringLiteral(OCTAVE_SOURCE_DIR "/frontend/dashboards/templates"));
         m_dm->setUserDir(m_tmp->path() + "/dashboards");
     }
 
@@ -230,7 +232,20 @@ private slots:
             QVERIFY(m.value("minSize").toMap().value("h").toDouble() > 0);
             QVERIFY(m.value("aspect").toDouble() > 0);
             QVERIFY(!m.contains("url"));   // QML's business
+            // The gallery's category and line; each option's settings section
+            QVERIFY(catalog.value("categories").toStringList().contains(m.value("category").toString()));
+            QVERIFY(!m.value("description").toString().isEmpty());
+            for (const QVariant &p : m.value("editableProps").toList())
+                QVERIFY2((QStringList{"look", "range", "advanced"}).contains(p.toMap().value("section").toString()),
+                         qPrintable(m.value("type").toString() + "." + p.toMap().value("key").toString()));
         }
+        // Data-first add proposes a widget the catalog has
+        const QVariantMap suggestions = catalog.value("suggestions").toMap();
+        for (const char *group : {"byId", "byKind"})
+            for (const QVariant &type : suggestions.value(group).toMap())
+                QVERIFY2(types.contains(type.toString()), qPrintable(type.toString()));
+        for (const char *kind : {"percentage", "temperature", "voltage", "pressure", "bidirectional", "numeric"})
+            QVERIFY(suggestions.value("byKind").toMap().contains(kind));
         QCOMPARE(types.first(), QStringLiteral("CircularGauge"));   // palette order
         QVERIFY(types.contains("MediaControlsWidget"));
         QCOMPARE(catalog.value("colorSwatches").toList().size(), 8);
@@ -577,6 +592,64 @@ private slots:
                          qPrintable(at(out.at(a).toMap())));
             cells = out;
         }
+    }
+
+    // ── templates ──
+
+    void templatesLoadInOrderAndFit()
+    {
+        const QVariantList templates = m_dm->templates();
+        QCOMPARE(templates.size(), 10);
+        QCOMPARE(templates.first().toMap().value("id").toString(), QStringLiteral("hero-4"));
+        QCOMPARE(templates.last().toMap().value("id").toString(), QStringLiteral("blank"));
+        QStringList types;
+        for (const QVariant &w : m_dm->widgetCatalog().value("widgets").toList())
+            types << w.toMap().value("type").toString();
+        for (const QVariant &t : templates) {
+            const QVariantMap tpl = t.toMap();
+            const QString id = tpl.value("id").toString();
+            QVERIFY2(!tpl.value("description").toString().isEmpty(), qPrintable(id));
+            const QVariantList cells = tpl.value("cells").toList();
+            for (const QVariant &c : cells) {
+                const QVariantMap cell = c.toMap();
+                QVERIFY2(types.contains(cell.value("type").toString()), qPrintable(id));
+                for (const QVariant &pid : cell.value("slot").toMap().value("prefer").toList())
+                    QVERIFY2(ParameterCatalog::find(pid.toString()), qPrintable(id + ": " + pid.toString()));
+            }
+            // Nothing dropped or moved by the spec rules: the cells fit the grid as written
+            const QVariantMap spec = m_dm->fromTemplate(id, {});
+            QCOMPARE(spec.value("cells").toList().size(), cells.size());
+            QVERIFY(!spec.contains("id"));
+            for (int i = 0; i < cells.size(); ++i)
+                QCOMPARE(at(spec.value("cells").toList().at(i).toMap()), at(cells.at(i).toMap()));
+        }
+    }
+
+    void fromTemplateFillsSlots()
+    {
+        // No car known: each slot takes its first preferred PID nobody took
+        QVariantMap spec = m_dm->fromTemplate("hero-4", {});
+        QCOMPARE(spec.value("label").toString(), QStringLiteral("Hero + 4"));
+        QStringList pids;
+        for (const QVariant &c : spec.value("cells").toList()) {
+            QVERIFY(!c.toMap().contains("slot"));
+            pids << c.toMap().value("paramId").toString();
+        }
+        QCOMPARE(pids, (QStringList{"RPM", "SPEED", "COOLANT_TEMP", "CONTROL_MODULE_VOLTAGE", "FUEL_LEVEL"}));
+
+        // A car without RPM or a voltage: the tach falls back to SPEED, the
+        // speed slot to nothing (no other numeric PID), voltage stays unbound
+        spec = m_dm->fromTemplate("hero-4", {"SPEED", "COOLANT_TEMP", "ENGINE_LOAD", "INTAKE_TEMP"});
+        pids.clear();
+        for (const QVariant &c : spec.value("cells").toList())
+            pids << c.toMap().value("paramId").toString();
+        QCOMPARE(pids, (QStringList{"SPEED", "", "COOLANT_TEMP", "", "ENGINE_LOAD"}));
+
+        // Self-binding widgets need nothing; an unknown template is empty
+        spec = m_dm->fromTemplate("track", {"RPM"});
+        QCOMPARE(spec.value("cells").toList().at(2).toMap().value("type").toString(), QStringLiteral("GForceGauge"));
+        QVERIFY(m_dm->fromTemplate("nope", {}).isEmpty());
+        QCOMPARE(m_dm->fromTemplate("blank", {}).value("cells").toList().size(), 0);
     }
 
     // ── nearest free spot, density ──

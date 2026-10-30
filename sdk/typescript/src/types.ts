@@ -348,6 +348,11 @@ export interface DashboardManager {
     supportedSchema: number
     /** QVariantMap, constant */
     widgetCatalog: Record<string, unknown>
+    /**
+     * QVariantList, constant
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    templates: unknown[]
   }
   methods: {
     saveDashboard: { args: [spec: Record<string, unknown>]; returns: string }
@@ -360,6 +365,8 @@ export interface DashboardManager {
     importDashboardFromClipboard: { args: []; returns: string }
     importDashboardFromText: { args: [json: string]; returns: string }
     refresh: { args: []; returns: void }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    fromTemplate: { args: [id: string, supported: string[]]; returns: Record<string, unknown> }
     loadDashboard: { args: [id: string]; returns: unknown }
     isBuiltIn: { args: [id: string]; returns: boolean }
     uniqueIdForLabel: { args: [label: string]; returns: string }
@@ -974,6 +981,8 @@ export interface ParameterCatalog {
     parameters: unknown[]
     /** QVariantList, notify displayParametersChanged */
     displayParameters: unknown[]
+    /** QStringList, constant */
+    groups: string[]
   }
   methods: {
     toDisplay: { args: [id: string, value: unknown]; returns: unknown }

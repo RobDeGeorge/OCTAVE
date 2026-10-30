@@ -10,6 +10,7 @@
 
 import QtQuick 2.15
 import ".." as App
+import "AlertLevel.js" as Alerts
 
 Item {
     id: root
@@ -49,14 +50,34 @@ Item {
     property real value: App.OBDParameterModel.sample(paramId)
     readonly property bool hasValue: isFinite(value)
 
+    // ── Alerts (gauges/AlertLevel.js) ───────────────────────────────
+    // Limits in the display unit, NaN = unset. Level 1 colours the value
+    // warnColor, level 2 critColor; alertFlash blinks it while critical.
+    property real warnAbove: NaN
+    property real warnBelow: NaN
+    property real critAbove: NaN
+    property real critBelow: NaN
+    property bool alertFlash: false
+    property color warnColor: App.Style.statusWarning
+    property color critColor: App.Style.statusDanger
+    readonly property int alertLevel: Alerts.level(value, warnAbove, warnBelow, critAbove, critBelow)
+    readonly property color _alertColor: alertLevel === 2 ? critColor : warnColor
+    property bool _flashOn: true
+    readonly property real _alertOpacity: (alertFlash && alertLevel === 2 && !_flashOn) ? 0.3 : 1.0
+    Timer {
+        running: root.alertFlash && root.alertLevel === 2
+        interval: 400
+        repeat: true
+        onTriggered: root._flashOn = !root._flashOn
+        onRunningChanged: if (!running) root._flashOn = true
+    }
+
     // ── Style ───────────────────────────────────────────────────────
     property string orientation: "horizontal"  // "horizontal" or "vertical"
     property color trackColor: Qt.darker(App.Style.obdBoxBackground, 1.15)
     property color fillColor: App.Style.obdBarColor
-    property color warnColor: App.Style.statusDanger
     property color labelColor: App.Style.obdLabelColor
     property color valueColor: App.Style.obdValueColor
-    property real warnAbove: NaN   // value at/above which the bar turns warnColor
     property int decimals: 0
     property bool showLabel: true
     property bool showValue: true
@@ -76,8 +97,7 @@ Item {
         NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
     }
 
-    readonly property bool _warning: hasValue && !isNaN(warnAbove) && value >= warnAbove
-    readonly property color _activeFill: _warning ? warnColor : fillColor
+    readonly property color _activeFill: alertLevel > 0 ? _alertColor : fillColor
     readonly property string _formatted: hasValue ? value.toFixed(Math.max(0, Math.min(4, decimals))) : "--"
     readonly property string _valueText: _formatted + (unit ? " " + unit : "")
 
@@ -125,7 +145,8 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             width: Math.min(implicitWidth, parent.width)
             text: root._valueText
-            color: root._warning ? root.warnColor : root.valueColor
+            color: root.alertLevel > 0 ? root._alertColor : root.valueColor
+            opacity: root._alertOpacity
             font.pixelSize: root._fontPx
             font.bold: true
             font.family: App.Style.fontFamily
@@ -156,7 +177,8 @@ Item {
         verticalAlignment: Text.AlignVCenter
         horizontalAlignment: Text.AlignHCenter
         text: root._valueText
-        color: root._warning ? root.warnColor : root.valueColor
+        color: root.alertLevel > 0 ? root._alertColor : root.valueColor
+            opacity: root._alertOpacity
         font.pixelSize: root._fontPx
         font.bold: true
         font.family: App.Style.fontFamily

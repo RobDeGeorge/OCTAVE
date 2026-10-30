@@ -1,0 +1,119 @@
+{
+  "schema": 1,
+  "id": "six-strip",
+  "label": "Six-field strip",
+  "description": "A trend line over six plain numbers",
+  "order": 5,
+  "gridColumns": 6,
+  "gridRows": 4,
+  "cells": [
+    {
+      "type": "SparklineGauge",
+      "col": 0,
+      "row": 0,
+      "colSpan": 6,
+      "rowSpan": 2,
+      "slot": {
+        "prefer": [
+          "SPEED",
+          "RPM"
+        ],
+        "kinds": [
+          "numeric"
+        ]
+      }
+    },
+    {
+      "type": "DigitalReadout",
+      "col": 0,
+      "row": 2,
+      "colSpan": 2,
+      "rowSpan": 1,
+      "slot": {
+        "prefer": [
+          "RPM"
+        ],
+        "kinds": [
+          "numeric"
+        ]
+      }
+    },
+    {
+      "type": "DigitalReadout",
+      "col": 2,
+      "row": 2,
+      "colSpan": 2,
+      "rowSpan": 1,
+      "slot": {
+        "prefer": [
+          "COOLANT_TEMP"
+        ],
+        "kinds": [
+          "temperature"
+        ]
+      }
+    },
+    {
+      "type": "DigitalReadout",
+      "col": 4,
+      "row": 2,
+      "colSpan": 2,
+      "rowSpan": 1,
+      "slot": {
+        "prefer": [
+          "CONTROL_MODULE_VOLTAGE"
+        ],
+        "kinds": [
+          "voltage"
+        ]
+      }
+    },
+    {
+      "type": "DigitalReadout",
+      "col": 0,
+      "row": 3,
+      "colSpan": 2,
+      "rowSpan": 1,
+      "slot": {
+        "prefer": [
+          "ENGINE_LOAD"
+        ],
+        "kinds": [
+          "percentage"
+        ]
+      }
+    },
+    {
+      "type": "DigitalReadout",
+      "col": 2,
+      "row": 3,
+      "colSpan": 2,
+      "rowSpan": 1,
+      "slot": {
+        "prefer": [
+          "INTAKE_TEMP",
+          "OIL_TEMP"
+        ],
+        "kinds": [
+          "temperature"
+        ]
+      }
+    },
+    {
+      "type": "DigitalReadout",
+      "col": 4,
+      "row": 3,
+      "colSpan": 2,
+      "rowSpan": 1,
+      "slot": {
+        "prefer": [
+          "FUEL_LEVEL",
+          "THROTTLE_POS"
+        ],
+        "kinds": [
+          "percentage"
+        ]
+      }
+    }
+  ]
+}

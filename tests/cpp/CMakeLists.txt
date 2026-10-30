@@ -44,7 +44,8 @@ octave_add_test(tst_parameterstore
     SOURCES managers/parameterstore.h managers/parameterstore.cpp managers/parametercatalog.h managers/parametercatalog.cpp
     LIBS Qt6::Gui Qt6::Qml)
 octave_add_test(tst_dashboardmanager SOURCES managers/dashboardmanager.h managers/dashboardmanager.cpp
-                util/dashboardgrid.h util/dashboardgrid.cpp LIBS Qt6::Gui)
+                util/dashboardgrid.h util/dashboardgrid.cpp managers/parametercatalog.h managers/parametercatalog.cpp
+                LIBS Qt6::Gui)
 octave_add_test(tst_dashboardwidgets
     SOURCES managers/dashboardmanager.h managers/dashboardmanager.cpp util/dashboardgrid.h util/dashboardgrid.cpp
             managers/parametercatalog.h managers/parametercatalog.cpp managers/parameterstore.h managers/parameterstore.cpp

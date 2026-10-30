@@ -1,0 +1,75 @@
+{
+  "schema": 1,
+  "id": "grid-2x2",
+  "label": "2 × 2",
+  "description": "Four half-dials, for temperatures and pressures",
+  "order": 3,
+  "gridColumns": 6,
+  "gridRows": 4,
+  "cells": [
+    {
+      "type": "ArcGauge",
+      "col": 0,
+      "row": 0,
+      "colSpan": 3,
+      "rowSpan": 2,
+      "slot": {
+        "prefer": [
+          "COOLANT_TEMP"
+        ],
+        "kinds": [
+          "temperature"
+        ]
+      }
+    },
+    {
+      "type": "ArcGauge",
+      "col": 3,
+      "row": 0,
+      "colSpan": 3,
+      "rowSpan": 2,
+      "slot": {
+        "prefer": [
+          "OIL_TEMP",
+          "INTAKE_TEMP"
+        ],
+        "kinds": [
+          "temperature"
+        ]
+      }
+    },
+    {
+      "type": "ArcGauge",
+      "col": 0,
+      "row": 2,
+      "colSpan": 3,
+      "rowSpan": 2,
+      "slot": {
+        "prefer": [
+          "INTAKE_PRESSURE",
+          "BOOST_PRESSURE_A",
+          "FUEL_PRESSURE"
+        ],
+        "kinds": [
+          "pressure"
+        ]
+      }
+    },
+    {
+      "type": "ArcGauge",
+      "col": 3,
+      "row": 2,
+      "colSpan": 3,
+      "rowSpan": 2,
+      "slot": {
+        "prefer": [
+          "CONTROL_MODULE_VOLTAGE",
+          "ELM_VOLTAGE"
+        ],
+        "kinds": [
+          "voltage"
+        ]
+      }
+    }
+  ]
+}

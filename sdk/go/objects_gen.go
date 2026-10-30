@@ -689,6 +689,14 @@ func (o DashboardManager) GetWidgetCatalog() (v map[string]any, err error) {
 	return
 }
 
+// GetTemplates reads the property "templates" (QVariantList).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) GetTemplates() (v []any, err error) {
+	err = o.c.Get("dashboardManager", "templates", &v)
+	return
+}
+
 // SaveDashboard calls saveDashboard(QVariantMap) -> QString.
 func (o DashboardManager) SaveDashboard(spec map[string]any) (v string, err error) {
 	err = o.c.Call("dashboardManager", "saveDashboard", &v, spec)
@@ -746,6 +754,14 @@ func (o DashboardManager) ImportDashboardFromText(json string) (v string, err er
 // Refresh calls refresh().
 func (o DashboardManager) Refresh() error {
 	return o.c.Call("dashboardManager", "refresh", nil)
+}
+
+// FromTemplate calls fromTemplate(QString, QStringList) -> QVariantMap.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) FromTemplate(id string, supported []string) (v map[string]any, err error) {
+	err = o.c.Call("dashboardManager", "fromTemplate", &v, id, supported)
+	return
 }
 
 // LoadDashboard calls loadDashboard(QString) -> QVariant.
@@ -2330,6 +2346,12 @@ func (o ParameterCatalog) GetParameters() (v []any, err error) {
 // GetDisplayParameters reads the property "displayParameters" (QVariantList).
 func (o ParameterCatalog) GetDisplayParameters() (v []any, err error) {
 	err = o.c.Get("parameterCatalog", "displayParameters", &v)
+	return
+}
+
+// GetGroups reads the property "groups" (QStringList).
+func (o ParameterCatalog) GetGroups() (v []string, err error) {
+	err = o.c.Get("parameterCatalog", "groups", &v)
 	return
 }
 

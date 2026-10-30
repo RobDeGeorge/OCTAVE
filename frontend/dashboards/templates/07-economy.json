@@ -1,0 +1,75 @@
+{
+  "schema": 1,
+  "id": "economy",
+  "label": "Economy",
+  "description": "Fuel use, level and load",
+  "order": 7,
+  "gridColumns": 6,
+  "gridRows": 4,
+  "cells": [
+    {
+      "type": "DigitalReadout",
+      "col": 0,
+      "row": 0,
+      "colSpan": 3,
+      "rowSpan": 2,
+      "slot": {
+        "prefer": [
+          "FUEL_RATE",
+          "ENGINE_FUEL_RATE_GS",
+          "MAF"
+        ],
+        "kinds": [
+          "numeric"
+        ]
+      }
+    },
+    {
+      "type": "BarGauge",
+      "col": 3,
+      "row": 0,
+      "colSpan": 3,
+      "rowSpan": 1,
+      "slot": {
+        "prefer": [
+          "FUEL_LEVEL"
+        ],
+        "kinds": [
+          "percentage"
+        ]
+      }
+    },
+    {
+      "type": "BarGauge",
+      "col": 3,
+      "row": 1,
+      "colSpan": 3,
+      "rowSpan": 1,
+      "slot": {
+        "prefer": [
+          "ENGINE_LOAD",
+          "ABSOLUTE_LOAD"
+        ],
+        "kinds": [
+          "percentage"
+        ]
+      }
+    },
+    {
+      "type": "SparklineGauge",
+      "col": 0,
+      "row": 2,
+      "colSpan": 6,
+      "rowSpan": 2,
+      "slot": {
+        "prefer": [
+          "MAF",
+          "FUEL_RATE"
+        ],
+        "kinds": [
+          "numeric"
+        ]
+      }
+    }
+  ]
+}

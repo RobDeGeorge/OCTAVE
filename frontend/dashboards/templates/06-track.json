@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "id": "track",
+  "label": "Track",
+  "description": "Shift lights, the tach and the g-force",
+  "order": 6,
+  "gridColumns": 6,
+  "gridRows": 4,
+  "cells": [
+    {
+      "type": "SegmentedGauge",
+      "col": 0,
+      "row": 0,
+      "colSpan": 6,
+      "rowSpan": 1,
+      "slot": {
+        "prefer": [
+          "RPM"
+        ],
+        "kinds": [
+          "numeric"
+        ]
+      }
+    },
+    {
+      "type": "CircularGauge",
+      "col": 0,
+      "row": 1,
+      "colSpan": 3,
+      "rowSpan": 3,
+      "slot": {
+        "prefer": [
+          "RPM"
+        ],
+        "kinds": [
+          "numeric"
+        ]
+      },
+      "props": {
+        "showNeedle": true
+      }
+    },
+    {
+      "type": "GForceGauge",
+      "col": 3,
+      "row": 1,
+      "colSpan": 3,
+      "rowSpan": 3
+    }
+  ]
+}

@@ -62,6 +62,13 @@ Item {
     // (defaultDensity()); false keeps gridColumns / gridRows as given
     property bool autoDensity: true
 
+    // A new dashboard that starts from a spec instead of an empty grid
+    // (a template, or a built-in being customized): its label, grid and
+    // cells, not saved until Done. fitToScreen also lays it out again on
+    // this screen's default density (a template, written for 6 x 4).
+    property var initialSpec: null
+    property bool fitToScreen: false
+
     // Optional grid geometry (dp) carried through from a loaded spec so a
     // hand-authored margins/spacing survives a save. undefined = not in the
     // spec; the renderer (and canvas) then fall back to their 20/16 defaults.
@@ -120,12 +127,16 @@ Item {
         _load()
         _resetHistory()
         _densityPending = autoDensity && editingId.length === 0 && draftJson.length === 0
+                          && (cells.length === 0 || fitToScreen)
         Qt.callLater(_pickDefaultDensity)
     }
 
     function _load() {
         if (draftJson.length > 0 && _restoreDraft(draftJson)) return
-        if (editingId.length === 0) return
+        if (editingId.length === 0) {
+            if (initialSpec && initialSpec.cells) _loadSpec(initialSpec)
+            return
+        }
         if (typeof dashboardManager === "undefined" || !dashboardManager) return
         var spec = dashboardManager.loadDashboard(editingId)
         if (!spec || !spec.cells) {
@@ -139,6 +150,10 @@ Item {
             editingId = ""
             return
         }
+        _loadSpec(spec)
+    }
+
+    function _loadSpec(spec) {
         // Already normalised by the manager: in the grid, no overlaps
         gridColumns = spec.gridColumns
         gridRows = spec.gridRows
@@ -190,10 +205,19 @@ Item {
     function _pickDefaultDensity() {
         if (!_densityPending || canvasFrame.width <= 0 || canvasFrame.height <= 0) return
         _densityPending = false
-        if (cells.length > 0) return
         var g = densityGrid(defaultDensity())
-        gridColumns = g.cols
-        gridRows = g.rows
+        if (cells.length > 0) {
+            // A template: the same layout on this screen's grid, when it fits
+            if (!fitToScreen || (g.cols === gridColumns && g.rows === gridRows)) return
+            var r = dashboardManager.rescale(cells, gridColumns, gridRows, g.cols, g.rows)
+            if (!r.ok) return
+            gridColumns = g.cols
+            gridRows = g.rows
+            _show(r.cells)
+        } else {
+            gridColumns = g.cols
+            gridRows = g.rows
+        }
         _resetHistory()
     }
 
@@ -451,7 +475,10 @@ Item {
     // A new widget at grid cell (col, row), or wherever there is room when
     // col < 0. At the tapped cell it shrinks (not below readable) before
     // going elsewhere. Returns whether it was placed.
-    function addCellAt(type, col, row) {
+    function addCellAt(type, col, row) { return _addCell(type, col, row, "") }
+
+    // The same, bound to `paramId` when given (data-first add)
+    function _addCell(type, col, row, paramId) {
         var meta = App.WidgetCatalog.metaFor(type)
         if (!meta) return false
         var spans = _newSpans(type)
@@ -484,8 +511,9 @@ Item {
             return false
         }
         var next = cells.slice()
+        var bound = (paramId && meta.supportedKinds.length > 0) ? paramId : ""
         next.push({
-            "type": type, "paramId": "",
+            "type": type, "paramId": bound,
             "col": place.col, "row": place.row,
             "colSpan": place.colSpan, "rowSpan": place.rowSpan,
             "props": {}
@@ -494,7 +522,7 @@ Item {
         selectedIndex = next.length - 1
         // A gauge without a PID is useless — pick one now. Self-binding
         // widgets (supportedKinds: []) skip this.
-        if (meta.supportedKinds.length > 0)
+        if (meta.supportedKinds.length > 0 && bound === "")
             openPidPicker()
         return true
     }
@@ -655,6 +683,51 @@ Item {
         _patchCell(index, { "props": props })
     }
 
+    // ── Test values ──────────────────────────────────────────────────────
+    // cell index → a value its widget shows instead of the live one (the
+    // sheet's Test value slider). Not part of the spec: never saved, not in
+    // undo, cleared when the sheet closes or the cells change.
+    property var testValues: ({})
+    function setTestValue(index, v) {
+        var t = Object.assign({}, testValues)
+        t[index] = v
+        testValues = t
+    }
+    function clearTestValue(index) {
+        if (testValues[index] === undefined) return
+        var t = Object.assign({}, testValues)
+        delete t[index]
+        testValues = t
+    }
+    function _clearTestValues() { if (Object.keys(testValues).length > 0) testValues = ({}) }
+    onSheetOpenChanged: if (!sheetOpen) _clearTestValues()
+    onSelectedIndexChanged: _clearTestValues()
+    onCellsChanged: _clearTestValues()
+
+    // The sheet's JSON section: the cell's props replaced by `text` (an
+    // object), held to the spec rules as a save would. Returns "" when
+    // applied as written, else what went wrong or what was dropped.
+    function setCellPropsJson(index, text) {
+        var c = cells[index]
+        if (!c) return "No widget selected"
+        var obj
+        try {
+            obj = JSON.parse(text)
+        } catch (e) {
+            return "Not valid JSON: " + e.message
+        }
+        if (obj === null || typeof obj !== "object" || Array.isArray(obj))
+            return "Options are an object: { \"key\": value, ... }"
+        var probe = Object.assign({}, c)
+        probe.props = obj
+        var spec = dashboardManager.normalizedSpec({ "gridColumns": gridColumns, "gridRows": gridRows,
+                                                     "cells": [probe] })
+        var kept = (spec.cells && spec.cells.length > 0 && spec.cells[0].props) ? spec.cells[0].props : {}
+        _patchCell(index, { "props": kept })
+        var dropped = Object.keys(obj).filter(function(k) { return kept[k] === undefined })
+        return dropped.length > 0 ? "Not kept (unknown or not a plain value): " + dropped.join(", ") : ""
+    }
+
     function _hideChoosers() {
         _tapCell = null
         _swapTarget = -1
@@ -678,12 +751,33 @@ Item {
     }
     function closeSheet() { sheetOpen = false }
 
+    // "bind": the picked PID goes to the selected widget; "add": the
+    // widget the catalog suggests for it is placed (data-first add)
+    property string _pidMode: "bind"
+
     function openPidPicker() {
         if (!selectedCell) return
         var meta = App.WidgetCatalog.metaFor(selectedCell.type)
+        _pidMode = "bind"
+        pidPicker.title = "Choose data"
         pidPicker.supportedKinds = meta ? meta.supportedKinds : ["*"]
         pidPicker.currentParamId = selectedCell.paramId ? selectedCell.paramId : ""
         pidPicker.open()
+    }
+
+    function openDataFirst() {
+        _pidMode = "add"
+        pidPicker.title = "What do you want to see?"
+        pidPicker.supportedKinds = ["*"]
+        pidPicker.currentParamId = ""
+        pidPicker.open()
+    }
+
+    // Data-first: the suggested widget for this PID, placed where Add was asked
+    function addForParam(paramId) {
+        var p = App.OBDParameterModel.displayParameters.filter(function(x) { return x.id === paramId })[0]
+        var type = App.WidgetCatalog.suggestFor(paramId, p ? p.kind : "numeric")
+        return _addCell(type, _pendingCol, _pendingRow, paramId)
     }
 
     function openPalette(col, row) {
@@ -967,6 +1061,7 @@ Item {
             model: cellModel
             selectedIndex: editor.selectedIndex
             interactive: !editor._sheetShown
+            testValues: editor.testValues
             minSpanFor: function(index) {
                 var c = editor.cells[index]
                 return c ? editor.minSpanFor(c.type) : null
@@ -1207,12 +1302,15 @@ Item {
         onWidgetPicked: function(type) {
             editor.addCellAt(type, editor._pendingCol, editor._pendingRow)
         }
+        onDataFirstRequested: editor.openDataFirst()
     }
 
     PIDPicker {
         id: pidPicker
         onPidPicked: function(paramId) {
-            if (editor.selectedIndex >= 0)
+            if (editor._pidMode === "add")
+                editor.addForParam(paramId)
+            else if (editor.selectedIndex >= 0)
                 editor.setCellParam(editor.selectedIndex, paramId)
         }
     }

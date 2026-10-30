@@ -95,4 +95,29 @@ QtObject {
     function isKnownType(typeName) {
         return metaFor(typeName) !== null
     }
+
+    // The gallery's categories, in order
+    readonly property var categories: _data.categories || []
+
+    // Whether a widget type can show a parameter of `kind`
+    function acceptsKind(typeName, kind) {
+        var m = metaFor(typeName)
+        if (!m) return false
+        for (var i = 0; i < m.supportedKinds.length; i++)
+            if (m.supportedKinds[i] === "*" || m.supportedKinds[i] === kind) return true
+        return false
+    }
+
+    // The widget the data-first add proposes for a parameter: the catalog's
+    // `suggestions` by id, else by kind, else a plain readout. Self-binding
+    // widgets (G-force, compass) are proposed for their sensor ids and take
+    // no paramId (supportedKinds empty).
+    function suggestFor(paramId, kind) {
+        var s = _data.suggestions || {}
+        var byId = (s.byId || {})[paramId]
+        if (byId && metaFor(byId)) return byId
+        var byKind = (s.byKind || {})[kind]
+        if (byKind && acceptsKind(byKind, kind)) return byKind
+        return "DigitalReadout"
+    }
 }

@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "id": "blank",
+  "label": "Blank",
+  "description": "An empty grid to build from scratch",
+  "order": 10,
+  "gridColumns": 6,
+  "gridRows": 4,
+  "cells": []
+}

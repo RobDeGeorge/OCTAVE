@@ -1,6 +1,7 @@
 // dashboardmanager.cpp
 
 #include "dashboardmanager.h"
+#include "parametercatalog.h"
 #include "../util/dashboardgrid.h"
 #include "../util/pathurl.h"
 
@@ -623,6 +624,84 @@ void DashboardManager::setWidgetCatalogFile(const QString &absolutePath)
     QVariantMap catalog = doc.object().toVariantMap();
     catalog.remove(QStringLiteral("_comment"));
     m_widgetCatalog = catalog;
+}
+
+void DashboardManager::setTemplatesDir(const QString &absolutePath)
+{
+    QList<QVariantMap> found;
+    const QDir dir(absolutePath);
+    for (const QString &name : dir.entryList({QStringLiteral("*.json")}, QDir::Files, QDir::Name)) {
+        QFile f(dir.absoluteFilePath(name));
+        if (!f.open(QIODevice::ReadOnly))
+            continue;
+        const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+        QVariantMap t = doc.object().toVariantMap();
+        if (t.value(QStringLiteral("id")).toString().isEmpty() || t.value(QStringLiteral("label")).toString().isEmpty()) {
+            qCWarning(lcDashboards) << "Skipping template without id / label:" << name;
+            continue;
+        }
+        t.remove(QStringLiteral("_comment"));
+        found.append(t);
+    }
+    std::stable_sort(found.begin(), found.end(), [](const QVariantMap &a, const QVariantMap &b) {
+        return a.value(QStringLiteral("order")).toInt() < b.value(QStringLiteral("order")).toInt();
+    });
+    m_templates.clear();
+    for (const QVariantMap &t : found)
+        m_templates.append(t);
+}
+
+QVariantMap DashboardManager::fromTemplate(const QString &id, const QStringList &supported) const
+{
+    QVariantMap tpl;
+    for (const QVariant &t : m_templates)
+        if (t.toMap().value(QStringLiteral("id")).toString() == id)
+            tpl = t.toMap();
+    if (tpl.isEmpty())
+        return {};
+
+    const bool carKnown = !supported.isEmpty();
+    const QSet<QString> reported(supported.begin(), supported.end());
+    QSet<QString> taken;
+    QVariantList cells;
+    // Cells that name their PID outright take it first
+    for (const QVariant &c : tpl.value(QStringLiteral("cells")).toList())
+        if (!c.toMap().value(QStringLiteral("paramId")).toString().isEmpty())
+            taken.insert(c.toMap().value(QStringLiteral("paramId")).toString());
+    for (const QVariant &c : tpl.value(QStringLiteral("cells")).toList()) {
+        QVariantMap cell = c.toMap();
+        const QVariantMap slot = cell.take(QStringLiteral("slot")).toMap();
+        if (!slot.isEmpty() && cell.value(QStringLiteral("paramId")).toString().isEmpty()) {
+            QString pick;
+            for (const QVariant &p : slot.value(QStringLiteral("prefer")).toList()) {
+                const QString pid = p.toString();
+                if (!taken.contains(pid) && ParameterCatalog::find(pid)
+                    && (!carKnown || reported.contains(pid) || ParameterCatalog::find(pid)->source == ParameterCatalog::Source::Imu)) {
+                    pick = pid;
+                    break;
+                }
+            }
+            if (pick.isEmpty() && carKnown) {
+                const QStringList kinds = slot.value(QStringLiteral("kinds")).toStringList();
+                for (const QString &pid : supported) {
+                    const ParameterCatalog::Parameter *p = ParameterCatalog::find(pid);
+                    if (p && p->aliasOf.isEmpty() && !taken.contains(pid) && kinds.contains(p->kind)) {
+                        pick = pid;
+                        break;
+                    }
+                }
+            }
+            cell.insert(QStringLiteral("paramId"), pick);
+            if (!pick.isEmpty())
+                taken.insert(pick);
+        }
+        cells.append(cell);
+    }
+    return normalizedSpec({{QStringLiteral("schema"), 1},
+                           {QStringLiteral("label"), tpl.value(QStringLiteral("label"))},
+                           {QStringLiteral("gridColumns"), tpl.value(QStringLiteral("gridColumns"))},
+                           {QStringLiteral("gridRows"), tpl.value(QStringLiteral("gridRows"))},
+                           {QStringLiteral("cells"), cells}});
 }
 
 namespace {
