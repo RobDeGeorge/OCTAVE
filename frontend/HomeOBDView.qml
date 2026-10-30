@@ -18,9 +18,10 @@ Item {
     // Parameter info from centralized singleton (covers all 92 params: 84 OBD + 8 IMU)
     property var parameterInfo: App.OBDParameterModel.parameterInfo
     
-    // Smart grid layout - 1 column for up to 5 cards, 2 columns for 6-8 cards
+    // Smart grid layout - 1 column for up to 5 cards, 2 columns for 6-8 cards.
+    // Portrait gives this view the full width, so 2 columns from 2 cards up.
     property int cardCount: obdRepeater.count
-    property int columnCount: cardCount <= 5 ? 1 : 2
+    property int columnCount: cardCount <= (App.Spacing.isPortrait ? 1 : 5) ? 1 : 2
 
     GridLayout {
         id: gridLayout

@@ -16,9 +16,10 @@ Item {
 
     // Column split shared by the header and every song row. Album names run
     // longest, artists shortest.
-    readonly property real titleColumnRatio: 0.4
-    readonly property real artistColumnRatio: 0.25
-    readonly property real albumColumnRatio: 0.35
+    // Portrait (a phone) has no room for three columns: album is dropped
+    readonly property real titleColumnRatio: App.Spacing.isPortrait ? 0.6 : 0.4
+    readonly property real artistColumnRatio: App.Spacing.isPortrait ? 0.4 : 0.25
+    readonly property real albumColumnRatio: App.Spacing.isPortrait ? 0 : 0.35
 
     // Destructive actions (delete song / playlist). Fixed rather than themed so
     // it never matches the accent. SheetButton keeps its own copy.
@@ -767,6 +768,7 @@ Item {
                         // Album header with sort functionality
                         Item {
                             Layout.preferredWidth: parent.width * mediaPlayer.albumColumnRatio
+                            visible: mediaPlayer.albumColumnRatio > 0
                             Layout.fillHeight: true
 
                             MouseArea {
@@ -1076,6 +1078,7 @@ Item {
                                 // Album column
                                 Item {
                                     Layout.preferredWidth: parent.width * mediaPlayer.albumColumnRatio
+                                    visible: mediaPlayer.albumColumnRatio > 0
                                     Layout.fillHeight: true
                                     clip: true
 
@@ -1349,6 +1352,7 @@ Item {
                                 // Album column: kept so the columns line up with the header
                                 Item {
                                     Layout.preferredWidth: parent.width * mediaPlayer.albumColumnRatio
+                                    visible: mediaPlayer.albumColumnRatio > 0
                                     Layout.fillHeight: true
                                 }
                             }

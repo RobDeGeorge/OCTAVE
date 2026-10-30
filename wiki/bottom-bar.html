@@ -151,7 +151,7 @@ thickness: isVertical
         <!-- Media Transport Controls -->
         <h2 id="media-controls">Media Transport Controls</h2>
 
-        <p>The media group contains, in order: Previous, Play/Pause, Next, Shuffle, Mute and the volume percentage. Each transport button is a <code>MediaButton</code>, drawn as a nav button is: the same size, gap and accent outline, with a tinted SVG (<code>TintedIcon</code>, see <a href="#svg-pattern">SVG Icon Pattern</a>) at 0.7 of the face, inside a face that squishes while pressed (see <a href="#animation-pattern">Button Animation Pattern</a>), and a <code>MouseArea</code> over the whole touch area:</p>
+        <p>The media group is off by default: a fresh install (and the browser demo) shows only the nav buttons and the clock, and Settings &gt; Display &gt; Layout &gt; Nav Bar Media Controls (<code>showBottomBarMediaControls</code>) turns it on. A settings file that already saved the old default keeps it. The media group contains, in order: Previous, Play/Pause, Next, Shuffle, Mute and the volume percentage. Each transport button is a <code>MediaButton</code>, drawn as a nav button is: the same size, gap and accent outline, with a tinted SVG (<code>TintedIcon</code>, see <a href="#svg-pattern">SVG Icon Pattern</a>) at 0.7 of the face, inside a face that squishes while pressed (see <a href="#animation-pattern">Button Animation Pattern</a>), and a <code>MouseArea</code> over the whole touch area:</p>
 
         <pre><code><span class="cls">MediaButton</span> {
     <span class="prop">face</span>: bottomBar.geo.items.prev; <span class="prop">hit</span>: bottomBar.geo.hits.prev

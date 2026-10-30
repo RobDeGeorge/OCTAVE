@@ -105,6 +105,9 @@ Item {
     // The phone's shuffle belongs to its app: off (and dimmed) meanwhile
     readonly property bool isShuffleEnabled: !useRemote && !!_np && _np.shuffled
 
+    // The visualizer is on screen (its setting, and something to play)
+    readonly property bool _waveformShown: !!settingsManager && settingsManager.showWaveformVisualizer && !playlistEmpty
+
     // Empty playlist detection — swaps the controls for the empty message
     property int localSongCount: 0
     property bool playlistEmpty: !useRemote && localSongCount === 0
@@ -212,7 +215,7 @@ Item {
         Item { //background
             id: backgroundContainer
             anchors.fill: parent
-            z: -1  
+            z: -1
 
             Grid {
                 id: albumArtGrid
@@ -312,7 +315,7 @@ Item {
 
         Rectangle { // Volume control at top
             id: topVolumeControl
-            width: parent.width * 0.75
+            width: parent.width * (App.Spacing.isPortrait ? 0.9 : 0.75)
             height: App.Spacing.mediaRoomDurationBarHeight
             anchors {
                 top: parent.top
@@ -331,6 +334,9 @@ Item {
                     implicitWidth: App.Spacing.bottomBarMuteButtonWidth
                     implicitHeight: App.Spacing.bottomBarMuteButtonHeight
                     Layout.alignment: Qt.AlignVCenter
+                    // Portrait: as wide as the % text, so the slider is centred
+                    Layout.preferredWidth: App.Spacing.isPortrait
+                        ? Math.max(implicitWidth, volumePercentText.implicitWidth) : -1
                     
                     background: Rectangle { color: "transparent" }
                     
@@ -454,7 +460,9 @@ Item {
                     color: App.Style.mediaRoomSeekColor
                     font.pixelSize: App.Spacing.mediaRoomSliderDurationText
                     font.family: mediaRoom.globalFont
-                    Layout.minimumWidth: dp(40)
+                    Layout.minimumWidth: App.Spacing.isPortrait ? 0 : dp(40)
+                    Layout.preferredWidth: App.Spacing.isPortrait ? volumeIconControl.Layout.preferredWidth : -1
+                    horizontalAlignment: App.Spacing.isPortrait ? Text.AlignRight : Text.AlignLeft
                 }
             }
 
@@ -496,38 +504,79 @@ Item {
         Rectangle { //media controls container
             id: mediaControlsContainer
             visible: !playlistEmpty
-            width: App.Spacing.applicationWidth * App.Spacing.mediaRoomControlsContainerWidth
+            // Portrait: the full width, from a little under the volume row
+            // down to the visualizer (or the seek bar when it is off)
+            width: App.Spacing.isPortrait ? parent.width
+                 : App.Spacing.applicationWidth * App.Spacing.mediaRoomControlsContainerWidth
             height: App.Spacing.applicationHeight * App.Spacing.mediaRoomControlsContainerHeight
             anchors {
                 top: topVolumeControl.bottom
-                bottom: durationBar.top
+                bottom: App.Spacing.isPortrait && mediaRoom._waveformShown ? waveformContainer.top : durationBar.top
                 horizontalCenter: parent.horizontalCenter
                 // Use verticalCenter to ensure it's centered between the two elements
                 margins: App.Spacing.mediaRoomMargin
+                topMargin: App.Spacing.mediaRoomMargin + (App.Spacing.isPortrait ? dp(8) : 0)
             }
             color: transparentColor
         
 
-            RowLayout {
+            // Controls and metadata on the left, art on the right; in
+            // portrait the art on top and the controls under it
+            GridLayout {
+                id: mediaControlsGrid
+                readonly property bool portrait: App.Spacing.isPortrait
                 anchors.fill: parent
-                spacing: App.Spacing.mediaRoomSpacing
+                columns: portrait ? 1 : 2
+                rowSpacing: App.Spacing.mediaRoomSpacing
+                columnSpacing: App.Spacing.mediaRoomSpacing
 
                 // Left side - Controls and Metadata
                 ColumnLayout {
+                    id: mediaControlsColumn
+                    Layout.row: mediaControlsGrid.portrait ? 1 : 0
+                    Layout.column: 0
+                    // Portrait: the height the art leaves (see the art item)
                     Layout.fillHeight: true
-                    Layout.preferredWidth: parent.width * (mediaRoom.showMusicDevice ? 0.56 : 0.6)
-                    Layout.maximumWidth: parent.width * (mediaRoom.showMusicDevice ? 0.56 : 0.6)
+                    Layout.fillWidth: mediaControlsGrid.portrait
+                    Layout.preferredWidth: mediaControlsGrid.portrait ? -1 : parent.width * (mediaRoom.showMusicDevice ? 0.56 : 0.6)
+                    Layout.maximumWidth: mediaControlsGrid.portrait ? Number.POSITIVE_INFINITY : parent.width * (mediaRoom.showMusicDevice ? 0.56 : 0.6)
                     Layout.leftMargin: dp(20)
-                    spacing: App.Spacing.mediaRoomSpacing * 2
+                    Layout.rightMargin: mediaControlsGrid.portrait ? dp(20) : 0
+                    spacing: mediaControlsGrid.portrait ? dp(10) : App.Spacing.mediaRoomSpacing * 2
 
                     // Spacer to push controls toward center
-                    Item { Layout.fillHeight: true }
+                    Item { Layout.fillHeight: true; visible: !mediaControlsGrid.portrait }
+
+                    // Portrait: the title block (reparented here) above the
+                    // transport row, both under the art
+                    Item {
+                        id: portraitMetaSlot
+                        visible: mediaControlsGrid.portrait
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: songMeta.implicitHeight
+                    }
+
+                    // Portrait: the keys sit midway between the title and the
+                    // visualizer (this spacer and the one at the bottom)
+                    Item { Layout.fillHeight: true; visible: mediaControlsGrid.portrait }
 
                     // Media Controls Row
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignHCenter
-                        spacing: App.Spacing.mediaRoomBetweenButton
+                        // Portrait: spread the keys across more of the page width
+                        spacing: mediaControlsGrid.portrait
+                            ? Math.max(App.Spacing.mediaRoomBetweenButton, mediaControlsColumn.width * 0.07)
+                            : App.Spacing.mediaRoomBetweenButton
+
+                        // Portrait: shuffle joins this row (it is reparented
+                        // here), balanced by an empty slot after Next
+                        Item {
+                            id: portraitShuffleSlot
+                            visible: mediaControlsGrid.portrait
+                            Layout.preferredWidth: shuffleButton.keyBox
+                            Layout.preferredHeight: Layout.preferredWidth
+                        }
 
                         Control { //Previous button
                             id: previousControl
@@ -553,8 +602,10 @@ Item {
                                 Image {
                                     id: previousButtonImage
                                     anchors.centerIn: parent
-                                    width: parent.width
-                                    height: parent.height
+                                    // A solid glyph that fills its box: drawn at 0.6 of
+                                    // the key so it doesn't outweigh the play circle
+                                    width: parent.width * 0.6
+                                    height: parent.height * 0.6
                                     source: "./assets/previous_button.svg"
                                     sourceSize: Qt.size(width * 2, height * 2)
                                     fillMode: Image.PreserveAspectFit
@@ -679,8 +730,10 @@ Item {
                                 Image {
                                     id: nextButtonImage
                                     anchors.centerIn: parent
-                                    width: parent.width
-                                    height: parent.height
+                                    // A solid glyph that fills its box: drawn at 0.6 of
+                                    // the key so it doesn't outweigh the play circle
+                                    width: parent.width * 0.6
+                                    height: parent.height * 0.6
                                     source: "./assets/next_button.svg"
                                     sourceSize: Qt.size(width * 2, height * 2)
                                     fillMode: Image.PreserveAspectFit
@@ -717,148 +770,164 @@ Item {
                                 }
                             }
                         }
+
+                        Item {
+                            visible: mediaControlsGrid.portrait
+                            Layout.preferredWidth: portraitShuffleSlot.Layout.preferredWidth
+                            Layout.preferredHeight: portraitShuffleSlot.Layout.preferredHeight
+                        }
                     }
 
-                    // Song metadata section (below controls)
-                    ColumnLayout {
+                    // Song metadata section (below controls; portrait: above
+                    // the seek bar, in portraitMetaSlot)
+                    Item {
+                        id: landscapeMetaSlot
+                        visible: !mediaControlsGrid.portrait
                         Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignHCenter
-                        spacing: dp(4)
+                        Layout.preferredHeight: songMeta.implicitHeight
 
-                        // Song title with scrolling
-                        Item {
-                            id: songTitleContainer
-                            Layout.fillWidth: true
-                            Layout.alignment: Qt.AlignHCenter
-                            height: Math.ceil(App.Spacing.mediaRoomMetaDataSongText * 1.4)
+                        ColumnLayout {
+                            id: songMeta
+                            parent: mediaControlsGrid.portrait ? portraitMetaSlot : landscapeMetaSlot
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            spacing: dp(4)
 
-                            Flickable {
-                                id: songTitleFlickable
-                                anchors.centerIn: parent
-                                width: Math.min(songTitleText.width, parent.width)
-                                height: parent.height
-                                contentWidth: songTitleText.width
-                                contentHeight: parent.height
-                                clip: true
-                                flickableDirection: Flickable.HorizontalFlick
+                            // Song title with scrolling
+                            Item {
+                                id: songTitleContainer
+                                Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignHCenter
+                                height: Math.ceil(App.Spacing.mediaRoomMetaDataSongText * 1.4)
 
-                                Text {
-                                    id: songTitleText
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: currentTrackName || "No track selected"
-                                    color: App.Style.metadataColor
-                                    font.pixelSize: App.Spacing.mediaRoomMetaDataSongText
-                                    font.bold: true
-                                    font.family: mediaRoom.globalFont
-                                }
+                                Flickable {
+                                    id: songTitleFlickable
+                                    anchors.centerIn: parent
+                                    width: Math.min(songTitleText.width, parent.width)
+                                    height: parent.height
+                                    contentWidth: songTitleText.width
+                                    contentHeight: parent.height
+                                    clip: true
+                                    flickableDirection: Flickable.HorizontalFlick
 
-                                // Title marquee. Runs only while mediaRoom is visible: this page stays alive
+                                    Text {
+                                        id: songTitleText
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: currentTrackName || "No track selected"
+                                        color: App.Style.metadataColor
+                                        font.pixelSize: App.Spacing.mediaRoomMetaDataSongText
+                                        font.bold: true
+                                        font.family: mediaRoom.globalFont
+                                    }
 
-                                // hidden (StackView cache / pre-building), and a hidden marquee kept a 5 s
+                                    // Title marquee. Runs only while mediaRoom is visible: this page stays alive
 
-                                // animation cycling forever, costing ~15% of a Pi core at idle. restart()
+                                    // hidden (StackView cache / pre-building), and a hidden marquee kept a 5 s
 
-                                // below bypasses the running binding, hence the visible checks there too.
+                                    // animation cycling forever, costing ~15% of a Pi core at idle. restart()
 
-                                Timer {
-                                    id: songScrollTimer
-                                    property real containerWidth: songTitleFlickable.parent ? songTitleFlickable.parent.width : 200
-                                    interval: 3000
-                                    running: songTitleText.width > containerWidth && mediaRoom.visible
-                                    repeat: true
-                                    onTriggered: {
-                                        if (!mediaRoom.visible) return
-                                        if (songTitleFlickable.contentX === 0) {
-                                            songScrollAnimation.to = songTitleText.width - songTitleFlickable.width;
-                                            songScrollAnimation.start();
-                                        } else {
-                                            songScrollAnimation.to = 0;
-                                            songScrollAnimation.start();
+                                    // below bypasses the running binding, hence the visible checks there too.
+
+                                    Timer {
+                                        id: songScrollTimer
+                                        property real containerWidth: songTitleFlickable.parent ? songTitleFlickable.parent.width : 200
+                                        interval: 3000
+                                        running: songTitleText.width > containerWidth && mediaRoom.visible
+                                        repeat: true
+                                        onTriggered: {
+                                            if (!mediaRoom.visible) return
+                                            if (songTitleFlickable.contentX === 0) {
+                                                songScrollAnimation.to = songTitleText.width - songTitleFlickable.width;
+                                                songScrollAnimation.start();
+                                            } else {
+                                                songScrollAnimation.to = 0;
+                                                songScrollAnimation.start();
+                                            }
                                         }
                                     }
-                                }
 
-                                NumberAnimation {
-                                    id: songScrollAnimation
-                                    target: songTitleFlickable
-                                    property: "contentX"
-                                    duration: settingsManager ? settingsManager.textScrollSpeed : 5000
-                                    easing.type: Easing.InOutQuad
-                                    onFinished: if (mediaRoom.visible) songScrollTimer.restart()
+                                    NumberAnimation {
+                                        id: songScrollAnimation
+                                        target: songTitleFlickable
+                                        property: "contentX"
+                                        duration: settingsManager ? settingsManager.textScrollSpeed : 5000
+                                        easing.type: Easing.InOutQuad
+                                        onFinished: if (mediaRoom.visible) songScrollTimer.restart()
+                                    }
                                 }
                             }
-                        }
 
-                        // Artist and album info
-                        Item {
-                            id: metadataContainer
-                            Layout.fillWidth: true
-                            Layout.alignment: Qt.AlignHCenter
-                            height: Math.ceil(App.Spacing.mediaRoomMetaDataBandText * 1.4)
+                            // Artist and album info
+                            Item {
+                                id: metadataContainer
+                                Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignHCenter
+                                height: Math.ceil(App.Spacing.mediaRoomMetaDataBandText * 1.4)
 
-                            Flickable {
-                                id: metadataFlickable
-                                anchors.centerIn: parent
-                                width: Math.min(metadataRow.width, parent.width)
-                                height: parent.height
-                                contentWidth: metadataRow.width
-                                contentHeight: parent.height
-                                clip: true
-                                flickableDirection: Flickable.HorizontalFlick
+                                Flickable {
+                                    id: metadataFlickable
+                                    anchors.centerIn: parent
+                                    width: Math.min(metadataRow.width, parent.width)
+                                    height: parent.height
+                                    contentWidth: metadataRow.width
+                                    contentHeight: parent.height
+                                    clip: true
+                                    flickableDirection: Flickable.HorizontalFlick
 
-                                Row {
-                                    id: metadataRow
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    spacing: dp(10)
+                                    Row {
+                                        id: metadataRow
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        spacing: dp(10)
 
-                                    Text {
-                                        text: currentArtist
-                                        color: App.Style.metadataColor
-                                        font.pixelSize: App.Spacing.mediaRoomMetaDataBandText
-                                        font.family: mediaRoom.globalFont
-                                        opacity: 0.7
-                                    }
-                                    Text {
-                                        text: "\u2022"
-                                        color: App.Style.metadataColor
-                                        font.pixelSize: App.Spacing.mediaRoomMetaDataAlbumText
-                                        font.family: mediaRoom.globalFont
-                                        opacity: 0.8
-                                    }
-                                    Text {
-                                        text: currentAlbum
-                                        color: App.Style.metadataColor
-                                        font.pixelSize: App.Spacing.mediaRoomMetaDataAlbumText
-                                        font.family: mediaRoom.globalFont
-                                        opacity: 0.8
-                                    }
-                                }
-
-                                Timer {
-                                    id: metadataScrollTimer
-                                    property real containerWidth: metadataFlickable.parent ? metadataFlickable.parent.width : 200
-                                    interval: 3000
-                                    running: metadataRow.width > containerWidth && mediaRoom.visible
-                                    repeat: true
-                                    onTriggered: {
-                                        if (!mediaRoom.visible) return
-                                        if (metadataFlickable.contentX === 0) {
-                                            metadataScrollAnimation.to = metadataRow.width - metadataFlickable.width;
-                                            metadataScrollAnimation.start();
-                                        } else {
-                                            metadataScrollAnimation.to = 0;
-                                            metadataScrollAnimation.start();
+                                        Text {
+                                            text: currentArtist
+                                            color: App.Style.metadataColor
+                                            font.pixelSize: App.Spacing.mediaRoomMetaDataBandText
+                                            font.family: mediaRoom.globalFont
+                                            opacity: 0.7
+                                        }
+                                        Text {
+                                            text: "\u2022"
+                                            color: App.Style.metadataColor
+                                            font.pixelSize: App.Spacing.mediaRoomMetaDataAlbumText
+                                            font.family: mediaRoom.globalFont
+                                            opacity: 0.8
+                                        }
+                                        Text {
+                                            text: currentAlbum
+                                            color: App.Style.metadataColor
+                                            font.pixelSize: App.Spacing.mediaRoomMetaDataAlbumText
+                                            font.family: mediaRoom.globalFont
+                                            opacity: 0.8
                                         }
                                     }
-                                }
 
-                                NumberAnimation {
-                                    id: metadataScrollAnimation
-                                    target: metadataFlickable
-                                    property: "contentX"
-                                    duration: settingsManager ? settingsManager.textScrollSpeed : 5000
-                                    easing.type: Easing.InOutQuad
-                                    onFinished: if (mediaRoom.visible) metadataScrollTimer.restart()
+                                    Timer {
+                                        id: metadataScrollTimer
+                                        property real containerWidth: metadataFlickable.parent ? metadataFlickable.parent.width : 200
+                                        interval: 3000
+                                        running: metadataRow.width > containerWidth && mediaRoom.visible
+                                        repeat: true
+                                        onTriggered: {
+                                            if (!mediaRoom.visible) return
+                                            if (metadataFlickable.contentX === 0) {
+                                                metadataScrollAnimation.to = metadataRow.width - metadataFlickable.width;
+                                                metadataScrollAnimation.start();
+                                            } else {
+                                                metadataScrollAnimation.to = 0;
+                                                metadataScrollAnimation.start();
+                                            }
+                                        }
+                                    }
+
+                                    NumberAnimation {
+                                        id: metadataScrollAnimation
+                                        target: metadataFlickable
+                                        property: "contentX"
+                                        duration: settingsManager ? settingsManager.textScrollSpeed : 5000
+                                        easing.type: Easing.InOutQuad
+                                        onFinished: if (mediaRoom.visible) metadataScrollTimer.restart()
+                                    }
                                 }
                             }
                         }
@@ -878,9 +947,20 @@ Item {
 
 
                 Item {
-                    Layout.fillHeight: true
-                    Layout.preferredWidth: parent.width * (mediaRoom.showMusicDevice ? 0.44 : 0.4)
-                    Layout.maximumWidth: parent.width * (mediaRoom.showMusicDevice ? 0.44 : 0.4)
+                    Layout.row: 0
+                    Layout.column: mediaControlsGrid.portrait ? 0 : 1
+                    Layout.fillWidth: mediaControlsGrid.portrait
+                    Layout.preferredWidth: mediaControlsGrid.portrait ? -1 : parent.width * (mediaRoom.showMusicDevice ? 0.44 : 0.4)
+                    Layout.maximumWidth: mediaControlsGrid.portrait ? Number.POSITIVE_INFINITY : parent.width * (mediaRoom.showMusicDevice ? 0.44 : 0.4)
+                    // Portrait: a square box as wide as the page, cut down to
+                    // what the title and keys under it leave, so it shrinks
+                    // rather than pushing them into the bottom bar
+                    Layout.fillHeight: !mediaControlsGrid.portrait
+                    Layout.preferredHeight: mediaControlsGrid.portrait
+                        ? Math.max(0, Math.min(parent.width,
+                              parent.height - mediaControlsColumn.implicitHeight - parent.rowSpacing))
+                        : -1
+                    Layout.minimumHeight: 0
                     Layout.alignment: Qt.AlignVCenter
 
                     // Stays loaded while MediaRoom is hidden: rebuilding the
@@ -906,13 +986,20 @@ Item {
 
                     AlbumArtCarousel {
                         id: albumArtStack
-                        anchors.fill: parent
+                        // Portrait: a square box at the top, right under the volume row
+                        anchors.fill: mediaControlsGrid.portrait ? undefined : parent
+                        anchors.top: mediaControlsGrid.portrait ? parent.top : undefined
+                        anchors.horizontalCenter: mediaControlsGrid.portrait ? parent.horizontalCenter : undefined
+                        width: parent.width
+                        height: mediaControlsGrid.portrait ? Math.min(parent.width, parent.height) : parent.height
                         // Keep the carousel's transition/settled lifecycle alive for track analysis.
                         // Only its presentation is hidden while a device is successfully loaded.
                         visible: !(musicDeviceLoader.item && musicDeviceLoader.item.ready)
 
                         // Settings bindings
-                        previewEnabled: settingsManager && settingsManager.show3DAlbumPreview
+                        // Portrait: nearly the page width, no side cards (no room for them)
+                        artFill: mediaControlsGrid.portrait ? 0.92 : 0.85
+                        previewEnabled: !mediaControlsGrid.portrait && settingsManager && settingsManager.show3DAlbumPreview
                         roundedArt: settingsManager && settingsManager.roundedAlbumArt
                         artRadius: dp(settingsManager ? settingsManager.albumArtCornerRadius : 16)
                         vinylMode: settingsManager && settingsManager.vinylRecordMode
@@ -936,6 +1023,7 @@ Item {
 
                         onArtLoadFailed: mediaRoom._displayAlbumArt = "./assets/missing_art.png"
                     }
+
                     Text {
                         anchors.bottom: parent.bottom
                         anchors.horizontalCenter: parent.horizontalCenter
@@ -994,14 +1082,14 @@ Item {
         Item {
             id: waveformContainer
             objectName: "waveformContainer"
-            width: parent.width * 0.75
+            width: durationBar.width
             height: dp(40)
             anchors {
                 bottom: durationBar.top
                 horizontalCenter: parent.horizontalCenter
                 bottomMargin: dp(10)
             }
-            visible: settingsManager && settingsManager.showWaveformVisualizer && !playlistEmpty
+            visible: mediaRoom._waveformShown
             // Kept for back-compat with animateTrackChange() / onAnalysisComplete
             // handler below. No longer hides the visualizer — bars just drop
             // to zero on track change (via dropBars()) and animate back up
@@ -1145,8 +1233,9 @@ Item {
         Rectangle { //duration bar
             id: durationBar
             visible: !playlistEmpty
-            width: parent.width * 0.75
-            height: App.Spacing.mediaRoomDurationBarHeight
+            width: parent.width * (App.Spacing.isPortrait ? 0.9 : 0.75)
+            // Portrait: the slider across the page, the times under it
+            height: App.Spacing.isPortrait ? seekGrid.implicitHeight : App.Spacing.mediaRoomDurationBarHeight
             anchors {
                 bottom: parent.bottom
                 horizontalCenter: parent.horizontalCenter
@@ -1154,12 +1243,18 @@ Item {
             }
             color: transparentColor
 
-            RowLayout {
+            GridLayout {
+                id: seekGrid
+                readonly property bool portrait: App.Spacing.isPortrait
                 anchors.fill: parent
-                spacing: dp(20)
+                columns: portrait ? 3 : 4
+                columnSpacing: portrait ? dp(8) : dp(20)
+                rowSpacing: 0
 
                 Text {
                     id: positionText
+                    Layout.row: seekGrid.portrait ? 1 : 0
+                    Layout.column: 0
                     text: formatTime(mediaRoom.position)
                     color: App.Style.mediaRoomSeekColor
                     font.pixelSize: App.Spacing.mediaRoomSliderDurationText
@@ -1169,6 +1264,9 @@ Item {
 
                 Slider {
                     id: progressSlider
+                    Layout.row: 0
+                    Layout.column: seekGrid.portrait ? 0 : 1
+                    Layout.columnSpan: seekGrid.portrait ? 3 : 1
                     Layout.fillWidth: true
                     from: 0
                     to: mediaRoom.duration > 0 ? mediaRoom.duration : 1
@@ -1286,6 +1384,11 @@ Item {
 
                 Text {
                     id: durationText
+                    Layout.row: seekGrid.portrait ? 1 : 0
+                    Layout.column: 2
+                    // Portrait: pushed to the right edge, under the slider's end
+                    Layout.fillWidth: seekGrid.portrait
+                    horizontalAlignment: seekGrid.portrait ? Text.AlignRight : Text.AlignLeft
                     text: formatTime(mediaRoom.duration)
                     color: App.Style.mediaRoomSeekColor
                     font.pixelSize: App.Spacing.mediaRoomSliderDurationText
@@ -1298,6 +1401,8 @@ Item {
                 // other source pauses)
                 Control {
                     id: sourceToggleButton
+                    Layout.row: seekGrid.portrait ? 1 : 0
+                    Layout.column: seekGrid.portrait ? 1 : 3
                     visible: useRemote
                     implicitWidth: Math.max(App.Spacing.mediaRoomShuffleButtonWidth * 1.8,
                                             sourcePillText.implicitWidth + implicitHeight)
@@ -1334,16 +1439,20 @@ Item {
             }
         }
 
-        // Shuffle Button — bottom left corner, centered between edge and duration bar
+        // Shuffle Button — bottom left corner, centered between edge and duration bar.
+        // Portrait: the duration bar spans the page, so shuffle moves into the
+        // transport row, left of Previous.
         Control {
             id: shuffleButton
+            parent: App.Spacing.isPortrait ? portraitShuffleSlot : mainContent
             visible: !playlistEmpty
             opacity: useRemote ? 0.35 : 1.0   // the phone's shuffle belongs to its app
-            width: durationBar.height * 1.96875
-            height: durationBar.height * 1.96875
-            anchors.verticalCenter: durationBar.verticalCenter
-            anchors.verticalCenterOffset: -dp(15)
-            x: (durationBar.x - width) / 2
+            // The same box as previous / next (its icon is drawn at 0.7 of it)
+            readonly property int keyBox: App.Spacing.mediaRoomKeySize
+            width: keyBox
+            height: width
+            y: App.Spacing.isPortrait ? 0 : durationBar.y + (durationBar.height - height) / 2 - dp(15)
+            x: App.Spacing.isPortrait ? 0 : (durationBar.x - width) / 2
             background: Rectangle {
                 color: isShuffleEnabled ? App.Style.mediaRoomToggleShade : "transparent"
                 radius: 4

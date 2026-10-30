@@ -30,6 +30,7 @@
             <li><a href="#context-properties">Accessing Backend Managers</a></li>
             <li><a href="#typeof-guards">Guarding Optional Globals with typeof</a></li>
             <li><a href="#gui-scale">GUI Scale</a></li>
+            <li><a href="#portrait">Portrait Layouts (phones)</a></li>
             <li><a href="#font-loading">Dynamic Font Loading</a></li>
             <li><a href="#album-art-capture">Album Art Capture Pipeline</a></li>
             <li><a href="#shift-light">Shift Light Overlays</a></li>
@@ -164,7 +165,7 @@
         <!-- Window Management -->
         <h2 id="window-management">Window Management</h2>
 
-        <p>Window dimensions are persisted bidirectionally on desktop. On resize, <code>onWidthChanged</code> / <code>onHeightChanged</code> write back to the settings manager (the only writer: the Display page's size fields resize the window and let this save it; skipped on Android, whose window is the screen) and recompute <code>Spacing</code>. The manager clamps to 400&ndash;7680 &times; 300&ndash;4320 and ignores an unchanged value, and its disk writes are batched (500&nbsp;ms):</p>
+        <p>Window dimensions are persisted bidirectionally on desktop. On resize, <code>onWidthChanged</code> / <code>onHeightChanged</code> write back to the settings manager (the only writer: the Display page's size fields resize the window and let this save it; skipped on Android, whose window is the screen) and recompute <code>Spacing</code>. The manager clamps to 320&ndash;7680 &times; 300&ndash;4320 (320 is also <code>minimumWidth</code>, so the browser demo fits a 360&nbsp;px phone held upright) and ignores an unchanged value, and its disk writes are batched (500&nbsp;ms):</p>
 
         <pre><code><span class="fn">onWidthChanged</span>: {
     <span class="kw">if</span> (settingsManager &amp;&amp; width &gt; <span class="num">0</span> &amp;&amp; width &gt;= minimumWidth) {
@@ -393,6 +394,25 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
           <div class="info-box-title">Why almost every file has its own dp() / dpMin()</div>
           Qt on Android loads QML singletons from <code>assets:/</code> with their <em>functions</em> un-callable (properties still work). Many pages and components therefore define a local <code>function dp(size) { return Math.round(size * (App.Spacing.effectiveScale || 1.0)) }</code> with identical math to <code>Spacing.dp</code>, and <code>Style.assetBase</code> is a property rather than a function for the same reason. The comment block in <span class="file-path">MediaPlayer.qml</span> documents the bug; the two-line wrapper is copied verbatim into ~40 files.
         </div>
+
+        <!-- Portrait -->
+        <h2 id="portrait">Portrait Layouts (phones)</h2>
+
+        <p>The app is designed landscape-first (a dash screen), but the browser demo is also opened on phones held upright. <code>Spacing.isPortrait</code> (<code>applicationHeight &gt; applicationWidth</code>) is the one switch; pages built as side-by-side panels read it and stack instead. Landscape is untouched by every rule below.</p>
+
+        <table>
+          <thead><tr><th>Page</th><th>Portrait layout</th></tr></thead>
+          <tbody>
+            <tr><td><span class="file-path">MainMenu.qml</span> (Home)</td><td>Media panel on top (48% of the height, album art shrinks to fit), OBD cards below; <span class="file-path">HomeOBDView.qml</span> goes to 2 columns from 2 cards up</td></tr>
+            <tr><td><span class="file-path">MediaRoom.qml</span></td><td>The landscape pieces stacked: the volume row at the top and the seek bar at the bottom (both centred, 90% wide; the seek bar's times sit under the slider), the visualizer just above the seek bar, and between them the album art (a square a little under the volume row, no side cards, <code>AlbumArtCarousel.artFill</code> 0.92), the title / artist under it, and the transport row (shuffle moved in left of Previous, balanced by an empty slot after Next) midway between the title and the visualizer. The art's height is what the title and keys leave, so it shrinks instead of pushing them into the bottom bar at any <code>screenAutoScale</code>. The blurred album-art background stays. The media-room row heights in <code>Spacing</code> come from the shorter window side</td></tr>
+            <tr><td><span class="file-path">MediaPlayer.qml</span></td><td>Title and Artist columns only (60 / 40); <code>Spacing.mediaPlayerRowHeight</code> is taken from the shorter window edge, so rows keep their landscape height</td></tr>
+            <tr><td><span class="file-path">SettingsSidebarLayout.qml</span> (Grid)</td><td><span class="file-path">settings/SettingsTilePage.qml</span>'s <code>sections</code> mode: one scrolling list, each section's caption above its tiles, two across</td></tr>
+            <tr><td><span class="file-path">OBDDiagnostics.qml</span></td><td>The four read buttons 2&times;2, Clear DTCs across the width, the terminal below taking the rest</td></tr>
+            <tr><td><span class="file-path">SensorMenu.qml</span></td><td>2&times;3 instead of 3&times;2</td></tr>
+          </tbody>
+        </table>
+
+        <p>Check a change at phone sizes with the screenshot sweep: <code>OCTAVE_BIN=$PWD/build/octave python -m dev.screenshots.auto --xvfb --size 430x932 --out $PWD/dev/shots_portrait</code> (and <code>360x780</code> for the narrowest phones), with a temporary <code>HOME</code> / <code>XDG_CONFIG_HOME</code>.</p>
 
         <!-- Font Loading -->
         <h2 id="font-loading">Font Loading</h2>

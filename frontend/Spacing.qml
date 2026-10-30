@@ -6,7 +6,10 @@ QtObject {
     // ===== Base dimensions and scaling factors =====
     property int applicationWidth: width
     property int applicationHeight: height
-    
+    // Taller than wide: a phone held upright (the browser demo on a phone,
+    // a portrait tablet). Pages built as side-by-side panels stack instead.
+    readonly property bool isPortrait: applicationHeight > applicationWidth
+
     // Global scaling properties
     property real globalScale: 1.0
     property real autoScaleFactor: 1.0
@@ -76,12 +79,7 @@ QtObject {
     property real mediaRoomControlsContainerHeight: .6
     
     // Media room buttons
-    property real mediaRoomPreviousButtonHeightPercent: .1
-    property real mediaRoomPreviousButtonWidthPercent: .1
-    property real mediaRoomPlayButtonHeightPercent: .3
-    property real mediaRoomPlayButtonWidthPercent: .3
-    property real mediaRoomNextButtonHeightPercent: .1
-    property real mediaRoomNextButtonWidthPercent: .1
+    property real mediaRoomKeySizePercent: .18
     property real mediaRoomShuffleButtonHeightPercent: .1
     property real mediaRoomShuffleButtonWidthPercent: .1
     
@@ -239,16 +237,22 @@ QtObject {
     property int bottomBarNavButtonHeight: scaledSize(Math.min(applicationWidth, applicationHeight) * bottomBarNavButtonHeightPercent)
     
     // ===== Calculated Dimensions - Media Room =====
+    // Heights from the shorter side: the same as height in landscape, and
+    // rows sized to their buttons (not the screen height) on a portrait phone
     property int mediaRoomMargin: scaledSize(Math.min(applicationWidth, applicationHeight) * mediaRoomMarginPercent)
     property int mediaRoomSpacing: scaledSize(Math.min(applicationWidth, applicationHeight) * mediaRoomSpacingPercent)
     property int mediaRoomBetweenButton: scaledSize(Math.min(applicationWidth, applicationHeight) * mediaRoomBetweenButtonPercent)
-    property int mediaRoomPreviousButtonHeight: scaledSize(applicationHeight * mediaRoomPreviousButtonHeightPercent)
-    property int mediaRoomPreviousButtonWidth: scaledSize(applicationWidth * mediaRoomPreviousButtonWidthPercent)
-    property int mediaRoomPlayButtonHeight: scaledSize(applicationHeight * mediaRoomPlayButtonHeightPercent)
-    property int mediaRoomPlayButtonWidth: scaledSize(applicationWidth * mediaRoomPlayButtonWidthPercent)
-    property int mediaRoomNextButtonHeight: scaledSize(applicationHeight * mediaRoomNextButtonHeightPercent)
-    property int mediaRoomNextButtonWidth: scaledSize(applicationWidth * mediaRoomNextButtonWidthPercent)
-    property int mediaRoomShuffleButtonHeight: scaledSize(applicationHeight * mediaRoomShuffleButtonHeightPercent)
+    // One size for the Media Room keys (previous, next, shuffle), from the
+    // shorter side so they keep their proportions on any window; play is 10% bigger
+    property int mediaRoomKeySize: scaledSize(Math.min(applicationWidth, applicationHeight) * mediaRoomKeySizePercent)
+    property int mediaRoomPlayKeySize: Math.round(mediaRoomKeySize * 1.1)
+    property int mediaRoomPreviousButtonHeight: mediaRoomKeySize
+    property int mediaRoomPreviousButtonWidth: mediaRoomKeySize
+    property int mediaRoomPlayButtonHeight: mediaRoomPlayKeySize
+    property int mediaRoomPlayButtonWidth: mediaRoomPlayKeySize
+    property int mediaRoomNextButtonHeight: mediaRoomKeySize
+    property int mediaRoomNextButtonWidth: mediaRoomKeySize
+    property int mediaRoomShuffleButtonHeight: scaledSize(Math.min(applicationWidth, applicationHeight) * mediaRoomShuffleButtonHeightPercent)
     property int mediaRoomShuffleButtonWidth: scaledSize(applicationWidth * mediaRoomShuffleButtonWidthPercent)
     property int mediaRoomMetaSpacing: scaledSize(Math.min(applicationWidth, applicationHeight) * mediaRoomMetaSpacingPercent)
     property int mediaRoomMetaDataSongText: scaledSize(Math.min(applicationWidth, applicationHeight) * mediaRoomMetaDataSongTextPercent)
@@ -256,8 +260,8 @@ QtObject {
     property int mediaRoomMetaDataAlbumText: scaledSize(Math.min(applicationWidth, applicationHeight) * mediaRoomMetaDataAlbumTextPercent)
     property int mediaRoomAlbumArtHeight: scaledSize(applicationHeight * mediaRoomAlbumArtHeightPercent)
     property int mediaRoomAlbumArtWidth: scaledSize(applicationWidth * mediaRoomAlbumArtWidthPercent)
-    property int mediaRoomDurationBarHeight: scaledSize(applicationHeight * mediaRoomDurationBarHeightPercent)
-    property int mediaRoomProgressSliderHeight: scaledSize(applicationHeight * mediaRoomProgressSliderHeightPercent)
+    property int mediaRoomDurationBarHeight: scaledSize(Math.min(applicationWidth, applicationHeight) * mediaRoomDurationBarHeightPercent)
+    property int mediaRoomProgressSliderHeight: scaledSize(Math.min(applicationWidth, applicationHeight) * mediaRoomProgressSliderHeightPercent)
     property int mediaRoomSliderButtonWidth: scaledSize(Math.min(applicationWidth, applicationHeight) * mediaRoomSliderButtonWidthPercent)
     property int mediaRoomSliderButtonHeight: scaledSize(Math.min(applicationWidth, applicationHeight) * mediaRoomSliderButtonHeightPercent)
     property int mediaRoomSliderButtonRadius: scaledSize(Math.min(applicationWidth, applicationHeight) * mediaRoomSliderButtonRadiusPercent)
@@ -265,7 +269,8 @@ QtObject {
 
     // ===== Calculated Dimensions - Media Player =====
     property int mediaPlayerHeaderHeight: scaledSize(applicationHeight * mediaPlayerHeaderHeightPercent)
-    property int mediaPlayerRowHeight: scaledSize(applicationHeight * mediaPlayerRowHeightPercent)
+    // Shorter side, so rows keep their landscape size on a portrait phone
+    property int mediaPlayerRowHeight: scaledSize(Math.min(applicationWidth, applicationHeight) * mediaPlayerRowHeightPercent)
     property int mediaPlayerAlbumArtSize: scaledSize(Math.min(applicationWidth, applicationHeight) * mediaPlayerAlbumArtSizePercent)
     property int mediaPlayerTextSize: scaledSize(Math.min(applicationWidth, applicationHeight) * mediaPlayerTextSizePercent)
     property int mediaPlayerSecondaryTextSize: scaledSize(Math.min(applicationWidth, applicationHeight) * mediaPlayerSecondaryTextSizePercent)

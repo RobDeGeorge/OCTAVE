@@ -129,17 +129,22 @@ Item {
         }
     }
 
-    // Main content area - Horizontal layout: Media on left (1/3), OBD on right (2/3)
-    RowLayout {
+    // Main content area: media on the left (1/3), OBD on the right (2/3);
+    // in portrait, media on top and OBD below
+    GridLayout {
         anchors.fill: parent
         anchors.margins: dp(10)
-        spacing: dp(10)
+        columns: App.Spacing.isPortrait ? 1 : 2
+        columnSpacing: dp(10)
+        rowSpacing: dp(10)
 
         // ========== LEFT SECTION: Media Controls (1/3 of width) ==========
         Rectangle {
             id: mediaSection
-            Layout.preferredWidth: parent.width * 0.33
-            Layout.fillHeight: true
+            Layout.preferredWidth: App.Spacing.isPortrait ? -1 : parent.width * 0.33
+            Layout.fillWidth: App.Spacing.isPortrait
+            Layout.preferredHeight: App.Spacing.isPortrait ? parent.height * 0.48 : -1
+            Layout.fillHeight: !App.Spacing.isPortrait
             color: "transparent"
             radius: dpMin(8, 2)
             clip: true
@@ -194,6 +199,10 @@ Item {
                 Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: parent.width + dp(40)
+                    // Portrait: the panel is wide and short, so the art
+                    // shrinks to what is left after the text and slider
+                    Layout.fillHeight: App.Spacing.isPortrait
+                    Layout.maximumHeight: parent.width + dp(40)
                     Layout.alignment: Qt.AlignHCenter
 
                     Image {

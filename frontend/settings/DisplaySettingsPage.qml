@@ -196,7 +196,7 @@ Flickable {
                         text: pageRoot.mainWindow ? pageRoot.mainWindow.width : ""
                         horizontalAlignment: TextInput.AlignHCenter
                         validator: IntValidator {   // SettingsManager::kMin/kMaxScreenWidth
-                            bottom: 400
+                            bottom: 320
                             top: 7680
                         }
 
@@ -315,7 +315,7 @@ Flickable {
                     Layout.fillWidth: false
                     Layout.alignment: Qt.AlignLeft
                     text: checked ? "On" : "Off"
-                    checked: settingsManager ? settingsManager.showBottomBarMediaControls : true
+                    checked: settingsManager ? settingsManager.showBottomBarMediaControls : false
                     activeColor: App.Style.accent
                     inactiveColor: App.Style.hoverColor
 

@@ -267,7 +267,7 @@ public:
     static constexpr int kMaxHomeObdParameters = 8;
     // Saved window size range: the window's own minimum up to 8K (a bigger
     // value would be clamped and then pushed back onto a real window)
-    static constexpr int kMinScreenWidth = 400;
+    static constexpr int kMinScreenWidth = 320;   // = Main.qml minimumWidth
     static constexpr int kMaxScreenWidth = 7680;
     static constexpr int kMinScreenHeight = 300;
     static constexpr int kMaxScreenHeight = 4320;
@@ -781,7 +781,7 @@ private:
     int m_blackBoxMaxMB = 500;
     QVariantList m_homeObdParameters;
     QString m_bottomBarOrientation;
-    bool m_showBottomBarMediaControls = true;
+    bool m_showBottomBarMediaControls = false;
 
     // Auto-play / resume
     bool m_autoPlayOnStartup = false;

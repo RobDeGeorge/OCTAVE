@@ -161,7 +161,7 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("gaugeSpeedUnit")]       = QStringLiteral("mph");
     d[QStringLiteral("obdAutoReconnectAttempts")] = 0;
     d[QStringLiteral("bottomBarOrientation")]  = QStringLiteral("bottom");
-    d[QStringLiteral("showBottomBarMediaControls")] = true;
+    d[QStringLiteral("showBottomBarMediaControls")] = false;   // opt-in: Display > Layout
     d[QStringLiteral("fuelTankCapacity")]      = 15.0;
     d[QStringLiteral("blackBoxEnabled")]       = true;
     d[QStringLiteral("blackBoxSweepAll")]      = true;

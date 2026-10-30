@@ -85,11 +85,11 @@ Item {
             anchors.margins: App.Spacing.overallMargin
             spacing: dp(16)
 
-            // Sensor cards — 3x2 grid
+            // Sensor cards — 3x2 grid (2x3 in portrait)
             GridLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                columns: 3
+                columns: App.Spacing.isPortrait ? 2 : 3
                 rowSpacing: dp(12)
                 columnSpacing: dp(12)
 

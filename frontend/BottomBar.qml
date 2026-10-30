@@ -106,7 +106,7 @@ Rectangle {
         width: width,
         height: height,
         navCount: navSections.length,
-        showMedia: settingsManager ? settingsManager.showBottomBarMediaControls : true,
+        showMedia: settingsManager ? settingsManager.showBottomBarMediaControls : false,
         showClock: settingsManager ? settingsManager.showClock : true,
         clockAuto: clockSizeAuto,
         clockPx: manualClockSize,

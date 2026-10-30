@@ -15,18 +15,35 @@ Item {
     // taking its rowSpan (default 1), so a column can hold one section.
     // Overrides columns.
     property int rows: 0
+    // Non-empty: a scrolling list instead of a grid (portrait), each
+    // section ({name, tiles}) under its caption with its tiles
+    // sectionColumns across. Overrides rows and columns.
+    property var sections: []
+    property int sectionColumns: 2
+    readonly property bool _stacked: sections && sections.length > 0
 
     signal tileSelected(string cardId, var originRect)
 
     // Rect of a tile in tilePage.parent coordinates (as tileSelected
     // reports it), or null if this grid has no such tile.
     function tileRect(cardId) {
-        var rep = tilePage.rows > 0 ? columnRepeater : tileRepeater
-        for (var i = 0; i < rep.count; i++) {
-            var t = rep.itemAt(i)
-            if (t && t.cardId === cardId) {
-                var pt = t.mapToItem(tilePage.parent, 0, 0)
-                return Qt.rect(pt.x, pt.y, t.width, t.height)
+        var reps = []
+        if (tilePage._stacked) {
+            for (var s = 0; s < sectionRepeater.count; s++) {
+                var sec = sectionRepeater.itemAt(s)
+                if (sec) reps.push(sec.tileRepeater)
+            }
+        } else {
+            reps.push(tilePage.rows > 0 ? columnRepeater : tileRepeater)
+        }
+        for (var r = 0; r < reps.length; r++) {
+            var rep = reps[r]
+            for (var i = 0; i < rep.count; i++) {
+                var t = rep.itemAt(i)
+                if (t && t.cardId === cardId) {
+                    var pt = t.mapToItem(tilePage.parent, 0, 0)
+                    return Qt.rect(pt.x, pt.y, t.width, t.height)
+                }
             }
         }
         return null
@@ -62,7 +79,7 @@ Item {
     // of 4 next to 4 tiles of 3), sizes the rows unevenly and leaves gaps.
     Item {
         id: columnGrid
-        visible: tilePage.rows > 0
+        visible: tilePage.rows > 0 && !tilePage._stacked
         anchors.fill: parent
         anchors.margins: App.Spacing.settingsHubGridSpacing
 
@@ -85,7 +102,7 @@ Item {
 
         Repeater {
             id: columnRepeater
-            model: tilePage.rows > 0 ? tilePage.tileModel : []
+            model: tilePage.rows > 0 && !tilePage._stacked ? tilePage.tileModel : []
 
             Tile {
                 readonly property var slot: columnGrid.slots[index] || { column: 0, row: 0, span: 1 }
@@ -101,7 +118,7 @@ Item {
 
     GridLayout {
         id: grid
-        visible: tilePage.rows <= 0
+        visible: tilePage.rows <= 0 && !tilePage._stacked
         anchors.fill: parent
         anchors.margins: App.Spacing.settingsHubGridSpacing
         columnSpacing: App.Spacing.settingsHubGridSpacing
@@ -121,7 +138,7 @@ Item {
 
         Repeater {
             id: tileRepeater
-            model: tilePage.rows <= 0 ? tilePage.tileModel : []
+            model: tilePage.rows <= 0 && !tilePage._stacked ? tilePage.tileModel : []
 
             Tile {
                 Layout.fillWidth: true
@@ -129,6 +146,69 @@ Item {
                 Layout.minimumHeight: 0
                 Layout.preferredHeight: grid.tileHeight
                 Layout.maximumHeight: grid.tileHeight
+            }
+        }
+    }
+
+    // sections: one scrolling column, a caption per section and its tiles
+    // in a grid under it, so tiles keep a readable width on a phone.
+    Flickable {
+        id: sectionFlick
+        visible: tilePage._stacked
+        anchors.fill: parent
+        anchors.margins: App.Spacing.settingsHubGridSpacing
+        contentHeight: sectionColumn.height
+        boundsBehavior: Flickable.StopAtBounds
+        clip: true
+
+        readonly property real spacing: App.Spacing.settingsHubGridSpacing
+        readonly property real tileWidth: Math.max(0,
+            (width - (tilePage.sectionColumns - 1) * spacing) / Math.max(1, tilePage.sectionColumns))
+        readonly property real tileHeight: Math.max(tilePage.dp(72), tileWidth * 0.5)
+
+        Column {
+            id: sectionColumn
+            width: sectionFlick.width
+            spacing: sectionFlick.spacing * 2
+
+            Repeater {
+                id: sectionRepeater
+                model: tilePage._stacked ? tilePage.sections : []
+
+                Column {
+                    required property var modelData
+                    readonly property alias tileRepeater: sectionTiles
+                    width: sectionColumn.width
+                    spacing: sectionFlick.spacing
+
+                    Text {
+                        visible: text !== ""
+                        width: parent.width
+                        text: modelData.name || ""
+                        color: App.Style.secondaryTextColor
+                        font.pixelSize: App.Spacing.overallText * 0.8
+                        font.family: App.Style.fontFamily
+                        font.weight: Font.DemiBold
+                        font.letterSpacing: 1.5
+                        font.capitalization: Font.AllUppercase
+                        elide: Text.ElideRight
+                    }
+
+                    Grid {
+                        columns: tilePage.sectionColumns
+                        spacing: sectionFlick.spacing
+
+                        Repeater {
+                            id: sectionTiles
+                            model: modelData.tiles
+
+                            Tile {
+                                width: Math.floor(sectionFlick.tileWidth)
+                                height: Math.round(sectionFlick.tileHeight)
+                            }
+                        }
+                    }
+                }
             }
         }
     }

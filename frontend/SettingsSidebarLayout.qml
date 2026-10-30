@@ -241,6 +241,9 @@ Item {
             }
             z: 2
             spacing: App.Spacing.settingsHubGridSpacing
+            // Portrait lists the sections down the page, captions included
+            visible: !App.Spacing.isPortrait
+            height: visible ? implicitHeight : 0
 
             readonly property int columnCount: Math.max(1, sidebarLayout.sectionColumns.length)
             readonly property real columnWidth: (width - spacing * (columnCount - 1)) / columnCount
@@ -273,8 +276,10 @@ Item {
                 bottomMargin: App.Spacing.settingsContentMargin
             }
             z: 2
-            tileModel: sidebarLayout.allTiles
-            rows: sidebarLayout.gridSlots
+            // Portrait: one scrolling list of the sections, two tiles across
+            tileModel: App.Spacing.isPortrait ? [] : sidebarLayout.allTiles
+            rows: App.Spacing.isPortrait ? 0 : sidebarLayout.gridSlots
+            sections: App.Spacing.isPortrait ? sidebarLayout.sectionColumns : []
             onTileSelected: function(cardId, rect) { sidebarLayout.selectTile(cardId, rect) }
         }
 

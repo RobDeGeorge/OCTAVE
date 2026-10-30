@@ -92,8 +92,10 @@ Item {
     //  Derived
     // ═══════════════════════════════════════════════════════════════════
 
+    // Share of the shorter side the art takes when there are no side cards
+    property real artFill: 0.85
     property real artSize: {
-        var factor = previewEnabled ? 0.75 : 0.85
+        var factor = previewEnabled ? 0.75 : artFill
         return Math.min(width * factor, height * factor)
     }
 

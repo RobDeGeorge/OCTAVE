@@ -15,8 +15,9 @@ ApplicationWindow {
     // fontFamily always returns a valid font (systemDefaultFont or custom font)
     font.family: App.Style.fontFamily !== "" ? App.Style.fontFamily : systemDefaultFont
 
-    // Minimum window constraints
-    minimumWidth: 400
+    // Minimum window constraints. 320 wide so the browser demo fits the
+    // narrowest phones held upright (360 CSS px and under)
+    minimumWidth: 320
     minimumHeight: 300
 
     // Properties bound to settings manager

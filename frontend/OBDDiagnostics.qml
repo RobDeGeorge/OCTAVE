@@ -143,12 +143,17 @@ Item {
             spacing: dp(15)
 
 
-            // 4x2 Grid - 4 buttons on top, terminal + clear on bottom
+            // 4x2 Grid - 4 buttons on top, terminal + clear on bottom.
+            // Portrait: the buttons 2x2, Clear DTCs across, the terminal below.
             GridLayout {
+                id: diagGrid
+                readonly property bool portrait: App.Spacing.isPortrait
+                // Height of a button row in portrait; the terminal takes the rest
+                readonly property real buttonRowHeight: Math.max(dp(64), height * 0.13)
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                columns: 4
-                rows: 2
+                columns: portrait ? 2 : 4
+                rows: portrait ? 4 : 2
                 rowSpacing: dp(15)
                 columnSpacing: dp(15)
 
@@ -157,9 +162,10 @@ Item {
                 // Read DTCs Button
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    Layout.row: 0
-                    Layout.column: 0
+                    Layout.fillHeight: !diagGrid.portrait
+                    Layout.preferredHeight: diagGrid.portrait ? diagGrid.buttonRowHeight : -1
+                    Layout.row: diagGrid.portrait ? 0 : 0
+                    Layout.column: diagGrid.portrait ? 0 : 0
                     radius: dpMin(12, 2)
                     color: mouseAreaReadDTC.pressed ? Qt.darker(accentColor, 1.2) : accentColor
 
@@ -206,9 +212,10 @@ Item {
                 // Read Current DTCs Button
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    Layout.row: 0
-                    Layout.column: 1
+                    Layout.fillHeight: !diagGrid.portrait
+                    Layout.preferredHeight: diagGrid.portrait ? diagGrid.buttonRowHeight : -1
+                    Layout.row: diagGrid.portrait ? 0 : 0
+                    Layout.column: diagGrid.portrait ? 1 : 1
                     radius: dpMin(12, 2)
                     color: mouseAreaReadCurrentDTC.pressed ? Qt.darker(accentColor, 1.2) : accentColor
 
@@ -255,9 +262,10 @@ Item {
                 // Read Status Button
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    Layout.row: 0
-                    Layout.column: 2
+                    Layout.fillHeight: !diagGrid.portrait
+                    Layout.preferredHeight: diagGrid.portrait ? diagGrid.buttonRowHeight : -1
+                    Layout.row: diagGrid.portrait ? 1 : 0
+                    Layout.column: diagGrid.portrait ? 0 : 2
                     radius: dpMin(12, 2)
                     color: mouseAreaReadStatus.pressed ? Qt.darker(accentColor, 1.2) : accentColor
 
@@ -304,9 +312,10 @@ Item {
                 // Freeze Frame Button (row 0, column 3)
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    Layout.row: 0
-                    Layout.column: 3
+                    Layout.fillHeight: !diagGrid.portrait
+                    Layout.preferredHeight: diagGrid.portrait ? diagGrid.buttonRowHeight : -1
+                    Layout.row: diagGrid.portrait ? 1 : 0
+                    Layout.column: diagGrid.portrait ? 1 : 3
                     radius: dpMin(12, 2)
                     color: mouseAreaFreezeFrame.pressed ? Qt.darker(accentColor, 1.2) : accentColor
 
@@ -356,9 +365,9 @@ Item {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    Layout.row: 1
+                    Layout.row: diagGrid.portrait ? 3 : 1
                     Layout.column: 0
-                    Layout.columnSpan: 3
+                    Layout.columnSpan: diagGrid.portrait ? 2 : 3
                     radius: dpMin(12, 2)
                     color: "#1a1a1a"
                     border.color: "#333333"
@@ -560,12 +569,14 @@ Item {
                     }
                 }
 
-                // Clear DTCs Button (row 1, column 3 - bottom right)
+                // Clear DTCs Button (row 1, column 3 - bottom right; portrait: full width under the buttons)
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    Layout.row: 1
-                    Layout.column: 3
+                    Layout.fillHeight: !diagGrid.portrait
+                    Layout.preferredHeight: diagGrid.portrait ? diagGrid.buttonRowHeight * 0.7 : -1
+                    Layout.row: diagGrid.portrait ? 2 : 1
+                    Layout.column: diagGrid.portrait ? 0 : 3
+                    Layout.columnSpan: diagGrid.portrait ? 2 : 1
                     radius: dpMin(12, 2)
                     color: mouseAreaClearDTC.pressed ? Qt.darker("#CC0000", 1.2) : "#CC0000"
 
