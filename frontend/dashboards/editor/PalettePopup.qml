@@ -12,6 +12,7 @@ import "../.." as App
 
 Popup {
     id: palette
+    objectName: "widgetPalette"
 
     function dp(size) { return Math.round(size * (App.Spacing.effectiveScale || 1.0)) }
     function dpMin(size, floor) { return Math.max(floor, Math.round(size * (App.Spacing.effectiveScale || 1.0))) }
@@ -22,6 +23,8 @@ Popup {
     x: Math.round((parent.width - width) / 2)
     y: Math.round((parent.height - height) / 2)
     width: Math.min(parent.width * 0.85, dp(640))
+    height: Math.min(parent.height * 0.9,
+                     paletteTitle.implicitHeight + dp(16) + paletteGrid.implicitHeight + topPadding + bottomPadding)
     modal: true
     focus: true
     padding: dp(20)
@@ -37,6 +40,7 @@ Popup {
         spacing: palette.dp(16)
 
         Text {
+            id: paletteTitle
             Layout.alignment: Qt.AlignHCenter
             text: "Add a widget"
             color: App.Style.primaryTextColor
@@ -45,55 +49,66 @@ Popup {
             font.bold: true
         }
 
-        GridLayout {
+        ScrollView {
+            id: paletteScroll
+            objectName: "widgetPaletteScroll"
             Layout.fillWidth: true
-            columns: 4
-            rowSpacing: palette.dp(12)
-            columnSpacing: palette.dp(12)
+            Layout.fillHeight: true
+            clip: true
+            contentWidth: availableWidth
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
-            Repeater {
-                model: App.WidgetCatalog.widgets
-                delegate: Rectangle {
-                    objectName: "paletteCard_" + modelData.type
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: palette.dp(110)
-                    radius: palette.dpMin(8, 2)
-                    color: cardMouse.pressed
-                           ? Qt.lighter(App.Style.obdBoxBackground, 1.3)
-                           : Qt.darker(App.Style.obdBoxBackground, 1.12)
-                    border.color: cardMouse.containsMouse
-                                  ? App.Style.accent
-                                  : Qt.darker(App.Style.obdBarColor, 1.6)
-                    border.width: 1
+            GridLayout {
+                id: paletteGrid
+                width: paletteScroll.availableWidth
+                columns: Math.max(2, Math.min(4, Math.floor(width / palette.dp(140))))
+                rowSpacing: palette.dp(12)
+                columnSpacing: palette.dp(12)
 
-                    Column {
-                        anchors.centerIn: parent
-                        spacing: palette.dp(8)
+                Repeater {
+                    model: App.WidgetCatalog.widgets
+                    delegate: Rectangle {
+                        objectName: "paletteCard_" + modelData.type
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: palette.dp(110)
+                        radius: palette.dpMin(8, 2)
+                        color: cardMouse.pressed
+                               ? Qt.lighter(App.Style.obdBoxBackground, 1.3)
+                               : Qt.darker(App.Style.obdBoxBackground, 1.12)
+                        border.color: cardMouse.containsMouse
+                                      ? App.Style.accent
+                                      : Qt.darker(App.Style.obdBarColor, 1.6)
+                        border.width: 1
 
-                        Text {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            text: modelData.glyph
-                            color: App.Style.accent
-                            font.pixelSize: palette.dp(34)
+                        Column {
+                            anchors.centerIn: parent
+                            spacing: palette.dp(8)
+
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: modelData.glyph
+                                color: App.Style.accent
+                                font.pixelSize: palette.dp(34)
+                            }
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: modelData.displayName
+                                color: App.Style.obdValueColor
+                                font.family: App.Style.fontFamily
+                                font.pixelSize: App.Spacing.overallText * 0.9
+                                font.bold: true
+                            }
                         }
-                        Text {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            text: modelData.displayName
-                            color: App.Style.obdValueColor
-                            font.family: App.Style.fontFamily
-                            font.pixelSize: App.Spacing.overallText * 0.9
-                            font.bold: true
-                        }
-                    }
 
-                    MouseArea {
-                        id: cardMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            palette.widgetPicked(modelData.type)
-                            palette.close()
+                        MouseArea {
+                            id: cardMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                palette.widgetPicked(modelData.type)
+                                palette.close()
+                            }
                         }
                     }
                 }

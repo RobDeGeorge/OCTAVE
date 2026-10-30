@@ -223,6 +223,58 @@
             "colorProps": [
                 "fillColor"
             ],
+            "defaultColSpan": 6,
+            "defaultRowSpan": 2,
+            "displayName": "Segmented",
+            "editableProps": [
+                {
+                    "def": 20,
+                    "key": "segmentCount",
+                    "kind": "int",
+                    "label": "Segments",
+                    "max": 40,
+                    "min": 2
+                },
+                {
+                    "def": null,
+                    "key": "warnAbove",
+                    "kind": "real",
+                    "label": "Warn above",
+                    "paramUnit": true
+                },
+                {
+                    "def": true,
+                    "key": "showLabel",
+                    "kind": "bool",
+                    "label": "Label"
+                },
+                {
+                    "def": true,
+                    "key": "showValue",
+                    "kind": "bool",
+                    "label": "Value"
+                },
+                {
+                    "def": 0,
+                    "key": "decimals",
+                    "kind": "int",
+                    "label": "Decimals",
+                    "max": 4,
+                    "min": 0
+                }
+            ],
+            "glyph": "▮",
+            "labelProps": true,
+            "rangeProps": true,
+            "supportedKinds": [
+                "*"
+            ],
+            "type": "SegmentedGauge"
+        },
+        {
+            "colorProps": [
+                "fillColor"
+            ],
             "defaultColSpan": 4,
             "defaultRowSpan": 2,
             "displayName": "Linear",
@@ -528,6 +580,34 @@
             "supportedKinds": [
             ],
             "type": "MediaControlsWidget"
+        },
+        {
+            "colorProps": [
+                "valueColor"
+            ],
+            "defaultColSpan": 4,
+            "defaultRowSpan": 2,
+            "displayName": "Clock",
+            "editableProps": [
+                {
+                    "def": true,
+                    "key": "showDate",
+                    "kind": "bool",
+                    "label": "Date"
+                },
+                {
+                    "def": false,
+                    "key": "showSeconds",
+                    "kind": "bool",
+                    "label": "Seconds"
+                }
+            ],
+            "glyph": "12",
+            "labelProps": false,
+            "rangeProps": false,
+            "supportedKinds": [
+            ],
+            "type": "ClockWidget"
         }
     ]
 }

@@ -211,6 +211,58 @@
       ]
     },
     {
+      "type": "SegmentedGauge",
+      "displayName": "Segmented",
+      "glyph": "▮",
+      "defaultColSpan": 6,
+      "defaultRowSpan": 2,
+      "supportedKinds": [
+        "*"
+      ],
+      "labelProps": true,
+      "rangeProps": true,
+      "colorProps": [
+        "fillColor"
+      ],
+      "editableProps": [
+        {
+          "key": "segmentCount",
+          "label": "Segments",
+          "kind": "int",
+          "def": 20,
+          "min": 2,
+          "max": 40
+        },
+        {
+          "key": "warnAbove",
+          "label": "Warn above",
+          "kind": "real",
+          "def": null,
+          "paramUnit": true
+        },
+        {
+          "key": "showLabel",
+          "label": "Label",
+          "kind": "bool",
+          "def": true
+        },
+        {
+          "key": "showValue",
+          "label": "Value",
+          "kind": "bool",
+          "def": true
+        },
+        {
+          "key": "decimals",
+          "label": "Decimals",
+          "kind": "int",
+          "def": 0,
+          "min": 0,
+          "max": 4
+        }
+      ]
+    },
+    {
       "type": "LinearGauge",
       "displayName": "Linear",
       "glyph": "↔",
@@ -514,6 +566,33 @@
         "accentColor"
       ],
       "editableProps": []
+    },
+    {
+      "type": "ClockWidget",
+      "displayName": "Clock",
+      "glyph": "12",
+      "defaultColSpan": 4,
+      "defaultRowSpan": 2,
+      "supportedKinds": [],
+      "labelProps": false,
+      "rangeProps": false,
+      "colorProps": [
+        "valueColor"
+      ],
+      "editableProps": [
+        {
+          "key": "showDate",
+          "label": "Date",
+          "kind": "bool",
+          "def": true
+        },
+        {
+          "key": "showSeconds",
+          "label": "Seconds",
+          "kind": "bool",
+          "def": false
+        }
+      ]
     }
   ],
   "colorSwatches": [

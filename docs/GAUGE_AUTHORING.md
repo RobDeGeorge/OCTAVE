@@ -26,9 +26,11 @@ You do **not** wire signals yourself. `src/appcore.cpp` feeds every decoded valu
 `App.OBDParameterModel.liveValue(paramId)` gets live, animated updates for
 free: it reads `paramStore[paramId]` (or the dashboard editor's demo sweep),
 re-evaluates only when that id changes, and is `undefined` until the first
-reading (show "--", not 0) and at shutdown.
+reading (show "--", not 0) and at shutdown. `SegmentedGauge` handles this
+explicitly. The older primitives still coerce missing samples to zero; see
+[the dashboard asset audit](DASHBOARD_ASSET_AUDIT.md) for the repair list.
 
-Every gauge primitive takes a `paramId` and handles the rest — title, unit,
+Every PID-bound gauge primitive takes a `paramId` and handles the rest — title, unit,
 min, max, and current value all come from the model. You can override any
 of them per-gauge if needed.
 
@@ -76,7 +78,7 @@ That's it. The gauge is live, animated, and themed.
 ## 3. Primitives (frontend/gauges/)
 
 The PID-bound primitives share the same binding API (the self-binding widgets
-in §3.8–§3.11 are the exception — they read their data source directly and
+in §3.8–§3.11 and §3.13 are the exception — they read their data source directly and
 take no `paramId`):
 
 | Property       | Type    | Default                     | Notes                                                          |
@@ -240,6 +242,50 @@ Previous / play-pause / next transport buttons driving the active media source
 (same source rule as `NowPlayingWidget`). Interactive in rendered dashboards;
 inside the editor canvas the selection/drag layer sits on top, so taps select
 the cell instead of skipping tracks. No editable props.
+
+---
+
+### 3.12 `SegmentedGauge`
+
+Horizontal segmented scale for RPM, load, fuel, temperature or other numeric
+PIDs. Its default span is 6 × 2. The title and value have separate width
+budgets; the strip is capped at 30 dp high. A value above the range fills all
+segments and one below the range fills none; the numeric readout remains
+unclamped. Each segment represents `1 / segmentCount` of the range, rounded
+up for a nonzero fraction. This is a discrete level indicator, not a precision
+plot or the vehicle's shift-light rules.
+
+| Property | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `segmentCount` | int | `20` | 2–40 segments. |
+| `warnAbove` | real | `NaN` | At or above this value, lit segments and the readout use `warnColor`. Upper-band segments have a dim warning outline. |
+| `showLabel`, `showValue` | bool | `true` | Header title / numeric value. |
+| `decimals` | int | `0` | 0–4 decimal places. |
+| `fillColor`, `trackColor`, `warnColor`, `labelColor`, `valueColor` | color | theme | The editor's Color row overrides `fillColor`. |
+| `hasValue` | readonly bool | finite `value` | Missing and non-finite samples show `--`, fill no segments and never activate the warning. A real zero displays `0`. |
+
+The usual `paramId`, `title`, `unit`, `min`, `max`, and manual `value`
+overrides apply. Thresholds and range overrides in JSON use the PID's native
+unit and follow the user's unit preference through the renderer/editor.
+An invalid range (`max <= min`, or non-finite bounds) fills no segments.
+
+### 3.13 `ClockWidget` *(self-binding)*
+
+A dashboard clock in `frontend/dashboards/widgets/`. Default span 4 × 2;
+no PID and no additional OBD polling. It follows the app's 12/24-hour
+preference and keeps showing time when the bottom-bar clock is hidden.
+
+| Property | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `showDate` | bool | `true` | Abbreviated weekday, month and day beneath the time. |
+| `showSeconds` | bool | `false` | Per-widget seconds display. |
+| `valueColor`, `labelColor` | color | theme | Time / date tint. The editor exposes `valueColor`. |
+
+Updates once a second while visible and refreshes immediately on becoming
+visible. Time and date fit their allotted width and height.
+
+The expanded editor palette scrolls within 90% of the window height and
+uses 2–4 columns according to available width.
 
 ---
 

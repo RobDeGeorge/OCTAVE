@@ -78,6 +78,7 @@ frontend/
     CircularGauge.qml            arc + ticks + optional needle + centre readout
     ArcGauge.qml                 top half-dial with readout below the chord
     BarGauge.qml                 horizontal / vertical filled bar with warn threshold
+    SegmentedGauge.qml           discrete level strip, optional high warning, missing-data state
     LinearGauge.qml              scale with bidirectional fill from zero
     DigitalReadout.qml           big number + title + unit
     SparklineGauge.qml           timer-sampled rolling history line (Canvas)
@@ -93,6 +94,7 @@ frontend/
     widgets/
       NowPlayingWidget.qml       self-binding media card
       MediaControlsWidget.qml    self-binding transport buttons
+      ClockWidget.qml            time + optional date, follows 12/24-hour preference
     editor/
       DashboardEditor.qml        page: owns the working spec, save / cancel / draft / demo
       EditorCanvas.qml           [+] targets, selection, drag-to-move, corner resize grip, occupancy map
@@ -325,6 +327,15 @@ berryIMU (8 signals) ─────────┴─> paramStore (C++, 33 ms f
           </tbody>
         </table>
 
+        <h3>SegmentedGauge</h3>
+        <p>A horizontal discrete level strip for any numeric PID. <code>segmentCount</code> defaults to 20 (2–40);
+          <code>warnAbove</code> defaults off. At the threshold, lit segments and the readout use the theme's danger color;
+          unlit upper-band segments retain a dim warning outline. <code>showLabel</code> and <code>showValue</code>
+          default on. Decimals default to 0 and can be set to 0–4. Range and threshold overrides are stored
+          in native units and follow display-unit preferences. Missing/non-finite samples show <code>--</code>, with no
+          lit segments or warning; a real zero remains zero. Invalid ranges fill no segments. Values outside a valid
+          range clamp the strip, while the numeric readout stays truthful. Default span: 6 × 2.</p>
+
         <h3>SparklineGauge</h3>
         <p>
           Rolling history drawn on a <code>Canvas</code>. <code>["*"]</code>. A <code>Timer</code> (running only while
@@ -366,7 +377,7 @@ berryIMU (8 signals) ─────────┴─> paramStore (C++, 33 ms f
 
         <h2 id="self-binding">Self-Binding Widgets</h2>
         <p>
-          Four widgets have <code>octaveSupportedKinds: []</code> and no <code>paramId</code>. The renderer skips the PID
+          Five widgets have <code>octaveSupportedKinds: []</code> and no <code>paramId</code>. The renderer skips the PID
           bind for them (it checks <code>item.paramId !== undefined</code>), the editor never opens the PID picker for them,
           and the properties panel hides its PID section.
         </p>
@@ -377,6 +388,7 @@ berryIMU (8 signals) ─────────┴─> paramStore (C++, 33 ms f
             <tr><td><code>CompassGauge</code></td><td><code>liveValue("HEADING")</code></td><td><code>showDegrees</code> (true)</td><td>The card (12 ticks, N/E/S/W letters, N in <code>statusDanger</code>) rotates by <code>-heading</code> under a fixed accent-coloured lubber triangle (a <code>Canvas</code> repainted on <code>accentChanged</code>); letters counter-rotate to stay upright. <code>RotationAnimation { direction: Shortest }</code> handles the 359° -&gt; 0° wrap. Centre readout shows degrees and the 8-point cardinal.</td></tr>
             <tr><td><code>NowPlayingWidget</code></td><td><a href="signals-slots-reference.html#nowPlaying"><code>nowPlaying</code></a></td><td><code>showArt</code>, <code>showArtist</code>, <code>showProgress</code> (all true)</td><td>Binds <code>nowPlaying</code> (the phone while it has the media controls, else local media), so it follows source and track changes with no refresh; art falls back to <code>assets/missing_art.png</code>. Display-only.</td></tr>
             <tr><td><code>MediaControlsWidget</code></td><td><code>nowPlaying</code></td><td>none</td><td>Prev / play-pause / next calling <code>nowPlaying.previous()</code> / <code>togglePlay()</code> / <code>next()</code>, which route to the live source; the icon binds <code>nowPlaying.playing</code>. Interactive in rendered dashboards; in the editor the drag/select <code>MouseArea</code> sits on top so taps select the cell.</td></tr>
+            <tr><td><code>ClockWidget</code></td><td>Local clock, app 12/24-hour preference</td><td><code>showDate</code> (true), <code>showSeconds</code> (false)</td><td>Time and optional abbreviated date, fitted to the cell. Updates once per second while visible, refreshes immediately when shown, and works with the bottom-bar clock hidden. No PID or OBD polling.</td></tr>
           </tbody>
         </table>
 
@@ -592,6 +604,7 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
             <tr><td><code>CircularGauge</code></td><td>Circular ◯</td><td>4 × 4</td><td><code>*</code></td><td>yes / yes</td><td>fillColor, needleColor</td><td>showNeedle, showTicks, showCenterReadout, redlineStart, decimals (0-4), majorTickCount (2-20), minorTicksPerMajor (0-10), startAngle, sweepAngle</td></tr>
             <tr><td><code>ArcGauge</code></td><td>Arc ◠</td><td>6 × 3</td><td><code>*</code></td><td>yes / yes</td><td>fillColor, needleColor</td><td>showNeedle, showTicks, showReadout, redlineStart, decimals, majorTickCount, minorTicksPerMajor</td></tr>
             <tr><td><code>BarGauge</code></td><td>Bar ▮</td><td>3 × 2</td><td>percentage, temperature, numeric, pressure, voltage</td><td>yes / yes</td><td>fillColor</td><td>orientation (enum horizontal/vertical), warnAbove, showLabel, showValue, decimals</td></tr>
+            <tr><td><code>SegmentedGauge</code></td><td>Segmented ▮</td><td>6 × 2</td><td><code>*</code></td><td>yes / yes</td><td>fillColor</td><td>segmentCount (2–40), warnAbove, showLabel, showValue, decimals (0–4)</td></tr>
             <tr><td><code>LinearGauge</code></td><td>Linear ↔</td><td>4 × 2</td><td>bidirectional</td><td>yes / yes</td><td>fillColor</td><td>showTicks, decimals, majorTickCount, minorTicksPerMajor</td></tr>
             <tr><td><code>DigitalReadout</code></td><td>Digital 88</td><td>4 × 2</td><td><code>*</code></td><td>yes / no</td><td>valueColor</td><td>showTitle, showUnit, decimals, padDigits (0-8), valueScale ("Digit size", 0.5-12)</td></tr>
             <tr><td><code>SparklineGauge</code></td><td>Sparkline ∿</td><td>6 × 2</td><td><code>*</code></td><td>yes / yes</td><td>lineColor</td><td>autoScale, fillBelow, showHeader, decimals, maxSamples (10-300), sampleIntervalMs (100-5000)</td></tr>
@@ -600,12 +613,13 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
             <tr><td><code>CompassGauge</code></td><td>Compass N</td><td>4 × 4</td><td>(none)</td><td>no / no</td><td>northColor</td><td>showDegrees</td></tr>
             <tr><td><code>NowPlayingWidget</code></td><td>Now Playing ♪</td><td>6 × 2</td><td>(none)</td><td>no / no</td><td>progressColor</td><td>showArt, showArtist, showProgress</td></tr>
             <tr><td><code>MediaControlsWidget</code></td><td>Media Keys ▶</td><td>4 × 2</td><td>(none)</td><td>no / no</td><td>accentColor</td><td>(none)</td></tr>
+            <tr><td><code>ClockWidget</code></td><td>Clock 12</td><td>4 × 2</td><td>(none)</td><td>no / no</td><td>valueColor</td><td>showDate, showSeconds</td></tr>
           </tbody>
         </table>
         <p>
-          The catalog lists are kept in step with each gauge's own <code>octaveEditableProps</code> manifest (which uses the
-          <code>name/type/default</code> key shape); the catalog is what the panel reads, so the gauge never has to be
-          instantiated to build the inspector. Anything not listed is still settable in the JSON by hand.
+          The catalog is what the panel reads, so the gauge never has to be instantiated to build the inspector.
+          Older gauges also carry legacy <code>octaveEditableProps</code> manifests; new widgets only need the catalog
+          entry and URL mapping. Anything not listed is still settable in the JSON by hand.
         </p>
 
         <h2 id="obdmenu">OBDMenu Integration: Active Dashboard and Chooser</h2>
@@ -685,7 +699,7 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
 
         <h3>PalettePopup, PIDPicker, PropertiesPanel</h3>
         <ul>
-          <li><strong>PalettePopup</strong>: modal, 4-column grid of cards from <code>WidgetCatalog.widgets</code> (glyph + display name); tapping emits <code>widgetPicked(type)</code> and closes.</li>
+          <li><strong>PalettePopup</strong>: modal, scrolling 2–4-column grid of cards (height capped to 90% of the window) from <code>WidgetCatalog.widgets</code> (glyph + display name); tapping emits <code>widgetPicked(type)</code> and closes.</li>
           <li><strong>PIDPicker</strong>: modal, 85 % of the window height, a search field focused on open, and a flat row model built from <code>allParameters</code> filtered by <code>supportedKinds</code> (<code>"*"</code> passes all) and by the query against title or id, grouped under headers in the order numeric, percentage, temperature, pressure, voltage, bidirectional. The current PID is highlighted; empty results show "No matching PIDs". Vehicle-gated (see <a href="#vehicle-gate">Vehicle Gate</a>): once a vehicle is scanned, its PIDs come first in each group and the rest are greyed (45 % opacity, "Not supported by this vehicle") but still pickable; a note under the title (<code>pidPickerVehicleNote</code>) explains which mode is active.</li>
           <li><strong>PropertiesPanel</strong> (scrollable <code>Flickable</code>, <code>editorPanelScroll</code>), top to bottom, ordered by how often each section is used:
             <ol>

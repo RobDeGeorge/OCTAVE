@@ -28,6 +28,7 @@ QtObject {
         "CircularGauge":       Qt.resolvedUrl("../gauges/CircularGauge.qml"),
         "ArcGauge":            Qt.resolvedUrl("../gauges/ArcGauge.qml"),
         "BarGauge":            Qt.resolvedUrl("../gauges/BarGauge.qml"),
+        "SegmentedGauge":      Qt.resolvedUrl("../gauges/SegmentedGauge.qml"),
         "LinearGauge":         Qt.resolvedUrl("../gauges/LinearGauge.qml"),
         "DigitalReadout":      Qt.resolvedUrl("../gauges/DigitalReadout.qml"),
         "SparklineGauge":      Qt.resolvedUrl("../gauges/SparklineGauge.qml"),
@@ -35,7 +36,8 @@ QtObject {
         "GForceGauge":         Qt.resolvedUrl("../gauges/GForceGauge.qml"),
         "CompassGauge":        Qt.resolvedUrl("../gauges/CompassGauge.qml"),
         "NowPlayingWidget":    Qt.resolvedUrl("widgets/NowPlayingWidget.qml"),
-        "MediaControlsWidget": Qt.resolvedUrl("widgets/MediaControlsWidget.qml")
+        "MediaControlsWidget": Qt.resolvedUrl("widgets/MediaControlsWidget.qml"),
+        "ClockWidget":         Qt.resolvedUrl("widgets/ClockWidget.qml")
     })
 
     readonly property var _data: (typeof dashboardManager !== "undefined" && dashboardManager)
