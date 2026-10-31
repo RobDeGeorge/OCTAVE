@@ -193,7 +193,8 @@ private slots:
         auto speed = [&] {
             return result("{\"op\":\"call\",\"object\":\"obdManager\",\"method\":\"speedMPH\"}").toDouble();
         };
-        QTRY_VERIFY_WITH_TIMEOUT(speed() > 2, 20000);
+        // It idles 3-6 s first, and a loaded CI runner polls slowly: 34 s once.
+        QTRY_VERIFY_WITH_TIMEOUT(speed() > 2, 60000);
 
         result("{\"op\":\"call\",\"object\":\"obdManager\",\"method\":\"connect_to_adapter\",\"args\":[\"/octave-test-missing-adapter\"]}");
         QVERIFY(!simulated());
