@@ -25,6 +25,7 @@ Popup {
     function dpMin(size, floor) { return Math.max(floor, Math.round(size * (App.Spacing.effectiveScale || 1.0))) }
 
     signal widgetPicked(string type)
+    signal presetPicked(var preset)
     signal dataFirstRequested()
 
     parent: Overlay.overlay
@@ -38,11 +39,12 @@ Popup {
 
     property string category: ""
     property string query: ""
+    property string note: ""
     property bool _demoWas: false
 
     readonly property var shown: {
         var out = []
-        var all = App.WidgetCatalog.widgets
+        var all = App.WidgetCatalog.presets.concat(App.WidgetCatalog.widgets)
         var q = query.trim().toLowerCase()
         for (var i = 0; i < all.length; i++) {
             var w = all[i]
@@ -56,6 +58,7 @@ Popup {
 
     onAboutToShow: {
         category = ""
+        note = ""
         searchField.text = ""
         _demoWas = App.OBDParameterModel.simulationActive
         App.OBDParameterModel.simulationActive = true
@@ -109,6 +112,16 @@ Popup {
                 font.pixelSize: App.Spacing.overallText * 1.2
                 font.bold: true
             }
+            // A widget someone shared (My widgets)
+            Chip {
+                objectName: "palettePastePreset"
+                text: "Paste a widget"
+                onClicked: {
+                    var id = dashboardManager.importWidgetPresetFromClipboard()
+                    gallery.note = id ? "Added to Mine" : (dashboardManager.lastShareError || "Nothing to paste")
+                    if (id) gallery.category = "Mine"
+                }
+            }
             // Data first: pick what to see, get the widget that suits it
             Chip {
                 objectName: "paletteDataFirst"
@@ -119,6 +132,17 @@ Popup {
                     gallery.dataFirstRequested()
                 }
             }
+        }
+
+        Text {
+            objectName: "paletteNote"
+            visible: gallery.note !== ""
+            Layout.fillWidth: true
+            text: gallery.note
+            wrapMode: Text.WordWrap
+            color: App.Style.obdLabelColor
+            font.family: App.Style.fontFamily
+            font.pixelSize: App.Spacing.overallText * 0.85
         }
 
         TextField {
@@ -157,7 +181,7 @@ Popup {
                     onClicked: gallery.category = ""
                 }
                 Repeater {
-                    model: App.WidgetCatalog.categories
+                    model: (App.WidgetCatalog.presets.length > 0 ? ["Mine"] : []).concat(App.WidgetCatalog.categories)
                     delegate: Chip {
                         objectName: "paletteCategory_" + modelData
                         text: modelData
@@ -188,7 +212,8 @@ Popup {
                     model: gallery.visible ? gallery.shown : []
                     delegate: Rectangle {
                         id: card
-                        objectName: "paletteCard_" + modelData.type
+                        objectName: modelData.preset ? "palettePreset_" + modelData.preset.id
+                                                     : "paletteCard_" + modelData.type
                         Layout.fillWidth: true
                         Layout.preferredHeight: gallery.dp(108) + cardText.implicitHeight + gallery.dp(16)
                         radius: gallery.dpMin(8, 2)
@@ -261,8 +286,34 @@ Popup {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                gallery.widgetPicked(modelData.type)
+                                if (modelData.preset) gallery.presetPicked(modelData.preset)
+                                else gallery.widgetPicked(modelData.type)
                                 gallery.close()
+                            }
+                        }
+
+                        // My widgets: share as text, or remove
+                        Row {
+                            visible: !!modelData.preset
+                            anchors.top: parent.top
+                            anchors.right: parent.right
+                            anchors.margins: gallery.dp(4)
+                            spacing: gallery.dp(4)
+                            Chip {
+                                objectName: "palettePresetCopy"
+                                text: "Copy"
+                                implicitHeight: gallery.dp(36)
+                                onClicked: {
+                                    if (dashboardManager.copyWidgetPresetToClipboard(modelData.preset.id))
+                                        gallery.note = "Copied \"" + modelData.preset.label + "\". Paste it anywhere to share."
+                                }
+                            }
+                            Chip {
+                                objectName: "palettePresetDelete"
+                                text: "×"
+                                implicitHeight: gallery.dp(36)
+                                implicitWidth: gallery.dp(36)
+                                onClicked: dashboardManager.deleteWidgetPreset(modelData.preset.id)
                             }
                         }
                     }

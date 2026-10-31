@@ -398,6 +398,30 @@ Write `schema: 1` for a spec without `layouts`, so builds before 2 read it;
 every built-in has a portrait layout. JSON Schema:
 `docs/api/dashboard-spec.schema.json`.
 
+**Optional keys (schema 1 still).**
+
+```json
+{
+  "alertBanner": false,
+  "showWhen": { "paramId": "TRANS_TEMP", "above": 110 },
+  "thumbnail": "data:image/jpeg;base64,..."
+}
+```
+
+- `alertBanner` — the renderer names every widget at its critical limit
+  (`critAbove` / `critBelow`) with its value in a red strip along the top,
+  so a small gauge can't go red unnoticed (warnings stay amber on the gauge
+  itself). `false` turns the strip off; absent = on.
+- `showWhen` — `{paramId, above, below}` in the PID's own unit, at least one
+  limit: on the OBD page with a car connected, the dashboard comes up by
+  itself when the value passes the limit, and the one before comes back once
+  it has stopped holding for 5 s, unless the user picked another meanwhile.
+  It fires once per crossing (`frontend/dashboards/AutoShowRules.qml`); the
+  rule's PID is polled while the page is on screen.
+- `thumbnail` — a picture of the dashboard for sharing, a JPEG or PNG data
+  URL of at most 96 KB. The editor takes one on Done
+  (`dashboardManager.thumbnailFromImage`); export carries it.
+
 **Per-widget overrides are just `props` keys.** The editor's Label & Range and
 Color sections write ordinary props — a cell that renames, rescales and
 recolors its gauge looks like this:
@@ -489,10 +513,42 @@ built for another car or shared. The panel warns when the bound PID is
 unsupported, and at render time `DashboardRenderer` swaps such a cell for a
 "Not supported by this vehicle" placeholder (see §5.5).
 
+**Reuse.** The toolbar's **Style** menu: *Copy style* / *Paste style* carry
+a widget's look (its `look` and `advanced` options and its colour, not its
+data, range or alerts; `WidgetCatalog.styleKeys`) to another widget, the
+colour across types; *Use this style on every …* gives it to every widget of
+the same type in one undo step. *Save as my widget…* keeps the widget's
+type, value and options under a name (`dashboardManager.saveWidgetPreset`,
+`<config>/widgets/<id>.json`, `{"schema": 1, "kind": "widgetPreset", label,
+baseType, paramId, props}`); the gallery lists them first under **Mine**,
+with *Copy* (as text, to share) and *×*, and *Paste a widget* adds one
+someone shared. The **Grid · Demo** menu's *Alerts and auto-show…* sets
+`alertBanner` and `showWhen`.
+
 **Sharing path.** In the chooser, **Share** on any JSON dashboard card offers
 *Save to Downloads* (`<Downloads>/OCTAVE-dashboards/<id>.json`) or *Copy as
 text*; **Import** offers *From file…* or *Paste from clipboard*. Imports are
-validated and always become a new user dashboard (§5.4).
+validated and always become a new user dashboard (§5.4); a report then shows
+the new dashboard and what didn't come across (`lastImportReport`: values
+the connected car doesn't report, values or widget types this build doesn't
+know, widgets dropped as overlapping, settings reset, widgets moved back
+onto the grid), with **Show it** and **Edit**.
+
+**In a browser.** With the service on, `http://<car>:9876/dashboards`
+(`sdk/web/dashboards.html`) is a dashboard editor for a laptop or phone:
+the list (thumbnails, Edit / Customize / Copy / Download / Delete, New from
+a template, Import by paste or file with the same report), and an editor
+with drag to move and resize (placed by the app's own `arrange` /
+`nearestFree` / `rescale`), the widget's data, look, range and alert
+options from the catalog, grid density, the portrait layout, undo, and the
+dashboard's alert banner and auto-show rule. **Show on the car** sends
+every change to `dashboardManager.previewDashboard`: the car's dashboard
+page shows it in place of the active dashboard ("Preview from another
+device") until the page ends it or 60 s after its last update. The
+chooser's **In a browser** button shows the address and a QR code to scan,
+and a pairing code; with the service on loopback only (the default) it
+gives the address for a browser on the same computer and says to start
+OCTAVE with `--service-bind` for the network.
 
 **Manual path.** Drop a JSON file with the same schema under the OS config dir:
 

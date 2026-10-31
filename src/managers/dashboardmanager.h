@@ -36,8 +36,8 @@ class DashboardManager : public QObject
     Q_OBJECT
     // Service permissions (src/service/servicescopes.h)
     Q_CLASSINFO("octave.scope", "files")
-    Q_CLASSINFO("octave.scope.read", "arrange canPlace derivePortrait fitAt fromTemplate isBuiltIn loadDashboard minSpan nearestFree normalizedSpec orientedSpec refresh rescale sizeOptions uniqueIdForLabel")
-    Q_CLASSINFO("octave.experimental", "arrange derivePortrait fromTemplate minSpan nearestFree orientedSpec rescale sizeOptions templates")
+    Q_CLASSINFO("octave.scope.read", "arrange canPlace derivePortrait fitAt fromTemplate isBuiltIn loadDashboard minSpan nearestFree normalizedSpec orientedSpec refresh rescale sizeOptions thumbnailFromImage uniqueIdForLabel widgetPresetText")
+    Q_CLASSINFO("octave.experimental", "arrange derivePortrait endPreview fromTemplate lastImportReport minSpan nearestFree orientedSpec preview previewDashboard rescale sizeOptions templates thumbnailFromImage copyWidgetPresetToClipboard deleteWidgetPreset importWidgetPresetFromClipboard importWidgetPresetFromText saveWidgetPreset widgetPresetText widgetPresets")
     Q_PROPERTY(QVariantList dashboards READ dashboards NOTIFY dashboardsChanged)
     // Human-readable reason the last export/import failed ("" after a
     // success) — the chooser shows it in its status line.
@@ -48,6 +48,28 @@ class DashboardManager : public QObject
     // Where exportDashboard last wrote ("" until it has); a service client
     // downloads it from GET /export/dashboard
     Q_PROPERTY(QString lastExportPath READ lastExportPath NOTIFY lastExportPathChanged)
+    // What the last successful import brought in and what it left out
+    // ({} until one has, and after a failed one): {id, label, cells (kept),
+    // droppedCells (types of widgets dropped as overlapping), droppedProps
+    // (values not valid for their setting), movedCells (off the grid,
+    // moved back in), portraitDropped, unknownTypes (kept, but this build
+    // has no such widget), paramIds (every PID the dashboard reads)}. The
+    // chooser checks paramIds against the car for "values your car doesn't
+    // report".
+    Q_PROPERTY(QVariantMap lastImportReport READ lastImportReport NOTIFY lastImportReportChanged)
+    // A dashboard being edited on another device (the browser editor at
+    // GET /dashboards), shown on this screen's dashboard page in place of
+    // the saved one: {id, spec} (spec normalised; id "" for one not saved
+    // yet), {} when there is none. Ends by endPreview() or 60 s after the
+    // last previewDashboard().
+    Q_PROPERTY(QVariantMap preview READ preview NOTIFY previewChanged)
+    // The user's own widgets (TODO/user-primitives.md tier 1): a named look
+    // for a widget type, data-only like a dashboard, in <config>/widgets/
+    // *.json ({"schema": 1, "kind": "widgetPreset", label, baseType,
+    // paramId, props}): [{id, label, baseType, paramId, props}] by label.
+    // Placing one places its baseType with these props (and its paramId
+    // when it has one).
+    Q_PROPERTY(QVariantList widgetPresets READ widgetPresets NOTIFY widgetPresetsChanged)
     // Built-in presets the user deleted (hidden) — the chooser shows
     // "Restore defaults" while this is non-zero.
     Q_PROPERTY(int hiddenBuiltInCount READ hiddenBuiltInCount NOTIFY dashboardsChanged)
@@ -88,7 +110,8 @@ public:
     // data" in the editor). Empty map for an unknown id.
     Q_INVOKABLE QVariantMap fromTemplate(const QString &id, const QStringList &supported) const;
 
-    // Merged list: each entry is { id, label, builtIn, path }. Sorted so
+    // Merged list: each entry is { id, label, builtIn, path }, plus the
+    // dashboard's showWhen rule {paramId, above, below} when it has one. Sorted so
     // built-ins come first (in file-name order), then user dashboards.
     QVariantList dashboards() const { return m_dashboards; }
 
@@ -156,9 +179,20 @@ public:
     Q_INVOKABLE QVariantList sizeOptions(const QString &type, int gridColumns, int gridRows, double cellWidth,
                                          double cellHeight, double spacing) const;
 
+    // A dashboard's `thumbnail`: `image` (a QImage, as QML's grabToImage
+    // result.image gives it) scaled to fit 320 x 180 and encoded as a
+    // "data:image/jpeg;base64,..." URL, which save and export keep. "" for
+    // anything that isn't an image (so a service client gets "").
+    Q_INVOKABLE QString thumbnailFromImage(const QVariant &image) const;
+
     QString lastShareError() const { return m_lastShareError; }
     QString lastError() const { return m_lastError; }
     QString lastExportPath() const { return m_lastExportPath; }
+    QVariantMap lastImportReport() const { return m_lastImportReport; }
+    QVariantMap preview() const { return m_preview; }
+    QVariantList widgetPresets() const { return m_widgetPresets; }
+    // A preset as the JSON text it is shared as ("" for an unknown id)
+    Q_INVOKABLE QString widgetPresetText(const QString &id) const;
     int hiddenBuiltInCount() const { return m_hiddenBuiltIns.size(); }
     int supportedSchema() const { return kSupportedSchema; }
 
@@ -209,6 +243,22 @@ public slots:
     QString importDashboardFromClipboard();
     QString importDashboardFromText(const QString &json);
 
+    // Save a widget preset {label, baseType, paramId, props} (props held to
+    // the spec rules for baseType; an `id` of an existing one overwrites
+    // it, else a new id from the label). Returns the id, "" with lastError.
+    QString saveWidgetPreset(const QVariantMap &preset);
+    bool deleteWidgetPreset(const QString &id);
+    bool copyWidgetPresetToClipboard(const QString &id);
+    // A shared preset as a new one (never overwrites); "" with lastShareError
+    QString importWidgetPresetFromText(const QString &json);
+    QString importWidgetPresetFromClipboard();
+
+    // Show `spec` on this screen as the preview (see `preview`); held to
+    // the load rules. False, and no preview, when it isn't a usable
+    // dashboard. Each call restarts the 60 s expiry.
+    bool previewDashboard(const QVariantMap &spec);
+    void endPreview();
+
     // Re-scan both directories. Emits dashboardsChanged() afterwards.
     // Call this after editing JSON externally while the app is running.
     void refresh();
@@ -218,12 +268,24 @@ signals:
     void lastShareErrorChanged();
     void lastErrorChanged();
     void lastExportPathChanged();
+    void lastImportReportChanged();
+    void previewChanged();
+    void widgetPresetsChanged();
 
 private:
     QString m_lastShareError;
     void setShareError(const QString &message);
     QString m_lastError;
     QString m_lastExportPath;
+    QVariantMap m_lastImportReport;
+    QVariantMap m_preview;
+    QVariantList m_widgetPresets;
+    QString widgetsDir() const;
+    void rescanWidgetPresets();
+    // {label, baseType, paramId, props} held to the rules, or {} with *error
+    QVariantMap normalizePreset(const QVariantMap &raw, QString *error) const;
+    QTimer m_previewExpiry;
+    void setImportReport(const QVariantMap &report);
     void setError(const QString &message);
 
     // The one set of spec rules, applied on import, save and load: known
@@ -244,8 +306,15 @@ private:
     // schema is refused (loadDashboard passes such a file through untouched).
     // Returns an empty map (and sets *error) when the data isn't usable.
     enum class SpecUse { Import, Save, Load };
+    // What normalizeSpec changed, for the import report
+    struct NormalizeReport {
+        QStringList droppedCells;   // types
+        int droppedProps = 0;
+        int movedCells = 0;
+        bool portraitDropped = false;
+    };
     static QVariantMap normalizeSpec(const QVariantMap &raw, SpecUse use, QString *error,
-                                     const QVariantMap &catalog = {});
+                                     const QVariantMap &catalog = {}, NormalizeReport *report = nullptr);
     QString importSpec(const QVariantMap &raw);
 
     QString m_presetsDir;

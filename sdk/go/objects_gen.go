@@ -671,6 +671,30 @@ func (o DashboardManager) GetLastExportPath() (v string, err error) {
 	return
 }
 
+// GetLastImportReport reads the property "lastImportReport" (QVariantMap).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) GetLastImportReport() (v map[string]any, err error) {
+	err = o.c.Get("dashboardManager", "lastImportReport", &v)
+	return
+}
+
+// GetPreview reads the property "preview" (QVariantMap).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) GetPreview() (v map[string]any, err error) {
+	err = o.c.Get("dashboardManager", "preview", &v)
+	return
+}
+
+// GetWidgetPresets reads the property "widgetPresets" (QVariantList).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) GetWidgetPresets() (v []any, err error) {
+	err = o.c.Get("dashboardManager", "widgetPresets", &v)
+	return
+}
+
 // GetHiddenBuiltInCount reads the property "hiddenBuiltInCount" (int).
 func (o DashboardManager) GetHiddenBuiltInCount() (v int, err error) {
 	err = o.c.Get("dashboardManager", "hiddenBuiltInCount", &v)
@@ -749,6 +773,61 @@ func (o DashboardManager) ImportDashboardFromClipboard() (v string, err error) {
 func (o DashboardManager) ImportDashboardFromText(json string) (v string, err error) {
 	err = o.c.Call("dashboardManager", "importDashboardFromText", &v, json)
 	return
+}
+
+// SaveWidgetPreset calls saveWidgetPreset(QVariantMap) -> QString.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) SaveWidgetPreset(preset map[string]any) (v string, err error) {
+	err = o.c.Call("dashboardManager", "saveWidgetPreset", &v, preset)
+	return
+}
+
+// DeleteWidgetPreset calls deleteWidgetPreset(QString) -> bool.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) DeleteWidgetPreset(id string) (v bool, err error) {
+	err = o.c.Call("dashboardManager", "deleteWidgetPreset", &v, id)
+	return
+}
+
+// CopyWidgetPresetToClipboard calls copyWidgetPresetToClipboard(QString) -> bool.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) CopyWidgetPresetToClipboard(id string) (v bool, err error) {
+	err = o.c.Call("dashboardManager", "copyWidgetPresetToClipboard", &v, id)
+	return
+}
+
+// ImportWidgetPresetFromText calls importWidgetPresetFromText(QString) -> QString.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) ImportWidgetPresetFromText(json string) (v string, err error) {
+	err = o.c.Call("dashboardManager", "importWidgetPresetFromText", &v, json)
+	return
+}
+
+// ImportWidgetPresetFromClipboard calls importWidgetPresetFromClipboard() -> QString.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) ImportWidgetPresetFromClipboard() (v string, err error) {
+	err = o.c.Call("dashboardManager", "importWidgetPresetFromClipboard", &v)
+	return
+}
+
+// PreviewDashboard calls previewDashboard(QVariantMap) -> bool.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) PreviewDashboard(spec map[string]any) (v bool, err error) {
+	err = o.c.Call("dashboardManager", "previewDashboard", &v, spec)
+	return
+}
+
+// EndPreview calls endPreview().
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) EndPreview() error {
+	return o.c.Call("dashboardManager", "endPreview", nil)
 }
 
 // Refresh calls refresh().
@@ -853,6 +932,22 @@ func (o DashboardManager) MinSpan(type_ string, gridColumns int, gridRows int, c
 // Experimental: not covered by the protocol version; may change or go in any release.
 func (o DashboardManager) SizeOptions(type_ string, gridColumns int, gridRows int, cellWidth float64, cellHeight float64, spacing float64) (v []any, err error) {
 	err = o.c.Call("dashboardManager", "sizeOptions", &v, type_, gridColumns, gridRows, cellWidth, cellHeight, spacing)
+	return
+}
+
+// ThumbnailFromImage calls thumbnailFromImage(QVariant) -> QString.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) ThumbnailFromImage(image any) (v string, err error) {
+	err = o.c.Call("dashboardManager", "thumbnailFromImage", &v, image)
+	return
+}
+
+// WidgetPresetText calls widgetPresetText(QString) -> QString.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) WidgetPresetText(id string) (v string, err error) {
+	err = o.c.Call("dashboardManager", "widgetPresetText", &v, id)
 	return
 }
 

@@ -627,6 +627,7 @@ qt_add_resources(octave "web_client"
     PREFIX "/web-client"
     BASE "${CMAKE_SOURCE_DIR}/sdk/web"
     FILES "${CMAKE_SOURCE_DIR}/sdk/web/index.html"
+          "${CMAKE_SOURCE_DIR}/sdk/web/dashboards.html"
 )
 
 # ---- The simulator's test video (sim.setVideo), 140 KB ----

@@ -71,6 +71,36 @@
         }
       },
       "additionalProperties": false
+    },
+    "thumbnail": {
+      "type": "string",
+      "maxLength": 98304,
+      "pattern": "^data:image/(jpeg|png);base64,[A-Za-z0-9+/]+=*$",
+      "description": "A picture of the dashboard for sharing (the editor takes one on save). Anything else is dropped."
+    },
+    "alertBanner": {
+      "type": "boolean",
+      "description": "false turns off the red strip that names any widget at its critical limit (critAbove / critBelow). Absent = on."
+    },
+    "showWhen": {
+      "type": "object",
+      "description": "Bring this dashboard up by itself while a value is past a limit (on the OBD page with a car connected); the one before comes back once it has not held for 5 s. Limits are in the PID's own unit; at least one of above / below, else the rule is dropped.",
+      "properties": {
+        "paramId": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "above": {
+          "type": "number"
+        },
+        "below": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "paramId"
+      ],
+      "additionalProperties": false
     }
   },
   "$defs": {

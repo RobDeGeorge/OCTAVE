@@ -107,6 +107,89 @@
         },
         {
             "kind": "slot",
+            "name": "saveWidgetPreset",
+            "params": [
+                {
+                    "name": "preset",
+                    "type": "QVariantMap"
+                }
+            ],
+            "returns": "QString",
+            "scope": "files",
+            "stability": "experimental"
+        },
+        {
+            "kind": "slot",
+            "name": "deleteWidgetPreset",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool",
+            "scope": "files",
+            "stability": "experimental"
+        },
+        {
+            "kind": "slot",
+            "name": "copyWidgetPresetToClipboard",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool",
+            "scope": "files",
+            "stability": "experimental"
+        },
+        {
+            "kind": "slot",
+            "name": "importWidgetPresetFromText",
+            "params": [
+                {
+                    "name": "json",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString",
+            "scope": "files",
+            "stability": "experimental"
+        },
+        {
+            "kind": "slot",
+            "name": "importWidgetPresetFromClipboard",
+            "params": [
+            ],
+            "returns": "QString",
+            "scope": "files",
+            "stability": "experimental"
+        },
+        {
+            "kind": "slot",
+            "name": "previewDashboard",
+            "params": [
+                {
+                    "name": "spec",
+                    "type": "QVariantMap"
+                }
+            ],
+            "returns": "bool",
+            "scope": "files",
+            "stability": "experimental"
+        },
+        {
+            "kind": "slot",
+            "name": "endPreview",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "files",
+            "stability": "experimental"
+        },
+        {
+            "kind": "slot",
             "name": "refresh",
             "params": [
             ],
@@ -468,6 +551,32 @@
             "returns": "QVariantList",
             "scope": "read",
             "stability": "experimental"
+        },
+        {
+            "kind": "invokable",
+            "name": "thumbnailFromImage",
+            "params": [
+                {
+                    "name": "image",
+                    "type": "QVariant"
+                }
+            ],
+            "returns": "QString",
+            "scope": "read",
+            "stability": "experimental"
+        },
+        {
+            "kind": "invokable",
+            "name": "widgetPresetText",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString",
+            "scope": "read",
+            "stability": "experimental"
         }
     ],
     "object": "dashboardManager",
@@ -502,6 +611,33 @@
             "notify": "lastExportPathChanged",
             "readable": true,
             "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "lastImportReport",
+            "notify": "lastImportReportChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QVariantMap",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "preview",
+            "notify": "previewChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QVariantMap",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "widgetPresets",
+            "notify": "widgetPresetsChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QVariantList",
             "writable": false
         },
         {
@@ -553,6 +689,21 @@
         },
         {
             "name": "lastExportPathChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "lastImportReportChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "previewChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "widgetPresetsChanged",
             "params": [
             ]
         }

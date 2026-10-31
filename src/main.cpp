@@ -162,6 +162,10 @@ Service makeService(const QStringList &arguments, AppCore &core, bool headless)
         QFile page(QStringLiteral(":/web-client/index.html"));
         if (page.open(QIODevice::ReadOnly))
             service.server->setPage(page.readAll());
+        // The browser dashboard editor (sdk/web/dashboards.html)
+        QFile editorPage(QStringLiteral(":/web-client/dashboards.html"));
+        if (editorPage.open(QIODevice::ReadOnly))
+            service.server->addPage("/dashboards", editorPage.readAll());
         // Or a frontend's own files (--web-root / serviceWebRoot)
         if (!options.webRoot.isEmpty()) {
             if (const QString problem = OctaveService::webRootProblem(options.webRoot); problem.isEmpty()) {
@@ -800,6 +804,8 @@ int main(int argc, char *argv[])
     devRuntime.afterLoad(service.server.get());   // its UI / perf / sim actions, with --profile
 #endif
     const bool serving = service.server && service.server->start();
+    if (serving)
+        core.servicePairing.setListening(service.server->bindAddress(), service.server->port());
 #ifndef Q_OS_MOBILE
     // `octave --pair-code` from this user on this machine, while the service is up
     OctaveService::AdminChannel admin(&core.servicePairing);

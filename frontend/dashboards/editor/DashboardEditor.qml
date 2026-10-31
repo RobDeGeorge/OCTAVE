@@ -210,6 +210,35 @@ Item {
         layoutMode = "landscape"
         _show(land)
         nameField.text = spec.label ? spec.label : ""
+        showWhen = spec.showWhen ? Object.assign({}, spec.showWhen) : null
+        alertBanner = spec.alertBanner !== false
+    }
+
+    // ── Dashboard options (the options popup) ────────────────────────────
+    // showWhen {paramId, above, below} (limits in the PID's own unit): the
+    // OBD page brings this dashboard up while it holds. alertBanner: the
+    // renderer's red strip naming widgets at their critical limit. Not in
+    // undo; a change marks the work unsaved.
+    property var showWhen: null
+    property bool alertBanner: true
+
+    function setShowWhen(when) {
+        if (drivingLocked) return
+        var w = null
+        if (when && when.paramId) {
+            w = { "paramId": when.paramId }
+            if (typeof when.above === "number" && isFinite(when.above)) w.above = when.above
+            if (typeof when.below === "number" && isFinite(when.below)) w.below = when.below
+        }
+        if (JSON.stringify(w) === JSON.stringify(showWhen)) return
+        showWhen = w
+        dirty = true
+    }
+
+    function setAlertBanner(on) {
+        if (drivingLocked || on === alertBanner) return
+        alertBanner = on
+        dirty = true
     }
 
     // ── Landscape / portrait ─────────────────────────────────────────────
@@ -324,6 +353,10 @@ Item {
         }
         var spec = { "schema": L.port ? 2 : 1, "gridColumns": L.land.cols, "gridRows": L.land.rows,
                      "cells": L.land.cells.map(plain) }
+        if (showWhen && (showWhen.above !== undefined || showWhen.below !== undefined))
+            spec.showWhen = Object.assign({}, showWhen)
+        if (!alertBanner)
+            spec.alertBanner = false
         if (L.port)
             spec.layouts = { "portrait": { "gridColumns": L.port.cols, "gridRows": L.port.rows,
                 "cells": L.port.cells.map(function(c) {
@@ -660,7 +693,7 @@ Item {
     function addCellAt(type, col, row) { return _addCell(type, col, row, "") }
 
     // The same, bound to `paramId` when given (data-first add)
-    function _addCell(type, col, row, paramId) {
+    function _addCell(type, col, row, paramId, props) {
         var meta = App.WidgetCatalog.metaFor(type)
         if (!meta) return false
         var spans = _newSpans(type)
@@ -699,7 +732,7 @@ Item {
             "type": type, "paramId": bound,
             "col": place.col, "row": place.row,
             "colSpan": place.colSpan, "rowSpan": place.rowSpan,
-            "props": {}
+            "props": props ? Object.assign({}, props) : {}
         })
         _apply(next)
         selectedIndex = next.length - 1
@@ -867,6 +900,116 @@ Item {
         _patchCell(index, { "props": props })
     }
 
+    // ── My widgets (dashboardManager.widgetPresets) ─────────────────────
+    // A preset places its base type with its options, bound to its value
+    // when it has one; "Save as my widget" keeps the selected widget's
+    // type, value and options under a name.
+    function addPreset(preset, col, row) {
+        return _addCell(preset.baseType, col, row, preset.paramId || "", preset.props || {})
+    }
+
+    function saveAsPreset(index, label) {
+        var c = cells[index]
+        var name = String(label || "").trim()
+        if (!c || name === "") return ""
+        var id = dashboardManager.saveWidgetPreset({ "label": name, "baseType": c.type,
+                                                     "paramId": c.paramId || "", "props": c.props || {} })
+        if (id) _notify("Saved to My widgets as \"" + name + "\"")
+        else _showError(dashboardManager.lastError || "Could not save the widget")
+        return id
+    }
+
+    // ── Copy / paste style, apply to all ────────────────────────────────
+    // A style is a widget's look without its data: its styleKeys props and
+    // its colour (the first colorProps entry; set on every colour prop of
+    // the target, as the Color row does). Pasting onto another type keeps
+    // the keys that type has; the colour carries across types.
+    property var copiedStyle: null
+
+    function styleOf(index) {
+        var c = cells[index]
+        if (!c) return null
+        var meta = App.WidgetCatalog.metaFor(c.type)
+        var props = c.props || {}
+        var keys = App.WidgetCatalog.styleKeys(c.type)
+        var style = { "type": c.type, "props": {}, "color": undefined }
+        for (var i = 0; i < keys.length; i++)
+            if (props[keys[i]] !== undefined) style.props[keys[i]] = props[keys[i]]
+        var colors = (meta && meta.colorProps) || []
+        if (colors.length > 0 && props[colors[0]] !== undefined) style.color = props[colors[0]]
+        return style
+    }
+
+    // cell `c` with `style` in place of its own (a new object)
+    function _styled(c, style) {
+        var meta = App.WidgetCatalog.metaFor(c.type)
+        var keys = App.WidgetCatalog.styleKeys(c.type)
+        var colors = (meta && meta.colorProps) || []
+        var props = Object.assign({}, c.props || {})
+        for (var i = 0; i < keys.length; i++) {
+            delete props[keys[i]]
+            if (style.props[keys[i]] !== undefined) props[keys[i]] = style.props[keys[i]]
+        }
+        for (var j = 0; j < colors.length; j++) {
+            delete props[colors[j]]
+            if (style.color !== undefined) props[colors[j]] = style.color
+        }
+        var out = Object.assign({}, c)
+        out.props = props
+        return out
+    }
+
+    function copyStyle(index) {
+        var s = styleOf(index)
+        if (!s) return
+        copiedStyle = s
+        var meta = App.WidgetCatalog.metaFor(s.type)
+        _notify("Style copied from " + (meta ? meta.displayName : s.type))
+    }
+
+    function pasteStyle(index) {
+        if (!copiedStyle || !cells[index]) return
+        var next = cells.slice()
+        next[index] = _styled(next[index], copiedStyle)
+        _apply(next)
+        _notify("Style pasted", "Undo", editor.undo)
+    }
+
+    // Every other widget of the same type takes this one's style, in one
+    // undo step. Returns how many changed.
+    function applyStyleToAll(index) {
+        var src = cells[index]
+        if (!src) return 0
+        var style = styleOf(index)
+        var next = cells.slice()
+        var n = 0
+        for (var i = 0; i < next.length; i++) {
+            if (i === index || next[i].type !== src.type) continue
+            var styled = _styled(next[i], style)
+            if (JSON.stringify(styled.props) === JSON.stringify(next[i].props || {})) continue
+            next[i] = styled
+            n++
+        }
+        var meta = App.WidgetCatalog.metaFor(src.type)
+        var name = meta ? meta.displayName : src.type
+        if (n === 0) {
+            _notify("Every " + name + " already looks like this")
+            return 0
+        }
+        _apply(next)
+        _notify("Style applied to " + n + " more " + name + (n === 1 ? "" : "s"), "Undo", editor.undo)
+        return n
+    }
+
+    // How many other widgets share the selected one's type ("apply to all")
+    readonly property int sameTypeCount: {
+        if (!selectedCell) return 0
+        var n = 0
+        for (var i = 0; i < cells.length; i++)
+            if (i !== selectedIndex && cells[i].type === selectedCell.type) n++
+        return n
+    }
+
     // ── Test values ──────────────────────────────────────────────────────
     // cell index → a value its widget shows instead of the live one (the
     // sheet's Test value slider). Not part of the spec: never saved, not in
@@ -977,11 +1120,34 @@ Item {
         return info && info.title ? info.title : paramId
     }
 
+    // Done: a picture of the canvas first (the dashboard's `thumbnail`,
+    // carried by export), taken with nothing selected; saved without one if
+    // the grab can't happen or takes too long
+    property bool _saving: false
+    Timer { id: grabFallback; interval: 1500; onTriggered: editor._finishSave("") }
+
     function save() {
         if (typeof dashboardManager === "undefined" || !dashboardManager) {
             _showError("No dashboard backend available")
             return
         }
+        if (_saving) return
+        _saving = true
+        clearSelection()
+        _hideChoosers()
+        closeSheet()
+        var w = 640, h = Math.max(1, Math.round(640 * editorCanvas.height / Math.max(1, editorCanvas.width)))
+        var started = editor.visible && editorCanvas.width > 0 && editorCanvas.grabToImage(function(result) {
+            editor._finishSave(dashboardManager.thumbnailFromImage(result.image))
+        }, Qt.size(w, h))
+        if (started) grabFallback.restart()
+        else _finishSave("")
+    }
+
+    function _finishSave(thumbnail) {
+        if (!_saving) return
+        _saving = false
+        grabFallback.stop()
         var label = nameField.text.trim().replace(/\s+/g, " ")   // as the manager stores it
         if (label.length === 0) label = "Untitled"
 
@@ -989,6 +1155,7 @@ Item {
         var spec = specToSave()
         spec.id = id
         spec.label = label
+        if (thumbnail) spec.thumbnail = thumbnail
 
         var savedId = dashboardManager.saveDashboard(spec)
         if (savedId && savedId.length > 0) {
@@ -1179,6 +1346,14 @@ Item {
                         text: "Fine grid (" + editor.densityGrid("fine").cols + " × " + editor.densityGrid("fine").rows + ")"
                     }
                     MenuSeparator {}
+                    MenuItem {
+                        objectName: "editorOptionsButton"
+                        implicitHeight: editor.touchSize
+                        enabled: !editor.drivingLocked
+                        text: "Alerts and auto-show…"
+                        font.family: App.Style.fontFamily
+                        onTriggered: optionsPopup.open()
+                    }
                     MenuItem {
                         objectName: "editorEditWhileDriving"
                         implicitHeight: editor.touchSize
@@ -1477,6 +1652,49 @@ Item {
                     }
                 }
                 Pill {
+                    id: styleButton
+                    objectName: "editorToolStyle"
+                    text: "Style"
+                    onClicked: styleMenu.open()
+                    Menu {
+                        id: styleMenu
+                        y: styleButton.height
+                        MenuItem {
+                            objectName: "editorStyleCopy"
+                            implicitHeight: editor.touchSize
+                            text: "Copy style"
+                            font.family: App.Style.fontFamily
+                            onTriggered: editor.copyStyle(editor.selectedIndex)
+                        }
+                        MenuItem {
+                            objectName: "editorStylePaste"
+                            implicitHeight: editor.touchSize
+                            enabled: editor.copiedStyle !== null
+                            text: "Paste style"
+                            font.family: App.Style.fontFamily
+                            onTriggered: editor.pasteStyle(editor.selectedIndex)
+                        }
+                        MenuItem {
+                            objectName: "editorStyleApplyAll"
+                            implicitHeight: editor.touchSize
+                            enabled: editor.sameTypeCount > 0
+                            text: editor.selectedMeta
+                                  ? "Use this style on every " + editor.selectedMeta.displayName
+                                    + (editor.sameTypeCount > 0 ? " (" + editor.sameTypeCount + " more)" : "")
+                                  : "Use this style on all"
+                            font.family: App.Style.fontFamily
+                            onTriggered: editor.applyStyleToAll(editor.selectedIndex)
+                        }
+                        MenuItem {
+                            objectName: "editorSaveAsPreset"
+                            implicitHeight: editor.touchSize
+                            text: "Save as my widget…"
+                            font.family: App.Style.fontFamily
+                            onTriggered: presetNameDialog.openFor(editor.selectedIndex)
+                        }
+                    }
+                }
+                Pill {
                     objectName: "editorToolDuplicate"
                     text: "Duplicate"
                     onClicked: editor.duplicateCell(editor.selectedIndex)
@@ -1580,6 +1798,9 @@ Item {
             editor.addCellAt(type, editor._pendingCol, editor._pendingRow)
         }
         onDataFirstRequested: editor.openDataFirst()
+        onPresetPicked: function(preset) {
+            editor.addPreset(preset, editor._pendingCol, editor._pendingRow)
+        }
     }
 
     PIDPicker {
@@ -1587,8 +1808,255 @@ Item {
         onPidPicked: function(paramId) {
             if (editor._pidMode === "add")
                 editor.addForParam(paramId)
+            else if (editor._pidMode === "rule")
+                optionsPopup.pickedParam(paramId)
             else if (editor.selectedIndex >= 0)
                 editor.setCellParam(editor.selectedIndex, paramId)
+        }
+    }
+
+    // ── Dashboard options: alert banner, show automatically when ... ────
+    Popup {
+        id: optionsPopup
+        objectName: "editorOptionsPopup"
+        parent: Overlay.overlay
+        modal: true
+        focus: true
+        padding: editor.dp(20)
+        x: Math.round((parent.width - width) / 2)
+        y: Math.round((parent.height - height) / 2)
+        width: Math.min(parent.width - editor.dp(24), editor.dp(560))
+
+        // Being edited here; applied on Done
+        property string paramId: ""
+        property bool banner: true
+
+        function pickedParam(id) { paramId = id }
+        function _num(text) {
+            var t = String(text).trim()
+            if (t === "") return NaN
+            var n = Number(t)
+            return isFinite(n) ? n : NaN
+        }
+        function _shown(v) {
+            if (v === undefined || !paramId) return ""
+            return String(App.OBDParameterModel.toDisplay(paramId, v))
+        }
+
+        onAboutToShow: {
+            var w = editor.showWhen
+            paramId = w ? w.paramId : ""
+            banner = editor.alertBanner
+            aboveField.text = w ? _shown(w.above) : ""
+            belowField.text = w ? _shown(w.below) : ""
+        }
+
+        function apply() {
+            var a = _num(aboveField.text), b = _num(belowField.text)
+            if (paramId === "" || (!isFinite(a) && !isFinite(b))) {
+                editor.setShowWhen(null)
+            } else {
+                var w = { "paramId": paramId }
+                if (isFinite(a)) w.above = App.OBDParameterModel.fromDisplay(paramId, a)
+                if (isFinite(b)) w.below = App.OBDParameterModel.fromDisplay(paramId, b)
+                editor.setShowWhen(w)
+            }
+            editor.setAlertBanner(banner)
+            close()
+        }
+
+        background: Rectangle {
+            color: App.Style.obdBoxBackground
+            radius: editor.dpMin(12, 4)
+            border.color: Qt.darker(App.Style.obdBarColor, 1.5)
+            border.width: 1
+        }
+
+        component OptionLabel: Text {
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            color: App.Style.obdLabelColor
+            font.family: App.Style.fontFamily
+            font.pixelSize: App.Spacing.overallText * 0.85
+        }
+
+        component NumberField: TextField {
+            Layout.preferredWidth: editor.dp(110)
+            Layout.preferredHeight: editor.touchSize
+            inputMethodHints: Qt.ImhFormattedNumbersOnly
+            color: App.Style.primaryTextColor
+            font.family: App.Style.fontFamily
+            font.pixelSize: App.Spacing.overallText
+            enabled: optionsPopup.paramId !== ""
+            background: Rectangle {
+                radius: editor.dpMin(6, 2)
+                color: Qt.darker(App.Style.obdBoxBackground, 1.25)
+                border.color: parent.activeFocus ? App.Style.accent : Qt.darker(App.Style.obdBarColor, 1.6)
+                border.width: 1
+            }
+        }
+
+        contentItem: ColumnLayout {
+            spacing: editor.dp(12)
+            Text {
+                text: "Alerts and auto-show"
+                color: App.Style.primaryTextColor
+                font.family: App.Style.fontFamily
+                font.pixelSize: App.Spacing.overallText * 1.2
+                font.bold: true
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: editor.dp(10)
+                OptionLabel {
+                    text: "Alert banner: name any widget at its critical limit in a red strip at the top"
+                }
+                Pill {
+                    objectName: "editorOptionBanner"
+                    text: optionsPopup.banner ? "On" : "Off"
+                    checked: optionsPopup.banner
+                    onClicked: optionsPopup.banner = !optionsPopup.banner
+                }
+            }
+
+            Rectangle { Layout.fillWidth: true; height: 1; color: Qt.darker(App.Style.obdBarColor, 1.6) }
+
+            OptionLabel {
+                text: "Show this dashboard by itself when a value passes a limit (on the OBD page, with a car "
+                      + "connected). The one you were on comes back when it stops."
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: editor.dp(8)
+                Pill {
+                    objectName: "editorOptionRulePid"
+                    maxLabelWidth: editor.dp(220)
+                    text: optionsPopup.paramId ? editor._pidTitle(optionsPopup.paramId) : "Choose a value"
+                    onClicked: {
+                        editor._pidMode = "rule"
+                        pidPicker.title = "Show this dashboard when ..."
+                        pidPicker.supportedKinds = ["*"]
+                        pidPicker.currentParamId = optionsPopup.paramId
+                        pidPicker.open()
+                    }
+                }
+                Pill {
+                    objectName: "editorOptionRuleOff"
+                    visible: optionsPopup.paramId !== ""
+                    text: "Off"
+                    onClicked: { optionsPopup.paramId = ""; aboveField.text = ""; belowField.text = "" }
+                }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: editor.dp(8)
+                OptionLabel { Layout.fillWidth: false; text: "at or above" }
+                NumberField { id: aboveField; objectName: "editorOptionAbove" }
+                OptionLabel { Layout.fillWidth: false; text: "or at or below" }
+                NumberField { id: belowField; objectName: "editorOptionBelow" }
+                OptionLabel {
+                    text: optionsPopup.paramId ? App.OBDParameterModel.getParamInfo(optionsPopup.paramId).unit || "" : ""
+                }
+            }
+
+            Flow {
+                Layout.fillWidth: true
+                spacing: editor.dp(8)
+                layoutDirection: Qt.RightToLeft
+                Pill {
+                    objectName: "editorOptionsDone"
+                    text: "Done"
+                    primary: true
+                    onClicked: optionsPopup.apply()
+                }
+                Pill {
+                    text: "Cancel"
+                    onClicked: optionsPopup.close()
+                }
+            }
+        }
+    }
+
+    // "Save as my widget": a name for it
+    Popup {
+        id: presetNameDialog
+        objectName: "editorPresetDialog"
+        parent: Overlay.overlay
+        modal: true
+        focus: true
+        padding: editor.dp(20)
+        x: Math.round((parent.width - width) / 2)
+        y: Math.round(Math.max(editor.dp(12), parent.height * 0.2))
+        width: Math.min(parent.width - editor.dp(24), editor.dp(520))
+        property int index: -1
+        function openFor(i) {
+            var c = editor.cells[i]
+            if (!c) return
+            index = i
+            var meta = App.WidgetCatalog.metaFor(c.type)
+            presetName.text = (c.props && c.props.title) || (c.paramId ? editor._pidTitle(c.paramId) + " " : "")
+                              + (meta ? meta.displayName : c.type)
+            open()
+        }
+        background: Rectangle {
+            color: App.Style.obdBoxBackground
+            radius: editor.dpMin(12, 4)
+            border.color: Qt.darker(App.Style.obdBarColor, 1.5)
+            border.width: 1
+        }
+        contentItem: ColumnLayout {
+            spacing: editor.dp(12)
+            Text {
+                Layout.fillWidth: true
+                text: "Save as my widget"
+                color: App.Style.primaryTextColor
+                font.family: App.Style.fontFamily
+                font.pixelSize: App.Spacing.overallText * 1.2
+                font.bold: true
+            }
+            Text {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: "Its type, value and options, ready to place again from Add (Mine) and to share as text."
+                color: App.Style.obdLabelColor
+                font.family: App.Style.fontFamily
+                font.pixelSize: App.Spacing.overallText * 0.85
+            }
+            TextField {
+                id: presetName
+                objectName: "editorPresetName"
+                Layout.fillWidth: true
+                Layout.preferredHeight: editor.touchSize
+                maximumLength: 80
+                color: App.Style.primaryTextColor
+                font.family: App.Style.fontFamily
+                font.pixelSize: App.Spacing.overallText
+                background: Rectangle {
+                    radius: editor.dpMin(6, 2)
+                    color: Qt.darker(App.Style.obdBoxBackground, 1.25)
+                    border.color: presetName.activeFocus ? App.Style.accent : Qt.darker(App.Style.obdBarColor, 1.6)
+                    border.width: 1
+                }
+            }
+            Flow {
+                Layout.fillWidth: true
+                spacing: editor.dp(8)
+                layoutDirection: Qt.RightToLeft
+                Pill {
+                    objectName: "editorPresetSave"
+                    text: "Save"
+                    primary: true
+                    onClicked: {
+                        if (editor.saveAsPreset(presetNameDialog.index, presetName.text) !== "")
+                            presetNameDialog.close()
+                    }
+                }
+                Pill {
+                    text: "Cancel"
+                    onClicked: presetNameDialog.close()
+                }
+            }
         }
     }
 

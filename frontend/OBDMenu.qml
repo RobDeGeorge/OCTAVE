@@ -56,6 +56,13 @@ Item {
     // still resolve to the same dashboards — they just render from JSON via
     // DashboardRenderer now instead of hand-written QML. See
     // TODO/dashboards-roadmap.md for the full Phase 2 design.
+    // A dashboard being edited on another device (dashboardManager.preview):
+    // shown here in place of the active one, with or without a car, until
+    // that device ends it (or 60 s after its last change)
+    readonly property var _preview: (typeof dashboardManager !== "undefined" && dashboardManager)
+                                    ? dashboardManager.preview : ({})
+    readonly property bool previewing: !!(_preview && _preview.spec)
+
     readonly property var _gridSentinel:
         ({ id: "grid", label: "Parameter Cards", builtIn: true })
 
@@ -184,8 +191,30 @@ Item {
             for (var i = 0; i < dashboardRegistry.length; i++)
                 if (dashboardRegistry[i].id === newId) label = dashboardRegistry[i].label
             showShareStatus("Imported \"" + label + "\"", false)
+            importReportPopup.openFor(dashboardManager.lastImportReport)
         } else {
             showShareStatus(dashboardManager.lastShareError || "Import failed", true)
+        }
+    }
+
+    Dashboards.RemoteEditPopup { id: remoteEditPopup }
+
+    // What the import brought in and what it left out
+    Dashboards.ImportReportPopup {
+        id: importReportPopup
+        stageWidth: obdPage.width
+        stageHeight: Math.max(1, obdPage.height - dp(80))
+        onShowRequested: function(id) {
+            dashboardChooserPopup.close()
+            obdPage.setActiveDashboard(id)
+        }
+        onEditRequested: function(id) {
+            dashboardChooserPopup.close()
+            obdPage.stackView.push("dashboards/editor/DashboardEditor.qml", {
+                stackView: obdPage.stackView,
+                callerPage: obdPage,
+                editingId: id
+            })
         }
     }
 
@@ -325,9 +354,9 @@ Item {
     readonly property bool _pageActiveForDemand:
         StackView.status === StackView.Active || StackView.status === StackView.Activating
     readonly property var _dashboardDemand:
-        (_pageActiveForDemand && obdConnected && activeDashboardId !== "grid") ? dashboardRenderer.paramIds : []
+        (_pageActiveForDemand && obdConnected && (previewing || activeDashboardId !== "grid")) ? dashboardRenderer.paramIds : []
     readonly property var _cardsDemand: {
-        if (!_pageActiveForDemand || !obdConnected || activeDashboardId !== "grid") return [];
+        if (!_pageActiveForDemand || !obdConnected || previewing || activeDashboardId !== "grid") return [];
         return vehicleParameters.map(function(p) { return p.id; });
     }
     function _pushDemand(consumer, ids) {
@@ -339,6 +368,37 @@ Item {
     Component.onDestruction: {
         _pushDemand("dashboard", []);
         _pushDemand("cards", []);
+        _pushDemand("autoShow", []);
+    }
+
+    // ── "Show this dashboard when ..." (a spec's showWhen) ───────────
+    // Checked twice a second while this page is on screen with a car
+    // connected (dashboards/AutoShowRules.qml has the rules). A dashboard
+    // shown by a rule isn't saved as the active one.
+    readonly property var _autoRules: dashboardRegistry.filter(function(d) { return !!d.showWhen })
+    readonly property var _autoDemand: {
+        if (!_pageActiveForDemand || !obdConnected) return []
+        var seen = {}, out = []
+        for (var i = 0; i < _autoRules.length; i++) {
+            var id = _autoRules[i].showWhen.paramId
+            if (!seen[id]) { seen[id] = true; out.push(id) }
+        }
+        return out
+    }
+    on_AutoDemandChanged: _pushDemand("autoShow", _autoDemand)
+    Dashboards.AutoShowRules {
+        id: autoShow
+        rules: obdPage._autoRules
+        activeId: obdPage.activeDashboardId
+        onSwitchTo: function(id) { obdPage.activeDashboardId = id }
+    }
+
+    Timer {
+        id: autoRuleTimer
+        interval: 500
+        repeat: true
+        running: obdPage._autoRules.length > 0 && obdPage._pageActiveForDemand && obdPage.obdConnected
+        onTriggered: autoShow.check()
     }
     
     Rectangle {
@@ -381,8 +441,11 @@ Item {
             }
 
             Text {
+                objectName: "dashboardTitle"
                 anchors.centerIn: parent
-                text: (obdManager && obdManager.simulated ? "Simulated · " : "") + obdPage.activeDashboardLabel
+                text: obdPage.previewing
+                      ? "Preview from another device · " + (obdPage._preview.spec.label || "New dashboard")
+                      : (obdManager && obdManager.simulated ? "Simulated · " : "") + obdPage.activeDashboardLabel
                 color: App.Style.obdValueColor
                 font.pixelSize: App.Spacing.overallText * 1.15
                 font.bold: true
@@ -486,7 +549,7 @@ Item {
                 topMargin: dp(6)
                 bottomMargin: dp(10)
             }
-            visible: obdPage.obdConnected && obdPage.activeDashboardId !== "grid"
+            visible: obdPage.previewing || (obdPage.obdConnected && obdPage.activeDashboardId !== "grid")
             // Load the dashboard only while this is the active StackView page,
             // not merely `visible`: page pre-building draws this page once
             // offscreen (briefly visible), and a visible-keyed spec then
@@ -497,14 +560,14 @@ Item {
             readonly property bool _pageActive: obdPage.StackView.status === StackView.Active
                                                 || obdPage.StackView.status === StackView.Activating
             spec: (visible && _pageActive && typeof dashboardManager !== "undefined" && dashboardManager)
-                  ? obdPage._specFor(obdPage.activeDashboardId)
+                  ? (obdPage.previewing ? obdPage._preview.spec : obdPage._specFor(obdPage.activeDashboardId))
                   : null
         }
 
         Flickable {
             id: cardsScroll
             objectName: "parameterCardsScroll"
-            visible: obdPage.obdConnected && obdPage.activeDashboardId === "grid"
+            visible: !obdPage.previewing && obdPage.obdConnected && obdPage.activeDashboardId === "grid"
             anchors {
                 top: obdHeader.bottom
                 left: parent.left
@@ -809,8 +872,8 @@ Item {
         // vehicle has answered the supported-PID scan.
         Column {
             objectName: "parameterCardsEmpty"
-            visible: !obdPage.obdConnected
-                     || (obdPage.activeDashboardId === "grid" && obdPage.vehicleParameters.length === 0)
+            visible: !obdPage.previewing && (!obdPage.obdConnected
+                     || (obdPage.activeDashboardId === "grid" && obdPage.vehicleParameters.length === 0))
             anchors.centerIn: cardsScroll
             width: Math.min(cardsScroll.width - dp(40), dp(560))
             spacing: dp(10)
@@ -1175,6 +1238,44 @@ Item {
                 }
             }
 
+            // The browser dashboard editor: where to open it, and a code
+            Rectangle {
+                id: browserEditButton
+                objectName: "browserEditButton"
+                visible: typeof servicePairing !== "undefined" && servicePairing !== null
+                anchors.top: parent.top
+                anchors.left: importDashboardButton.right
+                anchors.topMargin: App.Spacing.mediaRoomMargin
+                anchors.leftMargin: dp(8)
+                height: App.Spacing.bottomBarNavButtonHeight
+                width: visible ? browserEditLabel.implicitWidth + dp(24) : 0
+                radius: dpMin(8, 2)
+                color: "transparent"
+                border.color: App.Style.accent
+                border.width: 1
+                scale: browserEditMouse.pressed ? 0.9 : 1.0
+                Behavior on scale {
+                    NumberAnimation { duration: 200; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
+                }
+
+                Text {
+                    id: browserEditLabel
+                    anchors.centerIn: parent
+                    text: "In a browser"
+                    color: App.Style.accent
+                    font.pixelSize: App.Spacing.overallText
+                    font.bold: true
+                    font.family: obdPage.globalFont
+                }
+
+                MouseArea {
+                    id: browserEditMouse
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: remoteEditPopup.open()
+                }
+            }
+
             // Bring back built-in dashboards the user deleted.
             Rectangle {
                 id: restoreDefaultsButton
@@ -1182,7 +1283,7 @@ Item {
                 visible: typeof dashboardManager !== "undefined" && dashboardManager
                          && dashboardManager.hiddenBuiltInCount > 0
                 anchors.top: parent.top
-                anchors.left: importDashboardButton.right
+                anchors.left: browserEditButton.visible ? browserEditButton.right : importDashboardButton.right
                 anchors.topMargin: App.Spacing.mediaRoomMargin
                 anchors.leftMargin: dp(8)
                 height: App.Spacing.bottomBarNavButtonHeight

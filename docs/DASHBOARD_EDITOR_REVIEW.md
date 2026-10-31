@@ -161,7 +161,7 @@ Ordered so each phase is shippable and the next one builds on it. Effort: S < 1 
 - Polling-cost status line.
 - Driving lock.
 
-**Phase 4 — ecosystem (L-XL)**
+**Phase 4 — ecosystem (L-XL)** — built and tested on the desktop 2026-10-30: the browser editor at `GET /dashboards` with a live preview on the car (`previewDashboard`) and the chooser's **In a browser** sheet (address, QR, pairing code); thumbnails on save, the import report; Style menu (copy / paste, use on every widget of a type); the critical-alert banner and `showWhen` auto-show; widget presets ("My widgets", tier 1 of `TODO/user-primitives.md`). Not done: composites (tier 1 part 2, still in that TODO), an OS share sheet, a QR of the dashboard itself (a busy dashboard is more than a QR holds; the QR is of the editor's address), and the network side of remote editing stays behind `--service-bind`
 - Remote editing over the service API / browser editor with a live result on the car.
 - Share thumbnails, QR, import report; copy/paste style and "apply to all".
 - Dashboard alert overlay and "switch to page when …" rules; then `TODO/user-primitives.md` tier 1 (data-only widget presets).

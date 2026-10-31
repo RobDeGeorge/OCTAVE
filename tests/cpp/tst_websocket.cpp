@@ -187,12 +187,22 @@ private slots:
     {
         CommandServer server(0);
         server.setPage("<html>client</html>");
+        server.addPage("/dashboards", "<html>editor</html>");
         QVERIFY(server.start());
         const QByteArray host = "127.0.0.1:" + QByteArray::number(server.port());
 
         QByteArray reply = once(server.port(), "GET / HTTP/1.1\r\nHost: " + host + "\r\n\r\n");
         QVERIFY2(reply.startsWith("HTTP/1.1 200") && reply.endsWith("<html>client</html>"), reply.constData());
+        QVERIFY(reply.contains("connect-src 'self' ws: wss:"));
+        QVERIFY(!reply.contains("img-src"));
         reply = once(server.port(), "GET /secret HTTP/1.1\r\nHost: " + host + "\r\n\r\n");
+        QVERIFY(reply.startsWith("HTTP/1.1 404"));
+        // Another page (the dashboard editor), with the query ignored; data:
+        // images allowed there (thumbnails)
+        reply = once(server.port(), "GET /dashboards?x=1 HTTP/1.1\r\nHost: " + host + "\r\n\r\n");
+        QVERIFY2(reply.startsWith("HTTP/1.1 200") && reply.endsWith("<html>editor</html>"), reply.constData());
+        QVERIFY(reply.contains("img-src 'self' data:"));
+        reply = once(server.port(), "GET /dashboards/x HTTP/1.1\r\nHost: " + host + "\r\n\r\n");
         QVERIFY(reply.startsWith("HTTP/1.1 404"));
         reply = once(server.port(), "GET / HTTP/1.1\r\nHost: " + host + "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
                                     "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nOrigin: https://example.com\r\n\r\n");

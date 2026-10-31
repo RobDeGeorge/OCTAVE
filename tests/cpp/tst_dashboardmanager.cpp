@@ -7,6 +7,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QImage>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSet>
@@ -839,6 +840,146 @@ private slots:
     }
 
     // ── sizes ──
+
+    void importReportSaysWhatChanged()
+    {
+        QSignalSpy spy(m_dm.get(), &DashboardManager::lastImportReportChanged);
+        const QString raw = R"json({
+            "schema": 1, "label": "Shared", "gridColumns": 4, "gridRows": 2,
+            "cells": [
+                {"type": "CircularGauge", "paramId": "RPM", "col": 0, "row": 0, "colSpan": 2, "rowSpan": 2,
+                 "props": {"showNeedle": "yes", "nested": {"a": 1}}},
+                {"type": "BarGauge", "paramId": "RPM", "col": 1, "row": 1, "colSpan": 1, "rowSpan": 1},
+                {"type": "FancyNewGauge", "paramId": "BOOST", "col": 9, "row": 0, "colSpan": 1, "rowSpan": 1},
+                {"type": "DigitalReadout", "paramId": "", "col": 2, "row": 1, "colSpan": 1, "rowSpan": 1}
+            ]
+        })json";
+        const QString id = m_dm->importDashboardFromText(raw);
+        QVERIFY2(!id.isEmpty(), qPrintable(m_dm->lastShareError()));
+        QCOMPARE(spy.count(), 1);
+        const QVariantMap r = m_dm->lastImportReport();
+        QCOMPARE(r.value("id").toString(), id);
+        QCOMPARE(r.value("label").toString(), QStringLiteral("Shared"));
+        QCOMPARE(r.value("cells").toInt(), 3);
+        QCOMPARE(r.value("droppedCells").toStringList(), QStringList{"BarGauge"});
+        QCOMPARE(r.value("droppedProps").toInt(), 2);   // a bool as a string, a nested object
+        QCOMPARE(r.value("movedCells").toInt(), 1);     // col 9 on a 4-wide grid
+        QCOMPARE(r.value("unknownTypes").toStringList(), QStringList{"FancyNewGauge"});
+        QCOMPARE(r.value("paramIds").toStringList(), (QStringList{"RPM", "BOOST"}));
+        QCOMPARE(r.value("portraitDropped").toBool(), false);
+
+        // A refused import clears it
+        QCOMPARE(m_dm->importDashboardFromText("{not json"), QString());
+        QVERIFY(!m_dm->lastImportReport().isEmpty());   // parse errors never reach importSpec
+        QCOMPARE(m_dm->importDashboardFromText(R"({"schema": 99, "cells": []})"), QString());
+        QVERIFY(m_dm->lastImportReport().isEmpty());
+    }
+
+    void optionalKeysAreCheckedAndKept()
+    {
+        QImage img(640, 360, QImage::Format_RGB32);
+        img.fill(Qt::darkCyan);
+        const QString thumb = m_dm->thumbnailFromImage(QVariant::fromValue(img));
+        QVERIFY(thumb.startsWith("data:image/"));
+        QVERIFY(thumb.size() < 96 * 1024);
+        QCOMPARE(m_dm->thumbnailFromImage(QVariant(QStringLiteral("not an image"))), QString());
+
+        QVariantMap spec{{"label", "Extras"}, {"cells", QVariantList{}}, {"thumbnail", thumb},
+                         {"alertBanner", false},
+                         {"showWhen", QVariantMap{{"paramId", "COOLANT_TEMP"}, {"above", 105}, {"junk", 1}}}};
+        const QString id = m_dm->saveDashboard(spec);
+        QVERIFY2(!id.isEmpty(), qPrintable(m_dm->lastError()));
+        QVariantMap got = m_dm->loadDashboard(id).toMap();
+        QCOMPARE(got.value("thumbnail").toString(), thumb);
+        QCOMPARE(got.value("alertBanner"), QVariant(false));
+        QCOMPARE(got.value("showWhen").toMap(), (QVariantMap{{"paramId", "COOLANT_TEMP"}, {"above", 105.0}}));
+        QCOMPARE(got.value("schema").toInt(), 1);
+
+        // Wrong shapes are dropped, not kept
+        spec = {{"id", id}, {"label", "Extras"}, {"cells", QVariantList{}},
+                {"thumbnail", "javascript:alert(1)"}, {"alertBanner", "no"},
+                {"showWhen", QVariantMap{{"paramId", "RPM"}}}};
+        QVERIFY(!m_dm->saveDashboard(spec).isEmpty());
+        got = m_dm->loadDashboard(id).toMap();
+        QVERIFY(!got.contains("thumbnail"));
+        QVERIFY(!got.contains("alertBanner"));
+        QVERIFY(!got.contains("showWhen"));
+    }
+
+    void previewShowsAndExpires()
+    {
+        QSignalSpy spy(m_dm.get(), &DashboardManager::previewChanged);
+        QVariantMap spec{{"label", "Remote"}, {"gridColumns", 4}, {"gridRows", 2},
+                         {"thumbnail", "data:image/png;base64,AAAA"},
+                         {"cells", QVariantList{QVariantMap{{"type", "DigitalReadout"}, {"paramId", "RPM"},
+                                                            {"col", 9}, {"row", 0}, {"colSpan", 1}, {"rowSpan", 1}}}}};
+        QVERIFY(m_dm->previewDashboard(spec));
+        QCOMPARE(spy.count(), 1);
+        QVariantMap p = m_dm->preview();
+        QCOMPARE(p.value("id").toString(), QString());   // not saved yet
+        const QVariantMap shown = p.value("spec").toMap();
+        QCOMPARE(shown.value("cells").toList().at(0).toMap().value("col").toInt(), 3);   // held to the rules
+        QVERIFY(!shown.contains("id"));
+        QVERIFY(!shown.contains("thumbnail"));
+        // The same again changes nothing; a change does
+        QVERIFY(m_dm->previewDashboard(spec));
+        QCOMPARE(spy.count(), 1);
+        spec["id"] = "remote";
+        QVERIFY(m_dm->previewDashboard(spec));
+        QCOMPARE(spy.count(), 2);
+        QCOMPARE(m_dm->preview().value("id").toString(), QStringLiteral("remote"));
+        // Unusable: refused, and the preview ends
+        QVERIFY(!m_dm->previewDashboard(QVariantMap{{"schema", 99}, {"cells", QVariantList{}}}));
+        QVERIFY(m_dm->preview().isEmpty());
+        QCOMPARE(spy.count(), 3);
+        QVERIFY(m_dm->previewDashboard(spec));
+        m_dm->endPreview();
+        QVERIFY(m_dm->preview().isEmpty());
+        m_dm->endPreview();
+        QCOMPARE(spy.count(), 5);
+    }
+
+    void widgetPresetsSaveShareAndImport()
+    {
+        QSignalSpy spy(m_dm.get(), &DashboardManager::widgetPresetsChanged);
+        QCOMPARE(m_dm->widgetPresets().size(), 0);
+        const QString id = m_dm->saveWidgetPreset(QVariantMap{
+            {"label", "  Redline   Tach "}, {"baseType", "CircularGauge"}, {"paramId", "RPM"},
+            {"props", QVariantMap{{"showNeedle", true}, {"redlineStart", 6500}, {"showTicks", "no"},
+                                  {"nested", QVariantMap{{"a", 1}}}}}});
+        QCOMPARE(id, QStringLiteral("redline-tach"));
+        QCOMPARE(spy.count(), 1);
+        QVERIFY(QFile::exists(m_tmp->path() + "/widgets/redline-tach.json"));
+        const QVariantMap p = m_dm->widgetPresets().at(0).toMap();
+        QCOMPARE(p.value("label").toString(), QStringLiteral("Redline Tach"));
+        QCOMPARE(p.value("paramId").toString(), QStringLiteral("RPM"));
+        QCOMPARE(p.value("props").toMap(), (QVariantMap{{"showNeedle", true}, {"redlineStart", 6500}}));
+
+        // Shared as text, imported as a new one beside it
+        const QString text = m_dm->widgetPresetText(id);
+        QVERIFY(text.contains("\"kind\":\"widgetPreset\""));
+        QVERIFY(!text.contains("\"id\""));
+        QCOMPARE(m_dm->importWidgetPresetFromText(text), QStringLiteral("redline-tach-2"));
+        QCOMPARE(m_dm->widgetPresets().size(), 2);
+        // Kept apart from dashboards both ways
+        QCOMPARE(m_dm->importDashboardFromText(text), QString());
+        QVERIFY(m_dm->lastShareError().contains("widget, not a dashboard"));
+        QCOMPARE(m_dm->importWidgetPresetFromText(R"({"schema": 1, "label": "D", "cells": []})"), QString());
+        QVERIFY(m_dm->lastShareError().contains("dashboard, not a widget"));
+        QCOMPARE(m_dm->importWidgetPresetFromText(R"({"kind": "widgetPreset", "label": "X"})"), QString());
+        QCOMPARE(m_dm->saveWidgetPreset(QVariantMap{{"baseType", "BarGauge"}}), QString());   // no name
+
+        // Overwrite by id, delete, and a fresh manager reads the folder
+        QCOMPARE(m_dm->saveWidgetPreset(QVariantMap{{"id", id}, {"label", "Tach"}, {"baseType", "ArcGauge"}}), id);
+        QCOMPARE(m_dm->widgetPresets().size(), 2);
+        QVERIFY(m_dm->deleteWidgetPreset("redline-tach-2"));
+        QVERIFY(!m_dm->deleteWidgetPreset("../evil"));
+        DashboardManager again;
+        again.setWidgetCatalogFile(QStringLiteral(OCTAVE_SOURCE_DIR "/frontend/dashboards/widget-catalog.json"));
+        again.setUserDir(m_tmp->path() + "/dashboards");
+        QCOMPARE(again.widgetPresets().size(), 1);
+        QCOMPARE(again.widgetPresets().at(0).toMap().value("baseType").toString(), QStringLiteral("ArcGauge"));
+    }
 
     void minSpanReachesTheReadableSize()
     {

@@ -224,6 +224,9 @@
             <tr><td><code>lastShareError</code></td><td>QString</td><td>read</td><td><code>lastShareErrorChanged</code></td></tr>
             <tr><td><code>lastError</code></td><td>QString</td><td>read</td><td><code>lastErrorChanged</code></td></tr>
             <tr><td><code>lastExportPath</code></td><td>QString</td><td>read</td><td><code>lastExportPathChanged</code></td></tr>
+            <tr><td><code>lastImportReport</code> <span class="cmt">(experimental)</span></td><td>QVariantMap</td><td>read</td><td><code>lastImportReportChanged</code></td></tr>
+            <tr><td><code>preview</code> <span class="cmt">(experimental)</span></td><td>QVariantMap</td><td>read</td><td><code>previewChanged</code></td></tr>
+            <tr><td><code>widgetPresets</code> <span class="cmt">(experimental)</span></td><td>QVariantList</td><td>read</td><td><code>widgetPresetsChanged</code></td></tr>
             <tr><td><code>hiddenBuiltInCount</code></td><td>int</td><td>read</td><td><code>dashboardsChanged</code></td></tr>
             <tr><td><code>supportedSchema</code></td><td>int</td><td>constant</td><td>&ndash;</td></tr>
             <tr><td><code>widgetCatalog</code></td><td>QVariantMap</td><td>constant</td><td>&ndash;</td></tr>
@@ -242,6 +245,13 @@
             <tr><td><code>importDashboard(QString fileOrUrl)</code></td><td><code>QString</code></td><td>slot</td><td><code>files</code></td></tr>
             <tr><td><code>importDashboardFromClipboard()</code></td><td><code>QString</code></td><td>slot</td><td><code>files</code></td></tr>
             <tr><td><code>importDashboardFromText(QString json)</code></td><td><code>QString</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>saveWidgetPreset(QVariantMap preset)</code> <span class="cmt">(experimental)</span></td><td><code>QString</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>deleteWidgetPreset(QString id)</code> <span class="cmt">(experimental)</span></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>copyWidgetPresetToClipboard(QString id)</code> <span class="cmt">(experimental)</span></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>importWidgetPresetFromText(QString json)</code> <span class="cmt">(experimental)</span></td><td><code>QString</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>importWidgetPresetFromClipboard()</code> <span class="cmt">(experimental)</span></td><td><code>QString</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>previewDashboard(QVariantMap spec)</code> <span class="cmt">(experimental)</span></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>endPreview()</code> <span class="cmt">(experimental)</span></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
             <tr><td><code>refresh()</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>fromTemplate(QString id, QStringList supported)</code> <span class="cmt">(experimental)</span></td><td><code>QVariantMap</code></td><td>invokable</td><td><code>read</code></td></tr>
             <tr><td><code>loadDashboard(QString id)</code></td><td><code>QVariant</code></td><td>invokable</td><td><code>read</code></td></tr>
@@ -257,9 +267,11 @@
             <tr><td><code>rescale(QVariantList cells, int fromColumns, int fromRows, int toColumns, int toRows)</code> <span class="cmt">(experimental)</span></td><td><code>QVariantMap</code></td><td>invokable</td><td><code>read</code></td></tr>
             <tr><td><code>minSpan(QString type, int gridColumns, int gridRows, double cellWidth, double cellHeight, double spacing)</code> <span class="cmt">(experimental)</span></td><td><code>QVariantMap</code></td><td>invokable</td><td><code>read</code></td></tr>
             <tr><td><code>sizeOptions(QString type, int gridColumns, int gridRows, double cellWidth, double cellHeight, double spacing)</code> <span class="cmt">(experimental)</span></td><td><code>QVariantList</code></td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>thumbnailFromImage(QVariant image)</code> <span class="cmt">(experimental)</span></td><td><code>QString</code></td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>widgetPresetText(QString id)</code> <span class="cmt">(experimental)</span></td><td><code>QString</code></td><td>invokable</td><td><code>read</code></td></tr>
           </tbody>
         </table>
-        <p><strong>Signals</strong> (<code>subscribe</code>): <code>dashboardsChanged()</code>, <code>lastShareErrorChanged()</code>, <code>lastErrorChanged()</code>, <code>lastExportPathChanged()</code>.</p>
+        <p><strong>Signals</strong> (<code>subscribe</code>): <code>dashboardsChanged()</code>, <code>lastShareErrorChanged()</code>, <code>lastErrorChanged()</code>, <code>lastExportPathChanged()</code>, <code>lastImportReportChanged()</code>, <code>previewChanged()</code>, <code>widgetPresetsChanged()</code>.</p>
 
         <h3 id="diagnosticsManager"><code>diagnosticsManager</code> <span class="cmt">&mdash; DiagnosticsManager</span></h3>
         <p>Hand-written notes: <a href="signals-slots-reference.html#diagnosticsManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/diagnosticsManager.json</span>.</p>

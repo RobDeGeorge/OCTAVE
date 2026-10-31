@@ -2,6 +2,7 @@
 #include "servicescopes.h"
 
 #include "../managers/settingsmanager.h"
+#include "../phone_mirror/qrcodegen.hpp"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -9,6 +10,9 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QLoggingCategory>
+#ifndef OCTAVE_WASM
+#include <QNetworkInterface>
+#endif
 #include <QRandomGenerator>
 
 Q_LOGGING_CATEGORY(lcPairing, "octave.service.pairing")
@@ -414,4 +418,52 @@ void ServicePairing::persist()
         }
     }
     m_settings->saveFileOnlySetting(QStringLiteral("serviceTokens"), list);
+}
+
+void ServicePairing::setListening(const QHostAddress &bind, quint16 port)
+{
+    QStringList urls;
+    const QString suffix = QStringLiteral(":") + QString::number(port);
+    const bool any = bind == QHostAddress::Any || bind == QHostAddress::AnyIPv4 || bind == QHostAddress::AnyIPv6;
+    if (any) {
+#ifndef OCTAVE_WASM
+        for (const QHostAddress &a : QNetworkInterface::allAddresses())
+            if (!a.isLoopback() && a.protocol() == QAbstractSocket::IPv4Protocol && !a.isLinkLocal())
+                urls << QStringLiteral("http://") + a.toString() + suffix;
+#endif
+    } else if (!bind.isLoopback() && !bind.isNull()) {
+        urls << QStringLiteral("http://")
+                    + (bind.protocol() == QAbstractSocket::IPv6Protocol ? QStringLiteral("[%1]").arg(bind.toString())
+                                                                         : bind.toString())
+                    + suffix;
+    }
+    const bool network = !urls.isEmpty();
+    if (any || bind.isLoopback())
+        urls << QStringLiteral("http://127.0.0.1") + suffix;
+    if (urls == m_serviceUrls && network == m_onNetwork)
+        return;
+    m_serviceUrls = urls;
+    m_onNetwork = network;
+    emit serviceUrlsChanged();
+}
+
+QStringList ServicePairing::qrRows(const QString &text) const
+{
+    const QByteArray utf8 = text.toUtf8();
+    if (utf8.isEmpty() || utf8.size() > 1200)
+        return {};
+    try {
+        const qrcodegen::QrCode qr = qrcodegen::QrCode::encodeText(utf8.constData(), qrcodegen::QrCode::Ecc::MEDIUM);
+        QStringList rows;
+        for (int y = 0; y < qr.getSize(); ++y) {
+            QString row;
+            row.reserve(qr.getSize());
+            for (int x = 0; x < qr.getSize(); ++x)
+                row += qr.getModule(x, y) ? QLatin1Char('1') : QLatin1Char('0');
+            rows << row;
+        }
+        return rows;
+    } catch (const std::exception &) {
+        return {};
+    }
 }

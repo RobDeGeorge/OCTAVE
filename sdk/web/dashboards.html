@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OCTAVE Dashboards</title>
+<!--
+  The browser dashboard editor (docs/DASHBOARD_EDITOR_REVIEW.md, Phase 4):
+  edit the car's dashboards on a laptop or phone, with the result live on the
+  car's screen. The app serves this page at http://<host>:9876/dashboards
+  when the service is on; like the reference client (index.html) it has no
+  build step and no libraries, and talks to the same port over a WebSocket.
+
+  Everything goes through the published API (docs/api/): dashboardManager
+  for the list, the spec rules (saveDashboard normalises as the app does) and
+  the grid placement (arrange / nearestFree / rescale: the same C++ the
+  in-app editor calls), parameterCatalog for the values, paramStore for live
+  readings, dashboardManager.previewDashboard for "Show on the car".
+-->
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #ffffff; --ink: #1b1d22; --muted: #5d6470; --line: #dde0e6;
+    --accent: #0a7c86; --track: #e3e6eb; --warn: #c27c00; --crit: #c0392b; --canvas: #1b1f26; --cell: #262c35;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111317; --panel: #1a1d23; --ink: #e8eaee; --muted: #9aa1ad; --line: #2b2f37;
+            --accent: #3cc4cf; --track: #2b2f37; --warn: #f0b429; --crit: #f0645d; --canvas: #0c0e12; --cell: #1d222a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line);
+           flex-wrap: wrap; }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: .02em; }
+  header a { color: var(--muted); font-size: 13px; }
+  #status { margin-left: auto; font-size: 13px; color: var(--muted); }
+  #status::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+                    background: var(--crit); margin-right: 6px; vertical-align: 1px; }
+  #status.up::before { background: var(--accent); }
+  main { padding: 16px; max-width: 1400px; margin: 0 auto; }
+  section.box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 12px; }
+  button, select, input, textarea { font: inherit; color: inherit; }
+  button { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; cursor: pointer;
+           min-height: 40px; }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); font-weight: 600; }
+  button.danger { color: var(--crit); }
+  select, input[type=text], input[type=number], textarea {
+    background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; max-width: 100%; min-height: 40px; }
+  textarea { width: 100%; min-height: 160px; font: 12px/1.4 ui-monospace, monospace; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .note { font-size: 13px; color: var(--muted); }
+  .err { color: var(--crit); }
+  [hidden] { display: none !important; }
+
+  /* list */
+  .cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); margin-top: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: flex;
+          flex-direction: column; gap: 8px; }
+  .thumb { aspect-ratio: 16 / 9; background: var(--canvas); border-radius: 6px; overflow: hidden; position: relative; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb .mini { position: absolute; background: var(--cell); border: 1px solid #3a414c; border-radius: 3px; }
+  .card .name { font-weight: 600; overflow-wrap: anywhere; }
+  .badge { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 1px 8px;
+           margin-left: 6px; font-weight: 400; }
+
+  /* editor */
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  .toolbar input[type=text] { min-width: 200px; flex: 1; max-width: 360px; }
+  .work { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 340px; align-items: start; }
+  @media (max-width: 900px) { .work { grid-template-columns: minmax(0, 1fr); } }
+  #canvas { position: relative; aspect-ratio: 16 / 9; background: var(--canvas); border-radius: 10px; touch-action: none;
+            user-select: none; overflow: hidden; }
+  #canvas.portrait { aspect-ratio: 9 / 16; max-height: 78vh; margin: 0 auto; }
+  .gridline { position: absolute; border: 1px dashed rgba(255,255,255,.06); border-radius: 4px; pointer-events: none; }
+  .cell { position: absolute; background: var(--cell); border: 1px solid #3a414c; border-radius: 8px; color: #e8eaee;
+          display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+          padding: 4px; overflow: hidden; cursor: grab; }
+  .cell.sel { outline: 3px solid var(--accent); outline-offset: -1px; z-index: 2; }
+  .cell.dragging { opacity: .85; z-index: 3; cursor: grabbing; }
+  .cell .t { font-size: 11px; color: #9aa1ad; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap;
+             overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .cell .v { font-size: clamp(14px, 2.4vw, 34px); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .cell .k { font-size: 11px; color: #6f7784; }
+  .cell.warn .v { color: var(--warn); }
+  .cell.crit .v { color: var(--crit); }
+  .cell .grip { position: absolute; right: 0; bottom: 0; width: 26px; height: 26px; cursor: nwse-resize;
+                background: linear-gradient(135deg, transparent 50%, var(--accent) 50%); border-bottom-right-radius: 8px; }
+  .cell:not(.sel) .grip { display: none; }
+  #ghost { position: absolute; border: 2px dashed var(--accent); border-radius: 8px; pointer-events: none; z-index: 4; }
+  #ghost.bad { border-color: var(--crit); }
+  .panel h3 { font-size: 14px; margin: 14px 0 8px; color: var(--muted); font-weight: 600; }
+  .panel h3:first-child { margin-top: 0; }
+  .field { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px; align-items: center; margin: 6px 0; }
+  .field label { font-size: 13px; color: var(--muted); }
+  .field input[type=number] { width: 100%; }
+  .swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+  .swatch { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--line); cursor: pointer; padding: 0;
+            min-height: 0; }
+  .swatch.on { border-color: var(--ink); }
+  #msg { min-height: 1.4em; margin-top: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>OCTAVE Dashboards</h1>
+  <a href="/">Web client</a>
+  <span id="status">connecting…</span>
+</header>
+<main>
+  <section class="box" id="pairing" hidden>
+    <h2>Pair this browser</h2>
+    <p class="note">On the car's screen open Settings &gt; Device &gt; Service and press <b>Show a code</b>, then enter it
+      here. The token is kept in this browser; revoke it there any time.</p>
+    <div class="row">
+      <input id="pair-code" type="text" inputmode="numeric" maxlength="7" placeholder="123 456" aria-label="Pairing code">
+      <button id="pair-go" class="primary">Pair</button>
+      <span class="note" id="pair-msg"></span>
+    </div>
+  </section>
+
+  <div id="list-view" hidden>
+    <div class="row">
+      <select id="new-template" aria-label="Start from"></select>
+      <button id="new-go" class="primary">New dashboard</button>
+      <button id="import-show">Import…</button>
+      <span class="note" id="list-msg"></span>
+    </div>
+    <section class="box" id="import-box" hidden style="margin-top:12px">
+      <h2>Import a dashboard</h2>
+      <p class="note">Paste a shared dashboard (its JSON), or pick a file. It is added as a new dashboard; nothing is
+        overwritten.</p>
+      <textarea id="import-text" aria-label="Dashboard JSON"></textarea>
+      <div class="row" style="margin-top:8px">
+        <input type="file" id="import-file" accept=".json,application/json">
+        <button id="import-go" class="primary">Import</button>
+        <button id="import-cancel">Cancel</button>
+      </div>
+      <div id="import-report" class="note"></div>
+    </section>
+    <div class="cards" id="cards"></div>
+  </div>
+
+  <div id="editor-view" hidden>
+    <div class="toolbar">
+      <button id="ed-back">‹ Dashboards</button>
+      <input type="text" id="ed-name" aria-label="Dashboard name" maxlength="80">
+      <select id="ed-density" aria-label="Grid">
+        <option value="coarse">Coarse grid (4 × 3)</option>
+        <option value="normal">Normal grid (6 × 4)</option>
+        <option value="fine">Fine grid (12 × 8)</option>
+        <option value="custom" disabled>Custom grid</option>
+      </select>
+      <button id="ed-layout" aria-pressed="false">Portrait</button>
+      <button id="ed-undo" aria-label="Undo">Undo</button>
+      <button id="ed-redo" aria-label="Redo">Redo</button>
+      <label class="row note"><input type="checkbox" id="ed-preview" checked> Show on the car</label>
+      <button id="ed-save" class="primary">Save</button>
+    </div>
+    <div class="work">
+      <div>
+        <div id="canvas"><div id="ghost" hidden></div></div>
+        <div class="note" id="msg"></div>
+        <p class="note">Tap a widget to select it, drag it to move (widgets in the way swap or move aside), drag its
+          corner to resize. On the car, the dashboards page shows this one while "Show on the car" is on.</p>
+      </div>
+      <section class="box panel" id="panel"></section>
+    </div>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+// ── the client: one WebSocket, requests matched to replies by id ───────────
+class Octave {
+  constructor(url) { this.url = url; this.nextId = 1; this.pending = new Map(); this.handlers = []; }
+  connect() {
+    return new Promise((resolve, reject) => {
+      this.ws = new WebSocket(this.url);
+      this.ws.onopen = () => resolve();
+      this.ws.onerror = () => reject(new Error("cannot reach " + this.url));
+      this.ws.onclose = () => {
+        for (const p of this.pending.values()) p.reject(new Error("connection closed"));
+        this.pending.clear();
+        if (this.onclose) this.onclose();
+      };
+      this.ws.onmessage = (m) => {
+        const msg = JSON.parse(m.data);
+        if ("event" in msg) { for (const h of this.handlers) h(msg); }
+        else if (this.pending.has(msg.id)) {
+          const p = this.pending.get(msg.id);
+          this.pending.delete(msg.id);
+          msg.ok ? p.resolve(msg.result) : p.reject(new Error(msg.error));
+        }
+      };
+    });
+  }
+  request(op, args = {}) {
+    const id = this.nextId++;
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, { resolve, reject });
+      this.ws.send(JSON.stringify({ op, id, ...args }));
+    });
+  }
+  onEvent(h) { this.handlers.push(h); }
+  get(object, property) { return this.request("get", { object, property }); }
+  call(object, method, args = []) { return this.request("call", { object, method, args }); }
+}
+
+const $ = (id) => document.getElementById(id);
+const el = (tag, attrs = {}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (v !== undefined && v !== null && v !== false) e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const kid of kids) if (kid !== null && kid !== undefined) e.append(kid);
+  return e;
+};
+const TOKEN_KEY = "octave.token";
+const store = {
+  get() { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } },
+  set(v) { try { v ? localStorage.setItem(TOKEN_KEY, v) : localStorage.removeItem(TOKEN_KEY); } catch {} },
+};
+const DM = "dashboardManager";
+const DENSITIES = { coarse: [4, 3], normal: [6, 4], fine: [12, 8] };
+// The car screen the sizes are worked out for (dp, as the in-app editor's
+// canvas): 1280 x 720 with the renderer's 20 dp margins and 16 dp gaps
+const STAGE = { w: 1280, h: 680, margin: 20, spacing: 16 };
+
+let octave;
+const S = { catalog: { widgets: [] }, types: {}, params: {}, groups: [], supported: null, dashboards: [], templates: [] };
+let E = null;   // the dashboard being edited
+
+// ── values ─────────────────────────────────────────────────────────────────
+const live = {};
+let paramSub = null, paramSubKey = "";
+async function followParams(ids) {
+  const key = ids.slice().sort().join(",");
+  if (key === paramSubKey) return;
+  paramSubKey = key;
+  if (paramSub !== null) { octave.request("unsubscribe", { sub: paramSub }).catch(() => {}); paramSub = null; }
+  if (ids.length > 0) paramSub = (await octave.request("subscribe", { object: "paramStore", properties: ids, throttleMs: 250 })).sub;
+}
+function paramTitle(id) { return S.params[id] ? S.params[id].title : id; }
+function fmt(id, v) {
+  if (typeof v !== "number" || !isFinite(v)) return "--";
+  const p = S.params[id];
+  return v.toFixed(p ? p.decimals : 1);
+}
+function limit(v) { const n = v === undefined || v === null || v === "" ? NaN : Number(v); return isFinite(n) ? n : NaN; }
+function alertLevel(v, p) {
+  if (typeof v !== "number" || !isFinite(v)) return 0;
+  const ca = limit(p.critAbove), cb = limit(p.critBelow), wa = limit(p.warnAbove), wb = limit(p.warnBelow);
+  if ((isFinite(ca) && v >= ca) || (isFinite(cb) && v <= cb)) return 2;
+  if ((isFinite(wa) && v >= wa) || (isFinite(wb) && v <= wb)) return 1;
+  return 0;
+}
+
+// ── list ───────────────────────────────────────────────────────────────────
+function miniature(spec) {
+  const box = el("div", { class: "thumb" });
+  if (spec && spec.thumbnail) { box.append(el("img", { src: spec.thumbnail, alt: "" })); return box; }
+  const cols = (spec && spec.gridColumns) || 12, rows = (spec && spec.gridRows) || 6;
+  for (const c of (spec && spec.cells) || []) {
+    const m = el("div", { class: "mini" });
+    Object.assign(m.style, { left: (c.col / cols * 100 + .6) + "%", top: (c.row / rows * 100 + 1) + "%",
+      width: (c.colSpan / cols * 100 - 1.2) + "%", height: (c.rowSpan / rows * 100 - 2) + "%" });
+    box.append(m);
+  }
+  return box;
+}
+
+async function showList() {
+  await endPreview();
+  E = null;
+  followParams([]);
+  $("editor-view").hidden = true;
+  $("list-view").hidden = false;
+  S.dashboards = await octave.get(DM, "dashboards");
+  const cards = $("cards");
+  cards.replaceChildren();
+  for (const d of S.dashboards) {
+    const spec = await octave.call(DM, "loadDashboard", [d.id]);
+    const name = el("div", { class: "name" }, d.label, d.builtIn ? el("span", { class: "badge" }, "built-in") : null);
+    const actions = el("div", { class: "row" });
+    if (d.builtIn) {
+      actions.append(el("button", { onclick: () => openEditor(spec, { customize: true }) }, "Customize"));
+    } else {
+      actions.append(el("button", { class: "primary", onclick: () => openEditor(spec, { id: d.id }) }, "Edit"));
+      actions.append(el("button", { onclick: async () => {
+        const id = await octave.call(DM, "duplicateDashboard", [d.id, ""]);
+        $("list-msg").textContent = id ? "Copied" : await octave.get(DM, "lastError");
+        showList();
+      } }, "Copy"));
+    }
+    actions.append(el("button", { onclick: () => download(spec) }, "Download"));
+    if (!d.builtIn)
+      actions.append(el("button", { class: "danger", onclick: async () => {
+        if (!confirm(`Delete "${d.label}"? This can't be undone.`)) return;
+        await octave.call(DM, "deleteDashboard", [d.id]);
+        showList();
+      } }, "Delete"));
+    cards.append(el("div", { class: "card" }, miniature(spec), name, actions));
+  }
+}
+
+function download(spec) {
+  const out = Object.assign({}, spec);
+  delete out.id;
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
+  const a = el("a", { href: URL.createObjectURL(blob), download: (spec.id || "dashboard") + ".json" });
+  document.body.append(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+function reportLines(r) {
+  const out = [];
+  const n = (k, one, many) => k + " " + (k === 1 ? one : many);
+  const ids = r.paramIds || [];
+  const unknown = ids.filter((id) => !S.params[id]);
+  if (S.supported) {
+    const missing = ids.filter((id) => S.params[id] && S.params[id].source !== "imu" && !S.supported.has(id));
+    if (missing.length) out.push(n(missing.length, "value your car doesn't report", "values your car doesn't report")
+                                 + " (shown as --): " + missing.map(paramTitle).join(", "));
+  }
+  if (unknown.length) out.push(n(unknown.length, "value", "values") + " this version doesn't know: " + unknown.join(", "));
+  if ((r.unknownTypes || []).length) out.push(n(r.unknownTypes.length, "widget", "widgets")
+                                              + " this version doesn't have: " + r.unknownTypes.join(", "));
+  if ((r.droppedCells || []).length) out.push(n(r.droppedCells.length, "widget was", "widgets were") + " left out (overlapping)");
+  if (r.droppedProps > 0) out.push(n(r.droppedProps, "setting", "settings") + " back to the default");
+  if (r.movedCells > 0) out.push(n(r.movedCells, "widget was", "widgets were") + " moved back onto the grid");
+  return out;
+}
+
+async function importText(text) {
+  const id = await octave.call(DM, "importDashboardFromText", [text]);
+  if (!id) { $("import-report").textContent = await octave.get(DM, "lastShareError"); $("import-report").className = "err"; return; }
+  const r = await octave.get(DM, "lastImportReport");
+  const lines = reportLines(r);
+  $("import-report").className = "note";
+  $("import-report").replaceChildren(el("p", {}, `Imported "${r.label}": ${r.cells} widgets.`
+                                                 + (lines.length ? "" : " Everything came across.")),
+                                     ...lines.map((l) => el("div", {}, "• " + l)));
+  $("import-text").value = "";
+  showList();
+}
+
+// ── editor state ───────────────────────────────────────────────────────────
+// E: {id ("" = not saved yet), base (the spec as loaded: options kept), label,
+// cols, rows, cells, portrait ({cols, rows, cells: placements} | null), mode
+// ("landscape" | "portrait"), sel, history, at}. Cells are the landscape
+// layout; portrait placements match them by index.
+function snapshot() { return JSON.stringify({ cols: E.cols, rows: E.rows, cells: E.cells, portrait: E.portrait }); }
+function record() {
+  E.history = E.history.slice(0, E.at + 1);
+  E.history.push(snapshot());
+  if (E.history.length > 60) E.history.shift();
+  E.at = E.history.length - 1;
+  E.dirty = true;
+  changed();
+}
+function restore(i) {
+  const s = JSON.parse(E.history[i]);
+  Object.assign(E, s);
+  E.at = i;
+  E.sel = Math.min(E.sel, E.cells.length - 1);
+  if (!E.portrait) E.mode = "landscape";
+  E.dirty = true;
+  changed();
+}
+
+function openEditor(spec, how = {}) {
+  spec = spec || {};
+  $("list-view").hidden = true;
+  $("editor-view").hidden = false;
+  E = {
+    id: how.id || "",
+    base: Object.assign({}, spec),
+    label: how.customize ? (spec.label || "Dashboard") + " (mine)" : (spec.label || "New dashboard"),
+    cols: spec.gridColumns || 6, rows: spec.gridRows || 4,
+    cells: (spec.cells || []).map((c) => Object.assign({}, c, { props: Object.assign({}, c.props || {}) })),
+    portrait: null, mode: "landscape", sel: -1, history: [], at: -1, dirty: !!how.customize || !how.id,
+  };
+  E.when = Object.assign({ paramId: "" }, spec.showWhen || {});
+  const p = spec.layouts && spec.layouts.portrait;
+  if (p) E.portrait = { cols: p.gridColumns, rows: p.gridRows, cells: p.cells.map((c) => Object.assign({}, c)) };
+  $("ed-name").value = E.label;
+  E.history = [snapshot()];
+  E.at = 0;
+  changed(true);
+}
+
+function specNow() {
+  const spec = Object.assign({}, E.base);
+  delete spec.thumbnail;   // a picture of the old layout
+  spec.label = $("ed-name").value.trim() || "Untitled";
+  spec.gridColumns = E.cols;
+  spec.gridRows = E.rows;
+  spec.cells = E.cells;
+  if (E.id) spec.id = E.id; else delete spec.id;
+  const w = E.when;
+  const lim = (v) => typeof v === "number" && isFinite(v);
+  delete spec.showWhen;
+  if (w.paramId && (lim(w.above) || lim(w.below))) {
+    spec.showWhen = { paramId: w.paramId };
+    if (lim(w.above)) spec.showWhen.above = w.above;
+    if (lim(w.below)) spec.showWhen.below = w.below;
+  }
+  if (E.portrait) {
+    spec.schema = 2;
+    spec.layouts = { portrait: { gridColumns: E.portrait.cols, gridRows: E.portrait.rows, cells: E.portrait.cells } };
+  } else {
+    spec.schema = 1;
+    delete spec.layouts;
+  }
+  return spec;
+}
+
+// What the canvas shows: the landscape cells, or the cells at their
+// portrait placements
+function shown() {
+  if (E.mode !== "portrait" || !E.portrait) return { cols: E.cols, rows: E.rows, cells: E.cells };
+  return { cols: E.portrait.cols, rows: E.portrait.rows,
+           cells: E.cells.map((c, i) => Object.assign({}, c, E.portrait.cells[i])) };
+}
+function setShown(cells) {
+  if (E.mode !== "portrait") { E.cells = cells; return; }
+  E.portrait.cells = cells.map((c) => ({ col: c.col, row: c.row, colSpan: c.colSpan, rowSpan: c.rowSpan }));
+}
+
+let previewTimer = null, previewKeepAlive = null;
+function changed(first) {
+  $("ed-undo").disabled = E.at <= 0;
+  $("ed-redo").disabled = E.at >= E.history.length - 1;
+  const d = Object.entries(DENSITIES).find(([, g]) => g[0] === E.cols && g[1] === E.rows);
+  $("ed-density").value = d ? d[0] : "custom";
+  $("ed-layout").textContent = E.mode === "portrait" ? "Portrait (on)" : "Portrait";
+  $("ed-layout").setAttribute("aria-pressed", String(E.mode === "portrait"));
+  $("ed-density").disabled = E.mode === "portrait";
+  drawCanvas();
+  drawPanel();
+  followParams([...new Set(E.cells.map((c) => c.paramId).filter(Boolean)).values()]);
+  if (!first || E.dirty) schedulePreview();
+}
+
+function schedulePreview() {
+  clearTimeout(previewTimer);
+  if (!$("ed-preview").checked) return;
+  previewTimer = setTimeout(sendPreview, 250);
+}
+async function sendPreview() {
+  if (!E || !$("ed-preview").checked) return;
+  try { await octave.call(DM, "previewDashboard", [specNow()]); } catch (err) { say(err.message, true); }
+  clearInterval(previewKeepAlive);
+  previewKeepAlive = setInterval(sendPreview, 30000);   // the car drops a preview after 60 s of silence
+}
+async function endPreview() {
+  clearTimeout(previewTimer);
+  clearInterval(previewKeepAlive);
+  try { await octave.call(DM, "endPreview"); } catch {}
+}
+
+function say(text, bad) { $("msg").textContent = text || ""; $("msg").className = bad ? "note err" : "note"; }
+
+// ── canvas ─────────────────────────────────────────────────────────────────
+const canvas = $("canvas");
+function geometry() {
+  const L = shown();
+  const r = canvas.getBoundingClientRect();
+  return { L, r, cw: r.width / L.cols, ch: r.height / L.rows };
+}
+function place(node, c, g) {
+  const pad = 3;
+  Object.assign(node.style, { left: (c.col * g.cw + pad) + "px", top: (c.row * g.ch + pad) + "px",
+    width: (c.colSpan * g.cw - 2 * pad) + "px", height: (c.rowSpan * g.ch - 2 * pad) + "px" });
+}
+function drawCanvas() {
+  canvas.classList.toggle("portrait", E.mode === "portrait");
+  const g = geometry();
+  for (const n of [...canvas.querySelectorAll(".cell, .gridline")]) n.remove();
+  for (let row = 0; row < g.L.rows; row++)
+    for (let col = 0; col < g.L.cols; col++) {
+      const n = el("div", { class: "gridline" });
+      place(n, { col, row, colSpan: 1, rowSpan: 1 }, g);
+      canvas.append(n);
+    }
+  g.L.cells.forEach((c, i) => {
+    const meta = S.types[c.type];
+    const props = c.props || {};
+    const title = props.title || (c.paramId ? paramTitle(c.paramId) : (meta ? meta.displayName : c.type));
+    const v = el("div", { class: "v" }, c.paramId ? fmt(c.paramId, live[c.paramId]) : (meta ? meta.glyph || "" : "?"));
+    const node = el("div", { class: "cell" + (i === E.sel ? " sel" : ""), "data-i": i },
+                    el("div", { class: "t" }, title), v,
+                    el("div", { class: "k" }, (meta ? meta.displayName : c.type + " (unknown)")
+                                               + (c.paramId && S.params[c.paramId] && S.params[c.paramId].unit
+                                                  ? " · " + S.params[c.paramId].unit : "")),
+                    el("div", { class: "grip", "data-grip": i }));
+    const lvl = alertLevel(live[c.paramId], props);
+    if (lvl) node.classList.add(lvl === 2 ? "crit" : "warn");
+    place(node, c, g);
+    canvas.append(node);
+  });
+}
+function refreshValues() {
+  if (!E) return;
+  for (const node of canvas.querySelectorAll(".cell")) {
+    const c = E.cells[Number(node.dataset.i)];
+    if (!c || !c.paramId) continue;
+    node.querySelector(".v").textContent = fmt(c.paramId, live[c.paramId]);
+    const lvl = alertLevel(live[c.paramId], c.props || {});
+    node.classList.toggle("warn", lvl === 1);
+    node.classList.toggle("crit", lvl === 2);
+  }
+}
+
+// Select, drag to move, drag the grip to resize; placement by the app's own
+// rules (arrange: swap or push the widgets in the way)
+let drag = null;
+canvas.addEventListener("pointerdown", (ev) => {
+  const node = ev.target.closest(".cell");
+  if (!node) { E.sel = -1; changed(true); return; }
+  const i = Number(node.dataset.i);
+  if (E.sel !== i) { E.sel = i; drawCanvas(); drawPanel(); }
+  const g = geometry();
+  const c = g.L.cells[i];
+  drag = { i, resize: !!ev.target.dataset.grip, x0: ev.clientX, y0: ev.clientY, c, g, to: null, moved: false };
+  canvas.setPointerCapture(ev.pointerId);
+});
+canvas.addEventListener("pointermove", (ev) => {
+  if (!drag) return;
+  const dx = ev.clientX - drag.x0, dy = ev.clientY - drag.y0;
+  if (!drag.moved && Math.hypot(dx, dy) < 6) return;
+  drag.moved = true;
+  const { c, g } = drag;
+  let to;
+  if (drag.resize) {
+    to = { col: c.col, row: c.row,
+           colSpan: Math.max(1, Math.min(g.L.cols - c.col, Math.round(c.colSpan + dx / g.cw))),
+           rowSpan: Math.max(1, Math.min(g.L.rows - c.row, Math.round(c.rowSpan + dy / g.ch))) };
+  } else {
+    to = { col: Math.max(0, Math.min(g.L.cols - c.colSpan, Math.round(c.col + dx / g.cw))),
+           row: Math.max(0, Math.min(g.L.rows - c.rowSpan, Math.round(c.row + dy / g.ch))),
+           colSpan: c.colSpan, rowSpan: c.rowSpan };
+  }
+  drag.to = to;
+  const ghost = $("ghost");
+  ghost.hidden = false;
+  ghost.classList.remove("bad");
+  place(ghost, to, g);
+  const node = canvas.querySelector(`.cell[data-i="${drag.i}"]`);
+  if (node) {
+    node.classList.add("dragging");
+    if (!drag.resize) node.style.transform = `translate(${dx}px, ${dy}px)`;
+  }
+});
+canvas.addEventListener("pointerup", async () => {
+  const d = drag;
+  drag = null;
+  $("ghost").hidden = true;
+  if (!d || !d.moved || !d.to) { drawCanvas(); return; }
+  const t = d.to;
+  const L = shown();
+  if (t.col === d.c.col && t.row === d.c.row && t.colSpan === d.c.colSpan && t.rowSpan === d.c.rowSpan) { drawCanvas(); return; }
+  const r = await octave.call(DM, "arrange", [L.cells, L.cols, L.rows, d.i, t.col, t.row, t.colSpan, t.rowSpan]);
+  if (!r.ok) { say(r.reason || "It doesn't fit there", true); drawCanvas(); return; }
+  say(r.swapped ? "Swapped" : (r.moved && r.moved.length > 1 ? "Moved; the widgets in the way moved aside" : ""));
+  setShown(r.cells);
+  record();
+});
+canvas.addEventListener("pointercancel", () => { drag = null; $("ghost").hidden = true; drawCanvas(); });
+window.addEventListener("resize", () => { if (E) drawCanvas(); });
+
+// ── edits ──────────────────────────────────────────────────────────────────
+async function newSpans(type, cols, rows) {
+  const cw = (STAGE.w - 2 * STAGE.margin - STAGE.spacing * (cols - 1)) / cols;
+  const ch = (STAGE.h - 2 * STAGE.margin - STAGE.spacing * (rows - 1)) / rows;
+  const opts = await octave.call(DM, "sizeOptions", [type, cols, rows, cw, ch, STAGE.spacing]);
+  const least = await octave.call(DM, "minSpan", [type, cols, rows, cw, ch, STAGE.spacing]);
+  const out = [];
+  if (opts.length > 1) out.push([opts[1].colSpan, opts[1].rowSpan]);
+  if (opts.length > 0) out.push([opts[0].colSpan, opts[0].rowSpan]);
+  out.push([least.colSpan, least.rowSpan], [1, 1]);
+  return out;
+}
+async function freeSpot(cells, cols, rows, spans) {
+  for (const [cs, rs] of spans) {
+    const nf = await octave.call(DM, "nearestFree", [cells, cols, rows, 0, 0, Math.min(cs, cols), Math.min(rs, rows), -1]);
+    if (nf.ok) return nf;
+  }
+  return null;
+}
+async function addWidget(type, paramId) {
+  const spans = await newSpans(type, E.cols, E.rows);
+  const spot = await freeSpot(E.cells, E.cols, E.rows, spans);
+  if (!spot) { say("No room left: make a widget smaller or pick a finer grid", true); return; }
+  const cell = { type, paramId: paramId || "", col: spot.col, row: spot.row, colSpan: spot.colSpan, rowSpan: spot.rowSpan,
+                 props: {} };
+  if (E.portrait) {
+    const pspot = await freeSpot(E.portrait.cells, E.portrait.cols, E.portrait.rows, [[spot.colSpan, spot.rowSpan], [1, 1]]);
+    if (!pspot) { say("No room in the portrait layout", true); return; }
+    E.portrait.cells.push({ col: pspot.col, row: pspot.row, colSpan: pspot.colSpan, rowSpan: pspot.rowSpan });
+  }
+  E.cells.push(cell);
+  E.sel = E.cells.length - 1;
+  record();
+}
+async function duplicate(i) {
+  const c = E.cells[i];
+  const spot = await freeSpot(E.cells, E.cols, E.rows, [[c.colSpan, c.rowSpan], [1, 1]]);
+  if (!spot) { say("No room for a copy", true); return; }
+  if (E.portrait) {
+    const p = E.portrait.cells[i];
+    const pspot = await freeSpot(E.portrait.cells, E.portrait.cols, E.portrait.rows, [[p.colSpan, p.rowSpan], [1, 1]]);
+    if (!pspot) { say("No room for a copy in the portrait layout", true); return; }
+    E.portrait.cells.push({ col: pspot.col, row: pspot.row, colSpan: pspot.colSpan, rowSpan: pspot.rowSpan });
+  }
+  E.cells.push(Object.assign({}, c, { props: Object.assign({}, c.props), col: spot.col, row: spot.row,
+                                      colSpan: spot.colSpan, rowSpan: spot.rowSpan }));
+  E.sel = E.cells.length - 1;
+  record();
+}
+function remove(i) {
+  E.cells.splice(i, 1);
+  if (E.portrait) E.portrait.cells.splice(i, 1);
+  E.sel = -1;
+  record();
+}
+function setProp(i, key, value) {
+  const props = Object.assign({}, E.cells[i].props);
+  if (value === undefined) delete props[key]; else props[key] = value;
+  E.cells[i] = Object.assign({}, E.cells[i], { props });
+  record();
+}
+async function setDensity(name) {
+  const [cols, rows] = DENSITIES[name];
+  if (cols === E.cols && rows === E.rows) return;
+  const r = await octave.call(DM, "rescale", [E.cells, E.cols, E.rows, cols, rows]);
+  if (!r.ok) { say(r.reason || "The widgets don't fit that grid", true); changed(true); return; }
+  E.cells = r.cells;
+  E.cols = cols;
+  E.rows = rows;
+  if (E.portrait) {
+    const d = await octave.call(DM, "derivePortrait", [E.cells, cols, rows]);
+    E.portrait = { cols: d.gridColumns, rows: d.gridRows, cells: d.cells };
+    say("The portrait layout was worked out again for the new grid");
+  }
+  record();
+}
+async function toggleLayout() {
+  if (E.mode === "portrait") { E.mode = "landscape"; changed(true); return; }
+  if (!E.portrait) {
+    const d = await octave.call(DM, "derivePortrait", [E.cells, E.cols, E.rows]);
+    E.portrait = { cols: d.gridColumns, rows: d.gridRows, cells: d.cells };
+    E.mode = "portrait";
+    say("A portrait layout, worked out from this one. Rearrange it as you like; it is saved with the dashboard.");
+    record();
+    return;
+  }
+  E.mode = "portrait";
+  changed(true);
+}
+
+async function save() {
+  const spec = specNow();
+  if (!E.id) spec.id = await octave.call(DM, "uniqueIdForLabel", [spec.label]);
+  const id = await octave.call(DM, "saveDashboard", [spec]);
+  if (!id) { say(await octave.get(DM, "lastError") || "Save failed", true); return; }
+  E.id = id;
+  E.base.id = id;
+  E.dirty = false;
+  await endPreview();
+  $("ed-preview").checked = false;
+  say(`Saved "${spec.label}". On the car it is in the dashboards list.`);
+}
+
+// ── panel ──────────────────────────────────────────────────────────────────
+function field(label, input) { return el("div", { class: "field" }, el("label", {}, label), input); }
+function numberInput(value, onset, attrs = {}) {
+  const n = el("input", Object.assign({ type: "number", step: "any", value: value === undefined ? "" : value,
+                                        placeholder: "default" }, attrs));
+  n.addEventListener("change", () => onset(n.value.trim() === "" ? undefined : Number(n.value)));
+  return n;
+}
+function pidSelect(current, kinds, onset, placeholder) {
+  const s = el("select", {});
+  s.append(el("option", { value: "" }, placeholder || "No data"));
+  const accepts = (p) => !kinds || kinds.includes("*") || kinds.includes(p.kind);
+  for (const g of S.groups) {
+    const og = el("optgroup", { label: g });
+    for (const p of Object.values(S.params))
+      if (p.group === g && !p.aliasOf && accepts(p)) {
+        const off = S.supported && p.source !== "imu" && !S.supported.has(p.id);
+        og.append(el("option", { value: p.id }, p.title + (p.unit ? ` (${p.unit})` : "") + (off ? " · not on this car" : "")));
+      }
+    if (og.children.length) s.append(og);
+  }
+  s.value = current || "";
+  s.addEventListener("change", () => onset(s.value));
+  return s;
+}
+
+function drawPanel() {
+  const panel = $("panel");
+  panel.replaceChildren();
+  const add = el("select", {}, el("option", { value: "" }, "Add a widget…"));
+  for (const cat of S.catalog.categories || []) {
+    const og = el("optgroup", { label: cat });
+    for (const w of S.catalog.widgets) if (w.category === cat) og.append(el("option", { value: w.type }, w.displayName));
+    add.append(og);
+  }
+  add.addEventListener("change", () => { if (add.value) addWidget(add.value); });
+  panel.append(el("h3", {}, "Add"), add);
+  const byData = pidSelect("", null, async (id) => {
+    if (!id) return;
+    const p = S.params[id];
+    const sug = S.catalog.suggestions || {};
+    let type = (sug.byId || {})[id] || (sug.byKind || {})[p.kind] || "DigitalReadout";
+    if (!S.types[type]) type = "DigitalReadout";
+    addWidget(type, id);
+  }, "…or pick a value to show");
+  panel.append(el("div", { style: "margin-top:8px" }, byData));
+
+  const i = E.sel;
+  const c = E.cells[i];
+  if (!c) { drawOptions(panel); return; }
+  const meta = S.types[c.type] || { displayName: c.type, editableProps: [], supportedKinds: [] };
+  const props = c.props || {};
+  panel.append(el("h3", {}, meta.displayName));
+  if ((meta.supportedKinds || []).length)
+    panel.append(field("Data", pidSelect(c.paramId, meta.supportedKinds, (id) => {
+      E.cells[i] = Object.assign({}, E.cells[i], { paramId: id });
+      record();
+    })));
+  if (meta.labelProps) {
+    for (const [k, label] of [["title", "Title"], ["unit", "Unit"]]) {
+      const t = el("input", { type: "text", value: props[k] || "", placeholder: "from the value" });
+      t.addEventListener("change", () => setProp(i, k, t.value.trim() || undefined));
+      panel.append(field(label, t));
+    }
+  }
+  if (meta.rangeProps) {
+    const unit = c.paramId && S.params[c.paramId] ? ` (${S.params[c.paramId].unit})` : "";
+    panel.append(field("Min" + unit, numberInput(props.min, (v) => setProp(i, "min", v))));
+    panel.append(field("Max" + unit, numberInput(props.max, (v) => setProp(i, "max", v))));
+  }
+  if ((meta.colorProps || []).length) {
+    const sw = el("div", { class: "swatches" });
+    const cur = props[meta.colorProps[0]];
+    const setColor = (col) => {
+      const next = Object.assign({}, E.cells[i].props);
+      for (const k of meta.colorProps) { if (col === undefined) delete next[k]; else next[k] = col; }
+      E.cells[i] = Object.assign({}, E.cells[i], { props: next });
+      record();
+    };
+    sw.append(el("button", { class: "swatch" + (cur === undefined ? " on" : ""), title: "Theme colour",
+                             style: "background: conic-gradient(#0a7c86, #c27c00, #c0392b, #0a7c86)",
+                             onclick: () => setColor(undefined) }));
+    for (const col of S.catalog.colorSwatches || [])
+      sw.append(el("button", { class: "swatch" + (cur === col ? " on" : ""), title: col, style: `background:${col}`,
+                               onclick: () => setColor(col) }));
+    panel.append(field("Colour", sw));
+  }
+  const sections = [["range", "Range and alerts"], ["look", "Look"], ["advanced", "Advanced"]];
+  for (const [sec, title] of sections) {
+    const list = (meta.editableProps || []).filter((p) => (p.section || "advanced") === sec);
+    if (!list.length) continue;
+    panel.append(el("h3", {}, title));
+    for (const p of list) {
+      const v = props[p.key];
+      let input;
+      if (p.kind === "bool") {
+        input = el("input", { type: "checkbox" });
+        input.checked = v === undefined ? !!p.def : !!v;
+        input.addEventListener("change", () => setProp(i, p.key, input.checked));
+      } else if (p.kind === "enum") {
+        input = el("select", {}, ...(p.options || []).map((o) => el("option", { value: o }, o)));
+        input.value = v === undefined ? p.def : v;
+        input.addEventListener("change", () => setProp(i, p.key, input.value));
+      } else if (p.kind === "int" || p.kind === "real") {
+        input = numberInput(v, (n) => setProp(i, p.key, n === undefined ? undefined
+                                                 : (p.kind === "int" ? Math.round(n) : n)),
+                            { min: p.min, max: p.max, step: p.kind === "int" ? 1 : "any",
+                              placeholder: p.def === null || p.def === undefined ? "off" : String(p.def) });
+      } else {
+        input = el("input", { type: "text", value: v === undefined ? "" : v, placeholder: p.def || "" });
+        input.addEventListener("change", () => setProp(i, p.key, input.value === "" ? undefined : input.value));
+      }
+      const unit = p.paramUnit && c.paramId && S.params[c.paramId] ? ` (${S.params[c.paramId].unit})` : "";
+      panel.append(field(p.label + unit, input));
+    }
+  }
+  panel.append(el("div", { class: "row", style: "margin-top:14px" },
+                  el("button", { onclick: () => duplicate(i) }, "Duplicate"),
+                  el("button", { class: "danger", onclick: () => remove(i) }, "Delete")));
+}
+
+// Nothing selected: the dashboard's own options
+function drawOptions(panel) {
+  panel.append(el("h3", {}, "This dashboard"));
+  const banner = el("input", { type: "checkbox" });
+  banner.checked = E.base.alertBanner !== false;
+  banner.addEventListener("change", () => {
+    if (banner.checked) delete E.base.alertBanner; else E.base.alertBanner = false;
+    E.dirty = true;
+    schedulePreview();
+  });
+  panel.append(field("Alert banner", el("label", { class: "row note" }, banner,
+                                       "Name widgets at their critical limit in a red strip")));
+  const w = E.when;
+  panel.append(el("p", { class: "note" }, "Show this dashboard by itself when a value passes a limit (on the car's "
+                                         + "dashboards page, with the car connected). The one before comes back after."));
+  const edited = () => { E.dirty = true; schedulePreview(); };
+  panel.append(field("When", pidSelect(w.paramId, null, (id) => { w.paramId = id; edited(); drawPanel(); }, "Off")));
+  if (w.paramId) {
+    const unit = S.params[w.paramId] ? ` (${S.params[w.paramId].unit})` : "";
+    panel.append(field("At or above" + unit, numberInput(w.above, (v) => { w.above = v; edited(); })));
+    panel.append(field("At or below" + unit, numberInput(w.below, (v) => { w.below = v; edited(); })));
+  }
+}
+
+// ── start ──────────────────────────────────────────────────────────────────
+async function main() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  octave = new Octave(`${proto}//${location.host || "127.0.0.1:9876"}/`);
+  octave.onclose = () => { $("status").textContent = "disconnected"; $("status").className = ""; };
+  await octave.connect();
+  let hello = await octave.request("hello");
+  if (hello.auth === "untrusted" && store.get()) {
+    hello = await octave.request("hello", { token: store.get() });
+    if (hello.tokenRejected) store.set(null);
+  }
+  if (hello.auth === "untrusted") {
+    $("status").textContent = "not paired";
+    $("pairing").hidden = false;
+    await new Promise((resolve) => {
+      $("pair-go").onclick = async () => {
+        $("pair-msg").textContent = "";
+        try {
+          const r = await octave.request("pair", { code: $("pair-code").value.replace(/\D/g, ""), name: "Dashboard editor" });
+          store.set(r.token);
+          $("pairing").hidden = true;
+          resolve();
+        } catch (err) { $("pair-msg").textContent = err.message; }
+      };
+    });
+  }
+  $("status").textContent = "connected";
+  $("status").className = "up";
+
+  S.catalog = await octave.get(DM, "widgetCatalog");
+  for (const w of S.catalog.widgets || []) S.types[w.type] = w;
+  for (const p of await octave.get("parameterCatalog", "parameters")) S.params[p.id] = p;
+  S.groups = await octave.get("parameterCatalog", "groups");
+  try {
+    const sup = await octave.get("obdManager", "vehicleSupportedParameters");
+    if (sup && sup.length) S.supported = new Set(sup);
+  } catch {}
+  S.templates = await octave.get(DM, "templates");
+  for (const t of S.templates) $("new-template").add(new Option("Start from: " + t.label, t.id));
+
+  octave.onEvent((e) => {
+    if (e.event === "params") { Object.assign(live, e.values); refreshValues(); }
+  });
+
+  $("new-go").onclick = async () => {
+    const spec = await octave.call(DM, "fromTemplate", [$("new-template").value, S.supported ? [...S.supported] : []]);
+    openEditor(spec, {});
+  };
+  $("import-show").onclick = () => { $("import-box").hidden = false; $("import-report").textContent = ""; };
+  $("import-cancel").onclick = () => { $("import-box").hidden = true; };
+  $("import-file").onchange = async (ev) => { const f = ev.target.files[0]; if (f) $("import-text").value = await f.text(); };
+  $("import-go").onclick = () => importText($("import-text").value).catch((err) => { $("import-report").textContent = err.message; });
+
+  $("ed-back").onclick = () => {
+    if (E && E.dirty && !confirm("Leave without saving?")) return;
+    showList();
+  };
+  $("ed-name").oninput = () => { E.dirty = true; schedulePreview(); };
+  $("ed-density").onchange = () => setDensity($("ed-density").value);
+  $("ed-layout").onclick = () => toggleLayout();
+  $("ed-undo").onclick = () => { if (E.at > 0) restore(E.at - 1); };
+  $("ed-redo").onclick = () => { if (E.at < E.history.length - 1) restore(E.at + 1); };
+  $("ed-preview").onchange = () => { if ($("ed-preview").checked) sendPreview(); else endPreview(); };
+  $("ed-save").onclick = () => save().catch((err) => say(err.message, true));
+  document.addEventListener("keydown", (ev) => {
+    if (!E || $("editor-view").hidden || ev.target.closest("input, select, textarea")) return;
+    if ((ev.ctrlKey || ev.metaKey) && ev.key === "z") { ev.preventDefault(); ev.shiftKey ? $("ed-redo").click() : $("ed-undo").click(); }
+    else if ((ev.key === "Delete" || ev.key === "Backspace") && E.sel >= 0) { ev.preventDefault(); remove(E.sel); }
+    else if (ev.key === "Escape") { E.sel = -1; changed(true); }
+  });
+  window.addEventListener("beforeunload", () => { try { octave.ws.send(JSON.stringify({ op: "call", object: DM, method: "endPreview", args: [] })); } catch {} });
+  await showList();
+}
+
+main().catch((err) => { $("status").textContent = err.message; $("status").className = ""; });
+</script>
+</body>
+</html>

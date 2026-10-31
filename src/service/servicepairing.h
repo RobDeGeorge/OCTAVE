@@ -51,6 +51,7 @@
 #define OCTAVE_SERVICE_SERVICEPAIRING_H
 
 #include <QElapsedTimer>
+#include <QHostAddress>
 #include <QHash>
 #include <QMutex>
 #include <QObject>
@@ -69,6 +70,11 @@ class ServicePairing : public QObject
     Q_PROPERTY(QVariantList devices READ devices NOTIFY devicesChanged)      // [{id, name, created, lastUsed, scopes, session}]
     Q_PROPERTY(bool serviceEnabled READ serviceEnabled NOTIFY serviceEnabledChanged)
     Q_PROPERTY(bool loopbackOpen READ loopbackOpen CONSTANT)
+    // Where a browser reaches the service this run, "http://host:port" each
+    // (setListening): the network addresses first, when it listens on more
+    // than loopback, then http://127.0.0.1:port. Empty while not serving.
+    Q_PROPERTY(QStringList serviceUrls READ serviceUrls NOTIFY serviceUrlsChanged)
+    Q_PROPERTY(bool onNetwork READ onNetwork NOTIFY serviceUrlsChanged)
 
 public:
     static constexpr int kCodeLifetimeMs = 120000;
@@ -85,6 +91,14 @@ public:
     QVariantList devices() const;
     bool serviceEnabled() const { return m_serviceEnabled; }
     bool loopbackOpen() const { return m_loopbackOpen; }
+    QStringList serviceUrls() const { return m_serviceUrls; }
+    bool onNetwork() const { return m_onNetwork; }
+    // main.cpp, once the server is listening on `bind`:`port`. GUI thread
+    void setListening(const QHostAddress &bind, quint16 port);
+    // `text` as a QR code (medium error correction), a "0101..." string
+    // per row ("1" dark), for a QML Canvas to draw; empty if it can't be
+    // encoded
+    Q_INVOKABLE QStringList qrRows(const QString &text) const;
 
     // Settings > Service
     Q_INVOKABLE void startPairing();
@@ -128,12 +142,15 @@ signals:
     void pairingChanged();
     void devicesChanged();
     void serviceEnabledChanged();
+    void serviceUrlsChanged();
     // A device paired (the Settings card closes its code)
     void paired(const QString &name);
     // A device was revoked: close its connections
     void revoked(const QString &id);
 
 private:
+    QStringList m_serviceUrls;
+    bool m_onNetwork = false;
     struct Device {
         QString id, name, hash;
         qint64 created = 0, lastUsed = 0;

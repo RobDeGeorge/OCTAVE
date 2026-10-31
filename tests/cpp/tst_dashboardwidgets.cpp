@@ -11,6 +11,7 @@
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QTest>
 #include <cmath>
 #include <memory>
@@ -902,7 +903,186 @@ private slots:
         QTRY_VERIFY(!editor->property("drivingLocked").toBool());
     }
 
+    void alertBannerAndAutoShow()
+    {
+        // The renderer names a widget at its critical limit, unless the
+        // spec turns the banner off
+        QVERIFY(load("dashboards/DashboardRenderer.qml"));
+        QVariantMap cell{{"type", "DigitalReadout"}, {"paramId", "COOLANT_TEMP"}, {"col", 0}, {"row", 0},
+                         {"colSpan", 1}, {"rowSpan", 1}, {"props", QVariantMap{{"critAbove", 110}, {"warnAbove", 100}}}};
+        QVariantMap spec{{"gridColumns", 2}, {"gridRows", 1}, {"cells", QVariantList{cell}}};
+        root->setProperty("spec", spec);
+        store->ingest("COOLANT_TEMP", 105);   // a warning: the gauge's, not the banner's
+        QTest::qWait(80);
+        QCOMPARE(root->property("activeAlerts").toList().size(), 0);
+        store->ingest("COOLANT_TEMP", 120);
+        QTRY_COMPARE(root->property("activeAlerts").toList().size(), 1);
+        const QString text = root->property("activeAlerts").toList().at(0).toMap().value("text").toString();
+        QVERIFY2(text.contains("120") || text.contains("248"), qPrintable(text));   // °C or °F
+        spec["alertBanner"] = false;
+        root->setProperty("spec", spec);
+        QCOMPARE(root->property("activeAlerts").toList().size(), 0);
+
+        // Auto-show: up when the rule starts to hold, back when it has
+        // stopped for clearChecks checks, once per crossing
+        QQmlComponent rulesComponent(engine.get(), QUrl::fromLocalFile(frontend + "/dashboards/AutoShowRules.qml"));
+        std::unique_ptr<QObject> rules(rulesComponent.create());
+        QVERIFY2(rules, qPrintable(rulesComponent.errorString()));
+        rules->setProperty("clearChecks", 2);
+        rules->setProperty("rules", QVariantList{QVariantMap{
+            {"id", "hot"}, {"showWhen", QVariantMap{{"paramId", "COOLANT_TEMP"}, {"above", 110}}}}});
+        rules->setProperty("activeId", "sport");
+        QStringList switched;
+        connect(rules.get(), SIGNAL(switchTo(QString)), this, SLOT(noteSwitch(QString)));
+        m_switched = &switched;
+        store->ingest("COOLANT_TEMP", 90);
+        QTRY_COMPARE(store->value("COOLANT_TEMP").toInt(), 90);
+        invoke(rules.get(), "check");
+        QVERIFY(switched.isEmpty());
+        store->ingest("COOLANT_TEMP", 115);
+        QTRY_COMPARE(store->value("COOLANT_TEMP").toInt(), 115);
+        invoke(rules.get(), "check");
+        QCOMPARE(switched, QStringList{"hot"});
+        rules->setProperty("activeId", "hot");
+        invoke(rules.get(), "check");   // still holds: stays
+        store->ingest("COOLANT_TEMP", 95);
+        QTRY_COMPARE(store->value("COOLANT_TEMP").toInt(), 95);
+        invoke(rules.get(), "check");
+        QCOMPARE(switched.size(), 1);
+        invoke(rules.get(), "check");
+        QCOMPARE(switched, (QStringList{"hot", "sport"}));
+        // Swiped away while it holds: it doesn't come back until it crosses again
+        rules->setProperty("activeId", "sport");
+        store->ingest("COOLANT_TEMP", 115);
+        QTRY_COMPARE(store->value("COOLANT_TEMP").toInt(), 115);
+        invoke(rules.get(), "check");
+        QCOMPARE(switched.size(), 3);
+        rules->setProperty("activeId", "minimal");   // the user's pick
+        invoke(rules.get(), "check");
+        QCOMPARE(switched.size(), 3);
+        QCOMPARE(rules->property("shownId").toString(), QString());
+        m_switched = nullptr;
+    }
+
+    void importReportStyleAndOptions()
+    {
+        QTemporaryDir tmp;
+        dashboards->setUserDir(tmp.path() + "/dashboards");
+        QQmlComponent component(engine.get());
+        component.setData(QString(R"qml(
+            import QtQuick
+            import QtQuick.Controls
+            import "%1/dashboards" as Dashboards
+            import "%1/dashboards/editor" as Editor
+            ApplicationWindow {
+                width: 1280; height: 720; visible: true
+                property alias editor: ed
+                property alias report: rep
+                Editor.DashboardEditor { id: ed; anchors.fill: parent; autoDensity: false }
+                Dashboards.ImportReportPopup { id: rep }
+            }
+        )qml").arg(QUrl::fromLocalFile(frontend).toString()).toUtf8(), QUrl());
+        root.reset(component.create());
+        QVERIFY2(root, qPrintable(component.errorString()));
+        auto *window = qobject_cast<QQuickWindow *>(root.get());
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+
+        // Import report, with no car connected
+        QObject *report = qvariant_cast<QObject *>(root->property("report"));
+        const QVariantList lines = invoke(report, "lines", {QVariantMap{
+            {"id", "x"}, {"label", "X"}, {"cells", 3}, {"paramIds", QStringList{"RPM", "NOT_A_PID"}},
+            {"unknownTypes", QStringList{"FancyGauge"}}, {"droppedCells", QStringList{"BarGauge"}},
+            {"droppedProps", 2}, {"movedCells", 1}, {"portraitDropped", false}}}).toList();
+        QStringList texts;
+        for (const QVariant &l : lines) texts << l.toMap().value("text").toString();
+        QCOMPARE(texts.size(), 6);
+        QVERIFY2(texts[0].startsWith("No car connected"), qPrintable(texts[0]));
+        QVERIFY2(texts[1].startsWith("1 value this version of OCTAVE doesn't know") && texts[1].contains("NOT_A_PID"),
+                 qPrintable(texts[1]));
+        QVERIFY2(texts[2].contains("FancyGauge"), qPrintable(texts[2]));
+        QVERIFY2(texts[3].startsWith("1 widget was left out"), qPrintable(texts[3]));
+        QVERIFY2(texts[4].startsWith("2 settings"), qPrintable(texts[4]));
+        QVERIFY2(texts[5].startsWith("1 widget was moved"), qPrintable(texts[5]));
+        QCOMPARE(invoke(report, "lines", {QVariantMap{{"id", "y"}, {"paramIds", QStringList{}}}}).toList().size(), 0);
+
+        // Style: the look without the data, across types, to every one of a type
+        QObject *editor = qvariant_cast<QObject *>(root->property("editor"));
+        auto props = [editor](int i) { return editor->property("cells").toList().at(i).toMap().value("props").toMap(); };
+        QVERIFY(invoke(editor, "addCellAt", {"CircularGauge", -1, -1}).toBool());
+        QVERIFY(invoke(editor, "addCellAt", {"CircularGauge", -1, -1}).toBool());
+        QVERIFY(invoke(editor, "addCellAt", {"DigitalReadout", -1, -1}).toBool());
+        invoke(editor, "setCellProp", {0, "showTicks", false});
+        invoke(editor, "setCellProp", {0, "critAbove", 6000});
+        invoke(editor, "setCellProps", {0, QStringList{"fillColor", "needleColor"}, "#ff0000"});
+        invoke(editor, "setCellProp", {1, "majorTickCount", 5});
+        editor->setProperty("selectedIndex", 0);
+        QCOMPARE(editor->property("sameTypeCount").toInt(), 1);
+        invoke(editor, "copyStyle", {0});
+        invoke(editor, "pasteStyle", {2});
+        QCOMPARE(props(2).value("valueColor").toString(), QStringLiteral("#ff0000"));
+        QVERIFY(!props(2).contains("showTicks"));
+        QVERIFY(!props(2).contains("critAbove"));
+        QCOMPARE(invoke(editor, "applyStyleToAll", {0}).toInt(), 1);
+        QCOMPARE(props(1).value("showTicks"), QVariant(false));
+        QCOMPARE(props(1).value("needleColor").toString(), QStringLiteral("#ff0000"));
+        QVERIFY(!props(1).contains("majorTickCount"));   // replaced by the source's (unset)
+        QVERIFY(!props(1).contains("critAbove"));        // data stays the widget's own
+        QCOMPARE(invoke(editor, "applyStyleToAll", {0}).toInt(), 0);
+        invoke(editor, "undo");
+        QCOMPARE(props(1).value("majorTickCount").toInt(), 5);
+
+        // My widgets: saved from a widget, placed again with its options
+        const int before = editor->property("cells").toList().size();
+        QCOMPARE(invoke(editor, "saveAsPreset", {0, "Red dial"}).toString(), QStringLiteral("red-dial"));
+        QCOMPARE(dashboards->widgetPresets().size(), 1);
+        const QVariantMap preset = dashboards->widgetPresets().at(0).toMap();
+        QCOMPARE(preset.value("props").toMap().value("critAbove").toInt(), 6000);
+        QVERIFY(invoke(editor, "addPreset", {preset, -1, -1}).toBool());
+        QCOMPARE(editor->property("cells").toList().size(), before + 1);
+        const QVariantMap placed = editor->property("cells").toList().last().toMap();
+        QCOMPARE(placed.value("type").toString(), QStringLiteral("CircularGauge"));
+        QCOMPARE(placed.value("props").toMap().value("fillColor").toString(), QStringLiteral("#ff0000"));
+        // ...listed first in the gallery, under Mine; a tap places it
+        invoke(editor, "openPalette", {-1, -1});
+        auto *palette = root->findChild<QObject *>("widgetPalette");
+        QTRY_VERIFY(palette->property("opened").toBool());
+        QTRY_VERIFY(findVisual(window->contentItem(), "palettePreset_red-dial"));
+        QVERIFY(findVisual(window->contentItem(), "paletteCategory_Mine"));
+        QSignalSpy presetPicked(palette, SIGNAL(presetPicked(QVariant)));
+        // Looked up again each time: the gallery rebuilds its cards while it opens
+        auto mineCard = [&]() { return findVisual(window->contentItem(), "palettePreset_red-dial"); };
+        QTRY_VERIFY(mineCard() && mineCard()->width() > 0 && mineCard()->height() > 0 && mineCard()->isVisible());
+        QTest::qWait(300);   // the popup's enter transition
+        auto *mine = mineCard();
+        QVERIFY(mine);
+        const QPointF at = mine->mapToScene(QPointF(mine->width() / 2, mine->height() * 0.75));
+        // (the card goes with the gallery, which closes on the tap)
+        const QString where = QStringLiteral("tap at %1,%2 on %3x%4").arg(at.x()).arg(at.y())
+                                  .arg(mine->width()).arg(mine->height());
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, at.toPoint());
+        QVERIFY2(presetPicked.size() == 1, qPrintable(where));
+        QCOMPARE(editor->property("cells").toList().size(), before + 2);
+        invoke(editor, "undo");
+
+        // Dashboard options go into what is saved
+        invoke(editor, "setShowWhen", {QVariantMap{{"paramId", "COOLANT_TEMP"}, {"above", 105}}});
+        invoke(editor, "setAlertBanner", {false});
+        QVERIFY(editor->property("dirty").toBool());
+        QVariantMap saved = invoke(editor, "specToSave").toMap();
+        QCOMPARE(saved.value("showWhen").toMap(), (QVariantMap{{"paramId", "COOLANT_TEMP"}, {"above", 105}}));
+        QCOMPARE(saved.value("alertBanner"), QVariant(false));
+        invoke(editor, "setShowWhen", {QVariant()});
+        invoke(editor, "setAlertBanner", {true});
+        saved = invoke(editor, "specToSave").toMap();
+        QVERIFY(!saved.contains("showWhen"));
+        QVERIFY(!saved.contains("alertBanner"));
+    }
+
+public slots:
+    void noteSwitch(const QString &id) { if (m_switched) m_switched->append(id); }
+
 private:
+    QStringList *m_switched = nullptr;
     // A QML method of `obj` with up to three arguments, its result as a variant
     static QVariant invoke(QObject *obj, const char *method, const QVariantList &args = {})
     {

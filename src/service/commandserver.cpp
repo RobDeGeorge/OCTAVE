@@ -444,10 +444,11 @@ private:
         if (!Ws::isUpgrade(request)) {
             // The reference client (sdk/web), so a browser reaches the
             // service same-origin; nothing else is served
-            const QByteArray page = m_owner->page();
             const bool root = request.path == "/" || request.path == "/index.html";
-            if (request.method == "GET" && root && !page.isEmpty())
-                sock.write(Ws::httpResponse(200, "OK", "text/html; charset=utf-8", page));
+            const QByteArray page = root ? m_owner->page() : m_owner->pageAt(StaticFiles::pathOf(request.path));
+            if (request.method == "GET" && !page.isEmpty())
+                sock.write(Ws::httpResponse(200, "OK", "text/html; charset=utf-8", page,
+                                            root ? QByteArray(Ws::kInlinePageCsp) : QByteArray(Ws::kInlineEditorCsp)));
             else
                 sock.write(Ws::httpResponse(404, "Not Found", "text/plain", "not found\n"));
             flush(sock);

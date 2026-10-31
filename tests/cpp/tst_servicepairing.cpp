@@ -9,6 +9,8 @@
 #include <QJsonObject>
 #include <QSignalSpy>
 #include <QTemporaryDir>
+#include <QRegularExpression>
+#include <QHostAddress>
 #include <QTest>
 
 #include <memory>
@@ -28,6 +30,31 @@ private slots:
         qputenv("HOME", m_tmp->path().toUtf8());
         qputenv("XDG_CONFIG_HOME", (m_tmp->path() + "/config").toUtf8());
         qputenv("APPDATA", (m_tmp->path() + "/appdata").toUtf8());
+    }
+
+    void urlsSayWhereABrowserReachesIt()
+    {
+        SettingsManager settings;
+        ServicePairing p(&settings);
+        QVERIFY(p.serviceUrls().isEmpty());
+        QSignalSpy spy(&p, &ServicePairing::serviceUrlsChanged);
+        p.setListening(QHostAddress(QHostAddress::LocalHost), 9876);
+        QCOMPARE(p.serviceUrls(), QStringList{"http://127.0.0.1:9876"});
+        QVERIFY(!p.onNetwork());
+        p.setListening(QHostAddress("192.168.1.20"), 9000);
+        QCOMPARE(p.serviceUrls(), QStringList{"http://192.168.1.20:9000"});
+        QVERIFY(p.onNetwork());
+        p.setListening(QHostAddress(QHostAddress::Any), 9876);
+        QCOMPARE(p.serviceUrls().last(), QStringLiteral("http://127.0.0.1:9876"));
+        QCOMPARE(spy.count(), 3);
+
+        const QStringList rows = p.qrRows("http://192.168.1.20:9000/dashboards");
+        QVERIFY(rows.size() >= 21);
+        for (const QString &row : rows) {
+            QCOMPARE(row.size(), rows.size());
+            QVERIFY(QRegularExpression("^[01]+$").match(row).hasMatch());
+        }
+        QVERIFY(p.qrRows("").isEmpty());
     }
 
     void codesAreSixDigitsAndSingleUse()

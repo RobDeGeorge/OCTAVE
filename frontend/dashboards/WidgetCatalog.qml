@@ -58,6 +58,28 @@ QtObject {
         return out
     }
 
+    // The user's own widgets (dashboardManager.widgetPresets) as gallery
+    // entries in a "Mine" category: the base type's entry with the preset's
+    // name, options and value as its demo, `preset` the preset itself.
+    // Presets of a type this build doesn't have are left out.
+    readonly property var presets: {
+        var out = []
+        var list = (typeof dashboardManager !== "undefined" && dashboardManager) ? dashboardManager.widgetPresets : []
+        for (var i = 0; i < list.length; i++) {
+            var p = list[i]
+            var base = metaFor(p.baseType)
+            if (!base) continue
+            var entry = Object.assign({}, base)
+            entry.displayName = p.label
+            entry.description = "Yours: " + base.displayName
+            entry.category = "Mine"
+            entry.preset = p
+            entry.demo = { "paramId": p.paramId || (base.demo ? base.demo.paramId : ""), "props": p.props || {} }
+            out.push(entry)
+        }
+        return out
+    }
+
     // Swatches offered by the properties panel's Color row. Unset (the first,
     // "theme" swatch) keeps the widget on the live EnvironmentTheme colors.
     readonly property var colorSwatches: _data.colorSwatches || []
@@ -90,6 +112,23 @@ QtObject {
         for (var i = 0; i < ed.length; i++)
             if (ed[i].paramUnit === true) keys.push(ed[i].key)
         return keys
+    }
+
+    // Props of `typeName` that are its look rather than its data: the
+    // editableProps in the look / advanced sections (not a WarningLight's
+    // label, not one in the PID's unit). Copy / paste style and "apply to
+    // all" carry these, plus the colour (colorProps).
+    function styleKeys(typeName) {
+        var m = metaFor(typeName)
+        if (!m) return []
+        var out = []
+        var ed = m.editableProps || []
+        for (var i = 0; i < ed.length; i++) {
+            var p = ed[i]
+            if ((p.section === "look" || p.section === "advanced") && p.key !== "label" && p.paramUnit !== true)
+                out.push(p.key)
+        }
+        return out
     }
 
     function isKnownType(typeName) {

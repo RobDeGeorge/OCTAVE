@@ -436,7 +436,7 @@
     "fallingBehind": "A client whose queue overflows loses every queued record, gets a streamDropped event, and resumes at the next keyframe."
   },
   "http": {
-    "description": "GET only, on the service port. The Host header must be an address (IP or localhost), never a name (403 otherwise); a cross-site load (Sec-Fetch-Site other than same-origin or none) is refused with 403. `/` and the files under it (the reference page, or a `--web-root` frontend) are public. The routes below need trust: a loopback request with serviceLoopbackOpen on, `Authorization: Bearer <token>` from a program, or `?ticket=<ticket>` from `mediaTicket` in a browser; otherwise 401. A route that could not reach the app in time answers 503.",
+    "description": "GET only, on the service port. The Host header must be an address (IP or localhost), never a name (403 otherwise); a cross-site load (Sec-Fetch-Site other than same-origin or none) is refused with 403. `/` and the files under it (the reference page, or a `--web-root` frontend) are public, and so is `/dashboards` (the browser dashboard editor, a reference page too) when there is no `--web-root`. The routes below need trust: a loopback request with serviceLoopbackOpen on, `Authorization: Bearer <token>` from a program, or `?ticket=<ticket>` from `mediaTicket` in a browser; otherwise 401. A route that could not reach the app in time answers 503.",
     "auth": {
       "header": "Authorization: Bearer <token>",
       "query": "ticket",

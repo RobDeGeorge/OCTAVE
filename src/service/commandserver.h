@@ -179,10 +179,15 @@ public:
     // Before start(); 127.0.0.1 by default. The protocol has no
     // authentication: anything else lets the network drive the app.
     void setBindAddress(const QHostAddress &address) { m_bind = address; }
+    QHostAddress bindAddress() const { return m_bind; }
     // The HTML served at GET / (the reference client, sdk/web); none = 404.
     // Before start().
     void setPage(const QByteArray &html) { m_page = html; }
     QByteArray page() const { return m_page; }
+    // Another page of the reference client at GET `path` (/dashboards, the
+    // browser dashboard editor), same rules as the page. Before start().
+    void addPage(const QByteArray &path, const QByteArray &html) { m_pages.insert(path, html); }
+    QByteArray pageAt(const QByteArray &path) const { return m_pages.value(path); }
     // A directory served at GET / instead of the page (--web-root,
     // staticfiles.h); empty = the page. Before start().
     void setWebRoot(const QString &dir) { m_webRoot = dir; }
@@ -262,6 +267,7 @@ private:
     quint16 m_port;
     QHostAddress m_bind = QHostAddress(QHostAddress::LocalHost);
     QByteArray m_page;
+    QHash<QByteArray, QByteArray> m_pages;
     QString m_webRoot;
     TrustCheck m_trusted;
     Limits m_limits;

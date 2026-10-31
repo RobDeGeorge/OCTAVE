@@ -56,6 +56,10 @@ QByteArray acceptResponse(const HttpRequest &request);
 // The reference page's policy: its script is inline; it may only talk to
 // this service
 inline constexpr char kInlinePageCsp[] = "default-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:";
+// The other reference pages (the dashboard editor): the same, plus data:
+// images (a dashboard's thumbnail)
+inline constexpr char kInlineEditorCsp[] =
+    "default-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:";
 
 // The policy for a --web-root frontend: its own files only (no inline
 // script; inline styles, data: / blob: images and fonts, and WebAssembly

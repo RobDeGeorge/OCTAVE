@@ -342,6 +342,21 @@ export interface DashboardManager {
     lastError: string
     /** QString, notify lastExportPathChanged */
     lastExportPath: string
+    /**
+     * QVariantMap, notify lastImportReportChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    lastImportReport: Record<string, unknown>
+    /**
+     * QVariantMap, notify previewChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    preview: Record<string, unknown>
+    /**
+     * QVariantList, notify widgetPresetsChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    widgetPresets: unknown[]
     /** int, notify dashboardsChanged */
     hiddenBuiltInCount: number
     /** int, constant */
@@ -364,6 +379,20 @@ export interface DashboardManager {
     importDashboard: { args: [fileOrUrl: string]; returns: string }
     importDashboardFromClipboard: { args: []; returns: string }
     importDashboardFromText: { args: [json: string]; returns: string }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    saveWidgetPreset: { args: [preset: Record<string, unknown>]; returns: string }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    deleteWidgetPreset: { args: [id: string]; returns: boolean }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    copyWidgetPresetToClipboard: { args: [id: string]; returns: boolean }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    importWidgetPresetFromText: { args: [json: string]; returns: string }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    importWidgetPresetFromClipboard: { args: []; returns: string }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    previewDashboard: { args: [spec: Record<string, unknown>]; returns: boolean }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    endPreview: { args: []; returns: void }
     refresh: { args: []; returns: void }
     /** @experimental not covered by the protocol version; may change or go in any release */
     fromTemplate: { args: [id: string, supported: string[]]; returns: Record<string, unknown> }
@@ -387,12 +416,19 @@ export interface DashboardManager {
     minSpan: { args: [type: string, gridColumns: number, gridRows: number, cellWidth: number, cellHeight: number, spacing: number]; returns: Record<string, unknown> }
     /** @experimental not covered by the protocol version; may change or go in any release */
     sizeOptions: { args: [type: string, gridColumns: number, gridRows: number, cellWidth: number, cellHeight: number, spacing: number]; returns: unknown[] }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    thumbnailFromImage: { args: [image: unknown]; returns: string }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    widgetPresetText: { args: [id: string]; returns: string }
   }
   signals: {
     dashboardsChanged: []
     lastShareErrorChanged: []
     lastErrorChanged: []
     lastExportPathChanged: []
+    lastImportReportChanged: []
+    previewChanged: []
+    widgetPresetsChanged: []
   }
 }
 

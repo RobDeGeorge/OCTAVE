@@ -1,8 +1,8 @@
 # User-Created, Shareable Dashboard Primitives
 
 **Goal:** let people save and share their own dashboard building blocks (styled gauges and small gauge groups) as safely as they already share whole dashboards.
-**Status:** parked (design agreed in principle, not started)
-**Last updated:** 2026-10-18
+**Status:** tier 1 widget presets done 2026-10-30 ("My widgets": `dashboardManager.widgetPresets` / `saveWidgetPreset` / `importWidgetPresetFromText`, `<config>/widgets/*.json`, the gallery's Mine section, the Style menu's *Save as my widget…*); composites and tier 2 parked
+**Last updated:** 2026-10-30
 
 ---
 
@@ -101,8 +101,10 @@ this after Tier 1 ships, and only with all of these:
 
 ## Recommended order
 
-1. Tier 1 widget presets (schema, storage, "Save as preset", palette
-   section, share/import).
+1. ~~Tier 1 widget presets~~ (done 2026-10-30: as designed above, with the
+   preset's `paramId` kept when it has one; sharing is *Copy* on a Mine card
+   and *Paste a widget* in the gallery, and the dashboard importer refuses a
+   preset with a pointer to the gallery).
 2. Tier 1 composites (renderer + canvas grouping).
 3. Re-ask the user whether Tier 2 is still wanted once presets exist. It may not be.
 4. Tier 2 only with the isolation list above, and desktop first.

@@ -52,6 +52,12 @@
 // polls nothing, and shows one "needs a newer OCTAVE" message. Import
 // already refuses such files; this covers one copied into the folder by hand.
 //
+// Alert banner: unless the spec says "alertBanner": false, every widget
+// whose value is at its critical limit (critAbove / critBelow, the gauges'
+// own red level) is named with its value in a red strip along the top, so a
+// small gauge in a corner can't go red unnoticed. Warnings (amber) stay on
+// the gauge. `activeAlerts` is the same list for a host.
+//
 // Vehicle gate: once a connected vehicle has been scanned
 // (OBDParameterModel.vehicleKnown), a cell bound to a PID that vehicle
 // doesn't report shows a "not supported" placeholder instead of a gauge
@@ -59,6 +65,7 @@
 
 import QtQuick 2.15
 import ".." as App
+import "../gauges/AlertLevel.js" as AlertLevel
 
 Item {
     id: root
@@ -126,6 +133,74 @@ Item {
         (width  - 2 * _margin - _spacing * (_cols - 1)) / _cols)
     readonly property real _cellH: Math.max(1,
         (height - 2 * _margin - _spacing * (_rows - 1)) / _rows)
+
+    function _limit(v) {
+        var n = (v === undefined || v === null || v === "" || v === "NaN") ? NaN : Number(v)
+        return isFinite(n) ? n : NaN
+    }
+
+    // The cells with a critical limit (from the spec alone)
+    readonly property var _alertCells: {
+        var out = []
+        var cells = (spec && spec.cells && !tooNew && spec.alertBanner !== false) ? spec.cells : []
+        for (var i = 0; i < cells.length; i++) {
+            var c = cells[i], p = c.props || {}
+            if (!c.paramId) continue
+            var above = _limit(p.critAbove), below = _limit(p.critBelow)
+            if (!isFinite(above) && !isFinite(below)) continue
+            out.push({ "paramId": c.paramId, "critAbove": above, "critBelow": below, "title": p.title || "" })
+        }
+        return out
+    }
+
+    // [{paramId, text}] of the cells at their critical level now, one per PID
+    readonly property var activeAlerts: {
+        var out = [], seen = {}
+        for (var i = 0; i < _alertCells.length; i++) {
+            var a = _alertCells[i]
+            if (seen[a.paramId]) continue
+            var v = App.OBDParameterModel.rawValue(a.paramId)
+            if (typeof v !== "number") continue
+            if (AlertLevel.level(v, NaN, NaN, a.critAbove, a.critBelow) !== 2) continue
+            seen[a.paramId] = true
+            var info = App.OBDParameterModel.getParamInfo(a.paramId)
+            var shown = App.OBDParameterModel.toDisplay(a.paramId, v)
+            out.push({ "paramId": a.paramId,
+                       "text": (a.title || info.title) + " " + Number(shown).toFixed(App.OBDParameterModel.decimalsFor(a.paramId))
+                               + (info.unit ? " " + info.unit : "") })
+        }
+        return out
+    }
+
+    Rectangle {
+        objectName: "dashAlertBanner"
+        visible: root.activeAlerts.length > 0
+        z: 50
+        anchors.top: parent.top
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.topMargin: Math.max(2, root._margin / 4)
+        width: Math.min(parent.width - App.Spacing.dp(16), alertText.implicitWidth + App.Spacing.dp(28))
+        height: alertText.implicitHeight + App.Spacing.dp(10)
+        radius: height / 2
+        color: App.Style.statusDanger
+        SequentialAnimation on opacity {
+            running: root.activeAlerts.length > 0
+            loops: Animation.Infinite
+            NumberAnimation { to: 0.7; duration: 600; easing.type: Easing.InOutQuad }
+            NumberAnimation { to: 1.0; duration: 600; easing.type: Easing.InOutQuad }
+        }
+        Text {
+            id: alertText
+            anchors.centerIn: parent
+            width: Math.min(implicitWidth, parent.parent.width - App.Spacing.dp(40))
+            elide: Text.ElideRight
+            text: root.activeAlerts.map(function(a) { return a.text }).join("   \u00B7   ")
+            color: "white"
+            font.family: App.Style.fontFamily
+            font.bold: true
+            font.pixelSize: App.Spacing.overallText * 0.95
+        }
+    }
 
     Text {
         objectName: "dashTooNew"

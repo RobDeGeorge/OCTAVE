@@ -22,12 +22,15 @@ None of these can be done on the desktop rig.
 - [ ] Finger swipe between dashboards: a 20% drag or a flick past 8% commits, a short drag snaps back; taps on Media Keys / Now Playing inside a dashboard still register (the DragHandler sits on the page).
 - [ ] Resize grip reachable at the canvas edges.
 - [ ] Import "From file…" through the Android picker (content:// URL into `importDashboard`), and Export landing in Downloads/OCTAVE-dashboards.
+- [ ] Phase 4 on a touchscreen: the import report popup after a real import, the Style menu and *Save as my widget…* name field with the on-screen keyboard, the gallery's Mine cards (Copy / × reachable without placing the widget), the *Alerts and auto-show…* popup's number fields.
+- [ ] The browser editor (`/dashboards`) from the S22's browser against the Pi started with `--service-bind 0.0.0.0`: scan the chooser's **In a browser** QR, pair with the code, drag and resize by finger in the page, and the car's dashboard page following each change ("Preview from another device") and dropping the preview 60 s after the phone goes quiet.
 
 **Real car (Orange Pi 5 Plus in the Jeep, or the Pi with an ECU simulator):** effort M for the lot.
 - [ ] Parameter Cards: empty before the supported-PID scan, then the car's full list. Note the refresh rate with every supported PID demanded (ELM327 manages ~10–20 PIDs/s total).
 - [ ] Switching pages changes what is polled (watch the OBD log), with no visible stall when the poll list is rebuilt.
 - [ ] The RPM / ELM_VOLTAGE heartbeat keeps the data watchdog quiet on an empty demand (e.g. on Settings pages).
 - [ ] A dashboard bound to a PID the car lacks shows "Not supported by this vehicle", and the PID picker greys it out but still allows it.
+- [ ] The alert banner reads at a glance at its critical colour, and `showWhen` brings a dashboard up (e.g. coolant above a limit set low for the test) and hands back the one before 5 s after it clears.
 - [ ] The editor's driving lock: it pauses above ~5 km/h and lifts below ~2.5, the banner reads at a glance, "I'm a passenger" works; and the polling-cost line's estimate (15 requests a second shared) against the refresh rate actually seen.
 
 **Android BLE OBD (Galaxy S22 + BLE ELM327 in the Jeep):** effort S.

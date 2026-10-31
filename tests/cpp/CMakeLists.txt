@@ -244,6 +244,7 @@ octave_add_test(tst_servicebridge
             service/metadescribe.h service/metadescribe.cpp
             service/websocket.h service/websocket.cpp service/staticfiles.h service/staticfiles.cpp
             service/streamhub.h service/streamhub.cpp service/servicepairing.h service/servicepairing.cpp
+            phone_mirror/qrcodegen.hpp phone_mirror/qrcodegen.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
             util/variantlistmodel.h util/variantlistmodel.cpp
     LIBS Qt6::Gui Qt6::Qml Qt6::Network)
@@ -262,13 +263,15 @@ octave_add_test(tst_websocket
 octave_add_test(tst_staticfiles SOURCES service/staticfiles.h service/staticfiles.cpp)
 # Protocol v2 pairing: codes, limits, hashed tokens, revoke, media tickets
 octave_add_test(tst_servicepairing
-    SOURCES service/servicepairing.h service/servicepairing.cpp managers/settingsmanager.h managers/settingsmanager.cpp
+    SOURCES service/servicepairing.h service/servicepairing.cpp
+            phone_mirror/qrcodegen.hpp phone_mirror/qrcodegen.cpp managers/settingsmanager.h managers/settingsmanager.cpp
     LIBS Qt6::Gui Qt6::Network)
 set_tests_properties(tst_servicepairing PROPERTIES TIMEOUT 120)
 # The exec frontend supervisor with fake frontends (shell scripts)
 octave_add_test(tst_frontendsupervisor
     SOURCES managers/frontendsupervisor.h managers/frontendsupervisor.cpp managers/frontendmanifest.h managers/frontendmanifest.cpp
-            service/servicepairing.h service/servicepairing.cpp managers/settingsmanager.h managers/settingsmanager.cpp
+            service/servicepairing.h service/servicepairing.cpp
+            phone_mirror/qrcodegen.hpp phone_mirror/qrcodegen.cpp managers/settingsmanager.h managers/settingsmanager.cpp
     LIBS Qt6::Gui Qt6::Network)
 # Media streams: the H.264 helpers and the hub's join / drop / config rules
 octave_add_test(tst_streamhub

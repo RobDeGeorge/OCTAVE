@@ -5,12 +5,15 @@
 #include "../util/dashboardgrid.h"
 #include "../util/pathurl.h"
 
+#include <QBuffer>
 #include <QClipboard>
+#include <QImage>
 #include <QDateTime>
 #include <QGuiApplication>
 #include <QJsonArray>
 #include <QStandardPaths>
 #include <QUrl>
+#include <algorithm>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -30,6 +33,45 @@ DashboardManager::DashboardManager(QObject *parent)
     connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this,
             [this](const QString &) { m_rescanDebounce.start(); });
     connect(&m_rescanDebounce, &QTimer::timeout, this, &DashboardManager::onUserDirChanged);
+    m_previewExpiry.setSingleShot(true);
+    m_previewExpiry.setInterval(60 * 1000);
+    connect(&m_previewExpiry, &QTimer::timeout, this, &DashboardManager::endPreview);
+}
+
+bool DashboardManager::previewDashboard(const QVariantMap &spec)
+{
+    const QString id = spec.value(QStringLiteral("id")).toString();
+    QVariantMap raw = spec;
+    raw.insert(QStringLiteral("id"), id.isEmpty() ? QStringLiteral("preview") : id);
+    QString error;
+    QVariantMap normal = normalizeSpec(raw, SpecUse::Load, &error, m_widgetCatalog);
+    if (normal.isEmpty()) {
+        qCWarning(lcDashboards).noquote() << "Preview refused:" << error;
+        endPreview();
+        return false;
+    }
+    if (id.isEmpty())
+        normal.remove(QStringLiteral("id"));
+    normal.remove(QStringLiteral("thumbnail"));
+    const QVariantMap next{{QStringLiteral("id"), id}, {QStringLiteral("spec"), normal}};
+    m_previewExpiry.start();
+    if (next == m_preview)
+        return true;
+    if (m_preview.isEmpty())
+        qCInfo(lcDashboards) << "Preview started for" << (id.isEmpty() ? QStringLiteral("a new dashboard") : id);
+    m_preview = next;
+    emit previewChanged();
+    return true;
+}
+
+void DashboardManager::endPreview()
+{
+    m_previewExpiry.stop();
+    if (m_preview.isEmpty())
+        return;
+    m_preview.clear();
+    qCInfo(lcDashboards) << "Preview ended";
+    emit previewChanged();
 }
 
 void DashboardManager::setPresetsDir(const QString &absolutePath)
@@ -284,6 +326,7 @@ void DashboardManager::rescanAll()
                          << m_dashboards.size() << "total";
     m_userDirSignature = userDirSignatureNow();
     emit dashboardsChanged();
+    rescanWidgetPresets();
 }
 
 // ---------------------------------------------------------------------------
@@ -298,6 +341,10 @@ QVariantMap DashboardManager::readHeader(const QString &absolutePath) const
     QVariantMap header;
     header.insert(QStringLiteral("id"),    full.value(QStringLiteral("id")));
     header.insert(QStringLiteral("label"), full.value(QStringLiteral("label")));
+    // The page's "show this dashboard when ..." rule, checked as a save would
+    const QVariant when = normalizeSpec(full, SpecUse::Load, nullptr).value(QStringLiteral("showWhen"));
+    if (when.isValid())
+        header.insert(QStringLiteral("showWhen"), when);
     return header;
 }
 
@@ -495,6 +542,7 @@ constexpr int kMaxCells = 256;
 constexpr int kMaxGrid = 48;
 constexpr int kMaxLabelLength = 80;
 constexpr int kMaxPropString = 200;
+constexpr int kMaxThumbnail = 96 * 1024;   // a 320 x 180 JPEG is ~10-20 KB
 }
 
 void DashboardManager::setError(const QString &message)
@@ -591,11 +639,25 @@ QString DashboardManager::importDashboardFromText(const QString &json)
     return importSpec(doc.object().toVariantMap());
 }
 
+void DashboardManager::setImportReport(const QVariantMap &report)
+{
+    if (m_lastImportReport == report) return;
+    m_lastImportReport = report;
+    emit lastImportReportChanged();
+}
+
 QString DashboardManager::importSpec(const QVariantMap &raw)
 {
+    if (raw.value(QStringLiteral("kind")).toString() == QLatin1String("widgetPreset")) {
+        setImportReport({});
+        setShareError(QStringLiteral("That is a widget, not a dashboard: add it from the editor's widget gallery (Mine)"));
+        return {};
+    }
     QString error;
-    QVariantMap spec = normalizeSpec(raw, SpecUse::Import, &error, m_widgetCatalog);
+    NormalizeReport noted;
+    QVariantMap spec = normalizeSpec(raw, SpecUse::Import, &error, m_widgetCatalog, &noted);
     if (spec.isEmpty()) {
+        setImportReport({});
         setShareError(error);
         return {};
     }
@@ -603,9 +665,33 @@ QString DashboardManager::importSpec(const QVariantMap &raw)
     spec.insert(QStringLiteral("id"), id);
     const QString saved = saveDashboard(spec);
     if (saved.isEmpty()) {
+        setImportReport({});
         setShareError(QStringLiteral("Could not save the imported dashboard"));
         return {};
     }
+    QSet<QString> knownTypes;
+    for (const QVariant &w : m_widgetCatalog.value(QStringLiteral("widgets")).toList())
+        knownTypes.insert(w.toMap().value(QStringLiteral("type")).toString());
+    QStringList unknownTypes, paramIds;
+    const QVariantList cells = spec.value(QStringLiteral("cells")).toList();
+    for (const QVariant &cv : cells) {
+        const QVariantMap c = cv.toMap();
+        const QString type = c.value(QStringLiteral("type")).toString();
+        const QString pid = c.value(QStringLiteral("paramId")).toString();
+        if (!knownTypes.isEmpty() && !knownTypes.contains(type) && !unknownTypes.contains(type))
+            unknownTypes.append(type);
+        if (!pid.isEmpty() && !paramIds.contains(pid))
+            paramIds.append(pid);
+    }
+    setImportReport({{QStringLiteral("id"), saved},
+                     {QStringLiteral("label"), spec.value(QStringLiteral("label"))},
+                     {QStringLiteral("cells"), cells.size()},
+                     {QStringLiteral("droppedCells"), noted.droppedCells},
+                     {QStringLiteral("droppedProps"), noted.droppedProps},
+                     {QStringLiteral("movedCells"), noted.movedCells},
+                     {QStringLiteral("portraitDropped"), noted.portraitDropped},
+                     {QStringLiteral("unknownTypes"), unknownTypes},
+                     {QStringLiteral("paramIds"), paramIds}});
     qCInfo(lcDashboards) << "Imported dashboard as" << saved;
     setShareError({});
     return saved;
@@ -734,8 +820,11 @@ bool editableValue(const QVariantMap &def, QVariant &v)
 }
 } // namespace
 
-QVariantMap DashboardManager::normalizeSpec(const QVariantMap &raw, SpecUse use, QString *error, const QVariantMap &catalog)
+QVariantMap DashboardManager::normalizeSpec(const QVariantMap &raw, SpecUse use, QString *error, const QVariantMap &catalog,
+                                            NormalizeReport *report)
 {
+    NormalizeReport scratch;
+    NormalizeReport &noted = report ? *report : scratch;
     // type -> {prop key -> its editableProps entry}
     QHash<QString, QHash<QString, QVariantMap>> editable;
     for (const QVariant &w : catalog.value(QStringLiteral("widgets")).toList()) {
@@ -817,6 +906,30 @@ QVariantMap DashboardManager::normalizeSpec(const QVariantMap &raw, SpecUse use,
             out.insert(key, intIn(raw.value(key), 0, 200, 0));
     }
 
+    // A picture of the dashboard for sharing (thumbnailFromImage): a small
+    // base64 JPEG or PNG data URL, or nothing
+    const QString thumb = raw.value(QStringLiteral("thumbnail")).toString();
+    static const QRegularExpression dataUrl(QStringLiteral("^data:image/(jpeg|png);base64,[A-Za-z0-9+/]+=*$"));
+    if (!thumb.isEmpty() && thumb.size() <= kMaxThumbnail && dataUrl.match(thumb).hasMatch())
+        out.insert(QStringLiteral("thumbnail"), thumb);
+    // The alert banner over the dashboard (on unless false)
+    if (raw.value(QStringLiteral("alertBanner")).typeId() == QMetaType::Bool)
+        out.insert(QStringLiteral("alertBanner"), raw.value(QStringLiteral("alertBanner")).toBool());
+    // Bring this dashboard up when a value passes a limit: {paramId, above
+    // and / or below}; anything less is dropped
+    const QVariantMap when = raw.value(QStringLiteral("showWhen")).toMap();
+    const QString whenId = when.value(QStringLiteral("paramId")).toString();
+    if (!whenId.isEmpty() && whenId.size() <= 64) {
+        QVariantMap w{{QStringLiteral("paramId"), whenId}};
+        for (const QString key : {QStringLiteral("above"), QStringLiteral("below")}) {
+            const QVariant v = when.value(key);
+            if (v.typeId() == QMetaType::Int || v.typeId() == QMetaType::LongLong || v.typeId() == QMetaType::Double)
+                w.insert(key, qBound(-1e9, v.toDouble(), 1e9));
+        }
+        if (w.size() > 1)
+            out.insert(QStringLiteral("showWhen"), w);
+    }
+
     QVariantList cells;
     QList<int> rawIndexOf;   // kept cell -> its index in the file (for layouts.portrait)
     for (int rawIndex = 0; rawIndex < rawCells.size(); ++rawIndex) {
@@ -836,6 +949,10 @@ QVariantMap DashboardManager::normalizeSpec(const QVariantMap &raw, SpecUse use,
         r.rowSpan = intIn(c.value(QStringLiteral("rowSpan")), 1, rows, 1);
         r.col = intIn(c.value(QStringLiteral("col")), 0, cols - r.colSpan, 0);
         r.row = intIn(c.value(QStringLiteral("row")), 0, rows - r.rowSpan, 0);
+        if (r.col != c.value(QStringLiteral("col")).toInt() || r.row != c.value(QStringLiteral("row")).toInt()
+                || r.colSpan != c.value(QStringLiteral("colSpan"), 1).toInt()
+                || r.rowSpan != c.value(QStringLiteral("rowSpan"), 1).toInt())
+            ++noted.movedCells;
         // Cells never overlap. In file order the earlier cell wins; a later
         // one covering it shrinks toward 1x1 (as a new widget does) and is
         // dropped only if even that is taken.
@@ -844,6 +961,7 @@ QVariantMap DashboardManager::normalizeSpec(const QVariantMap &raw, SpecUse use,
             if (!DashboardGrid::canPlace(cells, cols, rows, r)) {
                 qCWarning(lcDashboards) << "Dropping" << type << "at" << r.col << r.row
                                         << "in" << label << ": it overlaps another widget";
+                noted.droppedCells.append(type);
                 continue;
             }
         }
@@ -858,10 +976,12 @@ QVariantMap DashboardManager::normalizeSpec(const QVariantMap &raw, SpecUse use,
         const QVariantMap rawProps = c.value(QStringLiteral("props")).toMap();
         const QHash<QString, QVariantMap> known = editable.value(type);
         for (auto it = rawProps.constBegin(); it != rawProps.constEnd(); ++it) {
-            if (it.key().size() > 64) continue;
+            if (it.key().size() > 64) { ++noted.droppedProps; continue; }
             QVariant v = it.value();
-            if (const auto def = known.constFind(it.key()); def != known.constEnd() && !editableValue(*def, v))
+            if (const auto def = known.constFind(it.key()); def != known.constEnd() && !editableValue(*def, v)) {
+                ++noted.droppedProps;
                 continue;
+            }
             switch (v.typeId()) {
             case QMetaType::Bool:
             case QMetaType::Int:
@@ -873,6 +993,7 @@ QVariantMap DashboardManager::normalizeSpec(const QVariantMap &raw, SpecUse use,
                 props.insert(it.key(), v.toString().left(kMaxPropString));
                 break;
             default:
+                ++noted.droppedProps;
                 break;
             }
         }
@@ -938,6 +1059,7 @@ QVariantMap DashboardManager::normalizeSpec(const QVariantMap &raw, SpecUse use,
             out.insert(QStringLiteral("schema"), 2);
         } else {
             qCWarning(lcDashboards) << "Dropping the portrait layout of" << label << ": its widgets don't fit";
+            noted.portraitDropped = true;
         }
     }
     return out;
@@ -1084,4 +1206,189 @@ QVariantList DashboardManager::sizeOptions(const QString &type, int gridColumns,
         out.append(QVariantMap{{QStringLiteral("label"), o.label}, {QStringLiteral("colSpan"), o.colSpan},
                                {QStringLiteral("rowSpan"), o.rowSpan}});
     return out;
+}
+
+QString DashboardManager::thumbnailFromImage(const QVariant &image) const
+{
+    if (image.typeId() != QMetaType::QImage)
+        return {};
+    QImage img = image.value<QImage>();
+    if (img.isNull())
+        return {};
+    img = img.scaled(QSize(320, 180), Qt::KeepAspectRatio, Qt::SmoothTransformation)
+              .convertToFormat(QImage::Format_RGB32);
+    QByteArray jpeg;
+    QBuffer buffer(&jpeg);
+    buffer.open(QIODevice::WriteOnly);
+    // PNG where a build has no JPEG writer
+    const bool isJpeg = img.save(&buffer, "JPEG", 70);
+    if (!isJpeg && !img.save(&buffer, "PNG"))
+        return {};
+    const QString url = (isJpeg ? QStringLiteral("data:image/jpeg;base64,") : QStringLiteral("data:image/png;base64,"))
+                        + QString::fromLatin1(jpeg.toBase64());
+    return url.size() <= kMaxThumbnail ? url : QString();
+}
+
+// ---------------------------------------------------------------------------
+// Widget presets (the user's own widgets)
+// ---------------------------------------------------------------------------
+
+QString DashboardManager::widgetsDir() const
+{
+    return m_userDir.isEmpty() ? QString() : QDir::cleanPath(m_userDir + QStringLiteral("/../widgets"));
+}
+
+QVariantMap DashboardManager::normalizePreset(const QVariantMap &raw, QString *error) const
+{
+    auto fail = [error](const QString &msg) { if (error) *error = msg; return QVariantMap{}; };
+    const QString type = raw.value(QStringLiteral("baseType")).toString();
+    if (type.isEmpty() || type.size() > 64)
+        return fail(QStringLiteral("Not an OCTAVE widget (no type)"));
+    const QString label = raw.value(QStringLiteral("label")).toString().simplified().left(kMaxLabelLength);
+    if (label.isEmpty())
+        return fail(QStringLiteral("The widget has no name"));
+    // The props by the dashboard rules: a one-cell dashboard of it
+    const QVariantMap cell{{QStringLiteral("type"), type},
+                           {QStringLiteral("paramId"), raw.value(QStringLiteral("paramId")).toString()},
+                           {QStringLiteral("col"), 0}, {QStringLiteral("row"), 0},
+                           {QStringLiteral("colSpan"), 1}, {QStringLiteral("rowSpan"), 1},
+                           {QStringLiteral("props"), raw.value(QStringLiteral("props")).toMap()}};
+    const QVariantMap spec = normalizeSpec({{QStringLiteral("id"), QStringLiteral("preset")},
+                                            {QStringLiteral("label"), label},
+                                            {QStringLiteral("cells"), QVariantList{cell}}},
+                                           SpecUse::Load, error, m_widgetCatalog);
+    const QVariantList cells = spec.value(QStringLiteral("cells")).toList();
+    if (cells.isEmpty())
+        return fail(QStringLiteral("Not an OCTAVE widget"));
+    const QVariantMap c = cells.first().toMap();
+    return {{QStringLiteral("label"), label},
+            {QStringLiteral("baseType"), type},
+            {QStringLiteral("paramId"), c.value(QStringLiteral("paramId"))},
+            {QStringLiteral("props"), c.value(QStringLiteral("props"))}};
+}
+
+void DashboardManager::rescanWidgetPresets()
+{
+    QVariantList list;
+    const QString dir = widgetsDir();
+    if (!dir.isEmpty()) {
+        const auto files = QDir(dir).entryInfoList({QStringLiteral("*.json")}, QDir::Files, QDir::Name);
+        for (const QFileInfo &fi : files) {
+            if (fi.size() > kMaxImportBytes) continue;
+            QVariantMap p = normalizePreset(readFullSpec(fi.absoluteFilePath()), nullptr);
+            if (p.isEmpty()) {
+                qCWarning(lcDashboards) << "Skipping widget preset" << fi.fileName();
+                continue;
+            }
+            p.insert(QStringLiteral("id"), fi.completeBaseName());
+            list.append(p);
+        }
+    }
+    std::sort(list.begin(), list.end(), [](const QVariant &a, const QVariant &b) {
+        return a.toMap().value(QStringLiteral("label")).toString().compare(
+                   b.toMap().value(QStringLiteral("label")).toString(), Qt::CaseInsensitive) < 0;
+    });
+    if (list == m_widgetPresets) return;
+    m_widgetPresets = list;
+    emit widgetPresetsChanged();
+}
+
+QString DashboardManager::saveWidgetPreset(const QVariantMap &preset)
+{
+    QString error;
+    QVariantMap p = normalizePreset(preset, &error);
+    const QString dir = widgetsDir();
+    if (p.isEmpty() || dir.isEmpty()) {
+        setError(p.isEmpty() ? error : QStringLiteral("No folder for widgets"));
+        return {};
+    }
+    QSet<QString> taken;
+    for (const QVariant &v : m_widgetPresets)
+        taken.insert(v.toMap().value(QStringLiteral("id")).toString());
+    QString id = preset.value(QStringLiteral("id")).toString();
+    if (!taken.contains(id)) {
+        const QString base = slugify(p.value(QStringLiteral("label")).toString());
+        id = base;
+        for (int n = 2; taken.contains(id); ++n)
+            id = base + QLatin1Char('-') + QString::number(n);
+    }
+    p.insert(QStringLiteral("schema"), 1);
+    p.insert(QStringLiteral("kind"), QStringLiteral("widgetPreset"));
+    if (!writeSpec(dir + QLatin1Char('/') + id + QStringLiteral(".json"), p)) {
+        setError(QStringLiteral("Could not write the widget"));
+        return {};
+    }
+    setError({});
+    rescanWidgetPresets();
+    return id;
+}
+
+bool DashboardManager::deleteWidgetPreset(const QString &id)
+{
+    static const QRegularExpression fileSafe(QStringLiteral("^[A-Za-z0-9_-]{1,64}$"));
+    if (!fileSafe.match(id).hasMatch() || widgetsDir().isEmpty())
+        return false;
+    const bool ok = QFile::remove(widgetsDir() + QLatin1Char('/') + id + QStringLiteral(".json"));
+    rescanWidgetPresets();
+    return ok;
+}
+
+QString DashboardManager::widgetPresetText(const QString &id) const
+{
+    for (const QVariant &v : m_widgetPresets) {
+        QVariantMap p = v.toMap();
+        if (p.value(QStringLiteral("id")).toString() != id) continue;
+        p.remove(QStringLiteral("id"));
+        p.insert(QStringLiteral("schema"), 1);
+        p.insert(QStringLiteral("kind"), QStringLiteral("widgetPreset"));
+        return QString::fromUtf8(QJsonDocument(QJsonObject::fromVariantMap(p)).toJson(QJsonDocument::Compact));
+    }
+    return {};
+}
+
+bool DashboardManager::copyWidgetPresetToClipboard(const QString &id)
+{
+    const QString text = widgetPresetText(id);
+    QClipboard *cb = QGuiApplication::clipboard();
+    if (text.isEmpty() || !cb) {
+        setShareError(text.isEmpty() ? QStringLiteral("Widget not found") : QStringLiteral("Clipboard unavailable"));
+        return false;
+    }
+    cb->setText(text);
+    setShareError({});
+    return true;
+}
+
+QString DashboardManager::importWidgetPresetFromText(const QString &json)
+{
+    const QByteArray data = json.trimmed().toUtf8();
+    QJsonParseError err;
+    const QJsonDocument doc = data.size() <= kMaxImportBytes ? QJsonDocument::fromJson(data, &err) : QJsonDocument();
+    const QVariantMap raw = doc.isObject() ? doc.object().toVariantMap() : QVariantMap();
+    if (raw.value(QStringLiteral("kind")).toString() != QLatin1String("widgetPreset")) {
+        setShareError(raw.contains(QStringLiteral("cells"))
+                          ? QStringLiteral("That is a dashboard, not a widget: import it from the dashboard list")
+                          : QStringLiteral("Not an OCTAVE widget"));
+        return {};
+    }
+    if (raw.value(QStringLiteral("schema"), 1).toInt() > 1) {
+        setShareError(QStringLiteral("This widget needs a newer version of OCTAVE"));
+        return {};
+    }
+    QVariantMap p = raw;
+    p.remove(QStringLiteral("id"));   // never overwrites
+    const QString id = saveWidgetPreset(p);
+    setShareError(id.isEmpty() ? lastError() : QString());
+    return id;
+}
+
+QString DashboardManager::importWidgetPresetFromClipboard()
+{
+    QClipboard *cb = QGuiApplication::clipboard();
+    const QString text = cb ? cb->text() : QString();
+    if (text.trimmed().isEmpty()) {
+        setShareError(QStringLiteral("The clipboard is empty"));
+        return {};
+    }
+    return importWidgetPresetFromText(text);
 }
