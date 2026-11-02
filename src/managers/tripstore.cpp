@@ -13,6 +13,8 @@
 #include <QTextStream>
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 
 #include "sqlite3.h"
 
@@ -100,6 +102,134 @@ private:
     sqlite3_stmt *m_stmt = nullptr;
     QString m_error;
 };
+
+// --- Health across drives -------------------------------------------------
+// Bump when a metric is added or its definition changes: trips summarised
+// under an older version get their health numbers worked out again on the
+// next trend query.
+const int kHealthVersion = 1;
+const double kHealthColdC = 40.0;        // a start below this is a cold start
+const double kHealthWarmC = 70.0;        // warmed up from here
+const qint64 kHealthSettleMs = 10 * 60 * 1000;   // coolant has settled by now
+
+const double kNoBand = std::numeric_limits<double>::quiet_NaN();
+
+struct HealthMetric {
+    const char *id;
+    const char *title;
+    const char *unit;          // UTF-8
+    int decimals;
+    double bandLo, bandHi;     // the usual range (NaN: none)
+    double changeAlert;        // recent vs earlier drives, in the unit
+    int worse;                 // +1 rising is the bad way, -1 falling, 0 either
+    const char *description;   // UTF-8
+    const char *lowNote;
+    const char *highNote;
+    const char *changeNote;
+};
+
+const HealthMetric kHealthMetrics[] = {
+    {"warmupMin", "Warm-up time", "min", 1, kNoBand, kNoBand, 2.0, +1,
+     "Minutes from a cold start (coolant under 40 \xC2\xB0""C) until the coolant reaches 70 \xC2\xB0""C. "
+     "Compare drives in similar weather.",
+     "", "",
+     "Taking longer to warm up than before: a thermostat stuck open is the usual cause."},
+    {"settledCoolant", "Running coolant", "\xC2\xB0""C", 0, 80.0, 105.0, 5.0, 0,
+     "Average coolant temperature after the first 10 minutes of a drive of 15 minutes or more.",
+     "Running cool: a thermostat stuck open keeps the engine below its working temperature.",
+     "Running hot: check the coolant level, the fan and the radiator.",
+     "The temperature the engine settles at has moved."},
+    {"idleVoltage", "Idle voltage", "V", 2, 13.0, 14.8, 0.3, -1,
+     "System voltage with the engine idling and the car stopped.",
+     "Low at idle: a weak alternator, a slipping belt or a tired battery.",
+     "High at idle: the voltage regulator may be overcharging.",
+     "The charging voltage at idle has dropped."},
+    {"chargingVoltage", "Charging voltage", "V", 2, 13.4, 14.8, 0.3, -1,
+     "System voltage with the engine above 1300 RPM.",
+     "Not charging fully: check the alternator and its belt.",
+     "Overcharging: the voltage regulator may be failing.",
+     "The charging voltage has dropped."},
+    {"idleRpm", "Warm idle", "RPM", 0, kNoBand, kNoBand, 100.0, 0,
+     "Engine speed at idle once warm (coolant 70 \xC2\xB0""C or more), car stopped.",
+     "", "",
+     "The warm idle speed has moved: a vacuum leak, a dirty throttle body or an idle valve."},
+    {"ltft1", "Long-term fuel trim 1", "%", 1, -10.0, 10.0, 4.0, 0,
+     "The fuel correction the engine has learned (bank 1) once warm. Positive: it adds fuel; negative: it takes fuel away.",
+     "Running rich: it is taking fuel away (leaky injector, high fuel pressure, a sensor).",
+     "Running lean: it is adding fuel (vacuum leak, weak fuel pump, dirty MAF).",
+     "The learned fuel correction has moved."},
+    {"ltft2", "Long-term fuel trim 2", "%", 1, -10.0, 10.0, 4.0, 0,
+     "The same for bank 2 (V engines).",
+     "Running rich on bank 2.",
+     "Running lean on bank 2.",
+     "The learned fuel correction on bank 2 has moved."},
+};
+
+struct HealthVerdict {
+    double recent = kNoBand;
+    double baseline = kNoBand;
+    QString status;
+    QString note;
+};
+
+// The last three drives against the ones before them (when there are at
+// least three), and against the usual range
+HealthVerdict judgeHealth(const HealthMetric &m, const QVector<double> &values)
+{
+    HealthVerdict v;
+    const int n = values.size();
+    if (n == 0) {
+        v.status = QStringLiteral("none");
+        v.note = QStringLiteral("No drive in this period has recorded it.");
+        return v;
+    }
+    auto mean = [&values](int from, int to) {
+        double s = 0.0;
+        for (int i = from; i < to; ++i)
+            s += values.at(i);
+        return s / std::max(1, to - from);
+    };
+    const int recentCount = std::min(3, n);
+    v.recent = mean(n - recentCount, n);
+    if (n - recentCount >= 3)
+        v.baseline = mean(0, n - recentCount);
+    const QString unit = QString::fromUtf8(m.unit);
+    auto fmt = [&m, &unit](double x) {
+        return QString::number(x, 'f', m.decimals) + (unit == QLatin1String("%") ? unit : QLatin1Char(' ') + unit);
+    };
+
+    if (!std::isnan(m.bandLo) && v.recent < m.bandLo) {
+        v.status = QStringLiteral("watch");
+        v.note = QStringLiteral("%1 lately, under the usual %2. %3")
+                     .arg(fmt(v.recent), fmt(m.bandLo), QString::fromUtf8(m.lowNote));
+        return v;
+    }
+    if (!std::isnan(m.bandHi) && v.recent > m.bandHi) {
+        v.status = QStringLiteral("watch");
+        v.note = QStringLiteral("%1 lately, over the usual %2. %3")
+                     .arg(fmt(v.recent), fmt(m.bandHi), QString::fromUtf8(m.highNote));
+        return v;
+    }
+    if (!std::isnan(v.baseline)) {
+        const double delta = v.recent - v.baseline;
+        const bool matters = m.worse == 0 || (m.worse > 0 ? delta > 0 : delta < 0);
+        if (matters && std::abs(delta) >= m.changeAlert) {
+            v.status = QStringLiteral("watch");
+            v.note = QStringLiteral("%1 on the last %2 drives, %3 before. %4")
+                         .arg(fmt(v.recent), QString::number(recentCount), fmt(v.baseline), QString::fromUtf8(m.changeNote));
+            return v;
+        }
+    }
+    v.status = QStringLiteral("ok");
+    if (std::isnan(v.baseline))
+        v.note = n < 4 ? QStringLiteral("A few more drives are needed to see a trend.")
+                       : QStringLiteral("In the usual range.");
+    else if (!std::isnan(m.bandLo))
+        v.note = QStringLiteral("Steady and in the usual range.");
+    else
+        v.note = QStringLiteral("Steady.");
+    return v;
+}
 } // namespace
 
 TripStore::TripStore(QObject *parent)
@@ -555,7 +685,267 @@ QVariantMap TripStore::summarise(qint64 id, qint64 startMs, qint64 endMs, bool c
     }
     s[QStringLiteral("events")] = events;
     s[QStringLiteral("eventCount")] = events.size();
+
+    s[QStringLiteral("health")] = computeHealth(id, startMs);
+    s[QStringLiteral("healthVersion")] = kHealthVersion;
     return s;
+}
+
+// ---------------------------------------------------------------------------
+// Health across drives
+// ---------------------------------------------------------------------------
+
+QVariantMap TripStore::computeHealth(qint64 id, qint64 startMs)
+{
+    QVariantMap health;
+    if (!isOpen())
+        return health;
+    const QHash<int, QString> names = paramNames();
+    QHash<int, int> kindOf;   // param row id -> Kind
+    enum Kind { Rpm, Speed, Coolant, Volt, Ltft1, Ltft2 };
+    const std::pair<const char *, Kind> wanted[] = {
+        {"RPM", Rpm}, {"SPEED", Speed}, {"COOLANT_TEMP", Coolant},
+        {"CONTROL_MODULE_VOLTAGE", Volt}, {"LONG_FUEL_TRIM_1", Ltft1}, {"LONG_FUEL_TRIM_2", Ltft2},
+    };
+    QStringList idList;
+    for (auto it = names.constBegin(); it != names.constEnd(); ++it) {
+        for (const auto &w : wanted) {
+            if (it.value() == QLatin1String(w.first)) {
+                kindOf.insert(it.key(), w.second);
+                idList << QString::number(it.key());
+            }
+        }
+    }
+    if (idList.isEmpty())
+        return health;
+
+    // One pass over the trip in time order, each reading judged against the
+    // latest value of the others (they are polled at different rates)
+    struct Avg {
+        double sum = 0.0;
+        int n = 0;
+        void add(double v) { sum += v; ++n; }
+        QVariant value(int minCount) const { return n >= minCount ? QVariant(sum / n) : QVariant(); }
+    };
+    Avg settled, idleVolt, chargeVolt, idleRpm, ltft1, ltft2;
+    bool haveRpm = false, haveSpeed = false, haveCoolant = false;
+    double rpm = 0.0, speed = 0.0, coolant = 0.0;
+    bool firstCoolant = true, coldStart = false;
+    qint64 warmAtMs = -1;
+    qint64 lastTs = startMs;
+
+    Query q(m_db);
+    // param ids are integers from our own table, safe to inline
+    const QString sql = QStringLiteral("SELECT ts_ms, param_id, value FROM samples WHERE trip_id = ? AND param_id IN (%1) "
+                                       "ORDER BY ts_ms").arg(idList.join(QLatin1Char(',')));
+    if (!q.prepare(sql))
+        return health;
+    q.bind(1, id);
+    while (q.step()) {
+        const qint64 ts = q.int64(0);
+        const int kind = kindOf.value(q.integer(1), -1);
+        const double v = q.dbl(2);
+        lastTs = std::max(lastTs, ts);
+        const bool stopped = !haveSpeed || speed < 1.0;
+        const bool warm = !haveCoolant || coolant >= kHealthWarmC;
+        switch (kind) {
+        case Rpm:
+            rpm = v;
+            haveRpm = true;
+            if (stopped && v > 300.0 && haveCoolant && coolant >= kHealthWarmC)
+                idleRpm.add(v);
+            break;
+        case Speed:
+            speed = v;
+            haveSpeed = true;
+            break;
+        case Coolant:
+            if (firstCoolant) {
+                firstCoolant = false;
+                coldStart = v < kHealthColdC;
+            }
+            coolant = v;
+            haveCoolant = true;
+            if (warmAtMs < 0 && v >= kHealthWarmC)
+                warmAtMs = ts;
+            if (ts - startMs >= kHealthSettleMs)
+                settled.add(v);
+            break;
+        case Volt:
+            if (haveRpm && rpm >= 400.0 && rpm <= 1100.0 && stopped)
+                idleVolt.add(v);
+            else if (haveRpm && rpm > 1300.0)
+                chargeVolt.add(v);
+            break;
+        case Ltft1:
+            if (warm)
+                ltft1.add(v);
+            break;
+        case Ltft2:
+            if (warm)
+                ltft2.add(v);
+            break;
+        default:
+            break;
+        }
+    }
+    auto put = [&health](const char *key, const QVariant &v) {
+        if (v.isValid())
+            health[QLatin1String(key)] = v;
+    };
+    if (coldStart && warmAtMs >= 0)
+        put("warmupMin", static_cast<double>(warmAtMs - startMs) / 60000.0);
+    // Only a drive that ran well past the settling point says what the coolant settles at
+    if (lastTs - startMs >= kHealthSettleMs + 5 * 60 * 1000)
+        put("settledCoolant", settled.value(5));
+    put("idleVoltage", idleVolt.value(3));
+    put("chargingVoltage", chargeVolt.value(3));
+    put("idleRpm", idleRpm.value(5));
+    put("ltft1", ltft1.value(3));
+    put("ltft2", ltft2.value(3));
+    return health;
+}
+
+QList<QVariantMap> TripStore::closedSummaries(int days, qint64 nowMs)
+{
+    QList<QVariantMap> out;
+    if (!isOpen())
+        return out;
+    const qint64 fromMs = days > 0 ? nowMs - static_cast<qint64>(days) * 86400000LL : std::numeric_limits<qint64>::min();
+    struct Row { qint64 id; qint64 startMs; QString summary; };
+    QList<Row> rows;
+    {
+        Query q(m_db);
+        if (!q.prepare("SELECT id, start_ms, summary FROM trips WHERE end_ms IS NOT NULL AND start_ms >= ? "
+                       "AND start_ms <= ? ORDER BY start_ms ASC"))
+            return out;
+        q.bind(1, fromMs).bind(2, nowMs);
+        while (q.step())
+            rows.append({q.int64(0), q.int64(1), q.text(2)});
+    }
+    bool inTransaction = false;
+    Query upd(m_db);
+    for (const Row &r : rows) {
+        QVariantMap s = QJsonDocument::fromJson(r.summary.toUtf8()).object().toVariantMap();
+        if (s.value(QStringLiteral("healthVersion")).toInt() < kHealthVersion) {
+            // Summarised before these numbers existed: work them out once and keep them
+            s[QStringLiteral("health")] = computeHealth(r.id, r.startMs);
+            s[QStringLiteral("healthVersion")] = kHealthVersion;
+            if (!inTransaction)
+                inTransaction = exec(QStringLiteral("BEGIN"));
+            if (upd.prepare("UPDATE trips SET summary = ? WHERE id = ?")) {
+                upd.bind(1, QString::fromUtf8(QJsonDocument(QJsonObject::fromVariantMap(s)).toJson(QJsonDocument::Compact)))
+                    .bind(2, r.id)
+                    .exec();
+            }
+        }
+        s[QStringLiteral("id")] = r.id;
+        s[QStringLiteral("startMs")] = r.startMs;
+        out.append(s);
+    }
+    if (inTransaction && !exec(QStringLiteral("COMMIT")))
+        exec(QStringLiteral("ROLLBACK"));
+    return out;
+}
+
+QVariantMap TripStore::healthTrends(int days, qint64 nowMs)
+{
+    QVariantMap result;
+    result[QStringLiteral("days")] = days;
+    result[QStringLiteral("toMs")] = nowMs;
+    result[QStringLiteral("fromMs")] = days > 0 ? QVariant(nowMs - static_cast<qint64>(days) * 86400000LL) : QVariant();
+    const QList<QVariantMap> trips = closedSummaries(days, nowMs);
+    result[QStringLiteral("tripCount")] = trips.size();
+
+    QVariantList metrics;
+    for (const HealthMetric &m : kHealthMetrics) {
+        QVariantMap metric;
+        metric[QStringLiteral("id")] = QLatin1String(m.id);
+        metric[QStringLiteral("title")] = QLatin1String(m.title);
+        metric[QStringLiteral("unit")] = QString::fromUtf8(m.unit);
+        metric[QStringLiteral("decimals")] = m.decimals;
+        if (!std::isnan(m.bandLo))
+            metric[QStringLiteral("bandLo")] = m.bandLo;
+        if (!std::isnan(m.bandHi))
+            metric[QStringLiteral("bandHi")] = m.bandHi;
+        metric[QStringLiteral("description")] = QString::fromUtf8(m.description);
+        QVariantList rows;
+        QVector<double> values;
+        for (const QVariantMap &t : trips) {
+            const QVariant v = t.value(QStringLiteral("health")).toMap().value(QLatin1String(m.id));
+            if (!v.isValid())
+                continue;
+            QVariantMap row;
+            row[QStringLiteral("id")] = t.value(QStringLiteral("id"));
+            row[QStringLiteral("startMs")] = t.value(QStringLiteral("startMs"));
+            row[QStringLiteral("v")] = v.toDouble();
+            rows.append(row);
+            values.append(v.toDouble());
+        }
+        metric[QStringLiteral("rows")] = rows;
+        const HealthVerdict verdict = judgeHealth(m, values);
+        if (!values.isEmpty())
+            metric[QStringLiteral("latest")] = values.last();
+        if (!std::isnan(verdict.recent))
+            metric[QStringLiteral("recent")] = verdict.recent;
+        if (!std::isnan(verdict.baseline))
+            metric[QStringLiteral("baseline")] = verdict.baseline;
+        metric[QStringLiteral("status")] = verdict.status;
+        metric[QStringLiteral("note")] = verdict.note;
+        metrics.append(metric);
+    }
+    result[QStringLiteral("metrics")] = metrics;
+
+    // Every parameter recorded in the window, for the per-parameter trend
+    QHash<QString, int> tripsWith;
+    for (const QVariantMap &t : trips) {
+        for (const QVariant &p : t.value(QStringLiteral("params")).toList())
+            ++tripsWith[p.toMap().value(QStringLiteral("id")).toString()];
+    }
+    QStringList ids = tripsWith.keys();
+    std::sort(ids.begin(), ids.end(), [&tripsWith](const QString &a, const QString &b) {
+        const int ca = tripsWith.value(a), cb = tripsWith.value(b);
+        return ca != cb ? ca > cb : a < b;
+    });
+    QVariantList params;
+    for (const QString &pid : ids) {
+        QVariantMap p;
+        p[QStringLiteral("id")] = pid;
+        p[QStringLiteral("trips")] = tripsWith.value(pid);
+        if (const ParameterCatalog::Parameter *meta = ParameterCatalog::find(pid)) {
+            p[QStringLiteral("title")] = meta->title;
+            p[QStringLiteral("unit")] = meta->unit;
+        } else {
+            p[QStringLiteral("title")] = pid;
+            p[QStringLiteral("unit")] = QString();
+        }
+        params.append(p);
+    }
+    result[QStringLiteral("params")] = params;
+    emit healthTrendsReady(days, result);
+    return result;
+}
+
+QVariantList TripStore::paramTrend(const QString &paramId, int days, qint64 nowMs)
+{
+    QVariantList rows;
+    for (const QVariantMap &t : closedSummaries(days, nowMs)) {
+        for (const QVariant &pv : t.value(QStringLiteral("params")).toList()) {
+            const QVariantMap p = pv.toMap();
+            if (p.value(QStringLiteral("id")).toString() != paramId)
+                continue;
+            QVariantMap row;
+            row[QStringLiteral("id")] = t.value(QStringLiteral("id"));
+            row[QStringLiteral("startMs")] = t.value(QStringLiteral("startMs"));
+            row[QStringLiteral("v")] = p.value(QStringLiteral("avg")).toDouble();
+            row[QStringLiteral("lo")] = p.value(QStringLiteral("min")).toDouble();
+            row[QStringLiteral("hi")] = p.value(QStringLiteral("max")).toDouble();
+            rows.append(row);
+            break;
+        }
+    }
+    emit paramTrendReady(paramId, days, rows);
+    return rows;
 }
 
 // ---------------------------------------------------------------------------

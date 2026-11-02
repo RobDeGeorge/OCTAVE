@@ -77,6 +77,31 @@ public:
     // chart gets full detail. Emits seriesReady().
     QVariantList series(qint64 id, const QString &paramId, int maxPoints, double fromS = -1, double toS = -1);
 
+    // --- health across drives ---
+    // Every closed trip's summary carries `health`: a few numbers worked out
+    // once at endTrip() from its samples (warm-up time, running coolant, idle
+    // and charging voltage, warm idle RPM, long-term fuel trims; definitions
+    // in kHealthMetrics, tripstore.cpp). Trips summarised before a metric
+    // existed are filled in on the first trend query that reaches them.
+    //
+    // healthTrends: the closed trips that started in the last `days` days
+    // (<= 0: all of them) before `nowMs`, oldest first, as
+    //   { days, fromMs, toMs, tripCount,
+    //     metrics: [{ id, title, unit, decimals, bandLo, bandHi (absent: no
+    //                 normal band), description, rows: [{ id, startMs, v }],
+    //                 latest, recent, baseline, status ("ok" | "watch" |
+    //                 "none"), note }],
+    //     params:  [{ id, title, unit, trips }] (every parameter recorded in
+    //               the window, most trips first) }
+    // Emits healthTrendsReady().
+    QVariantMap healthTrends(int days, qint64 nowMs);
+    // One parameter across the same window: [{ id, startMs, v (avg), lo
+    // (min), hi (max) }] per trip that recorded it, oldest first, from the
+    // stored summaries (no sample scan). Emits paramTrendReady().
+    QVariantList paramTrend(const QString &paramId, int days, qint64 nowMs);
+    // Per-trip health numbers of trip `id` from its samples (tests, summarise)
+    QVariantMap computeHealth(qint64 id, qint64 startMs);
+
     // --- housekeeping ---
     bool deleteTrip(qint64 id);               // rows + files
     void clearAll();
@@ -100,6 +125,8 @@ signals:
     void detailReady(qint64 id, const QVariantMap &detail);
     void seriesReady(qint64 id, const QString &paramId, const QVariantList &points);
     void exportFinished(qint64 id, const QString &path);
+    void healthTrendsReady(int days, const QVariantMap &result);
+    void paramTrendReady(const QString &paramId, int days, const QVariantList &rows);
     void storageChanged(qint64 bytes);
     void error(const QString &message);
 
@@ -111,6 +138,8 @@ private:
     QVariantMap summarise(qint64 id, qint64 startMs, qint64 endMs, bool clean, const QVariantMap &meta);
     QVariantMap rowSummary(const QVariantMap &row);   // trips row -> list item
     QVariantMap tripRow(qint64 id);
+    // Summaries of the closed trips in the window, oldest first, health filled in
+    QList<QVariantMap> closedSummaries(int days, qint64 nowMs);
     bool writeTripFiles(qint64 id, qint64 startMs, const QVariantMap &summary, QString *base);
     static QString stampFor(qint64 startMs);
     void removeTripFiles(const QString &base);

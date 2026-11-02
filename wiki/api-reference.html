@@ -1173,13 +1173,17 @@
             <tr><td><code>requestSeries(qlonglong id, QString paramId, int maxPoints, double fromS)</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>requestSeries(qlonglong id, QString paramId, int maxPoints)</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>requestSeries(qlonglong id, QString paramId)</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>requestHealthTrends(int days)</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>requestHealthTrends()</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>requestParamTrend(QString paramId, int days)</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>requestParamTrend(QString paramId)</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>deleteTrip(qlonglong id)</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
             <tr><td><code>clearHistory()</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
             <tr><td><code>exportTrip(qlonglong id)</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
             <tr><td><code>openHistoryFolder()</code></td><td><code>bool</code></td><td>slot</td><td><code>system</code></td></tr>
           </tbody>
         </table>
-        <p><strong>Signals</strong> (<code>subscribe</code>): <code>enabledChanged(bool enabled)</code>, <code>storeReadyChanged()</code>, <code>recordingChanged()</code>, <code>currentSampleCountChanged()</code>, <code>currentTripElapsedSChanged()</code>, <code>liveTripChanged(qlonglong id)</code>, <code>tripsChanged()</code>, <code>historyDirChanged()</code>, <code>storageBytesChanged()</code>, <code>lastExportPathChanged()</code>, <code>lastErrorChanged()</code>, <code>tripStarted(qlonglong id)</code>, <code>tripEnded(qlonglong id, QVariantMap summary)</code>, <code>detailReady(qlonglong id, QVariantMap detail)</code>, <code>seriesReady(qlonglong id, QString paramId, QVariantList points)</code>, <code>exportFinished(qlonglong id, QString path)</code>.</p>
+        <p><strong>Signals</strong> (<code>subscribe</code>): <code>enabledChanged(bool enabled)</code>, <code>storeReadyChanged()</code>, <code>recordingChanged()</code>, <code>currentSampleCountChanged()</code>, <code>currentTripElapsedSChanged()</code>, <code>liveTripChanged(qlonglong id)</code>, <code>tripsChanged()</code>, <code>historyDirChanged()</code>, <code>storageBytesChanged()</code>, <code>lastExportPathChanged()</code>, <code>lastErrorChanged()</code>, <code>tripStarted(qlonglong id)</code>, <code>tripEnded(qlonglong id, QVariantMap summary)</code>, <code>detailReady(qlonglong id, QVariantMap detail)</code>, <code>seriesReady(qlonglong id, QString paramId, QVariantList points)</code>, <code>exportFinished(qlonglong id, QString path)</code>, <code>healthTrendsReady(int days, QVariantMap result)</code>, <code>paramTrendReady(QString paramId, int days, QVariantList rows)</code>.</p>
 
         <h3 id="units"><code>units</code> <span class="cmt">&mdash; Units</span></h3>
         <p>Hand-written notes: <a href="signals-slots-reference.html#units">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/units.json</span>.</p>

@@ -4882,6 +4882,26 @@ func (o TripRecorder) RequestSeries2(id int64, paramId string) error {
 	return o.c.Call("tripRecorder", "requestSeries", nil, id, paramId)
 }
 
+// RequestHealthTrends1 calls requestHealthTrends(int).
+func (o TripRecorder) RequestHealthTrends1(days int) error {
+	return o.c.Call("tripRecorder", "requestHealthTrends", nil, days)
+}
+
+// RequestHealthTrends0 calls requestHealthTrends().
+func (o TripRecorder) RequestHealthTrends0() error {
+	return o.c.Call("tripRecorder", "requestHealthTrends", nil)
+}
+
+// RequestParamTrend2 calls requestParamTrend(QString, int).
+func (o TripRecorder) RequestParamTrend2(paramId string, days int) error {
+	return o.c.Call("tripRecorder", "requestParamTrend", nil, paramId, days)
+}
+
+// RequestParamTrend1 calls requestParamTrend(QString).
+func (o TripRecorder) RequestParamTrend1(paramId string) error {
+	return o.c.Call("tripRecorder", "requestParamTrend", nil, paramId)
+}
+
 // DeleteTrip calls deleteTrip(qlonglong).
 func (o TripRecorder) DeleteTrip(id int64) error {
 	return o.c.Call("tripRecorder", "deleteTrip", nil, id)

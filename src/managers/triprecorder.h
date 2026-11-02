@@ -47,7 +47,7 @@ class TripRecorder : public QObject
     Q_OBJECT
     // Service permissions (src/service/servicescopes.h)
     Q_CLASSINFO("octave.scope", "files")
-    Q_CLASSINFO("octave.scope.read", "refresh requestDetail requestSeries")
+    Q_CLASSINFO("octave.scope.read", "refresh requestDetail requestSeries requestHealthTrends requestParamTrend")
     Q_CLASSINFO("octave.scope.system", "openHistoryFolder")
     Q_CLASSINFO("octave.scope.full", "noteEvent recordSample setConnected setVehicleIdentity setVehicleParameters")
 
@@ -137,6 +137,11 @@ public slots:
     // -> seriesReady; fromS / toS (seconds since trip start, negative = whole trip) window the query
     Q_INVOKABLE void requestSeries(qint64 id, const QString &paramId, int maxPoints = 400,
                                    double fromS = -1, double toS = -1);
+    // Health across drives (see TripStore::healthTrends): the closed trips of
+    // the last `days` days (<= 0: all) -> healthTrendsReady
+    Q_INVOKABLE void requestHealthTrends(int days = 30);
+    // One parameter's per-trip min / avg / max over the same window -> paramTrendReady
+    Q_INVOKABLE void requestParamTrend(const QString &paramId, int days = 30);
     Q_INVOKABLE void deleteTrip(qint64 id);
     Q_INVOKABLE void clearHistory();               // everything but the trip being recorded
     Q_INVOKABLE void exportTrip(qint64 id);        // copy CSV + JSON to Downloads -> exportFinished
@@ -162,6 +167,8 @@ signals:
     void detailReady(qint64 id, const QVariantMap &detail);
     void seriesReady(qint64 id, const QString &paramId, const QVariantList &points);
     void exportFinished(qint64 id, const QString &path);
+    void healthTrendsReady(int days, const QVariantMap &result);
+    void paramTrendReady(const QString &paramId, int days, const QVariantList &rows);
 
 private:
     qint64 nowMs() const;

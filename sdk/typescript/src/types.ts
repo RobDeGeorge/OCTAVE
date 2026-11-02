@@ -1804,6 +1804,8 @@ export interface TripRecorder {
     refresh: { args: []; returns: void }
     requestDetail: { args: [id: number]; returns: void }
     requestSeries: { args: [id: number, paramId: string, maxPoints: number, fromS: number, toS: number] | [id: number, paramId: string, maxPoints: number, fromS: number] | [id: number, paramId: string, maxPoints: number] | [id: number, paramId: string]; returns: void }
+    requestHealthTrends: { args: [days: number] | []; returns: void }
+    requestParamTrend: { args: [paramId: string, days: number] | [paramId: string]; returns: void }
     deleteTrip: { args: [id: number]; returns: void }
     clearHistory: { args: []; returns: void }
     exportTrip: { args: [id: number]; returns: void }
@@ -1826,6 +1828,8 @@ export interface TripRecorder {
     detailReady: [id: number, detail: Record<string, unknown>]
     seriesReady: [id: number, paramId: string, points: unknown[]]
     exportFinished: [id: number, path: string]
+    healthTrendsReady: [days: number, result: Record<string, unknown>]
+    paramTrendReady: [paramId: string, days: number, rows: unknown[]]
   }
 }
 

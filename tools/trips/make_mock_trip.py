@@ -5,6 +5,7 @@ page has something to show while designing the UI.
     python tools/trips/make_mock_trip.py                 # into the real history dir
     python tools/trips/make_mock_trip.py --history DIR   # e.g. a sandbox XDG_CONFIG_HOME copy
     python tools/trips/make_mock_trip.py --minutes 45 --start "2026-10-20 08:12"
+    python tools/trips/make_mock_trip.py --drives 40 --days 60 --drift thermostat
 
 Close OCTAVE first. The script inserts the trip, its samples and events into
 <history>/blackbox.sqlite the same way TripStore does, but leaves it open with
@@ -16,6 +17,15 @@ produces. Run it again for another drive (each gets a different start time).
 The drive: a cold start, a stop-and-go city stretch, a highway cruise, a short
 adapter dropout, and the return, with coolant / oil warming up, voltage dipping
 at idle, fuel trending down and the usual trims, loads and temperatures.
+
+--drives N --days D writes N drives of 10-35 minutes spread over the last D
+days (mornings and evenings, cold and warm starts), for the Trip History
+page's Trends view. --drift makes something wear out over the second half of
+them so the health trends have a story to tell:
+
+    thermostat   stuck opening: slower warm-up, the engine runs cooler
+    alternator   the charging voltage sags, worst at idle
+    lean         a growing vacuum leak: long-term fuel trim and warm idle creep up
 """
 from __future__ import annotations
 
@@ -81,7 +91,15 @@ def speed_profile(minutes: float):
     return target
 
 
-def build_samples(start_ms: int, minutes: float, seed: int):
+def build_samples(start_ms: int, minutes: float, seed: int, wear: dict | None = None,
+                  start_coolant: float = 24.0, ambient: float = 19.0):
+    """`wear` (0 = healthy) per --drift kind: thermostat, alternator, lean."""
+    wear = wear or {}
+    stat = wear.get("thermostat", 0.0)
+    alt = wear.get("alternator", 0.0)
+    lean = wear.get("lean", 0.0)
+    coolant_goal = 92.0 - 16.0 * stat           # a stuck-open thermostat settles low
+    coolant_rate = 0.0035 * (1.0 - 0.35 * stat)  # and warms slowly
     rng = random.Random(seed)
     target = speed_profile(minutes)
     total = int(minutes * 60)
@@ -98,11 +116,10 @@ def build_samples(start_ms: int, minutes: float, seed: int):
 
     speed = 0.0
     rpm = 820.0
-    coolant = 24.0
-    oil = 22.0
+    coolant = start_coolant
+    oil = start_coolant - 2.0
     fuel = 68.4
     gear_ratios = [3.83, 2.33, 1.44, 1.0, 0.79]
-    ambient = 19.0
     baro = 98.2
     dropout = (total * 0.5, total * 0.5 + 9)   # 9 s without the adapter
     for tick in range(total * 4):               # 4 Hz for the fast PIDs
@@ -124,7 +141,7 @@ def build_samples(start_ms: int, minutes: float, seed: int):
                 gear = g
                 break
         if speed < 1.0:
-            rpm = 780 + 60 * math.sin(t * 1.3) + rng.uniform(-25, 25)
+            rpm = 780 + 140 * lean + 60 * math.sin(t * 1.3) + rng.uniform(-25, 25)
             if t < 90:
                 rpm += 350 * max(0.0, 1 - t / 90)   # cold fast idle
         else:
@@ -140,10 +157,10 @@ def build_samples(start_ms: int, minutes: float, seed: int):
             put(ts, "TIMING_ADVANCE", 8 + (rpm - 800) / 180 - load * 0.08 + rng.uniform(-0.5, 0.5), 1)
             put(ts, "O2_B1S1", 0.45 + 0.4 * math.sin(t * 2.1) + rng.uniform(-0.05, 0.05), 3)
         if tick % 4 == 0:                      # 1 Hz
-            coolant += (92.0 - coolant) * 0.0022 + (0.004 if speed < 1 else 0)
-            oil += (104.0 - oil) * 0.0012
+            coolant += (coolant_goal - coolant) * coolant_rate + (0.004 if speed < 1 else 0)
+            oil += (104.0 - 10.0 * stat - oil) * 0.0012
             fuel -= (0.0010 + load * 0.00004) if speed > 0.5 else 0.0003
-            volt = 14.25 - (0.35 if speed < 0.5 else 0.0) + rng.uniform(-0.04, 0.04)
+            volt = 14.25 - 0.9 * alt - ((0.35 + 0.5 * alt) if speed < 0.5 else 0.0) + rng.uniform(-0.04, 0.04)
             put(ts, "COOLANT_TEMP", coolant, 0)
             put(ts, "OIL_TEMP", oil, 0)
             put(ts, "CONTROL_MODULE_VOLTAGE", volt, 2)
@@ -154,7 +171,7 @@ def build_samples(start_ms: int, minutes: float, seed: int):
             put(ts, "COMMANDED_EQUIV_RATIO", 14.7 + 0.3 * math.sin(t / 5.0), 2)
             put(ts, "RUN_TIME", t, 0)
         if tick % 20 == 0:                     # every 5 s: the slow background sweep
-            put(ts, "LONG_FUEL_TRIM_1", 2.3 + 0.2 * math.sin(t / 300), 1)
+            put(ts, "LONG_FUEL_TRIM_1", 2.3 + 9.5 * lean + 0.2 * math.sin(t / 300) + rng.uniform(-0.3, 0.3), 1)
             put(ts, "AMBIANT_AIR_TEMP", ambient + (0.5 if t > total / 2 else 0), 0)
             put(ts, "BAROMETRIC_PRESSURE", baro, 0)
             put(ts, "FUEL_PRESSURE", 379 + rng.uniform(-3, 3), 0)
@@ -170,6 +187,60 @@ def build_samples(start_ms: int, minutes: float, seed: int):
     return rows, events
 
 
+def insert_trip(db, start_ms: int, rows, events, vin: str) -> int:
+    db.execute("INSERT INTO trips(id, start_ms, vin, make, model_year) VALUES(?, ?, ?, ?, ?)",
+               (start_ms, start_ms, vin, "Jeep", 2003))
+    ids = {}
+    for _, param, _ in rows:
+        if param not in ids:
+            db.execute("INSERT OR IGNORE INTO params(name) VALUES(?)", (param,))
+            ids[param] = db.execute("SELECT id FROM params WHERE name = ?", (param,)).fetchone()[0]
+    db.executemany("INSERT INTO samples(trip_id, ts_ms, param_id, value) VALUES(?, ?, ?, ?)",
+                   [(start_ms, ts, ids[p], v) for ts, p, v in rows])
+    db.execute("UPDATE trips SET sample_count = ? WHERE id = ?", (len(rows), start_ms))
+    db.executemany("INSERT INTO events(trip_id, ts_ms, kind, detail) VALUES(?, ?, ?, ?)",
+                   [(start_ms, ts, k, d) for ts, k, d in events])
+    return len(ids)
+
+
+def fleet(db, args) -> int:
+    """--drives N over --days D, the last half wearing out per --drift."""
+    rng = random.Random(args.seed)
+    now = dt.datetime.now().replace(second=0, microsecond=0)
+    first_day = (now - dt.timedelta(days=args.days)).date()
+    starts = set()
+    while len(starts) < args.drives:
+        day = first_day + dt.timedelta(days=rng.randrange(args.days))
+        hour, minute = rng.choice([(7, 40), (8, 5), (12, 30), (17, 20), (18, 0), (21, 15)])
+        when = dt.datetime.combine(day, dt.time(hour, minute)) + dt.timedelta(minutes=rng.randrange(25))
+        if when < now - dt.timedelta(hours=1):
+            starts.add(when)
+    total_rows = 0
+    for n, start in enumerate(sorted(starts)):
+        start_ms = int(start.timestamp() * 1000)
+        if db.execute("SELECT 1 FROM trips WHERE id = ?", (start_ms,)).fetchone():
+            continue
+        # healthy for the first half, then wearing out to fully worn on the last drive
+        progress = n / max(1, args.drives - 1)
+        amount = max(0.0, (progress - 0.5) / 0.5)
+        wear = {args.drift: amount} if args.drift != "none" else {}
+        # seasons and time of day: cold mornings, warm afternoons, the odd restart while still warm
+        ambient = 8.0 + 10.0 * math.sin(math.pi * (start.timetuple().tm_yday - 100) / 183.0) \
+            + (6.0 if 11 <= start.hour <= 18 else 0.0) + rng.uniform(-3, 3)
+        warm_restart = rng.random() < 0.15
+        start_coolant = rng.uniform(60, 80) if warm_restart else ambient + rng.uniform(0, 4)
+        minutes = rng.uniform(10, 35)
+        rows, events = build_samples(start_ms, minutes, args.seed + n, wear, start_coolant, ambient)
+        insert_trip(db, start_ms, rows, events, args.vin)
+        db.commit()
+        total_rows += len(rows)
+        print(f"  {start:%Y-%m-%d %H:%M}  {minutes:4.1f} min  {args.drift} wear {amount:.2f}"
+              f"{'  warm restart' if warm_restart else ''}")
+    print(f"{len(starts)} mock drives, {total_rows} samples -> {args.history / 'blackbox.sqlite'}")
+    print("Start OCTAVE: it closes each trip with its own summariser (the first start takes a moment).")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--history", type=Path, default=default_history_dir(), help="OCTAVE history dir (default: the app's)")
@@ -177,6 +248,10 @@ def main() -> int:
     ap.add_argument("--start", help='local start time "YYYY-MM-DD HH:MM" (default: yesterday 08:12)')
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--vin", default="1J4FA49S03P123456")
+    ap.add_argument("--drives", type=int, default=0, help="write this many drives instead of one")
+    ap.add_argument("--days", type=int, default=60, help="spread --drives over the last DAYS days (default 60)")
+    ap.add_argument("--drift", choices=["none", "thermostat", "alternator", "lean"], default="thermostat",
+                    help="what wears out over the second half of --drives (default thermostat)")
     args = ap.parse_args()
 
     if args.start:
@@ -191,26 +266,17 @@ def main() -> int:
     try:
         for sql in SCHEMA:
             db.execute(sql)
+        if args.drives > 0:
+            return fleet(db, args)
         if db.execute("SELECT 1 FROM trips WHERE id = ?", (start_ms,)).fetchone():
             print(f"a trip already starts at {start:%Y-%m-%d %H:%M}; pick another --start", file=sys.stderr)
             return 1
         rows, events = build_samples(start_ms, args.minutes, args.seed)
-        db.execute("INSERT INTO trips(id, start_ms, vin, make, model_year) VALUES(?, ?, ?, ?, ?)",
-                   (start_ms, start_ms, args.vin, "Jeep", 2003))
-        ids = {}
-        for _, param, _ in rows:
-            if param not in ids:
-                db.execute("INSERT OR IGNORE INTO params(name) VALUES(?)", (param,))
-                ids[param] = db.execute("SELECT id FROM params WHERE name = ?", (param,)).fetchone()[0]
-        db.executemany("INSERT INTO samples(trip_id, ts_ms, param_id, value) VALUES(?, ?, ?, ?)",
-                       [(start_ms, ts, ids[p], v) for ts, p, v in rows])
-        db.execute("UPDATE trips SET sample_count = ? WHERE id = ?", (len(rows), start_ms))
-        db.executemany("INSERT INTO events(trip_id, ts_ms, kind, detail) VALUES(?, ?, ?, ?)",
-                       [(start_ms, ts, k, d) for ts, k, d in events])
+        n_params = insert_trip(db, start_ms, rows, events, args.vin)
         db.commit()
     finally:
         db.close()
-    print(f"mock drive {start:%Y-%m-%d %H:%M}, {args.minutes:g} min, {len(rows)} samples over {len(ids)} PIDs "
+    print(f"mock drive {start:%Y-%m-%d %H:%M}, {args.minutes:g} min, {len(rows)} samples over {n_params} PIDs "
           f"-> {args.history / 'blackbox.sqlite'}")
     print("Start OCTAVE: it closes the trip with its own summariser and writes the CSV + JSON under trips/.")
     return 0

@@ -138,6 +138,8 @@ void TripRecorder::start()
     });
     connect(m_store, &TripStore::detailReady, this, &TripRecorder::detailReady);
     connect(m_store, &TripStore::seriesReady, this, &TripRecorder::seriesReady);
+    connect(m_store, &TripStore::healthTrendsReady, this, &TripRecorder::healthTrendsReady);
+    connect(m_store, &TripStore::paramTrendReady, this, &TripRecorder::paramTrendReady);
     connect(m_store, &TripStore::exportFinished, this, [this](qint64 id, const QString &path) {
         if (!path.isEmpty()) {
             m_lastExportPath = path;
@@ -476,6 +478,18 @@ void TripRecorder::requestSeries(qint64 id, const QString &paramId, int maxPoint
     if (id == m_tripId && m_tripOpen)
         flush();
     onStore([id, paramId, maxPoints, fromS, toS](TripStore *store) { store->series(id, paramId, maxPoints, fromS, toS); });
+}
+
+void TripRecorder::requestHealthTrends(int days)
+{
+    const qint64 now = nowMs();
+    onStore([days, now](TripStore *store) { store->healthTrends(days, now); });
+}
+
+void TripRecorder::requestParamTrend(const QString &paramId, int days)
+{
+    const qint64 now = nowMs();
+    onStore([paramId, days, now](TripStore *store) { store->paramTrend(paramId, days, now); });
 }
 
 void TripRecorder::deleteTrip(qint64 id)

@@ -18,6 +18,7 @@
 #include "managers/settingsmanager.h"
 #include "managers/triprecorder.h"
 #include "managers/tripstore.h"
+#include "sqlite3.h"
 
 class TstTripRecorder : public QObject
 {
@@ -60,6 +61,38 @@ class TstTripRecorder : public QObject
         for (const QVariant &t : trips) {
             if (t.toMap().value(QStringLiteral("id")).toLongLong() == id)
                 return t.toMap();
+        }
+        return {};
+    }
+
+    // A 20-minute drive, one reading set per second: a cold start (20 °C)
+    // with the coolant climbing 1 °C every `warmStepS` seconds to `settledC`,
+    // one minute of cold idle, 14 minutes at 40 mph, five minutes of warm idle
+    static void addHealthDrive(TripStore &store, qint64 id, int warmStepS = 5, float settledC = 90.0f,
+                               float idleVolt = 13.8f, float ltft = 3.0f)
+    {
+        store.beginTrip(id, id, {});
+        QVector<TripSample> b;
+        for (int t = 0; t < 20 * 60; ++t) {
+            const qint64 ts = id + t * 1000LL;
+            const bool idle = t < 60 || t >= 15 * 60;
+            const float coolant = std::min(settledC, 20.0f + float(t / warmStepS));
+            b.append({id, ts, QStringLiteral("RPM"), idle ? (t < 60 ? 1000.0f : 750.0f) : 2000.0f});
+            b.append({id, ts, QStringLiteral("SPEED"), idle ? 0.0f : 40.0f});
+            b.append({id, ts, QStringLiteral("COOLANT_TEMP"), coolant});
+            b.append({id, ts, QStringLiteral("CONTROL_MODULE_VOLTAGE"), idle ? idleVolt : 14.3f});
+            // Cold-engine trims are open loop and must not count
+            b.append({id, ts, QStringLiteral("LONG_FUEL_TRIM_1"), coolant >= 70.0f ? ltft : 20.0f});
+        }
+        store.append(b);
+        store.endTrip(id, id + 20 * 60 * 1000LL, true);
+    }
+
+    static QVariantMap metricById(const QVariantMap &trends, const QString &id)
+    {
+        for (const QVariant &m : trends.value(QStringLiteral("metrics")).toList()) {
+            if (m.toMap().value(QStringLiteral("id")).toString() == id)
+                return m.toMap();
         }
         return {};
     }
@@ -256,6 +289,156 @@ private slots:
         store.clearAll();
         QCOMPARE(store.listTrips().size(), 1);   // only the open trip
         QCOMPARE(QDir(store.tripsDir()).entryList(QDir::Files).size(), 0);
+    }
+
+    // ---- Health across drives ---------------------------------------------
+
+    void storeWorksOutHealthPerTrip()
+    {
+        TripStore store;
+        QVERIFY(store.open(m_tmp->path() + "/store"));
+        const qint64 id = 1'700'000'000'000LL;
+        addHealthDrive(store, id);
+        const QVariantMap detail = store.tripDetail(id);
+        QCOMPARE(detail.value("healthVersion").toInt(), 1);
+        const QVariantMap h = detail.value("health").toMap();
+        // 20 -> 70 °C at 1 °C per 5 s: 250 s
+        QVERIFY2(qAbs(h.value("warmupMin").toDouble() - 250.0 / 60.0) < 0.01, qPrintable(h.value("warmupMin").toString()));
+        QCOMPARE(h.value("settledCoolant").toDouble(), 90.0);
+        // Both idle stretches (cold at 1000 RPM, warm at 750) are idle; the drive is not
+        QVERIFY(qAbs(h.value("idleVoltage").toDouble() - 13.8) < 0.001);
+        QVERIFY(qAbs(h.value("chargingVoltage").toDouble() - 14.3) < 0.001);
+        // Warm idle only: the cold fast idle is left out
+        QCOMPARE(h.value("idleRpm").toDouble(), 750.0);
+        QVERIFY(qAbs(h.value("ltft1").toDouble() - 3.0) < 0.001);
+        QVERIFY(!h.contains("ltft2"));
+
+        // A warm start has no warm-up time; a short drive no running coolant
+        const qint64 id2 = id + 86'400'000LL;
+        store.beginTrip(id2, id2, {});
+        QVector<TripSample> b;
+        for (int t = 0; t < 300; ++t) {
+            b.append({id2, id2 + t * 1000LL, QStringLiteral("RPM"), 2000.0f});
+            b.append({id2, id2 + t * 1000LL, QStringLiteral("COOLANT_TEMP"), 85.0f});
+        }
+        store.append(b);
+        const QVariantMap h2 = store.endTrip(id2, id2 + 300000, true).value("health").toMap();
+        QVERIFY(!h2.contains("warmupMin"));
+        QVERIFY(!h2.contains("settledCoolant"));
+        QVERIFY(!h2.contains("idleVoltage"));
+    }
+
+    void storeTrendsAcrossDrivesFlagADrift()
+    {
+        TripStore store;
+        QVERIFY(store.open(m_tmp->path() + "/store"));
+        const qint64 day = 86'400'000LL;
+        const qint64 base = 1'700'000'000'000LL;
+        // Eight daily drives; the last three with a thermostat stuck open:
+        // slower to warm (1 °C every 9 s) and settling at 76 °C
+        for (int n = 0; n < 8; ++n) {
+            const bool failing = n >= 5;
+            addHealthDrive(store, base + n * day, failing ? 9 : 5, failing ? 76.0f : 90.0f);
+        }
+        // A trip being recorded is not part of any trend
+        store.beginTrip(base + 8 * day, base + 8 * day, {});
+        store.append({{base + 8 * day, base + 8 * day + 1000, QStringLiteral("RPM"), 800.0f}});
+
+        const qint64 now = base + 8 * day + 3'600'000LL;
+        QSignalSpy ready(&store, &TripStore::healthTrendsReady);
+        const QVariantMap all = store.healthTrends(0, now);
+        QCOMPARE(ready.count(), 1);
+        QCOMPARE(all.value("tripCount").toInt(), 8);
+
+        const QVariantMap warmup = metricById(all, "warmupMin");
+        const QVariantList rows = warmup.value("rows").toList();
+        QCOMPARE(rows.size(), 8);
+        for (int i = 1; i < rows.size(); ++i)   // oldest first
+            QVERIFY(rows.at(i).toMap().value("startMs").toLongLong() > rows.at(i - 1).toMap().value("startMs").toLongLong());
+        QVERIFY(qAbs(warmup.value("baseline").toDouble() - 250.0 / 60.0) < 0.01);
+        QVERIFY(qAbs(warmup.value("recent").toDouble() - 450.0 / 60.0) < 0.01);
+        QCOMPARE(warmup.value("status").toString(), QStringLiteral("watch"));
+        QVERIFY(!warmup.contains("bandLo"));
+
+        const QVariantMap coolant = metricById(all, "settledCoolant");
+        QCOMPARE(coolant.value("status").toString(), QStringLiteral("watch"));
+        QCOMPARE(coolant.value("latest").toDouble(), 76.0);
+        QCOMPARE(coolant.value("bandLo").toDouble(), 80.0);
+        QVERIFY(coolant.value("note").toString().contains("under the usual"));
+
+        const QVariantMap volt = metricById(all, "idleVoltage");
+        QCOMPARE(volt.value("status").toString(), QStringLiteral("ok"));
+        QCOMPARE(metricById(all, "ltft2").value("status").toString(), QStringLiteral("none"));
+        QVERIFY(metricById(all, "ltft2").value("rows").toList().isEmpty());
+
+        // Every recorded parameter, most trips first
+        const QVariantList params = all.value("params").toList();
+        QCOMPARE(params.size(), 5);
+        QCOMPARE(params.first().toMap().value("trips").toInt(), 8);
+
+        // The window: the last four days hold three drives (days 5-7), too few for a baseline
+        const QVariantMap recent = store.healthTrends(4, now);
+        QCOMPARE(recent.value("tripCount").toInt(), 3);
+        QVERIFY(!metricById(recent, "warmupMin").contains("baseline"));
+        QCOMPARE(metricById(recent, "warmupMin").value("status").toString(), QStringLiteral("ok"));
+
+        // One parameter, per trip, from the summaries
+        QSignalSpy paramReady(&store, &TripStore::paramTrendReady);
+        const QVariantList coolantRows = store.paramTrend("COOLANT_TEMP", 0, now);
+        QCOMPARE(paramReady.count(), 1);
+        QCOMPARE(coolantRows.size(), 8);
+        QCOMPARE(coolantRows.first().toMap().value("lo").toDouble(), 20.0);
+        QCOMPARE(coolantRows.first().toMap().value("hi").toDouble(), 90.0);
+        QCOMPARE(coolantRows.last().toMap().value("hi").toDouble(), 76.0);
+        QVERIFY(store.paramTrend("NOT_RECORDED", 0, now).isEmpty());
+    }
+
+    void storeFillsInHealthForOlderTrips()
+    {
+        const QString dir = m_tmp->path() + "/store";
+        const qint64 id = 1'700'000'000'000LL;
+        {
+            TripStore store;
+            QVERIFY(store.open(dir));
+            addHealthDrive(store, id);
+        }
+        // A summary written before the health numbers existed
+        {
+            sqlite3 *db = nullptr;
+            QCOMPARE(sqlite3_open((dir + "/blackbox.sqlite").toUtf8().constData(), &db), SQLITE_OK);
+            QCOMPARE(sqlite3_exec(db, "UPDATE trips SET summary = json_remove(summary, '$.health', '$.healthVersion')",
+                                  nullptr, nullptr, nullptr), SQLITE_OK);
+            sqlite3_close(db);
+        }
+        TripStore store;
+        QVERIFY(store.open(dir));
+        QVERIFY(!store.tripDetail(id).contains("health"));
+        const QVariantMap trends = store.healthTrends(0, id + 86'400'000LL);
+        QCOMPARE(metricById(trends, "idleRpm").value("rows").toList().size(), 1);
+        // ... and kept, so the next query reads it from the summary
+        const QVariantMap detail = store.tripDetail(id);
+        QCOMPARE(detail.value("healthVersion").toInt(), 1);
+        QCOMPARE(detail.value("health").toMap().value("idleRpm").toDouble(), 750.0);
+    }
+
+    void recorderServesTrendsFromItsThread()
+    {
+        auto r = makeRecorder();
+        drive(*r, 30, 30.0f);
+        r->endTripNow();
+        QTRY_COMPARE(r->trips().size(), 1);
+        QSignalSpy ready(r.get(), &TripRecorder::healthTrendsReady);
+        r->requestHealthTrends(7);
+        QTRY_COMPARE(ready.count(), 1);
+        QCOMPARE(ready.first().at(0).toInt(), 7);
+        QCOMPARE(ready.first().at(1).toMap().value("tripCount").toInt(), 1);
+        QSignalSpy param(r.get(), &TripRecorder::paramTrendReady);
+        r->requestParamTrend("SPEED", 7);
+        QTRY_COMPARE(param.count(), 1);
+        QCOMPARE(param.first().at(0).toString(), QStringLiteral("SPEED"));
+        QCOMPARE(param.first().at(2).toList().size(), 1);
+        QCOMPARE(param.first().at(2).toList().first().toMap().value("hi").toDouble(), 30.0);
+        r->shutdown();
     }
 
     // ---- TripRecorder ------------------------------------------------------

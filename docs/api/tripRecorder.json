@@ -207,6 +207,54 @@
         },
         {
             "kind": "slot",
+            "name": "requestHealthTrends",
+            "params": [
+                {
+                    "name": "days",
+                    "type": "int"
+                }
+            ],
+            "returns": "",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "requestHealthTrends",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "requestParamTrend",
+            "params": [
+                {
+                    "name": "paramId",
+                    "type": "QString"
+                },
+                {
+                    "name": "days",
+                    "type": "int"
+                }
+            ],
+            "returns": "",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "requestParamTrend",
+            "params": [
+                {
+                    "name": "paramId",
+                    "type": "QString"
+                }
+            ],
+            "returns": "",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
             "name": "deleteTrip",
             "params": [
                 {
@@ -486,6 +534,36 @@
                 {
                     "name": "path",
                     "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "healthTrendsReady",
+            "params": [
+                {
+                    "name": "days",
+                    "type": "int"
+                },
+                {
+                    "name": "result",
+                    "type": "QVariantMap"
+                }
+            ]
+        },
+        {
+            "name": "paramTrendReady",
+            "params": [
+                {
+                    "name": "paramId",
+                    "type": "QString"
+                },
+                {
+                    "name": "days",
+                    "type": "int"
+                },
+                {
+                    "name": "rows",
+                    "type": "QVariantList"
                 }
             ]
         }
