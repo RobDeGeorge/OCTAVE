@@ -139,7 +139,7 @@ None of the extras touch the core adapter; they hang off the expansion port and 
 ## Cross-references
 
 - `obd-adapter-discovery.md`: steps 3 and the BLE-only future depend on its scan/pair work on each platform (BLE-on-desktop not started).
-- `trip-history.md`: step 5 and the sensor channels feed the black box and its health trends (battery/alternator health fits there).
+- The black box's health trends (`TripStore::computeHealth`, `kHealthMetrics` in `src/managers/tripstore.cpp`, shipped 2026-11-01): step 5 and the sensor channels feed them; a battery / alternator number from the pod is a new row there (bump `kHealthVersion`).
 - `dashboards-roadmap.md` / `docs/GAUGE_AUTHORING.md`: new parameters (pod sensors, temp probes) need PID metadata in `OBDParameterModel.qml` and the gauge doc.
 
 ## Recommended order

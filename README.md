@@ -215,7 +215,6 @@ Every clip and screenshot in this README is scripted. `./build/octave --dev --pr
 ## What's next
 
 - **Android on the Play Store**: the APK runs today as a sideload ([plan](TODO/android-cpp-port.md))
-- **Health trends across drives** on top of the black box ([plan](TODO/trip-history.md))
 - **Wireless CarPlay / Android Auto** through a CarlinKit dongle ([plan](TODO/carlinkit-dongle-port.md))
 - **Video over the API**, so your own frontend can show the phone mirror too ([plan](TODO/open-backend.md))
 

@@ -3,11 +3,16 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "." as App
 
-// Trip History -- the black box viewer. Left: every recorded drive, newest
-// first (the one being recorded on top, live). Right: the selected drive's
-// summary, a chart of any recorded parameter, its events, and export /
-// delete. Data comes from tripRecorder (TripRecorder, C++); the files it
-// lists are the same CSV + JSON a person can pull off the box.
+// Trip History -- the black box viewer, two views:
+//   Drives: left, every recorded drive, newest first (the one being recorded
+//     on top, live); right, the selected drive's summary and a chart of any
+//     recorded parameter.
+//   Trends: left, the car's health numbers across drives (warm-up time,
+//     running coolant, voltages, idle, fuel trims), each with a sparkline and
+//     a verdict; right, the selected number (or any recorded parameter) per
+//     drive over 7 / 30 / 90 days or everything, a tap opening that drive.
+// Data comes from tripRecorder (TripRecorder, C++); the files it lists are
+// the same CSV + JSON a person can pull off the box.
 Item {
     // Local dp/dpMin wrappers — work around Qt Android singleton-function bug.
     function dp(size) { return Math.round(size * (App.Spacing.effectiveScale || 1.0)) }
@@ -29,6 +34,66 @@ Item {
     readonly property bool available: typeof tripRecorder !== "undefined" && tripRecorder !== null
     readonly property var trips: available ? tripRecorder.trips : []
     readonly property bool recording: available && tripRecorder.recording
+
+    // "drives" or "trends"
+    property string view: "drives"
+
+    // Trends: the window, the answer to requestHealthTrends, and what the
+    // big chart shows (a health metric or any recorded parameter)
+    property int trendDays: 30
+    property var trends: ({})
+    property string trendKind: "metric"      // "metric" | "param"
+    property string trendId: ""
+    property var paramRows: []
+    readonly property var trendMetrics: trends && trends.metrics ? trends.metrics : []
+    readonly property var trendParams: trends && trends.params ? trends.params : []
+    readonly property var trendMetric: {
+        if (trendKind !== "metric") return null
+        for (var i = 0; i < trendMetrics.length; i++)
+            if (trendMetrics[i].id === trendId) return trendMetrics[i]
+        return null
+    }
+    readonly property var trendRows: trendKind === "metric" ? (trendMetric ? trendMetric.rows : []) : paramRows
+
+    function setView(v) {
+        view = v
+        if (v === "trends") fetchTrends()
+    }
+    function fetchTrends() {
+        if (!available) return
+        tripRecorder.requestHealthTrends(trendDays)
+        if (trendKind === "param" && trendId !== "") tripRecorder.requestParamTrend(trendId, trendDays)
+    }
+    function setTrendDays(d) {
+        if (d === trendDays) return
+        trendDays = d
+        fetchTrends()
+    }
+    function selectTrend(kind, id) {
+        trendKind = kind
+        trendId = id
+        paramRows = []
+        if (kind === "param" && available) tripRecorder.requestParamTrend(id, trendDays)
+    }
+    // A point on the trend chart: open that drive
+    function openTripFromTrend(id) {
+        for (var i = 0; i < trips.length; i++) {
+            if (trips[i].id === id) { view = "drives"; selectTrip(trips[i]); tripList.positionViewAtIndex(i, ListView.Contain); return }
+        }
+    }
+    function trendValue(v, decimals, unit) {
+        if (v === undefined || v === null || isNaN(v)) return "—"
+        return Number(v).toFixed(decimals) + (unit === "%" ? "%" : unit ? " " + unit : "")
+    }
+    function statusColor(status) {
+        return status === "watch" ? App.Style.statusWarning : status === "ok" ? App.Style.statusSuccess : labelColor
+    }
+    // Trips change when a drive ends (or one is deleted): the trends follow, once things settle
+    Timer {
+        id: trendRefetch
+        interval: 800
+        onTriggered: tripHistoryPage.fetchTrends()
+    }
 
     // Selection
     property var selectedTrip: null          // list item (summary) or null
@@ -132,6 +197,7 @@ Item {
     // Keep the selection pointing at fresh list data (the live trip's sample
     // count moves; a deleted trip drops out)
     onTripsChanged: {
+        if (view === "trends") trendRefetch.restart()
         if (!selectedTrip) return
         for (var i = 0; i < trips.length; i++) {
             if (trips[i].id === selectedTrip.id) { selectedTrip = trips[i]; return }
@@ -160,6 +226,24 @@ Item {
             if (!tripHistoryPage.selectedTrip || id !== tripHistoryPage.selectedTrip.id) return
             if (paramId !== tripHistoryPage.selectedParam) return
             tripHistoryPage.seriesPoints = points
+        }
+        function onHealthTrendsReady(days, result) {
+            if (days !== tripHistoryPage.trendDays) return
+            tripHistoryPage.trends = result
+            // First look: the first number that needs a look, else the first with data
+            if (tripHistoryPage.trendId === "") {
+                var ms = result.metrics || [], pick = ""
+                for (var i = 0; i < ms.length && pick === ""; i++)
+                    if (ms[i].status === "watch") pick = ms[i].id
+                for (var j = 0; j < ms.length && pick === ""; j++)
+                    if (ms[j].rows.length > 0) pick = ms[j].id
+                if (pick !== "") tripHistoryPage.selectTrend("metric", pick)
+            }
+        }
+        function onParamTrendReady(paramId, days, rows) {
+            if (days !== tripHistoryPage.trendDays || tripHistoryPage.trendKind !== "param"
+                    || paramId !== tripHistoryPage.trendId) return
+            tripHistoryPage.paramRows = rows
         }
         function onTripEnded(id, summary) {
             if (tripHistoryPage.selectedTrip && tripHistoryPage.selectedTrip.id === id)
@@ -249,8 +333,49 @@ Item {
                         }
                     }
 
+                    // Drives | Trends
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: dpMin(34, 28)
+                        radius: height / 2
+                        color: Qt.darker(backgroundColor, 1.1)
+                        border.color: Qt.rgba(labelColor.r, labelColor.g, labelColor.b, 0.5)
+                        border.width: 1
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.margins: 3
+                            spacing: 3
+                            Repeater {
+                                model: [{ id: "drives", label: "Drives" }, { id: "trends", label: "Trends" }]
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    readonly property bool active: tripHistoryPage.view === modelData.id
+                                    objectName: "tripView_" + modelData.id
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    radius: height / 2
+                                    color: active ? accentColor : "transparent"
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: modelData.label
+                                        color: active ? backgroundColor : textColor
+                                        font.pixelSize: App.Spacing.overallText * 0.75
+                                        font.bold: active
+                                        font.family: globalFont
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: tripHistoryPage.setView(modelData.id)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     ListView {
                         id: tripList
+                        visible: tripHistoryPage.view === "drives"
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         clip: true
@@ -346,6 +471,156 @@ Item {
                         }
                     }
 
+                    // Health numbers across drives
+                    ListView {
+                        id: metricList
+                        objectName: "tripTrendMetrics"
+                        visible: tripHistoryPage.view === "trends"
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+                        spacing: dp(6)
+                        // All "none" with no drives: the empty note says so instead
+                        model: tripHistoryPage.trends.tripCount > 0 ? tripHistoryPage.trendMetrics : []
+                        boundsBehavior: Flickable.StopAtBounds
+                        ScrollBar.vertical: ScrollBar { }
+
+                        delegate: Rectangle {
+                            id: metricCard
+                            required property var modelData
+                            readonly property bool selected: tripHistoryPage.trendKind === "metric"
+                                                             && tripHistoryPage.trendId === modelData.id
+                            objectName: "tripTrendMetric_" + modelData.id
+                            readonly property bool empty: modelData.rows.length === 0
+                            width: metricList.width - dp(8)
+                            height: metricCol.implicitHeight + dp(14)
+                            radius: dpMin(8, 3)
+                            opacity: empty ? 0.55 : 1.0
+                            color: selected ? Qt.rgba(accentColor.r, accentColor.g, accentColor.b, 0.22)
+                                 : metricMouse.containsMouse ? Qt.lighter(cardColor, 1.15) : Qt.darker(backgroundColor, 1.05)
+                            border.color: selected ? accentColor : "transparent"
+                            border.width: selected ? 2 : 0
+
+                            MouseArea {
+                                id: metricMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: tripHistoryPage.selectTrend("metric", modelData.id)
+                            }
+
+                            ColumnLayout {
+                                id: metricCol
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                anchors.margins: dp(10)
+                                spacing: dp(3)
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: dp(6)
+                                    Rectangle {
+                                        width: dp(9); height: dp(9); radius: width / 2
+                                        color: tripHistoryPage.statusColor(modelData.status)
+                                    }
+                                    Text {
+                                        text: modelData.title
+                                        color: textColor
+                                        font.pixelSize: App.Spacing.overallText * 0.8
+                                        font.bold: true
+                                        font.family: globalFont
+                                        elide: Text.ElideRight
+                                        Layout.fillWidth: true
+                                    }
+                                    Text {
+                                        text: metricCard.empty ? "No data"
+                                              : tripHistoryPage.trendValue(modelData.recent, modelData.decimals, modelData.unit)
+                                        color: modelData.status === "watch" ? App.Style.statusWarning : textColor
+                                        font.pixelSize: App.Spacing.overallText * 0.8
+                                        font.bold: !metricCard.empty
+                                        font.family: globalFont
+                                    }
+                                }
+                                // One dot per drive, the usual range shaded
+                                Canvas {
+                                    id: spark
+                                    visible: modelData.rows.length > 1
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: dp(26)
+                                    property var rows: modelData.rows
+                                    property color lineColor: modelData.status === "watch" ? App.Style.statusWarning : accentColor
+                                    onRowsChanged: requestPaint()
+                                    onWidthChanged: requestPaint()
+                                    onLineColorChanged: requestPaint()
+                                    onPaint: {
+                                        var ctx = getContext("2d")
+                                        ctx.reset()
+                                        var r = rows || []
+                                        if (r.length < 2 || width < 4) return
+                                        var lo = Infinity, hi = -Infinity
+                                        for (var i = 0; i < r.length; i++) { lo = Math.min(lo, r[i].v); hi = Math.max(hi, r[i].v) }
+                                        // The data sets the scale, but never finer than a quarter of the
+                                        // usual range (10 % of the value without one): noise stays flat.
+                                        // The usual range is shaded where it falls.
+                                        var bLo = modelData.bandLo, bHi = modelData.bandHi
+                                        var minSpan = bLo !== undefined && bHi !== undefined ? (bHi - bLo) * 0.25
+                                                                                         : Math.abs(hi + lo) / 2 * 0.1
+                                        var span = Math.max(1e-6, hi - lo)
+                                        if (span < minSpan) { var mid = (hi + lo) / 2; lo = mid - minSpan / 2; hi = mid + minSpan / 2; span = minSpan }
+                                        lo -= span * 0.1; hi += span * 0.1; span = hi - lo
+                                        var t0 = r[0].startMs, t1 = Math.max(t0 + 1, r[r.length - 1].startMs)
+                                        var X = function(t) { return 3 + (t - t0) / (t1 - t0) * (width - 6) }
+                                        var Y = function(v) { return height - 3 - (v - lo) / span * (height - 6) }
+                                        if (bLo !== undefined || bHi !== undefined) {
+                                            ctx.fillStyle = Qt.rgba(App.Style.statusSuccess.r, App.Style.statusSuccess.g, App.Style.statusSuccess.b, 0.12)
+                                            var top = bHi === undefined ? 0 : Math.max(0, Y(bHi))
+                                            var bottom = bLo === undefined ? height : Math.min(height, Y(bLo))
+                                            if (bottom > top) ctx.fillRect(0, top, width, bottom - top)
+                                        }
+                                        ctx.strokeStyle = lineColor
+                                        ctx.globalAlpha = 0.6
+                                        ctx.lineWidth = 1.5
+                                        ctx.beginPath()
+                                        ctx.moveTo(X(r[0].startMs), Y(r[0].v))
+                                        for (var j = 1; j < r.length; j++) ctx.lineTo(X(r[j].startMs), Y(r[j].v))
+                                        ctx.stroke()
+                                        ctx.globalAlpha = 1
+                                        ctx.fillStyle = lineColor
+                                        var last = r[r.length - 1]
+                                        ctx.beginPath()
+                                        ctx.arc(X(last.startMs), Y(last.v), 2.5, 0, Math.PI * 2)
+                                        ctx.fill()
+                                    }
+                                }
+                                Text {
+                                    text: modelData.note
+                                    color: modelData.status === "watch" ? App.Style.statusWarning : labelColor
+                                    font.pixelSize: App.Spacing.overallText * 0.65
+                                    font.family: globalFont
+                                    wrapMode: Text.WordWrap
+                                    maximumLineCount: metricCard.selected ? 4 : 1
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                            }
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            visible: metricList.count === 0
+                            width: parent.width - dp(32)
+                            horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.WordWrap
+                            text: tripHistoryPage.trends.tripCount === 0
+                                  ? "No finished drives in this period.\nThe health numbers come from every drive the black box records."
+                                  : "Loading…"
+                            color: labelColor
+                            font.pixelSize: App.Spacing.overallText * 0.85
+                            font.family: globalFont
+                        }
+                    }
+
                     // Storage footer
                     Text {
                         Layout.fillWidth: true
@@ -369,7 +644,7 @@ Item {
 
                 Text {
                     anchors.centerIn: parent
-                    visible: tripHistoryPage.selectedTrip === null
+                    visible: tripHistoryPage.view === "drives" && tripHistoryPage.selectedTrip === null
                     text: "Select a drive"
                     color: labelColor
                     font.pixelSize: App.Spacing.overallText
@@ -380,7 +655,7 @@ Item {
                     anchors.fill: parent
                     anchors.margins: dp(12)
                     spacing: dp(8)
-                    visible: tripHistoryPage.selectedTrip !== null
+                    visible: tripHistoryPage.view === "drives" && tripHistoryPage.selectedTrip !== null
 
                     // Title row
                     RowLayout {
@@ -746,6 +1021,305 @@ Item {
                         }
                     }
 
+                }
+
+                // ── Trends: one number (or parameter) across drives ──────
+                ColumnLayout {
+                    id: trendPanel
+                    objectName: "tripTrendPanel"
+                    anchors.fill: parent
+                    anchors.margins: dp(12)
+                    spacing: dp(8)
+                    visible: tripHistoryPage.view === "trends"
+
+                    readonly property string title: tripHistoryPage.trendKind === "metric"
+                                                    ? (tripHistoryPage.trendMetric ? tripHistoryPage.trendMetric.title : "")
+                                                    : paramTitle(tripHistoryPage.trendId)
+                    readonly property string unit: tripHistoryPage.trendKind === "metric"
+                                                   ? (tripHistoryPage.trendMetric ? tripHistoryPage.trendMetric.unit : "")
+                                                   : paramUnit(tripHistoryPage.trendId)
+                    readonly property int decimals: tripHistoryPage.trendKind === "metric"
+                                                    ? (tripHistoryPage.trendMetric ? tripHistoryPage.trendMetric.decimals : 1)
+                                                    : paramDecimals(tripHistoryPage.trendId)
+
+                    // Title + window
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: dp(6)
+                        Text {
+                            text: trendPanel.title + (trendPanel.unit ? "  (" + trendPanel.unit + ")" : "")
+                            color: textColor
+                            font.pixelSize: App.Spacing.overallText * 0.95
+                            font.bold: true
+                            font.family: globalFont
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                        Repeater {
+                            model: [{ d: 7, label: "7 d" }, { d: 30, label: "30 d" }, { d: 90, label: "90 d" }, { d: 0, label: "All" }]
+                            delegate: Rectangle {
+                                required property var modelData
+                                readonly property bool active: tripHistoryPage.trendDays === modelData.d
+                                objectName: "tripTrendDays_" + modelData.d
+                                implicitWidth: dayText.implicitWidth + dp(16)
+                                implicitHeight: dayText.implicitHeight + dp(8)
+                                radius: height / 2
+                                color: active ? accentColor : Qt.darker(backgroundColor, 1.1)
+                                border.color: active ? accentColor : labelColor
+                                border.width: 1
+                                Text {
+                                    id: dayText
+                                    anchors.centerIn: parent
+                                    text: modelData.label
+                                    color: active ? backgroundColor : textColor
+                                    font.pixelSize: App.Spacing.overallText * 0.7
+                                    font.bold: active
+                                    font.family: globalFont
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: tripHistoryPage.setTrendDays(modelData.d)
+                                }
+                            }
+                        }
+                    }
+
+                    // Verdict (a health number) or what the chart shows (a parameter)
+                    Text {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        maximumLineCount: 3
+                        elide: Text.ElideRight
+                        text: {
+                            var n = tripHistoryPage.trends.tripCount || 0
+                            var drives = n + (n === 1 ? " drive" : " drives")
+                                       + (tripHistoryPage.trendDays > 0 ? " in the last " + tripHistoryPage.trendDays + " days" : " in all")
+                            if (tripHistoryPage.trendKind === "metric") {
+                                var m = tripHistoryPage.trendMetric
+                                return m ? m.note + "  ·  " + drives : drives
+                            }
+                            return "Lowest, average and highest on each drive  ·  " + drives
+                        }
+                        color: tripHistoryPage.trendKind === "metric" && tripHistoryPage.trendMetric
+                               && tripHistoryPage.trendMetric.status === "watch" ? App.Style.statusWarning : labelColor
+                        font.pixelSize: App.Spacing.overallText * 0.72
+                        font.family: globalFont
+                    }
+
+                    // Any recorded parameter
+                    ListView {
+                        id: trendParamChips
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: dp(30)
+                        orientation: ListView.Horizontal
+                        spacing: dp(6)
+                        clip: true
+                        boundsBehavior: Flickable.StopAtBounds
+                        model: tripHistoryPage.trendParams
+                        delegate: Rectangle {
+                            required property var modelData
+                            readonly property bool active: tripHistoryPage.trendKind === "param" && modelData.id === tripHistoryPage.trendId
+                            objectName: "tripTrendParam_" + modelData.id
+                            height: trendParamChips.height
+                            width: trendChipText.implicitWidth + dp(18)
+                            radius: height / 2
+                            color: active ? accentColor : Qt.darker(backgroundColor, 1.1)
+                            border.color: active ? accentColor : Qt.rgba(labelColor.r, labelColor.g, labelColor.b, 0.6)
+                            border.width: 1
+                            Text {
+                                id: trendChipText
+                                anchors.centerIn: parent
+                                text: paramTitle(modelData.id)
+                                color: active ? backgroundColor : textColor
+                                font.pixelSize: App.Spacing.overallText * 0.68
+                                font.bold: active
+                                font.family: globalFont
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: tripHistoryPage.selectTrend("param", modelData.id)
+                            }
+                        }
+                    }
+
+                    // Chart: one point per drive over the window
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        radius: dpMin(8, 3)
+                        color: Qt.darker(backgroundColor, 1.15)
+
+                        Canvas {
+                            id: trendChart
+                            objectName: "tripTrendChart"
+                            anchors.fill: parent
+                            anchors.margins: dp(8)
+
+                            property var rows: tripHistoryPage.trendRows
+                            readonly property bool isParam: tripHistoryPage.trendKind === "param"
+                            readonly property var metric: tripHistoryPage.trendMetric
+                            property color lineColor: accentColor
+                            property color axisColor: labelColor
+                            property color warnColor: App.Style.statusWarning
+                            property color bandColor: App.Style.statusSuccess
+                            property string font: globalFont
+                            property int fontPx: Math.max(8, Math.round(App.Spacing.overallText * 0.6))
+                            readonly property real plotLeft: fontPx * 3.6
+                            readonly property real plotRight: 8
+                            readonly property real plotTop: fontPx * 0.8
+                            readonly property real plotBottom: fontPx * 2.0
+                            // Time window: the chosen days up to now, or from the first drive
+                            readonly property real t1: tripHistoryPage.trends.toMs || Date.now()
+                            readonly property real t0: {
+                                if (tripHistoryPage.trendDays > 0) return t1 - tripHistoryPage.trendDays * 86400000
+                                var r = rows || []
+                                return r.length > 0 ? Math.min(r[0].startMs - 43200000, t1 - 86400000) : t1 - 86400000
+                            }
+                            function xOf(t) { return plotLeft + (t - t0) / Math.max(1, t1 - t0) * (width - plotLeft - plotRight) }
+
+                            onRowsChanged: requestPaint()
+                            onMetricChanged: requestPaint()
+                            onWidthChanged: requestPaint()
+                            onHeightChanged: requestPaint()
+                            onLineColorChanged: requestPaint()
+                            onT0Changed: requestPaint()
+
+                            onPaint: {
+                                var ctx = getContext("2d")
+                                ctx.reset()
+                                var r = rows || []
+                                var left = plotLeft, top = plotTop, w = width - plotLeft - plotRight, h = height - plotTop - plotBottom
+                                if (w <= 10 || h <= 10) return
+                                ctx.font = fontPx + "px " + font
+                                ctx.fillStyle = axisColor
+                                ctx.strokeStyle = axisColor
+                                ctx.lineWidth = 1
+                                if (r.length === 0) {
+                                    ctx.textAlign = "center"
+                                    ctx.textBaseline = "middle"
+                                    ctx.fillText(isParam ? "No drive in this period recorded it"
+                                                         : "No drive in this period gave this number", left + w / 2, top + h / 2)
+                                    return
+                                }
+                                var m = isParam ? null : metric
+                                var bLo = m && m.bandLo !== undefined ? m.bandLo : NaN
+                                var bHi = m && m.bandHi !== undefined ? m.bandHi : NaN
+                                var base = m && m.baseline !== undefined ? m.baseline : NaN
+                                var lo = Infinity, hi = -Infinity
+                                for (var i = 0; i < r.length; i++) {
+                                    lo = Math.min(lo, isParam ? r[i].lo : r[i].v)
+                                    hi = Math.max(hi, isParam ? r[i].hi : r[i].v)
+                                }
+                                // Show the usual range when it is near the data
+                                var dataSpan = Math.max(1e-6, hi - lo)
+                                if (!isNaN(bLo) && bLo < lo && lo - bLo < dataSpan * 3 + 1) lo = bLo
+                                if (!isNaN(bHi) && bHi > hi && bHi - hi < dataSpan * 3 + 1) hi = bHi
+                                if (!isNaN(base)) { lo = Math.min(lo, base); hi = Math.max(hi, base) }
+                                var span = hi - lo
+                                if (span < 1e-6) { span = Math.max(1, Math.abs(hi) * 0.1); lo -= span / 2; hi += span / 2 }
+                                else { lo -= span * 0.08; hi += span * 0.08 }
+                                span = hi - lo
+                                var Y = function(v) { return top + h - (v - lo) / span * h }
+                                var X = xOf
+
+                                // Grid + value labels
+                                ctx.globalAlpha = 0.3
+                                for (var g = 0; g <= 4; g++) {
+                                    var gy = top + h * g / 4
+                                    ctx.beginPath(); ctx.moveTo(left, gy); ctx.lineTo(left + w, gy); ctx.stroke()
+                                }
+                                ctx.globalAlpha = 1
+                                ctx.textAlign = "right"
+                                ctx.textBaseline = "middle"
+                                for (var k = 0; k <= 4; k++)
+                                    ctx.fillText(Number(hi - span * k / 4).toFixed(span < 5 ? 1 : 0), left - 4, top + h * k / 4)
+                                // Date labels, the outer two kept inside the plot
+                                ctx.textBaseline = "top"
+                                for (var d = 0; d <= 4; d++) {
+                                    var t = t0 + (t1 - t0) * d / 4
+                                    ctx.textAlign = d === 0 ? "left" : d === 4 ? "right" : "center"
+                                    ctx.fillText(Qt.formatDate(new Date(t), "d MMM"), X(t), top + h + 5)
+                                }
+
+                                ctx.save()
+                                ctx.beginPath(); ctx.rect(left, top, w, h); ctx.clip()
+                                // Usual range
+                                if (!isNaN(bLo) || !isNaN(bHi)) {
+                                    var yTop = isNaN(bHi) ? top : Y(bHi), yBot = isNaN(bLo) ? top + h : Y(bLo)
+                                    ctx.fillStyle = Qt.rgba(bandColor.r, bandColor.g, bandColor.b, 0.12)
+                                    ctx.fillRect(left, yTop, w, yBot - yTop)
+                                }
+                                // The drives before the last three, as a dashed line
+                                if (!isNaN(base)) {
+                                    ctx.strokeStyle = axisColor
+                                    ctx.globalAlpha = 0.7
+                                    ctx.setLineDash([5, 4])
+                                    ctx.beginPath(); ctx.moveTo(left, Y(base)); ctx.lineTo(left + w, Y(base)); ctx.stroke()
+                                    ctx.setLineDash([])
+                                    ctx.globalAlpha = 1
+                                }
+                                // Lowest-highest whiskers (parameters)
+                                if (isParam) {
+                                    ctx.strokeStyle = Qt.rgba(lineColor.r, lineColor.g, lineColor.b, 0.45)
+                                    ctx.lineWidth = Math.max(2, fontPx * 0.3)
+                                    for (var q = 0; q < r.length; q++) {
+                                        ctx.beginPath(); ctx.moveTo(X(r[q].startMs), Y(r[q].lo)); ctx.lineTo(X(r[q].startMs), Y(r[q].hi)); ctx.stroke()
+                                    }
+                                }
+                                // Line through the drives
+                                ctx.strokeStyle = lineColor
+                                ctx.globalAlpha = 0.5
+                                ctx.lineWidth = 1.5
+                                ctx.beginPath()
+                                ctx.moveTo(X(r[0].startMs), Y(r[0].v))
+                                for (var a = 1; a < r.length; a++) ctx.lineTo(X(r[a].startMs), Y(r[a].v))
+                                ctx.stroke()
+                                ctx.globalAlpha = 1
+                                // A dot per drive; outside the usual range in the warning colour
+                                var dotR = Math.max(3, fontPx * 0.4)
+                                for (var b = 0; b < r.length; b++) {
+                                    var v = r[b].v
+                                    var out = (!isNaN(bLo) && v < bLo) || (!isNaN(bHi) && v > bHi)
+                                    ctx.fillStyle = out ? warnColor : lineColor
+                                    ctx.beginPath(); ctx.arc(X(r[b].startMs), Y(v), dotR, 0, Math.PI * 2); ctx.fill()
+                                }
+                                ctx.restore()
+                                if (!isNaN(base)) {
+                                    ctx.fillStyle = axisColor
+                                    ctx.textAlign = "left"
+                                    ctx.textBaseline = "bottom"
+                                    ctx.fillText("before", left + 4, Y(base) - 2)
+                                }
+                            }
+
+                            // Tap a drive's point to open it
+                            TapHandler {
+                                onTapped: function(eventPoint) {
+                                    var r = trendChart.rows || []
+                                    var best = -1, bestDx = dp(24)
+                                    for (var i = 0; i < r.length; i++) {
+                                        var dx = Math.abs(trendChart.xOf(r[i].startMs) - eventPoint.position.x)
+                                        if (dx < bestDx) { bestDx = dx; best = i }
+                                    }
+                                    if (best >= 0) tripHistoryPage.openTripFromTrend(r[best].id)
+                                }
+                            }
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        visible: text !== ""
+                        wrapMode: Text.WordWrap
+                        text: (tripHistoryPage.trendKind === "metric" && tripHistoryPage.trendMetric
+                               ? tripHistoryPage.trendMetric.description + "  " : "")
+                              + (tripHistoryPage.trendRows.length > 0 ? "Tap a point to open that drive." : "")
+                        color: labelColor
+                        font.pixelSize: App.Spacing.overallText * 0.65
+                        font.family: globalFont
+                    }
                 }
             }
         }
