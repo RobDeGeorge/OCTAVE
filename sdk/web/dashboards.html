@@ -394,7 +394,29 @@ function openEditor(spec, how = {}) {
   E.history = [snapshot()];
   E.at = 0;
   changed(true);
+  followScreen();
 }
+
+// On an upright screen (a phone held upright) the editor opens on the
+// portrait layout, worked out from the landscape one when there is none, and
+// follows the screen as it turns until the first edit. Switching is not an
+// edit: the derived layout is kept only if the dashboard is saved.
+const UPRIGHT = window.matchMedia("(orientation: portrait)");
+function untouched() { return E && !E.modePicked && E.at === 0 && E.history.length === 1 && !$("editor-view").hidden; }
+async function followScreen() {
+  if (!untouched()) return;
+  const mode = UPRIGHT.matches ? "portrait" : "landscape";
+  if (mode === E.mode) return;
+  if (mode === "portrait" && !E.portrait) {
+    const d = await octave.call(DM, "derivePortrait", [E.cells, E.cols, E.rows]);
+    if (!untouched()) return;
+    E.portrait = { cols: d.gridColumns, rows: d.gridRows, cells: d.cells };
+  }
+  E.mode = mode;
+  E.history = [snapshot()];
+  changed(true);
+}
+UPRIGHT.addEventListener("change", followScreen);
 
 function specNow() {
   const spec = Object.assign({}, E.base);
@@ -653,6 +675,7 @@ async function setDensity(name) {
   record();
 }
 async function toggleLayout() {
+  E.modePicked = true;
   if (E.mode === "portrait") { E.mode = "landscape"; changed(true); return; }
   if (!E.portrait) {
     const d = await octave.call(DM, "derivePortrait", [E.cells, E.cols, E.rows]);

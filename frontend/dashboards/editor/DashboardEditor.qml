@@ -162,11 +162,16 @@ Item {
 
     property bool _densityPending: false
 
+    // The canvas can have its size before the dashboard is loaded (a
+    // StackView push sizes the page first): nothing is picked until then
+    property bool _completed: false
+
     Component.onCompleted: {
         _load()
         _resetHistory()
         _densityPending = autoDensity && editingId.length === 0 && draftJson.length === 0
                           && (cells.length === 0 || fitToScreen)
+        _completed = true
         Qt.callLater(_pickDefaultDensity)
     }
 
@@ -403,12 +408,16 @@ Item {
         return "coarse"
     }
 
-    // Once the canvas has a size: open on the layout for this screen's
-    // shape (portrait on an upright one; derived there if the dashboard has
-    // none, saved only if the user saves), then a new dashboard's density
+    // Once the dashboard is loaded and the canvas has a size: open on the
+    // layout for this screen's shape (portrait on an upright one; derived
+    // there if the dashboard has none, saved only if the user saves), then
+    // a new dashboard's density. Until the first edit the editor follows the
+    // screen if it turns (_followScreen): a browser settling its size, a
+    // phone turned while the editor opens.
     property bool _settled: false
     function _pickDefaultDensity() {
-        if (_settled || canvasFrame.width <= 0 || canvasFrame.height <= 0) return
+        if (!_completed || canvasFrame.width <= 0 || canvasFrame.height <= 0) return
+        if (_settled) { _followScreen(); return }
         _settled = true
         if (autoLayoutMode && canvasFrame.height > canvasFrame.width && layoutMode !== "portrait") {
             var wasDirty = dirty
@@ -433,6 +442,16 @@ Item {
                 gridRows = g.rows
             }
         }
+        _resetHistory()
+    }
+
+    function _followScreen() {
+        if (!autoLayoutMode || canUndo || drivingLocked) return
+        var mode = canvasFrame.height > canvasFrame.width ? "portrait" : "landscape"
+        if (mode === layoutMode) return
+        var wasDirty = dirty
+        setLayoutMode(mode)
+        dirty = wasDirty
         _resetHistory()
     }
 

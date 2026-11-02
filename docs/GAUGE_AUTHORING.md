@@ -489,7 +489,8 @@ only and is never saved) · **Advanced** (the other options, position and
 size steppers) · **JSON** (the props as text, applied through the spec
 rules) → **Remove**. **Portrait** (top bar) switches the canvas to the
 portrait layout, shown as an upright screen (derived the first time from the
-landscape one; the editor opens on it on an upright screen); data and
+landscape one; the editor opens on it on an upright screen and
+follows the screen until the first edit); data and
 options are shared, positions are each layout's own. A status line says
 what each value on the dashboard gets from the adapter ("6 values from the
 car · about 2.5 updates a second each", amber under one a second). Editing

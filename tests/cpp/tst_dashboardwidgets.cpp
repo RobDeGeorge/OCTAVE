@@ -785,6 +785,83 @@ private slots:
         QCOMPARE(spec.value("cells").toList().at(0).toMap().value("paramId").toString(), QStringLiteral("RPM"));
     }
 
+    // A new dashboard opened on an upright screen (a phone held upright,
+    // the browser demo on one) is edited upright, the way "+ New" opens it:
+    // pushed on a StackView, from a template, fitted to the screen. A
+    // screen that turns before anything is changed (a browser settling its
+    // size) takes the editor with it.
+    void editorOpensUprightOnAnUprightScreen_data()
+    {
+        QTest::addColumn<bool>("fromTemplate");
+        QTest::addColumn<bool>("startsLandscape");
+        QTest::newRow("template") << true << false;
+        QTest::newRow("blank") << false << false;
+        QTest::newRow("template, turned before any edit") << true << true;
+        QTest::newRow("blank, turned before any edit") << false << true;
+    }
+
+    void editorOpensUprightOnAnUprightScreen()
+    {
+        QFETCH(bool, fromTemplate);
+        QFETCH(bool, startsLandscape);
+        QQmlComponent component(engine.get());
+        component.setData(QString(R"qml(
+            import QtQuick
+            import QtQuick.Controls
+            ApplicationWindow {
+                width: %2; height: %3; visible: true
+                property alias stack: sv
+                property var editor: sv.currentItem
+                property var templateSpec: ({ "schema": 1, "gridColumns": 6, "gridRows": 4, "cells": [
+                    { "type": "CircularGauge", "col": 0, "row": 0, "colSpan": 4, "rowSpan": 4, "paramId": "RPM" },
+                    { "type": "DigitalReadout", "col": 4, "row": 0, "colSpan": 2, "rowSpan": 2, "paramId": "SPEED" },
+                    { "type": "DigitalReadout", "col": 4, "row": 2, "colSpan": 2, "rowSpan": 2, "paramId": "COOLANT_TEMP" } ] })
+                StackView { id: sv; anchors.fill: parent; initialItem: Item {} }
+                function openEditor(withTemplate) {
+                    sv.push("%1/dashboards/editor/DashboardEditor.qml",
+                            withTemplate ? { stackView: sv, initialSpec: templateSpec, fitToScreen: true }
+                                         : { stackView: sv })
+                }
+            }
+        )qml").arg(QUrl::fromLocalFile(frontend).toString())
+              .arg(startsLandscape ? 1280 : 390).arg(startsLandscape ? 720 : 844).toUtf8(), QUrl());
+        root.reset(component.create());
+        QVERIFY2(root, qPrintable(component.errorString()));
+        auto *window = qobject_cast<QQuickWindow *>(root.get());
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        QMetaObject::invokeMethod(root.get(), "openEditor", Q_ARG(QVariant, fromTemplate));
+        QTRY_VERIFY(qvariant_cast<QObject *>(root->property("editor"))
+                    && qvariant_cast<QObject *>(root->property("editor"))->objectName() == "dashboardEditor");
+        QObject *editor = qvariant_cast<QObject *>(root->property("editor"));
+        QTRY_VERIFY(editor->property("_settled").toBool());
+        if (startsLandscape) {
+            QCOMPARE(editor->property("layoutMode").toString(), QStringLiteral("landscape"));
+            window->resize(390, 844);
+        }
+        QTRY_COMPARE(editor->property("layoutMode").toString(), QStringLiteral("portrait"));
+        // An upright grid, and the canvas not drawn as a turned screen
+        QVERIFY(editor->property("gridRows").toInt() > editor->property("gridColumns").toInt());
+        auto *canvas = findVisual(window->contentItem(), "editorCanvas");
+        QVERIFY(canvas);
+        QTRY_VERIFY(canvas->height() > canvas->width());
+        if (fromTemplate)
+            QCOMPARE(editor->property("cells").toList().size(), 3);
+        // Opening upright is not an edit
+        QCOMPARE(editor->property("canUndo").toBool(), false);
+        QCOMPARE(editor->property("dirty").toBool(), false);
+
+        // Once something is changed the layout stays put when the screen turns
+        const int before = editor->property("cells").toList().size();
+        if (before > 0)
+            invoke(editor, "removeCell", {0});
+        else
+            QVERIFY(invoke(editor, "addForParam", {"INTAKE_TEMP"}).toBool());
+        QVERIFY(editor->property("canUndo").toBool());
+        window->resize(1280, 720);
+        QTest::qWait(100);
+        QCOMPARE(editor->property("layoutMode").toString(), QStringLiteral("portrait"));
+    }
+
     // Phase 3: the portrait layout in the renderer and the editor, the
     // polling-cost numbers, the driving lock
     void portraitLayoutsAndDrivingLock()
