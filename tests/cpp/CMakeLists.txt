@@ -297,6 +297,15 @@ if(Python3_Interpreter_FOUND)
         COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/tools/stream/service_load.py"
                 $<TARGET_FILE:octave> 0 "${CMAKE_CURRENT_BINARY_DIR}/service_load_check" --check)
     set_tests_properties(service_load_check PROPERTIES TIMEOUT 60)
+    # AppCore's cross-manager wiring on the real binary (`octave --headless
+    # --sim`): volume / mute to the outputs, RPM to the shift light, readings to
+    # paramStore and the black box, gauge units to the catalog, a track change
+    # to the saved state and the visualizer
+    add_test(NAME wiring
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover -s "${CMAKE_SOURCE_DIR}/tests/wiring" -p "check_*.py")
+    set_tests_properties(wiring PROPERTIES
+        ENVIRONMENT "OCTAVE_BIN=$<TARGET_FILE:octave>;QT_QPA_PLATFORM=offscreen"
+        TIMEOUT 180)
     # tools/api/check_compat.py (CI's API compatibility gate) sorts changes right
     add_test(NAME api_compat
         COMMAND ${Python3_EXECUTABLE} -m unittest discover -s "${CMAKE_SOURCE_DIR}/tools/api/tests")

@@ -4,7 +4,7 @@
 
 **Status:** deferred. A menu, not a commitment; pick an item up when work in its area starts.
 
-**Last updated:** 2026-10-25
+**Last updated:** 2026-11-01
 
 **Why parked:** the C++ QtTest suite (`tests/cpp/`, 45 tests via `octave_add_test()` in `tests/cpp/CMakeLists.txt`, run by `ctest --test-dir build --output-on-failure` in CI) already covers the subsystems that broke most often: ELM327 parsing, OBD demand polling, the simulated car, phone mirror, dashboards, settings backup/atomic write. What's left is useful but not urgent.
 
@@ -12,17 +12,13 @@ Items are ordered easiest first. Done 2026-10-18: the VolumeController test (`ts
 
 ---
 
-## 1. Signal wiring tests
+## 1. Signal wiring tests: the hardware inputs
 
-**Effort:** M (~2 h)
+**Effort:** S once the core library exists (`TODO/open-backend.md`), else M
 
-The cross-manager `connect()` calls now live in `AppCore` (`src/appcore.cpp`), which builds every manager with no QML engine, so a test can construct one directly. Nothing asserts the wiring yet (`tst_boot` only boots).
+Done 2026-11-01, on the real binary instead of a QtTest: `tests/wiring/check_wiring.py` (ctest `wiring`) boots `octave --headless --sim` and checks over the service API that volume and mute reach the outputs on the curve and are saved, RPM reaches the shift light, readings reach `paramStore` and the black box, the gauge unit settings reach the catalog, and a track change is saved and lights the visualizer. A QtTest that builds `AppCore` itself was not possible: the tests compile their own sources and there is no manager library yet.
 
-Steps:
-1. New `tests/cpp/tst_signalwiring.cpp` that constructs an `AppCore` (temp `XDG_CONFIG_HOME`); with `QSignalSpy` / `QTRY_COMPARE`, check:
-   - `volumeController.applyVolume(75)` reaches `MediaManager::setVolume` with the curved value
-   - a track change in `MediaManager` updates the playback state saved through `SettingsManager`
-   - changing `obdBluetoothPort` in settings triggers `OBDManager`'s debounced reconnect
+Left: the wires whose source is hardware the service cannot drive: `GestureManager::actionTriggered` and the ESP32 knob's `volumeChangeRequested` / `muteToggleRequested` into `VolumeController` / `NowPlaying` (`AppCore::wireInputs`), and the knob LED colour (`wireKnobLed`). Either a QtTest on `AppCore` once the core library lands (emit the signals, spy on `VolumeController`), or a dev-only `sim` call that emits them. Also not wiring but nearby: `obdBluetoothPort` changing triggers `OBDManager`'s debounced reconnect, which belongs in `tst_obdsim`.
 
 ## 2. Headless QML integration tests
 
