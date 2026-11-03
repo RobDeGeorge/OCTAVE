@@ -184,6 +184,8 @@ void SpotifyManager::save() const
 void SpotifyManager::restore()
 {
     const Stored s = load();
+    qCInfo(lcSpotify) << "client id" << (s.clientId.isEmpty() && m_clientId.isEmpty() ? "none" : "set")
+                      << "saved session" << !s.refreshToken.isEmpty() << "sign-in pending" << !s.verifier.isEmpty();
     if (!s.clientId.isEmpty() && s.clientId != m_clientId) {
         m_clientId = s.clientId;
         emit clientIdChanged();
@@ -217,6 +219,8 @@ void SpotifyManager::finishBrowserSignIn(const Stored &stored)
     if (!code.isEmpty() || !error.isEmpty())
         emscripten::val::global("history").call<void>("replaceState", emscripten::val::null(), std::string(""),
                                                       pageUrl().toStdString());
+    qCInfo(lcSpotify) << "back from Spotify sign-in: code" << !code.isEmpty() << "state matches"
+                      << (state == stored.oauthState) << "error" << error;
     m_verifier.clear();
     m_oauthState.clear();
     // Keep a session that was there before this sign-in try
@@ -232,6 +236,11 @@ void SpotifyManager::finishBrowserSignIn(const Stored &stored)
     if (!error.isEmpty())
         setStatus(error == QLatin1String("access_denied") ? QStringLiteral("Spotify sign-in was cancelled.")
                                                           : QStringLiteral("Spotify sign-in failed: ") + error);
+    else if (!code.isEmpty())
+        setStatus(QStringLiteral("Spotify sign-in didn't match this page (another tab?). Press Connect again."));
+    else
+        setStatus(QStringLiteral("Spotify sign-in didn't come back. Check the app's Redirect URI is exactly ")
+                  + redirectUri());
     if (!m_refreshToken.isEmpty()) {
         emit userChanged();
         setState(QStringLiteral("signedIn"));
@@ -269,6 +278,7 @@ void SpotifyManager::signIn()
     setStatus({});
 #ifdef OCTAVE_WASM
     save();   // the verifier, for when the page comes back
+    qCInfo(lcSpotify) << "going to Spotify sign-in, back at" << redirectUri();
     setState(QStringLiteral("signingIn"));
     emscripten::val::global("location").call<void>("assign", url.toString(QUrl::FullyEncoded).toStdString());
 #else

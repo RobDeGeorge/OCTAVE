@@ -971,6 +971,11 @@ Flickable {
                         placeholderText: "Client ID"
                         text: pageRoot.hasSpotify ? spotifyManager.clientId : ""
                         onEditingFinished: if (pageRoot.hasSpotify) spotifyManager.setClientId(text)
+                        // A whole ID pasted is taken at once: a phone's keyboard
+                        // may never finish editing, which left Connect greyed out
+                        onTextChanged: if (pageRoot.hasSpotify && /^[0-9a-fA-F]{32}$/.test(text.trim())
+                                               && text.trim() !== spotifyManager.clientId)
+                                           spotifyManager.setClientId(text)
                         Connections {
                             target: pageRoot.hasSpotify ? spotifyManager : null
                             function onClientIdChanged() { spotifyClientIdField.text = spotifyManager.clientId }
