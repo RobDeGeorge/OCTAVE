@@ -335,6 +335,10 @@ qt_add_executable(octave
     src/managers/parameterstore.cpp
     src/managers/nowplaying.h
     src/managers/nowplaying.cpp
+    src/managers/spotifyapi.h
+    src/managers/spotifyapi.cpp
+    src/managers/spotifymanager.h
+    src/managers/spotifymanager.cpp
     src/managers/shiftlightmanager.h
     src/managers/shiftlightmanager.cpp
     src/managers/mediamanager.h
@@ -442,8 +446,13 @@ message(STATUS "Build commit: ${OCTAVE_GIT_COMMIT} (${OCTAVE_GIT_DATE})")
 configure_file(src/util/buildinfo.h.in "${CMAKE_CURRENT_BINARY_DIR}/generated/buildinfo.h" @ONLY)
 target_include_directories(octave PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
+# The Spotify developer app OCTAVE signs in with (Settings > Media > Spotify
+# can use another). Empty: each user enters their own app's Client ID.
+set(OCTAVE_SPOTIFY_CLIENT_ID "" CACHE STRING "Client ID of the Spotify developer app (Web API sign-in)")
+
 target_compile_definitions(octave PRIVATE
     OCTAVE_VERSION="${PROJECT_VERSION}"
+    $<$<BOOL:${OCTAVE_SPOTIFY_CLIENT_ID}>:OCTAVE_SPOTIFY_CLIENT_ID="${OCTAVE_SPOTIFY_CLIENT_ID}">
     $<$<BOOL:${OCTAVE_HAVE_FFMPEG}>:OCTAVE_HAVE_FFMPEG>
     # Activate existing #ifndef Q_OS_MOBILE guards on Android (and iOS later).
     # Without this define the guards are no-ops and desktop-only code compiles on mobile.

@@ -34,6 +34,7 @@
             <li><a href="#parameterCatalog">ParameterCatalog</a></li>
             <li><a href="#paramStore">ParameterStore</a></li>
             <li><a href="#nowPlaying">NowPlaying</a></li>
+            <li><a href="#spotifyManager">SpotifyManager</a></li>
             <li><a href="#shiftLightManager">ShiftLightManager</a></li>
             <li><a href="#tripRecorder">TripRecorder</a></li>
             <li><a href="#esp32VolumeManager">ESP32VolumeManager</a></li>
@@ -75,7 +76,8 @@
             <tr><td><a href="#obdManager"><code>obdManager</code></a></td><td><code>OBDManager</code> &mdash; <span class="file-path">src/managers/obdmanager.h</span></td><td></td></tr>
             <tr><td><a href="#obdAdapterFinder"><code>obdAdapterFinder</code></a></td><td><code>OBDAdapterFinder</code> &mdash; <span class="file-path">src/managers/obdadapterfinder.h</span></td><td><code>supported</code> is true on desktop Linux only (phase 1)</td></tr>
             <tr><td><a href="#parameterCatalog"><code>parameterCatalog</code></a></td><td><code>ParameterCatalog</code> &mdash; <span class="file-path">src/managers/parametercatalog.h</span></td><td>Title / unit / range / kind of every OBD PID and IMU reading</td></tr>
-            <tr><td><a href="#nowPlaying"><code>nowPlaying</code></a></td><td><code>NowPlaying</code> &mdash; <span class="file-path">src/managers/nowplaying.h</span></td><td>What is playing and its controls, phone or local</td></tr>
+            <tr><td><a href="#nowPlaying"><code>nowPlaying</code></a></td><td><code>NowPlaying</code> &mdash; <span class="file-path">src/managers/nowplaying.h</span></td><td>What is playing and its controls, phone, Android Auto, Spotify or local</td></tr>
+            <tr><td><a href="#spotifyManager"><code>spotifyManager</code></a></td><td><code>SpotifyManager</code> &mdash; <span class="file-path">src/managers/spotifymanager.h</span></td><td>Spotify Web API: sign-in, library, remote control of the Spotify app (experimental)</td></tr>
             <tr><td><a href="#paramStore"><code>paramStore</code></a></td><td><code>ParameterStore</code> &mdash; <span class="file-path">src/managers/parameterstore.h</span></td><td>Latest value of every OBD PID and IMU reading, one notifying key per id</td></tr>
             <tr><td><a href="#shiftLightManager"><code>shiftLightManager</code></a></td><td><code>ShiftLightManager</code> &mdash; <span class="file-path">src/managers/shiftlightmanager.h</span></td><td>RPM shift light: active flag and flash phase</td></tr>
             <tr><td><a href="#tripRecorder"><code>tripRecorder</code></a></td><td><code>TripRecorder</code> &mdash; <span class="file-path">src/managers/triprecorder.h</span></td><td>Black box: every drive into SQLite + CSV / JSON files</td></tr>
@@ -968,19 +970,19 @@
         <!-- NowPlaying -->
         <h2 id="nowPlaying">NowPlaying <span class="cmt">&mdash; <code>nowPlaying</code></span></h2>
         <p><span class="file-path">src/managers/nowplaying.h</span> &mdash; QML context property <code>nowPlaying</code></p>
-        <p>What is playing right now and the controls for it, whichever source owns OCTAVE's music: the phone (while mirroring, once <code>phoneMirrorManager.mediaActive</code>), Android Auto (built-in receiver) or OCTAVE's own player. It is also the arbiter: one source at a time, and only a user action changes it (<a href="phone-mirror-android-auto.html#aa-native-music">Which source plays the music</a>). Frontends bind to this instead of choosing between <code>mediaManager</code> and <code>phoneMirrorManager</code> themselves. The phone reports its position only now and then, so this owns the one clock that extrapolates it (every 500 ms, only while the phone plays). Values are raw: placeholder text such as "Nothing playing" is the frontend's choice (<code>hasTrack</code>). It also holds the hand-off (the phone taking the controls pauses local playback; a local track starting hands them back with <code>releaseMedia(true)</code>, pausing the phone) and the Album Art Capture rule (the theme follows the live source's art). Tests: <span class="file-path">tests/cpp/tst_nowplaying.cpp</span>.</p>
+        <p>What is playing right now and the controls for it, whichever source owns OCTAVE's music: the phone (while mirroring, once <code>phoneMirrorManager.mediaActive</code>), Android Auto (built-in receiver), Spotify (<a href="#spotifyManager"><code>spotifyManager</code></a>: it takes the music when played from OCTAVE, or when it starts by itself while nothing else plays) or OCTAVE's own player. It is also the arbiter: one source at a time, and only a user action changes it (<a href="phone-mirror-android-auto.html#aa-native-music">Which source plays the music</a>). Frontends bind to this instead of choosing between <code>mediaManager</code> and <code>phoneMirrorManager</code> themselves. The phone reports its position only now and then, so this owns the one clock that extrapolates it (every 500 ms, only while the phone plays). Values are raw: placeholder text such as "Nothing playing" is the frontend's choice (<code>hasTrack</code>). It also holds the hand-off (the phone taking the controls pauses local playback; a local track starting hands them back with <code>releaseMedia(true)</code>, pausing the phone) and the Album Art Capture rule (the theme follows the live source's art). Tests: <span class="file-path">tests/cpp/tst_nowplaying.cpp</span>.</p>
         <h3>Properties</h3>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>source</code></td><td><code>QString</code></td><td>read-only</td><td><code>sourceChanged</code></td><td><code>"local"</code>, <code>"phone"</code> or <code>"androidauto"</code></td></tr>
+            <tr><td><code>source</code></td><td><code>QString</code></td><td>read-only</td><td><code>sourceChanged</code></td><td><code>"local"</code>, <code>"phone"</code>, <code>"androidauto"</code> or <code>"spotify"</code></td></tr>
             <tr><td><code>playing</code></td><td><code>bool</code></td><td>read-only</td><td><code>playingChanged</code></td><td>The live source is playing</td></tr>
             <tr><td><code>hasTrack</code>, <code>title</code>, <code>artist</code>, <code>album</code></td><td><code>bool</code>, <code>QString</code></td><td>read-only</td><td><code>trackInfoChanged</code></td><td>Local: display name, artist, album of the current file. Phone: the media session's metadata (<code>hasTrack</code> false with no media app)</td></tr>
             <tr><td><code>artUrl</code></td><td><code>QString</code></td><td>read-only</td><td><code>artUrlChanged</code></td><td>Album art URL, <code>""</code> when none (a file on the head unit; service clients fetch <code>GET /art</code>)</td></tr>
             <tr><td><code>artRevision</code></td><td><code>int</code></td><td>read-only</td><td><code>artUrlChanged</code></td><td>Goes up by one on every art change: the cache key for <code>GET /art</code></td></tr>
             <tr><td><code>durationMs</code>, <code>positionMs</code></td><td><code>int</code></td><td>read-only</td><td><code>durationChanged</code>, <code>positionChanged</code></td><td>Local: the player's 10 Hz reports. Phone: each report, extrapolated every 500 ms while playing. <code>0</code> duration = unknown</td></tr>
-            <tr><td><code>canSeek</code>, <code>canShuffle</code></td><td><code>bool</code></td><td>read-only</td><td><code>capabilitiesChanged</code></td><td><code>canShuffle</code> is false on the phone (its shuffle belongs to its app)</td></tr>
-            <tr><td><code>shuffled</code></td><td><code>bool</code></td><td>read-only</td><td><code>shuffledChanged</code></td><td>Local shuffle state</td></tr>
+            <tr><td><code>canSeek</code>, <code>canShuffle</code></td><td><code>bool</code></td><td>read-only</td><td><code>capabilitiesChanged</code></td><td><code>canShuffle</code> is true for local and Spotify; false on the phone and Android Auto (their shuffle belongs to their app)</td></tr>
+            <tr><td><code>shuffled</code></td><td><code>bool</code></td><td>read-only</td><td><code>shuffledChanged</code></td><td>The shuffle state of the live source (local or Spotify)</td></tr>
           </tbody>
         </table>
         <h3>Invokables &amp; Slots</h3>
@@ -989,8 +991,9 @@
           <tbody>
             <tr><td><code>togglePlay()</code>, <code>next()</code>, <code>previous()</code></td><td><code>void</code></td><td>Routed to the live source (the gesture sensor uses these too)</td></tr>
             <tr><td><code>seek(int positionMs)</code></td><td><code>void</code></td><td>When <code>canSeek</code>; the position shows at once and the source confirms it</td></tr>
-            <tr><td><code>toggleShuffle()</code></td><td><code>void</code></td><td>Local only; does nothing while the phone or Android Auto is the source</td></tr>
-            <tr><td><code>useLocal()</code></td><td><code>void</code></td><td>Hand the music back to OCTAVE's own player (the Media Room's source pill); the phone or Android Auto pauses, nothing plays until asked</td></tr>
+            <tr><td><code>toggleShuffle()</code></td><td><code>void</code></td><td>Local or Spotify; does nothing while the phone or Android Auto is the source</td></tr>
+            <tr><td><code>useLocal()</code></td><td><code>void</code></td><td>Hand the music back to OCTAVE's own player (the Media Room's source pill); the phone, Android Auto or Spotify pauses, nothing plays until asked</td></tr>
+            <tr><td><code>useSpotify()</code></td><td><code>void</code></td><td>Make Spotify the source (signed in only); nothing plays until asked</td></tr>
             <tr><td><code>extractArtColors()</code></td><td><code>void</code></td><td>Theme colours from the live source's art now (Media Room's "Save as Theme"). The Album Art Capture rule calls it on its own: while that theme is selected, whenever <code>artUrl</code> changes or the theme is chosen</td></tr>
           </tbody>
         </table>
@@ -999,6 +1002,37 @@
           <thead><tr><th>Signal</th><th>Description</th></tr></thead>
           <tbody>
             <tr><td><code>trackChanged()</code></td><td>Another track or another source (for track-change animations); not emitted for play/pause, seeks or position</td></tr>
+          </tbody>
+        </table>
+
+        <!-- SpotifyManager -->
+        <h2 id="spotifyManager">SpotifyManager <span class="cmt">&mdash; <code>spotifyManager</code></span></h2>
+        <p><span class="file-path">src/managers/spotifymanager.h</span> (+ <span class="file-path">spotifyapi.h</span>, the JSON readers and PKCE) &mdash; experimental</p>
+        <p>Spotify through its Web API. OCTAVE never plays Spotify audio: the Spotify app (phone, computer, speaker) plays and this is its remote (Spotify Connect; controlling playback needs Premium). Sign-in is OAuth with PKCE and no client secret: the desktop app opens the browser and waits on <code>http://127.0.0.1:43821/callback</code>; the browser build sends the page to Spotify and finishes when it comes back (redirect URI: the page's own address). The refresh token is kept in <span class="file-path">&lt;config&gt;/spotify.json</span> (owner-only), <code>localStorage</code> in the browser. The client ID is the build's (<code>-DOCTAVE_SPOTIFY_CLIENT_ID=...</code>) or one set in Settings &gt; Media &gt; Spotify. The player is polled (<code>GET /me/player</code>) every 2 s while playing, 6 s otherwise; commands show at once and hold for 1.5 s against older polls. Tests: <span class="file-path">tests/cpp/tst_spotifyapi.cpp</span>, <span class="file-path">tst_nowplaying.cpp</span>. Full member list: <a href="api-reference.html">API reference</a>.</p>
+        <h3>Properties</h3>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>state</code>, <code>signedIn</code></td><td><code>QString</code>, <code>bool</code></td><td><code>"signedOut"</code>, <code>"signingIn"</code> or <code>"signedIn"</code></td></tr>
+            <tr><td><code>clientId</code>, <code>builtInClientId</code>, <code>redirectUri</code></td><td><code>QString</code>, <code>bool</code></td><td>The Spotify developer app in use, whether it is the build's, and the redirect URI to register in it</td></tr>
+            <tr><td><code>userName</code>, <code>status</code></td><td><code>QString</code></td><td>Who is signed in; the last thing worth telling the user (<code>""</code> when all is well)</td></tr>
+            <tr><td><code>playlists</code>, <code>albums</code>, <code>libraryLoading</code></td><td><code>QVariantList</code>, <code>bool</code></td><td>Rows <code>{uri, id, name, owner, imageUrl, trackCount, kind, tracksListed}</code>; Liked Songs first among the playlists (<code>kind</code> <code>"liked"</code>). <code>tracksListed</code> is false for playlists the user doesn't own or collaborate on: Spotify (2026 rules) doesn't list their songs, they can only be played</td></tr>
+            <tr><td><code>collection</code>, <code>collectionUri</code>, <code>collectionTracks</code>, <code>collectionLoading</code></td><td></td><td>What <code>openCollection</code> opened; tracks <code>{uri, title, artist, album, durationMs, imageUrl}</code> (at most 1000)</td></tr>
+            <tr><td><code>hasPlayback</code>, <code>playing</code>, <code>title</code>, <code>artist</code>, <code>album</code>, <code>trackUri</code>, <code>contextUri</code>, <code>durationMs</code>, <code>positionMs</code></td><td></td><td>The player, wherever Spotify plays; <code>positionMs</code> extrapolated between polls</td></tr>
+            <tr><td><code>artUrl</code></td><td><code>QString</code></td><td>The cover as a local file (cached under the cache dir), so Album Art Capture can read its colours</td></tr>
+            <tr><td><code>shuffle</code>, <code>repeat</code>, <code>deviceName</code>, <code>devices</code></td><td></td><td><code>repeat</code>: <code>"off"</code>, <code>"context"</code> or <code>"track"</code></td></tr>
+            <tr><td><code>volumePercent</code>, <code>supportsVolume</code></td><td><code>deviceChanged</code></td><td>The playing device's volume, 0&ndash;100 (<code>-1</code>: not reported); <code>supportsVolume</code> is false for a device that won't let Spotify set it (some phones)</td></tr>
+          </tbody>
+        </table>
+        <h3>Slots</h3>
+        <table>
+          <thead><tr><th>Signature</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>signIn()</code>, <code>signOut()</code>, <code>setClientId(id)</code></td><td>Sign-in (full scope over the service); an empty client ID goes back to the build's</td></tr>
+            <tr><td><code>refreshLibrary()</code>, <code>openCollection(uri)</code>, <code>refreshDevices()</code></td><td>Load the library, a playlist / album / Liked Songs, the devices</td></tr>
+            <tr><td><code>playCollection(uri, index)</code></td><td>Play from track <code>index</code> (-1: from the top). No active device: the first one Spotify knows of is woken. Emits <code>playbackRequested</code>, which makes Spotify the <code>nowPlaying</code> source</td></tr>
+            <tr><td><code>togglePlay()</code>, <code>play()</code>, <code>pause()</code>, <code>next()</code>, <code>previous()</code>, <code>seek(ms)</code>, <code>setShuffle(on)</code>, <code>toggleShuffle()</code>, <code>cycleRepeat()</code>, <code>transferTo(deviceId)</code></td><td>Player commands</td></tr>
+            <tr><td><code>setVolume(percent)</code></td><td>The playing device's volume, 0&ndash;100, at most one call per 300 ms while a slider drags. <code>AppCore::wireVolume</code> sends <code>volumeController</code>'s percent here while <code>nowPlaying.source</code> is <code>"spotify"</code> (mute sends 0, unmute the volume back)</td></tr>
           </tbody>
         </table>
 

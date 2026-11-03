@@ -37,8 +37,16 @@ Flickable {
           summary: function() {
               if (!settingsManager) return {}
               return { state: settingsManager.vinylRecordMode ? "Vinyl record" : settingsManager.albumArtTransition }
+          } },
+        { cardId: "media_spotify", title: "Spotify", component: spotifyContent,
+          summary: function() {
+              if (!pageRoot.hasSpotify) return {}
+              return { state: spotifyManager.signedIn ? "Signed in as " + spotifyManager.userName
+                            : spotifyManager.state === "signingIn" ? "Signing in…" : "Not connected" }
           } }
     ]
+
+    readonly property bool hasSpotify: typeof spotifyManager !== "undefined" && spotifyManager !== null
 
     Connections {
         target: typeof mediaManager !== "undefined" ? mediaManager : null
@@ -892,6 +900,90 @@ Flickable {
         }
     }
 
+
+    // ─────────────────────────────────────────── Spotify
+    // Sign in with the Spotify developer app's Client ID (the build's, or
+    // the user's own); OCTAVE then browses the library and controls the
+    // Spotify app on the phone (SpotifyManager)
+    Component {
+        id: spotifyContent
+        ColumnLayout {
+            width: parent ? parent.width : 0
+            spacing: App.Spacing.sectionSpacing
+
+            SettingCategory {
+                title: "Spotify Account"
+                description: "Your playlists, Liked Songs and albums in the music menu. The Spotify app on your "
+                             + "phone (or any Spotify device) plays the music; OCTAVE is the remote. Controlling "
+                             + "playback needs Spotify Premium."
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.rowSpacing
+
+                    SettingLabel {
+                        Layout.fillWidth: true
+                        text: !pageRoot.hasSpotify ? "Not available"
+                              : spotifyManager.signedIn ? "Signed in as " + spotifyManager.userName
+                              : spotifyManager.state === "signingIn" ? "Waiting for Spotify… finish signing in in the browser."
+                              : "Not connected"
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: App.Spacing.rowSpacing
+                        SettingsButton {
+                            visible: pageRoot.hasSpotify && !spotifyManager.signedIn
+                            text: spotifyManager && spotifyManager.state === "signingIn" ? "Try Again" : "Connect Spotify"
+                            enabled: pageRoot.hasSpotify && spotifyManager.clientId !== ""
+                            onClicked: spotifyManager.signIn()
+                        }
+                        SettingsButton {
+                            visible: pageRoot.hasSpotify && spotifyManager.state !== "signedOut"
+                            text: spotifyManager && spotifyManager.signedIn ? "Sign Out" : "Cancel"
+                            onClicked: spotifyManager.signOut()
+                        }
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    SettingDescription {
+                        visible: pageRoot.hasSpotify && spotifyManager.status !== ""
+                        text: pageRoot.hasSpotify ? spotifyManager.status : ""
+                        color: App.Style.statusDanger
+                    }
+                }
+            }
+
+            SettingCategory {
+                title: "Spotify Developer App"
+                description: pageRoot.hasSpotify && spotifyManager.builtInClientId
+                    ? "OCTAVE signs in with its own Spotify app. To use yours instead, paste its Client ID."
+                    : "Create an app at developer.spotify.com (Web API), add the redirect URI below and your "
+                      + "account under User Management, then paste its Client ID here."
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.rowSpacing
+
+                    SettingsTextField {
+                        id: spotifyClientIdField
+                        Layout.fillWidth: true
+                        placeholderText: "Client ID"
+                        text: pageRoot.hasSpotify ? spotifyManager.clientId : ""
+                        onEditingFinished: if (pageRoot.hasSpotify) spotifyManager.setClientId(text)
+                        Connections {
+                            target: pageRoot.hasSpotify ? spotifyManager : null
+                            function onClientIdChanged() { spotifyClientIdField.text = spotifyManager.clientId }
+                        }
+                    }
+
+                    SettingDescription {
+                        text: "Redirect URI: " + (pageRoot.hasSpotify ? spotifyManager.redirectUri : "")
+                    }
+                }
+            }
+        }
+    }
 
     // ── Default rendering: stacked SettingsCards (Carousel/Hub/Dashboard layouts).
     //    Sidebar layout sets pageRoot.visible = false and renders the tile grid + popup instead.

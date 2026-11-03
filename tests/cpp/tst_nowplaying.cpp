@@ -17,6 +17,7 @@
 #include "managers/nowplaying.h"
 #include "managers/phonemirrormanager.h"
 #include "managers/settingsmanager.h"
+#include "managers/spotifymanager.h"
 
 namespace {
 QVariantMap phoneState(bool playing, const QString &title = "Song", qint64 positionMs = 1000)
@@ -443,7 +444,83 @@ private slots:
         QTRY_COMPARE(colors.count(), 1);
     }
 
+    // Spotify: a remote over the Web API. Signed in without a token, so no
+    // request leaves the test; player reports go in through applyPlayer.
+    void spotifyStartingElsewhereTakesTheMusicWhenNothingPlays()
+    {
+        MediaManager media;
+        PhoneMirrorManager phone;
+        SpotifyManager spotify;
+        spotify.setStoreFile(m_tmp->path() + "/spotify.json");
+        NowPlaying np(&media, &phone);
+        np.setSpotify(&spotify);
+        spotify.m_state = QStringLiteral("signedIn");
+
+        spotify.applyPlayer(spotifyState(true, QStringLiteral("Drive")));
+        QCOMPARE(np.source(), QStringLiteral("spotify"));
+        QVERIFY(np.playing());
+        QCOMPARE(np.title(), QStringLiteral("Drive"));
+        QCOMPARE(np.artist(), QStringLiteral("Band"));
+        QCOMPARE(np.durationMs(), 240000);
+        QVERIFY(np.canSeek());
+        QVERIFY(np.canShuffle());
+        QVERIFY(np.shuffled());
+
+        // A new track from the same source
+        QSignalSpy track(&np, &NowPlaying::trackChanged);
+        spotify.applyPlayer(spotifyState(true, QStringLiteral("Next One")));
+        QCOMPARE(np.title(), QStringLiteral("Next One"));
+        QCOMPARE(track.count(), 1);
+
+        // The user starts a local track: Spotify is paused, local owns
+        emit media.playStateChanged(true);
+        QCOMPARE(np.source(), QStringLiteral("local"));
+        QVERIFY(!spotify.playing());
+        QVERIFY(!np.shuffled());
+    }
+
+    void spotifyNeverTakesOverMusicThatPlays()
+    {
+        MediaManager media;
+        PhoneMirrorManager phone;
+        SpotifyManager spotify;
+        spotify.setStoreFile(m_tmp->path() + "/spotify.json");
+        NowPlaying np(&media, &phone);
+        np.setSpotify(&spotify);
+        spotify.m_state = QStringLiteral("signedIn");
+
+        emit media.currentMediaChanged(QStringLiteral("Road Song.mp3"));
+        emit media.playStateChanged(true);
+        spotify.applyPlayer(spotifyState(true, QStringLiteral("Drive")));
+        QCOMPARE(np.source(), QStringLiteral("local"));
+        QVERIFY(np.playing());
+
+        // Played from OCTAVE's Spotify page: the user's choice wins
+        emit spotify.playbackRequested();
+        QCOMPARE(np.source(), QStringLiteral("spotify"));
+        QCOMPARE(np.title(), QStringLiteral("Drive"));
+
+        // Signing out while it owns hands back to local, paused
+        spotify.signOut();
+        QCOMPARE(np.source(), QStringLiteral("local"));
+    }
+
 private:
+    static SpotifyApi::PlayerState spotifyState(bool playing, const QString &title)
+    {
+        SpotifyApi::PlayerState s;
+        s.valid = true;
+        s.playing = playing;
+        s.title = title;
+        s.artist = QStringLiteral("Band");
+        s.album = QStringLiteral("LP");
+        s.trackUri = QStringLiteral("spotify:track:") + title;
+        s.durationMs = 240000;
+        s.positionMs = 1000;
+        s.shuffle = true;
+        return s;
+    }
+
     static QByteArray redJpeg()
     {
         QImage img(32, 32, QImage::Format_RGB32);

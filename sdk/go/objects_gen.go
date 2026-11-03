@@ -4,7 +4,7 @@
 package octave
 
 // ObjectNames is every service object, as hello lists them.
-var ObjectNames = []string{"airPlayManager", "androidAutoManager", "audioAnalyzer", "berryIMU", "clock", "dashboardManager", "diagnosticsManager", "esp32VolumeManager", "fontCatalog", "frontendManager", "gestureSensor", "mediaManager", "networkManager", "nowPlaying", "obdAdapterFinder", "obdManager", "paramStore", "parameterCatalog", "phoneMirrorManager", "settingsManager", "shiftLightManager", "sim", "themeCatalog", "tripRecorder", "units", "volumeController"}
+var ObjectNames = []string{"airPlayManager", "androidAutoManager", "audioAnalyzer", "berryIMU", "clock", "dashboardManager", "diagnosticsManager", "esp32VolumeManager", "fontCatalog", "frontendManager", "gestureSensor", "mediaManager", "networkManager", "nowPlaying", "obdAdapterFinder", "obdManager", "paramStore", "parameterCatalog", "phoneMirrorManager", "settingsManager", "shiftLightManager", "sim", "spotifyManager", "themeCatalog", "tripRecorder", "units", "volumeController"}
 
 // AirPlayManager is the service object "airPlayManager" (C++ AirPlayManager); NewAirPlayManager(c) binds it to a client.
 type AirPlayManager struct{ c *Client }
@@ -1888,6 +1888,11 @@ func (o NowPlaying) ToggleShuffle() error {
 // UseLocal calls useLocal().
 func (o NowPlaying) UseLocal() error {
 	return o.c.Call("nowPlaying", "useLocal", nil)
+}
+
+// UseSpotify calls useSpotify().
+func (o NowPlaying) UseSpotify() error {
+	return o.c.Call("nowPlaying", "useSpotify", nil)
 }
 
 // ExtractArtColors calls extractArtColors().
@@ -4677,6 +4682,292 @@ func (o Sim) PairingCode() (v map[string]any, err error) {
 func (o Sim) Status() (v map[string]any, err error) {
 	err = o.c.Call("sim", "status", &v)
 	return
+}
+
+// SpotifyManager is the service object "spotifyManager" (C++ SpotifyManager); NewSpotifyManager(c) binds it to a client.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+type SpotifyManager struct{ c *Client }
+
+// NewSpotifyManager binds "spotifyManager" to c.
+func NewSpotifyManager(c *Client) SpotifyManager { return SpotifyManager{c} }
+
+// Name is the object's name on the wire.
+func (SpotifyManager) Name() string { return "spotifyManager" }
+
+// GetState reads the property "state" (QString).
+func (o SpotifyManager) GetState() (v string, err error) {
+	err = o.c.Get("spotifyManager", "state", &v)
+	return
+}
+
+// GetSignedIn reads the property "signedIn" (bool).
+func (o SpotifyManager) GetSignedIn() (v bool, err error) {
+	err = o.c.Get("spotifyManager", "signedIn", &v)
+	return
+}
+
+// GetClientId reads the property "clientId" (QString).
+func (o SpotifyManager) GetClientId() (v string, err error) {
+	err = o.c.Get("spotifyManager", "clientId", &v)
+	return
+}
+
+// GetBuiltInClientId reads the property "builtInClientId" (bool).
+func (o SpotifyManager) GetBuiltInClientId() (v bool, err error) {
+	err = o.c.Get("spotifyManager", "builtInClientId", &v)
+	return
+}
+
+// GetRedirectUri reads the property "redirectUri" (QString).
+func (o SpotifyManager) GetRedirectUri() (v string, err error) {
+	err = o.c.Get("spotifyManager", "redirectUri", &v)
+	return
+}
+
+// GetUserName reads the property "userName" (QString).
+func (o SpotifyManager) GetUserName() (v string, err error) {
+	err = o.c.Get("spotifyManager", "userName", &v)
+	return
+}
+
+// GetStatus reads the property "status" (QString).
+func (o SpotifyManager) GetStatus() (v string, err error) {
+	err = o.c.Get("spotifyManager", "status", &v)
+	return
+}
+
+// GetPlaylists reads the property "playlists" (QVariantList).
+func (o SpotifyManager) GetPlaylists() (v []any, err error) {
+	err = o.c.Get("spotifyManager", "playlists", &v)
+	return
+}
+
+// GetAlbums reads the property "albums" (QVariantList).
+func (o SpotifyManager) GetAlbums() (v []any, err error) {
+	err = o.c.Get("spotifyManager", "albums", &v)
+	return
+}
+
+// GetLibraryLoading reads the property "libraryLoading" (bool).
+func (o SpotifyManager) GetLibraryLoading() (v bool, err error) {
+	err = o.c.Get("spotifyManager", "libraryLoading", &v)
+	return
+}
+
+// GetCollectionUri reads the property "collectionUri" (QString).
+func (o SpotifyManager) GetCollectionUri() (v string, err error) {
+	err = o.c.Get("spotifyManager", "collectionUri", &v)
+	return
+}
+
+// GetCollection reads the property "collection" (QVariantMap).
+func (o SpotifyManager) GetCollection() (v map[string]any, err error) {
+	err = o.c.Get("spotifyManager", "collection", &v)
+	return
+}
+
+// GetCollectionTracks reads the property "collectionTracks" (QVariantList).
+func (o SpotifyManager) GetCollectionTracks() (v []any, err error) {
+	err = o.c.Get("spotifyManager", "collectionTracks", &v)
+	return
+}
+
+// GetCollectionLoading reads the property "collectionLoading" (bool).
+func (o SpotifyManager) GetCollectionLoading() (v bool, err error) {
+	err = o.c.Get("spotifyManager", "collectionLoading", &v)
+	return
+}
+
+// GetDevices reads the property "devices" (QVariantList).
+func (o SpotifyManager) GetDevices() (v []any, err error) {
+	err = o.c.Get("spotifyManager", "devices", &v)
+	return
+}
+
+// GetHasPlayback reads the property "hasPlayback" (bool).
+func (o SpotifyManager) GetHasPlayback() (v bool, err error) {
+	err = o.c.Get("spotifyManager", "hasPlayback", &v)
+	return
+}
+
+// GetPlaying reads the property "playing" (bool).
+func (o SpotifyManager) GetPlaying() (v bool, err error) {
+	err = o.c.Get("spotifyManager", "playing", &v)
+	return
+}
+
+// GetTitle reads the property "title" (QString).
+func (o SpotifyManager) GetTitle() (v string, err error) {
+	err = o.c.Get("spotifyManager", "title", &v)
+	return
+}
+
+// GetArtist reads the property "artist" (QString).
+func (o SpotifyManager) GetArtist() (v string, err error) {
+	err = o.c.Get("spotifyManager", "artist", &v)
+	return
+}
+
+// GetAlbum reads the property "album" (QString).
+func (o SpotifyManager) GetAlbum() (v string, err error) {
+	err = o.c.Get("spotifyManager", "album", &v)
+	return
+}
+
+// GetTrackUri reads the property "trackUri" (QString).
+func (o SpotifyManager) GetTrackUri() (v string, err error) {
+	err = o.c.Get("spotifyManager", "trackUri", &v)
+	return
+}
+
+// GetContextUri reads the property "contextUri" (QString).
+func (o SpotifyManager) GetContextUri() (v string, err error) {
+	err = o.c.Get("spotifyManager", "contextUri", &v)
+	return
+}
+
+// GetArtUrl reads the property "artUrl" (QString).
+func (o SpotifyManager) GetArtUrl() (v string, err error) {
+	err = o.c.Get("spotifyManager", "artUrl", &v)
+	return
+}
+
+// GetDurationMs reads the property "durationMs" (int).
+func (o SpotifyManager) GetDurationMs() (v int, err error) {
+	err = o.c.Get("spotifyManager", "durationMs", &v)
+	return
+}
+
+// GetPositionMs reads the property "positionMs" (int).
+func (o SpotifyManager) GetPositionMs() (v int, err error) {
+	err = o.c.Get("spotifyManager", "positionMs", &v)
+	return
+}
+
+// GetShuffle reads the property "shuffle" (bool).
+func (o SpotifyManager) GetShuffle() (v bool, err error) {
+	err = o.c.Get("spotifyManager", "shuffle", &v)
+	return
+}
+
+// GetRepeat reads the property "repeat" (QString).
+func (o SpotifyManager) GetRepeat() (v string, err error) {
+	err = o.c.Get("spotifyManager", "repeat", &v)
+	return
+}
+
+// GetDeviceName reads the property "deviceName" (QString).
+func (o SpotifyManager) GetDeviceName() (v string, err error) {
+	err = o.c.Get("spotifyManager", "deviceName", &v)
+	return
+}
+
+// GetVolumePercent reads the property "volumePercent" (int).
+func (o SpotifyManager) GetVolumePercent() (v int, err error) {
+	err = o.c.Get("spotifyManager", "volumePercent", &v)
+	return
+}
+
+// GetSupportsVolume reads the property "supportsVolume" (bool).
+func (o SpotifyManager) GetSupportsVolume() (v bool, err error) {
+	err = o.c.Get("spotifyManager", "supportsVolume", &v)
+	return
+}
+
+// SetClientId calls setClientId(QString).
+func (o SpotifyManager) SetClientId(clientId string) error {
+	return o.c.Call("spotifyManager", "setClientId", nil, clientId)
+}
+
+// SignIn calls signIn().
+func (o SpotifyManager) SignIn() error {
+	return o.c.Call("spotifyManager", "signIn", nil)
+}
+
+// SignOut calls signOut().
+func (o SpotifyManager) SignOut() error {
+	return o.c.Call("spotifyManager", "signOut", nil)
+}
+
+// RefreshLibrary calls refreshLibrary().
+func (o SpotifyManager) RefreshLibrary() error {
+	return o.c.Call("spotifyManager", "refreshLibrary", nil)
+}
+
+// RefreshDevices calls refreshDevices().
+func (o SpotifyManager) RefreshDevices() error {
+	return o.c.Call("spotifyManager", "refreshDevices", nil)
+}
+
+// OpenCollection calls openCollection(QString).
+func (o SpotifyManager) OpenCollection(uri string) error {
+	return o.c.Call("spotifyManager", "openCollection", nil, uri)
+}
+
+// PlayCollection2 calls playCollection(QString, int).
+func (o SpotifyManager) PlayCollection2(uri string, index int) error {
+	return o.c.Call("spotifyManager", "playCollection", nil, uri, index)
+}
+
+// PlayCollection1 calls playCollection(QString).
+func (o SpotifyManager) PlayCollection1(uri string) error {
+	return o.c.Call("spotifyManager", "playCollection", nil, uri)
+}
+
+// TogglePlay calls togglePlay().
+func (o SpotifyManager) TogglePlay() error {
+	return o.c.Call("spotifyManager", "togglePlay", nil)
+}
+
+// Play calls play().
+func (o SpotifyManager) Play() error {
+	return o.c.Call("spotifyManager", "play", nil)
+}
+
+// Pause calls pause().
+func (o SpotifyManager) Pause() error {
+	return o.c.Call("spotifyManager", "pause", nil)
+}
+
+// Next calls next().
+func (o SpotifyManager) Next() error {
+	return o.c.Call("spotifyManager", "next", nil)
+}
+
+// Previous calls previous().
+func (o SpotifyManager) Previous() error {
+	return o.c.Call("spotifyManager", "previous", nil)
+}
+
+// Seek calls seek(int).
+func (o SpotifyManager) Seek(positionMs int) error {
+	return o.c.Call("spotifyManager", "seek", nil, positionMs)
+}
+
+// SetShuffle calls setShuffle(bool).
+func (o SpotifyManager) SetShuffle(on bool) error {
+	return o.c.Call("spotifyManager", "setShuffle", nil, on)
+}
+
+// ToggleShuffle calls toggleShuffle().
+func (o SpotifyManager) ToggleShuffle() error {
+	return o.c.Call("spotifyManager", "toggleShuffle", nil)
+}
+
+// CycleRepeat calls cycleRepeat().
+func (o SpotifyManager) CycleRepeat() error {
+	return o.c.Call("spotifyManager", "cycleRepeat", nil)
+}
+
+// SetVolume calls setVolume(int).
+func (o SpotifyManager) SetVolume(percent int) error {
+	return o.c.Call("spotifyManager", "setVolume", nil, percent)
+}
+
+// TransferTo calls transferTo(QString).
+func (o SpotifyManager) TransferTo(deviceId string) error {
+	return o.c.Call("spotifyManager", "transferTo", nil, deviceId)
 }
 
 // ThemeCatalog is the service object "themeCatalog" (C++ ThemeCatalog); NewThemeCatalog(c) binds it to a client.

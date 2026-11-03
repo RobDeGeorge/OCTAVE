@@ -35,6 +35,7 @@
 #include "managers/androidautomanager.h"
 #include "managers/airplaymanager.h"
 #include "managers/phonemirrormanager.h"
+#include "managers/spotifymanager.h"
 #include "managers/nowplaying.h"
 #include "managers/themecatalog.h"
 #include "service/servicepairing.h"
@@ -84,6 +85,8 @@ public:
     AndroidAutoManager androidAutoManager;
     PhoneMirrorManager phoneMirrorManager;
     AirPlayManager airPlayManager;
+    // Spotify over its Web API: sign-in, library, remote control
+    SpotifyManager spotifyManager;
     NowPlaying nowPlaying;
     FontCatalog fontCatalog;
     ThemeCatalog themeCatalog;

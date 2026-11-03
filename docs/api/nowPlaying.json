@@ -55,6 +55,14 @@
         },
         {
             "kind": "slot",
+            "name": "useSpotify",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
             "name": "extractArtColors",
             "params": [
             ],

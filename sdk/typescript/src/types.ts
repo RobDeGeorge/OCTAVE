@@ -742,6 +742,7 @@ export interface NowPlaying {
     seek: { args: [positionMs: number]; returns: void }
     toggleShuffle: { args: []; returns: void }
     useLocal: { args: []; returns: void }
+    useSpotify: { args: []; returns: void }
     extractArtColors: { args: []; returns: void }
   }
   signals: {
@@ -1738,6 +1739,114 @@ export interface Simulator {
   }
 }
 
+/**
+ * spotifyManager (SpotifyManager)
+ * @experimental not covered by the protocol version; may change or go in any release
+ */
+export interface SpotifyManager {
+  properties: {
+    /** QString, notify stateChanged */
+    state: string
+    /** bool, notify stateChanged */
+    signedIn: boolean
+    /** QString, notify clientIdChanged */
+    clientId: string
+    /** bool, constant */
+    builtInClientId: boolean
+    /** QString, constant */
+    redirectUri: string
+    /** QString, notify userChanged */
+    userName: string
+    /** QString, notify statusChanged */
+    status: string
+    /** QVariantList, notify libraryChanged */
+    playlists: unknown[]
+    /** QVariantList, notify libraryChanged */
+    albums: unknown[]
+    /** bool, notify libraryLoadingChanged */
+    libraryLoading: boolean
+    /** QString, notify collectionChanged */
+    collectionUri: string
+    /** QVariantMap, notify collectionChanged */
+    collection: Record<string, unknown>
+    /** QVariantList, notify collectionTracksChanged */
+    collectionTracks: unknown[]
+    /** bool, notify collectionTracksChanged */
+    collectionLoading: boolean
+    /** QVariantList, notify devicesChanged */
+    devices: unknown[]
+    /** bool, notify trackChanged */
+    hasPlayback: boolean
+    /** bool, notify playingChanged */
+    playing: boolean
+    /** QString, notify trackChanged */
+    title: string
+    /** QString, notify trackChanged */
+    artist: string
+    /** QString, notify trackChanged */
+    album: string
+    /** QString, notify trackChanged */
+    trackUri: string
+    /** QString, notify trackChanged */
+    contextUri: string
+    /** QString, notify artChanged */
+    artUrl: string
+    /** int, notify trackChanged */
+    durationMs: number
+    /** int, notify positionReported */
+    positionMs: number
+    /** bool, notify modesChanged */
+    shuffle: boolean
+    /** QString, notify modesChanged */
+    repeat: string
+    /** QString, notify deviceChanged */
+    deviceName: string
+    /** int, notify deviceChanged */
+    volumePercent: number
+    /** bool, notify deviceChanged */
+    supportsVolume: boolean
+  }
+  methods: {
+    setClientId: { args: [clientId: string]; returns: void }
+    signIn: { args: []; returns: void }
+    signOut: { args: []; returns: void }
+    refreshLibrary: { args: []; returns: void }
+    refreshDevices: { args: []; returns: void }
+    openCollection: { args: [uri: string]; returns: void }
+    playCollection: { args: [uri: string, index: number] | [uri: string]; returns: void }
+    togglePlay: { args: []; returns: void }
+    play: { args: []; returns: void }
+    pause: { args: []; returns: void }
+    next: { args: []; returns: void }
+    previous: { args: []; returns: void }
+    seek: { args: [positionMs: number]; returns: void }
+    setShuffle: { args: [on: boolean]; returns: void }
+    toggleShuffle: { args: []; returns: void }
+    cycleRepeat: { args: []; returns: void }
+    setVolume: { args: [percent: number]; returns: void }
+    transferTo: { args: [deviceId: string]; returns: void }
+  }
+  signals: {
+    stateChanged: []
+    clientIdChanged: []
+    userChanged: []
+    statusChanged: []
+    libraryChanged: []
+    libraryLoadingChanged: []
+    collectionChanged: []
+    collectionTracksChanged: []
+    devicesChanged: []
+    playingChanged: []
+    trackChanged: []
+    artChanged: []
+    positionReported: []
+    modesChanged: []
+    deviceChanged: []
+    playbackRequested: []
+    startedElsewhere: []
+  }
+}
+
 /** themeCatalog (ThemeCatalog) */
 export interface ThemeCatalog {
   properties: {
@@ -1900,6 +2009,7 @@ export interface Objects {
   settingsManager: SettingsManager
   shiftLightManager: ShiftLightManager
   sim: Simulator
+  spotifyManager: SpotifyManager
   themeCatalog: ThemeCatalog
   tripRecorder: TripRecorder
   units: Units

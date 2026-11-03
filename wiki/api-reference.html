@@ -28,7 +28,7 @@
 
         <h2 id="overview">Overview</h2>
         <p>This page is generated from <span class="file-path">docs/api/</span> (<code>./build/octave --dump-api docs/api</code>, then <code>python wiki/build_api_reference.py</code>); <code>tst_apidocs</code> fails when that copy is out of date. The protocol itself (<code>hello</code>, <code>describe</code>, <code>get</code>, <code>set</code>, <code>call</code>, <code>subscribe</code>, <code>rows</code>, <code>stream</code>, <code>pair</code>) is specified in <span class="file-path">docs/api/protocol.json</span> (JSON Schema, checked against the server) and described in <a href="utilities.html#service-protocol">Utilities: Service protocol</a>; versioning and the dashboard file schema in <span class="file-path">docs/api/README.md</span> and <span class="file-path">docs/api/dashboard-spec.schema.json</span>. What each member means is in the hand-written <a href="signals-slots-reference.html">Signals &amp; Slots API</a>.</p>
-        <p>The same objects are QML context properties under the same names. Types are Qt's names (<code>QString</code>, <code>QVariantMap</code>, ...); on the wire they are JSON. 26 objects:</p>
+        <p>The same objects are QML context properties under the same names. Types are Qt's names (<code>QString</code>, <code>QVariantMap</code>, ...); on the wire they are JSON. 27 objects:</p>
         <ul>
             <li><a href="#airPlayManager">airPlayManager</a></li>
             <li><a href="#androidAutoManager">androidAutoManager</a></li>
@@ -52,6 +52,7 @@
             <li><a href="#settingsManager">settingsManager</a></li>
             <li><a href="#shiftLightManager">shiftLightManager</a></li>
             <li><a href="#sim">sim</a></li>
+            <li><a href="#spotifyManager">spotifyManager</a></li>
             <li><a href="#themeCatalog">themeCatalog</a></li>
             <li><a href="#tripRecorder">tripRecorder</a></li>
             <li><a href="#units">units</a></li>
@@ -527,6 +528,7 @@
             <tr><td><code>seek(int positionMs)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
             <tr><td><code>toggleShuffle()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
             <tr><td><code>useLocal()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>useSpotify()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
             <tr><td><code>extractArtColors()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
           </tbody>
         </table>
@@ -1120,6 +1122,70 @@
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>activeChanged()</code>.</p>
+
+        <h3 id="spotifyManager"><code>spotifyManager</code> <span class="cmt">&mdash; SpotifyManager</span></h3>
+        <p><strong>Experimental:</strong> this object may change or go in any release.</p>
+        <p>Hand-written notes: <a href="signals-slots-reference.html#spotifyManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/spotifyManager.json</span>.</p>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
+          <tbody>
+            <tr><td><code>state</code></td><td>QString</td><td>read</td><td><code>stateChanged</code></td></tr>
+            <tr><td><code>signedIn</code></td><td>bool</td><td>read</td><td><code>stateChanged</code></td></tr>
+            <tr><td><code>clientId</code></td><td>QString</td><td>read</td><td><code>clientIdChanged</code></td></tr>
+            <tr><td><code>builtInClientId</code></td><td>bool</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>redirectUri</code></td><td>QString</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>userName</code></td><td>QString</td><td>read</td><td><code>userChanged</code></td></tr>
+            <tr><td><code>status</code></td><td>QString</td><td>read</td><td><code>statusChanged</code></td></tr>
+            <tr><td><code>playlists</code></td><td>QVariantList</td><td>read</td><td><code>libraryChanged</code></td></tr>
+            <tr><td><code>albums</code></td><td>QVariantList</td><td>read</td><td><code>libraryChanged</code></td></tr>
+            <tr><td><code>libraryLoading</code></td><td>bool</td><td>read</td><td><code>libraryLoadingChanged</code></td></tr>
+            <tr><td><code>collectionUri</code></td><td>QString</td><td>read</td><td><code>collectionChanged</code></td></tr>
+            <tr><td><code>collection</code></td><td>QVariantMap</td><td>read</td><td><code>collectionChanged</code></td></tr>
+            <tr><td><code>collectionTracks</code></td><td>QVariantList</td><td>read</td><td><code>collectionTracksChanged</code></td></tr>
+            <tr><td><code>collectionLoading</code></td><td>bool</td><td>read</td><td><code>collectionTracksChanged</code></td></tr>
+            <tr><td><code>devices</code></td><td>QVariantList</td><td>read</td><td><code>devicesChanged</code></td></tr>
+            <tr><td><code>hasPlayback</code></td><td>bool</td><td>read</td><td><code>trackChanged</code></td></tr>
+            <tr><td><code>playing</code></td><td>bool</td><td>read</td><td><code>playingChanged</code></td></tr>
+            <tr><td><code>title</code></td><td>QString</td><td>read</td><td><code>trackChanged</code></td></tr>
+            <tr><td><code>artist</code></td><td>QString</td><td>read</td><td><code>trackChanged</code></td></tr>
+            <tr><td><code>album</code></td><td>QString</td><td>read</td><td><code>trackChanged</code></td></tr>
+            <tr><td><code>trackUri</code></td><td>QString</td><td>read</td><td><code>trackChanged</code></td></tr>
+            <tr><td><code>contextUri</code></td><td>QString</td><td>read</td><td><code>trackChanged</code></td></tr>
+            <tr><td><code>artUrl</code></td><td>QString</td><td>read</td><td><code>artChanged</code></td></tr>
+            <tr><td><code>durationMs</code></td><td>int</td><td>read</td><td><code>trackChanged</code></td></tr>
+            <tr><td><code>positionMs</code></td><td>int</td><td>read</td><td><code>positionReported</code></td></tr>
+            <tr><td><code>shuffle</code></td><td>bool</td><td>read</td><td><code>modesChanged</code></td></tr>
+            <tr><td><code>repeat</code></td><td>QString</td><td>read</td><td><code>modesChanged</code></td></tr>
+            <tr><td><code>deviceName</code></td><td>QString</td><td>read</td><td><code>deviceChanged</code></td></tr>
+            <tr><td><code>volumePercent</code></td><td>int</td><td>read</td><td><code>deviceChanged</code></td></tr>
+            <tr><td><code>supportsVolume</code></td><td>bool</td><td>read</td><td><code>deviceChanged</code></td></tr>
+          </tbody>
+        </table>
+        <table>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
+          <tbody>
+            <tr><td><code>setClientId(QString clientId)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>signIn()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>signOut()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>refreshLibrary()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>refreshDevices()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>openCollection(QString uri)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>playCollection(QString uri, int index)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>playCollection(QString uri)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>togglePlay()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>play()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>pause()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>next()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>previous()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>seek(int positionMs)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>setShuffle(bool on)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>toggleShuffle()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>cycleRepeat()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>setVolume(int percent)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>transferTo(QString deviceId)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+          </tbody>
+        </table>
+        <p><strong>Signals</strong> (<code>subscribe</code>): <code>stateChanged()</code>, <code>clientIdChanged()</code>, <code>userChanged()</code>, <code>statusChanged()</code>, <code>libraryChanged()</code>, <code>libraryLoadingChanged()</code>, <code>collectionChanged()</code>, <code>collectionTracksChanged()</code>, <code>devicesChanged()</code>, <code>playingChanged()</code>, <code>trackChanged()</code>, <code>artChanged()</code>, <code>positionReported()</code>, <code>modesChanged()</code>, <code>deviceChanged()</code>, <code>playbackRequested()</code>, <code>startedElsewhere()</code>.</p>
 
         <h3 id="themeCatalog"><code>themeCatalog</code> <span class="cmt">&mdash; ThemeCatalog</span></h3>
         <p>Hand-written notes: <a href="signals-slots-reference.html#themeCatalog">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/themeCatalog.json</span>.</p>

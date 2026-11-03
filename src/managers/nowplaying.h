@@ -9,6 +9,7 @@ class AndroidAutoMedia;
 class MediaManager;
 class PhoneMirrorManager;
 class SettingsManager;
+class SpotifyManager;
 
 /**
  * @brief What is playing right now and the controls for it, whichever source
@@ -30,6 +31,8 @@ class SettingsManager;
  * The owner and whether it played are saved (mediaLastSource /
  * mediaLastPlaying) so Android Auto picks up where it was after a restart.
  * Android Auto's voice requests pause local music until the mic closes.
+ * Spotify takes the music when the user plays it from OCTAVE, or when it
+ * starts by itself while nothing else plays.
  *
  * And the Album Art Capture rule: while that theme is selected, the colours
  * follow the live source's art (extracted on an art change, a source switch,
@@ -43,7 +46,7 @@ class NowPlaying : public QObject
     // Service permissions (src/service/servicescopes.h)
     Q_CLASSINFO("octave.scope", "media")
     Q_CLASSINFO("octave.scope.full", "extractArtColors")
-    Q_PROPERTY(QString source READ source NOTIFY sourceChanged)          // "local" | "phone" | "androidauto"
+    Q_PROPERTY(QString source READ source NOTIFY sourceChanged)          // "local" | "phone" | "androidauto" | "spotify"
     Q_PROPERTY(bool playing READ playing NOTIFY playingChanged)
     Q_PROPERTY(bool hasTrack READ hasTrack NOTIFY trackInfoChanged)
     Q_PROPERTY(QString title READ title NOTIFY trackInfoChanged)
@@ -55,7 +58,7 @@ class NowPlaying : public QObject
     Q_PROPERTY(int durationMs READ durationMs NOTIFY durationChanged)    // 0 = unknown
     Q_PROPERTY(int positionMs READ positionMs NOTIFY positionChanged)
     Q_PROPERTY(bool canSeek READ canSeek NOTIFY capabilitiesChanged)
-    // The phone's shuffle belongs to its app: OCTAVE's toggle is local only
+    // The phone's shuffle belongs to its app: OCTAVE's toggle is local or Spotify only
     Q_PROPERTY(bool canShuffle READ canShuffle NOTIFY capabilitiesChanged)
     Q_PROPERTY(bool shuffled READ shuffled NOTIFY shuffledChanged)
 
@@ -65,12 +68,14 @@ public:
     // music this long after connecting, OCTAVE presses play
     static constexpr int kResumeKeyDelayMs = 4000;
 
-    enum class Source { Local, Phone, AndroidAuto };
+    enum class Source { Local, Phone, AndroidAuto, Spotify };
 
     explicit NowPlaying(MediaManager *media, PhoneMirrorManager *phone,
                         SettingsManager *settings = nullptr, QObject *parent = nullptr);
     // Android Auto's music (AndroidAutoManager::media()); set once by AppCore
     void setAndroidAuto(AndroidAutoMedia *aa);
+    // Spotify over its Web API; set once by AppCore
+    void setSpotify(SpotifyManager *spotify);
     // Shutdown: sources stopping now don't overwrite the saved owner
     void stopSaving();
 
@@ -87,7 +92,7 @@ public:
     int durationMs() const { return m_durationMs; }
     int positionMs() const { return m_positionMs; }
     bool canSeek() const { return m_canSeek; }
-    bool canShuffle() const { return m_source == Source::Local; }
+    bool canShuffle() const { return m_source == Source::Local || m_source == Source::Spotify; }
     bool shuffled() const { return m_shuffled; }
 
 signals:
@@ -109,8 +114,10 @@ public slots:
     void seek(int positionMs);
     void toggleShuffle();   // no-op unless the local player is the source
     // Hand the music back to OCTAVE's own player (the Media Room's source
-    // pill): the phone or Android Auto pauses; nothing plays until asked
+    // pill): the phone, Android Auto or Spotify pauses; nothing plays until asked
     void useLocal();
+    // Make Spotify the source (signed in only); nothing plays until asked
+    void useSpotify();
 
     // Theme colours from the live source's art now, whatever the theme
     // (Media Room's "save as theme" popup; the Album Art Capture rule)
@@ -126,6 +133,8 @@ private:
     void onAaMicrophone(bool open);
     void readAaTrack();
     void readAaState();
+    void readSpotify();
+    void onSpotifyStartedElsewhere();
     void remember();
     void readLocalTrack();
     void readPhoneState();
@@ -146,6 +155,7 @@ private:
     PhoneMirrorManager *m_phoneMirror = nullptr;
     SettingsManager *m_settings = nullptr;
     AndroidAutoMedia *m_aa = nullptr;
+    SpotifyManager *m_spotify = nullptr;
 
     Source m_source = Source::Local;
     // Android Auto owned and played when OCTAVE last stopped: it resumes on

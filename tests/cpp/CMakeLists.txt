@@ -180,9 +180,12 @@ octave_add_test(tst_phonemirror
 if(WIN32 AND OCTAVE_HAVE_FFMPEG)
     target_include_directories(tst_phonemirror PRIVATE ${FFMPEG_INCLUDE_DIRS})
 endif()
+# Spotify Web API: PKCE, the sign-in URL, reading library / player JSON
+octave_add_test(tst_spotifyapi SOURCES managers/spotifyapi.h managers/spotifyapi.cpp)
 # NowPlaying over the real MediaManager and PhoneMirrorManager
 octave_add_test(tst_nowplaying
     SOURCES managers/nowplaying.h managers/nowplaying.cpp managers/androidautomedia.h managers/androidautomedia.cpp
+            managers/spotifymanager.h managers/spotifymanager.cpp managers/spotifyapi.h managers/spotifyapi.cpp
             managers/mediamanager.h managers/mediamanager.cpp util/folderbrowser.h util/folderbrowser.cpp service/staticfiles.h service/staticfiles.cpp util/units.h util/units.cpp
             managers/phonemirrormanager.h managers/phonemirrormanager.cpp
             phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h util/h264decoder.h util/h264decoder.cpp

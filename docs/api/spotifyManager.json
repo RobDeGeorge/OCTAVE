@@ -1,0 +1,522 @@
+{
+    "class": "SpotifyManager",
+    "methods": [
+        {
+            "kind": "slot",
+            "name": "setClientId",
+            "params": [
+                {
+                    "name": "clientId",
+                    "type": "QString"
+                }
+            ],
+            "returns": "",
+            "scope": "full"
+        },
+        {
+            "kind": "slot",
+            "name": "signIn",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "full"
+        },
+        {
+            "kind": "slot",
+            "name": "signOut",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "full"
+        },
+        {
+            "kind": "slot",
+            "name": "refreshLibrary",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "refreshDevices",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "openCollection",
+            "params": [
+                {
+                    "name": "uri",
+                    "type": "QString"
+                }
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "playCollection",
+            "params": [
+                {
+                    "name": "uri",
+                    "type": "QString"
+                },
+                {
+                    "name": "index",
+                    "type": "int"
+                }
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "playCollection",
+            "params": [
+                {
+                    "name": "uri",
+                    "type": "QString"
+                }
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "togglePlay",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "play",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "pause",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "next",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "previous",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "seek",
+            "params": [
+                {
+                    "name": "positionMs",
+                    "type": "int"
+                }
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "setShuffle",
+            "params": [
+                {
+                    "name": "on",
+                    "type": "bool"
+                }
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "toggleShuffle",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "cycleRepeat",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "setVolume",
+            "params": [
+                {
+                    "name": "percent",
+                    "type": "int"
+                }
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "transferTo",
+            "params": [
+                {
+                    "name": "deviceId",
+                    "type": "QString"
+                }
+            ],
+            "returns": "",
+            "scope": "media"
+        }
+    ],
+    "object": "spotifyManager",
+    "properties": [
+        {
+            "constant": false,
+            "name": "state",
+            "notify": "stateChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "signedIn",
+            "notify": "stateChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "clientId",
+            "notify": "clientIdChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "builtInClientId",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "redirectUri",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "userName",
+            "notify": "userChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "status",
+            "notify": "statusChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "playlists",
+            "notify": "libraryChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "albums",
+            "notify": "libraryChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "libraryLoading",
+            "notify": "libraryLoadingChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "collectionUri",
+            "notify": "collectionChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "collection",
+            "notify": "collectionChanged",
+            "readable": true,
+            "type": "QVariantMap",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "collectionTracks",
+            "notify": "collectionTracksChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "collectionLoading",
+            "notify": "collectionTracksChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "devices",
+            "notify": "devicesChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "hasPlayback",
+            "notify": "trackChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "playing",
+            "notify": "playingChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "title",
+            "notify": "trackChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "artist",
+            "notify": "trackChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "album",
+            "notify": "trackChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "trackUri",
+            "notify": "trackChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "contextUri",
+            "notify": "trackChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "artUrl",
+            "notify": "artChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "durationMs",
+            "notify": "trackChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "positionMs",
+            "notify": "positionReported",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "shuffle",
+            "notify": "modesChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "repeat",
+            "notify": "modesChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "deviceName",
+            "notify": "deviceChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "volumePercent",
+            "notify": "deviceChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "supportsVolume",
+            "notify": "deviceChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "stateChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "clientIdChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "userChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "statusChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "libraryChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "libraryLoadingChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "collectionChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "collectionTracksChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "devicesChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "playingChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "trackChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "artChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "positionReported",
+            "params": [
+            ]
+        },
+        {
+            "name": "modesChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "deviceChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "playbackRequested",
+            "params": [
+            ]
+        },
+        {
+            "name": "startedElsewhere",
+            "params": [
+            ]
+        }
+    ],
+    "stability": "experimental"
+}

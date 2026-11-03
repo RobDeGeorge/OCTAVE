@@ -116,6 +116,9 @@ AppCore::AppCore(const QDir &frontendDir, Units *units)
     // Outside the desktop block: on mobile the phone stub never takes them, so
     // the source is always local
     nowPlaying.setAndroidAuto(androidAutoManager.media());
+    // Spotify: the library in OCTAVE's pages, the Spotify app as the player
+    expose("spotifyManager", &spotifyManager);
+    nowPlaying.setSpotify(&spotifyManager);
     expose("nowPlaying", &nowPlaying);
     wireAnalyzer();
 
@@ -292,10 +295,12 @@ void AppCore::wireVolume()
         phoneMirrorManager.setVolume(linear);
         androidAutoManager.setVolume(linear);
         airPlayManager.setVolume(linear);
+        // Spotify plays on another device: its volume is set there, in its
+        // own 0-100 (the device applies its curve), only while it is the source
+        if (nowPlaying.sourceKind() == NowPlaying::Source::Spotify && !volumeController.muted())
+            spotifyManager.setVolume(percent);
 #ifndef Q_OS_MOBILE
         esp32VolumeManager.send_volume_update(percent);
-#else
-        Q_UNUSED(percent);
 #endif
     });
     volumeController.applyVolume(settingsManager.currentVolume());
@@ -307,6 +312,9 @@ void AppCore::wireVolume()
         phoneMirrorManager.setMuted(muted);
         androidAutoManager.setMuted(muted);
         airPlayManager.setMuted(muted);
+        // Spotify has no mute: 0 %, and the volume back on unmute
+        if (nowPlaying.sourceKind() == NowPlaying::Source::Spotify)
+            spotifyManager.setVolume(muted ? 0 : volumeController.percent());
 #ifndef Q_OS_MOBILE
         esp32VolumeManager.send_mute_state(muted);
 #endif

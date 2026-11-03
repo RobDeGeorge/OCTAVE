@@ -23,6 +23,7 @@
         "settingsManager": "SettingsManager",
         "shiftLightManager": "ShiftLightManager",
         "sim": "Simulator",
+        "spotifyManager": "SpotifyManager",
         "themeCatalog": "ThemeCatalog",
         "tripRecorder": "TripRecorder",
         "units": "Units",

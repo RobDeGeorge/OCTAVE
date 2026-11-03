@@ -35,6 +35,7 @@
             <li><a href="#playback-resume">Playback State Resume</a></li>
             <li><a href="#precaching">Neighbor Pre-caching</a></li>
             <li><a href="#error-recovery">Error Recovery</a></li>
+            <li><a href="#spotify">Spotify</a></li>
             <li><a href="#signals">Signals</a></li>
             <li><a href="#slots">Slots</a></li>
             <li><a href="#threading">Threading</a></li>
@@ -478,7 +479,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
 }</code></pre>
         <p>The fan-out:</p>
         <ul>
-          <li><code>applyVolume()</code> emits <code>volumeApplied(percent, linear)</code> and knows no manager; <span class="file-path">main.cpp</span> connects it to <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code>, <code>esp32VolumeManager.send_volume_update(percent)</code> (desktop builds).</li>
+          <li><code>applyVolume()</code> emits <code>volumeApplied(percent, linear)</code> and knows no manager; <code>AppCore::wireVolume</code> (<span class="file-path">src/appcore.cpp</span>) connects it to <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code>, Android Auto and AirPlay, <code>spotifyManager.setVolume(percent)</code> while Spotify is the source (see <a href="#spotify">Spotify</a>), and <code>esp32VolumeManager.send_volume_update(percent)</code> (desktop builds).</li>
         </ul>
         <p>
           <span class="file-path">main.cpp</span> calls <code>applyVolume(settingsManager.currentVolume)</code> once at startup after every manager
@@ -645,6 +646,36 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
         </p>
 
         <!-- Signals -->
+        <h2 id="spotify">Spotify</h2>
+        <p>
+          Spotify is not played by <code>MediaManager</code>: <a href="signals-slots-reference.html#spotifyManager"><code>spotifyManager</code></a>
+          reads the user's library over the Spotify Web API and remote-controls the Spotify app on the phone (or any
+          Spotify device). The music menu's playlist dropdown lists Liked Songs, the
+          user's playlists and saved albums under a <strong>Spotify</strong> heading after the local playlists; picking one
+          shows its songs in the same table and rows as a local playlist (<span class="file-path">frontend/MediaPlayer.qml</span>);
+          tapping one plays it on the phone and <code>nowPlaying</code> makes Spotify the source, so
+          the Media Room, bottom bar, knob and gestures control it. Album Art Capture follows its covers.
+        </p>
+        <p>
+          Volume: while Spotify is the source, OCTAVE's volume (slider, knob, gestures, mute) sets the Spotify device's own
+          volume (<code>spotifyManager.setVolume</code>, the raw percent: the device applies its own curve; mute is 0&nbsp;%).
+          A device that keeps its volume to itself (Spotify reports <code>supports_volume: false</code>) is left alone.
+        </p>
+        <p>Limits, all Spotify's:</p>
+        <ul>
+          <li>Controlling playback needs Spotify Premium.</li>
+          <li>A Development Mode Spotify app signs in only the accounts added under User Management in its dashboard.</li>
+          <li>Spotify lists the songs of a playlist only when the user owns or collaborates on it; other playlists can be played but not opened.</li>
+          <li>No audio reaches OCTAVE, so the visualizer stays flat.</li>
+        </ul>
+        <p>
+          Setting up: create an app at developer.spotify.com (Web API), add the redirect URIs
+          <code>http://127.0.0.1:43821/callback</code> (desktop and head unit) and the browser demo's address
+          (<code>https://robdegeorge.com/OCTAVE/</code>), add the account under User Management, then either build with
+          <code>-DOCTAVE_SPOTIFY_CLIENT_ID=&lt;id&gt;</code> or paste the Client ID in Settings &gt; Media &gt; Spotify and
+          press Connect Spotify.
+        </p>
+
         <h2 id="signals">Signals</h2>
         <table>
           <thead>

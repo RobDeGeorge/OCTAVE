@@ -175,6 +175,16 @@ Item {
         showingPhoneQueue = phoneQueueAvailable && _phoneIsSource
         if (showingPhoneQueue)
             phoneQueueView.positionViewAtBeginning()
+        // Spotify playing: the list it plays from; the phone or a local track: not
+        if (_spotifyIsSource) {
+            var ctx = spotifyManager.contextUri
+            if (ctx !== "" && ctx !== spotifyUri && _spotifyHas(ctx))
+                showSpotify(ctx)
+            else if (spotifyUri === "" && spotifyManager.playlists.length > 0)
+                showSpotify(spotifyManager.playlists[0].uri)
+        } else if (showingPhoneQueue) {
+            spotifyUri = ""
+        }
     }
     // Follow a source change while the page is open (the phone taking the
     // controls, or a local track handing them back)
@@ -182,8 +192,88 @@ Item {
         target: (typeof nowPlaying !== "undefined" && nowPlaying) ? nowPlaying : null
         function onSourceChanged() { mediaPlayer._pickQueue() }
     }
-    readonly property bool phoneQueueShown: showingPhoneQueue && phoneQueueAvailable
-    readonly property var dropdownEntries: (phoneQueueAvailable ? [phoneQueueName] : []).concat(playlistNames)
+    readonly property bool phoneQueueShown: showingPhoneQueue && phoneQueueAvailable && !spotifyShown
+    // A list that isn't the local library is in the table (no sorting, no new playlist)
+    readonly property bool remoteShown: phoneQueueShown || spotifyShown
+
+    // Spotify (spotifyManager, the Web API): Liked Songs, its playlists and
+    // saved albums are dropdown entries under a "Spotify" heading, after the
+    // local playlists; picking one shows its songs in the same table and
+    // rows as a local playlist (in the remote list, with the phone queue)
+    readonly property bool hasSpotify: typeof spotifyManager !== "undefined" && spotifyManager !== null
+    readonly property bool spotifySignedIn: hasSpotify && spotifyManager.signedIn
+    readonly property bool _spotifyIsSource: typeof nowPlaying !== "undefined" && !!nowPlaying && nowPlaying.source === "spotify"
+    // The open Spotify list's uri ("" = a local playlist or the phone queue)
+    property string spotifyUri: ""
+    readonly property bool spotifyShown: spotifyUri !== "" && spotifySignedIn
+    readonly property var spotifyTracks: spotifyShown ? spotifyManager.collectionTracks : []
+    readonly property var spotifyCollection: spotifyShown ? spotifyManager.collection : ({})
+    function _spotifyHas(uri) {
+        var lists = [spotifyManager.playlists, spotifyManager.albums]
+        for (var l = 0; l < lists.length; ++l)
+            for (var i = 0; i < lists[l].length; ++i)
+                if (lists[l][i].uri === uri)
+                    return true
+        return false
+    }
+    function showSpotify(uri) {
+        showingPhoneQueue = false
+        spotifyUri = uri
+        if (spotifyManager.collectionUri !== uri)
+            spotifyManager.openCollection(uri)
+        phoneQueueView.positionViewAtBeginning()
+    }
+    // Signed out: back to the local list
+    onSpotifySignedInChanged: if (!spotifySignedIn) spotifyUri = ""
+
+    // 3:05 / 1:02:07 from milliseconds
+    function formatMs(ms) {
+        var t = Math.round(ms / 1000)
+        var h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), sec = t % 60
+        var ss = (sec < 10 ? "0" : "") + sec
+        return h > 0 ? h + ":" + (m < 10 ? "0" : "") + m + ":" + ss : m + ":" + ss
+    }
+    readonly property string spotifyStats: {
+        if (!spotifyShown)
+            return ""
+        var c = spotifyCollection
+        var n = spotifyTracks.length || c.trackCount || 0
+        var parts = [n + " songs"]
+        var total = 0
+        for (var i = 0; i < spotifyTracks.length; ++i)
+            total += spotifyTracks[i].durationMs || 0
+        if (total > 0)
+            parts.push(formatMs(total))
+        if (c.owner)
+            parts.push(c.owner)
+        if (spotifyManager.deviceName)
+            parts.push("on " + spotifyManager.deviceName)
+        return parts.join("  \u00B7  ")
+    }
+
+    // Every dropdown row: { kind, name, uri }. kind: "phone", "local",
+    // "heading" (not pickable), "spotify", "spotifyConnect" (to Settings)
+    readonly property var dropdownEntries: {
+        var out = []
+        if (phoneQueueAvailable)
+            out.push({ kind: "phone", name: phoneQueueName, uri: "" })
+        for (var i = 0; i < playlistNames.length; ++i)
+            out.push({ kind: "local", name: playlistNames[i], uri: "" })
+        if (!hasSpotify)
+            return out
+        out.push({ kind: "heading", name: "Spotify", uri: "" })
+        if (!spotifySignedIn) {
+            out.push({ kind: "spotifyConnect", name: "Connect Spotify…", uri: "" })
+            return out
+        }
+        var lists = [spotifyManager.playlists, spotifyManager.albums]
+        for (var l = 0; l < lists.length; ++l)
+            for (var j = 0; j < lists[l].length; ++j)
+                out.push({ kind: "spotify", name: lists[l][j].name, uri: lists[l][j].uri })
+        if (spotifyManager.libraryLoading && out[out.length - 1].kind === "heading")
+            out.push({ kind: "heading", name: "Loading…", uri: "" })
+        return out
+    }
 
     property int playlistRefreshCounter: 0  // Incremented to force delegate rebindings
 
@@ -358,7 +448,7 @@ Item {
             // Stats (left side, vertically centered)
             Row {
                 id: statsRow
-                visible: !mediaPlayer.phoneQueueShown
+                visible: !mediaPlayer.phoneQueueShown && !mediaPlayer.spotifyShown
                 anchors {
                     left: parent.left
                     leftMargin: App.Spacing.overallMargin * 4
@@ -442,9 +532,27 @@ Item {
                 font.family: mediaPlayer.globalFont
             }
 
+            // Spotify list stats, in place of the local library's
+            Text {
+                visible: mediaPlayer.spotifyShown
+                anchors {
+                    left: parent.left
+                    leftMargin: App.Spacing.overallMargin * 4
+                    right: newPlaylistButton.left
+                    rightMargin: App.Spacing.overallMargin * 2
+                    verticalCenter: parent.verticalCenter
+                }
+                text: mediaPlayer.spotifyStats
+                color: App.Style.secondaryTextColor
+                font.pixelSize: App.Spacing.mediaPlayerStatsTextSize * 1.2
+                font.family: mediaPlayer.globalFont
+                elide: Text.ElideRight
+            }
+
             // New playlist button (left of dropdown)
             Rectangle {
                 id: newPlaylistButton
+                visible: !mediaPlayer.spotifyShown
                 width: App.Spacing.bottomBarNavButtonHeight
                 height: App.Spacing.bottomBarNavButtonHeight
                 anchors {
@@ -533,8 +641,9 @@ Item {
                         anchors.bottom: parent.bottom
                         anchors.leftMargin: App.Spacing.overallMargin * 2
                         verticalAlignment: Text.AlignVCenter
-                        text: mediaPlayer.phoneQueueShown ? mediaPlayer.phoneQueueName
-                                                          : (currentPlaylistName || "Select Playlist")
+                        text: mediaPlayer.spotifyShown ? (mediaPlayer.spotifyCollection.name || "Spotify")
+                              : mediaPlayer.phoneQueueShown ? mediaPlayer.phoneQueueName
+                              : (currentPlaylistName || "Select Playlist")
                         color: App.Style.primaryTextColor
                         font.pixelSize: App.Spacing.mediaPlayerStatsTextSize * 1.4
                         font.bold: true
@@ -564,6 +673,9 @@ Item {
                             if (playlistPopup.visible) {
                                 playlistPopup.close()
                             } else {
+                                if (mediaPlayer.spotifySignedIn && !spotifyManager.libraryLoading
+                                        && spotifyManager.playlists.length === 0)
+                                    spotifyManager.refreshLibrary()
                                 playlistPopup.open()
                             }
                         }
@@ -606,14 +718,18 @@ Item {
 
                                 Rectangle {
                                     id: playlistItem
-                                    readonly property bool isPhoneQueue: mediaPlayer.phoneQueueAvailable && index === 0
-                                    readonly property bool isActive: isPhoneQueue ? mediaPlayer.phoneQueueShown
-                                                                   : (!mediaPlayer.phoneQueueShown && modelData === currentPlaylistName)
+                                    readonly property string kind: modelData.kind
+                                    readonly property bool isHeading: kind === "heading"
+                                    readonly property bool isActive: kind === "phone" ? mediaPlayer.phoneQueueShown
+                                                                   : kind === "spotify" ? (mediaPlayer.spotifyShown && modelData.uri === mediaPlayer.spotifyUri)
+                                                                   : kind === "local" ? (!mediaPlayer.phoneQueueShown && !mediaPlayer.spotifyShown
+                                                                                         && modelData.name === currentPlaylistName)
+                                                                   : false
                                     width: playlistColumn.width
-                                    height: App.Spacing.bottomBarNavButtonHeight
+                                    height: isHeading ? App.Spacing.bottomBarNavButtonHeight * 0.6 : App.Spacing.bottomBarNavButtonHeight
                                     color: {
                                         if (isActive) return Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.25)
-                                        if (itemMouseArea.containsMouse)
+                                        if (!isHeading && itemMouseArea.containsMouse)
                                             return Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.15)
                                         return "transparent"
                                     }
@@ -621,7 +737,22 @@ Item {
                                     border.width: isActive ? 1 : 0
                                     border.color: App.Style.accent
 
+                                    // Section heading ("Spotify"): the dropdown's "PLAYLIST" label style
+                                    Text {
+                                        visible: playlistItem.isHeading
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: App.Spacing.overallMargin * 2
+                                        anchors.bottom: parent.bottom
+                                        text: modelData.name.toUpperCase()
+                                        color: App.Style.accent
+                                        font.pixelSize: App.Spacing.mediaPlayerStatsTextSize * 0.85
+                                        font.bold: true
+                                        font.family: mediaPlayer.globalFont
+                                        font.letterSpacing: dp(1)
+                                    }
+
                                     RowLayout {
+                                        visible: !playlistItem.isHeading
                                         anchors.fill: parent
                                         anchors.leftMargin: App.Spacing.overallMargin * 2
                                         anchors.rightMargin: App.Spacing.overallMargin * 2
@@ -629,8 +760,8 @@ Item {
 
                                         Text {
                                             Layout.fillWidth: true
-                                            text: modelData
-                                            color: App.Style.primaryTextColor
+                                            text: modelData.name
+                                            color: playlistItem.kind === "spotifyConnect" ? App.Style.accent : App.Style.primaryTextColor
                                             font.pixelSize: App.Spacing.overallText * 1.1
                                             font.bold: playlistItem.isActive
                                             font.family: mediaPlayer.globalFont
@@ -641,23 +772,31 @@ Item {
                                     MouseArea {
                                         id: itemMouseArea
                                         anchors.fill: parent
+                                        enabled: !playlistItem.isHeading
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: {
-                                            if (playlistItem.isPhoneQueue) {
+                                            if (playlistItem.kind === "spotify") {
+                                                mediaPlayer.showSpotify(modelData.uri)
+                                            } else if (playlistItem.kind === "spotifyConnect") {
+                                                if (mediaPlayer.mainWindow && mediaPlayer.mainWindow.navigateToSettings)
+                                                    mediaPlayer.mainWindow.navigateToSettings("mediaSettings")
+                                            } else if (playlistItem.kind === "phone") {
+                                                mediaPlayer.spotifyUri = ""
                                                 mediaPlayer.showingPhoneQueue = true
                                                 phoneQueueView.positionViewAtBeginning()
                                             } else {
+                                                mediaPlayer.spotifyUri = ""
                                                 mediaPlayer.showingPhoneQueue = false
-                                                if (mediaManager && modelData)
-                                                    mediaManager.select_playlist(modelData)
+                                                if (mediaManager && modelData.name)
+                                                    mediaManager.select_playlist(modelData.name)
                                             }
                                             playlistPopup.close()
                                         }
                                         onPressAndHold: {
-                                            // Only allow deleting non-special playlists
-                                            if (!playlistItem.isPhoneQueue && modelData !== "All Music" && modelData !== "Unsorted") {
-                                                deletePlaylistDialog.playlistToDelete = modelData
+                                            // Only allow deleting the user's own local playlists
+                                            if (playlistItem.kind === "local" && modelData.name !== "All Music" && modelData.name !== "Unsorted") {
+                                                deletePlaylistDialog.playlistToDelete = modelData.name
                                                 playlistPopup.close()
                                                 deletePlaylistDialog.open()
                                             }
@@ -716,7 +855,7 @@ Item {
 
                             MouseArea {
                                 anchors.fill: parent
-                                enabled: !mediaPlayer.phoneQueueShown   // the phone's order is the queue
+                                enabled: !mediaPlayer.remoteShown   // the phone's queue / Spotify's list order
                                 onClicked: {
                                     if (currentSortColumn === "title") {
                                         sortByTitleAscending = !sortByTitleAscending
@@ -730,7 +869,7 @@ Item {
 
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: mediaPlayer.phoneQueueShown ? "TITLE" : "TITLE " + (currentSortColumn === "title" ?
+                                text: mediaPlayer.remoteShown ? "TITLE" : "TITLE " + (currentSortColumn === "title" ?
                                     (sortByTitleAscending ? "↑" : "↓") : "")
                                 color: App.Style.headerTextColor
                                 font.pixelSize: App.Spacing.mediaPlayerTextSize * 1.2
@@ -746,7 +885,7 @@ Item {
 
                             MouseArea {
                                 anchors.fill: parent
-                                enabled: !mediaPlayer.phoneQueueShown   // the phone's order is the queue
+                                enabled: !mediaPlayer.remoteShown   // the phone's queue / Spotify's list order
                                 onClicked: {
                                     if (currentSortColumn === "artist") {
                                         sortByArtistAscending = !sortByArtistAscending
@@ -760,7 +899,7 @@ Item {
 
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: mediaPlayer.phoneQueueShown ? "ARTIST" : "ARTIST " + (currentSortColumn === "artist" ?
+                                text: mediaPlayer.remoteShown ? "ARTIST" : "ARTIST " + (currentSortColumn === "artist" ?
                                     (sortByArtistAscending ? "↑" : "↓") : "")
                                 color: App.Style.headerTextColor
                                 font.pixelSize: App.Spacing.mediaPlayerTextSize * 1.2
@@ -777,7 +916,7 @@ Item {
 
                             MouseArea {
                                 anchors.fill: parent
-                                enabled: !mediaPlayer.phoneQueueShown   // the phone's order is the queue
+                                enabled: !mediaPlayer.remoteShown   // the phone's queue / Spotify's list order
                                 onClicked: {
                                     if (currentSortColumn === "album") {
                                         sortByAlbumAscending = !sortByAlbumAscending
@@ -791,7 +930,7 @@ Item {
 
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: mediaPlayer.phoneQueueShown ? "" : "ALBUM " + (currentSortColumn === "album" ?
+                                text: mediaPlayer.phoneQueueShown ? "" : mediaPlayer.spotifyShown ? "ALBUM" : "ALBUM " + (currentSortColumn === "album" ?
                                     (sortByAlbumAscending ? "↑" : "↓") : "")
                                 color: App.Style.headerTextColor
                                 font.pixelSize: App.Spacing.mediaPlayerTextSize * 1.2
@@ -805,7 +944,7 @@ Item {
                 // Media list
                 ListView {
                     id: mediaListView
-                    visible: !mediaPlayer.phoneQueueShown
+                    visible: !mediaPlayer.remoteShown
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     // Same gap under the column header as the page leaves above the bottom bar
@@ -1152,20 +1291,28 @@ Item {
                     }
                 }
 
-                // Phone queue (phoneMirrorManager.mediaQueue): same card look as
-                // a song row, each with its album art as the phone sends it
+                // The remote list: the phone queue (phoneMirrorManager.mediaQueue)
+                // or a Spotify playlist / album (spotifyManager.collectionTracks),
+                // the same card look as a song row, each with its album art
                 ListView {
                     id: phoneQueueView
-                    visible: mediaPlayer.phoneQueueShown
+                    visible: mediaPlayer.remoteShown
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     Layout.topMargin: App.Spacing.overallMargin
                     clip: true
-                    model: mediaPlayer.phoneQueue
+                    model: mediaPlayer.spotifyShown ? mediaPlayer.spotifyTracks : mediaPlayer.phoneQueue
                     boundsBehavior: Flickable.StopAtBounds
                     spacing: dp(6)
 
                     readonly property int activeIndex: {
+                        if (mediaPlayer.spotifyShown) {
+                            var uri = spotifyManager.trackUri
+                            for (var t = 0; t < mediaPlayer.spotifyTracks.length; ++t)
+                                if (mediaPlayer.spotifyTracks[t].uri === uri)
+                                    return t
+                            return -1
+                        }
                         if (!mediaPlayer.hasPhoneMirror)
                             return -1
                         var id = phoneMirrorManager.mediaQueueActiveId
@@ -1186,9 +1333,13 @@ Item {
                         readonly property bool isCurrent: index === phoneQueueView.activeIndex
                         // The phone sends each item's art shortly after the queue;
                         // the playing item can borrow the now-playing art meanwhile
-                        readonly property string albumArtSource: modelData.art
-                            || (isCurrent && mediaPlayer.hasPhoneMirror ? phoneMirrorManager.mediaArtUrl : "")
+                        readonly property string albumArtSource: modelData.art || modelData.imageUrl
+                            || (isCurrent && !mediaPlayer.spotifyShown && mediaPlayer.hasPhoneMirror
+                                ? phoneMirrorManager.mediaArtUrl : "")
                             || "./assets/missing_art.png"
+                        // Spotify rows carry a length; the phone queue doesn't
+                        readonly property string durationLabel: modelData.durationMs > 0
+                            ? mediaPlayer.formatMs(modelData.durationMs) : ""
                         readonly property real lineTextSize: App.Spacing.mediaPlayerTextSize * 1.2
                         readonly property real columnGutter: App.Spacing.overallMargin * 3
 
@@ -1316,6 +1467,7 @@ Item {
                                         clip: true
 
                                         Text {
+                                            id: queueTitle
                                             anchors.left: parent.left
                                             anchors.right: parent.right
                                             anchors.rightMargin: queueRow.columnGutter
@@ -1327,6 +1479,20 @@ Item {
                                             font.bold: true
                                             wrapMode: Text.Wrap
                                             maximumLineCount: 2
+                                            elide: Text.ElideRight
+                                        }
+
+                                        // Duration, on the row below the title (as a song row)
+                                        Text {
+                                            visible: queueRow.durationLabel !== ""
+                                            anchors.left: parent.left
+                                            anchors.right: parent.right
+                                            anchors.top: queueTitle.bottom
+                                            anchors.topMargin: App.Spacing.overallMargin
+                                            text: queueRow.durationLabel
+                                            color: App.Style.secondaryTextColor
+                                            font.pixelSize: App.Spacing.mediaPlayerSecondaryTextSize * 1.1
+                                            font.family: mediaPlayer.globalFont
                                             elide: Text.ElideRight
                                         }
                                     }
@@ -1353,11 +1519,27 @@ Item {
                                     }
                                 }
 
-                                // Album column: kept so the columns line up with the header
+                                // Album column (the phone queue has none: kept blank so
+                                // the columns line up with the header)
                                 Item {
                                     Layout.preferredWidth: parent.width * mediaPlayer.albumColumnRatio
                                     visible: mediaPlayer.albumColumnRatio > 0
                                     Layout.fillHeight: true
+                                    clip: true
+
+                                    Text {
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: queueRow.columnGutter
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: modelData.album || ""
+                                        color: App.Style.secondaryTextColor
+                                        font.pixelSize: queueRow.lineTextSize
+                                        font.family: mediaPlayer.globalFont
+                                        wrapMode: Text.Wrap
+                                        maximumLineCount: 2
+                                        elide: Text.ElideRight
+                                    }
                                 }
                             }
 
@@ -1365,7 +1547,9 @@ Item {
                                 id: queueMouse
                                 anchors.fill: parent
                                 onClicked: {
-                                    if (!queueRow.isCurrent)
+                                    if (mediaPlayer.spotifyShown)
+                                        spotifyManager.playCollection(mediaPlayer.spotifyUri, index)
+                                    else if (!queueRow.isCurrent)
                                         phoneMirrorManager.mediaSkipToQueueItem(modelData.id)
                                     var returnToLibrary = settingsManager ? settingsManager.returnToLibraryAfterSelection : false
                                     if (!returnToLibrary)
@@ -1396,6 +1580,57 @@ Item {
                 }
             }
 
+            // Spotify: loading, or a list Spotify won't show (a followed playlist)
+            Column {
+                anchors.centerIn: parent
+                width: parent.width * 0.7
+                spacing: App.Spacing.overallMargin * 3
+                visible: mediaPlayer.spotifyShown && mediaPlayer.spotifyTracks.length === 0
+
+                readonly property bool notListed: mediaPlayer.spotifyCollection.tracksListed === false
+
+                Text {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.Wrap
+                    text: spotifyManager && spotifyManager.collectionLoading ? "Loading\u2026"
+                          : parent.notListed ? "Spotify doesn't share the songs of playlists you follow. You can still play it."
+                          : "No songs"
+                    color: App.Style.primaryTextColor
+                    font.pixelSize: App.Spacing.mediaPlayerTextSize * 1.3
+                    font.family: mediaPlayer.globalFont
+                }
+
+                Rectangle {
+                    visible: parent.notListed && !(spotifyManager && spotifyManager.collectionLoading)
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: playListText.implicitWidth + App.Spacing.overallMargin * 8
+                    height: App.Spacing.bottomBarNavButtonHeight
+                    radius: height / 2
+                    color: playListMouse.pressed ? Qt.darker(App.Style.accent, 1.2) : App.Style.accent
+
+                    Text {
+                        id: playListText
+                        anchors.centerIn: parent
+                        text: "Play"
+                        color: App.Style.backgroundColor
+                        font.pixelSize: App.Spacing.mediaPlayerTextSize * 1.2
+                        font.bold: true
+                        font.family: mediaPlayer.globalFont
+                    }
+                    MouseArea {
+                        id: playListMouse
+                        anchors.fill: parent
+                        onClicked: {
+                            spotifyManager.playCollection(mediaPlayer.spotifyUri, -1)
+                            var returnToLibrary = settingsManager ? settingsManager.returnToLibraryAfterSelection : false
+                            if (!returnToLibrary)
+                                stackView.openPage("MediaRoom.qml")
+                        }
+                    }
+                }
+            }
+
             // Empty state message
             Text {
                 anchors.centerIn: parent
@@ -1403,7 +1638,7 @@ Item {
                 color: App.Style.primaryTextColor
                 font.pixelSize: App.Spacing.mediaPlayerTextSize * 1.3
                 font.family: mediaPlayer.globalFont
-                visible: mediaListView.count === 0 && !mediaPlayer.phoneQueueShown
+                visible: mediaListView.count === 0 && !mediaPlayer.phoneQueueShown && !mediaPlayer.spotifyShown
             }
         }
     }
