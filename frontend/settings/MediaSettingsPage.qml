@@ -937,11 +937,15 @@ Flickable {
                             text: spotifyManager && spotifyManager.state === "signingIn" ? "Try Again" : "Connect Spotify"
                             enabled: pageRoot.hasSpotify && spotifyManager.clientId !== ""
                             onClicked: spotifyManager.signIn()
+                            // SettingsButton has no height of its own
+                            Layout.preferredHeight: spotifyClientIdField.height
                         }
                         SettingsButton {
                             visible: pageRoot.hasSpotify && spotifyManager.state !== "signedOut"
                             text: spotifyManager && spotifyManager.signedIn ? "Sign Out" : "Cancel"
                             onClicked: spotifyManager.signOut()
+                            // SettingsButton has no height of its own
+                            Layout.preferredHeight: spotifyClientIdField.height
                         }
                         Item { Layout.fillWidth: true }
                     }
