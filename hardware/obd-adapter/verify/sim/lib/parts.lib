@@ -1,0 +1,84 @@
+* parts.lib -- device models for the OBD adapter sims.
+* No vendor SPICE files could be fetched (diodes.com / lcsc returned HTML), so these are
+* discrete / behavioural models fitted to the datasheet numbers quoted per line.
+
+* ---- MMBT3904 (Q7,Q8,Q9). Classic Fairchild/onsemi 2N3904 Gummel-Poon (same die as MMBT3904).
+.model MMBT3904 NPN(Is=6.734f Xti=3 Eg=1.11 Vaf=74.03 Bf=416.4 Ne=1.259 Ise=6.734f Ikf=66.78m
++ Xtb=1.5 Br=.7371 Nc=2 Isc=0 Ikr=0 Rc=1 Cjc=3.638p Mjc=.3085 Vjc=.75 Fc=.5 Cje=4.493p Mje=.2593
++ Vje=.75 Tr=239.5n Tf=301.2p Itf=.4 Vtf=4 Xtf=2 Rb=10)
+* min-hFE corner: Bf/Ikf reduced so hFE(50mA,1V)~60 and hFE(100mA)~30 (datasheet minima)
+.model MMBT3904MIN NPN(Is=6.734f Xti=3 Eg=1.11 Vaf=74.03 Bf=120 Ne=1.259 Ise=6.734f Ikf=40m
++ Xtb=1.5 Br=.7371 Nc=2 Isc=0 Ikr=0 Rc=1.5 Cjc=3.638p Mjc=.3085 Vjc=.75 Fc=.5 Cje=4.493p Mje=.2593
++ Vje=.75 Tr=239.5n Tf=301.2p Itf=.4 Vtf=4 Xtf=2 Rb=10)
+
+* ---- MMBT5401 (Q2) Fairchild 2N5401/MMBT5401 Gummel-Poon (typ hFE ~120 at 10 mA)
+.model MMBT5401 PNP(Is=21.48f Xti=3 Eg=1.11 Vaf=100 Bf=132.1 Ne=1.375 Ise=21.48f Ikf=.1848
++ Xtb=1.5 Br=3.661 Nc=2 Isc=0 Ikr=0 Rc=1.6 Cjc=17.63p Mjc=.5312 Vjc=.75 Fc=.5 Cje=73.39p
++ Mje=.3777 Vje=.75 Tr=1.588n Tf=641.9p Itf=1 Vtf=2 Xtf=3 Rb=10)
+* min-hFE corner: datasheet hFE min 50 at 50 mA/5 V (and ~-40 % at -40 C, so ~30 cold)
+.model MMBT5401MIN PNP(Is=21.48f Xti=3 Eg=1.11 Vaf=100 Bf=45 Ne=1.375 Ise=21.48f Ikf=.12
++ Xtb=1.5 Br=3.661 Nc=2 Isc=0 Ikr=0 Rc=3 Cjc=17.63p Mjc=.5312 Vjc=.75 Fc=.5 Cje=73.39p
++ Mje=.3777 Vje=.75 Tr=1.588n Tf=641.9p Itf=1 Vtf=2 Xtf=3 Rb=10)
+
+* ---- 2N7002 (Q3,Q4,Q5): level 1, Vth 2.1 V typ (CJ datasheet 1.0-2.5 V), Rds ~2 ohm at 4.5 V
+.model N7002 NMOS(Level=1 Vto=2.1 Kp=0.35 Lambda=0.01 Rd=0.5 Rs=0.5 Cgso=20p Cgdo=5p Cbd=10p)
+.model N7002HI NMOS(Level=1 Vto=2.5 Kp=0.2 Lambda=0.01 Rd=1 Rs=1 Cgso=20p Cgdo=5p Cbd=10p)
+.subckt N2N7002 d g s
+M1 d g s s N7002
+Dbody s d DBODY7002
+.ends
+.model DBODY7002 D(Is=1e-12 Rs=0.5 Cjo=15p Bv=60)
+
+* ---- AO3401A (Q6) P-FET: Vth -0.9 V typ (-0.5..-1.3), Rds 50 mohm @ -10 V, Ciss 645 p, Crss 45 p
+.model PAO3401 PMOS(Level=1 Vto=-0.9 Kp=12 Lambda=0.01 Rd=0.02 Rs=0.02 Cgso=550p Cgdo=60p Cbd=90p)
+.subckt AO3401A d g s
+M1 d g s s PAO3401
+Dbody d s DBODY3401
+.ends
+.model DBODY3401 D(Is=1e-11 Rs=0.03 Cjo=80p Bv=33)
+
+* ---- Schottkys
+* B5819W: Vf ~0.2 V @ 5 mA, ~0.45 V @ 1 A (DS: 0.6 V max @ 1 A); Cj ~ 110 pF @0 V
+.model B5819W D(Is=3u N=1.1 Rs=0.1 Cjo=110p M=0.5 Vj=0.4 Bv=40 Ibv=1m)
+* SS34: Vf ~0.35-0.4 V @ 0.5 A typ, 0.5 V max @ 3 A
+.model SS34 D(Is=10u N=1.2 Rs=0.03 Cjo=300p M=0.5 Bv=40)
+* B560C: 5 A 60 V, Vf 0.7 V max @ 5 A
+.model B560C D(Is=30u N=1.3 Rs=0.03 Cjo=400p M=0.5 Bv=60)
+
+* ---- SMF24A unidirectional TVS (D17-D20): VBR 26.7 min / 28.1 typ @ 1 mA, VC 38.9 V @ 5.1 A, Cj ~ 100 pF (est)
+.model SMF24A D(Is=1e-12 N=1.5 Rs=0.5 Bv=28.1 Ibv=1m Cjo=100p M=0.4)
+
+* ---- LM339 behavioural comparator (one unit). inp inn vcc out(open collector), gnd = node 0.
+* CM range 0..Vcc-1.5 V (DS: correct output while one input is in range): inputs clipped to Vcc-1.5.
+* Response: ~0.3 us large-signal / 1.3 us at 5 mV overdrive -> 250 ns transport + 300 ns pole.
+* Output: ~60 ohm saturating sink, 16 mA max (DS: sink 6 mA min, 16 typ). Off when Vcc < 2 V.
+.subckt LM339U inp inn vcc out
+Bd x0 0 V = 1+tanh((min(V(inp),V(vcc)-1.5)-min(V(inn),V(vcc)-1.5))/2m)
+Rsrc x0 x 1k
+Tdel x 0 xd 0 Z0=1k TD=250n
+Rt xd 0 1k
+Ebuf xb 0 xd 0 1
+Rp xb xf 1k
+Cp xf 0 300p
+Bo out 0 I = max(0,min(1,1-V(xf)))*16m*tanh(max(V(out),0)/0.96)*(V(vcc)>2 ? 1 : 0)
+Cout out 0 3p
+.ends
+* supply current for the whole LM339: 0.8 mA typ, 2 mA max at 30 V (modelled 1.4 mA from V+)
+
+* ---- LM317L behavioural (U11): Vout = V(adj)+Vref, limited to Vin - dropout (DS fig ~1.6-1.8 V at 10-50 mA),
+* sources current only, Iadj 50 uA (legacy) into ADJ, ~0.5 ohm output R, ~1 us loop (1 uF on output is C38).
+.subckt LM317L vi vo adj params: vref=1.25 vdo=1.6
+Badj vi adj I = 50u
+Bset s 0 V = min(V(adj)+vref, V(vi)-vdo)
+Rf s sf 100
+Cf sf 0 10n
+Eamp a 0 sf 0 1
+Vsns a b 0
+Rout b vo 0.5
+Fin vi 0 Vsns 1
+.ends
+.model DIDEAL D(Is=1e-14 N=0.05)
+* 25 C datasheet-minimum MMBT5401 (hFE ~60 @10 mA, ~50 @50 mA, Vce 5 V); MMBT5401MIN above is ~-40 C minimum
+.model MMBT5401MIN25 PNP(Is=21.48f Xti=3 Eg=1.11 Vaf=100 Bf=68 Ne=1.375 Ise=21.48f Ikf=.13
++ Xtb=1.5 Br=3.661 Nc=2 Isc=0 Ikr=0 Rc=2.5 Cjc=17.63p Mjc=.5312 Vjc=.75 Fc=.5 Cje=73.39p
++ Mje=.3777 Vje=.75 Tr=1.588n Tf=641.9p Itf=1 Vtf=2 Xtf=3 Rb=10)

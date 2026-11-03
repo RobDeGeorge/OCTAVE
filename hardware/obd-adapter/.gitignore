@@ -1,0 +1,11 @@
+route/
+*-backups/
+*.kicad_prl
+fp-info-cache
+_autosave-*
+__pycache__/
+verify/sim/decks/
+verify/sim/out/
+verify/pins/*.xml
+!verify/sim/lib/*.lib
+.history/

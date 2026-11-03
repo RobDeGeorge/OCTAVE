@@ -1,8 +1,8 @@
 # DIY OBD adapter (OCTAVE's own Bluetooth OBD-II scanner + sensor pod)
 
 **Goal:** build our own OBD-II adapter that speaks every OBD protocol (including the TJ's J1850 VPW), works with every app over the ELM327 command set, and adds an OCTAVE native mode with an on-adapter PID scheduler, hardware timestamps and store-and-forward into the black box; optionally a tethered sensor pod (GNSS dead reckoning, IMU, baro, extras).
-**Status:** parked — brainstormed 2026-10-22, no hardware bought, no code written. A hardware project, not a code task; nothing in OCTAVE depends on it.
-**Last updated:** 2026-10-22
+**Status:** in progress: the Rev 0 bring-up board is designed (`hardware/obd-adapter/`, 2026-11-02): generated, ERC/DRC clean, JLCPCB fab files ready, not yet reviewed by a human or ordered. No firmware yet. Nothing in OCTAVE depends on it.
+**Last updated:** 2026-11-02
 
 ## Why this is parked here
 
@@ -133,7 +133,7 @@ None of the extras touch the core adapter; they hang off the expansion port and 
 3. **ESP32 bridge:** SPP + BLE `FFE0`/`FFE1`, then pair through `OBDAdapterFinder`. **Effort:** M. **Needs:** Pi, S22.
 4. **Native mode** in firmware + a new OCTAVE protocol class beside `elm327protocol`, with a QtTest in `tests/cpp/` (and a `carsim` / `simelm327`-style simulated native adapter for `--dev`). Measure PIDs/s against the NEXAS. **Effort:** L. **Needs:** desktop, Jeep.
 5. **Store-and-forward backfill** into `TripRecorder` / `TripStore`. **Effort:** M. **Needs:** desktop, Jeep.
-6. **Rev A board:** KiCad, enclosure, expansion port, sleep-current measurement, transient testing. **Effort:** L. **Needs:** bench supply, multimeter / current meter.
+6. **Rev A board** (Rev 0, a bring-up board with every bus, exists: `hardware/obd-adapter/README.md`; it uses the STN-style discrete J1850 / K-line front ends instead of an L9637D): KiCad, enclosure, expansion port, sleep-current measurement, transient testing. **Effort:** L. **Needs:** bench supply, multimeter / current meter.
 7. **Sensor pod board:** GNSS (DR with OBD speed) + IMU + baro first, then extras from the brainstorm. OCTAVE side: sensor channels into the managers (likely alongside `berryimumanager`) and the black box. **Effort:** L–XL. **Needs:** Jeep.
 
 ## Cross-references
