@@ -673,7 +673,9 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
           <code>http://127.0.0.1:43821/callback</code> (desktop and head unit) and the browser demo's address
           (<code>https://robdegeorge.com/OCTAVE/</code>), add the account under User Management, then either build with
           <code>-DOCTAVE_SPOTIFY_CLIENT_ID=&lt;id&gt;</code> or paste the Client ID in Settings &gt; Media &gt; Spotify and
-          press Connect Spotify.
+          press Connect Spotify. In the browser build the ID can also come in the address,
+          <code>https://robdegeorge.com/OCTAVE/?spotify=&lt;Client ID&gt;</code> (saved in the browser, then dropped from the
+          address bar): pasting into a text field is unreliable there on a phone.
         </p>
 
         <h2 id="signals">Signals</h2>

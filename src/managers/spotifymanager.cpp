@@ -13,6 +13,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QStandardPaths>
+#include <QRegularExpression>
 #include <QUrlQuery>
 
 #include <utility>
@@ -191,6 +192,35 @@ void SpotifyManager::restore()
         emit clientIdChanged();
     }
 #ifdef OCTAVE_WASM
+    // ?spotify=<Client ID> in the address: typing or pasting into a text
+    // field is unreliable in the browser build on a phone. Taken, saved,
+    // then dropped from the address bar.
+    {
+        const emscripten::val loc = emscripten::val::global("location");
+        const QUrlQuery q(QString::fromStdString(loc["search"].as<std::string>()).mid(1));
+        const QString fromUrl = q.queryItemValue(QStringLiteral("spotify")).trimmed();
+        if (!fromUrl.isEmpty()) {
+            static const QRegularExpression idPattern(QStringLiteral("^[0-9A-Za-z]{32}$"));
+            if (idPattern.match(fromUrl).hasMatch()) {
+                qCInfo(lcSpotify) << "client id from the address";
+                if (fromUrl != m_clientId) {
+                    m_clientId = fromUrl;
+                    emit clientIdChanged();
+                }
+                // save() writes the members: keep the rest of what was stored
+                m_refreshToken = s.refreshToken;
+                m_userId = s.userId;
+                m_userName = s.userName;
+                m_verifier = s.verifier;
+                m_oauthState = s.oauthState;
+                save();
+            } else {
+                setStatus(QStringLiteral("The Client ID in the address doesn't look right (32 letters and digits)."));
+            }
+            emscripten::val::global("history").call<void>("replaceState", emscripten::val::null(), std::string(""),
+                                                          pageUrl().toStdString());
+        }
+    }
     if (!s.verifier.isEmpty()) {
         finishBrowserSignIn(s);
         return;
@@ -258,6 +288,7 @@ void SpotifyManager::setClientId(const QString &clientId)
     const QString id = clientId.trimmed().isEmpty() ? kBuiltInClientId : clientId.trimmed();
     if (id == m_clientId)
         return;
+    qCInfo(lcSpotify) << "client id set," << id.size() << "characters";
     if (m_state != QLatin1String("signedOut"))
         signOut();
     m_clientId = id;
