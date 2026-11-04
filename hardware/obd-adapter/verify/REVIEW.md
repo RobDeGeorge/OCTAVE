@@ -68,6 +68,73 @@ Then every finding below was either fixed in `gen/` or accepted with a reason, a
 | 28 | Nit | digital audit | The SWD header is unshrouded and has pin 7 fitted, so keyed cables won't seat. | **Accepted:** use an unkeyed cable, and mind the orientation. |
 | 29 | Nit | digital audit | Unconfirmed: whether the system bootloader drives I2C3 on PC8/PC9 (J1850 TX) or USART2. | **Accepted:** both have pull-downs, and DFU happens on the bench. |
 
+## Round 2 (2026-11-03)
+
+After round 1 was fixed, five checks ran again on the regenerated design. Each was done by a fresh reviewer with no access to the round-1 conclusions:
+
+1. **Schematic audit** of the whole netlist against the datasheets, including ST AN2606 (what the system bootloader does to each pin).
+2. **Re-simulation** of every analog front end: ISO 7637-2 pulses 1, 2a, 3a and 3b; the ISO 16750-2 5b load dump; cold crank; and tolerance corners for the LM317L, the comparator and the buck.
+3. **Independent layout review** of the routed board: connectivity graph of the real copper, hot loop, return paths, decoupling distances, clearances and thermal.
+4. **JLCPCB DFM and assembly review** against the official JLC/EasyEDA footprints of every LCSC part.
+5. **STM32 pin check**, re-run.
+
+### Circuit findings
+
+| # | Severity | Found by | Finding | Status |
+|---|---|---|---|---|
+| 30 | **Bug** | audit | The G47x bootloader puts PC9 (`J1850_TXN`) in I2C3 open-drain with its pull-up on (AN2606 Table 101). Against R37 100k, that turns Q7 on and holds J1962 pin 10 (Bus−) low for as long as the part is in DFU. This refutes item 29. | **Fixed:** 2.2k base-emitter on Q7 (worst-case base 0.26 V in the bootloader; normal drive is still 2.3 mA). |
+| 31 | **Fail** | sim | The LM2901DR is the non-B die (36 V abs max, 30 V operating). CMP_VCC reaches 37 V at a 42 V clamp and 85 °C with a high-tolerance BZT52C33, and R39 (0603) sees 0.28 W. | **Fixed:** LM2901BIDR (38 V abs max, 36 V operating, same pinout); R39 in 1206. |
+| 32 | **Fail** | sim | J1850 PWM Bus+ high reaches 5.45–5.58 V in the LM317L tolerance corner (Vref 1.30 V, Iadj 100 µA), and VPW reaches 8.03 V. | **Fixed:** divider 240 / 680 / 470. Simulated across all corners: PWM 4.26–5.00 V, VPW 6.42–7.54 V. The 5.25 V PWM VOH limit is still taken on trust. |
+| 33 | **Fail** | sim | If Bus+ is shorted to ground while transmitting, the LM317L current limit pulls Q2 (MMBT5401) out of saturation: 0.5–5.8 W in a SOT-23. | **Fixed:** DLC_SW high side is now a P-MOSFET (SI2309CDS, 60 V). The gate is pulled up with 47k, clamped with a 12 V zener, and driven by Q3 through 10k (1206). The FET stays fully on, and the LM317L's own limit and thermal shutdown take the fault. |
+| 34 | Risk | audit | In the bootloader, PA10 (USART1_RX, pull-up) enables the dead-battery Rd on PB4 (CAN2_TXD), which requests dominant. STB is held up only 50 mV above VIH against the bootloader's PB15 pull-down. | **Fixed:** 10k pull-down on PA10; STB pull-ups 10k → 4.7k (STB ≥ 2.78 V worst case). |
+| 35 | Risk | audit | The bootloader drives PA2 (USART2_TX) push-pull high while the ESP32 is unpowered and its supply is held at 0 V by the load switch. That back-powers the module through its ESD diode. Item 23 only covered the application. | **Fixed:** 1k in series with PA1, PA2, PB5 and PB7 (injection ≤ 3 mA; the RC is 10 ns at 3 Mbaud). |
+| 36 | Risk | audit + sim | On USB-only power the OR'd 5V is 4.24–4.52 V, under the TCAN1044V's 4.5 V minimum and near its 4.4 V UV-rising limit. The VPW threshold also leaves its window. | **Fixed by design choice:** TCAN VCC, the VPW reference and the Bus− pull-up now run from 5V_BUCK, so they work whenever the car (or 12 V on J6) is present. **CAN and J1850 are not valid on USB-only bench power: use 12 V on J6.** |
+| 37 | Risk | audit | The 2920L110 PTC derates to about 0.5 A hold at 85 °C. A hot crank with Wi-Fi can trip it. | **Fixed:** 2920L200/60 (2 A hold, 60 V). |
+| 38 | Risk | audit + sim + layout | AP2114H junction temperature. At 128 °C/W with no copper, 0.25 A average gives 134–145 °C at 85 °C ambient. | **Fixed in layout:** a 3V3 F.Cu tab zone plus 5 vias into the In2 3V3 pour. Rev A: a 3V3 buck if an 85 °C rating is wanted. |
+| 39 | Risk | sim | ISO 16750-2 5b (35 V suppressed load dump, 400 ms): the 5.0SMDJ26CA (VBR 28.9–31.9 V) clamps the whole pulse, 42–62 J. With a VBR-minimum part the PTC trips and latches. | **Accepted for Rev 0:** a 33CA would lift the clamp to 53 V, over the 50 V caps and closer to the 60 V FET and buck. Real alternators have central suppression, which is what 5b models. Rev A: 33CA plus 63/100 V caps. Bench: don't apply 5b. |
+| 40 | Risk | audit | Temperature grade: STM32G474RE**T6**, ESP32-WROOM-32E and W25Q128JV-IQ are −40..85 °C parts. | **Accepted for bring-up.** For an 85 °C cabin rating: G474RET3, WROOM-32E-H8, W25Q128JVSJQ. |
+| 41 | Marginal | sim | Pulse 1 hold-up: with a −40 °C electrolytic and a heavy load, 3V3 dips below 3.0 V for 0.5–1.6 ms (reset, self-recovering). | **Accepted:** ISO function status C. Rev A: 100–220 µF low-temperature or polymer on VBAT_P. |
+| 42 | Marginal | sim | Buck gain margin is only 1.8–5.5 dB at VIN 6 V / 1.5 A (duty 0.89, subharmonic). Regulation holds. | **Accepted.** Watch SW on the scope during a crank. |
+| 43 | Marginal | sim | VPW receive is invalid below VBAT ≈ 6–7.3 V (comparator common-mode range); K below 4–6.4 V. | **Accepted:** no J1850 traffic expected during cranking. |
+| 44 | Nit | audit | Remaining nits are N4–N15 in the round-2 audit, for example no VBUS sense, no ESD on Qwiic/EXP, and AP2114 fold-back at start into a heavy load. | **Accepted for Rev 0.** |
+
+### Layout findings (the round-1 board was DRC-clean but the autorouter had undone the power-stage intent)
+
+| # | Finding | Status |
+|---|---|---|
+| L1 | Buck hot loop about 50 mm² across three top-side GND islands; the catch diode returned through one via. | **Fixed:** the power stage is placed explicitly and wired before routing (`gen/prewire.py`): input caps on pin 2, D5 at the SW pin, a 4-via anode ground, GND vias at every cap, and an F.Cu keepout for other nets. |
+| L2 | BOOT cap loop 27.6 mm. | **Fixed:** C26 sits on pins 1/8 with stubs of about 2 mm. |
+| L3 | FB, RT and COMP ran beside and under the switch node. | **Fixed:** the divider and compensation sit at pins 4–6, away from SW. FB senses 5V_BUCK at the output caps over B.Cu. |
+| L4 | The In2 3V3 pour touched the net at two vias; 3V3 was distributed on 0.25 mm tracks over 90–100 mm. | **Fixed:** every 3V3 pad is fanned out to In2 before routing. |
+| L5 | LDO input/output caps 44–46 mm from the regulator. | **Fixed:** they are placed at the pins. |
+| L6 | Bus TVS/ESD parts sat past the devices they protect; VBAT_IN ran 30 mm, mostly on In2, before the PTC. | **Fixed:** F1 and D4 at J6.1 (VBAT_IN is a few mm of 1.2 mm F.Cu); the SMF24A and NUP2105L clamps at their J6 pins. |
+| L7 | Battery and 5 V power on the 0.5 oz inner layer could fuse before the PTC trips. | **Fixed:** classes ≥ 0.4 mm and all battery-voltage nets are restricted to F.Cu/B.Cu. |
+| L8 | Battery-voltage nets at 0.20 mm from MCU pins. | **Fixed:** battery-side class clearance 0.30 mm. |
+| L9 | Decoupling 15–30 mm from the TCAN, LM2901 and LM317L supply pins; the LM74700 gate track was 42 mm; VBAT_SENSE filter 83 mm from PA4. | **Fixed:** placed at their pins (`near_rules()` in layout.py). |
+| L10 | The flash sat at the opposite corner from the QSPI pins. | **Fixed:** moved below the MCU. |
+| L11 | CAN pairs are not routed as coupled pairs. | **Accepted:** Freerouting can't. The skew doesn't matter at CAN rates; check emissions on the bench. |
+
+### Assembly (DFM) findings
+
+| # | Finding | Status |
+|---|---|---|
+| D1 | 26 CPL rotations disagreed with JLC's footprint orientation, and the ESP32, USB-C and Micro-Fit centroids were offset. | **Fixed:** the `JLC_CORR` table in build.py (rotation and local offset per LCSC part). Its output matched the reviewer's independently corrected CPL for all 152 parts. **Still check the JLC placement preview for U1, U4, U7, J2, J6 and L1.** |
+| D2 | Solid GND pour on 0603 pads: tombstoning risk. | **Fixed:** thermal reliefs (0.3 gap, 0.4 spoke). Large pads, the buck and the ESP32 ground pad stay solid. |
+| D3 | ESP32 ground-pad vias open on the bottom mask (solder drains through). | **Fixed:** tented on B.Mask. |
+| D4 | No fiducials. | **Order option:** "edge rails + fiducials added by JLCPCB". |
+| D5 | L1 (C96978) has no JLC footprint, so JLC maps it by hand. | **Check:** in the preview, pads must be left and right (0/180). |
+| D6 | J6 is through-hole. | **Order option:** confirm THT assembly is included, or hand-solder J6. |
+| D7 | U7's paste window lies over open thermal vias. | **Accepted:** the bottom is tented; TI allows it. |
+
+### Firmware obligations (from both rounds)
+
+- Keep PA1/PA2/PB5/PB7 low or as inputs until the ESP32 is powered, and drive ESP_EN open-drain (item 23).
+- Set LPUART1 TXINV **before** switching PC1 to its alternate function. LPUART idles high, and through the NPN that holds K low.
+- Set PWR_CR3.UCPD_DBDIS early, and put PB4/PB13 in AF (TXD high) before driving STB low. Never drive STB low while TXD is low.
+- Set the W25Q128 QE bit before using quad mode.
+- Abort a J1850 transmit on the first echo mismatch.
+- Filter comparator input capture (item 26).
+
 ## Result after the fixes
 
 - **ERC:** 0 errors, 0 warnings.

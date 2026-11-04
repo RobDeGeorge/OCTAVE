@@ -59,7 +59,7 @@ U(mcu, "MCU_ST_STM32G4:STM32G474RETx", "STM32G474RET6", "Package_QFP:LQFP-64_10x
     "VBAT": "3V3", "VDD": "3V3", "VSS": "GND", "VSSA": "GND", "VDDA": "VDDA", "VREF+": "VDDA",
     "PG10": "NRST", "PB8": "BOOT0",
     "PF0": "HSE_IN", "PF1": "HSE_OUT", "PC14": None, "PC15": None,
-    "PA0": "ESP_RTS", "PA1": "ESP_CTS", "PA2": "MCU_TX_ESP", "PA3": "ESP_TX_MCU",
+    "PA0": "ESP_RTS", "PA1": "ESP_CTS_M", "PA2": "MCU_TX_ESP_M", "PA3": "ESP_TX_MCU",
     "PA4": "VBAT_SENSE", "PA5": "EXP_PA5",
     "PA6": "QSPI_IO3", "PA7": "QSPI_IO2", "PB0": "QSPI_IO1", "PB1": "QSPI_IO0",
     "PB10": "QSPI_CLK", "PB11": "QSPI_NCS",
@@ -67,7 +67,7 @@ U(mcu, "MCU_ST_STM32G4:STM32G474RETx", "STM32G474RET6", "Package_QFP:LQFP-64_10x
     "PA11": "USB_DM", "PA12": "USB_DP", "PA13": "SWDIO", "PA14": "SWCLK",
     "PA15": "BTN_USER", "PB2": "J1850_VSEL",
     "PB3": "CAN2_RXD", "PB4": "CAN2_TXD",
-    "PB5": "ESP_IO0", "PB6": "ESP_PWR_EN", "PB7": "ESP_EN",
+    "PB5": "ESP_IO0_M", "PB6": "ESP_PWR_EN", "PB7": "ESP_EN_M",
     "PB9": "LED_R", "PC11": "LED_G", "PC12": "LED_B",
     "PB12": "CAN1_RXD", "PB13": "CAN1_TXD", "PB14": "CAN1_STB", "PB15": "CAN2_STB",
     "PC0": "KLINE_RX", "PC1": "KLINE_TX", "PC2": "LLINE_TX", "PC3": "DLC_SW_EN",
@@ -135,7 +135,8 @@ esp.notes = [
     "UART0 + EN + IO0 also on J_ESP for esptool; the STM32 can reset (PB7) and strap IO0 (PB5) itself.",
     "Power-gated by a TPS22918 on PB6 (off at reset), placed at the module's 3V3 pin with its caps.",
     "Close JP_ESP_ON to power the ESP32 without STM32 firmware (blank-board esptool flashing).",
-    "Firmware: keep PA1/PA2/PB5/PB7 low or input while the ESP32 is off (no back-powering through its I/O).",
+    "1k in series with PA1/PA2/PB5/PB7 limits back-powering through the ESP32's I/O while it is off;",
+    "firmware still keeps them low or input until ESP_PWR_EN is on, and drives EN open-drain.",
 ]
 U(esp, "RF_Module:ESP32-WROOM-32E", "ESP32-WROOM-32E-N8", "RF_Module:ESP32-WROOM-32E", {
     "GND": "GND", "VDD": "3V3_ESP", "EN": "ESP_EN", "IO0": "ESP_IO0",
@@ -149,6 +150,9 @@ C(esp, "100n", "3V3_ESP")
 R(esp, "10k", "3V3_ESP", "ESP_EN")
 C(esp, "1u", "ESP_EN")
 R(esp, "10k", "3V3_ESP", "ESP_IO0")
+for mcu_net, esp_net in (("ESP_CTS_M", "ESP_CTS"), ("MCU_TX_ESP_M", "MCU_TX_ESP"),
+                         ("ESP_IO0_M", "ESP_IO0"), ("ESP_EN_M", "ESP_EN")):
+    R(esp, "1k", mcu_net, esp_net)
 U(esp, "OCTAVE:TPS22918", "TPS22918", "Package_TO_SOT_SMD:SOT-23-6",
   {"VIN": "3V3", "ON": "ESP_PWR_EN", "CT": "ESP_PWR_CT", "VOUT": "3V3_ESP", "QOD": "3V3_ESP", "GND": "GND"})
 R(esp, "100k", "ESP_PWR_EN", "GND")
@@ -167,6 +171,7 @@ d.add(ex, Part(_ref("J"), "Connector_Generic:Conn_01x04", "Qwiic",
                {"1": "GND", "2": "3V3", "3": "I2C_SDA", "4": "I2C_SCL"}, lcsc=LCSC.get("QWIIC")))
 R(ex, "4.7k", "3V3", "I2C_SDA")
 R(ex, "4.7k", "3V3", "I2C_SCL")
+R(ex, "10k", "EXP_PA10", "GND")  # bootloader pulls PA10 up, which turns on PB4's UCPD pull-down (CAN2 TXD dominant)
 d.add(ex, Part(_ref("J"), "Connector_Generic:Conn_02x06_Odd_Even", "EXP",
                "Connector_PinHeader_2.54mm:PinHeader_2x06_P2.54mm_Vertical",
                {"1": "3V3", "2": "5V", "3": "GND", "4": "GND", "5": "EXP_TX", "6": "EXP_RX",
@@ -179,9 +184,10 @@ pw.notes = [
     "5.0SMDJ26CA (5 kW) is bidirectional on purpose: a unidirectional TVS would short a reversed battery through the PTC.",
     "Everything on VBAT_P must survive the ~42 V TVS clamp: LM74700 65 V, AO4264E 60 V, TPS54360B 60 V, caps 50 V.",
     "TPS54360B: datasheet 600 kHz design (Fig. 32) with FB 57.6k/10.2k = 5.32 V, so 5V is ~4.9 V after the SS34 OR.",
-    "EN divider not fitted: the internal UVLO (~4.3 V) keeps the buck running through a 6 V cold crank.",
+    "EN left open (internal pull-up): the internal UVLO (~4.3 V) keeps the buck running through a 6 V cold crank.",
+    "5V_BUCK (not the OR'd 5V) feeds everything on the vehicle side: CAN VCC, the VPW reference, the Bus- pull-up.",
 ]
-d.add(pw, Part(_ref("F"), "Device:Polyfuse", "1.1A 60V", "Fuse:Fuse_2920_7451Metric",
+d.add(pw, Part(_ref("F"), "Device:Polyfuse", "2A 60V", "Fuse:Fuse_2920_7451Metric",
                {"1": "VBAT_IN", "2": "VBAT_F"}, lcsc=LCSC["PTC"]))
 d.add(pw, Part(_ref("D"), "Device:D_TVS", "5.0SMDJ26CA", "Diode_SMD:D_SMC",
                {"A1": "VBAT_F", "A2": "GND"}, lcsc=LCSC["5.0SMDJ26CA"]))
@@ -200,12 +206,10 @@ C(pw, "100n", "VBAT_P")
 # 5 V buck
 U(pw, "Regulator_Switching:TPS54360DDA", "TPS54360BDDAR",
   "Package_SO:TI_SO-PowerPAD-8_ThermalVias",
-  {"VIN": "VBAT_P", "EN": "BUCK_EN", "RT/CLK": "BUCK_RT", "FB": "BUCK_FB", "COMP": "BUCK_COMP",
+  {"VIN": "VBAT_P", "EN": None, "RT/CLK": "BUCK_RT", "FB": "BUCK_FB", "COMP": "BUCK_COMP",
    "GND": "GND", "GNDPAD": "GND", "BOOT": "BUCK_BOOT", "SW": "BUCK_SW"}, lcsc_key="TPS54360B")
 C(pw, "2.2u", "VBAT_P", fp=C1206)
 C(pw, "2.2u", "VBAT_P", fp=C1206)
-R(pw, "510k", "VBAT_P", "BUCK_EN", dnp=True, note="not fitted: internal UVLO rides through cranking")
-R(pw, "84.5k", "BUCK_EN", "GND", dnp=True, note="not fitted: internal UVLO rides through cranking")
 R(pw, "162k", "BUCK_RT", "GND", lcsc_key="R162k")
 C(pw, "100n", "BUCK_BOOT", "BUCK_SW")
 d.add(pw, Part(_ref("L"), "Device:L", "8.2u", "Inductor_SMD:L_Changjiang_FNR8065S",
@@ -255,15 +259,16 @@ d.add(car, Part(_ref("J"), "Connector_Generic:Conn_02x05_Odd_Even", "OBD (Micro-
 can = d.block("can", "CAN FD: HS-CAN (J1962 6/14) and MS-CAN (3/11), TCAN1044V")
 can.notes = [
     "STB pulled high: transceivers sit in standby (receive-only wake) until firmware drives STB low.",
+    "VCC from 5V_BUCK: CAN needs car / 12 V bench power (on USB alone the OR'd 5V is under the 4.5 V minimum).",
     "No termination by default (the car has its own 2x120R). Fit the TERM jumper only on a bench bus.",
 ]
 for i, (h, l) in ((1, ("CAN1_H", "CAN1_L")), (2, ("CAN2_H", "CAN2_L"))):
     U(can, "Interface_CAN_LIN:TJA1051T-3", "TCAN1044VDRQ1", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm",
-      {"TXD": f"CAN{i}_TXD", "RXD": f"CAN{i}_RXD", "GND": "GND", "VCC": "5V", "VIO": "3V3",
+      {"TXD": f"CAN{i}_TXD", "RXD": f"CAN{i}_RXD", "GND": "GND", "VCC": "5V_BUCK", "VIO": "3V3",
        "CANH": h, "CANL": l, "S": f"CAN{i}_STB"}, lcsc_key="TCAN1044VDRQ1")
-    C(can, "100n", "5V")
+    C(can, "100n", "5V_BUCK")
     C(can, "100n", "3V3")
-    R(can, "10k", "3V3", f"CAN{i}_STB")
+    R(can, "4.7k", "3V3", f"CAN{i}_STB")  # 4.7k: stays standby against the bootloader's PB15 pull-down
     U(can, "Power_Protection:NUP2105L", "SZNUP2105L", SOT23, {"1": h, "2": l, "3": "GND"},
       lcsc_key="NUP2105L", ref="D")
     R(can, "120", h, f"CAN{i}_TERM", lcsc_key="R120")
@@ -275,12 +280,15 @@ for i, (h, l) in ((1, ("CAN1_H", "CAN1_L")), (2, ("CAN2_H", "CAN2_L"))):
 sw = d.block("dlcsw", "DLC_SW: switched battery for the legacy-bus front ends")
 sw.notes = [
     "Off in sleep: the J1850 supply, the LM2901 and the K/L 510R pull-ups. STN's note: pull-ups left on DLC",
-    "draw current and can disturb the bus (engine stall). MMBT5401 (150 V) high side, 2N7002 level shift.",
+    "draw current and can disturb the bus (engine stall). SI2309CDS 60 V P-FET high side, 12 V zener gate clamp,",
+    "2N7002 level shift: Vgs = -7.4 V at 9 V battery, clamped at -12 V up to the 42 V TVS clamp.",
 ]
-d.add(sw, Part(_ref("Q"), "Transistor_BJT:MMBT3906", "MMBT5401", SOT23,
-               {"E": "VBAT_P", "B": "DLC_SW_B", "C": "DLC_SW"}, lcsc=LCSC["MMBT5401"]))
-R(sw, "10k", "VBAT_P", "DLC_SW_B")
-R(sw, "4.7k", "DLC_SW_B", "DLC_SW_D", fp="Resistor_SMD:R_1206_3216Metric", lcsc_key="R4.7k_1206")  # 0.36 W at 42 V
+d.add(sw, Part(_ref("Q"), "Transistor_FET:Q_PMOS_GSD", "SI2309CDS", SOT23,
+               {"G": "DLC_SW_G", "S": "VBAT_P", "D": "DLC_SW"}, lcsc=LCSC["SI2309CDS"]))
+R(sw, "47k", "VBAT_P", "DLC_SW_G")
+d.add(sw, Part(_ref("D"), "Device:D_Zener", "BZT52C12", "Diode_SMD:D_SOD-123",
+               {"K": "VBAT_P", "A": "DLC_SW_G"}, lcsc=LCSC["BZT52C12"]))
+R(sw, "10k", "DLC_SW_G", "DLC_SW_D", fp="Resistor_SMD:R_1206_3216Metric", lcsc_key="R10k_1206")  # 0.09 W at 42 V
 d.add(sw, Part(_ref("Q"), "Transistor_FET:2N7002", "2N7002", SOT23,
                {"G": "DLC_SW_EN", "S": "GND", "D": "DLC_SW_D"}, lcsc=LCSC["2N7002"]))
 R(sw, "100k", "DLC_SW_EN", "GND")
@@ -290,9 +298,11 @@ TP(sw, "DLC_SW")
 # ---------------------------------------------------------------- J1850
 jb = d.block("j1850", "SAE J1850 VPW (Bus+, J1962 pin 2) and PWM (Bus+ / Bus-, pins 2 / 10): STN-style discrete")
 jb.notes = [
-    "Supply: LM317L 240/787/453R = 7.71 V (VPW); J1850_VSEL high shorts the 453R = 5.35 V (PWM: Bus+ <= 5.25 V after the Schottky).",
+    "Supply: LM317L 240/680/470R = 7.24 V (VPW); J1850_VSEL high shorts the 470R = 4.79 V (PWM).",
+    "Simulated over LM317L tolerance: Bus+ 6.42-7.54 V (VPW, spec 6.25-8) and 4.26-5.00 V (PWM, 3.80-5.25 assumed).",
     "Bus+: 2N7002 -> AO3401A -> Schottky; 10k + Schottky bus load. Bus-: MMBT3904 sink, 10k + Schottky pull-up to 5 V.",
-    "RX: LM2901 on CMP_VCC (DLC_SW via 470R, 33 V zener: abs max 36 V). VPW: Bus+ vs 5V x 10/12.7, active high. PWM: Bus+ vs Bus-.",
+    "RX: LM2901B on CMP_VCC (DLC_SW via 470R, 33 V zener; 38 V abs max). VPW: Bus+ vs 5V_BUCK x 10/12.7, active high.",
+    "PWM: Bus+ vs Bus-. Q7 base has 2.2k to GND: the bootloader's PC9 pull-up must not turn it on (Bus- low).",
     "Input clamps are 1N4148W (low leakage): Schottkys leak enough when hot to shift the thresholds behind 10k.",
     "No wave shaping (none of the ELM/STN/OpenDiag designs do); a Rev A option is an RC on the P-FET gate.",
 ]
@@ -301,8 +311,8 @@ U(jb, "Regulator_Linear:LM317L_SO8", "LM317LIDR", "Package_SO:SOIC-8_3.9x4.9mm_P
 C(jb, "100n", "DLC_SW", lcsc_key="C100n")
 C(jb, "1u", "VJ1850")
 R(jb, "240", "VJ1850", "VJ_ADJ")
-R(jb, "787", "VJ_ADJ", "VJ_N1")
-R(jb, "453", "VJ_N1", "GND")
+R(jb, "680", "VJ_ADJ", "VJ_N1")
+R(jb, "470", "VJ_N1", "GND")
 d.add(jb, Part(_ref("Q"), "Transistor_FET:2N7002", "2N7002", SOT23,
                {"G": "J1850_VSEL", "S": "GND", "D": "VJ_N1"}, lcsc=LCSC["2N7002"]))
 R(jb, "10k", "J1850_VSEL", "GND")
@@ -323,23 +333,24 @@ d.add(jb, Part(_ref("Q"), "Transistor_BJT:MMBT3904", "MMBT3904", SOT23,
                {"B": "J1850_NB", "E": "GND", "C": "J1850_N"}, lcsc=LCSC["MMBT3904"]))
 R(jb, "1k", "J1850_TXN", "J1850_NB")
 R(jb, "100k", "J1850_TXN", "GND")
+R(jb, "2.2k", "J1850_NB", "GND")
 d.add(jb, Part(_ref("D"), "Device:D_Schottky", "B5819W", "Diode_SMD:D_SOD-123",
-               {"A": "5V", "K": "J1850_NPU"}, lcsc=LCSC["B5819W"]))
+               {"A": "5V_BUCK", "K": "J1850_NPU"}, lcsc=LCSC["B5819W"]))
 R(jb, "10k", "J1850_NPU", "J1850_N")
 # receivers
-U(jb, "Comparator:LM2901", "LM2901DR", "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm", {
+U(jb, "Comparator:LM2901", "LM2901BIDR", "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm", {
     "3": "CMP_VCC", "12": "GND",
     "5": "VPW_IN", "4": "VPW_REF", "2": "VPW_RX",          # A: VPW
     "7": "PWM_INP", "6": "PWM_INN", "1": "PWM_RX",         # B: PWM
     "11": "K_IN", "10": "K_REF", "13": "KLINE_RX",         # C: K-line
     "9": "GND", "8": "CMP_VCC", "14": None,                # D: spare, output low
-}, lcsc_key="LM2901DR")
-R(jb, "470", "DLC_SW", "CMP_VCC")
+}, lcsc_key="LM2901BIDR")
+R(jb, "470", "DLC_SW", "CMP_VCC", fp="Resistor_SMD:R_1206_3216Metric", lcsc_key="R470_1206")
 d.add(jb, Part(_ref("D"), "Device:D_Zener", "BZT52C33", "Diode_SMD:D_SOD-123",
                {"K": "CMP_VCC", "A": "GND"}, lcsc=LCSC["BZT52C33"]))
 C(jb, "100n", "CMP_VCC")
 R(jb, "10k", "J1850_P", "VPW_IN")
-R(jb, "2.7k", "5V", "VPW_REF")
+R(jb, "2.7k", "5V_BUCK", "VPW_REF")
 R(jb, "10k", "VPW_REF", "GND")
 R(jb, "10k", "3V3", "VPW_RX")
 R(jb, "10k", "J1850_P", "PWM_INP")

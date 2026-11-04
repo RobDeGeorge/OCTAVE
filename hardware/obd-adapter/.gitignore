@@ -9,3 +9,4 @@ verify/sim/out/
 verify/pins/*.xml
 !verify/sim/lib/*.lib
 .history/
+~*.lck

@@ -12,6 +12,34 @@ from kilib import footprint_path
 MM = pcbnew.FromMM
 
 
+# 3D models the stock KiCad library names but does not ship (or ships under another
+# name). The STEP files in lib/3dmodels/ are the LCSC / EasyEDA models of the exact
+# JLCPCB parts, fetched with easyeda2kicad; offset (mm, KiCad's y-up) and z rotation
+# put them on the KiCad footprint's pads (solved by matching pad positions).
+MODELS = {
+    "Fuse_2920_7451Metric": ("${KIPRJMOD}/lib/3dmodels/Fuse_2920_LCSC_C49326266.step", (0, 0, 0), 0),
+    "Molex_Micro-Fit_3.0_43045-1000_2x05_P3.00mm_Horizontal":
+        ("${KIPRJMOD}/lib/3dmodels/Molex_43045-1000_LCSC_C122421.step", (6.0, -1.5, 0), 180),
+    "USB_C_Receptacle_HRO_TYPE-C-31-M-12":
+        ("${KIPRJMOD}/lib/3dmodels/HRO_TYPE-C-31-M-12_LCSC_C165948.step", (0, 1.575, 0), 180),
+    "SW_Push_1P1T_XKB_TS-1187A": ("${KIPRJMOD}/lib/3dmodels/XKB_TS-1187A_LCSC_C318884.step", (0, 0.025, 0), 0),
+    "TI_SO-PowerPAD-8_ThermalVias": ("${KICAD10_3DMODEL_DIR}/Package_SO.3dshapes/TI_SO-PowerPAD-8.step", (0, 0, 0), 0),
+}
+
+
+def set_model(fp, name):
+    if name not in MODELS:
+        return
+    path, off, rot = MODELS[name]
+    fp.Models().clear()
+    m = pcbnew.FP_3DMODEL()
+    m.m_Filename = path
+    m.m_Offset = pcbnew.VECTOR3D(*off)
+    m.m_Rotation = pcbnew.VECTOR3D(0, 0, rot)
+    m.m_Scale = pcbnew.VECTOR3D(1, 1, 1)
+    fp.Models().push_back(m)
+
+
 def new_board(layers=4):
     b = pcbnew.NewBoard("/dev/null") if False else pcbnew.BOARD()
     b.SetCopperLayerCount(layers)
@@ -35,6 +63,7 @@ def add_footprints(board, design, sch_name=None):
         lib, name = footprint_path(part.footprint)
         fp = pcbnew.FootprintLoad(lib, name)
         fp.SetFPIDAsString(part.footprint)
+        set_model(fp, name)
         fp.SetReference(part.ref)
         fp.SetValue(part.value)
         units = sorted(part.sym.units)
@@ -123,16 +152,20 @@ def zone(board, netinfo, layer, x0, y0, x1, y1, clearance=0.3, min_w=0.25, prior
     z.SetMinThickness(MM(min_w))
     z.SetAssignedPriority(priority)
     z.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL if solid else pcbnew.ZONE_CONNECTION_THERMAL)
+    z.SetThermalReliefGap(MM(0.3))
+    z.SetThermalReliefSpokeWidth(MM(0.4))
     z.SetIslandRemovalMode(pcbnew.ISLAND_REMOVAL_MODE_ALWAYS)
     board.Add(z)
     return z
 
 
-def fanout(board, netname, layer_plane, keepouts=(), via_d=0.6, drill=0.3, width=0.3, clearance=0.2):
+def fanout(board, netname, layer_plane, keepouts=(), via_d=0.6, drill=0.3, width=0.3, clearance=0.2,
+           hv=(), hv_clearance=0.0):
     """Give every SMD pad on `netname` a short track + via down to its plane layer.
 
     Tries spots around each pad (nearest first) and keeps the first one whose via
-    and track clear every other-net copper item by `clearance`. Returns the pads it
+    and track clear every other-net copper item by `clearance` (`hv_clearance` for the
+    nets in `hv`). Returns the pads it
     could not fan out.
     """
     import math
@@ -168,7 +201,7 @@ def fanout(board, netname, layer_plane, keepouts=(), via_d=0.6, drill=0.3, width
                 trk.SetWidth(MM(min(width, vd - 0.1)))
                 trk.SetLayer(layer)
                 trk.SetNet(net)
-                if _clear(board, via, trk, items, net, clr):
+                if _clear(board, via, trk, items, net, clr, hv, MM(hv_clearance)):
                     board.Add(via)
                     board.Add(trk)
                     items += [via, trk]
@@ -179,11 +212,11 @@ def fanout(board, netname, layer_plane, keepouts=(), via_d=0.6, drill=0.3, width
     return failed
 
 
-def _clear(board, via, trk, items, net, clr):
+def _clear(board, via, trk, items, net, clr, hv=(), hv_clr=0):
     vbb = via.GetBoundingBox()
     tbb = trk.GetBoundingBox()
-    vbb.Inflate(clr)
-    tbb.Inflate(clr)
+    vbb.Inflate(max(clr, hv_clr))
+    tbb.Inflate(max(clr, hv_clr))
     edge = board.GetBoardEdgesBoundingBox()
     edge.Inflate(-(via.GetWidth(pcbnew.F_Cu) // 2 + pcbnew.FromMM(0.4)))
     if not edge.Contains(via.GetPosition()):
@@ -206,7 +239,8 @@ def _clear(board, via, trk, items, net, clr):
             for layer in (pcbnew.F_Cu, pcbnew.In1_Cu, pcbnew.In2_Cu, pcbnew.B_Cu):
                 if not (mine.IsOnLayer(layer) and it.IsOnLayer(layer)):
                     continue
-                if mine.GetEffectiveShape(layer).Collide(it.GetEffectiveShape(layer), clr):
+                gap = max(clr, hv_clr) if it.GetNetname().lstrip("/") in hv else clr
+                if mine.GetEffectiveShape(layer).Collide(it.GetEffectiveShape(layer), gap):
                     return False
     return True
 
@@ -258,7 +292,8 @@ def star(board, netname, pads, x, y, via_d=0.6, drill=0.3, width=0.25, clearance
     return failed
 
 
-def stitch(board, netname, x0, y0, x1, y1, pitch=4.0, keepouts=(), via_d=0.6, drill=0.3, clearance=0.25):
+def stitch(board, netname, x0, y0, x1, y1, pitch=4.0, keepouts=(), via_d=0.6, drill=0.3, clearance=0.25,
+           keep_courtyards=True):
     """GND stitching vias on a grid wherever one fits clear of other copper."""
     net = board.FindNet(netname)
     clr = MM(clearance)
@@ -281,7 +316,7 @@ def stitch(board, netname, x0, y0, x1, y1, pitch=4.0, keepouts=(), via_d=0.6, dr
                 trk.SetWidth(MM(via_d))
                 trk.SetLayer(pcbnew.F_Cu)
                 trk.SetNet(net)
-                if _clear(board, via, trk, items, net, clr) and not _under_footprint(board, via):
+                if _clear(board, via, trk, items, net, clr) and not (keep_courtyards and _under_footprint(board, via)):
                     board.Add(via)
                     items.append(via)
                     n += 1
