@@ -54,7 +54,7 @@ Then every finding below was either fixed in `gen/` or accepted with a reason, a
 | 14 | Risk | digital + power audits | The AP2112K (SOT-23-5, 184 °C/W) reaches thermal shutdown with Wi-Fi in a hot car. | **Fixed:** AP2114H-3.3 in SOT-223 (1 A, ceramic-stable, pinout matches the AMS1117 symbol: 1 GND, 2 VOUT + tab, 3 VIN). |
 | 15 | **Layout** | digital audit | The ESP32 load switch sat about 120 mm from the module, with 3V3_ESP on a 149 mm track and the module's caps about 20 mm from its pin. That invites brownouts on Wi-Fi TX. | **Fixed:** TPS22918, 22 µF, 100 nF, its input cap and the EN RC are placed beside the module's 3V3 / EN pins. 3V3 has a pour on In2. |
 | 16 | Layout | digital audit | The flash decoupling cap was ~17 mm away, and the NRST cap ~15 mm away on a 73 mm track. | **Fixed:** both pinned next to their pins. |
-| 17 | Risk | digital audit | On a blank board the ESP32 can't be powered for esptool: PB6 is held low and J3 has no 3V3 pin. | **Fixed:** the `ESP_ON` solder jumper (3V3 to the load switch's ON pin). |
+| 17 | Risk | digital audit | On a blank board the ESP32 can't be powered for esptool: PB6 is held low and J3 has no 3V3 pin. | **Fixed:** the `ESP_ON` jumper (JP1, a 2-pin header with a shunt, from 3V3 to the load switch's ON pin; a solder jumper in round 1, changed so it can be switched repeatedly). |
 | 18 | Risk | digital audit | The USBLC6 was wired flow-through with two separate nets per line, so continuity depended on the clone's internal link. | **Fixed:** one net per line through pins 1/6 and 3/4. |
 | 19 | Risk | digital audit | The bootloader may drive PC10 (USART3 TX), which would switch on DLC_SW. Unconfirmed: AN2606 could not be fetched. | **Fixed:** DLC_SW_EN moved to PC3; PC10 is unused. |
 | 20 | Nit | digital audit | The green and blue LEDs only got 0.1–0.5 mA at 1k. | **Fixed:** 330R. |
@@ -105,7 +105,7 @@ After round 1 was fixed, five checks ran again on the regenerated design. Each w
 | L1 | Buck hot loop about 50 mm² across three top-side GND islands; the catch diode returned through one via. | **Fixed:** the power stage is placed explicitly and wired before routing (`gen/prewire.py`): input caps on pin 2, D5 at the SW pin, a 4-via anode ground, GND vias at every cap, and an F.Cu keepout for other nets. |
 | L2 | BOOT cap loop 27.6 mm. | **Fixed:** C26 sits on pins 1/8 with stubs of about 2 mm. |
 | L3 | FB, RT and COMP ran beside and under the switch node. | **Fixed:** the divider and compensation sit at pins 4–6, away from SW. FB senses 5V_BUCK at the output caps over B.Cu. |
-| L4 | The In2 3V3 pour touched the net at two vias; 3V3 was distributed on 0.25 mm tracks over 90–100 mm. | **Fixed:** every 3V3 pad is fanned out to In2 before routing. |
+| L4 | The In2 3V3 pour touched the net at two vias; 3V3 was distributed on 0.25 mm tracks over 90–100 mm. | **Fixed:** In2 is a solid 3V3 plane (no signals on it), and every 3V3 pad has its own via to it. |
 | L5 | LDO input/output caps 44–46 mm from the regulator. | **Fixed:** they are placed at the pins. |
 | L6 | Bus TVS/ESD parts sat past the devices they protect; VBAT_IN ran 30 mm, mostly on In2, before the PTC. | **Fixed:** F1 and D4 at J6.1 (VBAT_IN is a few mm of 1.2 mm F.Cu); the SMF24A and NUP2105L clamps at their J6 pins. |
 | L7 | Battery and 5 V power on the 0.5 oz inner layer could fuse before the PTC trips. | **Fixed:** classes ≥ 0.4 mm and all battery-voltage nets are restricted to F.Cu/B.Cu. |
@@ -113,6 +113,10 @@ After round 1 was fixed, five checks ran again on the regenerated design. Each w
 | L9 | Decoupling 15–30 mm from the TCAN, LM2901 and LM317L supply pins; the LM74700 gate track was 42 mm; VBAT_SENSE filter 83 mm from PA4. | **Fixed:** placed at their pins (`near_rules()` in layout.py). |
 | L10 | The flash sat at the opposite corner from the QSPI pins. | **Fixed:** moved below the MCU. |
 | L11 | CAN pairs are not routed as coupled pairs. | **Accepted:** Freerouting can't. The skew doesn't matter at CAN rates; check emissions on the bench. |
+| L12 | The 0.30 mm battery-side clearance existed only in the router's input, so KiCad's DRC never checked it; checking it found about 50 violations (GND fan-out and stitching vias, and a finisher route of 5V_BUCK). | **Fixed:** `obd-adapter.kicad_dru` (generated) makes KiCad's DRC and interactive router enforce it; the fan-out, stitching and finisher keep it too. Closest battery-side gap on the final board: 0.302 mm. |
+| L13 | U6 (LM74700) pin 2 GND had no via (it sits between two battery pins) and hung on one thermal spoke of an F.Cu pour island with no via. A floating GND pin leaves Q1 off, and the load runs through its body diode. | **Fixed:** the fan-out tries every 0.05 mm spot when its rings fail; U6.2 has its own via 1.1 mm away. |
+| L14 | The finisher placed two vias inside 0603 pads (R45.1, R12.1). | **Fixed:** moved out, and the finisher no longer puts a via in or touching any SMD pad. The only holes in SMD pads are U7's thermal vias (D7). |
+| L15 | Freerouting leaves 3–8 connections, different ones each run, mostly STM32 pins boxed in by their neighbours. | **Fixed:** grid finisher (`gen/maze.py`) with rip-up for the last few; the result is frozen in `gen/routing.json`, and rebuilds replay it. 5V_BUCK branches (CAN VCC, VPW reference, FB) are 0.4 mm; its power path is 1.0–1.2 mm. |
 
 ### Assembly (DFM) findings
 
@@ -126,7 +130,24 @@ After round 1 was fixed, five checks ran again on the regenerated design. Each w
 | D6 | J6 is through-hole. | **Order option:** confirm THT assembly is included, or hand-solder J6. |
 | D7 | U7's paste window lies over open thermal vias. | **Accepted:** the bottom is tented; TI allows it. |
 
-### Firmware obligations (from both rounds)
+### Round 3 (2026-11-03): ESP32 programming
+
+The plan is to program everything over USB. As built, USB-C (J2) reaches only the STM32, and the ESP32's ROM bootloader listens only on UART0, which went only to J3. So the first ESP32 flash, and any recovery, needed an external adapter on J3, and a blank STM32 left the ESP32 unpowered.
+
+| # | Change | Why |
+|---|---|---|
+| E1 | JP1 `ESP_ON`: solder jumper → 2-pin 2.54 mm header with a shunt (moved to (93.5, 30), clear of the ESP32 courtyard). | It gets switched more than once; a 1.3 mm solder jumper lifts after a few reworks. |
+| E2 | Second USB-C (J7, right edge) → USBLC6 → CH340C → ESP32 UART0, with the two-NPN auto-reset on DTR / RTS. | esptool / Arduino flash and a console with no adapter and no STM32 firmware. A USB hub was considered and left for a later product revision: on a bring-up board it would put one chip between the PC and both MCUs, DFU included. |
+| E3 | VBUS2 → SS34 → `5V`, and the load switch's ON pin is now a diode OR (1N4148W) of PB6 and VBUS2. | J7 alone powers the board and the ESP32. Feeding VBUS2 into the PB6 net instead would lose to PB6's 5.1k UCPD dead-battery pull-down on a blank chip, and put ~4.5 V on PB6 once it is off. |
+| E4 | CH340C powered from `3V3_ESP`; 1k in series with its TXD. | It is off whenever the ESP32 is, so it can't back-power the module through RXD0; an adapter on J3 can still drive RXD0. |
+| E5 | `ESP RST` (SW4) and `ESP BOOT` (SW5) buttons, TS-1187A like SW1-3. | For hosts whose DTR / RTS timing defeats the auto-reset. |
+| E6 | Battery-side set (`HV` in build.py) gained CAN1_TERM, CAN2_TERM, IDEAL_GATE, IDEAL_VCAP and BUCK_BOOT. | The round 2 audit counted them as battery-side, but the build didn't. The re-route put CAN2_TXD 0.165 mm from CAN1_TERM, which sits at CAN bus potential through the 120R. Fixed: re-routed, and now enforced by the rule. |
+
+The board was fully re-routed for round 3: placement is unchanged except for the new parts and JP1, and the expansion block (J4, J5, R16-18) is now pinned where the packer had put it.
+
+The 17 new parts are numbered after the existing ones (J7, U13, U14, Q10-11, SW4-5, D25-27, R61-65, C44-45), so no existing reference changed. The CH340C uses a project symbol (`OCTAVE:CH340C`) with V3 typed passive: the datasheet ties V3 to VCC at 3.3 V, which the stock symbol reports as two power outputs joined. Its JLC rotation (270) was checked by pad match against the TCAN1044's SOIC-8.
+
+### Firmware obligations (from all rounds)
 
 - Keep PA1/PA2/PB5/PB7 low or as inputs until the ESP32 is powered, and drive ESP_EN open-drain (item 23).
 - Set LPUART1 TXINV **before** switching PC1 to its alternate function. LPUART idles high, and through the NPN that holds K low.
@@ -134,17 +155,20 @@ After round 1 was fixed, five checks ran again on the regenerated design. Each w
 - Set the W25Q128 QE bit before using quad mode.
 - Abort a J1850 transmit on the first echo mismatch.
 - Filter comparator input capture (item 26).
+- Leave PB5 (ESP32 IO0) and PB7 (EN) as inputs while the ESP32 is being flashed through J7, or they fight the auto-reset through their 1k. With J7 plugged in, PB6 can't turn the ESP32 off (VBUS2 holds the switch on).
 
 ## Result after the fixes
 
 - **ERC:** 0 errors, 0 warnings.
-- **DRC:** 0 copper errors, 0 unconnected, 0 schematic-parity issues, 0 courtyard overlaps. 101 silkscreen warnings.
+- **DRC (final, replayed from `gen/routing.json`):** 0 copper errors, 0 unconnected, 0 schematic-parity issues, 0 courtyard overlaps. 204 silkscreen warnings (JLCPCB clips silk on pads), and 1 note that U4's footprint differs from the library copy (the antenna keepout and tented ground pad, on purpose).
+- **Rules:** signals 0.15 mm track / 0.15 mm gap (Default class), battery-side nets 0.30 mm from everything (closest on the board: 0.302 mm), vias 0.6 / 0.3 mm. All within JLCPCB's standard 4-layer process (0.09 mm minimum).
 - **STM32 pin check:** re-run on the new netlist, all 31 functions OK. PC3 (`DLC_SW_EN`) is a plain GPIO.
-- **Board:** 169 footprints, 152 JLC-assembled parts, 73 BOM lines. All exist at JLC; parts cost about $30.60 per board, with 35 extended parts.
+- **Board:** 191 footprints, 176 JLC-assembled parts, 80 BOM lines, 5 hand-fit (J3, J5, JP1-3: pin headers). Not re-priced since round 1 ($30.60 per board then, for 152 parts); round 3 adds the CH340C (extended part fee) and about $1 of parts.
+- **Power nets:** each of the 15 supply and battery-side nets is one connected piece (checked by graph, zones included).
 - **Track lengths:**
-  - 3V3_ESP: 149 mm before, 32 mm now.
-  - 3V3: plus a 5051 mm² pour on In2.
-  - The ESP32 EN and STM32 NRST caps now sit at their pins. Both tracks are still 55–63 mm, because they run to the STM32, SWD and buttons.
+  - 3V3_ESP: 149 mm before, 31 mm now.
+  - 3V3: a solid plane on In2.
+  - The ESP32 EN and STM32 NRST caps now sit at their pins. Both tracks are still 53–58 mm, because they run to the STM32, SWD and buttons.
 
 ## Not covered
 

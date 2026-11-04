@@ -14,6 +14,12 @@ SYMBOLS = [
     ic("TPS22918", [(1, "VIN", PI), (3, "ON", I), (4, "CT", P)],
        [(6, "VOUT", PO), (5, "QOD", P), (2, "GND", PI)],
        footprint="Package_TO_SOT_SMD:SOT-23-6", desc="5.5 V 2 A load switch"),
+    # WCH CH340C SOIC-16 (internal clock). V3 is its regulator output, tied to VCC when VCC is 3.3 V:
+    # passive here, so ERC doesn't call that two power outputs
+    ic("CH340C", [(16, "VCC", PI), (4, "V3", P), (5, "UD+", B), (6, "UD-", B), None, (1, "GND", PI)],
+       [(2, "TXD", O), (3, "RXD", I), (13, "~{DTR}", O), (14, "~{RTS}", O), (9, "~{CTS}", I), (10, "~{DSR}", I),
+        (11, "~{RI}", I), (12, "~{DCD}", I), (15, "R232", I), (7, "NC", NC), (8, "NC", NC)],
+       footprint="Package_SO:SOIC-16_3.9x9.9mm_P1.27mm", desc="USB to UART, internal clock"),
 ]
 
 if __name__ == "__main__":

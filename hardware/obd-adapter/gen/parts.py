@@ -41,6 +41,7 @@ LCSC = {
     # connectors, UI
     "MICROFIT10": "C122421",      # Molex 43045-1000 2x5 right angle, Ext
     "USBC": "C165948",            # HRO TYPE-C-31-M-12, Ext
+    "CH340C": "C84681",           # USB-UART, internal clock, SOIC-16, Ext, 97k
     "SWD": "C41376037",           # 2x5 1.27 mm SMD header, Ext
     "QWIIC": "C160404",           # JST SM04B-SRSS-TB, Ext
     "SW": "C318884",              # XKB TS-1187A 5.1 mm tactile, Basic

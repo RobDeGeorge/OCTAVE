@@ -26,9 +26,9 @@ python3 build.py fab      # Gerbers, drill, BOM, CPL
 python3 build.py all
 ```
 
-Use the system `python3` (KiCad's `pcbnew` module lives there), not the repo venv. Tools: KiCad 10, Freerouting 2.x (`/opt/freerouting`, AUR `freerouting-bin`).
+Use the system `python3` (KiCad's `pcbnew` module lives there), not the repo venv. Tools: KiCad 10, Java, and the Freerouting 2.5 jar (`~/.local/share/freerouting/freerouting-2.5.0.jar`, or set `FREEROUTING_JAR`). 2.2 loops forever on this board.
 
-The schematic and the board are generated from the same netlist, and `kicad-cli pcb drc --schematic-parity` checks that they agree. Every pin on the schematic is joined by net label, so a net is everything that carries the same name. **Do not hand-edit the generated files**: the next build overwrites them. If you route by hand in KiCad, stop running `pcb` / `route` and keep the board under hand control from then on.
+The schematic and the board are generated from the same netlist, and `kicad-cli pcb drc --schematic-parity` checks that they agree. Every pin on the schematic is joined by net label, so a net is everything that carries the same name. **Do not hand-edit the generated files**: the next build overwrites them. The exceptions are copper and labels: after routing by hand in KiCad, run `build.py freeze` so the next build replays your tracks, and copy any reference-label moves into `LABELS` in `gen/layout.py`.
 
 ## Blocks
 
@@ -37,7 +37,7 @@ The schematic and the board are generated from the same netlist, and `kicad-cli 
 **Power:** J1962 pin 16 → 1.1 A 60 V PTC → 5.0SMDJ26CA → LM74700 ideal diode + AO4264E → `VBAT_P` (with 47 µF bulk).
 - `VBAT_P` feeds a TPS54360B buck (60 V input; the datasheet's 600 kHz design with the output set to 5.32 V), then an SS34 diode-OR with USB VBUS (`5V` ≈ 4.9 V), then an AP2114H 3.3 V LDO (SOT-223).
 - The buck's EN divider is not fitted, so the internal UVLO keeps it running through a 6 V cold crank.
-- The ESP32 has its own TPS22918 load switch (`ESP_PWR_EN`, PB6, off at reset), placed at the module's 3V3 pin. Close the `ESP_ON` solder jumper to power it without STM32 firmware.
+- The ESP32 has its own TPS22918 load switch, placed at the module's 3V3 pin. Its ON pin is a diode OR of `ESP_PWR_EN` (PB6, off at reset) and `VBUS2` (the ESP32's USB port), so plugging into J7 always powers the ESP32. A shunt on the `ESP_ON` header (JP1, next to J3) also powers it without STM32 firmware; take it off again for normal use.
 - The TVS is bidirectional on purpose. A unidirectional one would conduct into a reversed battery and defeat the ideal diode.
 - Everything on `VBAT_P` must survive the TVS's ~42 V clamp.
 
@@ -63,10 +63,16 @@ The schematic and the board are generated from the same netlist, and `kicad-cli 
 
 **Radio:** ESP32-WROOM-32E-N8.
 - UART2 (IO16 RX / IO17 TX, IO18 CTS / IO19 RTS) to USART2 with flow control.
-- UART0 + EN + IO0 on `J_ESP_PROG` for esptool. The STM32 can also reset the ESP32 (PB7) and strap IO0 (PB5).
+- UART0 goes to its own USB-C port (J7) through a CH340C, with the usual two-transistor auto-reset on DTR / RTS, so `esptool` and the Arduino IDE flash it with no buttons and no STM32 firmware. J7 is also the ESP32's console.
+- `ESP RST` (SW4, EN) and `ESP BOOT` (SW5, IO0) buttons, for when a host's DTR / RTS timing defeats the auto-reset: hold BOOT, tap RST.
+- UART0 + EN + IO0 are also on `J_ESP_PROG` (J3) for an external adapter (the CH340C's TXD has 1k in series, so an adapter there can still drive RXD0). The STM32 can also reset the ESP32 (PB7) and strap IO0 (PB5).
 - The antenna sits at the top edge, with the module's keepout cleared on every layer.
 
-**USB-C:** device (5.1k CC), USBLC6 ESD, PA11 / PA12 (DFU bootloader + CDC). On USB power alone `5V` is about 4.6 V, marginal for the CAN transceivers (4.5 V minimum).
+**USB-C (J2, STM32):** device (5.1k CC), USBLC6 ESD, PA11 / PA12 (DFU bootloader + CDC). On USB power alone `5V` is about 4.6 V, marginal for the CAN transceivers (4.5 V minimum).
+
+**USB-C (J7, ESP32):** device (5.1k CC), USBLC6 ESD, CH340C on ESP32 UART0. Its VBUS also feeds `5V` through its own SS34, so either port powers the board.
+
+**Flashing a new board over USB only:** STM32 through J2: hold BOOT, tap RESET, flash with STM32CubeProgrammer or `dfu-util` (a blank chip starts the bootloader by itself). ESP32 through J7: `esptool --port /dev/ttyUSB0 ...`. The two are independent; either can go first.
 
 **Storage, expansion:** 16 MB W25Q128 on QUADSPI1 (store-and-forward); Qwiic I2C (PA8 / PA9); a 2x6 header with 3V3, 5V, USART1 and spare GPIO.
 
@@ -127,9 +133,19 @@ J1962 pin 4 (chassis ground) is not used; signal ground carries the return.
 5. **Confirm the J1850 PWM high-level limit** (5.25 V assumed, `verify/REVIEW.md` #10) against SAE J1850 if you have it.
 6. Through-hole parts (Micro-Fit, pin headers) need JLC's through-hole option or hand soldering; see `fab/*-hand-fit.txt`.
 7. The board is autorouted. Before fab, look at the buck switch node, the ESP32 antenna area and the USB pair in KiCad.
-8. DRC (2026-11-02, after the verification fixes): 0 copper errors, 0 unconnected, 0 schematic-parity issues, 0 courtyard overlaps; 101 silkscreen warnings (labels overlapping each other or clipped by pads / the edge, which JLC clips anyway). Tidy the labels you care about in KiCad.
+8. DRC (2026-11-03, after the round 3 changes): 0 copper errors, 0 unconnected, 0 schematic-parity issues, 0 courtyard overlaps; 204 silkscreen warnings (labels overlapping each other or clipped by pads / the edge, which JLC clips anyway). Tidy the labels you care about in KiCad and copy their positions into `LABELS` in `gen/layout.py`, or the next `build.py pcb` puts them back.
 
-**How the board is routed** (`build.py route`): GND first. Every SMD ground pad gets a short track and a via to the In1 plane, and the MCU's VSS / VSSA pins join one via under the chip. All of that is locked. Freerouting then routes everything else (supply nets in wider classes, see `WIDTHS`). Afterwards: GND stitching vias wherever one fits, GND pours on both outer layers, and a 3V3 pour on In2 around the routed signals. Freerouting is not deterministic, so each `route` run gives a different, equally valid layout. The checked-in board is one such run.
+**How the board is routed** (`build.py route`):
+
+- **Frozen.** The routing is frozen in `gen/routing.json`, and `route` replays it, so every rebuild gives the same board. It refuses to run if a part has moved since the freeze. `OBD_REROUTE=1` routes afresh, and `build.py freeze` captures a routed (or hand-edited) board.
+- **Routing afresh, in order:**
+  1. The power stage is wired by hand (`gen/prewire.py`).
+  2. Every SMD GND pad gets a via to the In1 plane, and every 3V3 pad a via to the solid In2 plane. The MCU's VSS / VSSA pins join one via under the chip. All of that is locked.
+  3. Freerouting 2.5 routes the rest on F.Cu / B.Cu. Supply nets get wider classes (`WIDTHS`), and battery-side nets keep 0.30 mm from everything (`HV`).
+  4. A grid router (`gen/maze.py`) finishes the few connections Freerouting leaves.
+  5. GND stitching vias and the outer-layer GND pours go in last.
+- **Battery-side clearance.** `obd-adapter.kicad_dru` (generated) makes KiCad's DRC and interactive router enforce the battery-side clearance too.
+- **Freerouting is not deterministic.** A fresh route gives a different, equally valid layout, which may need a few connections finished by hand before `build.py freeze`.
 
 ## Known Rev 0 limits
 

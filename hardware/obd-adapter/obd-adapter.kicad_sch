@@ -5779,21 +5779,18 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "Jumper:SolderJumper_2_Open"
-			(pin_numbers
-				(hide yes)
-			)
+		(symbol "Connector_Generic:Conn_01x02"
 			(pin_names
-				(offset 0)
+				(offset 1.016)
 				(hide yes)
 			)
 			(exclude_from_sim no)
-			(in_bom no)
+			(in_bom yes)
 			(on_board yes)
 			(in_pos_files yes)
 			(duplicate_pin_numbers_are_jumpers no)
-			(property "Reference" "JP"
-				(at 0 2.032 0)
+			(property "Reference" "J"
+				(at 0 2.54 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(effects
@@ -5802,8 +5799,8 @@
 					)
 				)
 			)
-			(property "Value" "SolderJumper_2_Open"
-				(at 0 -2.54 0)
+			(property "Value" "Conn_01x02"
+				(at 0 -5.08 0)
 				(show_name no)
 				(do_not_autoplace no)
 				(effects
@@ -5824,28 +5821,6 @@
 				)
 			)
 			(property "Datasheet" ""
-				(at 0 -7.62 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Description" "Solder Jumper, 2-pole, open"
-				(at 0 -5.08 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "ki_keywords" "solder jumper SPST"
 				(at 0 0 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -5856,7 +5831,7 @@
 					)
 				)
 			)
-			(property "ki_fp_filters" "SolderJumper*Open*"
+			(property "Description" "Generic connector, single row, 01x02, script generated (kicad-library-utils/schlib/autogen/connector/)"
 				(at 0 0 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -5867,63 +5842,66 @@
 					)
 				)
 			)
-			(symbol "SolderJumper_2_Open_0_1"
-				(polyline
-					(pts
-						(xy -0.254 1.016)
-						(xy -0.254 -1.016)
-					)
-					(stroke
-						(width 0.1524)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(arc
-					(start -0.254 -1.016)
-					(mid -1.2656 0)
-					(end -0.254 1.016)
-					(stroke
-						(width 0.1524)
-						(type default)
-					)
-					(fill
-						(type outline)
-					)
-				)
-				(arc
-					(start 0.254 1.016)
-					(mid 1.2656 0)
-					(end 0.254 -1.016)
-					(stroke
-						(width 0.1524)
-						(type default)
-					)
-					(fill
-						(type outline)
-					)
-				)
-				(polyline
-					(pts
-						(xy 0.254 1.016)
-						(xy 0.254 -1.016)
-					)
-					(stroke
-						(width 0.1524)
-						(type default)
-					)
-					(fill
-						(type none)
+			(property "ki_keywords" "connector"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
 					)
 				)
 			)
-			(symbol "SolderJumper_2_Open_1_1"
+			(property "ki_fp_filters" "Connector*:*_1x??_*"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "Conn_01x02_1_1"
+				(rectangle
+					(start -1.27 1.27)
+					(end 1.27 -3.81)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type background)
+					)
+				)
+				(rectangle
+					(start -1.27 0.127)
+					(end 0 -0.127)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(rectangle
+					(start -1.27 -2.413)
+					(end 0 -2.667)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
 				(pin passive line
 					(at -5.08 0 0)
 					(length 3.81)
-					(name "A"
+					(name "Pin_1"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -5939,9 +5917,9 @@
 					)
 				)
 				(pin passive line
-					(at 5.08 0 180)
+					(at -5.08 -2.54 0)
 					(length 3.81)
-					(name "B"
+					(name "Pin_2"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -9647,164 +9625,6 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "Connector_Generic:Conn_01x02"
-			(pin_names
-				(offset 1.016)
-				(hide yes)
-			)
-			(exclude_from_sim no)
-			(in_bom yes)
-			(on_board yes)
-			(in_pos_files yes)
-			(duplicate_pin_numbers_are_jumpers no)
-			(property "Reference" "J"
-				(at 0 2.54 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Value" "Conn_01x02"
-				(at 0 -5.08 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Footprint" ""
-				(at 0 0 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Datasheet" ""
-				(at 0 0 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Description" "Generic connector, single row, 01x02, script generated (kicad-library-utils/schlib/autogen/connector/)"
-				(at 0 0 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "ki_keywords" "connector"
-				(at 0 0 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "ki_fp_filters" "Connector*:*_1x??_*"
-				(at 0 0 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(symbol "Conn_01x02_1_1"
-				(rectangle
-					(start -1.27 1.27)
-					(end 1.27 -3.81)
-					(stroke
-						(width 0.254)
-						(type default)
-					)
-					(fill
-						(type background)
-					)
-				)
-				(rectangle
-					(start -1.27 0.127)
-					(end 0 -0.127)
-					(stroke
-						(width 0.1524)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(rectangle
-					(start -1.27 -2.413)
-					(end 0 -2.667)
-					(stroke
-						(width 0.1524)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(pin passive line
-					(at -5.08 0 0)
-					(length 3.81)
-					(name "Pin_1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin passive line
-					(at -5.08 -2.54 0)
-					(length 3.81)
-					(name "Pin_2"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "2"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-			)
-			(embedded_fonts no)
-		)
 		(symbol "Transistor_FET:Q_PMOS_GSD"
 			(pin_names
 				(offset 0)
@@ -12140,6 +11960,361 @@
 						)
 					)
 					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
+		(symbol "OCTAVE:CH340C"
+			(pin_names
+				(offset 1.016)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "U"
+				(at 0 19.05 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "CH340C"
+				(at 0 -13.97 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" "Package_SO:SOIC-16_3.9x9.9mm_P1.27mm"
+				(at 0 0 0)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Description" "USB to UART, internal clock"
+				(at 0 0 0)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "CH340C_0_1"
+				(rectangle
+					(start -7.62 16.51)
+					(end 7.62 -11.43)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type background)
+					)
+				)
+			)
+			(symbol "CH340C_1_1"
+				(pin power_in line
+					(at -10.16 15.24 0)
+					(length 2.54)
+					(name "VCC"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "16"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -10.16 12.7 0)
+					(length 2.54)
+					(name "V3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "4"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin bidirectional line
+					(at -10.16 10.16 0)
+					(length 2.54)
+					(name "UD+"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "5"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin bidirectional line
+					(at -10.16 7.62 0)
+					(length 2.54)
+					(name "UD-"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "6"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin power_in line
+					(at -10.16 2.54 0)
+					(length 2.54)
+					(name "GND"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin output line
+					(at 10.16 15.24 180)
+					(length 2.54)
+					(name "TXD"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin input line
+					(at 10.16 12.7 180)
+					(length 2.54)
+					(name "RXD"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin output line
+					(at 10.16 10.16 180)
+					(length 2.54)
+					(name "~{DTR}"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "13"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin output line
+					(at 10.16 7.62 180)
+					(length 2.54)
+					(name "~{RTS}"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "14"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin input line
+					(at 10.16 5.08 180)
+					(length 2.54)
+					(name "~{CTS}"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "9"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin input line
+					(at 10.16 2.54 180)
+					(length 2.54)
+					(name "~{DSR}"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "10"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin input line
+					(at 10.16 0 180)
+					(length 2.54)
+					(name "~{RI}"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "11"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin input line
+					(at 10.16 -2.54 180)
+					(length 2.54)
+					(name "~{DCD}"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "12"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin input line
+					(at 10.16 -5.08 180)
+					(length 2.54)
+					(name "R232"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "15"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin no_connect line
+					(at 10.16 -7.62 180)
+					(length 2.54)
+					(name "NC"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "7"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin no_connect line
+					(at 10.16 -10.16 180)
+					(length 2.54)
+					(name "NC"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "8"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -17097,7 +17272,7 @@
 		)
 		(uuid "7a50074e-5bdc-5ead-b40f-79a85a8e0d38")
 	)
-	(text "Close JP_ESP_ON to power the ESP32 without STM32 firmware (blank-board esptool flashing)."
+	(text "Fit a shunt on JP_ESP_ON to power the ESP32 without STM32 firmware (blank-board esptool flashing)."
 		(exclude_from_sim no)
 		(at 139 204.14 0)
 		(effects
@@ -17106,7 +17281,7 @@
 			)
 			(justify left top)
 		)
-		(uuid "4ee13f1c-47f7-5487-bfa2-e8207bdb739a")
+		(uuid "6eb61daf-bbcd-5ad6-a091-2ee71595b966")
 	)
 	(text "1k in series with PA1/PA2/PB5/PB7 limits back-powering through the ESP32's I/O while it is off;"
 		(exclude_from_sim no)
@@ -18503,7 +18678,7 @@
 		)
 		(uuid "cafd566b-040d-51d8-bced-ccaa4a5e4dfa")
 	)
-	(label "ESP_PWR_EN"
+	(label "ESP_SW_ON"
 		(at 325.12 226.06 180)
 		(fields_autoplaced yes)
 		(effects
@@ -18634,7 +18809,7 @@
 			)
 		)
 	)
-	(label "ESP_PWR_EN"
+	(label "ESP_SW_ON"
 		(at 363.22 222.25 90)
 		(fields_autoplaced yes)
 		(effects
@@ -18853,16 +19028,16 @@
 		(uuid "8e0113f5-09f0-5e1b-ae51-ee5f4eaa5c63")
 	)
 	(symbol
-		(lib_id "Jumper:SolderJumper_2_Open")
-		(at 152.4 307.34 0)
+		(lib_id "Connector_Generic:Conn_01x02")
+		(at 160.02 307.34 0)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom no)
+		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "5c41f209-677f-5e85-9e3e-da6c7548ec0b")
 		(property "Reference" "JP1"
-			(at 152.4 304.8 0)
+			(at 160.02 304.8 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -18870,15 +19045,15 @@
 			)
 		)
 		(property "Value" "ESP_ON"
-			(at 152.4 309.88 0)
+			(at 160.02 312.42 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Footprint" "Jumper:SolderJumper-2_P1.3mm_Open_RoundedPad1.0x1.5mm"
-			(at 152.4 307.34 0)
+		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
+			(at 160.02 307.34 0)
 			(hide yes)
 			(effects
 				(font
@@ -18887,7 +19062,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 152.4 307.34 0)
+			(at 160.02 307.34 0)
 			(hide yes)
 			(effects
 				(font
@@ -18896,7 +19071,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 152.4 307.34 0)
+			(at 160.02 307.34 0)
 			(hide yes)
 			(effects
 				(font
@@ -18920,7 +19095,7 @@
 		)
 	)
 	(label "3V3"
-		(at 147.32 307.34 180)
+		(at 154.94 307.34 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -18931,19 +19106,19 @@
 		(uuid "ce66b4d9-81cd-5bb4-9033-3d17a9d3ded1")
 	)
 	(label "ESP_PWR_EN"
-		(at 157.48 307.34 0)
+		(at 154.94 309.88 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left bottom)
+			(justify right bottom)
 		)
 		(uuid "909c84ce-d271-5361-8f57-b048bf02f626")
 	)
 	(symbol
 		(lib_id "Connector_Generic:Conn_01x05")
-		(at 190.5 312.42 0)
+		(at 182.88 312.42 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -18951,7 +19126,7 @@
 		(dnp no)
 		(uuid "f57c8869-566c-5d16-b3dc-4365f29730a8")
 		(property "Reference" "J3"
-			(at 190.5 304.8 0)
+			(at 182.88 304.8 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -18959,7 +19134,7 @@
 			)
 		)
 		(property "Value" "ESP_PROG"
-			(at 190.5 320.04 0)
+			(at 182.88 320.04 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -18967,7 +19142,7 @@
 			)
 		)
 		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x05_P2.54mm_Vertical"
-			(at 190.5 312.42 0)
+			(at 182.88 312.42 0)
 			(hide yes)
 			(effects
 				(font
@@ -18976,7 +19151,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 190.5 312.42 0)
+			(at 182.88 312.42 0)
 			(hide yes)
 			(effects
 				(font
@@ -18985,7 +19160,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 190.5 312.42 0)
+			(at 182.88 312.42 0)
 			(hide yes)
 			(effects
 				(font
@@ -19018,7 +19193,7 @@
 		)
 	)
 	(label "GND"
-		(at 185.42 307.34 180)
+		(at 177.8 307.34 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -19029,7 +19204,7 @@
 		(uuid "5afc0cdd-90bb-5698-b4f5-a27a1023312a")
 	)
 	(label "ESP_TXD0"
-		(at 185.42 309.88 180)
+		(at 177.8 309.88 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -19040,7 +19215,7 @@
 		(uuid "67d44f24-bfce-51cb-a9c2-0d72e76121e6")
 	)
 	(label "ESP_RXD0"
-		(at 185.42 312.42 180)
+		(at 177.8 312.42 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -19051,7 +19226,7 @@
 		(uuid "7c114589-cd58-5d08-9430-4b8ee8e74b7e")
 	)
 	(label "ESP_EN"
-		(at 185.42 314.96 180)
+		(at 177.8 314.96 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -19062,7 +19237,7 @@
 		(uuid "eee83f59-ec67-56b6-9c2e-e5a0197b2c72")
 	)
 	(label "ESP_IO0"
-		(at 185.42 317.5 180)
+		(at 177.8 317.5 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -32677,6 +32852,2166 @@
 		)
 		(uuid "f2da30f6-1892-5d1e-808a-0a1a8f1ab9d9")
 	)
+	(text "USB-C for the ESP32 (CH340C on UART0, auto-reset): esptool / console without the STM32"
+		(exclude_from_sim no)
+		(at 20 571.287 0)
+		(effects
+			(font
+				(size 3 3)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "b4be181d-c418-5767-a90e-e34dd5d8ad3c")
+	)
+	(text "Second USB-C (sink, 5.1k CC). VBUS2 powers the board through its own Schottky and turns the ESP32's"
+		(exclude_from_sim no)
+		(at 20 577.287 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "5145c054-8729-58ef-a57a-ee5dc61d65f8")
+	)
+	(text "load switch on through a diode, so esptool works on a board whose STM32 is blank."
+		(exclude_from_sim no)
+		(at 20 580.287 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "19cae00a-407f-5bf2-a001-e3c584a237c9")
+	)
+	(text "CH340C runs from 3V3_ESP: it is off whenever the ESP32 is, so it can't back-power the module through RXD0."
+		(exclude_from_sim no)
+		(at 20 583.287 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "6fefa676-4437-5ebd-90cd-724a02f67159")
+	)
+	(text "Auto-reset: the usual two-NPN cross pair on DTR/RTS drives EN and IO0 (esptool's default reset)."
+		(exclude_from_sim no)
+		(at 20 586.287 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "e369914e-763f-5c2f-aee5-b1a01a1c68ca")
+	)
+	(text "1k in series with the CH340C TXD, so an adapter on J3 can still drive RXD0."
+		(exclude_from_sim no)
+		(at 20 589.287 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "720078ed-143b-5ecb-8a2e-601e96485009")
+	)
+	(symbol
+		(lib_id "Connector:USB_C_Receptacle_USB2.0_16P")
+		(at 35.56 619.76 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "e486d320-3c82-562a-bb8d-93e97d2fafae")
+		(property "Reference" "J7"
+			(at 35.56 599.44 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "USB-C ESP32"
+			(at 35.56 645.16 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12"
+			(at 35.56 619.76 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 35.56 619.76 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 35.56 619.76 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C165948"
+			(at 35.56 619.76 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "A1"
+			(uuid "02416004-e28e-5f2e-8e14-faa535f23255")
+		)
+		(pin "A4"
+			(uuid "edba2bc7-214f-5578-8ac9-e3ca7ad2495b")
+		)
+		(pin "A5"
+			(uuid "221c7aa1-110b-5203-8d45-eb17ef4be2fc")
+		)
+		(pin "A6"
+			(uuid "42749160-ed1a-5591-81a9-bd6d0a6a156f")
+		)
+		(pin "A7"
+			(uuid "55c11362-e926-5113-95af-2403a1a6fff7")
+		)
+		(pin "A8"
+			(uuid "beab08b4-e456-563c-a69a-769b70e65afa")
+		)
+		(pin "A9"
+			(uuid "d581ba1d-e0cd-52b1-8b14-44e703c19862")
+		)
+		(pin "A12"
+			(uuid "9324575f-21e3-5994-b976-570fec5d3dca")
+		)
+		(pin "B1"
+			(uuid "63f1bfee-5703-525b-b8ec-5f55c099ae52")
+		)
+		(pin "B4"
+			(uuid "9d686648-3dfe-59d4-8d64-64c5bbf289b2")
+		)
+		(pin "B5"
+			(uuid "0b76ec01-f597-59f3-a899-025ef01aec71")
+		)
+		(pin "B6"
+			(uuid "ca5accff-837a-5ced-b77b-8b0905078c59")
+		)
+		(pin "B7"
+			(uuid "9ca5e87f-278d-53f3-a3ed-83b128b06e68")
+		)
+		(pin "B8"
+			(uuid "bf653440-b79c-5930-aa5b-b13380e81143")
+		)
+		(pin "B9"
+			(uuid "66cd02a5-8bec-5a0b-93a2-e35242c4150c")
+		)
+		(pin "B12"
+			(uuid "7b765381-d11e-5545-840a-e7340ae7b67e")
+		)
+		(pin "SH"
+			(uuid "4c4dce73-18c6-505c-a833-2b7f6af26858")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679"
+					(reference "J7")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(label "GND"
+		(at 35.56 642.62 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "9b4372e4-628c-5a1a-bb8e-d2db19f5dd24")
+	)
+	(label "VBUS2"
+		(at 50.8 604.52 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "344c77e2-5e1a-5072-95e5-9f727973e1c6")
+	)
+	(label "USB2_CC1"
+		(at 50.8 609.6 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "5e71e81b-4ef7-5a00-a9d1-b2334babf879")
+	)
+	(label "USB2_DP"
+		(at 50.8 622.3 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "acfcf8a5-3920-536b-8de2-e8796032efd5")
+	)
+	(label "USB2_DM"
+		(at 50.8 617.22 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "d2e7dbdc-1e5b-5ad8-b431-1af9304bb00c")
+	)
+	(no_connect
+		(at 50.8 632.46)
+		(uuid "f38ec1ab-7725-5bf1-a581-00a6423c22eb")
+	)
+	(label "VBUS2"
+		(at 50.8 604.52 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "c122b006-12c4-5da5-b382-84786568220e")
+	)
+	(label "GND"
+		(at 35.56 642.62 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "61a05c22-72db-5ae4-80be-58223e2b05b3")
+	)
+	(label "GND"
+		(at 35.56 642.62 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "3ab9ea15-c655-5a73-bd8f-c4ecc90b7c49")
+	)
+	(label "VBUS2"
+		(at 50.8 604.52 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "fba5d929-be90-5455-a79d-33841f81307f")
+	)
+	(label "USB2_CC2"
+		(at 50.8 612.14 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "368e5317-4273-5033-b5e9-8ca3874986de")
+	)
+	(label "USB2_DP"
+		(at 50.8 624.84 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "e5730ed6-394e-5813-a8a9-4aa180ce5854")
+	)
+	(label "USB2_DM"
+		(at 50.8 619.76 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "9bdc0572-7e61-52c8-aff5-2d2732501825")
+	)
+	(no_connect
+		(at 50.8 635)
+		(uuid "90daf760-768a-5416-82ca-9191a25c2e2c")
+	)
+	(label "VBUS2"
+		(at 50.8 604.52 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "d297788b-0b6a-5305-9276-d9d5dbf81990")
+	)
+	(label "GND"
+		(at 35.56 642.62 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "860d1370-0bd0-5382-aaab-434e63524233")
+	)
+	(label "GND"
+		(at 27.94 642.62 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "01bc40ab-cecf-56fc-af01-1486b1bfe439")
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 68.58 607.06 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "38a9a2e0-cae0-5629-b997-3c8f946e8203")
+		(property "Reference" "R61"
+			(at 68.58 601.98 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "5.1k"
+			(at 68.58 612.14 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+			(at 68.58 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 68.58 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 68.58 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C23186"
+			(at 68.58 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "b4aaf5ac-d898-5669-8b38-8ca13a377b1d")
+		)
+		(pin "2"
+			(uuid "54059573-ddbc-5170-b7e3-18f504f93065")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679"
+					(reference "R61")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(label "USB2_CC1"
+		(at 68.58 603.25 90)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "451232e7-a20b-519f-a92a-ca828dd8e537")
+	)
+	(label "GND"
+		(at 68.58 610.87 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "99ff14ef-9c64-5180-8f7d-7d48351dcd7a")
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 81.28 607.06 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "0a998326-1ae2-550b-9817-086274ee794e")
+		(property "Reference" "R62"
+			(at 81.28 601.98 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "5.1k"
+			(at 81.28 612.14 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+			(at 81.28 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 81.28 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 81.28 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C23186"
+			(at 81.28 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "0c337998-2676-5be5-bdc5-e0b4e31d7e9e")
+		)
+		(pin "2"
+			(uuid "d5c138fa-e32b-5b1c-91ad-e98cadab52d1")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679"
+					(reference "R62")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(label "USB2_CC2"
+		(at 81.28 603.25 90)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "7004daa2-0783-5df1-8529-7575f9bccb03")
+	)
+	(label "GND"
+		(at 81.28 610.87 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "e8f63a9a-2cdf-51d6-a6a1-dbb833398918")
+	)
+	(symbol
+		(lib_id "Power_Protection:USBLC6-2SC6")
+		(at 104.14 607.06 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "c9061a7a-5df8-51ce-a9b8-5106018d48f9")
+		(property "Reference" "U13"
+			(at 104.14 599.44 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "USBLC6-2SC6"
+			(at 104.14 617.22 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Package_TO_SOT_SMD:SOT-23-6"
+			(at 104.14 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 104.14 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 104.14 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C2687116"
+			(at 104.14 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "fa90e3d4-29f6-5f9b-ba16-cccf2b6307b6")
+		)
+		(pin "2"
+			(uuid "d2f387b2-1ad0-5376-b00c-b382f7aa12b7")
+		)
+		(pin "3"
+			(uuid "1c504b00-60b7-58cc-8df1-9da01e50061a")
+		)
+		(pin "4"
+			(uuid "c5226fbe-eb2a-53e3-9dd2-f30ca8f51fa3")
+		)
+		(pin "5"
+			(uuid "1ec11663-874e-57a5-ba39-0628d7de95c7")
+		)
+		(pin "6"
+			(uuid "00e6a865-114b-5427-a898-462f75aa5e2a")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679"
+					(reference "U13")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(label "USB2_DP"
+		(at 99.06 607.06 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "78cc6f80-b487-566f-a498-3d39d4c1e070")
+	)
+	(label "GND"
+		(at 104.14 614.68 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "5ce44844-fdb8-599d-ad38-e80a8c5da409")
+	)
+	(label "USB2_DM"
+		(at 99.06 609.6 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "c731ace0-31ff-5bba-b1f4-c0d755fd8e2b")
+	)
+	(label "USB2_DM"
+		(at 109.22 609.6 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "7a41cb29-99ec-57bb-8a39-e814c8150580")
+	)
+	(label "VBUS2"
+		(at 104.14 601.98 90)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "22c5ef72-3190-5c59-990e-871e462b079a")
+	)
+	(label "USB2_DP"
+		(at 109.22 607.06 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "57211f01-be8c-59fc-826f-f37d58975f5c")
+	)
+	(symbol
+		(lib_id "Device:C")
+		(at 129.54 607.06 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "1ee6c700-d120-59e8-a1ab-bd09f33c15f1")
+		(property "Reference" "C44"
+			(at 129.54 601.98 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "10u"
+			(at 129.54 612.14 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
+			(at 129.54 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 129.54 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 129.54 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C96446"
+			(at 129.54 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "6cbb270d-e0b6-5458-aac6-246787919cdf")
+		)
+		(pin "2"
+			(uuid "892f2a0d-4b33-59be-8623-1c537448ef24")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679"
+					(reference "C44")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(label "VBUS2"
+		(at 129.54 603.25 90)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "fcd79cad-b6d2-500c-99d1-0be58967b7ea")
+	)
+	(label "GND"
+		(at 129.54 610.87 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "d88d6322-a0a4-5e4e-a2d9-b2ee26be5106")
+	)
+	(symbol
+		(lib_id "Device:D_Schottky")
+		(at 147.32 604.52 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "d0f5fd7c-abb3-5cd1-b951-8c8fb3e4784f")
+		(property "Reference" "D25"
+			(at 147.32 601.98 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "SS34"
+			(at 147.32 607.06 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Diode_SMD:D_SMA"
+			(at 147.32 604.52 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 147.32 604.52 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 147.32 604.52 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C8678"
+			(at 147.32 604.52 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "10ae3fe2-ef7e-58cd-b69e-5aac2edcb533")
+		)
+		(pin "2"
+			(uuid "640a3591-fd2c-5153-8c0a-600281242f9a")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679"
+					(reference "D25")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(label "5V"
+		(at 143.51 604.52 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "2f5f9a2e-fc58-576a-8555-47854f28edc5")
+	)
+	(label "VBUS2"
+		(at 151.13 604.52 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "36f692a7-8705-521f-98a4-60725504e4c4")
+	)
+	(symbol
+		(lib_id "OCTAVE:CH340C")
+		(at 182.88 619.76 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "ddf25e08-d703-5a3d-a32a-e1a4b8844b51")
+		(property "Reference" "U14"
+			(at 182.88 601.98 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "CH340C"
+			(at 182.88 632.46 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Package_SO:SOIC-16_3.9x9.9mm_P1.27mm"
+			(at 182.88 619.76 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 182.88 619.76 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 182.88 619.76 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C84681"
+			(at 182.88 619.76 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "16"
+			(uuid "c3e26d70-7546-54d6-8783-10b208ffd5d6")
+		)
+		(pin "4"
+			(uuid "61b34681-e249-55a9-96a5-2426cb9bc8d3")
+		)
+		(pin "5"
+			(uuid "88666184-c295-59b3-be09-2c8d8919f047")
+		)
+		(pin "6"
+			(uuid "04d2b9a5-286e-59aa-a031-439147ad56a6")
+		)
+		(pin "1"
+			(uuid "c83d6ca9-77a4-5a78-ac86-a71180a37656")
+		)
+		(pin "2"
+			(uuid "bf470857-ccb6-5f5d-a2f7-00ee522fef49")
+		)
+		(pin "3"
+			(uuid "19fa8cb8-c98b-55b6-bb35-481ff6d3d745")
+		)
+		(pin "13"
+			(uuid "6e5c5e54-13fb-5e3e-b060-89fccc68d3a4")
+		)
+		(pin "14"
+			(uuid "2a68ef9b-c1b1-533e-9dad-13baa88876a1")
+		)
+		(pin "9"
+			(uuid "6ebab685-4b37-5e94-a227-34845096aa5a")
+		)
+		(pin "10"
+			(uuid "c8328e3a-06d3-5395-b76c-cc2851238d71")
+		)
+		(pin "11"
+			(uuid "02e9f131-b267-51f2-a9f0-a090feac711a")
+		)
+		(pin "12"
+			(uuid "3f9acd63-1f73-5d3e-a3e1-606bb8359def")
+		)
+		(pin "15"
+			(uuid "829b9157-d012-53a9-9d4e-1b5c1404ecf1")
+		)
+		(pin "7"
+			(uuid "289d1abf-f9a0-557f-ab31-4fa801b17f9d")
+		)
+		(pin "8"
+			(uuid "b0b44ae8-b8e8-539a-a9f6-a304b2dad5e5")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679"
+					(reference "U14")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(label "3V3_ESP"
+		(at 172.72 604.52 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "535b4584-9f63-5331-b0a0-4aa6f3a8c1c4")
+	)
+	(label "3V3_ESP"
+		(at 172.72 607.06 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "eeba4320-11b1-5c86-93ef-df20293b7281")
+	)
+	(label "USB2_DP"
+		(at 172.72 609.6 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "18f9d0e5-a72f-5d86-9868-ecd0418cb3cd")
+	)
+	(label "USB2_DM"
+		(at 172.72 612.14 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "1ed84277-9049-5d9a-9fd8-443c8a2d5982")
+	)
+	(label "GND"
+		(at 172.72 617.22 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "b857d5ae-e7bc-5d03-9cae-686972062850")
+	)
+	(label "U2S_TXD"
+		(at 193.04 604.52 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "15741b49-0e1d-5786-85c6-102444d5c15b")
+	)
+	(label "ESP_TXD0"
+		(at 193.04 607.06 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "63285911-afac-5c33-8b27-cc624bea84f1")
+	)
+	(label "U2S_DTR"
+		(at 193.04 609.6 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "5c53ad39-7866-5ba3-860b-b4f12f905e92")
+	)
+	(label "U2S_RTS"
+		(at 193.04 612.14 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "3e8b062a-f3c4-5e7a-b88b-a272fbf38b09")
+	)
+	(no_connect
+		(at 193.04 614.68)
+		(uuid "e7024164-3d3d-5d08-a69c-948905138526")
+	)
+	(no_connect
+		(at 193.04 617.22)
+		(uuid "1d088e0c-356a-5499-b5fb-9192b02a2b6e")
+	)
+	(no_connect
+		(at 193.04 619.76)
+		(uuid "a29853e2-cbfd-505d-a38c-eb0af502476d")
+	)
+	(no_connect
+		(at 193.04 622.3)
+		(uuid "c2773d44-006a-5bde-bd40-5b134f8147b7")
+	)
+	(no_connect
+		(at 193.04 624.84)
+		(uuid "e861cc4e-9532-58b5-a594-cb4befcab9e0")
+	)
+	(no_connect
+		(at 193.04 627.38)
+		(uuid "cf083523-233c-57ca-a621-0a0ad6cb2514")
+	)
+	(no_connect
+		(at 193.04 629.92)
+		(uuid "3907d32b-dcd6-580f-a9bd-839f59889ac7")
+	)
+	(symbol
+		(lib_id "Device:C")
+		(at 213.36 607.06 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "b31a555f-70e2-5633-a112-2af05e2f4b58")
+		(property "Reference" "C45"
+			(at 213.36 601.98 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "100n"
+			(at 213.36 612.14 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
+			(at 213.36 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 213.36 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 213.36 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C14663"
+			(at 213.36 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "6d12d5fe-d6da-58c4-af15-81b99d6578d9")
+		)
+		(pin "2"
+			(uuid "833785f8-9926-5798-997e-db1526b21317")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679"
+					(reference "C45")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(label "3V3_ESP"
+		(at 213.36 603.25 90)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "33792542-c2ea-5d46-8723-aacb8a572919")
+	)
+	(label "GND"
+		(at 213.36 610.87 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "f9af3291-44f9-5283-84a4-6dc487f4a025")
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 226.06 607.06 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "dab7a36c-10f8-5a75-b547-02cf0cfd5d7f")
+		(property "Reference" "R63"
+			(at 226.06 601.98 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "1k"
+			(at 226.06 612.14 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+			(at 226.06 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 226.06 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 226.06 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C21190"
+			(at 226.06 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "9a131337-9e38-56cb-ae7c-2fae812bffd0")
+		)
+		(pin "2"
+			(uuid "c51a9dd2-34d3-5062-a6fa-83d113f09bd9")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679"
+					(reference "R63")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(label "U2S_TXD"
+		(at 226.06 603.25 90)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "548f7016-7b44-5a32-b590-1597ddf61ce2")
+	)
+	(label "ESP_RXD0"
+		(at 226.06 610.87 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "36f91e3b-799f-5ed4-85b1-06209d45a7d4")
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 238.76 607.06 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "ba16a6b9-fbce-5525-a834-ff1ab13e73e8")
+		(property "Reference" "R64"
+			(at 238.76 601.98 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "10k"
+			(at 238.76 612.14 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+			(at 238.76 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 238.76 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 238.76 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C25804"
+			(at 238.76 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "caeb516f-fccc-5669-a621-c9f7bddacd73")
+		)
+		(pin "2"
+			(uuid "c17af25e-b3ef-5efc-97c4-0ff102ac31b3")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679"
+					(reference "R64")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(label "U2S_DTR"
+		(at 238.76 603.25 90)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "3c847ee9-401a-5776-879e-87a79735a298")
+	)
+	(label "U2S_DTR_B"
+		(at 238.76 610.87 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "07675e6e-e465-5c0c-860b-0721cb6abe12")
+	)
+	(symbol
+		(lib_id "Transistor_BJT:MMBT3904")
+		(at 261.62 607.06 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "eb37ef6d-1707-5c11-a4fc-ef657da8766e")
+		(property "Reference" "Q10"
+			(at 261.62 599.44 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "MMBT3904"
+			(at 261.62 614.68 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Package_TO_SOT_SMD:SOT-23"
+			(at 261.62 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 261.62 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 261.62 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C20526"
+			(at 261.62 607.06 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "7e0f6cc5-3430-5919-ac9d-215b3021633f")
+		)
+		(pin "2"
+			(uuid "da6dbd06-a40f-5132-9d72-53940e93d588")
+		)
+		(pin "3"
+			(uuid "b6c5103b-5563-50a2-9fec-1ebbaad4e510")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679"
+					(reference "Q10")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(label "U2S_DTR_B"
+		(at 256.54 607.06 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "74a341c3-baba-56c4-8ab0-b3dd50592e30")
+	)
+	(label "U2S_RTS"
+		(at 264.16 612.14 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "ca874951-4b80-50c7-85c3-68b7c1bc0679")
+	)
+	(label "ESP_EN"
+		(at 264.16 601.98 90)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "77abc8b8-9f6d-5328-9241-591e03cffda9")
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 25.4 657.86 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "d1fda42b-1bd6-535a-8490-c276a9b6821c")
+		(property "Reference" "R65"
+			(at 25.4 652.78 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "10k"
+			(at 25.4 662.94 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+			(at 25.4 657.86 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 25.4 657.86 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 25.4 657.86 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C25804"
+			(at 25.4 657.86 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "b3186c94-c6f3-5982-954c-0cb75ad9516c")
+		)
+		(pin "2"
+			(uuid "e59228e4-27a6-5128-aeb9-b56a47fe5b4c")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679"
+					(reference "R65")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(label "U2S_RTS"
+		(at 25.4 654.05 90)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "8e908096-d1bb-544c-aae5-6ccffb4f8f1a")
+	)
+	(label "U2S_RTS_B"
+		(at 25.4 661.67 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "a7aa76e9-6a19-516d-8bc5-1934d27af905")
+	)
+	(symbol
+		(lib_id "Transistor_BJT:MMBT3904")
+		(at 50.8 660.4 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "25f3de36-e459-524f-854a-79af73ad0e7a")
+		(property "Reference" "Q11"
+			(at 50.8 652.78 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "MMBT3904"
+			(at 50.8 668.02 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Package_TO_SOT_SMD:SOT-23"
+			(at 50.8 660.4 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 50.8 660.4 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 50.8 660.4 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C20526"
+			(at 50.8 660.4 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "7042c227-b4c7-5131-9c72-4e1605a71873")
+		)
+		(pin "2"
+			(uuid "182add7b-634f-5d67-aa8f-0366e488e0ff")
+		)
+		(pin "3"
+			(uuid "eb9794be-779c-5e2d-ae25-01ac54345096")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679"
+					(reference "Q11")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(label "U2S_RTS_B"
+		(at 45.72 660.4 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "e88a6291-8d05-52f1-b94a-e1e28377efbc")
+	)
+	(label "U2S_DTR"
+		(at 53.34 665.48 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "2abf6265-b484-5dd8-8926-dfc92027e8a8")
+	)
+	(label "ESP_IO0"
+		(at 53.34 655.32 90)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "6b4940cf-1a15-5e8b-abea-1473917c83c3")
+	)
+	(symbol
+		(lib_id "Switch:SW_Push")
+		(at 73.66 657.86 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "ac6f74e4-b7aa-5bcd-a7eb-b9fc0ba451c5")
+		(property "Reference" "SW4"
+			(at 73.66 652.78 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "ESP_RST"
+			(at 73.66 660.4 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A"
+			(at 73.66 657.86 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 73.66 657.86 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 73.66 657.86 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C318884"
+			(at 73.66 657.86 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "889bf4e2-c5da-59f3-82d0-3fca94b38291")
+		)
+		(pin "2"
+			(uuid "7a4c185c-f832-552f-a581-f385c152b54f")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679"
+					(reference "SW4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(label "ESP_EN"
+		(at 68.58 657.86 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "6029ee05-4342-5775-921e-5e19e3931d27")
+	)
+	(label "GND"
+		(at 78.74 657.86 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "e1dc2d35-b3f8-55fa-9f77-d2100df1e90a")
+	)
+	(symbol
+		(lib_id "Switch:SW_Push")
+		(at 104.14 657.86 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "e32fcc62-f973-5cb1-9518-7d3c9f2b85c1")
+		(property "Reference" "SW5"
+			(at 104.14 652.78 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "ESP_BOOT"
+			(at 104.14 660.4 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A"
+			(at 104.14 657.86 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 104.14 657.86 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 104.14 657.86 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C318884"
+			(at 104.14 657.86 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "5fb9ec05-711c-597f-9d7a-4c0346709a14")
+		)
+		(pin "2"
+			(uuid "25e6febf-946a-5b49-b8d9-d4a4114cb3eb")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679"
+					(reference "SW5")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(label "ESP_IO0"
+		(at 99.06 657.86 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "5a5a04b8-7815-559f-92ae-23e7dddd86d1")
+	)
+	(label "GND"
+		(at 109.22 657.86 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "fbdf630a-05fe-56aa-8de3-c03719fbd543")
+	)
+	(symbol
+		(lib_id "Device:D")
+		(at 134.62 655.32 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "ae33e1bc-10ee-5716-aec4-f2453286f6c2")
+		(property "Reference" "D26"
+			(at 134.62 652.78 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "1N4148W"
+			(at 134.62 657.86 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Diode_SMD:D_SOD-123"
+			(at 134.62 655.32 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 134.62 655.32 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 134.62 655.32 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C81598"
+			(at 134.62 655.32 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "ed117b55-3fc3-5123-8aa3-ebe66631ec2a")
+		)
+		(pin "2"
+			(uuid "b93a5cc5-b065-57b1-b83a-3c3bd451fc40")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679"
+					(reference "D26")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(label "ESP_SW_ON"
+		(at 130.81 655.32 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "3756c664-5e7e-51d9-9a4e-9ea57372c2e0")
+	)
+	(label "ESP_PWR_EN"
+		(at 138.43 655.32 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "884fdfd4-8d0f-5159-81f4-9452e38cacc3")
+	)
+	(symbol
+		(lib_id "Device:D")
+		(at 172.72 655.32 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "e4ac6ec6-3eaa-545d-b2c0-9363bc7e3859")
+		(property "Reference" "D27"
+			(at 172.72 652.78 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "1N4148W"
+			(at 172.72 657.86 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Diode_SMD:D_SOD-123"
+			(at 172.72 655.32 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 172.72 655.32 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 172.72 655.32 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C81598"
+			(at 172.72 655.32 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "2ce35656-103b-5ca9-9232-02db246d4fb3")
+		)
+		(pin "2"
+			(uuid "384fb0a5-e6fe-5796-b924-5cf2360ce036")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679"
+					(reference "D27")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(label "ESP_SW_ON"
+		(at 168.91 655.32 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "28f1315a-9bf8-5c02-8e1c-63fef1bf2a18")
+	)
+	(label "VBUS2"
+		(at 176.53 655.32 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "da155946-d234-5d46-8d84-982ac62bdd29")
+	)
 	(symbol
 		(lib_id "power:PWR_FLAG")
 		(at 30.48 10.16 0)
@@ -33416,7 +35751,7 @@
 			)
 		)
 	)
-	(label "VDDA"
+	(label "VBUS2"
 		(at 259.08 10.16 0)
 		(fields_autoplaced yes)
 		(effects
@@ -33426,6 +35761,81 @@
 			(justify left bottom)
 		)
 		(uuid "6517e4c1-9515-5553-827e-0e6d4d29dc67")
+	)
+	(symbol
+		(lib_id "power:PWR_FLAG")
+		(at 284.48 10.16 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(dnp no)
+		(uuid "2d4afa63-b6da-55f0-9529-c8c30e260d79")
+		(property "Reference" "#FLG11"
+			(at 284.48 5.08 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "PWR_FLAG"
+			(at 284.48 12.7 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 284.48 10.16 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 284.48 10.16 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 284.48 10.16 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "05bed18f-4797-52b8-b702-12e7beb43be0")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679"
+					(reference "#FLG11")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(label "VDDA"
+		(at 284.48 10.16 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "cd170866-f4f7-55ad-a607-9d105a5c2184")
 	)
 	(sheet_instances
 		(path "/"

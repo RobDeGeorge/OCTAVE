@@ -33,12 +33,19 @@ REGIONS = {
     "esp32": (82, 27, 109, 42),
     "exp": (82, 42, 109, 60),
     "usb": (82, 60, 109, 74),
+    "espusb": (89.2, 27, 100.8, 58),     # J3 / JP1 to J7 under the ESP32 module, down beside J5
 }
 
 # ESP32 antenna: the module courtyard covers x 75-124 above y 6.68
 KEEPOUTS = [(75.0, 0.0, W, 6.8)]
 # copper beside the LDO's tab (U8 at (54.4, 48.2)): heat spreading + vias into the In2 3V3 plane
 LDO_TAB = (56.4, 45.0, 60.2, 51.4)
+
+# reference labels placed by hand in KiCad (absolute x, y in mm, text angle): applied after placement
+LABELS = {
+    "C24": (16.0, 66.0, 180), "C25": (16.0, 63.5, 180), "C27": (39.0, 67.5, 0), "C28": (35.5, 69.0, 0),
+    "R20": (33.0, 71.2, 90), "R21": (28.5, 71.2, 270),
+}
 
 # the buck converter, laid out around U7 at (BX, BY)
 BX, BY = 27.0, 66.5
@@ -84,7 +91,21 @@ def fixed_for(design):
         ref("esp32", "100k"): (88.5, 18.0, 90),
         ref("esp32", "1u", 1): (84.8, 19.6, 0),       # TPS22918 VIN
         ref("esp32", "1n"): (84.8, 21.8, 0),
-        ref("esp32", "ESP_ON"): (88.5, 21.8, 90),
+        ref("esp32", "ESP_ON"): (93.5, 30.0, 0),   # 2.54 mm header (origin pin 1), clear of the ESP32 courtyard
+        # ESP32 USB port on the right edge (J2's edge offset, turned to face out) and its buttons and
+        # power-OR diodes in the strip left of the module (its courtyard is x 89.75-109.25 below y 6.7)
+        ref("espusb", "USB-C ESP32"): (106.2, 34.0, 90),
+        ref("espusb", "CH340C"): (95.0, 50.0, 0),       # between the Qwiic connector and J5
+        # the expansion block where the region packer put it before the CH340C took part of its region
+        ref("exp", "EXP"): (102.815, 43.815, 0),
+        ref("exp", "Qwiic"): (85.945, 45.325, 0),
+        ref("exp", "4.7k", 0): (92.025, 42.775, 0),
+        ref("exp", "4.7k", 1): (95.525, 42.775, 0),
+        ref("exp", "10k"): (99.025, 42.775, 0),
+        ref("espusb", "ESP_RST"): (78.5, 12.0, 0),
+        ref("espusb", "ESP_BOOT"): (78.5, 19.0, 0),
+        ref("espusb", "1N4148W", 0): (78.5, 23.0, 0),    # PB6 -> ON
+        ref("espusb", "1N4148W", 1): (78.5, 25.6, 0),    # VBUS2 -> ON
         ref("usb", "USB-C"): (96.0, 71.2, 0),
         ref("ui", "SWD"): (54.5, 5.0, 0),
         # input chain under the car connector: J6.1 -> PTC -> TVS -> ideal diode (LM74700 + FET)
@@ -183,6 +204,19 @@ def near_rules(design):
     on(by_net("j1850", "100n", "CMP_VCC")[0], (cmp_, "3"))
     on(ref("j1850", "BZT52C33"), (cmp_, "3"))
     on(by_net("j1850", "470", "CMP_VCC")[0], (cmp_, "3"))
+    # ESP32 USB port: ESD and CC at the connector, CH340C periphery at its pins
+    j7 = ref("espusb", "USB-C ESP32")
+    ch = ic("espusb", "CH340C")
+    on(ic("espusb", "USBLC6-2SC6"), (j7, "A6"), (j7, "A7"), dist=8)
+    on(ref("espusb", "5.1k", 0), (j7, "A5"), dist=8)
+    on(ref("espusb", "5.1k", 1), (j7, "B5"), dist=8)
+    on(ref("espusb", "10u"), (j7, "A4"), dist=8)
+    on(ref("espusb", "SS34"), (j7, "A4"), dist=10)
+    on(ref("espusb", "100n"), (ch, "16"), dist=6)
+    on(ref("espusb", "1k"), (ch, "2"), dist=6)
+    for i, pin in ((0, "13"), (1, "14")):
+        on(ref("espusb", "10k", i), (ch, pin), dist=8)
+        on(ref("espusb", "MMBT3904", i), (ch, pin), dist=10)
     assert all(r in parts for r, _, _ in rules)
     return rules
 

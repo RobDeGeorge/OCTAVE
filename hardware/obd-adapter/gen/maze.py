@@ -64,7 +64,7 @@ class _Grid:
         self.nx = (self.x1 - self.x0) // STEP + 1
         self.ny = (self.y1 - self.y0) // STEP + 1
         self.half = width // 2
-        self.clr = clearance + MM(0.02)   # margin for diagonal steps between grid points
+        self.clr = clearance + MM(0.04)   # margin for diagonal steps between grid points (0.02 left 0.138 of 0.15)
         self.keepouts = [tuple(MM(v) for v in k) for k in keepouts]
         self.obs = []
         for o in list(board.GetTracks()) + [p for fp in board.GetFootprints() for p in fp.Pads()]:
@@ -79,6 +79,12 @@ class _Grid:
             # the larger clearance wins: battery-side obstacles keep hv_clearance from any net
             gap = max(self.clr, hv_clearance + MM(0.02)) if o.GetNetname().lstrip("/") in hv else self.clr
             self.obs.append((bb.GetLeft(), bb.GetTop(), bb.GetRight(), bb.GetBottom(), o, o.GetNetname() == net, soft, gap))
+        # SMD pads of every net, own included: a via may not sit in or touch one (solder wicks
+        # down an open hole; DFM flags it)
+        self.smd = [p for fp in board.GetFootprints() for p in fp.Pads()
+                    if p.GetAttribute() == pcbnew.PAD_ATTRIB_SMD and fp.GetBoundingBox().Intersects(
+                        pcbnew.BOX2I(pcbnew.VECTOR2I(self.x0 - MM(2), self.y0 - MM(2)),
+                                     pcbnew.VECTOR2I(self.x1 - self.x0 + MM(4), self.y1 - self.y0 + MM(4))))]
         for z in board.Zones():   # rule areas (antenna keepout) block everything
             if z.GetIsRuleArea():
                 bb = z.GetBoundingBox()
@@ -119,6 +125,11 @@ class _Grid:
         k = (i, j, "via")
         if k not in self.cache:
             pt = self.pos(i, j)
+            ring = pcbnew.SHAPE_CIRCLE(pt, MM(VIA_D / 2))
+            if any(p.GetEffectiveShape(L).Collide(ring, MM(0.05)) for p in self.smd for L in LAYERS
+                   if p.IsOnLayer(L) and (p.GetPosition() - pt).EuclideanNorm() < MM(4)):
+                self.cache[k] = None
+                return None
             a, b = self.probe(i, j, LAYERS[0]), self.probe(i, j, LAYERS[1])
             c = None if a is None or b is None else self._hit(
                 pcbnew.SHAPE_CIRCLE(pt, MM(VIA_D / 2)), pt, MM(VIA_D) + self.clr + MM(1), ALL, False)

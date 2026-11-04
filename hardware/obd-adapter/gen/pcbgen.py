@@ -207,6 +207,35 @@ def fanout(board, netname, layer_plane, keepouts=(), via_d=0.6, drill=0.3, width
                     items += [via, trk]
                     done = True
                     break
+            if not done:    # the rings start a margin out from the pad: try every 0.05 mm spot within 2.5 mm
+                spots = sorted(((dx * dx + dy * dy, dx, dy) for dx in range(-50, 51) for dy in range(-50, 51)))
+                for vd, dr in ((via_d, drill), (0.45, 0.2)):
+                    for _, dx, dy in spots:
+                        p = pcbnew.VECTOR2I(c.x + MM(dx * 0.05), c.y + MM(dy * 0.05))
+                        if pad.GetEffectiveShape(layer).Collide(pcbnew.SHAPE_CIRCLE(p, MM(vd / 2)), MM(0.1)):
+                            continue    # no via in (or touching) the pad: solder would wick down it
+                        x, y = pcbnew.ToMM(p.x), pcbnew.ToMM(p.y)
+                        if any(k0 <= x <= k2 and k1 <= y <= k3 for k0, k1, k2, k3 in keepouts):
+                            continue
+                        via = pcbnew.PCB_VIA(board)
+                        via.SetPosition(p)
+                        via.SetWidth(MM(vd))
+                        via.SetDrill(MM(dr))
+                        via.SetNet(net)
+                        trk = pcbnew.PCB_TRACK(board)
+                        trk.SetStart(c)
+                        trk.SetEnd(p)
+                        trk.SetWidth(MM(min(width, vd - 0.1)))
+                        trk.SetLayer(layer)
+                        trk.SetNet(net)
+                        if _clear(board, via, trk, items, net, clr, hv, MM(hv_clearance)):
+                            board.Add(via)
+                            board.Add(trk)
+                            items += [via, trk]
+                            done = True
+                            break
+                    if done:
+                        break
             if not done:
                 failed.append(f"{fp.GetReference()}.{pad.GetNumber()}")
     return failed

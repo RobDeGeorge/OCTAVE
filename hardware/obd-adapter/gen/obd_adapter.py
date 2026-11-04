@@ -134,7 +134,7 @@ esp.notes = [
     "STM32 link: ESP32 UART2 on IO16 (RX) / IO17 (TX), CTS IO18 (from PA1 RTS), RTS IO19 (to PA0 CTS), up to 3 Mbaud.",
     "UART0 + EN + IO0 also on J_ESP for esptool; the STM32 can reset (PB7) and strap IO0 (PB5) itself.",
     "Power-gated by a TPS22918 on PB6 (off at reset), placed at the module's 3V3 pin with its caps.",
-    "Close JP_ESP_ON to power the ESP32 without STM32 firmware (blank-board esptool flashing).",
+    "Fit a shunt on JP_ESP_ON to power the ESP32 without STM32 firmware (blank-board esptool flashing).",
     "1k in series with PA1/PA2/PB5/PB7 limits back-powering through the ESP32's I/O while it is off;",
     "firmware still keeps them low or input until ESP_PWR_EN is on, and drives EN open-drain.",
 ]
@@ -154,16 +154,15 @@ for mcu_net, esp_net in (("ESP_CTS_M", "ESP_CTS"), ("MCU_TX_ESP_M", "MCU_TX_ESP"
                          ("ESP_IO0_M", "ESP_IO0"), ("ESP_EN_M", "ESP_EN")):
     R(esp, "1k", mcu_net, esp_net)
 U(esp, "OCTAVE:TPS22918", "TPS22918", "Package_TO_SOT_SMD:SOT-23-6",
-  {"VIN": "3V3", "ON": "ESP_PWR_EN", "CT": "ESP_PWR_CT", "VOUT": "3V3_ESP", "QOD": "3V3_ESP", "GND": "GND"})
-R(esp, "100k", "ESP_PWR_EN", "GND")
+  {"VIN": "3V3", "ON": "ESP_SW_ON", "CT": "ESP_PWR_CT", "VOUT": "3V3_ESP", "QOD": "3V3_ESP", "GND": "GND"})
+R(esp, "100k", "ESP_SW_ON", "GND")
 C(esp, "1n", "ESP_PWR_CT", lcsc_key="C1n")
 C(esp, "1u", "3V3")
-d.add(esp, Part(_ref("JP"), "Jumper:SolderJumper_2_Open", "ESP_ON",
-                "Jumper:SolderJumper-2_P1.3mm_Open_RoundedPad1.0x1.5mm", {"A": "3V3", "B": "ESP_PWR_EN"}))
+d.add(esp, Part(_ref("JP"), "Connector_Generic:Conn_01x02", "ESP_ON",
+                "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical", {"1": "3V3", "2": "ESP_PWR_EN"}))
 d.add(esp, Part(_ref("J"), "Connector_Generic:Conn_01x05", "ESP_PROG",
                 "Connector_PinHeader_2.54mm:PinHeader_1x05_P2.54mm_Vertical",
                 {"1": "GND", "2": "ESP_TXD0", "3": "ESP_RXD0", "4": "ESP_EN", "5": "ESP_IO0"}))
-
 # ---------------------------------------------------------------- expansion
 ex = d.block("exp", "Expansion: Qwiic I2C + header (sensor pod, temp probes, logic analyzer)")
 d.add(ex, Part(_ref("J"), "Connector_Generic:Conn_01x04", "Qwiic",
@@ -388,3 +387,44 @@ R(iso, "10k", "KLINE", "K_IN")
 R(iso, "10k", "DLC_SW", "K_REF")
 R(iso, "10k", "K_REF", "GND")
 R(iso, "10k", "3V3", "KLINE_RX")
+
+# ---------------------------------------------------------------- ESP32 USB
+# (last in the file so the parts added in Rev 0 round 3 don't renumber the rest)
+eu = d.block("espusb", "USB-C for the ESP32 (CH340C on UART0, auto-reset): esptool / console without the STM32")
+eu.notes = [
+    "Second USB-C (sink, 5.1k CC). VBUS2 powers the board through its own Schottky and turns the ESP32's",
+    "load switch on through a diode, so esptool works on a board whose STM32 is blank.",
+    "CH340C runs from 3V3_ESP: it is off whenever the ESP32 is, so it can't back-power the module through RXD0.",
+    "Auto-reset: the usual two-NPN cross pair on DTR/RTS drives EN and IO0 (esptool's default reset).",
+    "1k in series with the CH340C TXD, so an adapter on J3 can still drive RXD0.",
+]
+d.add(eu, Part(_ref("J"), "Connector:USB_C_Receptacle_USB2.0_16P", "USB-C ESP32",
+               "Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12",
+               {"GND": "GND", "VBUS": "VBUS2", "CC1": "USB2_CC1", "CC2": "USB2_CC2", "D+": "USB2_DP",
+                "D-": "USB2_DM", "SBU1": None, "SBU2": None, "SHIELD": "GND"}, lcsc=LCSC.get("USBC")))
+R(eu, "5.1k", "USB2_CC1", "GND")
+R(eu, "5.1k", "USB2_CC2", "GND")
+U(eu, "Power_Protection:USBLC6-2SC6", "USBLC6-2SC6", "Package_TO_SOT_SMD:SOT-23-6",
+  {"1": "USB2_DP", "6": "USB2_DP", "3": "USB2_DM", "4": "USB2_DM", "2": "GND", "5": "VBUS2"})
+C(eu, "10u", "VBUS2")
+d.add(eu, Part(_ref("D"), "Device:D_Schottky", "SS34", "Diode_SMD:D_SMA",
+               {"A": "VBUS2", "K": "5V"}, lcsc=LCSC["SS34"]))
+U(eu, "OCTAVE:CH340C", "CH340C", "Package_SO:SOIC-16_3.9x9.9mm_P1.27mm",
+  {"1": "GND", "2": "U2S_TXD", "3": "ESP_TXD0", "4": "3V3_ESP", "5": "USB2_DP", "6": "USB2_DM",
+   "7": None, "8": None, "9": None, "10": None, "11": None, "12": None,
+   "13": "U2S_DTR", "14": "U2S_RTS", "15": None, "16": "3V3_ESP"})
+C(eu, "100n", "3V3_ESP")
+R(eu, "1k", "U2S_TXD", "ESP_RXD0")
+# DTR low + RTS high -> EN low (reset); RTS low + DTR high -> IO0 low (download strap); both equal -> neither
+for base, emit, coll in (("U2S_DTR", "U2S_RTS", "ESP_EN"), ("U2S_RTS", "U2S_DTR", "ESP_IO0")):
+    R(eu, "10k", base, f"{base}_B")
+    d.add(eu, Part(_ref("Q"), "Transistor_BJT:MMBT3904", "MMBT3904", SOT23,
+                   {"B": f"{base}_B", "E": emit, "C": coll}, lcsc=LCSC["MMBT3904"]))
+for name, net in (("ESP_RST", "ESP_EN"), ("ESP_BOOT", "ESP_IO0")):
+    d.add(eu, Part(_ref("SW"), "Switch:SW_Push", name, "Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A",
+                    {"1": net, "2": "GND"}, lcsc=LCSC.get("SW")))
+# ON = PB6 (ESP_PWR_EN, or the JP1 shunt) OR VBUS2 (the ESP32 USB port): diodes keep 5 V off PB6, and
+# PB6's UCPD dead-battery pull-down (5.1k until PWR_CR3.UCPD_DBDIS) can't hold the switch off
+for src in ("ESP_PWR_EN", "VBUS2"):
+    d.add(eu, Part(_ref("D"), "Device:D", "1N4148W", "Diode_SMD:D_SOD-123",
+                    {"A": src, "K": "ESP_SW_ON"}, lcsc=LCSC["1N4148W"]))
