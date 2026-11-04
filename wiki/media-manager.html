@@ -653,8 +653,32 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
           Spotify device). The music menu's playlist dropdown lists Liked Songs, the
           user's playlists and saved albums under a <strong>Spotify</strong> heading after the local playlists; picking one
           shows its songs in the same table and rows as a local playlist (<span class="file-path">frontend/MediaPlayer.qml</span>);
-          tapping one plays it on the phone and <code>nowPlaying</code> makes Spotify the source, so
-          the Media Room, bottom bar, knob and gestures control it. Album Art Capture follows its covers.
+          tapping one plays it on the phone and, once Spotify has taken the command, <code>nowPlaying</code> makes Spotify
+          the source, so the Media Room, bottom bar, knob and gestures control it. Album Art Capture follows its covers.
+        </p>
+        <p>
+          The button left of the dropdown says where Spotify plays and moves it to another device
+          (<code>devices</code>, <code>transferTo</code>). With no device active a play wakes the active one, else a phone,
+          else the first listed. A play that fails leaves the music that was on alone, and
+          <code>commandFailed</code> puts the reason in the app-wide notice, on whichever page the driver is.
+        </p>
+        <p>
+          Mirroring with Spotify on the mirrored phone, the phone source and the Spotify source are two remotes for one
+          player: the phone keeps the controls, with its audio on OCTAVE's volume, and neither hand-off pauses the music
+          (<code>NowPlaying::phoneRunsSpotify</code>).
+        </p>
+        <p>
+          Closing OCTAVE pauses Spotify when it is OCTAVE's music (the source, or the mirrored phone's app), so it doesn't
+          play on with nothing left to stop it: <code>AppCore::shutdown</code> calls
+          <code>NowPlaying::pauseSpotifyBeforeExit</code>, which waits for Spotify's answer for at most 2.5 s, as the main
+          loop has ended by then. Spotify playing on another device while something else owns the music is left alone. A
+          power cut or a crash runs no shutdown, so nothing can be sent.
+        </p>
+        <p>
+          No network at start, or an outage, is normal in a car: requests waiting for a token are answered as failed, polling
+          carries on, and the first good poll fetches the library that didn't come. The session survives; only Spotify
+          revoking it (<code>invalid_grant</code>) signs OCTAVE out. <span class="file-path">spotify.json</span> is written
+          atomically, as the refresh token rotates about hourly.
         </p>
         <p>
           Volume: while Spotify is the source, OCTAVE's volume (slider, knob, gestures, mute) sets the Spotify device's own

@@ -43,6 +43,7 @@ class SpotifyManager;
 class NowPlaying : public QObject
 {
     Q_OBJECT
+    friend class TstNowPlaying;
     // Service permissions (src/service/servicescopes.h)
     Q_CLASSINFO("octave.scope", "media")
     Q_CLASSINFO("octave.scope.full", "extractArtColors")
@@ -78,6 +79,10 @@ public:
     void setSpotify(SpotifyManager *spotify);
     // Shutdown: sources stopping now don't overwrite the saved owner
     void stopSaving();
+    // OCTAVE is closing: Spotify, when it plays OCTAVE's music, is paused
+    // rather than left playing. Blocks for Spotify's answer, kExitPauseMs at most.
+    void pauseSpotifyBeforeExit();
+    static constexpr int kExitPauseMs = 2500;
 
     QString source() const;
     Source sourceKind() const { return m_source; }
@@ -135,6 +140,13 @@ private:
     void readAaState();
     void readSpotify();
     void onSpotifyStartedElsewhere();
+    // The mirrored phone's playing app is Spotify: the phone source and the
+    // Spotify source are then two remotes for the same player
+    bool phoneRunsSpotify() const;
+    // Spotify is playing and it is OCTAVE's music: the source, or the mirrored
+    // phone's app. Spotify playing on a computer at home while something else
+    // owns the music is none of OCTAVE's business.
+    bool spotifyPlaysForOctave() const;
     void remember();
     void readLocalTrack();
     void readPhoneState();

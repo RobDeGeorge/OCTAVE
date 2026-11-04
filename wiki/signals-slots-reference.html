@@ -1030,9 +1030,17 @@
           <tbody>
             <tr><td><code>signIn()</code>, <code>signOut()</code>, <code>setClientId(id)</code></td><td>Sign-in (full scope over the service); an empty client ID goes back to the build's</td></tr>
             <tr><td><code>refreshLibrary()</code>, <code>openCollection(uri)</code>, <code>refreshDevices()</code></td><td>Load the library, a playlist / album / Liked Songs, the devices</td></tr>
-            <tr><td><code>playCollection(uri, index)</code></td><td>Play from track <code>index</code> (-1: from the top). No active device: the first one Spotify knows of is woken. Emits <code>playbackRequested</code>, which makes Spotify the <code>nowPlaying</code> source</td></tr>
+            <tr><td><code>playCollection(uri, index)</code></td><td>Play from track <code>index</code> (-1: from the top). No active device: the active one, else a phone, else the first Spotify knows of is woken. Once Spotify has taken it, emits <code>playbackRequested</code>, which makes Spotify the <code>nowPlaying</code> source</td></tr>
             <tr><td><code>togglePlay()</code>, <code>play()</code>, <code>pause()</code>, <code>next()</code>, <code>previous()</code>, <code>seek(ms)</code>, <code>setShuffle(on)</code>, <code>toggleShuffle()</code>, <code>cycleRepeat()</code>, <code>transferTo(deviceId)</code></td><td>Player commands</td></tr>
             <tr><td><code>setVolume(percent)</code></td><td>The playing device's volume, 0&ndash;100, at most one call per 300 ms while a slider drags. <code>AppCore::wireVolume</code> sends <code>volumeController</code>'s percent here while <code>nowPlaying.source</code> is <code>"spotify"</code> (mute sends 0, unmute the volume back)</td></tr>
+          </tbody>
+        </table>
+        <h3>Signals</h3>
+        <table>
+          <thead><tr><th>Signal</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>commandFailed(message)</code></td><td>A control the user pressed didn't work; <code>message</code> says why. Main.qml shows it in the app-wide notice. Volume changes report through <code>status</code> only.</td></tr>
+            <tr><td><code>playbackRequested()</code></td><td>Spotify took a play from OCTAVE: <code>nowPlaying</code> makes it the source</td></tr>
           </tbody>
         </table>
 

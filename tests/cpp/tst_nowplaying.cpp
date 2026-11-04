@@ -5,10 +5,14 @@
 // reports and the real MediaManager through its signals.
 
 #include <QBuffer>
+#include <QElapsedTimer>
 #include <QImage>
 #include <QSignalSpy>
 #include <QTemporaryDir>
+#include <QTcpServer>
+#include <QTcpSocket>
 #include <QTest>
+#include <QTimer>
 
 #include <memory>
 
@@ -505,7 +509,192 @@ private slots:
         QCOMPARE(np.source(), QStringLiteral("local"));
     }
 
+    // Mirroring with Spotify on that phone: playing a song from OCTAVE starts
+    // it there, the phone reports it and takes the controls. Pausing "the old
+    // source" then would pause the very music the user just asked for.
+    void spotifyOnTheMirroredPhoneIsOnePlayer()
+    {
+        MediaManager media;
+        PhoneMirrorManager phone;
+        SpotifyManager spotify;
+        spotify.setStoreFile(m_tmp->path() + "/spotify.json");
+        NowPlaying np(&media, &phone);
+        np.setSpotify(&spotify);
+        spotify.m_state = QStringLiteral("signedIn");
+        spotify.applyPlayer(spotifyState(true, QStringLiteral("Drive")));
+        QCOMPARE(np.source(), QStringLiteral("spotify"));
+
+        QVariantMap state = phoneState(true, "Drive");
+        state[QStringLiteral("package")] = QStringLiteral("com.spotify.music");
+        phone.onMediaState(state);
+        QCOMPARE(np.source(), QStringLiteral("phone"));
+        QVERIFY(spotify.playing());   // not paused by the hand-off
+
+        // And the phone keeps the controls: its audio is on OCTAVE's volume
+        emit spotify.playbackRequested();
+        QCOMPARE(np.source(), QStringLiteral("phone"));
+    }
+
+    void anotherAppOnThePhoneStillPausesSpotify()
+    {
+        MediaManager media;
+        PhoneMirrorManager phone;
+        SpotifyManager spotify;
+        spotify.setStoreFile(m_tmp->path() + "/spotify.json");
+        NowPlaying np(&media, &phone);
+        np.setSpotify(&spotify);
+        spotify.m_state = QStringLiteral("signedIn");
+        spotify.applyPlayer(spotifyState(true, QStringLiteral("Drive")));
+
+        QVariantMap state = phoneState(true, "A Podcast");
+        state[QStringLiteral("package")] = QStringLiteral("org.example.podcasts");
+        phone.onMediaState(state);
+        QCOMPARE(np.source(), QStringLiteral("phone"));
+        QVERIFY(!spotify.playing());
+    }
+
+    // No network yet (the car just started): the token request fails and
+    // everything waiting for it must finish, or polling and the library stay
+    // wedged until a restart. m_refreshing holds the real request back.
+    void aFailedTokenRequestLeavesNothingHanging()
+    {
+        SpotifyManager spotify;
+        spotify.setStoreFile(m_tmp->path() + "/spotify.json");
+        spotify.m_state = QStringLiteral("signedIn");
+        spotify.m_refreshToken = QStringLiteral("token");
+        spotify.m_refreshing = true;
+
+        spotify.poll();
+        spotify.refreshLibrary();
+        QVERIFY(spotify.m_pollInFlight);
+        QVERIFY(spotify.libraryLoading());
+
+        spotify.failWaiting();
+        QVERIFY(!spotify.m_pollInFlight);
+        QVERIFY(spotify.m_poll.isActive());   // it tries again
+        QVERIFY(!spotify.libraryLoading());
+        QVERIFY(!spotify.m_libraryLoaded);    // so the next good poll loads it
+    }
+
+    void aPlayThatCannotBeSentIsExplainedAndTakenBack()
+    {
+        SpotifyManager spotify;
+        spotify.setStoreFile(m_tmp->path() + "/spotify.json");
+        spotify.m_state = QStringLiteral("signedIn");
+        spotify.m_refreshToken = QStringLiteral("token");
+        spotify.m_refreshing = true;
+        QSignalSpy requested(&spotify, &SpotifyManager::playbackRequested);
+        QSignalSpy failed(&spotify, &SpotifyManager::commandFailed);
+
+        spotify.play();
+        QVERIFY(spotify.playing());
+        spotify.failWaiting();
+        QVERIFY(!spotify.playing());
+        QCOMPARE(requested.count(), 0);   // the music that was on stays on
+        QCOMPARE(failed.count(), 1);
+    }
+
+    // The whole way: a real request during a real aboutToQuit, when the main
+    // loop has already ended
+    void closingPausesSpotifyDuringAboutToQuit()
+    {
+        QTcpServer server;
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+        QByteArray request;
+        connect(&server, &QTcpServer::newConnection, &server, [&] {
+            QTcpSocket *sock = server.nextPendingConnection();
+            connect(sock, &QTcpSocket::readyRead, sock, [&request, sock] {
+                request += sock->readAll();
+                sock->write("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n");
+                sock->disconnectFromHost();
+            });
+        });
+
+        MediaManager media;
+        PhoneMirrorManager phone;
+        SpotifyManager spotify;
+        spotify.setStoreFile(m_tmp->path() + "/spotify.json");
+        NowPlaying np(&media, &phone);
+        np.setSpotify(&spotify);
+        signInForTest(spotify);
+        spotify.m_apiBase = QStringLiteral("http://127.0.0.1:%1").arg(server.serverPort());
+        spotify.applyPlayer(spotifyState(true, QStringLiteral("Drive")));
+        QCOMPARE(np.source(), QStringLiteral("spotify"));
+
+        QElapsedTimer took;
+        const auto hook = connect(qApp, &QCoreApplication::aboutToQuit, &np, [&] {
+            took.start();
+            np.pauseSpotifyBeforeExit();
+            QVERIFY(took.elapsed() < NowPlaying::kExitPauseMs);   // answered, not timed out
+        });
+        QTimer::singleShot(0, qApp, &QCoreApplication::quit);
+        QCoreApplication::exec();
+        disconnect(hook);
+        QVERIFY2(request.startsWith("PUT /me/player/pause "), request.constData());
+    }
+
+    void closingLeavesSpotifyAloneWhenItIsNotOctavesMusic()
+    {
+        MediaManager media;
+        PhoneMirrorManager phone;
+        SpotifyManager spotify;
+        spotify.setStoreFile(m_tmp->path() + "/spotify.json");
+        NowPlaying np(&media, &phone);
+        np.setSpotify(&spotify);
+        spotify.m_state = QStringLiteral("signedIn");
+
+        // Nothing plays
+        QVERIFY(!np.spotifyPlaysForOctave());
+
+        // The phone owns the music with another app; Spotify plays elsewhere
+        phone.onMediaState(phoneState(true, "A Podcast"));
+        QCOMPARE(np.source(), QStringLiteral("phone"));
+        spotify.applyPlayer(spotifyState(true, QStringLiteral("At Home")));
+        QCOMPARE(np.source(), QStringLiteral("phone"));
+        QVERIFY(!np.spotifyPlaysForOctave());
+
+        // That phone's app is Spotify: it is OCTAVE's after all
+        QVariantMap state = phoneState(true, "Drive");
+        state[QStringLiteral("package")] = QStringLiteral("com.spotify.music");
+        phone.onMediaState(state);
+        QVERIFY(np.spotifyPlaysForOctave());
+    }
+
+    // No network: closing waits a moment, not forever
+    void closingWithNoAnswerGivesUpInTime()
+    {
+        SpotifyManager spotify;
+        spotify.setStoreFile(m_tmp->path() + "/spotify.json");
+        spotify.m_state = QStringLiteral("signedIn");
+        spotify.m_refreshToken = QStringLiteral("token");
+        spotify.m_refreshing = true;   // a token that never comes
+        QElapsedTimer took;
+        took.start();
+        spotify.pauseBeforeExit(100);
+        QVERIFY(took.elapsed() >= 90 && took.elapsed() < 2000);
+    }
+
+    void savedSessionIsPrivate()
+    {
+        SpotifyManager spotify;
+        const QString file = m_tmp->path() + "/spotify-session.json";
+        spotify.setStoreFile(file);
+        spotify.m_refreshToken = QStringLiteral("token");
+        spotify.save();
+        QVERIFY(QFile::exists(file));
+        QCOMPARE(QFile::permissions(file) & (QFile::ReadGroup | QFile::ReadOther), QFileDevice::Permissions());
+    }
+
 private:
+    static void signInForTest(SpotifyManager &spotify)
+    {
+        spotify.m_state = QStringLiteral("signedIn");
+        spotify.m_refreshToken = QStringLiteral("token");
+        spotify.m_accessToken = QStringLiteral("access");
+        spotify.m_tokenLifeMs = 3600 * 1000;
+        spotify.m_tokenAge.start();
+    }
+
     static SpotifyApi::PlayerState spotifyState(bool playing, const QString &title)
     {
         SpotifyApi::PlayerState s;

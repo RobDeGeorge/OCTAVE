@@ -68,6 +68,12 @@ PlayerState readPlayer(const QJsonObject &player);
 
 // GET /me/player/devices: [{id, name, type, active}]
 QVariantList readDevices(const QJsonObject &reply);
+// The device to wake when nothing is active: the active one if any, then a
+// phone (the one in the car, not a speaker at home), then the first ("": none)
+QString pickDevice(const QVariantList &devices);
+// The PUT /me/player/play body: a collection from row `index` (-1: from the
+// top). `tracks` are its listed rows, empty when they aren't known
+QJsonObject playBody(const QString &uri, int index, const QVariantList &tracks);
 
 // "spotify:playlist:abc" -> "abc"
 QString idOf(const QString &uri);

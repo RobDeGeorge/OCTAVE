@@ -108,6 +108,10 @@ public:
 
     // Where the tokens live (tests); the browser build ignores it
     void setStoreFile(const QString &path);
+    // OCTAVE is closing: pause the Spotify device and wait for the answer, at
+    // most timeoutMs. For aboutToQuit, where a request left to the main loop
+    // would never go out and the phone would play on with no remote.
+    void pauseBeforeExit(int timeoutMs);
 
     QString state() const { return m_state; }
     bool signedIn() const { return m_state == QLatin1String("signedIn"); }
@@ -158,8 +162,12 @@ signals:
     void positionReported();
     void modesChanged();
     void deviceChanged();
-    // The user started Spotify from OCTAVE: NowPlaying makes it the source
+    // Spotify took a play from OCTAVE: NowPlaying makes it the source. Only
+    // once it has: a play that fails must not stop the music that was on
     void playbackRequested();
+    // A control the user pressed didn't work; `message` says why. For the
+    // driver, on whichever page (`status` keeps it for the Settings card)
+    void commandFailed(const QString &message);
     // Spotify started playing by itself (from the phone, another app)
     void startedElsewhere();
 
@@ -213,11 +221,28 @@ private:
     void tokenRequest(const QList<QPair<QString, QString>> &form, bool isRefresh);
     void refreshToken();
     void onSignedIn();
-    // Runs `call` with a fresh access token (refreshing first when needed)
-    void withToken(std::function<void()> call);
+    // Who wants a token while one is being fetched
+    struct TokenWaiter
+    {
+        std::function<void()> ready, failed;
+    };
+    // Runs `ready` with a fresh access token (refreshing first when needed),
+    // or `failed` when there is none to be had: exactly one of them, always.
+    // A caller left hanging would wedge whatever it holds (a poll in flight,
+    // the library loading), which is every start of a car with no network yet
+    void withToken(std::function<void()> ready, std::function<void()> failed);
+    void failWaiting();
     void api(const QByteArray &verb, const QString &path, const QJsonDocument &body, Done done, bool retried = false);
     void get(const QString &path, Done done) { api("GET", path, {}, std::move(done)); }
-    void command(const QByteArray &verb, const QString &path, const QJsonDocument &body = {});
+    // `accepted` runs once Spotify has taken the command
+    void command(const QByteArray &verb, const QString &path, const QJsonDocument &body = {},
+                 std::function<void()> accepted = {});
+    // The profile, then the library, unless they're here or on their way;
+    // polls call it, so a library the network kept away comes by itself
+    void ensureLibrary();
+    void libraryPartDone(bool ok);
+    // A failed play: take back the "playing" it showed ahead of Spotify
+    void undoOptimisticPlay(const QString &path);
     void loadPlaylistPage(const QString &path, QVariantList acc);
     void loadAlbumPage(const QString &path, QVariantList acc);
     void loadTracksPage(const QString &uri, const QString &path, const QString &albumImage);
@@ -230,6 +255,7 @@ private:
 
     QNetworkAccessManager m_net;
     QString m_storeFile;
+    QString m_apiBase;   // Spotify's, or a test's server
     QString m_state = QStringLiteral("signedOut");
     QString m_clientId;
     QString m_status;
@@ -239,7 +265,7 @@ private:
     QElapsedTimer m_tokenAge;
     int m_tokenLifeMs = 0;
     bool m_refreshing = false;
-    QList<std::function<void()>> m_waiting;
+    QList<TokenWaiter> m_waiting;
 
     // Desktop sign-in
     QTcpServer *m_loopback = nullptr;
@@ -250,6 +276,9 @@ private:
     QVariantMap m_liked;
     bool m_libraryLoading = false;
     int m_libraryPending = 0;
+    bool m_libraryFailed = false;   // a part of this load didn't come
+    bool m_libraryLoaded = false;
+    bool m_profileLoading = false;
     QVariantMap m_collection;
     QVariantList m_collectionTracks;
     bool m_collectionLoading = false;
@@ -264,6 +293,7 @@ private:
     int m_volumeWanted = -1;
     QElapsedTimer m_volumeAge;   // since the last volume sent: polls keep it meanwhile
     bool m_pollInFlight = false;
+    bool m_wasPlaying = false;   // before the latest play
     // Optimistic state from a command holds until Spotify has caught up
     QElapsedTimer m_commandAge;
     // Rate limited: no calls until then

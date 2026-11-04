@@ -145,7 +145,13 @@ void NowPlaying::setSpotify(SpotifyManager *spotify)
         return;
     m_spotify = spotify;
     // Played from OCTAVE's Spotify pages: the user's choice
-    connect(m_spotify, &SpotifyManager::playbackRequested, this, [this] { switchTo(Source::Spotify); });
+    connect(m_spotify, &SpotifyManager::playbackRequested, this, [this] {
+        // Mirroring: it plays on the phone, the phone already has the controls
+        // (and its audio comes through OCTAVE, on OCTAVE's volume)
+        if (m_source == Source::Phone && phoneRunsSpotify())
+            return;
+        switchTo(Source::Spotify);
+    });
     connect(m_spotify, &SpotifyManager::startedElsewhere, this, &NowPlaying::onSpotifyStartedElsewhere);
     connect(m_spotify, &SpotifyManager::playingChanged, this, [this] {
         if (m_source == Source::Spotify) {
@@ -187,6 +193,29 @@ void NowPlaying::onSpotifyStartedElsewhere()
         return;
     qCInfo(lcNowPlaying) << "Spotify started playing elsewhere; nothing else plays, so it owns the music";
     switchTo(Source::Spotify);
+}
+
+bool NowPlaying::phoneRunsSpotify() const
+{
+    return m_phoneMirror && m_phoneMirror->mediaApp().startsWith(QLatin1String("com.spotify."));
+}
+
+bool NowPlaying::spotifyPlaysForOctave() const
+{
+    if (!m_spotify)
+        return false;
+    // The phone's own report: a poll may be seconds behind it
+    return m_source == Source::Spotify ? m_spotify->playing() : m_source == Source::Phone && phoneRunsSpotify() && m_playing;
+}
+
+void NowPlaying::pauseSpotifyBeforeExit()
+{
+    if (!spotifyPlaysForOctave())
+        return;
+    // Over the mirror too: it reaches the phone with no internet
+    if (m_source == Source::Phone)
+        m_phoneMirror->mediaPause();
+    m_spotify->pauseBeforeExit(kExitPauseMs);
 }
 
 void NowPlaying::readSpotify()
@@ -245,7 +274,9 @@ void NowPlaying::switchTo(Source s)
             m_aa->revokeFocus();
         break;
     case Source::Spotify:
-        if (m_spotify && m_spotify->playing())
+        // Not when the phone takes over from itself: the music Spotify just
+        // started on the mirrored phone must not be paused by the hand-off
+        if (m_spotify && m_spotify->playing() && !(s == Source::Phone && phoneRunsSpotify()))
             m_spotify->pause();
         break;
     }

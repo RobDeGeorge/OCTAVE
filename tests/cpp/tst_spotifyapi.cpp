@@ -181,6 +181,42 @@ private slots:
         QVERIFY(d.first().toMap().value("active").toBool());
     }
 
+    void wakesTheActiveDeviceThenAPhone()
+    {
+        const auto dev = [](const char *id, const char *type, bool active = false) {
+            return QVariantMap{{QStringLiteral("id"), QString::fromLatin1(id)},
+                               {QStringLiteral("type"), QString::fromLatin1(type)},
+                               {QStringLiteral("active"), active}};
+        };
+        QCOMPARE(SpotifyApi::pickDevice({}), QString());
+        QCOMPARE(SpotifyApi::pickDevice({dev("hifi", "Speaker")}), QStringLiteral("hifi"));
+        QCOMPARE(SpotifyApi::pickDevice({dev("hifi", "Speaker"), dev("phone", "Smartphone")}), QStringLiteral("phone"));
+        QCOMPARE(SpotifyApi::pickDevice({dev("phone", "Smartphone"), dev("pc", "Computer", true)}), QStringLiteral("pc"));
+    }
+
+    void playBodyAimsAtTheTappedTrack()
+    {
+        const auto track = [](const char *id) {
+            return QVariantMap{{QStringLiteral("uri"), QStringLiteral("spotify:track:") + QLatin1String(id)}};
+        };
+        const QVariantList rows{track("a"), track("b")};
+        const QString list = QStringLiteral("spotify:playlist:1");
+
+        // By uri: a playlist's local files have no row, so the row number is off
+        QCOMPARE(SpotifyApi::playBody(list, 1, rows)
+                     .value(QStringLiteral("offset")).toObject().value(QStringLiteral("uri")).toString(),
+                 QStringLiteral("spotify:track:b"));
+        // A list whose rows aren't known (a followed playlist)
+        QVERIFY(!SpotifyApi::playBody(list, -1, {}).contains(QStringLiteral("offset")));
+        QCOMPARE(SpotifyApi::playBody(list, 3, {})
+                     .value(QStringLiteral("offset")).toObject().value(QStringLiteral("position")).toInt(), 3);
+        // Liked Songs: the listed tracks from the tapped one
+        const QJsonArray uris = SpotifyApi::playBody(SpotifyApi::likedUri(QStringLiteral("me")), 1, rows)
+                                    .value(QStringLiteral("uris")).toArray();
+        QCOMPARE(uris.size(), 1);
+        QCOMPARE(uris.at(0).toString(), QStringLiteral("spotify:track:b"));
+    }
+
     void uris()
     {
         QCOMPARE(SpotifyApi::idOf(QStringLiteral("spotify:playlist:abc")), QStringLiteral("abc"));

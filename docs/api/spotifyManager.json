@@ -513,6 +513,15 @@
             ]
         },
         {
+            "name": "commandFailed",
+            "params": [
+                {
+                    "name": "message",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
             "name": "startedElsewhere",
             "params": [
             ]

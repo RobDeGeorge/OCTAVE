@@ -246,8 +246,6 @@ Item {
             parts.push(formatMs(total))
         if (c.owner)
             parts.push(c.owner)
-        if (spotifyManager.deviceName)
-            parts.push("on " + spotifyManager.deviceName)
         return parts.join("  \u00B7  ")
     }
 
@@ -538,7 +536,7 @@ Item {
                 anchors {
                     left: parent.left
                     leftMargin: App.Spacing.overallMargin * 4
-                    right: newPlaylistButton.left
+                    right: spotifyDeviceButton.left
                     rightMargin: App.Spacing.overallMargin * 2
                     verticalCenter: parent.verticalCenter
                 }
@@ -547,6 +545,120 @@ Item {
                 font.pixelSize: App.Spacing.mediaPlayerStatsTextSize * 1.2
                 font.family: mediaPlayer.globalFont
                 elide: Text.ElideRight
+            }
+
+            // Where Spotify plays, and the choice of where: in the new
+            // playlist button's place, which Spotify lists don't have
+            Rectangle {
+                id: spotifyDeviceButton
+                visible: mediaPlayer.spotifyShown
+                width: Math.min(spotifyDeviceLabel.implicitWidth + App.Spacing.overallMargin * 4, parent.width * 0.25)
+                height: App.Spacing.bottomBarNavButtonHeight
+                anchors {
+                    right: playlistDropdownContainer.left
+                    rightMargin: App.Spacing.overallMargin * 2
+                    verticalCenter: parent.verticalCenter
+                }
+                color: spotifyDeviceMouse.pressed
+                    ? Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.2)
+                    : "transparent"
+                radius: dpMin(8, 2)
+                border.width: 1
+                border.color: App.Style.accent
+
+                Text {
+                    id: spotifyDeviceLabel
+                    anchors.fill: parent
+                    anchors.margins: App.Spacing.overallMargin
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    text: (mediaPlayer.hasSpotify && spotifyManager.deviceName) || "Choose device"
+                    color: App.Style.accent
+                    font.pixelSize: App.Spacing.overallText
+                    font.family: mediaPlayer.globalFont
+                    elide: Text.ElideRight
+                }
+
+                MouseArea {
+                    id: spotifyDeviceMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        spotifyManager.refreshDevices()
+                        spotifyDevicePopup.open()
+                    }
+                }
+
+                Popup {
+                    id: spotifyDevicePopup
+                    y: parent.height + dp(4)
+                    x: parent.width - width
+                    width: dp(320)
+                    padding: dp(10)
+                    modal: false
+                    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+                    background: Rectangle {
+                        color: App.Style.backgroundColor
+                        border.color: App.Style.accent
+                        border.width: 1
+                        radius: dpMin(8, 2)
+                    }
+
+                    contentItem: Column {
+                        spacing: dp(4)
+
+                        Text {
+                            visible: mediaPlayer.hasSpotify && spotifyManager.devices.length === 0
+                            width: parent.width
+                            wrapMode: Text.Wrap
+                            text: "No Spotify device is on. Open Spotify on your phone."
+                            color: App.Style.secondaryTextColor
+                            font.pixelSize: App.Spacing.overallText * 1.1
+                            font.family: mediaPlayer.globalFont
+                        }
+
+                        Repeater {
+                            model: mediaPlayer.hasSpotify ? spotifyManager.devices : []
+
+                            Rectangle {
+                                width: parent.width
+                                height: App.Spacing.bottomBarNavButtonHeight
+                                radius: dpMin(6, 2)
+                                color: deviceRowMouse.pressed
+                                    ? Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.2)
+                                    : "transparent"
+                                border.width: modelData.active ? 1 : 0
+                                border.color: App.Style.accent
+
+                                Text {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: App.Spacing.overallMargin * 2
+                                    anchors.rightMargin: App.Spacing.overallMargin * 2
+                                    verticalAlignment: Text.AlignVCenter
+                                    text: modelData.name
+                                    color: App.Style.primaryTextColor
+                                    font.pixelSize: App.Spacing.overallText * 1.1
+                                    font.bold: modelData.active
+                                    font.family: mediaPlayer.globalFont
+                                    elide: Text.ElideRight
+                                }
+
+                                MouseArea {
+                                    id: deviceRowMouse
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        if (!modelData.active)
+                                            spotifyManager.transferTo(modelData.id)
+                                        spotifyDevicePopup.close()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // New playlist button (left of dropdown)
@@ -779,6 +891,10 @@ Item {
                                             if (playlistItem.kind === "spotify") {
                                                 mediaPlayer.showSpotify(modelData.uri)
                                             } else if (playlistItem.kind === "spotifyConnect") {
+                                                // Straight to sign-in when it can start; Settings shows
+                                                // how it goes (or asks for the Client ID)
+                                                if (spotifyManager.clientId !== "")
+                                                    spotifyManager.signIn()
                                                 if (mediaPlayer.mainWindow && mediaPlayer.mainWindow.navigateToSettings)
                                                     mediaPlayer.mainWindow.navigateToSettings("mediaSettings")
                                             } else if (playlistItem.kind === "phone") {
@@ -1547,9 +1663,12 @@ Item {
                                 id: queueMouse
                                 anchors.fill: parent
                                 onClicked: {
-                                    if (mediaPlayer.spotifyShown)
+                                    // The song already on: carry on, not from its start
+                                    if (mediaPlayer.spotifyShown && !queueRow.isCurrent)
                                         spotifyManager.playCollection(mediaPlayer.spotifyUri, index)
-                                    else if (!queueRow.isCurrent)
+                                    else if (mediaPlayer.spotifyShown && !spotifyManager.playing)
+                                        spotifyManager.play()
+                                    else if (!mediaPlayer.spotifyShown && !queueRow.isCurrent)
                                         phoneMirrorManager.mediaSkipToQueueItem(modelData.id)
                                     var returnToLibrary = settingsManager ? settingsManager.returnToLibraryAfterSelection : false
                                     if (!returnToLibrary)

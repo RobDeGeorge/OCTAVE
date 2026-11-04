@@ -220,6 +220,44 @@ QVariantList readDevices(const QJsonObject &reply)
     return out;
 }
 
+QString pickDevice(const QVariantList &devices)
+{
+    QString phone;
+    for (const QVariant &v : devices) {
+        const QVariantMap d = v.toMap();
+        if (d.value(QStringLiteral("active")).toBool())
+            return d.value(QStringLiteral("id")).toString();
+        if (phone.isEmpty()
+            && d.value(QStringLiteral("type")).toString().compare(QLatin1String("Smartphone"), Qt::CaseInsensitive) == 0)
+            phone = d.value(QStringLiteral("id")).toString();
+    }
+    if (!phone.isEmpty())
+        return phone;
+    return devices.isEmpty() ? QString() : devices.first().toMap().value(QStringLiteral("id")).toString();
+}
+
+QJsonObject playBody(const QString &uri, int index, const QVariantList &tracks)
+{
+    QJsonObject body;
+    if (isLiked(uri) && !tracks.isEmpty() && index < tracks.size()) {
+        // Liked Songs isn't a context the player takes everywhere: queue
+        // the listed tracks from the one tapped (the top for -1)
+        QJsonArray uris;
+        for (int i = qMax(0, index); i < tracks.size() && uris.size() < 100; ++i)
+            uris << tracks.at(i).toMap().value(QStringLiteral("uri")).toString();
+        body[QStringLiteral("uris")] = uris;
+        return body;
+    }
+    body[QStringLiteral("context_uri")] = uri;
+    // By uri: rows skip what isn't a track (local files, episodes), so a row
+    // number is not a position in the playlist
+    if (index >= 0 && index < tracks.size())
+        body[QStringLiteral("offset")] = QJsonObject{{QStringLiteral("uri"), tracks.at(index).toMap().value(QStringLiteral("uri")).toString()}};
+    else if (index >= 0)
+        body[QStringLiteral("offset")] = QJsonObject{{QStringLiteral("position"), index}};
+    return body;
+}
+
 QString idOf(const QString &uri)
 {
     return uri.section(QLatin1Char(':'), -1);

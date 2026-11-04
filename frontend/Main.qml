@@ -994,6 +994,24 @@ ApplicationWindow {
         }
     }
 
+    // Spotify: a control that didn't work is explained wherever the driver
+    // is (playing a song leaves the music menu), and a finished sign-in
+    // comes back from the browser it was left in
+    property bool _spotifySigningIn: false
+    Connections {
+        target: typeof spotifyManager !== "undefined" ? spotifyManager : null
+        function onCommandFailed(message) {
+            errorToast.show(message)
+        }
+        function onStateChanged() {
+            if (mainWindow._spotifySigningIn && spotifyManager.signedIn) {
+                mainWindow.raise()
+                mainWindow.requestActivate()
+            }
+            mainWindow._spotifySigningIn = spotifyManager.state === "signingIn"
+        }
+    }
+
     // An iPhone that starts mirroring over AirPlay comes up on screen: the
     // driver picked OCTAVE on the phone, so showing it is what they asked for
     Connections {

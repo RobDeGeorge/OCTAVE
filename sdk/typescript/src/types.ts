@@ -1843,6 +1843,7 @@ export interface SpotifyManager {
     modesChanged: []
     deviceChanged: []
     playbackRequested: []
+    commandFailed: [message: string]
     startedElsewhere: []
   }
 }

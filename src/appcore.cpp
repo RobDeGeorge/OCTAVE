@@ -432,6 +432,9 @@ void AppCore::shutdown()
     demoDrive.stop(); // release simulated sensors before hardware cleanup
     // Sources stopping below must not overwrite who owned the music
     nowPlaying.stopSaving();
+    // Before the phone mirror goes, and with the network still up: Spotify
+    // must not play on with nothing left to stop it
+    nowPlaying.pauseSpotifyBeforeExit();
     // Stubs make all calls no-op on mobile
     androidAutoManager.cleanup();
     phoneMirrorManager.cleanup();

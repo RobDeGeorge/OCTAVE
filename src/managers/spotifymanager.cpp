@@ -5,6 +5,7 @@
 #include <QCryptographicHash>
 #include <QDesktopServices>
 #include <QDir>
+#include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -14,8 +15,10 @@
 #include <QNetworkRequest>
 #include <QStandardPaths>
 #include <QRegularExpression>
+#include <QSaveFile>
 #include <QUrlQuery>
 
+#include <memory>
 #include <utility>
 
 #ifdef OCTAVE_WASM
@@ -41,6 +44,7 @@ constexpr int kSignInTimeoutMs = 5 * 60 * 1000;
 // A command's own effect wins over a poll that may predate it
 constexpr int kCommandHoldMs = 1500;
 constexpr int kArtCacheFiles = 40;
+const QString kUnreachable = QStringLiteral("Can't reach Spotify.");
 
 #ifdef OCTAVE_WASM
 const char *kStorageKey = "octave.spotify";
@@ -75,6 +79,7 @@ SpotifyManager::SpotifyManager(QObject *parent)
     : QObject(parent)
 {
     m_clientId = kBuiltInClientId;
+    m_apiBase = kApiBase;
     m_poll.setSingleShot(true);
     connect(&m_poll, &QTimer::timeout, this, &SpotifyManager::poll);
     m_volumeSend.setSingleShot(true);
@@ -171,14 +176,18 @@ void SpotifyManager::save() const
 #else
     const QString path = m_storeFile.isEmpty() ? SettingsManager::getAppDataDir() + QStringLiteral("/spotify.json")
                                                : m_storeFile;
-    QFile f(path);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+    // Atomic: the refresh token rotates about hourly, and the power can go
+    // at any moment in a car. A torn file would mean signing in again there.
+    QSaveFile f(path);
+    if (!f.open(QIODevice::WriteOnly)) {
         qCWarning(lcSpotify) << "can't write" << path << f.errorString();
         return;
     }
     // The refresh token is a password to the account's player and library
     f.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner);
     f.write(QJsonDocument(o).toJson(QJsonDocument::Indented));
+    if (!f.commit())
+        qCWarning(lcSpotify) << "can't write" << path << f.errorString();
 #endif
 }
 
@@ -413,7 +422,7 @@ void SpotifyManager::refreshToken()
     if (m_refreshing)
         return;
     if (m_refreshToken.isEmpty()) {
-        m_waiting.clear();
+        failWaiting();
         return;
     }
     tokenRequest({{QStringLiteral("grant_type"), QStringLiteral("refresh_token")},
@@ -444,8 +453,6 @@ void SpotifyManager::tokenRequest(const QList<QPair<QString, QString>> &form, bo
         if (status != 200 || access.isEmpty()) {
             const QString why = errorMessage(doc);
             qCWarning(lcSpotify) << "token request failed" << status << reply->errorString() << why;
-            const QList<std::function<void()>> dropped = std::exchange(m_waiting, {});
-            Q_UNUSED(dropped);
             // invalid_grant: the refresh token was revoked (or the app's
             // user list changed); anything else may pass, keep the session
             if (status == 400 || !isRefresh) {
@@ -454,7 +461,8 @@ void SpotifyManager::tokenRequest(const QList<QPair<QString, QString>> &form, bo
                                     : QStringLiteral("Spotify sign-in failed%1.")
                                           .arg(why.isEmpty() ? QString() : QStringLiteral(": ") + why));
             } else {
-                setStatus(QStringLiteral("Can't reach Spotify."));
+                failWaiting();
+                setStatus(kUnreachable);
             }
             return;
         }
@@ -470,20 +478,38 @@ void SpotifyManager::tokenRequest(const QList<QPair<QString, QString>> &form, bo
             setState(QStringLiteral("signedIn"));
             onSignedIn();
         }
-        if (m_status == QLatin1String("Can't reach Spotify."))
+        if (m_status == kUnreachable)
             setStatus({});
-        for (const auto &call : std::exchange(m_waiting, {}))
-            call();
+        for (const TokenWaiter &w : std::exchange(m_waiting, {}))
+            w.ready();
     });
+}
+
+void SpotifyManager::failWaiting()
+{
+    for (const TokenWaiter &w : std::exchange(m_waiting, {}))
+        w.failed();
 }
 
 void SpotifyManager::onSignedIn()
 {
+    ensureLibrary();
+    poll();
+}
+
+void SpotifyManager::ensureLibrary()
+{
+    if (!signedIn() || m_libraryLoaded || m_libraryLoading || m_profileLoading)
+        return;
+    m_profileLoading = true;
     get(QStringLiteral("/me"), [this](int status, const QJsonDocument &doc) {
+        m_profileLoading = false;
         if (status != 200) {
-            if (status == 403)
+            if (status == 403) {
+                m_libraryLoaded = true;   // an answer, not an outage: no asking again
                 setStatus(QStringLiteral("Spotify refused this account. It has to be added under User Management "
                                          "in the Spotify developer app."));
+            }
             return;
         }
         const QJsonObject me = doc.object();
@@ -497,7 +523,6 @@ void SpotifyManager::onSignedIn()
         save();
         refreshLibrary();
     });
-    poll();
 }
 
 void SpotifyManager::signOut()
@@ -512,7 +537,6 @@ void SpotifyManager::clearSession()
 {
     m_refreshToken.clear();
     m_accessToken.clear();
-    m_waiting.clear();
     m_verifier.clear();
     m_oauthState.clear();
     m_userId.clear();
@@ -523,6 +547,7 @@ void SpotifyManager::clearSession()
     m_collection.clear();
     m_collectionTracks.clear();
     m_devices.clear();
+    m_libraryLoaded = false;
     m_poll.stop();
     save();
     emit userChanged();
@@ -532,20 +557,23 @@ void SpotifyManager::clearSession()
     emit devicesChanged();
     applyPlayer({});
     setState(QStringLiteral("signedOut"));
+    failWaiting();
 }
 
 // ── requests ───────────────────────────────────────────────────────────
 
-void SpotifyManager::withToken(std::function<void()> call)
+void SpotifyManager::withToken(std::function<void()> ready, std::function<void()> failed)
 {
-    if (m_refreshToken.isEmpty())
-        return;
-    // A minute's margin: the token must still be good when Spotify reads it
-    if (!m_accessToken.isEmpty() && m_tokenAge.isValid() && m_tokenAge.elapsed() < m_tokenLifeMs - 60000) {
-        call();
+    if (m_refreshToken.isEmpty()) {
+        failed();
         return;
     }
-    m_waiting << std::move(call);
+    // A minute's margin: the token must still be good when Spotify reads it
+    if (!m_accessToken.isEmpty() && m_tokenAge.isValid() && m_tokenAge.elapsed() < m_tokenLifeMs - 60000) {
+        ready();
+        return;
+    }
+    m_waiting << TokenWaiter{std::move(ready), std::move(failed)};
     refreshToken();
 }
 
@@ -558,7 +586,7 @@ void SpotifyManager::api(const QByteArray &verb, const QString &path, const QJso
         return;
     }
     withToken([this, verb, path, body, done, retried] {
-        QNetworkRequest req{QUrl(path.startsWith(QLatin1String("https://")) ? path : kApiBase + path)};
+        QNetworkRequest req{QUrl(path.startsWith(QLatin1String("https://")) ? path : m_apiBase + path)};
         req.setRawHeader("Authorization", "Bearer " + m_accessToken.toLatin1());
         QByteArray data;
         if (!body.isNull()) {
@@ -586,55 +614,83 @@ void SpotifyManager::api(const QByteArray &verb, const QString &path, const QJso
             if (done)
                 done(status, doc);
         });
+    }, [done] {
+        if (done)
+            done(0, {});
     });
 }
 
-void SpotifyManager::command(const QByteArray &verb, const QString &path, const QJsonDocument &body)
+void SpotifyManager::command(const QByteArray &verb, const QString &path, const QJsonDocument &body,
+                             std::function<void()> accepted)
 {
     m_commandAge.start();
-    api(verb, path, body, [this, verb, path, body](int status, const QJsonDocument &doc) {
+    api(verb, path, body, [this, verb, path, body, accepted](int status, const QJsonDocument &doc) {
         if (status >= 200 && status < 300) {
             setStatus({});
+            if (accepted)
+                accepted();
             pollSoon();
             return;
         }
+        if (!signedIn())
+            return;   // the session ended: that is the news, not this command
+        // A control the user pressed: they hear why, on whichever page they are
+        auto fail = [this](const QString &message) {
+            setStatus(message);
+            emit commandFailed(message);
+        };
         const QString reason = errorReason(doc);
         if (status == 404 && reason == QLatin1String("NO_ACTIVE_DEVICE") && !path.contains(QLatin1String("device_id="))) {
             // Nothing is playing anywhere: wake a device that is around
-            get(QStringLiteral("/me/player/devices"), [this, verb, path, body](int st, const QJsonDocument &d) {
+            get(QStringLiteral("/me/player/devices"), [this, verb, path, body, accepted, fail](int st, const QJsonDocument &d) {
                 const QVariantList devs = st == 200 ? SpotifyApi::readDevices(d.object()) : QVariantList();
                 if (m_devices != devs) {
                     m_devices = devs;
                     emit devicesChanged();
                 }
                 if (devs.isEmpty()) {
-                    setStatus(QStringLiteral("No Spotify device is on. Open Spotify on your phone, then try again."));
                     m_commandAge.invalidate();
+                    undoOptimisticPlay(path);
+                    fail(QStringLiteral("No Spotify device is on. Open Spotify on your phone, then try again."));
                     pollSoon();
                     return;
                 }
-                const QString id = devs.first().toMap().value(QStringLiteral("id")).toString();
                 command(verb, path + (path.contains(QLatin1Char('?')) ? QStringLiteral("&") : QStringLiteral("?"))
-                                  + QStringLiteral("device_id=") + id,
-                        body);
+                                  + QStringLiteral("device_id=") + SpotifyApi::pickDevice(devs),
+                        body, accepted);
             });
             return;
         }
         m_commandAge.invalidate();
-        if (path.startsWith(QLatin1String("/me/player/volume")) && (status == 403 || status == 400))
-            setStatus(QStringLiteral("%1 doesn't let Spotify change its volume. Use the phone's buttons.")
-                          .arg(m_player.deviceName.isEmpty() ? QStringLiteral("This device") : m_player.deviceName));
-        else if (status == 403 && (reason == QLatin1String("PREMIUM_REQUIRED") || reason.isEmpty()))
-            setStatus(QStringLiteral("Spotify Premium is needed to control playback."));
-        else if (status == 429)
-            setStatus(QStringLiteral("Spotify asked OCTAVE to slow down. Try again in a moment."));
-        else if (status == 0)
-            setStatus(QStringLiteral("Can't reach Spotify."));
-        else
-            setStatus(QStringLiteral("Spotify: ") + (errorMessage(doc).isEmpty() ? QString::number(status)
-                                                                               : errorMessage(doc)));
+        undoOptimisticPlay(path);
+        if (path.startsWith(QLatin1String("/me/player/volume"))) {
+            // Status only: a knob turning would queue one notice per click
+            if (status == 403 || status == 400)
+                setStatus(QStringLiteral("%1 doesn't let Spotify change its volume. Use the phone's buttons.")
+                              .arg(m_player.deviceName.isEmpty() ? QStringLiteral("This device") : m_player.deviceName));
+            else if (status == 0)
+                setStatus(kUnreachable);
+        } else if (status == 403 && (reason == QLatin1String("PREMIUM_REQUIRED") || reason.isEmpty())) {
+            fail(QStringLiteral("Spotify Premium is needed to control playback."));
+        } else if (status == 429) {
+            fail(QStringLiteral("Spotify asked OCTAVE to slow down. Try again in a moment."));
+        } else if (status == 0) {
+            fail(kUnreachable);
+        } else {
+            fail(QStringLiteral("Spotify: ") + (errorMessage(doc).isEmpty() ? QString::number(status) : errorMessage(doc)));
+        }
         pollSoon();
     });
+}
+
+void SpotifyManager::undoOptimisticPlay(const QString &path)
+{
+    // Offline no poll corrects a play shown before it was taken
+    if (!path.startsWith(QLatin1String("/me/player/play")) || !m_player.playing || m_wasPlaying)
+        return;
+    m_player.positionMs = positionMs();
+    m_player.playing = false;
+    emit playingChanged();
 }
 
 // ── library ────────────────────────────────────────────────────────────
@@ -644,15 +700,10 @@ void SpotifyManager::refreshLibrary()
     if (!signedIn() || m_libraryLoading)
         return;
     m_libraryPending = 3;
+    m_libraryFailed = false;
     m_libraryLoading = true;
     emit libraryLoadingChanged();
-    auto oneDone = [this] {
-        if (--m_libraryPending == 0) {
-            m_libraryLoading = false;
-            emit libraryLoadingChanged();
-        }
-    };
-    get(QStringLiteral("/me/tracks?limit=1"), [this, oneDone](int status, const QJsonDocument &doc) {
+    get(QStringLiteral("/me/tracks?limit=1"), [this](int status, const QJsonDocument &doc) {
         if (status == 200) {
             QVariantMap liked;
             liked[QStringLiteral("uri")] = SpotifyApi::likedUri(m_userId);
@@ -671,10 +722,20 @@ void SpotifyManager::refreshLibrary()
             m_playlists = list;
             emit libraryChanged();
         }
-        oneDone();
+        libraryPartDone(status == 200);
     });
     loadPlaylistPage(QStringLiteral("/me/playlists?limit=50"), {});
     loadAlbumPage(QStringLiteral("/me/albums?limit=50"), {});
+}
+
+void SpotifyManager::libraryPartDone(bool ok)
+{
+    m_libraryFailed = m_libraryFailed || !ok;
+    if (--m_libraryPending == 0) {
+        m_libraryLoaded = !m_libraryFailed;
+        m_libraryLoading = false;
+        emit libraryLoadingChanged();
+    }
 }
 
 void SpotifyManager::loadPlaylistPage(const QString &path, QVariantList acc)
@@ -693,14 +754,14 @@ void SpotifyManager::loadPlaylistPage(const QString &path, QVariantList acc)
                 return;
             }
         }
-        if (!m_liked.isEmpty())
-            acc.prepend(m_liked);
-        m_playlists = acc;
-        emit libraryChanged();
-        if (--m_libraryPending == 0) {
-            m_libraryLoading = false;
-            emit libraryLoadingChanged();
+        // A reload the network cut short keeps the list that was there
+        if (status == 200 || m_playlists.isEmpty()) {
+            if (!m_liked.isEmpty())
+                acc.prepend(m_liked);
+            m_playlists = acc;
+            emit libraryChanged();
         }
+        libraryPartDone(status == 200);
     });
 }
 
@@ -717,12 +778,11 @@ void SpotifyManager::loadAlbumPage(const QString &path, QVariantList acc)
                 return;
             }
         }
-        m_albums = acc;
-        emit libraryChanged();
-        if (--m_libraryPending == 0) {
-            m_libraryLoading = false;
-            emit libraryLoadingChanged();
+        if (status == 200 || m_albums.isEmpty()) {
+            m_albums = acc;
+            emit libraryChanged();
         }
+        libraryPartDone(status == 200);
     });
 }
 
@@ -813,37 +873,24 @@ void SpotifyManager::playCollection(const QString &uri, int index)
 {
     if (!signedIn() || uri.isEmpty())
         return;
-    emit playbackRequested();
-    QJsonObject body;
-    if (SpotifyApi::isLiked(uri) && index < m_collectionTracks.size() && SpotifyApi::isLiked(collectionUri())
-        && !m_collectionTracks.isEmpty()) {
-        // Liked Songs isn't a context the player takes everywhere: queue
-        // the listed tracks from the one tapped (the top for -1)
-        QJsonArray uris;
-        for (int i = qMax(0, index); i < m_collectionTracks.size() && uris.size() < 100; ++i)
-            uris << m_collectionTracks.at(i).toMap().value(QStringLiteral("uri")).toString();
-        body[QStringLiteral("uris")] = uris;
-    } else {
-        body[QStringLiteral("context_uri")] = uri;
-        if (index >= 0)
-            body[QStringLiteral("offset")] = QJsonObject{{QStringLiteral("position"), index}};
-    }
+    const QJsonObject body = SpotifyApi::playBody(uri, index, uri == collectionUri() ? m_collectionTracks : QVariantList());
+    m_wasPlaying = m_player.playing;
     m_player.playing = true;
     m_positionAge.start();
     emit playingChanged();
-    command("PUT", QStringLiteral("/me/player/play"), QJsonDocument(body));
+    command("PUT", QStringLiteral("/me/player/play"), QJsonDocument(body), [this] { emit playbackRequested(); });
 }
 
 void SpotifyManager::play()
 {
     if (!signedIn())
         return;
-    emit playbackRequested();
     m_player.positionMs = positionMs();
+    m_wasPlaying = m_player.playing;
     m_player.playing = true;
     m_positionAge.start();
     emit playingChanged();
-    command("PUT", QStringLiteral("/me/player/play"));
+    command("PUT", QStringLiteral("/me/player/play"), {}, [this] { emit playbackRequested(); });
 }
 
 void SpotifyManager::pause()
@@ -855,6 +902,30 @@ void SpotifyManager::pause()
     m_positionAge.start();
     emit playingChanged();
     command("PUT", QStringLiteral("/me/player/pause"));
+}
+
+void SpotifyManager::pauseBeforeExit(int timeoutMs)
+{
+    if (!signedIn())
+        return;
+    qCInfo(lcSpotify) << "OCTAVE is closing: pausing Spotify";
+    m_poll.stop();
+    QEventLoop loop;
+    QTimer::singleShot(timeoutMs, &loop, &QEventLoop::quit);
+    // Shared: a late reply must find neither a dead loop nor a dead flag, and
+    // api() can answer before exec() (no token, rate limited)
+    const auto answered = std::make_shared<bool>(false);
+    const QPointer<QEventLoop> waiting(&loop);
+    api("PUT", QStringLiteral("/me/player/pause"), {}, [answered, waiting](int status, const QJsonDocument &) {
+        qCInfo(lcSpotify) << "pause before exit ->" << status;
+        *answered = true;
+        if (waiting)
+            waiting->quit();
+    });
+    if (!*answered)
+        loop.exec();
+    if (!*answered)
+        qCWarning(lcSpotify) << "no answer from Spotify before exit: it may keep playing";
 }
 
 void SpotifyManager::togglePlay()
@@ -942,10 +1013,10 @@ void SpotifyManager::transferTo(const QString &deviceId)
 {
     if (!signedIn() || deviceId.isEmpty())
         return;
-    emit playbackRequested();
     command("PUT", QStringLiteral("/me/player"),
             QJsonDocument(QJsonObject{{QStringLiteral("device_ids"), QJsonArray{deviceId}},
-                                      {QStringLiteral("play"), true}}));
+                                      {QStringLiteral("play"), true}}),
+            [this] { emit playbackRequested(); });
 }
 
 void SpotifyManager::poll()
@@ -955,10 +1026,18 @@ void SpotifyManager::poll()
     m_pollInFlight = true;
     get(QStringLiteral("/me/player?additional_types=episode"), [this](int status, const QJsonDocument &doc) {
         m_pollInFlight = false;
+        if (!signedIn())
+            return;
         if (status == 200)
             applyPlayer(SpotifyApi::readPlayer(doc.object()));
         else if (status == 204)
             applyPlayer({});   // nothing active on any device
+        if (status == 200 || status == 204) {
+            // Spotify answers: whatever an outage kept away can come now
+            if (m_status == kUnreachable)
+                setStatus({});
+            ensureLibrary();
+        }
         schedulePoll();
     });
 }
