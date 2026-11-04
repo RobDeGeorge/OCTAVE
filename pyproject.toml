@@ -11,6 +11,7 @@ extend-exclude = [
     "__pycache__",
     "tools",
     "wiki",
+    "hardware",   # board generator and sims, not app tooling
 ]
 
 [tool.ruff.lint]
