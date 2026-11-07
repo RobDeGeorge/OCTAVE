@@ -102,11 +102,12 @@ class Symbol:
             for g in sub[2:]:
                 if not isinstance(g, list):
                     continue
-                for key in ("start", "end", "center", "at"):
+                for key in ("start", "mid", "end", "center", "at"):
                     pt = find(g, key)
                     if pt and g[0] != "pin":
-                        xs.append(float(pt[1]))
-                        ys.append(float(pt[2]))
+                        r = float(find(g, "radius")[1]) if g[0] == "circle" else 0
+                        xs += [float(pt[1]) - r, float(pt[1]) + r]
+                        ys += [float(pt[2]) - r, float(pt[2]) + r]
                 pts = find(g, "pts")
                 if pts:
                     for xy in findall(pts, "xy"):
