@@ -249,6 +249,9 @@ private:
     void poll();
     void pollSoon(int ms = 500);
     void applyPlayer(const SpotifyApi::PlayerState &s);
+    // A poll's answer. One empty report isn't news: Spotify gives them while
+    // it changes tracks, and believing it would blank the cover mid-transition
+    void onPlayerReport(const SpotifyApi::PlayerState &s);
     void fetchArt(const QString &url);
     void schedulePoll();
     void clearSession();
@@ -293,6 +296,7 @@ private:
     int m_volumeWanted = -1;
     QElapsedTimer m_volumeAge;   // since the last volume sent: polls keep it meanwhile
     bool m_pollInFlight = false;
+    int m_emptyReports = 0;      // in a row, while there is a track
     bool m_wasPlaying = false;   // before the latest play
     // Optimistic state from a command holds until Spotify has caught up
     QElapsedTimer m_commandAge;

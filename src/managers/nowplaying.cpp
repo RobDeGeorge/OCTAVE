@@ -28,6 +28,13 @@ NowPlaying::NowPlaying(MediaManager *media, PhoneMirrorManager *phone, SettingsM
     , m_phoneMirror(phone)
     , m_settings(settings)
 {
+    m_artClear.setSingleShot(true);
+    m_artClear.setInterval(kArtClearHoldMs);
+    connect(&m_artClear, &QTimer::timeout, this, [this] {
+        m_artUrl.clear();
+        ++m_artRevision;
+        emit artUrlChanged();
+    });
     m_tick.setInterval(kPhoneTickMs);
     connect(&m_tick, &QTimer::timeout, this, &NowPlaying::tick);
 
@@ -54,7 +61,7 @@ NowPlaying::NowPlaying(MediaManager *media, PhoneMirrorManager *phone, SettingsM
                 setPosition(int(ms));
         });
         connect(m_media, &MediaManager::shuffleStateChanged, this, [this](bool on) {
-            if (m_source != Source::Spotify)
+            if (!m_spotifyShuffle)
                 setShuffled(on);
         });
         m_localFile = m_media->get_current_file();
@@ -174,13 +181,14 @@ void NowPlaying::setSpotify(SpotifyManager *spotify)
             setPosition(m_spotify->positionMs());
     });
     connect(m_spotify, &SpotifyManager::modesChanged, this, [this] {
-        if (m_source == Source::Spotify)
+        if (m_spotifyShuffle)
             setShuffled(m_spotify->shuffle());
     });
     // Signed out while it owned the music: back to OCTAVE's player, paused
     connect(m_spotify, &SpotifyManager::stateChanged, this, [this] {
         if (m_source == Source::Spotify && !m_spotify->signedIn())
             switchTo(Source::Local);
+        updateSpotifyShuffle();
     });
 }
 
@@ -216,6 +224,20 @@ void NowPlaying::pauseSpotifyBeforeExit()
     if (m_source == Source::Phone)
         m_phoneMirror->mediaPause();
     m_spotify->pauseBeforeExit(kExitPauseMs);
+}
+
+void NowPlaying::updateSpotifyShuffle()
+{
+    const bool on = m_spotify && m_spotify->signedIn()
+                    && (m_source == Source::Spotify || (m_source == Source::Phone && phoneRunsSpotify()));
+    if (on != m_spotifyShuffle) {
+        m_spotifyShuffle = on;
+        emit capabilitiesChanged();
+        if (!on && m_media)
+            setShuffled(m_media->is_shuffled());
+    }
+    if (on)
+        setShuffled(m_spotify->shuffle());
 }
 
 void NowPlaying::readSpotify()
@@ -281,6 +303,7 @@ void NowPlaying::switchTo(Source s)
         break;
     }
     readSource();
+    updateSpotifyShuffle();
     emit sourceChanged();
     emit capabilitiesChanged();   // canShuffle follows the source
     emit trackChanged();
@@ -308,7 +331,6 @@ void NowPlaying::readSource()
         setPlaying(m_spotify->playing());
         setPosition(m_spotify->positionMs());
         setCanSeek(m_spotify->hasPlayback());
-        setShuffled(m_spotify->shuffle());
         break;
     case Source::Local:
         readLocalTrack();
@@ -453,6 +475,7 @@ void NowPlaying::readPhoneState()
     setCanSeek(m_phoneMirror->mediaCanSeek());
     setPosition(m_phoneMirror->mediaPosition());
     updateTick();
+    updateSpotifyShuffle();   // the phone's app may have changed
 }
 
 void NowPlaying::readAaTrack()
@@ -575,7 +598,7 @@ void NowPlaying::toggleShuffle()
 {
     if (m_source == Source::Local && m_media)
         m_media->toggle_shuffle();
-    else if (m_source == Source::Spotify)
+    else if (m_spotifyShuffle)
         m_spotify->toggleShuffle();
 }
 
@@ -614,6 +637,13 @@ void NowPlaying::setTrack(bool has, const QString &title, const QString &artist,
 
 void NowPlaying::setArtUrl(const QString &url)
 {
+    // Local art is known at once: none means none
+    if (url.isEmpty() && !m_artUrl.isEmpty() && m_source != Source::Local) {
+        if (!m_artClear.isActive())
+            m_artClear.start();
+        return;
+    }
+    m_artClear.stop();
     if (url == m_artUrl)
         return;
     m_artUrl = url;

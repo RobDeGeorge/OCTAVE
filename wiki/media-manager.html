@@ -668,6 +668,17 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
           (<code>NowPlaying::phoneRunsSpotify</code>).
         </p>
         <p>
+          Shuffle is Spotify's while it is the source or the mirrored phone's app: <code>nowPlaying.canShuffle</code>,
+          <code>shuffled</code> and <code>toggleShuffle()</code> follow it, so the Media Room and bottom bar buttons work
+          and show its state, including a change made in the Spotify app. Any other phone app keeps its own shuffle.
+        </p>
+        <p>
+          The cover never drops out in a track change: <code>nowPlaying</code> holds a remote source's last cover for
+          1.5&nbsp;s when told there is none (<code>kArtClearHoldMs</code>; its art arrives after its track), and Spotify's
+          single empty report between tracks is ignored, it takes two polls in a row to count as stopped. Local art is known
+          at once, so none means none.
+        </p>
+        <p>
           Closing OCTAVE pauses Spotify when it is OCTAVE's music (the source, or the mirrored phone's app), so it doesn't
           play on with nothing left to stop it: <code>AppCore::shutdown</code> calls
           <code>NowPlaying::pauseSpotifyBeforeExit</code>, which waits for Spotify's answer for at most 2.5 s, as the main
@@ -688,7 +699,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
         <p>Limits, all Spotify's:</p>
         <ul>
           <li>Controlling playback needs Spotify Premium.</li>
-          <li>A Development Mode Spotify app signs in only the accounts added under User Management in its dashboard.</li>
+          <li>A Development Mode Spotify app signs in only the accounts added under User Management in its dashboard, a handful at most, and its owner needs Premium. One shared app can't serve the public, so each user sets up their own (Settings &gt; Media &gt; Spotify).</li>
           <li>Spotify lists the songs of a playlist only when the user owns or collaborates on it; other playlists can be played but not opened.</li>
           <li>No audio reaches OCTAVE, so the visualizer stays flat.</li>
         </ul>

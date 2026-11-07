@@ -59,6 +59,7 @@ Item {
     // "All Music"); the phone or Android Auto counts as music
     property int localSongCount: 0
     readonly property bool musicEmpty: !useRemote && localSongCount === 0
+    readonly property bool spotifyOffered: typeof spotifyManager !== "undefined" && !!spotifyManager
     readonly property bool phoneOffered: (!!settingsManager && settingsManager.phoneMirrorEnabled)
                                          || (typeof airPlayManager !== "undefined" && !!airPlayManager
                                              && airPlayManager.available && airPlayManager.enabled)
@@ -486,19 +487,37 @@ Item {
                     width: parent.width
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.WordWrap
-                    text: mainMenu.phoneOffered ? "Pick a music folder or connect your phone"
-                                                : "Pick the folder your music is in"
+                    text: mainMenu.phoneOffered && mainMenu.spotifyOffered ? "Pick a music folder, or connect your phone or Spotify"
+                          : mainMenu.phoneOffered ? "Pick a music folder or connect your phone"
+                          : mainMenu.spotifyOffered ? "Pick a music folder or connect Spotify"
+                          : "Pick the folder your music is in"
                     color: App.Style.secondaryTextColor
                     font.pixelSize: App.Spacing.overallText * 0.9
                     font.family: mainMenu.globalFont
                 }
-                PromptButton {
-                    objectName: "homeMusicBrowseButton"
+                // Side by side when both fit: this panel is a third of the
+                // screen, and narrower still at a large UI scale
+                Grid {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "Browse Music"
-                    // the browser demo opens the browser's own folder picker instead
-                    onClicked: if (typeof mediaManager === "undefined" || !mediaManager
-                                   || !mediaManager.pick_browser_library()) homeFolderDialog.open()
+                    columns: homeMusicBrowse.width + homeMusicSpotify.width + spacing <= parent.width ? 2 : 1
+                    spacing: dp(12)
+                    horizontalItemAlignment: Grid.AlignHCenter
+
+                    PromptButton {
+                        id: homeMusicBrowse
+                        objectName: "homeMusicBrowseButton"
+                        text: "Browse Music"
+                        // the browser demo opens the browser's own folder picker instead
+                        onClicked: if (typeof mediaManager === "undefined" || !mediaManager
+                                       || !mediaManager.pick_browser_library()) homeFolderDialog.open()
+                    }
+                    PromptButton {
+                        id: homeMusicSpotify
+                        objectName: "homeSpotifyButton"
+                        visible: mainMenu.spotifyOffered
+                        text: "Spotify"
+                        onClicked: if (mainMenu.mainWindow) mainMenu.mainWindow.openSpotify()
+                    }
                 }
                 PromptButton {
                     objectName: "homeConnectPhoneButton"

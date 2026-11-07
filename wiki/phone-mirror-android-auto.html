@@ -976,7 +976,7 @@
               <tr><td>A tap on the Android Auto screen, OCTAVE's play / next / previous aimed at Android Auto, or a voice request, then the phone asks to play within 6 s</td><td>Granted: Android Auto owns the music; local pauses, a mirrored phone is released</td></tr>
               <tr><td>Android Auto owns the music and asks again (after a pause)</td><td>Granted</td></tr>
               <tr><td>Play in OCTAVE's player while Android Auto owns</td><td>Local owns; OCTAVE takes focus back and the phone pauses</td></tr>
-              <tr><td>The Media Room's source pill ("Android Auto" / "Phone")</td><td><code>nowPlaying.useLocal()</code>: the other source pauses, nothing plays until asked</td></tr>
+              <tr><td><code>nowPlaying.useLocal()</code> from a frontend or service client</td><td>The other source pauses, nothing plays until asked</td></tr>
               <tr><td>Navigation prompt or system sound from Android Auto</td><td>Local music ducks to 30 % (the same <code>MediaManager::setDucking</code> phone mirroring uses; the lower of the two wins)</td></tr>
               <tr><td>Google Assistant opens the microphone</td><td>Local music pauses, and resumes when the microphone closes unless something else started</td></tr>
               <tr><td>The owner goes away (phone unplugged, session ended)</td><td>Paused, still shown; nothing else starts. Play then goes to OCTAVE's own player</td></tr>

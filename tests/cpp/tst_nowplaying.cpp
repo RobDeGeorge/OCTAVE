@@ -674,6 +674,129 @@ private slots:
         QVERIFY(took.elapsed() >= 90 && took.elapsed() < 2000);
     }
 
+    // Spotify answers with no track while it changes tracks: the cover must
+    // not go in the middle of the transition
+    void oneEmptySpotifyReportKeepsTheTrack()
+    {
+        SpotifyManager spotify;
+        spotify.setStoreFile(m_tmp->path() + "/spotify.json");
+        spotify.m_state = QStringLiteral("signedIn");
+        spotify.onPlayerReport(spotifyState(true, QStringLiteral("Drive")));
+        QSignalSpy tracks(&spotify, &SpotifyManager::trackChanged);
+
+        spotify.onPlayerReport({});
+        QVERIFY(spotify.hasPlayback());
+        QCOMPARE(tracks.count(), 0);
+
+        // The count starts over after a real report
+        spotify.onPlayerReport(spotifyState(true, QStringLiteral("Next One")));
+        spotify.onPlayerReport({});
+        QVERIFY(spotify.hasPlayback());
+
+        // Still nothing on the next poll: it really stopped
+        spotify.onPlayerReport({});
+        QVERIFY(!spotify.hasPlayback());
+    }
+
+    void aRemoteSourceHoldsItsCoverUntilTheNextOneComes()
+    {
+        MediaManager media;
+        PhoneMirrorManager phone;
+        SpotifyManager spotify;
+        spotify.setStoreFile(m_tmp->path() + "/spotify.json");
+        NowPlaying np(&media, &phone);
+        np.setSpotify(&spotify);
+        spotify.m_state = QStringLiteral("signedIn");
+        spotify.applyPlayer(spotifyState(true, QStringLiteral("Drive")));
+        QCOMPARE(np.source(), QStringLiteral("spotify"));
+        np.m_artClear.setInterval(20);
+        const QString first = QStringLiteral("file:///a.jpg"), second = QStringLiteral("file:///b.jpg");
+
+        np.setArtUrl(first);
+        np.setArtUrl({});
+        QCOMPARE(np.artUrl(), first);
+        np.setArtUrl(second);
+        QCOMPARE(np.artUrl(), second);
+        QVERIFY(!np.m_artClear.isActive());   // the new cover ends the hold
+
+        // A track that truly has none: not forever
+        np.setArtUrl({});
+        QTRY_VERIFY(np.artUrl().isEmpty());
+    }
+
+    void localArtClearsAtOnce()
+    {
+        MediaManager media;
+        PhoneMirrorManager phone;
+        NowPlaying np(&media, &phone);
+        QCOMPARE(np.source(), QStringLiteral("local"));
+        np.setArtUrl(QStringLiteral("file:///a.jpg"));
+        np.setArtUrl({});
+        QVERIFY(np.artUrl().isEmpty());
+    }
+
+    void shuffleReachesSpotifyAsTheSource()
+    {
+        MediaManager media;
+        PhoneMirrorManager phone;
+        SpotifyManager spotify;
+        spotify.setStoreFile(m_tmp->path() + "/spotify.json");
+        NowPlaying np(&media, &phone);
+        np.setSpotify(&spotify);
+        spotify.m_state = QStringLiteral("signedIn");
+        spotify.m_refreshToken = QStringLiteral("token");
+        spotify.m_refreshing = true;   // holds the real request back
+        SpotifyApi::PlayerState off = spotifyState(true, QStringLiteral("Drive"));
+        off.shuffle = false;
+        spotify.applyPlayer(off);
+        QVERIFY(np.canShuffle());
+        QVERIFY(!np.shuffled());
+
+        np.toggleShuffle();
+        QVERIFY(spotify.shuffle());
+        QVERIFY(np.shuffled());
+
+        // Changed in the Spotify app: the button follows
+        spotify.m_commandAge.invalidate();
+        spotify.applyPlayer(off);
+        QVERIFY(!np.shuffled());
+    }
+
+    // Mirroring: the phone is the source, but that phone's app is Spotify
+    void shuffleReachesSpotifyOnTheMirroredPhone()
+    {
+        MediaManager media;
+        PhoneMirrorManager phone;
+        SpotifyManager spotify;
+        spotify.setStoreFile(m_tmp->path() + "/spotify.json");
+        NowPlaying np(&media, &phone);
+        np.setSpotify(&spotify);
+        spotify.m_state = QStringLiteral("signedIn");
+        spotify.m_refreshToken = QStringLiteral("token");
+        spotify.m_refreshing = true;
+        emit spotify.stateChanged();
+
+        phone.onMediaState(phoneState(true, "A Podcast"));
+        QCOMPARE(np.source(), QStringLiteral("phone"));
+        QVERIFY(!np.canShuffle());   // another app's shuffle is that app's
+
+        QSignalSpy capabilities(&np, &NowPlaying::capabilitiesChanged);
+        QVariantMap state = phoneState(true, "Drive");
+        state[QStringLiteral("package")] = QStringLiteral("com.spotify.music");
+        phone.onMediaState(state);
+        QVERIFY(np.canShuffle());
+        QVERIFY(capabilities.count() >= 1);   // or the button stays dimmed
+
+        np.toggleShuffle();
+        QVERIFY(spotify.shuffle());
+        QVERIFY(np.shuffled());
+
+        // Back to the other app: Spotify's shuffle isn't shown for it
+        phone.onMediaState(phoneState(true, "A Podcast"));
+        QVERIFY(!np.canShuffle());
+        QVERIFY(!np.shuffled());
+    }
+
     void savedSessionIsPrivate()
     {
         SpotifyManager spotify;

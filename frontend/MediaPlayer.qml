@@ -185,6 +185,21 @@ Item {
         } else if (showingPhoneQueue) {
             spotifyUri = ""
         }
+        _showSpotifyIfNoLocal()
+    }
+    // No local songs and nothing else to show: the Spotify library, rather
+    // than an empty page. Also when the library lands after the page opened.
+    function _showSpotifyIfNoLocal() {
+        if (spotifySignedIn && spotifyUri === "" && !showingPhoneQueue && spotifyManager.playlists.length > 0
+                && mediaManager && mediaManager.get_current_song_list().length === 0)
+            showSpotify(spotifyManager.playlists[0].uri)
+    }
+    Connections {
+        target: mediaPlayer.hasSpotify ? spotifyManager : null
+        function onLibraryChanged() {
+            if (mediaPlayer.StackView.status === StackView.Active)
+                mediaPlayer._showSpotifyIfNoLocal()
+        }
     }
     // Follow a source change while the page is open (the phone taking the
     // controls, or a local track handing them back)
@@ -261,7 +276,7 @@ Item {
             return out
         out.push({ kind: "heading", name: "Spotify", uri: "" })
         if (!spotifySignedIn) {
-            out.push({ kind: "spotifyConnect", name: "Connect Spotify…", uri: "" })
+            out.push({ kind: "spotifyConnect", name: spotifyManager.clientId !== "" ? "Connect Spotify…" : "Set Up Spotify…", uri: "" })
             return out
         }
         var lists = [spotifyManager.playlists, spotifyManager.albums]
@@ -891,12 +906,8 @@ Item {
                                             if (playlistItem.kind === "spotify") {
                                                 mediaPlayer.showSpotify(modelData.uri)
                                             } else if (playlistItem.kind === "spotifyConnect") {
-                                                // Straight to sign-in when it can start; Settings shows
-                                                // how it goes (or asks for the Client ID)
-                                                if (spotifyManager.clientId !== "")
-                                                    spotifyManager.signIn()
-                                                if (mediaPlayer.mainWindow && mediaPlayer.mainWindow.navigateToSettings)
-                                                    mediaPlayer.mainWindow.navigateToSettings("mediaSettings")
+                                                if (mediaPlayer.mainWindow && mediaPlayer.mainWindow.openSpotify)
+                                                    mediaPlayer.mainWindow.openSpotify()
                                             } else if (playlistItem.kind === "phone") {
                                                 mediaPlayer.spotifyUri = ""
                                                 mediaPlayer.showingPhoneQueue = true

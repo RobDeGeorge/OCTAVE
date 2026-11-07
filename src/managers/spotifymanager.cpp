@@ -44,6 +44,7 @@ constexpr int kSignInTimeoutMs = 5 * 60 * 1000;
 // A command's own effect wins over a poll that may predate it
 constexpr int kCommandHoldMs = 1500;
 constexpr int kArtCacheFiles = 40;
+constexpr int kEmptyReportsToClear = 2;
 const QString kUnreachable = QStringLiteral("Can't reach Spotify.");
 
 #ifdef OCTAVE_WASM
@@ -1029,9 +1030,9 @@ void SpotifyManager::poll()
         if (!signedIn())
             return;
         if (status == 200)
-            applyPlayer(SpotifyApi::readPlayer(doc.object()));
+            onPlayerReport(SpotifyApi::readPlayer(doc.object()));
         else if (status == 204)
-            applyPlayer({});   // nothing active on any device
+            onPlayerReport({});   // nothing active on any device
         if (status == 200 || status == 204) {
             // Spotify answers: whatever an outage kept away can come now
             if (m_status == kUnreachable)
@@ -1058,6 +1059,14 @@ void SpotifyManager::schedulePoll()
         ms = qMax(ms, int(m_backoffMs - m_backoff.elapsed()) + 100);
     if (!m_poll.isActive() || m_poll.remainingTime() > ms)
         m_poll.start(ms);
+}
+
+void SpotifyManager::onPlayerReport(const SpotifyApi::PlayerState &s)
+{
+    if (!s.valid && m_player.valid && ++m_emptyReports < kEmptyReportsToClear)
+        return;
+    m_emptyReports = 0;
+    applyPlayer(s);
 }
 
 void SpotifyManager::applyPlayer(const SpotifyApi::PlayerState &in)

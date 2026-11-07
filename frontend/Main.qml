@@ -324,18 +324,38 @@ ApplicationWindow {
     // generic navigateTo() can't push it without one. Used by the command
     // server / screenshot sweeper to walk every settings page. If already on
     // Settings, switches section in place instead of stacking a new copy.
-    function navigateToSettings(section) {
+    // `tile`: a card inside the section to open as well (a cardId)
+    function navigateToSettings(section, tile) {
         var target = (section && section !== "") ? section : "displaySettings"
         if (stackView.currentItem && stackView.currentItem.objectName === "settingsMenu") {
             stackView.currentItem.navigateToCategory(target)
+            if (tile)
+                stackView.currentItem.openTile(tile)
             console.log("[NAV] Settings section ->", target)
             return
         }
         var page = stackView.openPage("SettingsMenu.qml", { initialSection: target })
         if (page) {
             page.navigateToCategory(target)
+            if (tile)
+                page.openTile(tile)
             console.log("[NAV] Opened Settings ->", target)
         }
+    }
+
+    // The music screens' Spotify button: its library when signed in, else the
+    // sign-in when it can start, on the Spotify card, which shows how it goes
+    // or what setting up takes
+    function openSpotify() {
+        if (typeof spotifyManager === "undefined" || !spotifyManager)
+            return
+        if (spotifyManager.signedIn) {
+            stackView.openPage("MediaPlayer.qml")
+            return
+        }
+        if (/^[0-9a-zA-Z]{32}$/.test(spotifyManager.clientId))
+            spotifyManager.signIn()
+        navigateToSettings("mediaSettings", "media_spotify")
     }
 
     function navigateBack() {

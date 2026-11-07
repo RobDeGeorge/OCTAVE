@@ -21,6 +21,14 @@ Item {
     // At most this many tiles per column, one section per column.
     readonly property int gridRows: 4
 
+    // The tiles may still be loading: onAllTilesChanged then finishes the job
+    function openCard(cardId) {
+        settingsMenu.initialTile = cardId
+        contentArea.openTile(cardId, null)
+        if (contentArea.detailCardId === cardId)
+            settingsMenu.initialTile = ""
+    }
+
     function openTileId() {
         return contentArea.detailCardId
     }

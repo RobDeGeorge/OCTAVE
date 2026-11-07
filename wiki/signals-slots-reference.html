@@ -992,7 +992,7 @@
             <tr><td><code>togglePlay()</code>, <code>next()</code>, <code>previous()</code></td><td><code>void</code></td><td>Routed to the live source (the gesture sensor uses these too)</td></tr>
             <tr><td><code>seek(int positionMs)</code></td><td><code>void</code></td><td>When <code>canSeek</code>; the position shows at once and the source confirms it</td></tr>
             <tr><td><code>toggleShuffle()</code></td><td><code>void</code></td><td>Local or Spotify; does nothing while the phone or Android Auto is the source</td></tr>
-            <tr><td><code>useLocal()</code></td><td><code>void</code></td><td>Hand the music back to OCTAVE's own player (the Media Room's source pill); the phone, Android Auto or Spotify pauses, nothing plays until asked</td></tr>
+            <tr><td><code>useLocal()</code></td><td><code>void</code></td><td>Hand the music back to OCTAVE's own player, for frontends and service clients (the QML UI gets there by playing a local track); the phone, Android Auto or Spotify pauses, nothing plays until asked</td></tr>
             <tr><td><code>useSpotify()</code></td><td><code>void</code></td><td>Make Spotify the source (signed in only); nothing plays until asked</td></tr>
             <tr><td><code>extractArtColors()</code></td><td><code>void</code></td><td>Theme colours from the live source's art now (Media Room's "Save as Theme"). The Album Art Capture rule calls it on its own: while that theme is selected, whenever <code>artUrl</code> changes or the theme is chosen</td></tr>
           </tbody>

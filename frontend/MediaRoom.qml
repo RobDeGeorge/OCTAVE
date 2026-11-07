@@ -102,8 +102,9 @@ Item {
     }
     readonly property bool showMusicDevice: App.MusicDevicePreference.enabled && App.MusicDevicePreference.isAvailable()
 
-    // The phone's shuffle belongs to its app: off (and dimmed) meanwhile
-    readonly property bool isShuffleEnabled: !useRemote && !!_np && _np.shuffled
+    // Local or Spotify. Another phone app's shuffle belongs to that app: off
+    // (and dimmed) meanwhile
+    readonly property bool isShuffleEnabled: !!_np && _np.canShuffle && _np.shuffled
 
     // The visualizer is on screen (its setting, and something to play)
     readonly property bool _waveformShown: !!settingsManager && settingsManager.showWaveformVisualizer && !playlistEmpty
@@ -1057,13 +1058,26 @@ Item {
                 opacity: 0.6
             }
 
-            Settings.SettingsButton {
+            Row {
                 anchors.horizontalCenter: parent.horizontalCenter
-                width: dp(120)
-                height: dp(40)
-                text: "Browse"
-                // the browser demo opens the browser's own folder picker instead
-                onClicked: if (!mediaManager || !mediaManager.pick_browser_library()) emptyFolderDialog.open()
+                spacing: dp(12)
+
+                Settings.SettingsButton {
+                    width: dp(120)
+                    height: dp(40)
+                    text: "Browse"
+                    // the browser demo opens the browser's own folder picker instead
+                    onClicked: if (!mediaManager || !mediaManager.pick_browser_library()) emptyFolderDialog.open()
+                }
+
+                Settings.SettingsButton {
+                    objectName: "emptySpotifyButton"
+                    visible: typeof spotifyManager !== "undefined" && !!spotifyManager
+                    width: dp(120)
+                    height: dp(40)
+                    text: "Spotify"
+                    onClicked: if (mediaRoom.mainWindow) mediaRoom.mainWindow.openSpotify()
+                }
             }
 
             Text {
@@ -1247,7 +1261,7 @@ Item {
                 id: seekGrid
                 readonly property bool portrait: App.Spacing.isPortrait
                 anchors.fill: parent
-                columns: portrait ? 3 : 4
+                columns: 3
                 columnSpacing: portrait ? dp(8) : dp(20)
                 rowSpacing: 0
 
@@ -1395,47 +1409,6 @@ Item {
                     font.family: mediaRoom.globalFont
                     Layout.minimumWidth: dp(40)  // Added minimum width for consistent layout
                 }
-
-                // Source pill: shown while the phone or Android Auto has the
-                // music; tapping it hands it back to OCTAVE's local media (the
-                // other source pauses)
-                Control {
-                    id: sourceToggleButton
-                    Layout.row: seekGrid.portrait ? 1 : 0
-                    Layout.column: seekGrid.portrait ? 1 : 3
-                    visible: useRemote
-                    implicitWidth: Math.max(App.Spacing.mediaRoomShuffleButtonWidth * 1.8,
-                                            sourcePillText.implicitWidth + implicitHeight)
-                    implicitHeight: App.Spacing.mediaRoomShuffleButtonHeight
-                    background: Rectangle {
-                        color: App.Style.accent
-                        radius: height / 2
-                        border.color: App.Style.accent
-                        border.width: 1
-                    }
-                    contentItem: Text {
-                        id: sourcePillText
-                        text: mediaRoom.remoteName
-                        color: "white"
-                        font.pixelSize: App.Spacing.mediaRoomSliderDurationText * 0.9
-                        font.bold: true
-                        font.family: mediaRoom.globalFont
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                    MouseArea {
-                        id: sourceToggleMouseArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: {
-                            if (mediaRoom.useRemote)
-                                nowPlaying.useLocal()
-                        }
-                    }
-                    ToolTip.visible: sourceToggleMouseArea.containsMouse
-                    ToolTip.text: "Back to local files"
-                    ToolTip.delay: 500
-                }
             }
         }
 
@@ -1446,7 +1419,7 @@ Item {
             id: shuffleButton
             parent: App.Spacing.isPortrait ? portraitShuffleSlot : mainContent
             visible: !playlistEmpty
-            opacity: useRemote ? 0.35 : 1.0   // the phone's shuffle belongs to its app
+            opacity: mediaRoom._np && mediaRoom._np.canShuffle ? 1.0 : 0.35
             // The same box as previous / next (its icon is drawn at 0.7 of it)
             readonly property int keyBox: App.Spacing.mediaRoomKeySize
             width: keyBox
@@ -1484,7 +1457,7 @@ Item {
                 anchors.fill: parent
                 onClicked: {
                     if (mediaRoom._np)
-                        mediaRoom._np.toggleShuffle()   // does nothing for the phone
+                        mediaRoom._np.toggleShuffle()   // does nothing without canShuffle
                 }
             }
         }

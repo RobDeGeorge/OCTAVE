@@ -137,6 +137,15 @@ Item {
         return ""
     }
 
+    // Open a card of the current section: at once in a layout already up,
+    // else when it comes up. Layouts without tile popups just show the section.
+    function openTile(cardId) {
+        if (layoutLoader.item && typeof layoutLoader.item.openCard === "function")
+            layoutLoader.item.openCard(cardId)
+        else
+            initialTile = cardId
+    }
+
     function navigateToHub() {
         if (layoutLoader.item && typeof layoutLoader.item.navigateToHub === "function") {
             layoutLoader.item.navigateToHub()

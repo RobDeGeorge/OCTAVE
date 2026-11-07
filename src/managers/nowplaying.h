@@ -59,7 +59,8 @@ class NowPlaying : public QObject
     Q_PROPERTY(int durationMs READ durationMs NOTIFY durationChanged)    // 0 = unknown
     Q_PROPERTY(int positionMs READ positionMs NOTIFY positionChanged)
     Q_PROPERTY(bool canSeek READ canSeek NOTIFY capabilitiesChanged)
-    // The phone's shuffle belongs to its app: OCTAVE's toggle is local or Spotify only
+    // Local, or Spotify (as the source or the mirrored phone's app). Any other
+    // phone app's shuffle belongs to that app
     Q_PROPERTY(bool canShuffle READ canShuffle NOTIFY capabilitiesChanged)
     Q_PROPERTY(bool shuffled READ shuffled NOTIFY shuffledChanged)
 
@@ -97,7 +98,7 @@ public:
     int durationMs() const { return m_durationMs; }
     int positionMs() const { return m_positionMs; }
     bool canSeek() const { return m_canSeek; }
-    bool canShuffle() const { return m_source == Source::Local || m_source == Source::Spotify; }
+    bool canShuffle() const { return m_source == Source::Local || m_spotifyShuffle; }
     bool shuffled() const { return m_shuffled; }
 
 signals:
@@ -117,9 +118,9 @@ public slots:
     void next();
     void previous();
     void seek(int positionMs);
-    void toggleShuffle();   // no-op unless the local player is the source
-    // Hand the music back to OCTAVE's own player (the Media Room's source
-    // pill): the phone, Android Auto or Spotify pauses; nothing plays until asked
+    void toggleShuffle();   // no-op when canShuffle is false
+    // Hand the music back to OCTAVE's own player, for frontends and service
+    // clients: the phone, Android Auto or Spotify pauses; nothing plays until asked
     void useLocal();
     // Make Spotify the source (signed in only); nothing plays until asked
     void useSpotify();
@@ -147,6 +148,9 @@ private:
     // phone's app. Spotify playing on a computer at home while something else
     // owns the music is none of OCTAVE's business.
     bool spotifyPlaysForOctave() const;
+    // Shuffle is Spotify's while it is the source or the mirrored phone's app:
+    // recomputes it, and canShuffle / shuffled with it
+    void updateSpotifyShuffle();
     void remember();
     void readLocalTrack();
     void readPhoneState();
@@ -168,6 +172,11 @@ private:
     SettingsManager *m_settings = nullptr;
     AndroidAutoMedia *m_aa = nullptr;
     SpotifyManager *m_spotify = nullptr;
+    // A remote source's art comes after its track (a download, a message from
+    // the phone), so "no art" holds the last cover this long. Without it the
+    // missing-art image flashes in the middle of a track transition.
+    QTimer m_artClear;
+    static constexpr int kArtClearHoldMs = 1500;
 
     Source m_source = Source::Local;
     // Android Auto owned and played when OCTAVE last stopped: it resumes on
@@ -185,6 +194,7 @@ private:
     int m_positionMs = 0;
     bool m_canSeek = false;
     bool m_shuffled = false;
+    bool m_spotifyShuffle = false;
 
     QTimer m_tick;
 };

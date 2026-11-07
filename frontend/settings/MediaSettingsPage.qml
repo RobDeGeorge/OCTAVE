@@ -42,7 +42,8 @@ Flickable {
           summary: function() {
               if (!pageRoot.hasSpotify) return {}
               return { state: spotifyManager.signedIn ? "Signed in as " + spotifyManager.userName
-                            : spotifyManager.state === "signingIn" ? "Signing in…" : "Not connected" }
+                            : spotifyManager.state === "signingIn" ? "Signing in…"
+                            : spotifyManager.clientId === "" ? "Needs setup" : "Not connected" }
           } }
     ]
 
@@ -902,9 +903,11 @@ Flickable {
 
 
     // ─────────────────────────────────────────── Spotify
-    // Sign in with the Spotify developer app's Client ID (the build's, or
-    // the user's own); OCTAVE then browses the library and controls the
-    // Spotify app on the phone (SpotifyManager)
+    // One card, one step at a time: the Client ID of a Spotify developer app
+    // (the user's own, unless the build has one), then Connect, which shows
+    // only once there is an ID that can work. Signed in, just who and Sign
+    // Out. OCTAVE then browses the library and controls the Spotify app on
+    // the phone (SpotifyManager).
     Component {
         id: spotifyContent
         ColumnLayout {
@@ -912,72 +915,48 @@ Flickable {
             spacing: App.Spacing.sectionSpacing
 
             SettingCategory {
-                title: "Spotify Account"
+                id: spotifyCard
+                title: "Spotify"
                 description: "Your playlists, Liked Songs and albums in the music menu. The Spotify app on your "
-                             + "phone (or any Spotify device) plays the music; OCTAVE is the remote. Controlling "
-                             + "playback needs Spotify Premium."
+                             + "phone (or any Spotify device) plays the music; OCTAVE is the remote. Needs Spotify "
+                             + "Premium."
+
+                readonly property bool signedIn: pageRoot.hasSpotify && spotifyManager.signedIn
+                readonly property bool signingIn: pageRoot.hasSpotify && spotifyManager.state === "signingIn"
+                readonly property bool builtInId: pageRoot.hasSpotify && spotifyManager.builtInClientId
+                readonly property bool idReady: pageRoot.hasSpotify && spotifyCard.isClientId(spotifyManager.clientId)
+                // A build with its own ID needs none of the setup, unless asked for
+                property bool useOwnId: false
+                readonly property bool showSetup: pageRoot.hasSpotify && !signedIn && !signingIn
+                                                  && (!builtInId || useOwnId)
+
+                function isClientId(text) { return /^[0-9a-zA-Z]{32}$/.test(text.trim()) }
 
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: App.Spacing.rowSpacing
 
-                    SettingLabel {
-                        Layout.fillWidth: true
-                        text: !pageRoot.hasSpotify ? "Not available"
-                              : spotifyManager.signedIn ? "Signed in as " + spotifyManager.userName
-                              : spotifyManager.state === "signingIn" ? "Waiting for Spotify… finish signing in in the browser."
-                              : "Not connected"
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: App.Spacing.rowSpacing
-                        SettingsButton {
-                            visible: pageRoot.hasSpotify && !spotifyManager.signedIn
-                            text: spotifyManager && spotifyManager.state === "signingIn" ? "Try Again" : "Connect Spotify"
-                            enabled: pageRoot.hasSpotify && spotifyManager.clientId !== ""
-                            onClicked: spotifyManager.signIn()
-                            // SettingsButton has no height of its own
-                            Layout.preferredHeight: spotifyClientIdField.height
-                        }
-                        SettingsButton {
-                            visible: pageRoot.hasSpotify && spotifyManager.state !== "signedOut"
-                            text: spotifyManager && spotifyManager.signedIn ? "Sign Out" : "Cancel"
-                            onClicked: spotifyManager.signOut()
-                            // SettingsButton has no height of its own
-                            Layout.preferredHeight: spotifyClientIdField.height
-                        }
-                        Item { Layout.fillWidth: true }
+                    SettingDescription {
+                        visible: spotifyCard.showSetup
+                        text: "To connect, create an app at developer.spotify.com (Web API). Add the redirect URI "
+                              + "below and your account under User Management, then paste the app's Client ID here."
                     }
 
                     SettingDescription {
-                        visible: pageRoot.hasSpotify && spotifyManager.status !== ""
-                        text: pageRoot.hasSpotify ? spotifyManager.status : ""
-                        color: App.Style.statusDanger
+                        visible: spotifyCard.showSetup
+                        text: "Redirect URI: " + (pageRoot.hasSpotify ? spotifyManager.redirectUri : "")
                     }
-                }
-            }
-
-            SettingCategory {
-                title: "Spotify Developer App"
-                description: pageRoot.hasSpotify && spotifyManager.builtInClientId
-                    ? "OCTAVE signs in with its own Spotify app. To use yours instead, paste its Client ID."
-                    : "Create an app at developer.spotify.com (Web API), add the redirect URI below and your "
-                      + "account under User Management, then paste its Client ID here."
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.rowSpacing
 
                     SettingsTextField {
                         id: spotifyClientIdField
+                        visible: spotifyCard.showSetup
                         Layout.fillWidth: true
                         placeholderText: "Client ID"
                         text: pageRoot.hasSpotify ? spotifyManager.clientId : ""
                         onEditingFinished: if (pageRoot.hasSpotify) spotifyManager.setClientId(text)
                         // A whole ID pasted is taken at once: a phone's keyboard
-                        // may never finish editing, which left Connect greyed out
-                        onTextChanged: if (pageRoot.hasSpotify && /^[0-9a-fA-F]{32}$/.test(text.trim())
+                        // may never finish editing, which would keep Connect away
+                        onTextChanged: if (pageRoot.hasSpotify && spotifyCard.isClientId(text)
                                                && text.trim() !== spotifyManager.clientId)
                                            spotifyManager.setClientId(text)
                         Connections {
@@ -987,7 +966,52 @@ Flickable {
                     }
 
                     SettingDescription {
-                        text: "Redirect URI: " + (pageRoot.hasSpotify ? spotifyManager.redirectUri : "")
+                        visible: spotifyCard.showSetup && spotifyClientIdField.text.trim() !== ""
+                                 && !spotifyCard.isClientId(spotifyClientIdField.text)
+                        text: "A Client ID is 32 letters and digits."
+                        color: App.Style.statusDanger
+                    }
+
+                    SettingLabel {
+                        visible: !pageRoot.hasSpotify || spotifyCard.signedIn || spotifyCard.signingIn
+                        Layout.fillWidth: true
+                        text: !pageRoot.hasSpotify ? "Not available"
+                              : spotifyCard.signedIn ? "Signed in as " + spotifyManager.userName
+                              : "Waiting for Spotify… finish signing in in the browser."
+                    }
+
+                    RowLayout {
+                        visible: spotifyCard.idReady || spotifyCard.signedIn || spotifyCard.signingIn
+                        Layout.fillWidth: true
+                        spacing: App.Spacing.rowSpacing
+                        SettingsButton {
+                            visible: !spotifyCard.signedIn
+                            text: spotifyCard.signingIn ? "Try Again" : "Connect Spotify"
+                            onClicked: spotifyManager.signIn()
+                            // SettingsButton has no height of its own
+                            Layout.preferredHeight: App.Spacing.formElementHeight
+                        }
+                        SettingsButton {
+                            visible: spotifyCard.signedIn || spotifyCard.signingIn
+                            text: spotifyCard.signedIn ? "Sign Out" : "Cancel"
+                            onClicked: spotifyManager.signOut()
+                            Layout.preferredHeight: App.Spacing.formElementHeight
+                        }
+                        SettingsButton {
+                            visible: spotifyCard.builtInId && !spotifyCard.useOwnId && !spotifyCard.signedIn
+                                     && !spotifyCard.signingIn
+                            text: "Use My Own Client ID"
+                            buttonColor: App.Style.hoverColor
+                            onClicked: spotifyCard.useOwnId = true
+                            Layout.preferredHeight: App.Spacing.formElementHeight
+                        }
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    SettingDescription {
+                        visible: pageRoot.hasSpotify && spotifyManager.status !== ""
+                        text: pageRoot.hasSpotify ? spotifyManager.status : ""
+                        color: App.Style.statusDanger
                     }
                 }
             }

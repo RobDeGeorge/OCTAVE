@@ -27,11 +27,11 @@ Rectangle {
     function mediaPrevious() { if (_np) _np.previous() }
     function mediaTogglePlay() { if (_np) _np.togglePlay() }
     function mediaNext() { if (_np) _np.next() }
-    // The phone's shuffle belongs to its app: nowPlaying ignores it; the
-    // button is dimmed meanwhile
+    // Local or Spotify; another phone app's shuffle belongs to that app:
+    // nowPlaying ignores it and the button shows it off
     function mediaToggleShuffle() { if (_np) _np.toggleShuffle() }
 
-    readonly property bool isShuffleEnabled: !!_np && _np.shuffled
+    readonly property bool isShuffleEnabled: !!_np && _np.canShuffle && _np.shuffled
 
     // null at shutdown, when the managers go before the engine
     readonly property int volumePercent: volumeController ? volumeController.percent : 0
