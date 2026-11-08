@@ -140,6 +140,7 @@ None of the extras touch the core adapter; they hang off the expansion port and 
 
 - `obd-adapter-discovery.md`: steps 3 and the BLE-only future depend on its scan/pair work on each platform (BLE-on-desktop not started).
 - The black box's health trends (`TripStore::computeHealth`, `kHealthMetrics` in `src/managers/tripstore.cpp`, shipped 2026-11-01): step 5 and the sensor channels feed them; a battery / alternator number from the pod is a new row there (bump `kHealthVersion`).
+- `traffic-stop-mode.md`: the adapter is the always-hot backup store for the phone's recordings: microSD on the ESP32's SDMMC host (Rev A slot), Wi-Fi receiver, BLE trigger / status to the companion app, panic button on a spare expansion GPIO, ATECC608C-signed OBD window. A camera "survivor pod" is an optional extra that would merge with the sensor pod.
 - `dashboards-roadmap.md` / `docs/GAUGE_AUTHORING.md`: new parameters (pod sensors, temp probes) need PID metadata in `OBDParameterModel.qml` and the gauge doc.
 
 ## Recommended order

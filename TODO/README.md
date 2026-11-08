@@ -1,6 +1,6 @@
 # TODO index — easiest to hardest
 
-**Last updated:** 2026-11-01 (trip-history.md done and deleted: health trends shipped; future-tests.md item 1 mostly done)
+**Last updated:** 2026-11-07 (traffic-stop-mode.md added)
 
 One file per deferred plan. Each file opens with a one-line **Goal**, lists only the work that is left, and gives every step an **Effort** (S under an hour, M one session, L several sessions, XL a new subsystem) and the device it needs. When a plan is finished, delete its file and its row here.
 
@@ -26,7 +26,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | [update-checker-packaged-builds.md](update-checker-packaged-builds.md) | Packaged builds compare against the latest GitHub release | M | VMs, S22 |
 | [dp-helper-consolidation.md](dp-helper-consolidation.md) | One shared `dp()` instead of 63 private copies | M | 10-min S22 check first |
 | [obd-adapter-discovery.md](obd-adapter-discovery.md) | Pick-and-connect Bluetooth OBD on every platform (Jeep test S, other platforms L) | S, then L | Pi + NEXAS, S22 |
-| [octave-companion-app.md](octave-companion-app.md) | Setup walkthrough for phone debugging, then phone notifications / calls / battery | M, then L | S22 |
+| [octave-companion-app.md](octave-companion-app.md) | Mirror setup walkthrough (no app), then the companion app: car link, phone GPS into the black box, traffic stop recorder, notifications / calls, keep-mirror-connected; v2 remote, parking, car health, hotspot | M, then L–XL | S22, Pi |
 | [phone-spotify-library.md](phone-spotify-library.md) | Step 1 (shared song rows, shuffle/repeat to the phone) M; library reader is a maybe | M … L | S22 + Spotify |
 | [arm64-qt-ffmpeg-lgpl.md](arm64-qt-ffmpeg-lgpl.md) | aarch64 AppImage ships an LGPL FFmpeg for Qt's music playback instead of Ubuntu's GPL one | M (or with a Qt upgrade) | arm64 CI, Pi |
 | [iphone-airplay.md](iphone-airplay.md) | An iPhone mirrors to OCTAVE over AirPlay and is driven by OCTAVE as a Bluetooth mouse: code done, every check needs an iPhone | S … M | desktop + iPhone, then Pi |
@@ -40,6 +40,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | [qml-precompile.md](qml-precompile.md) | Ship pre-compiled QML so first launch doesn't stall | L | Win11 VM, Pi, S22 |
 | [user-primitives.md](user-primitives.md) | Gauge groups that move as one (composites); code widgets only behind an opt-in. Presets are done | L (code widgets XL) | desktop |
 | [open-backend.md](open-backend.md) | The contract is done (2026-10-23); left: two small service follow-ups, the hardware checks noted along the way, and the core library / process split after v1.0 road time | S; library M; split L | desktop, Pi, phone, Android |
+| [traffic-stop-mode.md](traffic-stop-mode.md) | One trigger: the phone records its cameras, texts contacts with location and uploads encrypted pieces; the Pi and the OBD adapter keep backup copies | M spikes, then L–XL | S22, ESP32 + microSD, adapter |
 
 ## 4. New subsystems (XL)
 
