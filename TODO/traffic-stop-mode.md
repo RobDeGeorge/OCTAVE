@@ -2,7 +2,7 @@
 
 **Goal:** one tap on OCTAVE, or a hidden wired button, makes the phone record audio + video from its own cameras, text a contact list with the location and upload encrypted, hash-chained pieces to the user's cloud within seconds, while the Pi and the custom OBD adapter keep backup copies in the car. No extra cameras needed. Live streaming to contacts is the stretch goal.
 **Status:** deferred: scoped and researched 2026-11-07 (three research passes: existing products, PCB hardware, surviving phone seizure). Nothing built. Spikes on the S22 come first (step 1).
-**Last updated:** 2026-11-07
+**Last updated:** 2026-11-09
 
 ## Why it's parked
 
@@ -113,12 +113,12 @@ Decided 2026-11-07: **the phone is the main recorder, beacon and cloud uploader.
 
 Always-hot, hidden under the dash, keeps running after engine-off. It now **does need on-board storage** to hold media:
 
-- **Storage:** microSD (high-endurance, 32–64 GB) on the ESP32's SDMMC host (the STM32G474 has no SD host). At 2 cameras × 500 kbps + audio, an hour is about 500 MB. Pieces arrive already encrypted; the adapter only stores and forwards them, so a stolen card shows nothing. For Rev A, add the slot or keep it to the 2x6 expansion header on Rev 0 as a microSD breakout for bring-up.
+- **Storage:** microSD (high-endurance, 32–64 GB) on the ESP32 (the STM32G474 has no SD host). **On Rev 0 since 2026-11-09:** J10 on the bottom edge, SPI mode (MISO IO4, CLK IO5, MOSI IO21, CS IO22, detect IO23), about 2 MB/s, plenty for the pieces. At 2 cameras × 500 kbps + audio, an hour is about 500 MB. Pieces arrive already encrypted; the adapter only stores and forwards them, so a stolen card shows nothing.
 - **Receiving:**
   - Wi-Fi from the phone: the ESP32 joins the Pi hotspot or offers its own access point when the Pi is off. A realistic 2–5 Mbps is enough for 480p pieces.
   - BLE is too slow for video and carries the trigger and status only.
-- **Trigger:** the panic button (spare GPIO on the Rev 0 header: PA5 / PA10 / PC13 / PD2), sent to the phone over BLE and to the Pi over the native protocol.
-- **Evidence of its own:** frozen + signed OBD speed window (ATECC608C), with the piece hashes it received logged in the same chain.
+- **Trigger:** the panic button (Rev 0: J9, a JST SH 2-pin socket with ESD protection, on PC13 / WKUP2), sent to the phone over BLE and to the Pi over the native protocol.
+- **Evidence of its own:** frozen + signed OBD speed window (Rev 0: U16 ATECC608B on the STM32 I2C bus), with the piece hashes it received logged in the same chain.
 - **Forwarding later:** when the incident is over and the phone or the Pi has internet again, the adapter re-offers anything the cloud is missing.
 - **Optional, not needed for v1:** head-unit power-hold output, supercap + unplug alarm, its own LTE-M modem (nRF9151) as a phone-free beacon.
 
@@ -161,7 +161,7 @@ On the S22 (ask before running anything against it):
 2. **Evidence format:** piece + hash-chain + signature spec, a verifier (`tools/incident/verify`) and a QtTest. Used by the phone, the Pi and the adapter. **Effort:** M. **Device:** desktop.
 3. **Companion app v1:** pre-armed service, cameras, pieces, encryption, upload to one cloud target, SMS beacon, notification trigger. Shared with the notifications work in `octave-companion-app.md`. **Effort:** L–XL. **Device:** S22, S26.
 4. **Pi side:** `IncidentManager`, trigger UI, piece receiver, black-box freeze, status, viewer. **Effort:** L. **Device:** desktop, Pi.
-5. **Adapter backup:** ESP32 Wi-Fi receiver + microSD, BLE trigger / status, panic button, signed OBD window. Bring-up on Rev 0 through the expansion header; microSD slot + ATECC608C on Rev A. Firmware after `diy-obd-adapter.md` step 3 (ESP32 bridge). **Effort:** L. **Device:** adapter, S22, Jeep.
+5. **Adapter backup:** ESP32 Wi-Fi receiver + microSD, BLE trigger / status, panic button, signed OBD window. Rev 0 has the microSD slot, panic input, ATECC608B and a wake-on-motion accelerometer (LIS2DH12). Firmware after `diy-obd-adapter.md` step 3 (ESP32 bridge). **Effort:** L. **Device:** adapter, S22, Jeep.
 6. **Storage setup:** user-configured cloud target, key pair (private key never on the phone or a server), decrypt + verify for the user. **Effort:** M. **Device:** desktop.
 7. **Phone-server fallback** (detached incident mode). **Effort:** M. **Device:** S22.
 8. **Stretch: live stream** from the app. **Effort:** L. **Device:** S22 on mobile data.
@@ -171,7 +171,7 @@ Each step updates the wiki (new `traffic-stop.html`, `phone-mirror-android-auto.
 
 ## Cross-references
 
-- `diy-obd-adapter.md`: the adapter becomes the always-hot backup store: microSD on the ESP32's SDMMC host, Wi-Fi receiver for the phone's pieces, BLE trigger / status, panic button, signed OBD window. The survivor pod is an optional extra that would merge with its sensor pod. No Rev 0 change is needed: the 2x6 header (spare PA5 / PA10 / PC13 / PD2) covers the panic input; microSD can be a breakout for bring-up.
+- `diy-obd-adapter.md`: the adapter becomes the always-hot backup store: microSD on the ESP32's SDMMC host, Wi-Fi receiver for the phone's pieces, BLE trigger / status, panic button, signed OBD window. The survivor pod is an optional extra that would merge with its sensor pod. Rev 0 carries the hardware for all of it (microSD J10, panic J9, ATECC608B, LIS2DH12); parked current is about 0.5 mA with the ESP32 off (`hardware/obd-adapter/README.md`, "Parked current").
 - `octave-companion-app.md`: this plan decides its "extend phone_server or build an app" question in favour of the app.
 - `phone-mirror-robustness.md`: the shell fallback is only as reliable as the phone connection.
 

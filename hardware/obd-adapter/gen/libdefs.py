@@ -20,7 +20,18 @@ SYMBOLS = [
        [(2, "TXD", O), (3, "RXD", I), (13, "~{DTR}", O), (14, "~{RTS}", O), (9, "~{CTS}", I), (10, "~{DSR}", I),
         (11, "~{RI}", I), (12, "~{DCD}", I), (15, "R232", I), (7, "NC", NC), (8, "NC", NC)],
        footprint="Package_SO:SOIC-16_3.9x9.9mm_P1.27mm", desc="USB to UART, internal clock"),
+    # ST LIS2DH12 LGA-12 (datasheet table 2): 1 SCL, 2 CS, 3 SDO/SA0, 4 SDA, 5 RES (to GND), 6-8 GND,
+    # 9 VDD, 10 VDD_IO, 11 INT2, 12 INT1
+    ic("LIS2DH12", [(9, "VDD", PI), (10, "VDD_IO", PI), (2, "~{CS}", I), (3, "SDO/SA0", I), (5, "RES", P),
+                    (6, "GND", PI), (7, "GND", PI), (8, "GND", PI)],
+       [(1, "SCL/SPC", I), (4, "SDA/SDI/SDO", B), None, (12, "INT1", O), (11, "INT2", O)],
+       footprint="Package_LGA:LGA-12_2x2mm_P0.5mm", desc="3-axis accelerometer, I2C / SPI"),
 ]
 
 if __name__ == "__main__":
     write(SYMBOLS)
+
+# Project footprints (lib/OCTAVE.pretty)
+from mklib import j1962_edge_joint, j1962_plug_adapter  # noqa: E402
+
+FOOTPRINTS = [j1962_edge_joint(), j1962_plug_adapter()]

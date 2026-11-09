@@ -320,7 +320,7 @@ def broken(board, skip):
     return [n for n in nets if n not in skip and not n.startswith("unconnected-") and len(_pad_pieces(board, n)) > 1]
 
 
-def finish(board, width_of, clearance_of, keepouts, skip=("/GND",), rounds=3, rip=False, hv=(), hv_clearance=0.3,
+def finish(board, width_of, clearance_of, keepouts, skip=("GND",), rounds=3, rip=False, hv=(), hv_clearance=0.3,
            only=None):
     """Join every net that is still in pieces. First around obstacles (locally, then board-wide);
     failing that, through at most two unlocked tracks of other nets, kept only if every net it cut
@@ -381,7 +381,7 @@ def finish(board, width_of, clearance_of, keepouts, skip=("/GND",), rounds=3, ri
     return sorted(n for n in broken(board, skip) if only is None or n in only)
 
 
-def prune(board, skip=("/GND", "/3V3")):
+def prune(board, skip=("GND", "3V3")):
     """Remove unlocked tracks and vias left dangling by rip-up (repeat until none)."""
     total = 0
     while True:

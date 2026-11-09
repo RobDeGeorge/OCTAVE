@@ -1,7 +1,21 @@
-ERC report (2026-11-04T20:06:23, Encoding UTF8)
+ERC report (2026-11-09T13:38:55, Encoding UTF8)
 Report includes: Errors, Warnings, Exclusions
 
 ***** Sheet /
+
+***** Sheet /Power/
+
+***** Sheet /Car plug and CAN/
+
+***** Sheet /J1850/
+
+***** Sheet /K-line and DLC switch/
+
+***** Sheet /STM32/
+
+***** Sheet /ESP32/
+
+***** Sheet /USB and expansion/
 
  ** ERC messages: 0  Errors 0  Warnings 0
 

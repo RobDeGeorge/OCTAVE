@@ -10,3 +10,5 @@ verify/pins/*.xml
 !verify/sim/lib/*.lib
 .history/
 ~*.lck
+# precheck.py scratch board
+obd-adapter-pre.*

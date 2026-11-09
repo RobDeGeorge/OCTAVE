@@ -21,6 +21,8 @@ LCSC = {
     "USBLC6-2SC6": "C2687116",    # UMW, Ext, 112k
     "LM2901BIDR": "C22427890",    # TI, LM339 pinout, -40..125 C, 38 V abs max (LM2901 non-B: 36 V), Ext, 1.7k
     "LM317LIDR": "C183332",       # Ext, 95k
+    "LIS2DH12TR": "C110926",      # ST 3-axis accelerometer, LGA-12 2x2, Ext
+    "ATECC608B": "C1518769",      # Microchip ATECC608B-SSHDA-T secure element, SOIC-8, Ext
     # discretes
     "MMBT3904": "C20526",         # Basic
     "MMBT3906": "C2143",          # Ext
@@ -39,12 +41,15 @@ LCSC = {
     "XTAL16M": "C13738",          # 16 MHz 3225 9 pF, Basic
     "FB600": "C1002",             # GZ1608D601TF 600R 0603, Basic
     # connectors, UI
-    "MICROFIT10": "C122421",      # Molex 43045-1000 2x5 right angle, Ext
     "USBC": "C165948",            # HRO TYPE-C-31-M-12, Ext
     "CH340C": "C84681",           # USB-UART, internal clock, SOIC-16, Ext, 97k
     "SWD": "C41376037",           # 2x5 1.27 mm SMD header, Ext
-    "QWIIC": "C160404",           # JST SM04B-SRSS-TB, Ext
+    "QWIIC": "C160404",
+    "SH2": "C160402",             # JST SM02B-SRSS-TB (panic button), Ext
+    "MICROSD": "C585350",         # Molex 104031-0811 push-pull microSD, Ext
+    "ESD9B3.3": "C96512",         # onsemi ESD9B3.3ST5G, SOD-923 (panic input), Ext           # JST SM04B-SRSS-TB, Ext
     "SW": "C318884",              # XKB TS-1187A 5.1 mm tactile, Basic
+    "DIP4": "C40736",             # KINGTEK DSHP04TSGET 4-way SMD DIP, 1.27 mm, -40..85 C, 24 V 25 mA, Ext
     "LEDR": "C2286", "LEDG": "C12624", "LEDB": "C2288",
     # passives (0603 Basic unless noted)
     "C100n": "C14663", "C1u": "C15849", "C10u": "C96446", "C4.7u": "C19666",
@@ -61,5 +66,6 @@ LCSC = {
     "R2.2k": "C4190", "R680": "C23228", "R470": "C23179", "R10.2k": "C22772", "R84.5k": "C23118",
     "R162k": "C22815", "R120": "C22787", "R240": "C23350", "R787": "C23111", "R453": "C48136",
     "R2.7k": "C13167", "R1.5k": "C22843", "R510_2512": "C5843118",  # Yageo 2 W 2512
+    "RN10k": "C29718",            # UNI-ROYAL 4D03WGJ0103T5E 4 x 10k 0603x4 array, Basic
     "R100k_0.1%": "C122538", "R10k_0.1%": "C95204",
 }

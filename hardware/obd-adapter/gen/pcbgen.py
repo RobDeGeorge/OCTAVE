@@ -18,11 +18,12 @@ MM = pcbnew.FromMM
 # put them on the KiCad footprint's pads (solved by matching pad positions).
 MODELS = {
     "Fuse_2920_7451Metric": ("${KIPRJMOD}/lib/3dmodels/Fuse_2920_LCSC_C49326266.step", (0, 0, 0), 0),
-    "Molex_Micro-Fit_3.0_43045-1000_2x05_P3.00mm_Horizontal":
-        ("${KIPRJMOD}/lib/3dmodels/Molex_43045-1000_LCSC_C122421.step", (6.0, -1.5, 0), 180),
     "USB_C_Receptacle_HRO_TYPE-C-31-M-12":
-        ("${KIPRJMOD}/lib/3dmodels/HRO_TYPE-C-31-M-12_LCSC_C165948.step", (0, 1.575, 0), 180),
+        ("${KIPRJMOD}/lib/3dmodels/HRO_TYPE-C-31-M-12_LCSC_C165948.step", (0, -1.025, 0), 180),
     "SW_Push_1P1T_XKB_TS-1187A": ("${KIPRJMOD}/lib/3dmodels/XKB_TS-1187A_LCSC_C318884.step", (0, 0.025, 0), 0),
+    # EasyEDA's footprint is KiCad's turned 180 degrees (pads agree to 0.1 mm)
+    "microSD_HC_Molex_104031-0811":
+        ("${KIPRJMOD}/lib/3dmodels/Molex_104031-0811_LCSC_C585350.step", (0, 0, 0), 180),
     "TI_SO-PowerPAD-8_ThermalVias": ("${KICAD10_3DMODEL_DIR}/Package_SO.3dshapes/TI_SO-PowerPAD-8.step", (0, 0, 0), 0),
 }
 
@@ -46,7 +47,8 @@ def new_board(layers=4):
     return b
 
 
-def add_footprints(board, design, sch_name=None):
+def add_footprints(board, design, sch_name=None, sheets=None):
+    """sheets: {ref: (sheet uuid, sheet name, sheet file)} when the schematic is a hierarchy."""
     nets = {}
 
     def net(name):
@@ -68,9 +70,15 @@ def add_footprints(board, design, sch_name=None):
         fp.SetValue(part.value)
         units = sorted(part.sym.units)
         sym_uuid = stable_uuid(design.name, part.ref, units[0])
-        fp.SetPath(pcbnew.KIID_PATH("/" + sym_uuid))
-        fp.SetSheetname("Root")
-        fp.SetSheetfile((sch_name or design.name) + ".kicad_sch")
+        if sheets and part.ref in sheets:
+            su, sname, sfile = sheets[part.ref]
+            fp.SetPath(pcbnew.KIID_PATH(f"/{su}/{sym_uuid}"))
+            fp.SetSheetname(sname)
+            fp.SetSheetfile(sfile)
+        else:
+            fp.SetPath(pcbnew.KIID_PATH("/" + sym_uuid))
+            fp.SetSheetname("Root")
+            fp.SetSheetfile((sch_name or design.name) + ".kicad_sch")
         for key, val in (("LCSC", part.lcsc), ("MPN", part.mpn), ("Note", part.note)):
             if val:
                 f = pcbnew.PCB_FIELD(fp, pcbnew.FIELD_T_USER, key) if hasattr(pcbnew, "FIELD_T_USER") else None
@@ -95,7 +103,7 @@ def add_footprints(board, design, sch_name=None):
             if not num or num not in pin_net:
                 continue  # mechanical pad with no symbol pin
             if pin_net[num]:
-                pad.SetNet(net("/" + pin_net[num]))
+                pad.SetNet(net(pin_net[num]))
             else:
                 nm = pin_name.get(num, "")
                 nm = nm.replace("/", "{slash}")
@@ -127,12 +135,16 @@ def place(fp, x, y, rot=0, back=False):
     fp.SetOrientationDegrees(rot)
 
 
-def outline(board, x0, y0, x1, y1, r=1.0):
+def outline(board, x0, y0, x1, y1, r=1.0, tab=None):
+    """Rectangular board outline; tab = (ya, yb, depth) adds a tab sticking out of the left edge."""
     pts = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
-    for i in range(4):
+    if tab:
+        ya, yb, depth = tab
+        pts += [(x0, yb), (x0 - depth, yb), (x0 - depth, ya), (x0, ya)]
+    for i in range(len(pts)):
         s = pcbnew.PCB_SHAPE(board)
         s.SetShape(pcbnew.SHAPE_T_SEGMENT)
-        a, b = pts[i], pts[(i + 1) % 4]
+        a, b = pts[i], pts[(i + 1) % len(pts)]
         s.SetStart(pcbnew.VECTOR2I(MM(a[0]), MM(a[1])))
         s.SetEnd(pcbnew.VECTOR2I(MM(b[0]), MM(b[1])))
         s.SetLayer(pcbnew.Edge_Cuts)
@@ -160,8 +172,9 @@ def zone(board, netinfo, layer, x0, y0, x1, y1, clearance=0.3, min_w=0.25, prior
 
 
 def fanout(board, netname, layer_plane, keepouts=(), via_d=0.6, drill=0.3, width=0.3, clearance=0.2,
-           hv=(), hv_clearance=0.0):
-    """Give every SMD pad on `netname` a short track + via down to its plane layer.
+           hv=(), hv_clearance=0.0, refs=None):
+    """Give every SMD pad on `netname` a short track + via down to its plane layer (only the pads
+    of the footprints in `refs`, if given).
 
     Tries spots around each pad (nearest first) and keeps the first one whose via
     and track clear every other-net copper item by `clearance` (`hv_clearance` for the
@@ -174,6 +187,8 @@ def fanout(board, netname, layer_plane, keepouts=(), via_d=0.6, drill=0.3, width
     items = [t for t in board.GetTracks()] + [p for fp in board.GetFootprints() for p in fp.Pads()]
     failed = []
     for fp in board.GetFootprints():
+        if refs is not None and fp.GetReference() not in refs:
+            continue
         for pad in fp.Pads():
             if pad.GetNetCode() != net.GetNetCode() or pad.GetAttribute() != pcbnew.PAD_ATTRIB_SMD:
                 continue

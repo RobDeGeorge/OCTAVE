@@ -1,8 +1,8 @@
 # DIY OBD adapter (OCTAVE's own Bluetooth OBD-II scanner + sensor pod)
 
 **Goal:** build our own OBD-II adapter that speaks every OBD protocol (including the TJ's J1850 VPW), works with every app over the ELM327 command set, and adds an OCTAVE native mode with an on-adapter PID scheduler, hardware timestamps and store-and-forward into the black box; optionally a tethered sensor pod (GNSS dead reckoning, IMU, baro, extras).
-**Status:** in progress: the Rev 0 bring-up board is designed (`hardware/obd-adapter/`, 2026-11-02): generated, ERC/DRC clean, JLCPCB fab files ready, not yet reviewed by a human or ordered. No firmware yet. Nothing in OCTAVE depends on it.
-**Last updated:** 2026-11-02
+**Status:** in progress: the Rev 0 bring-up board is designed (`hardware/obd-adapter/`, 2026-11-02). Since 2026-11-07 it plugs straight into the OBD-II port (a J1962 male plug on a small adapter board soldered across the board's end, the board in the middle of the plug) instead of using a Micro-Fit cable. Generated, ERC/DRC clean, JLCPCB fab files ready; not yet reviewed by a human or ordered, and the plug footprint (Jiatel CR-PG001, from its drawing) has to be checked against a real plug first. No firmware yet. Nothing in OCTAVE depends on it.
+**Last updated:** 2026-11-09
 
 ## Why this is parked here
 
@@ -72,7 +72,7 @@ DoIP (automotive Ethernet) is out of scope.
 
 ### Physical
 
-Low-profile right-angle plug (the TJ port is near the driver's knee), one RGB LED, one button. Rough BOM $30–50 at hobby quantities; verify part numbers and stock before buying.
+Rev 0: a straight J1962 plug on an adapter board across the board's end, the board in the plug's mid-plane like an ELM327 dongle, sticking ~100 mm out of the port (board 100 x 70 mm) (the TJ port is near the driver's knee; check the room). Later dongle: low-profile, same idea or a right-angle plug, one RGB LED, one button. Rough BOM $30–50 at hobby quantities; verify part numbers and stock before buying.
 
 ## Sensor pod (optional, later board)
 
@@ -133,14 +133,14 @@ None of the extras touch the core adapter; they hang off the expansion port and 
 3. **ESP32 bridge:** SPP + BLE `FFE0`/`FFE1`, then pair through `OBDAdapterFinder`. **Effort:** M. **Needs:** Pi, S22.
 4. **Native mode** in firmware + a new OCTAVE protocol class beside `elm327protocol`, with a QtTest in `tests/cpp/` (and a `carsim` / `simelm327`-style simulated native adapter for `--dev`). Measure PIDs/s against the NEXAS. **Effort:** L. **Needs:** desktop, Jeep.
 5. **Store-and-forward backfill** into `TripRecorder` / `TripStore`. **Effort:** M. **Needs:** desktop, Jeep.
-6. **Rev A board** (Rev 0, a bring-up board with every bus, exists: `hardware/obd-adapter/README.md`; it uses the STN-style discrete J1850 / K-line front ends instead of an L9637D): KiCad, enclosure, expansion port, sleep-current measurement, transient testing. **Effort:** L. **Needs:** bench supply, multimeter / current meter.
+6. **Rev A board** (Rev 0, a bring-up board with every bus, exists: `hardware/obd-adapter/README.md`; it uses the STN-style discrete J1850 / K-line front ends instead of an L9637D): KiCad, enclosure, expansion port, sleep-current measurement (Rev 0 estimate ≈ 0.53 mA, see the board README), transient testing. **Effort:** L. **Needs:** bench supply, multimeter / current meter.
 7. **Sensor pod board:** GNSS (DR with OBD speed) + IMU + baro first, then extras from the brainstorm. OCTAVE side: sensor channels into the managers (likely alongside `berryimumanager`) and the black box. **Effort:** L–XL. **Needs:** Jeep.
 
 ## Cross-references
 
 - `obd-adapter-discovery.md`: steps 3 and the BLE-only future depend on its scan/pair work on each platform (BLE-on-desktop not started).
 - The black box's health trends (`TripStore::computeHealth`, `kHealthMetrics` in `src/managers/tripstore.cpp`, shipped 2026-11-01): step 5 and the sensor channels feed them; a battery / alternator number from the pod is a new row there (bump `kHealthVersion`).
-- `traffic-stop-mode.md`: the adapter is the always-hot backup store for the phone's recordings: microSD on the ESP32's SDMMC host (Rev A slot), Wi-Fi receiver, BLE trigger / status to the companion app, panic button on a spare expansion GPIO, ATECC608C-signed OBD window. A camera "survivor pod" is an optional extra that would merge with the sensor pod.
+- `traffic-stop-mode.md`: the adapter is the always-hot backup store for the phone's recordings: microSD on the ESP32 (SPI), Wi-Fi receiver, BLE trigger / status to the companion app, panic button, ATECC608B-signed OBD window, LIS2DH12 wake-on-motion. All on Rev 0 since 2026-11-09. A camera "survivor pod" is an optional extra that would merge with the sensor pod.
 - `dashboards-roadmap.md` / `docs/GAUGE_AUTHORING.md`: new parameters (pod sensors, temp probes) need PID metadata in `OBDParameterModel.qml` and the gauge doc.
 
 ## Recommended order

@@ -58,7 +58,7 @@ mcu.notes = [
 U(mcu, "MCU_ST_STM32G4:STM32G474RETx", "STM32G474RET6", "Package_QFP:LQFP-64_10x10mm_P0.5mm", {
     "VBAT": "3V3", "VDD": "3V3", "VSS": "GND", "VSSA": "GND", "VDDA": "VDDA", "VREF+": "VDDA",
     "PG10": "NRST", "PB8": "BOOT0",
-    "PF0": "HSE_IN", "PF1": "HSE_OUT", "PC14": None, "PC15": None,
+    "PF0": "HSE_IN", "PF1": "HSE_OUT", "PC14": "ACC_INT1", "PC15": "ACC_INT2",
     "PA0": "ESP_RTS", "PA1": "ESP_CTS_M", "PA2": "MCU_TX_ESP_M", "PA3": "ESP_TX_MCU",
     "PA4": "VBAT_SENSE", "PA5": "EXP_PA5",
     "PA6": "QSPI_IO3", "PA7": "QSPI_IO2", "PB0": "QSPI_IO1", "PB1": "QSPI_IO0",
@@ -73,7 +73,7 @@ U(mcu, "MCU_ST_STM32G4:STM32G474RETx", "STM32G474RET6", "Package_QFP:LQFP-64_10x
     "PC0": "KLINE_RX", "PC1": "KLINE_TX", "PC2": "LLINE_TX", "PC3": "DLC_SW_EN",
     "PC4": "EXP_TX", "PC5": "EXP_RX",
     "PC6": "VPW_RX", "PC7": "PWM_RX", "PC8": "J1850_TXP", "PC9": "J1850_TXN",
-    "PC10": None, "PC13": "EXP_PC13", "PD2": "EXP_PD2",
+    "PC10": "EXP_PC10", "PC13": "PANIC_BTN", "PD2": "EXP_PD2",
 }, lcsc_key="STM32G474RET6")
 for _ in range(4):
     C(mcu, "100n", "3V3")
@@ -97,8 +97,11 @@ d.add(ui, Part(_ref("J"), "Connector:Conn_ARM_JTAG_SWD_10", "SWD",
                "Connector_PinHeader_1.27mm:PinHeader_2x05_P1.27mm_Vertical_SMD",
                {"1": "3V3", "2": "SWDIO", "3": "GND", "4": "SWCLK", "5": "GND", "6": None, "7": None,
                 "8": None, "9": "GND", "10": "NRST"}, lcsc=LCSC.get("SWD")))
-for name, net, other in (("RESET", "NRST", "GND"), ("BOOT", "BOOT0", "3V3"), ("USER", "BTN_USER", "GND")):
-    d.add(ui, Part(_ref("SW"), "Switch:SW_Push", name, "Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A",
+for name, net, other in (("RESET", "NRST", "GND"), (None, None, None), ("USER", "BTN_USER", "GND")):
+    ref = _ref("SW")
+    if name is None:        # SW2 was the BOOT0 button: BOOT0 is switch 4 of the CONFIG DIP switch now
+        continue
+    d.add(ui, Part(ref, "Switch:SW_Push", name, "Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A",
                    {"1": net, "2": other}, lcsc=LCSC.get("SW")))
 R(ui, "10k", "3V3", "BTN_USER")
 for color in "RGB":
@@ -132,18 +135,24 @@ C(fl, "100n", "3V3")
 esp = d.block("esp32", "ESP32-WROOM-32E: Bluetooth Classic SPP + BLE (FFE0/FFE1) + Wi-Fi bridge")
 esp.notes = [
     "STM32 link: ESP32 UART2 on IO16 (RX) / IO17 (TX), CTS IO18 (from PA1 RTS), RTS IO19 (to PA0 CTS), up to 3 Mbaud.",
-    "UART0 + EN + IO0 also on J_ESP for esptool; the STM32 can reset (PB7) and strap IO0 (PB5) itself.",
+    "UART0 goes to its own USB-C (CH340C, auto-reset); the STM32 can reset (PB7) and strap IO0 (PB5) itself.",
     "Power-gated by a TPS22918 on PB6 (off at reset), placed at the module's 3V3 pin with its caps.",
-    "Fit a shunt on JP_ESP_ON to power the ESP32 without STM32 firmware (blank-board esptool flashing).",
+    "CONFIG switch 1 (ESP_ON) powers the ESP32 without STM32 firmware; plugging in its USB-C does too.",
     "1k in series with PA1/PA2/PB5/PB7 limits back-powering through the ESP32's I/O while it is off;",
     "firmware still keeps them low or input until ESP_PWR_EN is on, and drives EN open-drain.",
 ]
+# microSD in SPI mode on pins that are not boot straps except IO5, which only needs to be high at reset
+# (its internal pull-up; the card doesn't drive CLK); in module-pin order along the side facing the
+# card, matching the socket's contact order, so the lines don't cross
+SD_PINS = {"IO4": "MISO", "IO5": "CLK", "IO21": "MOSI", "IO22": "CS", "IO23": "CD"}
+ESP_IO = ("IO14", "IO27", "IO26", "IO25", "IO33", "IO32", "IO35", "IO34")   # module pins 13..6, the side facing J8
 U(esp, "RF_Module:ESP32-WROOM-32E", "ESP32-WROOM-32E-N8", "RF_Module:ESP32-WROOM-32E", {
     "GND": "GND", "VDD": "3V3_ESP", "EN": "ESP_EN", "IO0": "ESP_IO0",
     "IO16": "MCU_TX_ESP", "IO17": "ESP_TX_MCU", "IO18": "ESP_CTS", "IO19": "ESP_RTS",
     "RXD0/IO3": "ESP_RXD0", "TXD0/IO1": "ESP_TXD0",
-    **{n: None for n in ("SENSOR_VP", "SENSOR_VN", "IO34", "IO35", "IO32", "IO33", "IO25", "IO26", "IO27",
-                         "IO14", "IO12", "IO13", "NC", "IO15", "IO2", "IO4", "IO5", "IO21", "IO22", "IO23")},
+    **{n: "ESP_" + n for n in ESP_IO},
+    **{n: None for n in ("SENSOR_VP", "SENSOR_VN", "IO12", "IO13", "NC", "IO15", "IO2")},
+    **{n: "ESP_SD_" + f for n, f in SD_PINS.items()},
 }, lcsc_key="ESP32")
 C(esp, "22u", "3V3_ESP", fp=C1206)
 C(esp, "100n", "3V3_ESP")
@@ -158,11 +167,7 @@ U(esp, "OCTAVE:TPS22918", "TPS22918", "Package_TO_SOT_SMD:SOT-23-6",
 R(esp, "100k", "ESP_SW_ON", "GND")
 C(esp, "1n", "ESP_PWR_CT", lcsc_key="C1n")
 C(esp, "1u", "3V3")
-d.add(esp, Part(_ref("JP"), "Connector_Generic:Conn_01x02", "ESP_ON",
-                "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical", {"1": "3V3", "2": "ESP_PWR_EN"}))
-d.add(esp, Part(_ref("J"), "Connector_Generic:Conn_01x05", "ESP_PROG",
-                "Connector_PinHeader_2.54mm:PinHeader_1x05_P2.54mm_Vertical",
-                {"1": "GND", "2": "ESP_TXD0", "3": "ESP_RXD0", "4": "ESP_EN", "5": "ESP_IO0"}))
+_ref("J")   # J3 was the ESP_PROG header: the ESP32's USB-C (J7) does its job; the number stays free
 # ---------------------------------------------------------------- expansion
 ex = d.block("exp", "Expansion: Qwiic I2C + header (sensor pod, temp probes, logic analyzer)")
 d.add(ex, Part(_ref("J"), "Connector_Generic:Conn_01x04", "Qwiic",
@@ -171,11 +176,12 @@ d.add(ex, Part(_ref("J"), "Connector_Generic:Conn_01x04", "Qwiic",
 R(ex, "4.7k", "3V3", "I2C_SDA")
 R(ex, "4.7k", "3V3", "I2C_SCL")
 R(ex, "10k", "EXP_PA10", "GND")  # bootloader pulls PA10 up, which turns on PB4's UCPD pull-down (CAN2 TXD dominant)
-d.add(ex, Part(_ref("J"), "Connector_Generic:Conn_02x06_Odd_Even", "EXP",
-               "Connector_PinHeader_2.54mm:PinHeader_2x06_P2.54mm_Vertical",
+# Footprint only (DNP): solder a 2x7 header in if the prototype needs it
+d.add(ex, Part(_ref("J"), "Connector_Generic:Conn_02x07_Odd_Even", "EXP",
+               "Connector_PinHeader_2.54mm:PinHeader_2x07_P2.54mm_Vertical",
                {"1": "3V3", "2": "5V", "3": "GND", "4": "GND", "5": "EXP_TX", "6": "EXP_RX",
-                "7": "EXP_PA5", "8": "EXP_PA10", "9": "EXP_PC13", "10": "EXP_PD2",
-                "11": "I2C_SDA", "12": "I2C_SCL"}))
+                "7": "EXP_PA5", "8": "EXP_PA10", "9": "PANIC_BTN", "10": "EXP_PD2",
+                "11": "I2C_SDA", "12": "I2C_SCL", "13": "EXP_PC10", "14": "GND"}, dnp=True))
 
 # ---------------------------------------------------------------- power
 pw = d.block("power", "Power: J1962 pin 16 -> PTC -> TVS -> ideal diode -> 5.3 V buck; USB OR'd in; 3.3 V LDO")
@@ -244,22 +250,25 @@ for n in ("VBAT_P", "5V", "3V3", "GND"):
     TP(pw, n)
 
 # ---------------------------------------------------------------- car connector
-car = d.block("car", "Car connector: Molex Micro-Fit 3.0 2x5 to an OBD-II (J1962) pigtail")
+car = d.block("car", "Car connector: SAE J1962 (OBD-II) male plug on the board, straight PCB pins")
 car.notes = [
-    "Micro-Fit pin -> J1962 pin: 1->16 BATT, 2->5 SGND, 3->2 J1850 Bus+, 4->10 Bus-, 5->7 K,",
-    "6->15 L, 7->6 CAN-H, 8->14 CAN-L, 9->3 MS-CAN-H, 10->11 MS-CAN-L. J1962 pin 4 (chassis) is not used.",
+    "Plugs straight into the car's diagnostic port; mounted on the bottom side so the board lies flat",
+    "under the dash with the parts facing out. Pins 4 (chassis) and 5 (signal) ground both go to GND.",
+    "1, 8, 9, 12, 13 are not used (soldered for strength). Bench: an OBD-II female breakout or extension.",
 ]
-d.add(car, Part(_ref("J"), "Connector_Generic:Conn_02x05_Odd_Even", "OBD (Micro-Fit 2x5)",
-                "Connector_Molex:Molex_Micro-Fit_3.0_43045-1000_2x05_P3.00mm_Horizontal",
-                {"1": "VBAT_IN", "2": "GND", "3": "J1850_P", "4": "J1850_N", "5": "KLINE", "6": "LLINE",
-                 "7": "CAN1_H", "8": "CAN1_L", "9": "CAN2_H", "10": "CAN2_L"}, lcsc=LCSC["MICROFIT10"]))
+d.add(car, Part(_ref("J"), "Connector_Generic:Conn_02x08_Top_Bottom", "OBD-II plug (J1962 male)",
+                "OCTAVE:J1962_Edge_Joint",
+                {"16": "VBAT_IN", "4": "GND", "5": "GND", "2": "J1850_P", "10": "J1850_N", "7": "KLINE",
+                 "15": "LLINE", "6": "CAN1_H", "14": "CAN1_L", "3": "CAN2_H", "11": "CAN2_L",
+                 "1": None, "8": None, "9": None, "12": None, "13": None},
+                note="Hand-fit: Jiatel CR-PG001 J1962 male plug on the obd-adapter-plug board, soldered across the board edge"))
 
 # ---------------------------------------------------------------- CAN
 can = d.block("can", "CAN FD: HS-CAN (J1962 6/14) and MS-CAN (3/11), TCAN1044V")
 can.notes = [
     "STB pulled high: transceivers sit in standby (receive-only wake) until firmware drives STB low.",
     "VCC from 5V_BUCK: CAN needs car / 12 V bench power (on USB alone the OR'd 5V is under the 4.5 V minimum).",
-    "No termination by default (the car has its own 2x120R). Fit the TERM jumper only on a bench bus.",
+    "No termination by default (the car has its own 2x120R). CONFIG switch 2 / 3 adds it, on a bench bus only.",
 ]
 for i, (h, l) in ((1, ("CAN1_H", "CAN1_L")), (2, ("CAN2_H", "CAN2_L"))):
     U(can, "Interface_CAN_LIN:TJA1051T-3", "TCAN1044VDRQ1", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm",
@@ -270,10 +279,7 @@ for i, (h, l) in ((1, ("CAN1_H", "CAN1_L")), (2, ("CAN2_H", "CAN2_L"))):
     R(can, "4.7k", "3V3", f"CAN{i}_STB")  # 4.7k: stays standby against the bootloader's PB15 pull-down
     U(can, "Power_Protection:NUP2105L", "SZNUP2105L", SOT23, {"1": h, "2": l, "3": "GND"},
       lcsc_key="NUP2105L", ref="D")
-    R(can, "120", h, f"CAN{i}_TERM", lcsc_key="R120")
-    d.add(can, Part(_ref("JP"), "Connector_Generic:Conn_01x02", f"TERM{i}",
-                    "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
-                    {"1": f"CAN{i}_TERM", "2": l}))
+    R(can, "120", h, f"CAN{i}_TERM", lcsc_key="R120")     # to CAN_L through CONFIG switch 1 + i
 
 # ---------------------------------------------------------------- DLC_SW
 sw = d.block("dlcsw", "DLC_SW: switched battery for the legacy-bus front ends")
@@ -349,8 +355,10 @@ d.add(jb, Part(_ref("D"), "Device:D_Zener", "BZT52C33", "Diode_SMD:D_SOD-123",
                {"K": "CMP_VCC", "A": "GND"}, lcsc=LCSC["BZT52C33"]))
 C(jb, "100n", "CMP_VCC")
 R(jb, "10k", "J1850_P", "VPW_IN")
-R(jb, "2.7k", "5V_BUCK", "VPW_REF")
-R(jb, "10k", "VPW_REF", "GND")
+# VPW threshold 5.32 V x 47 / 60 = 4.17 V; 13k / 47k (was 2.7k / 10k, same ratio within 0.5 %) so the
+# divider draws 88 uA instead of 420 uA: it is on 5V_BUCK, which stays up while the car is parked
+R(jb, "13k", "5V_BUCK", "VPW_REF")
+R(jb, "47k", "VPW_REF", "GND")
 R(jb, "10k", "3V3", "VPW_RX")
 R(jb, "10k", "J1850_P", "PWM_INP")
 R(jb, "10k", "J1850_N", "PWM_INN")
@@ -423,8 +431,79 @@ for base, emit, coll in (("U2S_DTR", "U2S_RTS", "ESP_EN"), ("U2S_RTS", "U2S_DTR"
 for name, net in (("ESP_RST", "ESP_EN"), ("ESP_BOOT", "ESP_IO0")):
     d.add(eu, Part(_ref("SW"), "Switch:SW_Push", name, "Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A",
                     {"1": net, "2": "GND"}, lcsc=LCSC.get("SW")))
-# ON = PB6 (ESP_PWR_EN, or the JP1 shunt) OR VBUS2 (the ESP32 USB port): diodes keep 5 V off PB6, and
+# ON = PB6 (ESP_PWR_EN, or CONFIG switch 1) OR VBUS2 (the ESP32 USB port): diodes keep 5 V off PB6, and
 # PB6's UCPD dead-battery pull-down (5.1k until PWR_CR3.UCPD_DBDIS) can't hold the switch off
 for src in ("ESP_PWR_EN", "VBUS2"):
     d.add(eu, Part(_ref("D"), "Device:D", "1N4148W", "Diode_SMD:D_SOD-123",
                     {"A": src, "K": "ESP_SW_ON"}, lcsc=LCSC["1N4148W"]))
+
+# ---------------------------------------------------------------- CONFIG switch
+# One 4-way SMD DIP switch for the bench settings (it replaced three 2-pin jumpers and the BOOT0
+# button): 1 ESP_ON (3V3 -> PB6 / the ESP32 load switch), 2 / 3 the 120R CAN1 / CAN2 terminations,
+# 4 BOOT0 (STM32 ROM bootloader on the next reset). Off = car use. Created last so the references
+# before it keep their numbers (SW6).
+ui.notes.append("CONFIG (SW6): 1 ESP_ON, 2 CAN1 120R, 3 CAN2 120R, 4 BOOT0. All off in the car.")
+d.add(ui, Part(_ref("SW"), "Switch:SW_DIP_x04", "CONFIG",
+               "Button_Switch_SMD:SW_DIP_SPSTx04_Slide_KingTek_DSHP04TS_W7.62mm_P1.27mm",
+               {"1": "3V3", "8": "ESP_PWR_EN", "2": "CAN1_TERM", "7": "CAN1_L",
+                "3": "CAN2_TERM", "6": "CAN2_L", "4": "3V3", "5": "BOOT0"}, lcsc=LCSC.get("DIP4")))
+
+# ---------------------------------------------------------------- ESP32 IO header
+# Footprint only (DNP), like J5: eight spare ESP32 pins on the module side that faces it (IO34 / IO35
+# are input-only; IO25-27 / IO14 lose their ADC while Wi-Fi is on). Powered from 3V3_ESP, so whatever
+# is plugged in turns off with the ESP32 and can't back-power it. Created last so it is J8.
+esp.notes.append("J8 (DNP): ESP32 IO14 27 26 25 33 32 35 34 + 3V3_ESP / GND; 3.3 V logic, IO34/35 input-only.")
+d.add(esp, Part(_ref("J"), "Connector_Generic:Conn_01x10", "ESP_IO",
+                "Connector_PinHeader_2.54mm:PinHeader_1x10_P2.54mm_Vertical",
+                {"1": "GND", **{str(i + 2): "ESP_" + n for i, n in enumerate(ESP_IO)}, "10": "3V3_ESP"},
+                dnp=True))
+
+# ---------------------------------------------------------------- parked watch, evidence, panic button
+# Added for traffic stop mode and the companion app (TODO/traffic-stop-mode.md, TODO/octave-companion-app.md).
+# Created last so every earlier reference keeps its number.
+sn = d.block("sense", "Parked watch and evidence: accelerometer, secure element, panic button")
+sn.notes = [
+    "U15 LIS2DH12 on the STM32 I2C bus (0x19, SA0 high): wake-on-motion while parked (tow / break-in),",
+    "crash spikes while driving. INT1 -> PC14, INT2 -> PC15 (EXTI, wake from Stop).",
+    "U16 ATECC608B (0x60) on the same bus: signs the frozen OBD speed window for traffic stop evidence.",
+    "J9 panic button (hidden, on a cable): ESD diode at the connector, 1k series, 10k pull-up, 100n;",
+    "PANIC_BTN = PC13 (WKUP2, wakes from Standby too). Closed = low.",
+]
+U(sn, "OCTAVE:LIS2DH12", "LIS2DH12TR", "Package_LGA:LGA-12_2x2mm_P0.5mm",
+  {"VDD": "3V3", "VDD_IO": "3V3", "~{CS}": "3V3", "SDO/SA0": "3V3", "RES": "GND", "GND": "GND",
+   "SCL/SPC": "I2C_SCL", "SDA/SDI/SDO": "I2C_SDA", "INT1": "ACC_INT1", "INT2": "ACC_INT2"}, lcsc_key="LIS2DH12TR")
+C(sn, "100n", "3V3")
+C(sn, "10u", "3V3")
+U(sn, "Security:ATECC608B-SSHDA", "ATECC608B-SSHDA-T", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm",
+  {"VCC": "3V3", "GND": "GND", "SDA": "I2C_SDA", "SCL": "I2C_SCL", "NC": None}, lcsc_key="ATECC608B")
+C(sn, "100n", "3V3")
+d.add(sn, Part(_ref("J"), "Connector_Generic:Conn_01x02", "PANIC",
+               "Connector_JST:JST_SH_SM02B-SRSS-TB_1x02-1MP_P1.00mm_Horizontal",
+               {"1": "PANIC_IN", "2": "GND"}, lcsc=LCSC.get("SH2")))
+d.add(sn, Part(_ref("D"), "Device:D_TVS", "ESD9B3.3ST5G", "Diode_SMD:D_SOD-923",
+               {"1": "PANIC_IN", "2": "GND"}, lcsc=LCSC["ESD9B3.3"]))
+R(sn, "1k", "PANIC_IN", "PANIC_BTN")
+R(sn, "10k", "3V3", "PANIC_BTN")
+C(sn, "100n", "PANIC_BTN")
+
+# ---------------------------------------------------------------- microSD (ESP32)
+sd = d.block("sd", "microSD on the ESP32 (SPI): backup store for the phone's traffic stop recordings")
+sd.notes = [
+    "J10 microSD (push-pull) in SPI mode: MISO IO4, CLK IO5, MOSI IO21, CS IO22, card detect IO23",
+    "(switch to GND, ESP32 internal pull-up). Powered from 3V3_ESP: off with the ESP32.",
+    "10k pull-ups (RN1 array + R68) on CS / MOSI / MISO and the unused DAT1 / DAT2 (SD spec). The card slides in from the",
+    "bottom edge and sticks out about 3 mm, so it can be pulled.",
+]
+d.add(sd, Part(_ref("J"), "Connector:Micro_SD_Card_Det2", "microSD",
+               "Connector_Card:microSD_HC_Molex_104031-0811",
+               {"DAT2": "SD_DAT2", "DAT3/CD": "ESP_SD_CS", "CMD": "ESP_SD_MOSI", "VDD": "3V3_ESP",
+                "CLK": "ESP_SD_CLK", "VSS": "GND", "DAT0": "ESP_SD_MISO", "DAT1": "SD_DAT1",
+                "DET_A": "GND", "DET_B": "ESP_SD_CD", "SHIELD": "GND"}, lcsc=LCSC.get("MICROSD")))
+C(sd, "10u", "3V3_ESP")
+C(sd, "100n", "3V3_ESP")
+# pull-ups: one 4 x 10k array (CS, MOSI, MISO, DAT1) + DAT2's own
+sd_pu = ("ESP_SD_CS", "ESP_SD_MOSI", "ESP_SD_MISO", "SD_DAT1")
+d.add(sd, Part(_ref("RN"), "Device:R_Pack04", "4x10k", "Resistor_SMD:R_Array_Convex_4x0603",
+               {**{str(i + 1): n for i, n in enumerate(sd_pu)}, **{str(8 - i): "3V3_ESP" for i in range(4)}},
+               lcsc=LCSC["RN10k"]))
+R(sd, "10k", "3V3_ESP", "SD_DAT2")

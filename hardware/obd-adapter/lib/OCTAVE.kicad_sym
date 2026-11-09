@@ -13,7 +13,8 @@
 			(at 0 8.89 0)
 			(effects
 				(font
-					(size 1.27 1.27)
+					(size 1 1)
+					(thickness 0.15)
 				)
 			)
 		)
@@ -21,7 +22,8 @@
 			(at 0 -8.89 0)
 			(effects
 				(font
-					(size 1.27 1.27)
+					(size 1 1)
+					(thickness 0.15)
 				)
 			)
 		)
@@ -30,7 +32,8 @@
 			(hide yes)
 			(effects
 				(font
-					(size 1.27 1.27)
+					(size 1 1)
+					(thickness 0.15)
 				)
 			)
 		)
@@ -39,7 +42,8 @@
 			(hide yes)
 			(effects
 				(font
-					(size 1.27 1.27)
+					(size 1 1)
+					(thickness 0.15)
 				)
 			)
 		)
@@ -48,7 +52,8 @@
 			(hide yes)
 			(effects
 				(font
-					(size 1.27 1.27)
+					(size 1 1)
+					(thickness 0.15)
 				)
 			)
 		)
@@ -72,14 +77,16 @@
 				(name "G"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "4"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -90,14 +97,16 @@
 				(name "S"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "1"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -108,14 +117,16 @@
 				(name "S"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "2"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -126,14 +137,16 @@
 				(name "S"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "3"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -144,14 +157,16 @@
 				(name "D"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "5"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -162,14 +177,16 @@
 				(name "D"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "6"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -180,14 +197,16 @@
 				(name "D"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "7"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -198,14 +217,16 @@
 				(name "D"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "8"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -224,7 +245,8 @@
 			(at 0 8.89 0)
 			(effects
 				(font
-					(size 1.27 1.27)
+					(size 1 1)
+					(thickness 0.15)
 				)
 			)
 		)
@@ -232,7 +254,8 @@
 			(at 0 -3.81 0)
 			(effects
 				(font
-					(size 1.27 1.27)
+					(size 1 1)
+					(thickness 0.15)
 				)
 			)
 		)
@@ -241,7 +264,8 @@
 			(hide yes)
 			(effects
 				(font
-					(size 1.27 1.27)
+					(size 1 1)
+					(thickness 0.15)
 				)
 			)
 		)
@@ -250,7 +274,8 @@
 			(hide yes)
 			(effects
 				(font
-					(size 1.27 1.27)
+					(size 1 1)
+					(thickness 0.15)
 				)
 			)
 		)
@@ -259,7 +284,8 @@
 			(hide yes)
 			(effects
 				(font
-					(size 1.27 1.27)
+					(size 1 1)
+					(thickness 0.15)
 				)
 			)
 		)
@@ -283,14 +309,16 @@
 				(name "VIN"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "1"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -301,14 +329,16 @@
 				(name "ON"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "3"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -319,14 +349,16 @@
 				(name "CT"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "4"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -337,14 +369,16 @@
 				(name "VOUT"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "6"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -355,14 +389,16 @@
 				(name "QOD"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "5"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -373,14 +409,16 @@
 				(name "GND"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "2"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -399,7 +437,8 @@
 			(at 0 19.05 0)
 			(effects
 				(font
-					(size 1.27 1.27)
+					(size 1 1)
+					(thickness 0.15)
 				)
 			)
 		)
@@ -407,7 +446,8 @@
 			(at 0 -13.97 0)
 			(effects
 				(font
-					(size 1.27 1.27)
+					(size 1 1)
+					(thickness 0.15)
 				)
 			)
 		)
@@ -416,7 +456,8 @@
 			(hide yes)
 			(effects
 				(font
-					(size 1.27 1.27)
+					(size 1 1)
+					(thickness 0.15)
 				)
 			)
 		)
@@ -425,7 +466,8 @@
 			(hide yes)
 			(effects
 				(font
-					(size 1.27 1.27)
+					(size 1 1)
+					(thickness 0.15)
 				)
 			)
 		)
@@ -434,7 +476,8 @@
 			(hide yes)
 			(effects
 				(font
-					(size 1.27 1.27)
+					(size 1 1)
+					(thickness 0.15)
 				)
 			)
 		)
@@ -458,14 +501,16 @@
 				(name "VCC"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "16"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -476,14 +521,16 @@
 				(name "V3"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "4"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -494,14 +541,16 @@
 				(name "UD+"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "5"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -512,14 +561,16 @@
 				(name "UD-"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "6"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -530,14 +581,16 @@
 				(name "GND"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "1"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -548,14 +601,16 @@
 				(name "TXD"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "2"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -566,14 +621,16 @@
 				(name "RXD"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "3"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -584,14 +641,16 @@
 				(name "~{DTR}"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "13"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -602,14 +661,16 @@
 				(name "~{RTS}"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "14"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -620,14 +681,16 @@
 				(name "~{CTS}"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "9"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -638,14 +701,16 @@
 				(name "~{DSR}"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "10"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -656,14 +721,16 @@
 				(name "~{RI}"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "11"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -674,14 +741,16 @@
 				(name "~{DCD}"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "12"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -692,14 +761,16 @@
 				(name "R232"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "15"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -710,14 +781,16 @@
 				(name "NC"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "7"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
@@ -728,14 +801,328 @@
 				(name "NC"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)
 				(number "8"
 					(effects
 						(font
-							(size 1.27 1.27)
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
+	)
+	(symbol "LIS2DH12"
+		(pin_names
+			(offset 1.016)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "U"
+			(at 0 13.97 0)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(property "Value" "LIS2DH12"
+			(at 0 -11.43 0)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(property "Footprint" "Package_LGA:LGA-12_2x2mm_P0.5mm"
+			(at 0 0 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 0 0 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(property "Description" "3-axis accelerometer, I2C / SPI"
+			(at 0 0 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1 1)
+					(thickness 0.15)
+				)
+			)
+		)
+		(symbol "LIS2DH12_0_1"
+			(rectangle
+				(start -7.62 11.43)
+				(end 7.62 -8.89)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type background)
+				)
+			)
+		)
+		(symbol "LIS2DH12_1_1"
+			(pin power_in line
+				(at -10.16 10.16 0)
+				(length 2.54)
+				(name "VDD"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+				(number "9"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+			)
+			(pin power_in line
+				(at -10.16 7.62 0)
+				(length 2.54)
+				(name "VDD_IO"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+				(number "10"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+			)
+			(pin input line
+				(at -10.16 5.08 0)
+				(length 2.54)
+				(name "~{CS}"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+				(number "2"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+			)
+			(pin input line
+				(at -10.16 2.54 0)
+				(length 2.54)
+				(name "SDO/SA0"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+				(number "3"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at -10.16 0 0)
+				(length 2.54)
+				(name "RES"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+				(number "5"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+			)
+			(pin power_in line
+				(at -10.16 -2.54 0)
+				(length 2.54)
+				(name "GND"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+				(number "6"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+			)
+			(pin power_in line
+				(at -10.16 -5.08 0)
+				(length 2.54)
+				(name "GND"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+				(number "7"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+			)
+			(pin power_in line
+				(at -10.16 -7.62 0)
+				(length 2.54)
+				(name "GND"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+				(number "8"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+			)
+			(pin input line
+				(at 10.16 10.16 180)
+				(length 2.54)
+				(name "SCL/SPC"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+			)
+			(pin bidirectional line
+				(at 10.16 7.62 180)
+				(length 2.54)
+				(name "SDA/SDI/SDO"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+				(number "4"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+			)
+			(pin output line
+				(at 10.16 2.54 180)
+				(length 2.54)
+				(name "INT1"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+				(number "12"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+			)
+			(pin output line
+				(at 10.16 0 180)
+				(length 2.54)
+				(name "INT2"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
+						)
+					)
+				)
+				(number "11"
+					(effects
+						(font
+							(size 1 1)
+							(thickness 0.15)
 						)
 					)
 				)

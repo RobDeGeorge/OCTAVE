@@ -2,7 +2,7 @@
 
 **Goal:** one Android app that links the phone to the car and does what a shell process can't: traffic stop mode, phone GPS into OCTAVE, notifications / calls / battery on the head unit, keeping the mirror connected, and the car's status while you're away. Also a first-run walkthrough for the mirror (pure QML, no app needed).
 **Status:** deferred: scoped, not started. **Decided 2026-11-07: build a separate app** (`companion/`) rather than extending `phone_server/` for these features (see "Why an app").
-**Last updated:** 2026-11-07
+**Last updated:** 2026-11-09
 
 Already shipped: adb pairing and connect over Wi-Fi in the phone mirror via QR pairing (`f100f60`), with mDNS discovery (`phonemirrormanager.cpp:1218-1274`) and a remembered phone (`wirelessAddress`). Now-playing metadata ships through `phone_server`'s `PhoneMedia.java`. No app was needed for either.
 
@@ -60,7 +60,7 @@ Nothing here blocks daily use in the Jeep. A separate app is its own product (bu
 ### Later
 
 13. **Crash detection.** The car's IMU (`berryimumanager` or the adapter / pod) plus OBD speed detect the crash, which is far more reliable than a phone's sensors. The phone texts contacts after a cancellable countdown (Pixel-style). This one is automatic, unlike traffic stop mode, so the countdown and a loud cancel button are mandatory. **Effort:** L. **Device:** Jeep, S22.
-14. **Tow / break-in alert.** The adapter wakes on motion while parked and tells the phone; only in Bluetooth range unless the optional cellular hardware exists. **Effort:** M. **Device:** adapter, S22.
+14. **Tow / break-in alert.** The adapter wakes on motion while parked (its LIS2DH12, on Rev 0) and tells the phone; only in Bluetooth range unless the optional cellular hardware exists. **Effort:** M. **Device:** adapter, S22.
 15. **Driver profiles.** The phone is the identity: connecting it loads that driver's music, dashboards and settings. **Effort:** M. **Device:** two phones, Pi.
 16. **Settings and dashboard backup** to the phone or the user's cloud. **Effort:** S–M. **Device:** S22.
 17. **One-tap bug report:** pull OCTAVE's logs (`<config>/logs/`) over the service and share them. **Effort:** S. **Device:** S22, Pi.
