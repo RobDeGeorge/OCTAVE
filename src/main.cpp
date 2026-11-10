@@ -398,7 +398,13 @@ int runHeadless(QGuiApplication &app, bool smokeTest, const FrontendManager::Boo
         core.servicePairing.setLoopbackOpenForRun(false);
         core.frontendManager.setRunningId(exec->manifest.id);
     }
-    Service service = makeService(app.arguments(), core, true);
+    // The exec frontend reaches OCTAVE through the service, so it is on
+    // whatever the serviceEnabled setting says (--service, --command-port
+    // and --service-bind still pick where)
+    QStringList serviceArgs = app.arguments();
+    if (exec)
+        serviceArgs << QStringLiteral("--service");
+    Service service = makeService(serviceArgs, core, true);
 #ifdef OCTAVE_DEV_TOOLS
     // --headless --dev: also the sim_* actions, no UI
     const QDir frontendDir = findFrontendDir();
@@ -407,6 +413,20 @@ int runHeadless(QGuiApplication &app, bool smokeTest, const FrontendManager::Boo
                                                     QDir(frontendDir.absoluteFilePath(QStringLiteral(".."))), &core.sim});
     devRuntime.startHeadless(service.server.get());
 #endif
+    if (exec && (!service.server || !service.server->start())) {
+        // Without the service the frontend can't reach anything: the built-in
+        // screen instead, never a car that doesn't start
+        const QString why = service.server ? QStringLiteral("the service could not listen on port %1")
+                                                 .arg(service.server->port())
+                                           : QStringLiteral("the service could not start");
+        qCritical("Frontend %s can't run (%s): starting again on the QML UI", qPrintable(exec->manifest.id),
+                  qPrintable(why));
+        FrontendManager::endTrial(core.frontendManager.root());
+        FrontendManager::forceQml(core.frontendManager.root(), why);
+        core.shutdown();
+        startAgain(app.arguments(), Relaunch::OnQml);
+        return 0;
+    }
     if (!service.server || !service.server->start()) {
         qCritical("--headless: the service did not start, nothing could reach the app; exiting");
         core.shutdown();

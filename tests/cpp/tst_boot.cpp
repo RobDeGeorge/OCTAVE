@@ -362,7 +362,10 @@ time.sleep(4)   # the simulated car records a trip meanwhile
         QProcess app;
         app.setProcessEnvironment(env(tmp));
         app.setProcessChannelMode(QProcess::MergedChannels);
-        app.start(kApp, {"--config", config, "--sim", "--service", QString::number(freePort())});
+        // No --service and serviceEnabled unset, as on a fresh install: the
+        // exec frontend turns the service on itself (--command-port only
+        // picks the port)
+        app.start(kApp, {"--config", config, "--sim", "--command-port", QString::number(freePort())});
         QVERIFY(app.waitForStarted(10000));
         QVERIFY2(finished(app), "did not exit within 60 s");   // the frontend's exit 0 ends it
         const QString out = QString::fromUtf8(app.readAll());
@@ -582,6 +585,53 @@ time.sleep(4)   # an exit within 3 s of starting would count as a crash
                 log = QString::fromUtf8(f.readAll());
         }
         QVERIFY2(log.contains("USE_QML: the QML UI instead of org.test.broken"), qPrintable(log.right(3000)));
+        QVERIFY2(log.contains("Smoke test: Main.qml loaded"), qPrintable(log.right(3000)));
+        QTest::qWait(7000);   // its --smoke exit, before the folder goes
+#endif
+    }
+
+    // The service can't listen (the port is taken): the built-in screen,
+    // not an OCTAVE that exits at every start
+    void anExecFrontendWithoutTheServiceFallsBackToQml()
+    {
+#if !defined(Q_OS_LINUX) && !defined(Q_OS_MACOS)
+        QSKIP("exec frontends on Unix only in this test");
+#else
+        QTemporaryDir tmp;
+        const QString config = tmp.filePath("config");
+        const QString fe = config + "/frontends/org.test.screen";
+        QDir().mkpath(fe);
+        QFile m(fe + "/octave-frontend.json");
+        QVERIFY(m.open(QIODevice::WriteOnly));
+        m.write(R"({"id": "org.test.screen", "name": "Screen", "version": "1", "protocol": [1, 9],
+            "exec": {"linux": ["sleep", "30"], "macos": ["sleep", "30"]}})");
+        m.close();
+        QFile active(config + "/frontends/ACTIVE");
+        QVERIFY(active.open(QIODevice::WriteOnly));
+        active.write("org.test.screen\n");
+        active.close();
+        QTcpServer taken;
+        QVERIFY(taken.listen(QHostAddress::LocalHost));
+
+        QProcess app;
+        app.setProcessEnvironment(env(tmp));
+        app.setProcessChannelMode(QProcess::MergedChannels);
+        app.start(kApp, {"--config", config, "--command-port", QString::number(taken.serverPort()), "--smoke"});
+        QVERIFY(app.waitForStarted(10000));
+        QVERIFY2(finished(app), "did not exit within 60 s");
+        const QString out = QString::fromUtf8(app.readAll());
+        QVERIFY2(app.exitCode() == 0, qPrintable(out.right(3000)));
+        QVERIFY2(out.contains("can't run (the service could not listen"), qPrintable(out.right(3000)));
+        QVERIFY(QFile::exists(config + "/frontends/USE_QML"));
+        QString log;
+        QElapsedTimer t;
+        t.start();
+        while (t.elapsed() < 60000 && !log.contains("Smoke test: Main.qml loaded")) {
+            QTest::qWait(500);
+            QFile f(config + "/logs/octave-cpp.log");
+            if (f.open(QIODevice::ReadOnly))
+                log = QString::fromUtf8(f.readAll());
+        }
         QVERIFY2(log.contains("Smoke test: Main.qml loaded"), qPrintable(log.right(3000)));
         QTest::qWait(7000);   // its --smoke exit, before the folder goes
 #endif
