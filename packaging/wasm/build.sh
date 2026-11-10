@@ -47,6 +47,18 @@ ls -l "$BUILD_DIR"/octave.js "$BUILD_DIR"/octave.wasm "$BUILD_DIR"/octave.data
 if [ -n "${OUT_DIR:-}" ]; then
     mkdir -p "$OUT_DIR"
     cp "$BUILD_DIR"/octave.js "$BUILD_DIR"/octave.wasm "$BUILD_DIR"/octave.data "$BUILD_DIR"/qtloader.js "$OUT_DIR/"
-    cp "$here"/index.html "$here"/coi-serviceworker.js "$here"/LICENSE.coi-serviceworker "$OUT_DIR/"
+    cp "$here"/index.html "$here"/playground.html "$here"/coi-serviceworker.js "$here"/LICENSE.coi-serviceworker "$OUT_DIR/"
+    # The frontend playground's bundled frontends (playground.html, BUNDLED):
+    # the JavaScript template as it is, and glass when it has been built
+    # (npm --prefix examples/frontends/glass ci && npm --prefix examples/frontends/glass run build)
+    rm -rf "$OUT_DIR/frontends"
+    mkdir -p "$OUT_DIR/frontends/hello-car-js"
+    cp "$src"/templates/hello-car-js/index.html "$src"/templates/hello-car-js/app.js "$src"/templates/hello-car-js/octave.js \
+        "$OUT_DIR/frontends/hello-car-js/"
+    if [ -f "$src/examples/frontends/glass/dist/index.html" ]; then
+        cp -r "$src/examples/frontends/glass/dist" "$OUT_DIR/frontends/glass"
+    else
+        echo "build.sh: examples/frontends/glass/dist not built; the playground offers it but can't load it" >&2
+    fi
     echo "staged site in $OUT_DIR"
 fi

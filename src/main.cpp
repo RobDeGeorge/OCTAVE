@@ -68,6 +68,7 @@ extern "C" {
 #endif
 #ifdef OCTAVE_WASM
 #include "platform/wasm/webbluetooth.h"
+#include "platform/wasm/webservice.h"
 #endif
 
 namespace {
@@ -839,6 +840,15 @@ int main(int argc, char *argv[])
 
     // ---- Service (makeService: off unless asked for) ----
     Service service = makeService(app.arguments(), core, false);
+#ifdef OCTAVE_WASM
+    // A page can't listen on a port: the service is the page's own
+    // (Module.octaveService, webservice.h), always on, for the frontend
+    // playground (packaging/wasm/playground.html)
+    if (!service.server)
+        service = makeService(app.arguments() << QStringLiteral("--service"), core, false);
+    if (service.server)
+        WebService::install(service.server.get());
+#endif
 
     // ---- Load Main.qml ----
 #ifdef Q_OS_ANDROID
@@ -859,7 +869,11 @@ int main(int argc, char *argv[])
 #ifdef OCTAVE_DEV_TOOLS
     devRuntime.afterLoad(service.server.get());   // its UI / perf / sim actions, with --profile
 #endif
+#ifndef OCTAVE_WASM
     const bool serving = service.server && service.server->start();
+#else
+    const bool serving = false;   // no socket in the browser: the page's own (above)
+#endif
     if (serving)
         core.servicePairing.setListening(service.server->bindAddress(), service.server->port());
 #ifndef Q_OS_MOBILE

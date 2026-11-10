@@ -49,20 +49,50 @@ result to GitHub Pages with the wiki under `wiki/`.
 ## Testing locally
 
 Threads need the headers, so a plain `python -m http.server` is not enough
-on first load. Copy the build output next to the page and serve it with any
-static server that sends `Cross-Origin-Opener-Policy: same-origin` and
-`Cross-Origin-Embedder-Policy: require-corp`, for example:
+on first load. Stage the site with `OUT_DIR` (above) and serve it with
+`serve.py`, which sends `Cross-Origin-Opener-Policy: same-origin`,
+`Cross-Origin-Embedder-Policy: require-corp` and, as GitHub Pages does,
+`Access-Control-Allow-Origin: *`:
 
 ```bash
-mkdir -p /tmp/octave-site
-cp packaging/wasm/index.html packaging/wasm/coi-serviceworker.js /tmp/octave-site/
-cp build-wasm/octave.js build-wasm/octave.wasm build-wasm/octave.data build-wasm/qtloader.js /tmp/octave-site/
-python3 -c 'import http.server as h,functools as f
-class H(h.SimpleHTTPRequestHandler):
-    def end_headers(s):
-        s.send_header("Cross-Origin-Opener-Policy","same-origin"); s.send_header("Cross-Origin-Embedder-Policy","require-corp"); super().end_headers()
-h.ThreadingHTTPServer(("127.0.0.1",8080),f.partial(H,directory="/tmp/octave-site")).serve_forever()'
+python3 packaging/wasm/serve.py /tmp/octave-site 8080
 ```
 
 Then open `http://127.0.0.1:8080/`. The demo runs the simulated car
 (`--dev` style carsim) and talks to no hardware.
+
+## The frontend playground
+
+`playground.html` runs a web frontend (one written for the service API,
+`wiki/writing-a-frontend.html`) against this same core, in the browser, with
+nothing to install: `/OCTAVE/playground.html?frontend=glass`. The core runs
+as on `index.html`, its own screen shown small on the right; it starts the
+simulated car itself (`obdManager.connect_to_adapter("sim://elm327")`).
+
+- **The service without a socket.** A page can't listen on a port, so the
+  wasm build offers the service protocol to the page as
+  `Module.octaveService` (`src/platform/wasm/webservice.{h,cpp}`): `open`,
+  `send`, `close`, each message one request handled by the same
+  `CommandServer` ops and `ServiceBridge` a socket's line goes to
+  (`CommandServer::handleLineOn`). The service is always on in the browser
+  build, and only this page can reach it.
+- **The frontend, unmodified.** It runs in an iframe whose page gets a
+  `WebSocket` stand-in before its own scripts, carrying each text frame to
+  the playground by `postMessage`; the playground passes it to
+  `Module.octaveService`. So `new WebSocket("ws://" + location.host + "/")`
+  just works. Binary stream records (video) are not carried.
+- **Sandboxed.** The iframe is `sandbox="allow-scripts allow-forms"` without
+  `allow-same-origin`: the frontend has an opaque origin, can't reach this
+  site, its storage or the playground's page, and has only the bridge. That
+  is what makes `?frontend=<url>` (any folder or `index.html` whose host
+  allows CORS, as GitHub Pages does) safe to offer. `localStorage` throws in
+  there, so a frontend must not depend on it.
+- **Bundled frontends**: `frontends/hello-car-js/` (the template) and
+  `frontends/glass/` (the example, when built), staged by `build.sh`.
+- **Not available there**: `GET /art` and `/export` (no HTTP server: covers
+  don't show), pairing (the page counts as a program on the device), video.
+- **The check**: `node packaging/wasm/check_playground.mjs
+  http://127.0.0.1:8080/` loads each bundled frontend in headless Chromium
+  and passes when it shows two different RPM readings from the core
+  (`SHOT_DIR=` keeps screenshots). The Pages workflow runs it after the
+  build (advisory for now).

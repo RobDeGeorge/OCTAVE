@@ -1,0 +1,450 @@
+<!doctype html>
+<!--
+  The frontend playground: a web frontend for OCTAVE, running in the browser
+  against the real OCTAVE core (this WebAssembly build) and its simulated
+  car, with nothing to install. See README.md, "The frontend playground".
+
+  How it works: the core is loaded as on index.html, with its own screen
+  shown small on the right. It offers the service protocol to this page as
+  Module.octaveService (src/platform/wasm/webservice.h). The frontend runs
+  in an iframe whose page gets a WebSocket stand-in first, which sends each
+  message to that object instead of a network socket, so an unmodified
+  frontend (new WebSocket("ws://" + location.host + "/")) works as it does
+  on a head unit.
+
+  ?frontend=<name> picks a bundled one (frontends/<name>/), ?frontend=<url>
+  loads any folder or index.html URL whose host allows it (CORS; GitHub
+  Pages does).
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Try OCTAVE frontends in your browser, against the real OCTAVE core and a simulated car.">
+  <meta name="color-scheme" content="dark light">
+  <title>Frontend Playground</title>
+  <!-- Cross-origin isolation for threaded WebAssembly (index.html says why). -->
+  <script>window.coi = { coepCredentialless: () => false };</script>
+  <script src="coi-serviceworker.js"></script>
+  <style>
+    :root {
+      --bg: #0b0d10;
+      --panel: #14181d;
+      --panel-2: #1b2027;
+      --line: #262d35;
+      --text: #e6e9ec;
+      --muted: #8a949e;
+      --accent: #3ddc97;
+      --error: #ff6b6b;
+    }
+    @media (prefers-color-scheme: light) {
+      :root:not([data-theme="dark"]) {
+        --bg: #f4f5f7; --panel: #ffffff; --panel-2: #eef0f3; --line: #d9dde3;
+        --text: #15191e; --muted: #5d6874; --accent: #0f8a5f; --error: #c62828;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #0b0d10; --panel: #14181d; --panel-2: #1b2027; --line: #262d35;
+      --text: #e6e9ec; --muted: #8a949e; --accent: #3ddc97; --error: #ff6b6b;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+    body { font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; }
+
+    header {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+      padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel);
+    }
+    header h1 { font-size: 15px; letter-spacing: 0.14em; margin: 0; font-weight: 700; }
+    header h1 span { color: var(--muted); font-weight: 500; letter-spacing: 0.02em; }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: auto; }
+    select, input, button {
+      font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line);
+      border-radius: 8px; padding: 6px 10px; min-height: 36px;
+    }
+    input { width: min(60vw, 280px); }
+    button { cursor: pointer; }
+    button.primary { background: var(--accent); color: #06130d; border-color: transparent; font-weight: 600; }
+    a { color: var(--accent); }
+
+    main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 440px; }
+    #stage { position: relative; min-width: 0; min-height: 0; border-right: 1px solid var(--line); }
+    #frontend { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; display: none; }
+    aside { display: flex; flex-direction: column; min-height: 0; background: var(--panel); }
+    aside h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 14px 16px 8px; font-weight: 600; }
+    #car { position: relative; height: 290px; margin: 0 16px; border-radius: 10px; overflow: hidden; background: #000; border: 1px solid var(--line); }
+    #screen { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .drive { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 16px 0; }
+    #log { flex: 1; min-height: 80px; margin: 0 16px 16px; padding: 8px 10px; overflow: auto; font: 12px/1.5 ui-monospace, "JetBrains Mono", monospace;
+           background: var(--panel-2); border-radius: 8px; color: var(--muted); white-space: pre-wrap; word-break: break-word; }
+    #log .in { color: var(--text); }
+    #log .err { color: var(--error); }
+    .note { margin: 0 16px 8px; color: var(--muted); font-size: 13px; }
+
+    #loader { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .card { width: min(100%, 460px); }
+    .card h2 { margin: 0 0 6px; font-size: 22px; }
+    .card p { color: var(--muted); margin: 0 0 16px; }
+    .bar { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+    .bar > div { height: 100%; width: 0; background: var(--accent); transition: width 0.15s linear; }
+    .bar.indeterminate > div { width: 30%; animation: slide 1.2s ease-in-out infinite; }
+    @keyframes slide { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
+    #status { margin: 10px 0 0; color: var(--muted); font-variant-numeric: tabular-nums; min-height: 1.4em; }
+    #error { display: none; margin-top: 12px; padding: 10px 12px; background: var(--panel); border-left: 3px solid var(--error); white-space: pre-wrap; word-break: break-word; }
+    .failed #error { display: block; }
+
+    @media (max-width: 900px) {
+      body { height: auto; min-height: 100%; }
+      main { grid-template-columns: 1fr; }
+      #stage { height: 70vh; border-right: 0; border-bottom: 1px solid var(--line); }
+      #log { max-height: 200px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>OCTAVE <span>Frontend Playground</span></h1>
+    <div class="controls">
+      <label for="pick" class="visually-hidden" hidden>Frontend</label>
+      <select id="pick" aria-label="Frontend"></select>
+      <input id="url" type="url" placeholder="or a frontend's URL" aria-label="Frontend URL">
+      <button id="load">Load</button>
+      <a href="wiki/frontend-gallery.html">Gallery</a>
+      <a href="wiki/writing-a-frontend.html">Write one</a>
+    </div>
+  </header>
+  <main>
+    <section id="stage">
+      <div id="loader">
+        <div class="card">
+          <h2>Starting the car</h2>
+          <p>The real OCTAVE core, compiled to WebAssembly, with a simulated car. The frontend on this side talks to it exactly as it would on a head unit.</p>
+          <div class="bar indeterminate"><div id="fill"></div></div>
+          <p id="status">Starting</p>
+          <pre id="error"></pre>
+        </div>
+      </div>
+      <!-- sandbox without allow-same-origin: the frontend gets an opaque origin, so a
+           frontend from anywhere (?frontend=<url>) can't touch this site or its storage;
+           it reaches the core only through the postMessage bridge below -->
+      <iframe id="frontend" title="The frontend" sandbox="allow-scripts allow-forms"></iframe>
+    </section>
+    <aside>
+      <h2>The car: OCTAVE's built-in screen</h2>
+      <div id="car"><div id="screen"></div></div>
+      <div class="drive">
+        <button data-sim="pull">Pull away</button>
+        <button data-sim="rev">Rev</button>
+        <button data-sim="stop">Stop</button>
+        <button data-sim="mute">Mute</button>
+      </div>
+      <h2>Messages</h2>
+      <p class="note">What the frontend sends (&rarr;) and the replies it gets; events are counted, not listed.</p>
+      <div id="log" aria-live="off"></div>
+    </aside>
+  </main>
+
+  <script src="octave.js"></script>
+  <script src="qtloader.js"></script>
+  <script>
+  (async function () {
+    // ── bundled frontends (staged next to this page by build.sh / CI) ──
+    const BUNDLED = [
+      { id: 'hello-car-js', name: 'Hello, car (template)' },
+      { id: 'glass', name: 'Glass (TypeScript + Svelte)' },
+    ];
+    const $ = (id) => document.getElementById(id);
+    const pick = $('pick'), urlBox = $('url'), frame = $('frontend'), logBox = $('log');
+    for (const f of BUNDLED) pick.add(new Option(f.name, f.id));
+
+    const params = new URLSearchParams(location.search);
+    const asked = params.get('frontend') || 'hello-car-js';
+    if (BUNDLED.some((f) => f.id === asked)) pick.value = asked; else urlBox.value = asked;
+
+    // ── the message log ──
+    let events = 0, eventLine = null;
+    function log(text, cls) {
+      const line = document.createElement('div');
+      if (cls) line.className = cls;
+      line.textContent = text.length > 400 ? text.slice(0, 400) + ' …' : text;
+      logBox.append(line);
+      while (logBox.childElementCount > 300) logBox.firstElementChild.remove();
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+    function countEvent() {
+      events++;
+      if (!eventLine || eventLine !== logBox.lastElementChild) { eventLine = document.createElement('div'); logBox.append(eventLine); }
+      eventLine.textContent = '… ' + events + ' events';
+    }
+
+    // ── loading the core (as index.html) ──
+    const bar = document.querySelector('.bar'), fill = $('fill'), status = $('status');
+    function fail(message) {
+      $('loader').classList.add('failed');
+      $('loader').style.display = 'flex';
+      frame.style.display = 'none';
+      bar.classList.remove('indeterminate');
+      status.textContent = 'The playground could not start.';
+      $('error').textContent = message;
+    }
+    if (typeof WebAssembly === 'undefined') return fail('This browser does not support WebAssembly.');
+    if (!window.crossOriginIsolated) {
+      status.textContent = 'Enabling cross-origin isolation';
+      if (!('serviceWorker' in navigator))
+        return fail('This page needs cross-origin isolation, and service workers are not available here.');
+      setTimeout(() => { if (!window.crossOriginIsolated) fail('Cross-origin isolation did not come up. Reload the page; a private window may block service workers.'); }, 8000);
+      return;
+    }
+
+    const files = { 'octave.wasm': { loaded: 0, total: 0 }, 'octave.data': { loaded: 0, total: 0 } };
+    let phase = 'Downloading';
+    const MB = 1024 * 1024;
+    function render() {
+      const loaded = Object.values(files).reduce((a, f) => a + f.loaded, 0);
+      const total = Object.values(files).reduce((a, f) => a + f.total, 0);
+      if (total > 0) {
+        bar.classList.remove('indeterminate');
+        fill.style.width = Math.min(100, 100 * loaded / total).toFixed(1) + '%';
+        status.textContent = `${phase} ${(loaded / MB).toFixed(1)} MB of ${(total / MB).toFixed(1)} MB`;
+      } else status.textContent = phase;
+    }
+    async function download(name) {
+      const response = await fetch(name);
+      if (!response.ok) throw new Error(`Could not download ${name} (HTTP ${response.status})`);
+      const entry = files[name];
+      entry.total = Number(response.headers.get('Content-Length')) || 0;
+      if (!response.body || !entry.total) {
+        const buffer = await response.arrayBuffer();
+        entry.loaded = entry.total = buffer.byteLength; render();
+        return buffer;
+      }
+      const reader = response.body.getReader(), chunks = [];
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value); entry.loaded += value.byteLength; render();
+      }
+      const out = new Uint8Array(entry.loaded);
+      let at = 0;
+      for (const c of chunks) { out.set(c, at); at += c.byteLength; }
+      return out.buffer;
+    }
+
+    // The service, once the core has installed it (webservice.cpp)
+    const serviceReady = new Promise((resolve) => {
+      if (globalThis.octaveService) resolve(globalThis.octaveService);
+      else globalThis.onOctaveServiceReady = resolve;
+    });
+
+    try {
+      render();
+      const [wasmBytes, dataBytes] = await Promise.all([download('octave.wasm'), download('octave.data')]);
+      phase = 'Compiling'; fill.style.width = ''; bar.classList.add('indeterminate'); status.textContent = phase;
+      const module = await WebAssembly.compile(wasmBytes);
+      status.textContent = 'Starting the core';
+      qtLoad({
+        getPreloadedPackage: () => dataBytes,
+        qt: {
+          module: Promise.resolve(module),
+          entryFunction: window.octave_entry,
+          containerElements: [$('screen')],
+          onExit: (exit) => fail(exit.crashed ? 'The core crashed: ' + (exit.text || 'unknown error') : 'The core exited.'),
+        },
+      }).catch((e) => fail(String(e && e.message || e)));
+    } catch (e) {
+      console.error(e);
+      return fail(String(e && e.message || e));
+    }
+
+    const service = await serviceReady;
+
+    // The playground's own connection: drives the car for the buttons
+    let ownId = 0, nextId = 1;
+    const pending = new Map();
+    function request(op, args) {
+      return new Promise((resolve, reject) => {
+        const id = nextId++;
+        pending.set(id, { resolve, reject });
+        service.send(ownId, JSON.stringify({ op, id, ...args }));
+      });
+    }
+    ownId = service.open((text) => {
+      const m = JSON.parse(text);
+      const p = pending.get(m.id);
+      if (!p) return;
+      pending.delete(m.id);
+      m.ok ? p.resolve(m.result) : p.reject(new Error(m.error));
+    });
+    const call = (object, method, ...args) => request('call', { object, method, args });
+
+    status.textContent = 'Starting the simulated car';
+    // The adapter sheet's "Simulated car": the real OBD stack on a simulated
+    // ELM327, with the demo autopilot driving it
+    try { await call('obdManager', 'connect_to_adapter', 'sim://elm327'); }
+    catch (e) { log('could not start the simulated car: ' + e.message, 'err'); }
+
+    const simButtons = {
+      pull: () => call('sim', 'setThrottle', 45),
+      rev: () => call('sim', 'rev'),
+      stop: () => call('sim', 'setThrottle', 0).then(() => call('sim', 'setBrake', 80)),
+      mute: () => call('volumeController', 'toggleMute'),
+    };
+    document.querySelectorAll('[data-sim]').forEach((b) => b.addEventListener('click', () => {
+      simButtons[b.dataset.sim]().catch((e) => log(b.textContent + ': ' + e.message, 'err'));
+    }));
+
+    // ── the frontend in its iframe ──
+    // Runs in the iframe before any of the frontend's own scripts: WebSocket
+    // becomes a stand-in that carries each text frame to this page by
+    // postMessage, and this page to Module.octaveService and back. The
+    // iframe is sandboxed (an opaque origin), so the bridge is all it has.
+    function shimSource() {
+      return `(function () {
+  var parentWindow = window.parent;
+  var sockets = new Map();
+  var next = 0;
+  function post(m) { m.octave = 1; parentWindow.postMessage(m, '*'); }
+  window.addEventListener('message', function (e) {
+    if (e.source !== parentWindow) return;
+    var m = e.data;
+    if (!m || m.octave !== 1) return;
+    var s = sockets.get(m.sock);
+    if (!s) return;
+    if (m.type === 'opened') s._opened(m.ok);
+    else if (m.type === 'message') s._message(m.data);
+    else if (m.type === 'closed') s._closed();
+  });
+  class OctaveSocket extends EventTarget {
+    constructor(url) {
+      super();
+      this.url = String(url); this.readyState = 0; this.protocol = ''; this.extensions = '';
+      this.binaryType = 'blob'; this.bufferedAmount = 0;
+      this.onopen = this.onmessage = this.onclose = this.onerror = null;
+      this._sock = ++next;
+      sockets.set(this._sock, this);
+      post({ type: 'open', sock: this._sock });
+    }
+    _fire(type, ev) {
+      const h = this['on' + type];
+      if (typeof h === 'function') { try { h.call(this, ev); } catch (e) { setTimeout(() => { throw e; }); } }
+      this.dispatchEvent(ev);
+    }
+    _opened(ok) {
+      if (this.readyState !== 0) return;
+      if (!ok) {
+        this.readyState = 3;
+        sockets.delete(this._sock);
+        this._fire('error', new Event('error'));
+        this._fire('close', new CloseEvent('close', { code: 1006, wasClean: false }));
+        return;
+      }
+      this.readyState = 1;
+      this._fire('open', new Event('open'));
+    }
+    _message(text) {
+      if (this.readyState === 1) this._fire('message', new MessageEvent('message', { data: text }));
+    }
+    _closed() {
+      if (this.readyState === 3) return;
+      this.readyState = 3;
+      sockets.delete(this._sock);
+      this._fire('close', new CloseEvent('close', { code: 1006, wasClean: false }));
+    }
+    send(data) {
+      if (this.readyState !== 1) throw new DOMException('WebSocket is not open', 'InvalidStateError');
+      post({ type: 'send', sock: this._sock, data: typeof data === 'string' ? data : new TextDecoder().decode(data) });
+    }
+    close() {
+      if (this.readyState >= 2) return;
+      const wasOpen = this.readyState === 1;
+      this.readyState = 3;
+      sockets.delete(this._sock);
+      post({ type: 'close', sock: this._sock });
+      if (wasOpen) this._fire('close', new CloseEvent('close', { code: 1000, wasClean: true }));
+    }
+  }
+  for (const [k, v] of [['CONNECTING', 0], ['OPEN', 1], ['CLOSING', 2], ['CLOSED', 3]]) {
+    Object.defineProperty(OctaveSocket, k, { value: v });
+    Object.defineProperty(OctaveSocket.prototype, k, { value: v });
+  }
+  window.WebSocket = OctaveSocket;
+})();`;
+    }
+
+    // The bridge: the frontend's sockets (by its own numbers) to service
+    // connections. Each load of a frontend starts afresh, closing the last
+    // one's connections
+    let socks = new Map();
+    function closeFrontendConnections() {
+      for (const id of socks.values()) service.close(id);
+      socks = new Map();
+    }
+    function trace(dir, text) {
+      if (dir === '<' && text.startsWith('{"event"')) return countEvent();
+      log((dir === '>' ? '→ ' : '← ') + text, dir === '>' ? 'in' : (text.includes('"ok":false') ? 'err' : ''));
+    }
+    window.addEventListener('message', (e) => {
+      if (e.source !== frame.contentWindow) return;
+      const m = e.data;
+      if (!m || m.octave !== 1 || typeof m.sock !== 'number') return;
+      const target = e.source;
+      const mine = socks;
+      const reply = (msg) => { msg.octave = 1; msg.sock = m.sock; target.postMessage(msg, '*'); };
+      if (m.type === 'open') {
+        if (socks.has(m.sock)) return;
+        const id = service.open((text) => { trace('<', text); reply({ type: 'message', data: text }); });
+        if (id) socks.set(m.sock, id);
+        reply({ type: 'opened', ok: !!id });
+      } else if (m.type === 'send' && typeof m.data === 'string') {
+        const id = mine.get(m.sock);
+        if (!id) return reply({ type: 'closed' });
+        trace('>', m.data);
+        service.send(id, m.data);
+      } else if (m.type === 'close') {
+        const id = mine.get(m.sock);
+        if (id) { service.close(id); mine.delete(m.sock); }
+      }
+    });
+
+    function frontendUrl(value) {
+      if (BUNDLED.some((f) => f.id === value)) return new URL(`frontends/${value}/`, location.href);
+      const u = new URL(value, location.href);
+      return u;
+    }
+
+    async function loadFrontend(value) {
+      closeFrontendConnections();
+      frame.style.display = 'none';
+      $('loader').style.display = 'flex';
+      $('loader').classList.remove('failed');
+      status.textContent = 'Loading the frontend';
+      let base;
+      try {
+        base = frontendUrl(value);
+        const page = base.pathname.endsWith('.html') ? base : new URL('index.html', base);
+        if (!page.pathname.endsWith('.html')) throw new Error('not a page');
+        const response = await fetch(page, { mode: 'cors' });
+        if (!response.ok) throw new Error(`HTTP ${response.status} for ${page}`);
+        let html = await response.text();
+        const head = `<base href="${new URL('.', page).href}"><script>${shimSource()}<\/script>`;
+        html = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + head) : head + html;
+        frame.srcdoc = html;
+        frame.style.display = 'block';
+        $('loader').style.display = 'none';
+        const u = new URL(location.href);
+        u.searchParams.set('frontend', value);
+        history.replaceState(null, '', u);
+        log('loaded ' + page.href);
+      } catch (e) {
+        fail(`Could not load the frontend ${value}: ${e.message}. A frontend from another site must allow it (CORS; GitHub Pages does), and its files must be fetchable from this page.`);
+      }
+    }
+
+    $('load').addEventListener('click', () => loadFrontend(urlBox.value.trim() || pick.value));
+    pick.addEventListener('change', () => { urlBox.value = ''; loadFrontend(pick.value); });
+    urlBox.addEventListener('keydown', (e) => { if (e.key === 'Enter') loadFrontend(urlBox.value.trim() || pick.value); });
+    loadFrontend(urlBox.value.trim() || pick.value);
+  })();
+  </script>
+</body>
+</html>
