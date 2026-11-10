@@ -2,6 +2,10 @@
 
 What a frontend, a script or another program can read and drive in OCTAVE, without Qt or QML. The QML UI that ships with OCTAVE sees the same objects. Protocol and transport: [wiki/utilities.html#service-protocol](../../wiki/utilities.html#service-protocol). A browsable page built from these files: [wiki/api-reference.html](../../wiki/api-reference.html).
 
+## License
+
+The backend is GPL-3.0-or-later. These files describe its interface; the clients built from them (`sdk/`), the starter projects (`templates/`) and the example frontends (`examples/frontends/`) are MIT, each folder with its own `LICENSE`. A frontend that only talks to OCTAVE over this protocol is a separate program and may use any license: that is the project's intent and its reading of the GPL (not legal advice). See `wiki/writing-a-frontend.html#license`.
+
 ## Files
 
 | File | What | Source |

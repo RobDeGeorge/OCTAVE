@@ -2,6 +2,8 @@
 
 Copy one of these folders and you have an OCTAVE frontend that connects, pairs when it is not on the head unit (asking only for the media permission), shows RPM and speed live, plays and pauses, and shows the cover. Each is complete on its own, under 200 lines, with its own README, and each has a check that runs it against the simulated car, so they cannot rot (ctest `template_js`, `template_python`, `template_go`, each registered when its language is found).
 
+Every template is MIT ([`LICENSE`](LICENSE), and a copy in each folder): copy one and license your frontend however you like ([why that works](../wiki/writing-a-frontend.html#license)).
+
 | Folder | Language | Runs where | Client |
 |---|---|---|---|
 | [`hello-car-js/`](hello-car-js/) | plain JavaScript, no bundler | a browser, served by OCTAVE itself with `--web-root` | `octave.js`, 60 lines, in the folder |

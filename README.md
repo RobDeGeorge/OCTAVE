@@ -295,4 +295,6 @@ Copyright 2026 Rob DeGeorge.
 
 OCTAVE is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [LICENSE](LICENSE) for the full text.
 
+The service clients (`sdk/`), starter projects (`templates/`) and example frontends (`examples/frontends/`) are MIT, so a frontend you build on them can use any license ([Your Frontend, Your License](wiki/writing-a-frontend.html#license)).
+
 Code published before 2026-10-12 (v0.9.4 and earlier) was released under the MIT License and remains available under those terms.

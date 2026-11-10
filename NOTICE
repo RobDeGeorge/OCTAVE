@@ -8,6 +8,10 @@ https://github.com/RobDeGeorge/OCTAVE
 Licensed under the GNU General Public License, version 3 or (at your option)
 any later version (GPL-3.0-or-later). See LICENSE for the full text.
 
+Except: sdk/, templates/ and examples/frontends/ (the service clients, starter
+projects and example frontends) are under the MIT License (the LICENSE file in
+each), so frontends built on them may use any license.
+
 Third-party code bundled in this repository:
 
 - QR Code generator library, Copyright (c) Project Nayuki, MIT License
