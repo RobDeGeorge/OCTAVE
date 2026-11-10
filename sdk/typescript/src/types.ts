@@ -521,6 +521,8 @@ export interface FrontendManager {
     forcedQmlReason: string
     /** QString, notify lastErrorChanged */
     lastError: string
+    /** int, notify trialChanged */
+    trialSecondsLeft: number
   }
   methods: {
     installFromFolder: { args: [path: string]; returns: string }
@@ -529,12 +531,18 @@ export interface FrontendManager {
     setActive: { args: [id: string]; returns: boolean }
     clearForcedQml: { args: []; returns: void }
     manifestOf: { args: [id: string]; returns: Record<string, unknown> }
+    tryFrontend: { args: [id: string, seconds: number]; returns: boolean }
+    keepTrial: { args: []; returns: void }
+    restartNow: { args: []; returns: void }
   }
   signals: {
     frontendsChanged: []
     activeChanged: []
     lastErrorChanged: []
     installed: [id: string]
+    trialChanged: []
+    trialExpired: []
+    restartRequested: []
   }
 }
 
@@ -1983,6 +1991,7 @@ export interface VolumeController {
     percentChanged: [percent: number]
     mutedChanged: [muted: boolean]
     effectivelyMutedChanged: []
+    escapeGesture: []
   }
 }
 

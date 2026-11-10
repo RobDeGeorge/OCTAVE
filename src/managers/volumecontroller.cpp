@@ -96,6 +96,17 @@ void VolumeController::toggleMute()
         return;
     m_lastToggle.start();
 
+    if (!m_clock.isValid())
+        m_clock.start();
+    const qint64 now = m_clock.elapsed();
+    m_recentToggles.append(now);
+    while (!m_recentToggles.isEmpty() && now - m_recentToggles.first() > kEscapeWindowMs)
+        m_recentToggles.removeFirst();
+    if (m_recentToggles.size() >= kEscapePresses) {
+        m_recentToggles.clear();
+        emit escapeGesture();
+    }
+
     if (m_percent == 0) {
         // Nothing to unmute to: come back at the startup volume
         const int restore = m_settings ? toPercentStatic(m_settings->startUpVolume()) : 0;

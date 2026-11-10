@@ -444,6 +444,103 @@ private slots:
 #endif
     }
 
+    void tryingAScreenGoesBackByItself()
+    {
+#if !QT_CONFIG(process) || defined(Q_OS_ANDROID) || defined(Q_OS_IOS)
+        QSKIP("exec frontends need a desktop build");
+#else
+        QTemporaryDir tmp;
+        FrontendManager fm;
+        const QString root = tmp.filePath("frontends");
+        fm.setRoot(root);
+        QJsonObject m = webManifest("org.test.exec");
+        m.remove("web");
+        m.insert("exec", QJsonObject{{FrontendManifest::currentPlatform(), QJsonArray{"bin/run"}}});
+        write(tmp.filePath("exec") + "/octave-frontend.json", json(m));
+        write(tmp.filePath("exec") + "/bin/run", "#!/bin/sh\n");
+        QCOMPARE(fm.installFromFolder(tmp.filePath("exec")), QStringLiteral("org.test.exec"));
+        QVERIFY(!fm.installFromFolder(makeWebFolder(tmp, webManifest())).isEmpty());
+
+        // A web frontend doesn't replace the screen: nothing to try
+        QSignalSpy restart(&fm, &FrontendManager::restartRequested);
+        QVERIFY(!fm.tryFrontend("com.example.dash", 60));
+        QVERIFY(fm.lastError().contains("web frontend"));
+        QVERIFY(!fm.tryFrontend("org.test.missing", 60));
+        QCOMPARE(restart.count(), 0);
+
+        // From the QML UI: tried now, the QML UI after
+        FrontendManager::forceQml(root, "earlier crash");
+        QVERIFY(fm.tryFrontend("org.test.exec", 5));   // clamped up to the minimum
+        QCOMPARE(restart.count(), 1);
+        QCOMPARE(fm.activeId(), QStringLiteral("org.test.exec"));
+        QVERIFY(!fm.forcedQml());   // a fresh choice clears USE_QML
+
+        FrontendManager::Trial t = FrontendManager::beginTrial(root);
+        QVERIFY(t.active());
+        QCOMPARE(t.id, QStringLiteral("org.test.exec"));
+        QCOMPARE(t.previous, QString());
+        QCOMPARE(t.seconds, FrontendManager::kMinTrialSeconds);
+        QVERIFY(!QFile::exists(QDir(root).filePath("TRIAL")));
+        QVERIFY(QFile::exists(QDir(root).filePath("TRIAL.running")));
+        QCOMPARE(FrontendManager::bootChoice(root, false).kind, FrontendManager::Boot::Exec);
+
+        // Time is up: the previous screen is back
+        FrontendManager::endTrial(root);
+        QCOMPARE(fm.activeId(), QString());
+        QVERIFY(!QFile::exists(QDir(root).filePath("TRIAL.running")));
+        QCOMPARE(FrontendManager::bootChoice(root, false).kind, FrontendManager::Boot::Qml);
+
+        // A trial run that never ended (power cut): the next start goes back
+        QVERIFY(fm.tryFrontend("org.test.exec", 60));
+        QVERIFY(FrontendManager::beginTrial(root).active());
+        t = FrontendManager::beginTrial(root);
+        QVERIFY(!t.active());
+        QVERIFY2(t.note.contains("did not end"), qPrintable(t.note));
+        QCOMPARE(fm.activeId(), QString());
+
+        // Kept: it stays the screen, and later starts are no trial
+        QVERIFY(fm.tryFrontend("org.test.exec", 60));
+        QVERIFY(FrontendManager::beginTrial(root).active());
+        fm.setRunningId("org.test.exec");
+        QSignalSpy changed(&fm, &FrontendManager::trialChanged);
+        fm.startTrialCountdown(60);
+        QCOMPARE(fm.trialSecondsLeft(), 60);
+        fm.keepTrial();
+        QCOMPARE(fm.trialSecondsLeft(), 0);
+        QVERIFY(changed.count() >= 2);
+        QVERIFY(!QFile::exists(QDir(root).filePath("TRIAL.running")));
+        QVERIFY(!FrontendManager::beginTrial(root).active());
+        QCOMPARE(fm.activeId(), QStringLiteral("org.test.exec"));
+
+        // Trying another while one runs: back to the running one after
+        QJsonObject m2 = m;
+        m2.insert("id", "org.test.other");
+        write(tmp.filePath("other") + "/octave-frontend.json", json(m2));
+        write(tmp.filePath("other") + "/bin/run", "#!/bin/sh\n");
+        QCOMPARE(fm.installFromFolder(tmp.filePath("other")), QStringLiteral("org.test.other"));
+        QVERIFY(fm.tryFrontend("org.test.other", 60));
+        t = FrontendManager::beginTrial(root);
+        QCOMPARE(t.previous, QStringLiteral("org.test.exec"));
+        FrontendManager::endTrial(root);
+        QCOMPARE(fm.activeId(), QStringLiteral("org.test.exec"));
+
+        // A hand-written TRIAL that names a path is ignored
+        write(QDir(root).filePath("TRIAL"), R"({"id": "../evil", "previous": "", "seconds": 60})");
+        t = FrontendManager::beginTrial(root);
+        QVERIFY(!t.active());
+        QCOMPARE(fm.activeId(), QStringLiteral("org.test.exec"));
+#endif
+    }
+
+    void trialCountdownExpires()
+    {
+        FrontendManager fm;
+        QSignalSpy expired(&fm, &FrontendManager::trialExpired);
+        fm.startTrialCountdown(1);
+        QVERIFY(expired.wait(3000));
+        QCOMPARE(fm.trialSecondsLeft(), 0);
+    }
+
     void removeAndTheRunningOne()
     {
         QTemporaryDir tmp;

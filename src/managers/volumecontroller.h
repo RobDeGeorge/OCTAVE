@@ -2,6 +2,7 @@
 #define VOLUMECONTROLLER_H
 
 #include <QElapsedTimer>
+#include <QList>
 #include <QObject>
 
 #include <algorithm>
@@ -43,8 +44,12 @@ class VolumeController : public QObject
     Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY mutedChanged)
     // muted, or the volume is 0 %: what the mute icons show
     Q_PROPERTY(bool effectivelyMuted READ effectivelyMuted NOTIFY effectivelyMutedChanged)
+    Q_CLASSINFO("octave.experimental.escapeGesture", "new in 0.9.6")
 
 public:
+    static constexpr int kEscapePresses = 5;
+    static constexpr int kEscapeWindowMs = 4000;
+
     /**
      * @brief Construct a VolumeController.
      * @param settingsManager  Pointer to the app-wide SettingsManager (required).
@@ -96,6 +101,15 @@ signals:
     void percentChanged(int percent);
     void mutedChanged(bool muted);
     void effectivelyMutedChanged();
+    /**
+     * @brief Mute was pressed kEscapePresses times within kEscapeWindowMs.
+     *
+     * The way back to the built-in screen that works whatever is on it:
+     * while an installed program frontend is the screen, main.cpp answers
+     * it by going back to the QML UI (frontendmanager.h). Counts every
+     * accepted toggleMute(), whichever input it came from.
+     */
+    void escapeGesture();
 
 public slots:
     /**
@@ -139,6 +153,9 @@ private:
     bool m_muted = false;
     int m_notifyingPercent = 0;   // depth inside percentChanged (see applyVolume)
     QElapsedTimer m_lastToggle;
+    // When each of the last kEscapePresses accepted toggles came (escapeGesture)
+    QElapsedTimer m_clock;
+    QList<qint64> m_recentToggles;
 };
 
 #endif // VOLUMECONTROLLER_H

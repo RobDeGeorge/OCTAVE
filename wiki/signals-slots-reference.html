@@ -579,6 +579,7 @@
           <thead><tr><th>Signal</th><th>Description</th></tr></thead>
           <tbody>
             <tr><td><code>percentChanged(int percent)</code>, <code>mutedChanged(bool muted)</code>, <code>effectivelyMutedChanged()</code></td><td>Property notifies; <code>volumeApplied</code> still fires on every <code>applyVolume()</code> except an echo of <code>percentChanged</code>, <code>percentChanged</code> only on a real change</td></tr>
+            <tr><td><code>escapeGesture()</code></td><td>Mute pressed five times within four seconds (every accepted <code>toggleMute()</code> counts, from any input). While an installed program frontend is the screen, OCTAVE answers it by going back to the built-in UI (<a href="writing-a-frontend.html#install">Writing a Frontend</a>) <span class="cmt">(experimental)</span></td></tr>
             <tr><td><code>volumeApplied(int percent, float linear)</code></td><td>After every <code>applyVolume()</code>: clamped percent and the linear 0&ndash;1 value. <code>main.cpp</code> connects it to <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code> and <code>esp32VolumeManager.send_volume_update(percent)</code></td></tr>
           </tbody>
         </table>
@@ -1654,6 +1655,7 @@
             <tr><td><code>runningId</code></td><td><code>QString</code></td><td>constant</td><td>&mdash;</td><td>What this run shows, decided at start (<code>""</code> = the QML UI)</td></tr>
             <tr><td><code>forcedQml</code>, <code>forcedQmlReason</code></td><td><code>bool</code>, <code>QString</code></td><td>read-only</td><td><code>activeChanged</code></td><td><code>USE_QML</code> is present (an exec frontend is not started) and its text</td></tr>
             <tr><td><code>lastError</code></td><td><code>QString</code></td><td>read-only</td><td><code>lastErrorChanged</code></td><td>Why the last install / remove / <code>setActive</code> failed; <code>""</code> after a success</td></tr>
+            <tr><td><code>trialSecondsLeft</code></td><td><code>int</code></td><td>read-only</td><td><code>trialChanged</code></td><td>Seconds until the screen being tried goes back to the previous one; 0 when this run is not a trial or it was kept <span class="cmt">(experimental)</span></td></tr>
           </tbody>
         </table>
         <h3>Invokables &amp; Slots</h3>
@@ -1666,6 +1668,9 @@
             <tr><td><code>setActive(QString id)</code></td><td><code>bool</code></td><td>The screen from the next start; <code>""</code> = the QML UI. Refuses one that can't run here</td></tr>
             <tr><td><code>clearForcedQml()</code></td><td><code>void</code></td><td>Delete <code>USE_QML</code></td></tr>
             <tr><td><code>manifestOf(QString id)</code></td><td><code>QVariantMap</code></td><td>One row of <code>frontends</code>, <code>{}</code> if none</td></tr>
+            <tr><td><code>tryFrontend(QString id, int seconds)</code></td><td><code>bool</code></td><td>Restart now on the exec frontend <code>id</code> for 15&ndash;900 s, then on the screen this run shows; refuses a web frontend <span class="cmt">(experimental)</span></td></tr>
+            <tr><td><code>keepTrial()</code></td><td><code>void</code></td><td>Keep the screen being tried; the <code>read</code> permission is enough, so the frontend itself can offer it <span class="cmt">(experimental)</span></td></tr>
+            <tr><td><code>restartNow()</code></td><td><code>void</code></td><td>Restart OCTAVE so a <code>setActive</code> choice takes effect <span class="cmt">(experimental)</span></td></tr>
           </tbody>
         </table>
         <h3>Signals</h3>
@@ -1674,6 +1679,8 @@
           <tbody>
             <tr><td><code>frontendsChanged()</code>, <code>activeChanged()</code>, <code>lastErrorChanged()</code></td><td>As the properties change</td></tr>
             <tr><td><code>installed(QString id)</code></td><td>An install finished</td></tr>
+            <tr><td><code>trialChanged()</code></td><td><code>trialSecondsLeft</code> changed (every second during a trial)</td></tr>
+            <tr><td><code>restartRequested()</code></td><td>OCTAVE is about to restart (<code>tryFrontend</code>, <code>restartNow</code>)</td></tr>
           </tbody>
         </table>
 

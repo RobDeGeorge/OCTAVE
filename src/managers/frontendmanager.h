@@ -24,18 +24,35 @@
 // it after repeated crashes and anyone can create it by hand on the boot
 // volume). `octave --qml` does the same for one run.
 //
+// Trying a screen (tryFrontend): an exec frontend can be tried for a few
+// minutes. TRIAL holds {id, previous, seconds}; OCTAVE restarts on it
+// (restartRequested), renames TRIAL to TRIAL.running at the start
+// (beginTrial) and counts down (trialSecondsLeft); at zero, or when the
+// frontend gives up, the previous screen is back (endTrial) and OCTAVE
+// restarts on it. keepTrial() (the user liked it; any connected frontend
+// may call it, since the user chose to try this one) makes it the screen
+// for good. A TRIAL.running found at a start means the trial run never
+// ended on its own (power cut, crash): the previous screen comes back
+// then too, so turning the car off and on always ends a trial.
+//
+// The escape: VolumeController::escapeGesture (mute pressed five times
+// within four seconds, from any input: the knob, the gesture sensor, a
+// frontend) ends an exec frontend's run, writes USE_QML and restarts on
+// the QML UI (main.cpp).
+//
 // Service object `frontendManager`: changes need the `system` permission.
 
 #include "frontendmanifest.h"
 
 #include <QObject>
+#include <QTimer>
 #include <QVariantList>
 
 class FrontendManager : public QObject
 {
     Q_OBJECT
     Q_CLASSINFO("octave.scope", "system")
-    Q_CLASSINFO("octave.scope.read", "manifestOf")
+    Q_CLASSINFO("octave.scope.read", "manifestOf keepTrial")
     // [{id, name, version, description, kind, protocol, scopes, command,
     //   active, compatible, problem, path}]
     Q_PROPERTY(QVariantList frontends READ frontends NOTIFY frontendsChanged)
@@ -48,6 +65,15 @@ class FrontendManager : public QObject
     Q_PROPERTY(QString forcedQmlReason READ forcedQmlReason NOTIFY activeChanged)
     // Why the last install / remove / setActive failed ("" after a success)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
+    // Seconds until a tried screen goes back to the previous one; 0 when
+    // this run is not a trial (or it was kept)
+    Q_PROPERTY(int trialSecondsLeft READ trialSecondsLeft NOTIFY trialChanged)
+    Q_CLASSINFO("octave.experimental.trialSecondsLeft", "trying a screen is new in 0.9.6")
+    Q_CLASSINFO("octave.experimental.tryFrontend", "trying a screen is new in 0.9.6")
+    Q_CLASSINFO("octave.experimental.keepTrial", "trying a screen is new in 0.9.6")
+    Q_CLASSINFO("octave.experimental.restartNow", "new in 0.9.6")
+    Q_CLASSINFO("octave.experimental.trialChanged", "trying a screen is new in 0.9.6")
+    Q_CLASSINFO("octave.experimental.restartRequested", "new in 0.9.6")
 
 public:
     static constexpr int kMaxFiles = 10000;
@@ -80,6 +106,18 @@ public:
     Q_INVOKABLE void clearForcedQml();
     // The installed manifest as frontends() lists it, {} if none
     Q_INVOKABLE QVariantMap manifestOf(const QString &id) const;
+    // Make the exec frontend `id` the screen for `seconds` (clamped to
+    // kMinTrialSeconds..kMaxTrialSeconds), then go back to the current
+    // one by itself. OCTAVE restarts at once (restartRequested)
+    Q_INVOKABLE bool tryFrontend(const QString &id, int seconds);
+    // Keep the screen being tried: no going back when the time is up
+    Q_INVOKABLE void keepTrial();
+    // Restart OCTAVE now, so a choice made with setActive takes effect
+    Q_INVOKABLE void restartNow();
+
+    int trialSecondsLeft() const { return m_trialLeft; }
+    // main.cpp, in a trial run: count down from `seconds`; trialExpired at 0
+    void startTrialCountdown(int seconds);
 
     // ── At start, before AppCore (main.cpp) ──
     struct Boot {
@@ -94,6 +132,22 @@ public:
     static Boot bootChoice(const QString &root, bool qmlFlag);
     // Write USE_QML with `reason`
     static void forceQml(const QString &root, const QString &reason);
+    struct Trial {
+        QString id;         // the frontend being tried; empty = no trial
+        QString previous;   // the screen to go back to ("" = the QML UI)
+        int seconds = 0;
+        QString note;       // what beginTrial did, for the log
+        bool active() const { return !id.isEmpty(); }
+    };
+    static constexpr int kMinTrialSeconds = 15;
+    static constexpr int kMaxTrialSeconds = 900;
+    static constexpr int kDefaultTrialSeconds = 120;
+    // At start, before bootChoice: TRIAL becomes TRIAL.running and is
+    // returned; a TRIAL.running left by a run that never ended its trial
+    // is undone at once (the previous screen is back) and no trial runs
+    static Trial beginTrial(const QString &root);
+    // Undo the running trial: the previous screen is ACTIVE again
+    static void endTrial(const QString &root);
     // The installed manifest of `id` under `root`, checked; empty id if bad
     static FrontendManifest load(const QString &root, const QString &id, QStringList *errors);
     // Why `m` can't run in this build ("" if it can)
@@ -105,6 +159,11 @@ signals:
     void lastErrorChanged();
     // An install finished (id) for the Settings page
     void installed(const QString &id);
+    void trialChanged();
+    // The time for the screen being tried is up (main.cpp goes back)
+    void trialExpired();
+    // tryFrontend / restartNow: main.cpp quits and starts OCTAVE again
+    void restartRequested();
 
 private:
     QString fail(const QString &why);
@@ -115,6 +174,8 @@ private:
     QString m_root;
     QString m_runningId;
     QString m_lastError;
+    QTimer *m_trialTimer = nullptr;
+    int m_trialLeft = 0;
 };
 
 #endif // FRONTENDMANAGER_H

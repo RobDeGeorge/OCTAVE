@@ -372,8 +372,10 @@ Flickable {
 
             SettingDescription {
                 text: "Other screens for OCTAVE, made by anyone with the service API. A web frontend is served to "
-                      + "browsers; a program frontend replaces this screen. The choice takes effect at the next start. "
-                      + "To get this screen back: start with --qml, or put a file named USE_QML in the frontends folder."
+                      + "browsers; a program frontend replaces this screen. Try one for two minutes and this screen "
+                      + "comes back by itself (so does turning the car off and on). To get this screen back at any "
+                      + "time: press mute five times within four seconds (the knob, a gesture or the frontend's own "
+                      + "button), start with --qml, or put a file named USE_QML in the frontends folder."
             }
 
             Text {
@@ -394,15 +396,25 @@ Flickable {
                 height: pageRoot.dp(30)
                 onClicked: fm.clearForcedQml()
             }
-            Text {
+            RowLayout {
                 visible: !!fm && !fm.forcedQml && fm.activeId !== fm.runningId
                 Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                text: fm ? "Showing " + pageRoot.frontendName(fm.runningId) + " now; " + pageRoot.frontendName(fm.activeId)
-                           + " from the next start." : ""
-                color: App.Style.secondaryTextColor
-                font.pixelSize: App.Spacing.overallText * 0.8
-                font.family: App.Style.fontFamily
+                spacing: App.Spacing.overallSpacing
+                Text {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: fm ? "Showing " + pageRoot.frontendName(fm.runningId) + " now; " + pageRoot.frontendName(fm.activeId)
+                               + " from the next start." : ""
+                    color: App.Style.secondaryTextColor
+                    font.pixelSize: App.Spacing.overallText * 0.8
+                    font.family: App.Style.fontFamily
+                }
+                SettingsButton {
+                    objectName: "restartForFrontend"
+                    text: "Restart now"
+                    height: pageRoot.dp(28)
+                    onClicked: fm.restartNow()
+                }
             }
 
             RowLayout {
@@ -476,6 +488,17 @@ Flickable {
                                 font.pixelSize: App.Spacing.overallText * 0.85
                                 font.family: App.Style.fontFamily
                                 elide: Text.ElideRight
+                            }
+                            SettingsButton {
+                                objectName: "tryFrontend_" + modelData.id
+                                // A program frontend replaces this screen: try it, and this screen comes back
+                                visible: modelData.kind !== "web"
+                                text: "Try"
+                                enabled: !modelData.active && modelData.compatible
+                                tooltipText: modelData.compatible ? "Restart on it now; back to this screen after two minutes"
+                                                                  : modelData.problem
+                                height: pageRoot.dp(28)
+                                onClicked: if (!fm.tryFrontend(modelData.id, 120)) pageRoot.frontendStatus = fm.lastError
                             }
                             SettingsButton {
                                 objectName: "useFrontend_" + modelData.id
