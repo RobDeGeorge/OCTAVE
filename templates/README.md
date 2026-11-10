@@ -22,4 +22,6 @@ then open <http://127.0.0.1:9876/>, or run the Python or Go one against the same
 
 `hello-car-js` and `hello-car-python` each carry an `octave-frontend.json`, so the folder is also an installable frontend: Settings > Device > Frontends > Install from folder, then Use (or `frontendManager.installFromFolder(path)` and `setActive(id)` over the service). From the next start the JavaScript one is served at `/` and the Python one runs as the screen in place of the built-in UI, each with only the **media** permission. Each README's "Install it as the screen" has the details; ctest `templates_install` runs both that way against the simulated car. `hello-car-go` has no manifest yet: to install it, build it, read `OCTAVE_HOST`, `OCTAVE_PORT` and `OCTAVE_TOKEN` from the environment as `hello_car.py` does, and add an `octave-frontend.json` whose `exec` names the binary inside the folder.
 
+Bigger examples: the five complete frontends in [`examples/frontends/`](../examples/frontends/) ([gallery](../wiki/frontend-gallery.html)). Try a web one in your browser in the [frontend playground](https://robdegeorge.com/OCTAVE/playground.html).
+
 Where to go from a template: `wiki/writing-a-frontend.html` (the walkthrough), `docs/api/<object>.json` (every object's members), `docs/api/protocol.json` (the protocol), `sdk/` (typed clients with reconnects).

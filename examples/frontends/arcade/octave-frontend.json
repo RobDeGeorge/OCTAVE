@@ -1,0 +1,12 @@
+{
+  "id": "org.octave.example.arcade",
+  "name": "Arcade",
+  "version": "0.1.0",
+  "description": "An 8-bit arcade dashboard in C + SDL2: speed, revs, the track and trouble codes",
+  "protocol": [1, 3],
+  "scopes": ["media", "vehicle"],
+  "exec": {
+    "linux": ["build/octave-arcade", "--fullscreen"],
+    "macos": ["build/octave-arcade", "--fullscreen"]
+  }
+}

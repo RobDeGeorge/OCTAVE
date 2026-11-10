@@ -39,7 +39,7 @@
         <h2 id="what-you-get">What You Get</h2>
         <p>Every manager the bundled UI uses: settings, media and now playing, volume, OBD and the live value of every PID and IMU reading, the black box, the shift light, phone mirroring control, dashboards. Each one's properties, methods and signals are listed with their types in the generated <a href="api-reference.html">Service API Reference</a> (<span class="file-path">docs/api/</span>); what they mean is in <a href="signals-slots-reference.html">Signals &amp; Slots API</a>. <code>tst_conformance</code> guarantees the bundled UI uses nothing outside that list, so whatever it can do, your frontend can too.</p>
         <p>Four working clients come with the repo: <span class="file-path">sdk/web/index.html</span> (plain JavaScript, about 250 lines), <span class="file-path">sdk/python/octave_client</span> (stdlib only), <span class="file-path">sdk/go</span> (standard library only, generated from <span class="file-path">docs/api/protocol.json</span> and the object files: one Go type per service object, with a method per API method) and <span class="file-path">sdk/typescript</span> (an npm package for browsers and Node; its envelope is generated from <span class="file-path">docs/api/protocol.json</span> and its object types from the object files, so a wrong call fails to compile and a deprecated member shows as such in the editor). Read one of them next to this page.</p>
-        <p>Five whole frontends written to prove the API (TypeScript + Svelte, Python + Textual, Go + Gio, Rust + egui, C + SDL2, together reaching every feature of the bundled UI) are kept on the <code>frontends-experiment</code> branch as worked examples; they are not part of <code>main</code>.</p>
+        <p>Five whole frontends written to prove the API (TypeScript + Svelte, Python + Textual, Go + Gio, Rust + egui, C + SDL2, together reaching every feature of the bundled UI) are in <span class="file-path">examples/frontends/</span> as worked examples, MIT, each installable as the screen; see them in the <a href="frontend-gallery.html">Frontend Gallery</a>.</p>
 
         <h2 id="license">Your Frontend, Your License</h2>
         <p>OCTAVE itself (the app, its managers, the bundled QML UI) is GPL-3.0-or-later. Everything you would copy into a frontend is MIT: the clients in <span class="file-path">sdk/</span> (Python, Go, TypeScript, the web page), the starter projects in <span class="file-path">templates/</span> and the example frontends in <span class="file-path">examples/frontends/</span>, each folder with its own <span class="file-path">LICENSE</span>. Copy them, keep the MIT notice, and license the rest of your frontend however you like, open or closed.</p>
@@ -273,6 +273,7 @@ client.connect()
 
         <div class="related-pages">
           <h3>Related Pages</h3>
+          <a href="frontend-gallery.html" class="related-link">Frontend Gallery</a>
           <a href="api-reference.html" class="related-link">Service API Reference</a>
           <a href="utilities.html#service-protocol" class="related-link">Service protocol</a>
           <a href="signals-slots-reference.html" class="related-link">Signals &amp; Slots API</a>

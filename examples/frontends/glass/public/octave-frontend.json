@@ -1,0 +1,9 @@
+{
+  "id": "org.octave.example.glass",
+  "name": "Glass",
+  "version": "0.1.0",
+  "description": "A touch-first web frontend in TypeScript + Svelte: every page of the car, in a browser",
+  "protocol": [1, 3],
+  "scopes": ["media", "vehicle", "phone", "settings", "files", "system"],
+  "web": {"root": "."}
+}

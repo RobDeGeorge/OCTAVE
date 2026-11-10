@@ -19,7 +19,7 @@
 
 **Try it in your browser: https://robdegeorge.com/OCTAVE/** (the simulated car, no install, about 25 MB)
 
-### [Download](https://github.com/RobDeGeorge/OCTAVE/releases/latest) &nbsp;·&nbsp; [Wiki](https://robdegeorge.com/OCTAVE/wiki/) &nbsp;·&nbsp; [Build your own frontend](https://robdegeorge.com/OCTAVE/wiki/writing-a-frontend.html)
+### [Download](https://github.com/RobDeGeorge/OCTAVE/releases/latest) &nbsp;·&nbsp; [Wiki](https://robdegeorge.com/OCTAVE/wiki/) &nbsp;·&nbsp; [Build your own frontend](https://robdegeorge.com/OCTAVE/wiki/writing-a-frontend.html) &nbsp;·&nbsp; [Frontend playground](https://robdegeorge.com/OCTAVE/playground.html)
 
 </div>
 
@@ -125,7 +125,9 @@ with Client() as octave:
         print(event["values"])        # {'RPM': 2210, 'SPEED': 41}
 ```
 
-[SDKs](sdk/) for Python, TypeScript and Go, a no-build [web client](sdk/web/index.html), [starter projects](templates/) to copy, the full [API reference](https://robdegeorge.com/OCTAVE/wiki/api-reference.html), and a walkthrough: **[Writing a Frontend](https://robdegeorge.com/OCTAVE/wiki/writing-a-frontend.html)**. Install your frontend as the head unit's screen from Settings > Device > Frontends.
+[SDKs](sdk/) for Python, TypeScript and Go, a no-build [web client](sdk/web/index.html), [starter projects](templates/) to copy, the full [API reference](https://robdegeorge.com/OCTAVE/wiki/api-reference.html), and a walkthrough: **[Writing a Frontend](https://robdegeorge.com/OCTAVE/wiki/writing-a-frontend.html)**. Install your frontend as the head unit's screen from Settings > Device > Frontends; *Try* gives it two minutes, and five presses of mute always bring the built-in screen back.
+
+**[Try a frontend in your browser](https://robdegeorge.com/OCTAVE/playground.html)** against the real core and a simulated car, or browse the **[frontend gallery](https://robdegeorge.com/OCTAVE/wiki/frontend-gallery.html)**: five complete examples in Svelte, Textual, Gio, SDL2 and egui (`examples/frontends/`, MIT). Built one? See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 </td>
 </tr>
