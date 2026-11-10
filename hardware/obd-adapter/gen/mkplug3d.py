@@ -35,9 +35,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 MODELS = os.path.join(HERE, "..", "lib", "3dmodels")
 OUT = os.path.join(MODELS, "J1962_Male_Straight_Jiatel_CR-PG001.step")
 OUT_ASM = os.path.join(MODELS, "J1962_Edge_Joint_Assembly.step")
-# adapter board (see build.py plug): 40 x 18 x 1.6, slot 36 x 1.8 for the main board's tab
+# adapter board (see build.py plug): 40 x 18 x 1.6, slot 36 x 2.0 for the main board's tab
 ADAPTER = (40.0, 18.0, 1.6)
-SLOT = (36.0, 1.8)
+SLOT = (36.0, 2.0)
+PIN_SLOT = (2.6, 1.3)                # the blades' holes (mklib.j1962_plug_adapter has the same)
 BOARD_T = 1.6
 
 PITCH, ROW = 4.0, 8.6
@@ -112,7 +113,8 @@ def adapter():
     b = b.cut(slot)
     for k in range(1, 9):
         for y in (-ROW / 2, ROW / 2):
-            b = b.cut(Part.makeBox(2.2, 1.2, t + 2, V((4.5 - k) * PITCH - 1.1, y - 0.6, -t - 1)))
+            b = b.cut(Part.makeBox(PIN_SLOT[0], PIN_SLOT[1], t + 2,
+                                   V((4.5 - k) * PITCH - PIN_SLOT[0] / 2, y - PIN_SLOT[1] / 2, -t - 1)))
     pads = []
     for k in range(1, 9):                       # joint pads on the back, slot edge to pin
         for sgn in (-1, 1):

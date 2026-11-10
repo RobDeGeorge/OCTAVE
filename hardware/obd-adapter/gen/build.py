@@ -59,7 +59,7 @@ def project_files():
         json.dump(pro, f, indent=2)
     # battery-side nets keep HV_CLEARANCE from everything else (Freerouting gets the same rule
     # through the DSN classes; this makes KiCad's DRC and interactive router enforce it too)
-    cond = " || ".join(f"A.NetName == '{n}'" for n in sorted(HV))
+    cond = " || ".join(f"A.NetName == '{n}'" for n in sorted(HV) + [HV_SPARE + "*"])
     with open(os.path.join(PROJ, NAME + ".kicad_dru"), "w") as f:
         f.write("(version 1)\n"
                 f"(rule \"battery-side clearance\"\n  (condition \"({cond}) && A.NetName != B.NetName\")\n"
@@ -111,6 +111,8 @@ def pcb():
         r.SetTextSize(pcbnew.VECTOR2I(pcbnew.FromMM(0.8), pcbnew.FromMM(0.8)))
         r.SetTextThickness(pcbnew.FromMM(0.12))
     layout.place_all(board, d, fps)
+    # the mounting holes (layout.KEEPOUTS kept their squares free of parts); labels keep off them too
+    fps.update(pcbgen.add_holes(board, layout.HOLES, layout.HOLE_KEEP))
     crowded = layout.place_labels(fps, skip=layout.LABELS)
     if crowded:
         print("labels with no clear spot:", " ".join(sorted(crowded)))
@@ -121,7 +123,7 @@ def pcb():
     import mklib
     yc = layout.PLUG[1]
     pcbgen.outline(board, layout.X0, 0, layout.W, layout.H,
-                   tab=(yc - mklib.TAB / 2, yc + mklib.TAB / 2, mklib.ADAPTER[2]))
+                   tab=(yc - mklib.TAB / 2, yc + mklib.TAB / 2, mklib.TAB_DEPTH))
     # In1 is the GND plane (Freerouting sees it as a power layer); In2 is poured with 3V3 after routing
     pcbgen.zone(board, nets["GND"], pcbnew.In1_Cu, layout.X0, 0, layout.W, layout.H, clearance=0.25, solid=True)
     for fp in fps.values():
@@ -131,18 +133,18 @@ def pcb():
                 ls.RemoveLayer(pcbnew.B_Mask)
                 pad.SetLayerSet(ls)
     board.Save(PCB)
-    print("placed", len(fps), "footprints")
+    print("placed", len(fps) - len(layout.HOLES), "footprints,", len(layout.HOLES), "mounting holes")
 
 
 # track widths in um; anything not listed is 200. Keep a class no wider than the smallest pad it
-# lands on (Freerouting does not neck down): 3V3 and VDDA reach 0.3 mm LQFP pins, VBUS the USB-C.
+# lands on (Freerouting does not neck down): 3V3 reaches 0.3 mm LQFP pins, VBUS the USB-C.
 WIDTHS = {
     1200: ["VBAT_IN"],
     600: ["VBAT_F", "VBAT_P", "BUCK_SW", "5V"],
     # 5V_BUCK's power path (L1 -> output caps -> OR diode) is pre-routed at 1.0-1.2 mm; what is
     # left to route are branches to the CAN VCC pins (~70 mA each), the VPW reference and the FB divider
     400: ["5V_BUCK", "VBUS", "VBUS2", "3V3_ESP", "DLC_SW", "VJ1850", "KLINE", "LLINE", "KLINE_PU", "LLINE_PU"],
-    250: ["3V3", "VDDA", "GND"],
+    250: ["3V3", "GND"],
 }
 # nets that can sit at battery voltage (or ring like the switch node): wider clearance to the rest
 HV = {"VBAT_IN", "VBAT_F", "VBAT_P", "DLC_SW", "DLC_SW_G", "KLINE", "LLINE", "KLINE_PU", "LLINE_PU",
@@ -152,6 +154,10 @@ HV = {"VBAT_IN", "VBAT_F", "VBAT_P", "DLC_SW", "DLC_SW_G", "KLINE", "LLINE", "KL
       # diode's gate drive (above VBAT) and the buck's bootstrap (rides the switch node)
       "CAN1_TERM", "CAN2_TERM", "IDEAL_GATE", "IDEAL_VCAP", "BUCK_BOOT"}
 HV_CLEARANCE = 300
+# The plug's pads this board does not use (J1962 pins 1, 8, 9, 12, 13: the car maker's own, some at
+# battery voltage, pin 1 often switched 12 V) have a net each of this name. They get the same clearance:
+# route() adds them to HV
+HV_SPARE = "unconnected-(J6-"
 SIGNAL_WIDTH, SIGNAL_CLEARANCE = 150, 150   # um, the Default net class
 # nets the maze router lays before Freerouting runs (OBD_SEED=/A,/B sets them)
 SEED = []   # tried: seeding the ten nets earlier runs failed made Freerouting leave 12 instead of 4
@@ -168,6 +174,13 @@ def _width_of(net):
 
 def _clearance_of(net):
     return (HV_CLEARANCE if net.lstrip("/") in HV else SIGNAL_CLEARANCE) / 1000
+
+
+def _hv_spare(board):
+    """Add the plug's unused pads' nets to HV. Returns their names."""
+    spare = sorted(str(n) for n in board.GetNetsByName().keys() if str(n).startswith(HV_SPARE))
+    HV.update(spare)
+    return spare
 
 
 def _dsn_postprocess(text):
@@ -189,7 +202,9 @@ def _dsn_postprocess(text):
     import prewire
     ko = ""
     for i, (x0, y0, x1, y1) in enumerate(prewire.KEEPOUTS):
-        ko += f"(keepout \"k{i}\" (rect F.Cu {x0 * 1000:.0f} {-y1 * 1000:.0f} {x1 * 1000:.0f} {-y0 * 1000:.0f}))\n    "
+        # the buck's and the LDO's are for F.Cu; the plug's tab carries no copper on any layer
+        for layer in (("F.Cu", "In1.Cu", "In2.Cu", "B.Cu") if (x0, y0, x1, y1) == prewire.TAB_KEEPOUT else ("F.Cu",)):
+            ko += f"(keepout \"k{i}_{layer}\" (rect {layer} {x0 * 1000:.0f} {-y1 * 1000:.0f} {x1 * 1000:.0f} {-y0 * 1000:.0f}))\n    "
     # In2 around the LDO tab: no signals, so the 3V3 pour there is solid and its vias reach the plane
     x0, y0, x1, y1 = prewire.LDO_TAB
     ko += "" if IN2_PLANE else f"(keepout \"ldo_in2\" (rect In2.Cu {(x0 - 1) * 1000:.0f} {-(y1 + 1.5) * 1000:.0f} {(x1 + 2.5) * 1000:.0f} {-(y0 - 1.5) * 1000:.0f}))\n    "
@@ -198,7 +213,7 @@ def _dsn_postprocess(text):
     m = re.search(r"\(class kicad_default (.*?)\(circuit", text, re.S)
     names = m.group(1).split()
     special = {n for nets in WIDTHS.values() for n in nets}
-    keep = [n for n in names if n not in special]
+    bare = lambda n: n.strip('"').lstrip("/")    # noqa: E731  (the DSN quotes names with brackets in them)
     via = '(circuit\n        (use_via "Via[0-3]_600:300_um")\n      )'
 
     outer = '(circuit\n        (use_via "Via[0-3]_600:300_um")\n        (use_layer F.Cu B.Cu)\n      )'
@@ -209,8 +224,9 @@ def _dsn_postprocess(text):
         v = outer if (width >= 600 or "VBUS" in nets) else via
         return (f"(class {name} {' '.join(nets)}\n      {v}\n"
                 f"      (rule\n        (width {width})\n        (clearance {clear})\n      )\n    )\n    ")
-    hv_plain = [n for n in HV if n not in special and n in names]
-    keep = [n for n in keep if n[1:] not in HV]
+    # every net is in one class only: Freerouting takes the last one that lists it
+    hv_plain = [n for n in names if bare(n) in HV and bare(n) not in special]
+    keep = [n for n in names if bare(n) not in HV and bare(n) not in special]
     new = "(class kicad_default " + " ".join(keep) + "\n      (circuit"
     classes = ""
     for w, nets in WIDTHS.items():
@@ -280,14 +296,16 @@ def route():
     import prewire
     work = os.path.join(PROJ, "route")
     os.makedirs(work, exist_ok=True)
-    keepout = list(layout.KEEPOUTS)  # ESP32 antenna
+    keepout = list(layout.KEEPOUTS) + [prewire.TAB_KEEPOUT]  # ESP32 antenna (none now), the plug's tab
     d = obd_adapter.d
 
     board = pcbnew.LoadBoard(PCB)
+    print("battery-side clearance also round the plug's unused pads:", len(_hv_spare(board)))
     if os.path.exists(FROZEN) and not os.environ.get("OBD_REROUTE"):
         print(f"routing: replaying {_replay(board)} frozen tracks / vias from gen/routing.json")
         _copper(board, d, keepout, stitch=False)    # stitching vias are part of the frozen routing
         pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+        print("copper on the plug's tab:", prewire.on_tab(board) or "none")
         board.Save(PCB)
         drc()
         return
@@ -422,6 +440,7 @@ def _route_rest(board, d, keepout, pre_items, stitch):
     import maze
     left = maze.finish(board, _width_of, _clearance_of, prewire.KEEPOUTS, skip=("GND", "3V3"), hv=HV, hv_clearance=HV_CLEARANCE / 1000)
     print("nets still in pieces after the finisher:", left or "none")
+    print("copper on the plug's tab:", prewire.on_tab(board) or "none")
     board.Save(PCB)
     drc()
 
@@ -839,7 +858,7 @@ def plug():
     t.SetMirrored(True)
     t.SetTextSize(pcbnew.VECTOR2I(pcbnew.FromMM(0.8), pcbnew.FromMM(0.8)))
     t.SetTextThickness(pcbnew.FromMM(0.12))
-    t.SetPosition(pcbnew.VECTOR2I(pcbnew.FromMM(cx), pcbnew.FromMM(cy + 7.4)))
+    t.SetPosition(pcbnew.VECTOR2I(pcbnew.FromMM(cx), pcbnew.FromMM(cy + 7.7)))
     board.Add(t)
     board.Save(PLUG_PCB)
     rpt = os.path.join(PROJ, PLUG_NAME + "-drc.rpt")

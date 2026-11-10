@@ -38,9 +38,9 @@ SHEETS = [
 ]
 
 # nets drawn with a power symbol rather than a label
-RAILS = {"GND", "3V3", "5V", "5V_BUCK", "3V3_ESP", "VDDA", "VBAT_IN", "VBAT_F", "VBAT_P", "VBUS", "VBUS2",
+RAILS = {"GND", "3V3", "5V", "5V_BUCK", "3V3_ESP", "VBAT_IN", "VBAT_F", "VBAT_P", "VBUS", "VBUS2",
          "DLC_SW", "CMP_VCC", "VJ1850"}
-POWER_FLAGS = {"GND", "VBAT_IN", "VBUS", "VBUS2", "VBAT_F", "VBAT_P", "5V", "VDDA", "DLC_SW", "CMP_VCC", "5V_BUCK"}
+POWER_FLAGS = {"GND", "VBAT_IN", "VBUS", "VBUS2", "VBAT_F", "VBAT_P", "5V", "DLC_SW", "CMP_VCC", "5V_BUCK"}
 
 # away direction of a label / power symbol from its pin, per label angle (y down)
 AWAY = {0: (1, 0), 180: (-1, 0), 90: (0, -1), 270: (0, 1)}

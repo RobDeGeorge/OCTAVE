@@ -1,8 +1,3 @@
 Not assembled by JLCPCB (no LCSC number): fit by hand or leave off.
 
-JP1    ESP_ON                 Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical
-J3     ESP_PROG               Connector_PinHeader_2.54mm:PinHeader_1x05_P2.54mm_Vertical
-J5     EXP                    Connector_PinHeader_2.54mm:PinHeader_2x06_P2.54mm_Vertical
 J6     OBD-II plug (J1962 male) OCTAVE:J1962_Edge_Joint
-JP2    TERM1                  Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical
-JP3    TERM2                  Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical

@@ -54,9 +54,11 @@ mcu.notes = [
     "PC3 switches DLC_SW (battery to the J1850 supply, comparators, K/L pull-ups); PB2 picks 7.7 V VPW / 5.8 V PWM.",
     "PB4/PB6 carry UCPD dead-battery pull-downs until firmware sets PWR_CR3.UCPD_DBDIS: both are safe low at reset.",
     "DLC_SW_EN is on PC3, not PC10: the system bootloader may drive USART3 TX (PC10) and would switch DLC_SW on.",
+    "Firmware turns on the internal pull-ups of PA15 (USER button) and PC0 (KLINE_RX, an open-collector output).",
+    "VDDA / VREF+ are on 3V3 (100n + 1u at the pins): the ADC only reads the battery divider.",
 ]
 U(mcu, "MCU_ST_STM32G4:STM32G474RETx", "STM32G474RET6", "Package_QFP:LQFP-64_10x10mm_P0.5mm", {
-    "VBAT": "3V3", "VDD": "3V3", "VSS": "GND", "VSSA": "GND", "VDDA": "VDDA", "VREF+": "VDDA",
+    "VBAT": "3V3", "VDD": "3V3", "VSS": "GND", "VSSA": "GND", "VDDA": "3V3", "VREF+": "3V3",
     "PG10": "NRST", "PB8": "BOOT0",
     "PF0": "HSE_IN", "PF1": "HSE_OUT", "PC14": "ACC_INT1", "PC15": "ACC_INT2",
     "PA0": "ESP_RTS", "PA1": "ESP_CTS_M", "PA2": "MCU_TX_ESP_M", "PA3": "ESP_TX_MCU",
@@ -78,11 +80,13 @@ U(mcu, "MCU_ST_STM32G4:STM32G474RETx", "STM32G474RET6", "Package_QFP:LQFP-64_10x
 for _ in range(4):
     C(mcu, "100n", "3V3")
 C(mcu, "4.7u", "3V3")
-d.add(mcu, Part(_ref("FB"), "Device:FerriteBead_Small", "600R@100MHz", "Inductor_SMD:L_0603_1608Metric",
-                {"1": "3V3", "2": "VDDA"}, lcsc=LCSC.get("FB600")))
-C(mcu, "100n", "VDDA")
-C(mcu, "1u", "VDDA")
-C(mcu, "10n", "VDDA", lcsc_key="C10n")
+# VDDA / VREF+ (pins 29 / 28) are on 3V3 with their own 100n + 1u at the pins. FB1 (600R bead) and C8
+# (10n) between 3V3 and a separate VDDA net are gone: the only analogue input is the battery divider on
+# PA4 (10k source, 100n at the pin, read against the LDO's own +-1.5 %), which a bead does not improve.
+_ref("FB")
+C(mcu, "100n", "3V3")
+C(mcu, "1u", "3V3")
+_ref("C")   # C8
 C(mcu, "100n", "NRST")
 R(mcu, "10k", "BOOT0", "GND")
 d.add(mcu, Part(_ref("Y"), "Device:Crystal_GND24", "16MHz", "Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm",
@@ -92,7 +96,8 @@ C(mcu, "10p", "HSE_OUT", lcsc_key="CXTAL")
 
 # ---------------------------------------------------------------- debug, buttons, LEDs
 ui = d.block("ui", "Debug, buttons, LEDs")
-ui.notes = ["SWD: 2x5 1.27 mm Cortex debug header (ST-Link V3 / J-Link)."]
+ui.notes = ["SWD: 2x5 1.27 mm Cortex debug header (ST-Link V3 / J-Link).",
+            "USER button: PA15 to GND, internal pull-up (no resistor on the board)."]
 d.add(ui, Part(_ref("J"), "Connector:Conn_ARM_JTAG_SWD_10", "SWD",
                "Connector_PinHeader_1.27mm:PinHeader_2x05_P1.27mm_Vertical_SMD",
                {"1": "3V3", "2": "SWDIO", "3": "GND", "4": "SWCLK", "5": "GND", "6": None, "7": None,
@@ -103,7 +108,7 @@ for name, net, other in (("RESET", "NRST", "GND"), (None, None, None), ("USER", 
         continue
     d.add(ui, Part(ref, "Switch:SW_Push", name, "Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A",
                    {"1": net, "2": other}, lcsc=LCSC.get("SW")))
-R(ui, "10k", "3V3", "BTN_USER")
+_ref("R")   # R2 was the USER button's 10k pull-up: PA15 has one (on from reset, as JTDI; firmware keeps it on)
 for color in "RGB":
     led_a = f"LED_{color}_A"
     R(ui, "1k" if color == "R" else "330", f"LED_{color}", led_a)
@@ -158,7 +163,7 @@ C(esp, "22u", "3V3_ESP", fp=C1206)
 C(esp, "100n", "3V3_ESP")
 R(esp, "10k", "3V3_ESP", "ESP_EN")
 C(esp, "1u", "ESP_EN")
-R(esp, "10k", "3V3_ESP", "ESP_IO0")
+_ref("R")   # R10 was a 10k pull-up on IO0: the pin has its own (45k, on at reset); BOOT (SW5) / Q11 / PB5 still pull it low
 for mcu_net, esp_net in (("ESP_CTS_M", "ESP_CTS"), ("MCU_TX_ESP_M", "MCU_TX_ESP"),
                          ("ESP_IO0_M", "ESP_IO0"), ("ESP_EN_M", "ESP_EN")):
     R(esp, "1k", mcu_net, esp_net)
@@ -196,6 +201,9 @@ d.add(pw, Part(_ref("F"), "Device:Polyfuse", "2A 60V", "Fuse:Fuse_2920_7451Metri
                {"1": "VBAT_IN", "2": "VBAT_F"}, lcsc=LCSC["PTC"]))
 d.add(pw, Part(_ref("D"), "Device:D_TVS", "5.0SMDJ26CA", "Diode_SMD:D_SMC",
                {"A1": "VBAT_F", "A2": "GND"}, lcsc=LCSC["5.0SMDJ26CA"]))
+# The ideal diode stays (REVIEW 54): a Schottky here (tried on 2026-11-09, simulated in
+# verify/sim/sim_input_d29.py) saves three parts and 80 uA parked, but it leaks with the battery reversed
+# (VBAT_P to -0.7 V at 100 C, the buck's VIN is rated to -0.3 V) and costs 0.3 V of cranking headroom.
 C(pw, "100n", "VBAT_F")  # LM74700 input cap (datasheet: >= 22 nF required)
 U(pw, "Power_Management:LM74700", "LM74700QDBVRQ1", "Package_TO_SOT_SMD:SOT-23-6",
   {"ANODE": "VBAT_F", "CATHODE": "VBAT_P", "GATE": "IDEAL_GATE", "VCAP": "IDEAL_VCAP",
@@ -250,10 +258,11 @@ for n in ("VBAT_P", "5V", "3V3", "GND"):
     TP(pw, n)
 
 # ---------------------------------------------------------------- car connector
-car = d.block("car", "Car connector: SAE J1962 (OBD-II) male plug on the board, straight PCB pins")
+car = d.block("car", "Car connector: SAE J1962 (OBD-II) male plug on an adapter board across the left edge")
 car.notes = [
-    "Plugs straight into the car's diagnostic port; mounted on the bottom side so the board lies flat",
-    "under the dash with the parts facing out. Pins 4 (chassis) and 5 (signal) ground both go to GND.",
+    "The plug sits on the adapter board (obd-adapter-plug); the main board's tab goes through its slot and",
+    "the 16 edge pads (9-16 on top, 1-8 underneath) are soldered to it. The adapter's 9-16 row (the plug's",
+    "latch side) goes on the main board's top. Pins 4 (chassis) and 5 (signal) ground both go to GND.",
     "1, 8, 9, 12, 13 are not used (soldered for strength). Bench: an OBD-II female breakout or extension.",
 ]
 d.add(car, Part(_ref("J"), "Connector_Generic:Conn_02x08_Top_Bottom", "OBD-II plug (J1962 male)",
@@ -306,7 +315,7 @@ jb.notes = [
     "Supply: LM317L 240/680/470R = 7.24 V (VPW); J1850_VSEL high shorts the 470R = 4.79 V (PWM).",
     "Simulated over LM317L tolerance: Bus+ 6.42-7.54 V (VPW, spec 6.25-8) and 4.26-5.00 V (PWM, 3.80-5.25 assumed).",
     "Bus+: 2N7002 -> AO3401A -> Schottky; 10k + Schottky bus load. Bus-: MMBT3904 sink, 10k + Schottky pull-up to 5 V.",
-    "RX: LM2901B on CMP_VCC (DLC_SW via 470R, 33 V zener; 38 V abs max). VPW: Bus+ vs 5V_BUCK x 10/12.7, active high.",
+    "RX: LM2901B on CMP_VCC (DLC_SW via 470R, 33 V zener; 38 V abs max). VPW: Bus+ vs 5V_BUCK x 47/65 = 3.85 V, active high.",
     "PWM: Bus+ vs Bus-. Q7 base has 2.2k to GND: the bootloader's PC9 pull-up must not turn it on (Bus- low).",
     "Input clamps are 1N4148W (low leakage): Schottkys leak enough when hot to shift the thresholds behind 10k.",
     "No wave shaping (none of the ELM/STN/OpenDiag designs do); a Rev A option is an RC on the P-FET gate.",
@@ -355,9 +364,11 @@ d.add(jb, Part(_ref("D"), "Device:D_Zener", "BZT52C33", "Diode_SMD:D_SOD-123",
                {"K": "CMP_VCC", "A": "GND"}, lcsc=LCSC["BZT52C33"]))
 C(jb, "100n", "CMP_VCC")
 R(jb, "10k", "J1850_P", "VPW_IN")
-# VPW threshold 5.32 V x 47 / 60 = 4.17 V; 13k / 47k (was 2.7k / 10k, same ratio within 0.5 %) so the
-# divider draws 88 uA instead of 420 uA: it is on 5V_BUCK, which stays up while the car is parked
-R(jb, "13k", "5V_BUCK", "VPW_REF")
+# VPW threshold 5.32 V x 47 / 65 = 3.85 V (3.72-3.97 V over the buck's and the resistors' tolerance), the
+# middle of J1850's 3.5-4.25 V receive window. STN's 10 / 12.7 ratio is for a 5.0 V reference: on 5.32 V
+# it gave 4.17 V nominal and up to 4.30 V (REVIEW 45). 18k / 47k draws 82 uA: the divider is on 5V_BUCK,
+# which stays up while the car is parked
+R(jb, "18k", "5V_BUCK", "VPW_REF")
 R(jb, "47k", "VPW_REF", "GND")
 R(jb, "10k", "3V3", "VPW_RX")
 R(jb, "10k", "J1850_P", "PWM_INP")
@@ -378,7 +389,7 @@ iso.notes = [
     "510R 2 W pull-ups (1.1 W with a line held low at a 24 V jump start) fed from DLC_SW through 1N4148W.",
     "The diodes stop the car's own pull-up back-feeding the sleeping DLC_SW loads (that held K/L low with DLC_SW off).",
     "MMBT3904 sinks, 470R base: TX high = line low.",
-    "RX: LM2901 unit C, K vs DLC_SW/2 (10k/10k), K high -> KLINE_RX high (10k pull-up to 3.3 V).",
+    "RX: LM2901 unit C, K vs DLC_SW/2 (10k/10k), K high -> KLINE_RX high (PC0's internal pull-up, set by firmware).",
 ]
 for line, tx in (("KLINE", "KLINE_TX"), ("LLINE", "LLINE_TX")):
     d.add(iso, Part(_ref("D"), "Device:D", "1N4148W", "Diode_SMD:D_SOD-123",
@@ -394,7 +405,7 @@ for line, tx in (("KLINE", "KLINE_TX"), ("LLINE", "LLINE_TX")):
 R(iso, "10k", "KLINE", "K_IN")
 R(iso, "10k", "DLC_SW", "K_REF")
 R(iso, "10k", "K_REF", "GND")
-R(iso, "10k", "3V3", "KLINE_RX")
+_ref("R")   # R60 was KLINE_RX's 10k pull-up: PC0's internal pull-up (~40k, firmware) does it at 10.4 kbaud
 
 # ---------------------------------------------------------------- ESP32 USB
 # (last in the file so the parts added in Rev 0 round 3 don't renumber the rest)
@@ -404,7 +415,7 @@ eu.notes = [
     "load switch on through a diode, so esptool works on a board whose STM32 is blank.",
     "CH340C runs from 3V3_ESP: it is off whenever the ESP32 is, so it can't back-power the module through RXD0.",
     "Auto-reset: the usual two-NPN cross pair on DTR/RTS drives EN and IO0 (esptool's default reset).",
-    "1k in series with the CH340C TXD, so an adapter on J3 can still drive RXD0.",
+    "1k in series with the CH340C TXD: it limits the current into RXD0, and a probe on the net can still drive it.",
 ]
 d.add(eu, Part(_ref("J"), "Connector:USB_C_Receptacle_USB2.0_16P", "USB-C ESP32",
                "Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12",
@@ -439,13 +450,13 @@ for src in ("ESP_PWR_EN", "VBUS2"):
 
 # ---------------------------------------------------------------- CONFIG switch
 # One 4-way SMD DIP switch for the bench settings (it replaced three 2-pin jumpers and the BOOT0
-# button): 1 ESP_ON (3V3 -> PB6 / the ESP32 load switch), 2 / 3 the 120R CAN1 / CAN2 terminations,
+# button): 1 ESP_ON (3V3 -> 1k -> PB6 / the ESP32 load switch), 2 / 3 the 120R CAN1 / CAN2 terminations,
 # 4 BOOT0 (STM32 ROM bootloader on the next reset). Off = car use. Created last so the references
 # before it keep their numbers (SW6).
 ui.notes.append("CONFIG (SW6): 1 ESP_ON, 2 CAN1 120R, 3 CAN2 120R, 4 BOOT0. All off in the car.")
 d.add(ui, Part(_ref("SW"), "Switch:SW_DIP_x04", "CONFIG",
                "Button_Switch_SMD:SW_DIP_SPSTx04_Slide_KingTek_DSHP04TS_W7.62mm_P1.27mm",
-               {"1": "3V3", "8": "ESP_PWR_EN", "2": "CAN1_TERM", "7": "CAN1_L",
+               {"1": "ESP_ON_SW", "8": "ESP_PWR_EN", "2": "CAN1_TERM", "7": "CAN1_L",
                 "3": "CAN2_TERM", "6": "CAN2_L", "4": "3V3", "5": "BOOT0"}, lcsc=LCSC.get("DIP4")))
 
 # ---------------------------------------------------------------- ESP32 IO header
@@ -466,7 +477,8 @@ sn.notes = [
     "U15 LIS2DH12 on the STM32 I2C bus (0x19, SA0 high): wake-on-motion while parked (tow / break-in),",
     "crash spikes while driving. INT1 -> PC14, INT2 -> PC15 (EXTI, wake from Stop).",
     "U16 ATECC608B (0x60) on the same bus: signs the frozen OBD speed window for traffic stop evidence.",
-    "J9 panic button (hidden, on a cable): ESD diode at the connector, 1k series, 10k pull-up, 100n;",
+    "J9 panic button (hidden, on a cable): 1k series at the connector, then the ESD diode, 10k pull-up",
+    "and 100n at the pin, so a cable shorted to +12 V is limited to ~8 mA into the clamp.",
     "PANIC_BTN = PC13 (WKUP2, wakes from Standby too). Closed = low.",
 ]
 U(sn, "OCTAVE:LIS2DH12", "LIS2DH12TR", "Package_LGA:LGA-12_2x2mm_P0.5mm",
@@ -480,8 +492,10 @@ C(sn, "100n", "3V3")
 d.add(sn, Part(_ref("J"), "Connector_Generic:Conn_01x02", "PANIC",
                "Connector_JST:JST_SH_SM02B-SRSS-TB_1x02-1MP_P1.00mm_Horizontal",
                {"1": "PANIC_IN", "2": "GND"}, lcsc=LCSC.get("SH2")))
+# The clamp sits behind the 1k (REVIEW 48): ahead of it, a cable shorted to +12 V put the battery
+# straight across a 3.3 V diode
 d.add(sn, Part(_ref("D"), "Device:D_TVS", "ESD9B3.3ST5G", "Diode_SMD:D_SOD-923",
-               {"1": "PANIC_IN", "2": "GND"}, lcsc=LCSC["ESD9B3.3"]))
+               {"1": "PANIC_BTN", "2": "GND"}, lcsc=LCSC["ESD9B3.3"]))
 R(sn, "1k", "PANIC_IN", "PANIC_BTN")
 R(sn, "10k", "3V3", "PANIC_BTN")
 C(sn, "100n", "PANIC_BTN")
@@ -507,3 +521,15 @@ d.add(sd, Part(_ref("RN"), "Device:R_Pack04", "4x10k", "Resistor_SMD:R_Array_Con
                {**{str(i + 1): n for i, n in enumerate(sd_pu)}, **{str(8 - i): "3V3_ESP" for i in range(4)}},
                lcsc=LCSC["RN10k"]))
 R(sd, "10k", "3V3_ESP", "SD_DAT2")
+
+# ---------------------------------------------------------------- audit round 5 (REVIEW 46, 47)
+# Created last so every earlier reference keeps its number (R69, R70).
+# R69: VBUS2 has no other path to ground with J7 unplugged, so the reverse leakage of the SS34 between it
+# and 5V (uA at room temperature, 0.3-0.4 mA in a hot car) went through the ON diode into the load
+# switch's 100k pull-down: 10 uA is 1 V, the TPS22918's VIH, and the ESP32 turned itself on while parked.
+# 1k holds VBUS2 under 0.4 V at 0.4 mA (VIL 0.5 V, less the diode's drop); 5 mA while J7 is plugged in.
+R(eu, "1k", "VBUS2", "GND")
+# R70: CONFIG switch 1 used to tie 3V3 straight to PB6; firmware driving PB6 low (ESP32 off) with the switch
+# on would short the rail through the pin. Through 1k that is 3.3 mA. With PB6's 5.1k dead-battery
+# pull-down still on (blank chip) PB6 sits at 2.76 V and ON at ~2.2 V, above the 1 V VIH.
+R(ui, "1k", "3V3", "ESP_ON_SW")

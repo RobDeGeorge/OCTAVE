@@ -730,7 +730,7 @@ def j1850_page(D, design):
     ref_y = ua["-"][1] + 7.62
     D.wire(ua["-"], (73.66, ua["-"][1]), (73.66, ref_y))
     D.hang(F("47k", {"1": "VPW_REF"}), (73.66, ref_y), fields="right")
-    r45 = D.inline(j("13k"), (73.66, ref_y), "left", first="2", fields="below")
+    r45 = D.inline(j("18k"), (73.66, ref_y), "left", first="2", fields="below")
     D.power(r45["1"], "5V_BUCK")
     D.name((73.66, ref_y - 2.54), "VPW_REF", "right", length=2.54)
     D.wire(ua["2"], (111.76, Y3))
@@ -845,8 +845,8 @@ def iso_page(D, design):
     D.name((149.86, kref[1] - 2.54), "K_REF", "right", length=2.54)
     D.wire(uc["13"], (185.42, uc["13"][1]))
     D.label((185.42, uc["13"][1]), "KLINE_RX", "right")
-    D.hang(F("10k", {"2": "KLINE_RX"}), (177.8, uc["13"][1]), to="3V3", direction="up", first="2", fields="left")
     D.text("K vs DLC_SW / 2: K high -> KLINE_RX high", 175.26, YK + 33.02)
+    D.text("(open collector: PC0's internal pull-up, set by firmware)", 175.26, YK + 36.02)
 
     # -- L-line -------------------------------------------------------------------------------
     D.text("L-line (J1962 pin 15): driver, 510R pull-up (transmit only)", 25.4, 175.26, size=1.8, bold=True)

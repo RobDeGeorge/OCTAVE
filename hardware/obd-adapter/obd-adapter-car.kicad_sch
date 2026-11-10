@@ -1703,7 +1703,7 @@
 		)
 		(uuid "25bdf5d2-9434-5860-b073-5b72cf26dc8c")
 	)
-	(text "Plugs straight into the car's diagnostic port; mounted on the bottom side so the board lies flat"
+	(text "The plug sits on the adapter board (obd-adapter-plug); the main board's tab goes through its slot and"
 		(exclude_from_sim no)
 		(at 20.32 22.86 0)
 		(effects
@@ -1712,9 +1712,9 @@
 			)
 			(justify left top)
 		)
-		(uuid "ab5b905e-1863-5f68-a359-5ecc7ca97718")
+		(uuid "a7ff71ec-2758-5696-a40c-be63a794d54f")
 	)
-	(text "under the dash with the parts facing out. Pins 4 (chassis) and 5 (signal) ground both go to GND."
+	(text "the 16 edge pads (9-16 on top, 1-8 underneath) are soldered to it. The adapter's 9-16 row (the plug's"
 		(exclude_from_sim no)
 		(at 20.32 25.86 0)
 		(effects
@@ -1723,9 +1723,9 @@
 			)
 			(justify left top)
 		)
-		(uuid "67681fed-4a4c-568e-a1fe-1bd1bd4ca6c5")
+		(uuid "047530e0-4ed9-54e8-be38-0ca3991f3597")
 	)
-	(text "1, 8, 9, 12, 13 are not used (soldered for strength). Bench: an OBD-II female breakout or extension."
+	(text "latch side) goes on the main board's top. Pins 4 (chassis) and 5 (signal) ground both go to GND."
 		(exclude_from_sim no)
 		(at 20.32 28.86 0)
 		(effects
@@ -1734,7 +1734,18 @@
 			)
 			(justify left top)
 		)
-		(uuid "450b384b-775c-5e07-9c5d-2551d61181b4")
+		(uuid "f2349578-0dfd-553f-b323-cfcc99ba7b44")
+	)
+	(text "1, 8, 9, 12, 13 are not used (soldered for strength). Bench: an OBD-II female breakout or extension."
+		(exclude_from_sim no)
+		(at 20.32 31.86 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "5e913ae4-24fc-5694-98e3-02b894047ef2")
 	)
 	(text "J1962 pin out (male plug, the car's view of it mirrored)"
 		(exclude_from_sim no)

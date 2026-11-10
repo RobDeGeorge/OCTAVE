@@ -3623,7 +3623,7 @@
 		)
 		(uuid "d56281e0-d9dd-5f57-b6a5-38ab879018e6")
 	)
-	(text "RX: LM2901B on CMP_VCC (DLC_SW via 470R, 33 V zener; 38 V abs max). VPW: Bus+ vs 5V_BUCK x 10/12.7, active high."
+	(text "RX: LM2901B on CMP_VCC (DLC_SW via 470R, 33 V zener; 38 V abs max). VPW: Bus+ vs 5V_BUCK x 47/65 = 3.85 V, active high."
 		(exclude_from_sim no)
 		(at 157.48 57.26 0)
 		(effects
@@ -3632,7 +3632,7 @@
 			)
 			(justify left top)
 		)
-		(uuid "384a908c-2b9f-5ed1-b17a-f87d30349c0f")
+		(uuid "8ee4cd0c-080e-5446-b39d-2ab0d7df2441")
 	)
 	(text "PWM: Bus+ vs Bus-. Q7 base has 2.2k to GND: the bootloader's PC9 pull-up must not turn it on (Bus- low)."
 		(exclude_from_sim no)
@@ -5962,7 +5962,7 @@
 				)
 			)
 		)
-		(property "Value" "13k"
+		(property "Value" "18k"
 			(at 69.85 221.056 90)
 			(effects
 				(font
@@ -5997,7 +5997,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C22797"
+		(property "LCSC" "C25810"
 			(at 69.85 215.9 0)
 			(hide yes)
 			(effects

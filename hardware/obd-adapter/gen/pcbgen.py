@@ -114,6 +114,50 @@ def add_footprints(board, design, sch_name=None, sheets=None):
     return fps, nets
 
 
+def add_holes(board, centres, keep, footprint="MountingHole:MountingHole_3.2mm_M3"):
+    """Mounting holes H1 ...: board-only footprints (not in the schematic, the BOM or the placement file),
+    each with a rule area of radius `keep` on F.Cu and B.Cu that takes no tracks and no vias (pours may
+    run through it: a screw head or a standoff sits on solder mask over plain copper, never on a track).
+    Returns {ref: footprint}."""
+    import math
+    lib, name = footprint_path(footprint)
+    out = {}
+    for i, (x, y) in enumerate(centres, 1):
+        fp = pcbnew.FootprintLoad(lib, name)
+        fp.SetFPIDAsString(footprint)
+        fp.SetReference(f"H{i}")
+        fp.SetValue("M3")
+        fp.Reference().SetVisible(False)
+        fp.SetAttributes(pcbnew.FP_BOARD_ONLY | pcbnew.FP_EXCLUDE_FROM_BOM | pcbnew.FP_EXCLUDE_FROM_POS_FILES)
+        place(fp, x, y)
+        board.Add(fp)
+        out[fp.GetReference()] = fp
+        z = pcbnew.ZONE(board)
+        z.SetIsRuleArea(True)
+        z.SetZoneName(f"H{i} screw head")
+        z.SetLayerSet(_lset(pcbnew.F_Cu, pcbnew.B_Cu))
+        z.SetDoNotAllowTracks(True)
+        z.SetDoNotAllowVias(True)
+        z.SetDoNotAllowZoneFills(False)
+        z.SetDoNotAllowPads(False)
+        z.SetDoNotAllowFootprints(False)
+        o = z.Outline()
+        o.NewOutline()
+        n = 48
+        for k in range(n):
+            a = 2 * math.pi * k / n
+            o.Append(MM(x + keep * math.cos(a)), MM(y + keep * math.sin(a)))
+        board.Add(z)
+    return out
+
+
+def _lset(*layers):
+    ls = pcbnew.LSET()
+    for layer in layers:
+        ls.AddLayer(layer)
+    return ls
+
+
 def expand_pin_number(num):
     """KiCad 10 stacked pins: "[1,15,38-39]" -> ["1", "15", "38", "39"]."""
     if not (num.startswith("[") and num.endswith("]")):

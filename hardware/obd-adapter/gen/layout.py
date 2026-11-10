@@ -1,4 +1,4 @@
-"""Placement for the Rev 0 board: 110 x 75 mm, 4 layers, plus a tab on the left edge.
+"""Placement for the Rev 0 board: 100 x 70 mm, 4 layers, plus a tab on the left edge.
 
 The OBD-II plug sits on a small adapter board (obd-adapter-plug, build.py plug) that stands across
 the left edge: the tab goes through its slot and 16 edge pads (9-16 on top, 1-8 underneath) are
@@ -37,7 +37,7 @@ MX, MY = (0.0, 0.0) if TWO_SIDED else (3.0, 0.5)   # MY: U1 on y = H / 2 with th
 # parts they serve (JLCPCB Standard PCBA then: Economic is one side only).
 SMALL = ("R_0603", "C_0603", "R_1206", "C_1206", "L_0603", "D_SOD-123", "TestPoint")
 SMALL_EXACT = ("SOT-23",)
-X0 = 0.0            # left edge (the tab sticks out of it to x = -1.6)
+X0 = 0.0            # left edge (the tab sticks out of it to x = -mklib.TAB_DEPTH)
 # the plug's edge pads (J1962_Edge_Joint): origin on the left edge at the middle of the pins, centred
 # on the edge (y = H / 2) so the plug sits square on the board's end. The pins run down the edge in
 # pairs (9 / 1 at H / 2 - 14 ... 16 / 8 at H / 2 + 14, 9-16 top, 1-8 bottom). The tab is as wide as
@@ -47,6 +47,9 @@ PLUG = (0.0, H / 2, 0)
 # (prewire.py); nothing else is placed in it
 VBAT_LANE = (3.4, H / 2 - 1.5, 6.0, H / 2 + 15.5)
 BACK = set()        # refs placed on the bottom side (filled by fixed_for)
+# fixed parts in the notch at a corner of another part's courtyard (filled by fixed_for): the bounding
+# boxes place_all compares overlap there, the courtyards do not (DRC's courtyards_overlap is what counts)
+NOTCHED = set()
 CENTRED = set()     # fixed refs whose (x, y) is their courtyard's centre, not their origin (filled by fixed_for)
 # Left to right the board follows the signal: car plug and front ends, the STM32 in the middle, the
 # ESP32 at the far end with its antenna pointing out of it (centred, like the plug), the two USB-C
@@ -62,20 +65,30 @@ USB_X = W - 6.0                   # both USB-C ports, mirrored about y = H / 2, 
 # (turned 90 degrees: their pads point along y, so each is only 5.7 mm wide)
 BTN_Y, BTN_PITCH, BTN_ROT = 5.6, 6.3, 90     # (1.3 mm off the edge: room for the labels above)
 # the CONFIG DIP switch starts the row (7.4 x 9.5 mm turned 90: switches 1-4 read left to right),
-# top-aligned with the buttons; then RESET, USER, ESP RST, ESP BOOT
-DIP_AT = (50.0 + DXM + 3.71, BTN_Y - 3.8 + 4.75, 90)        # courtyard centre
+# top-aligned with the buttons; then RESET, USER, ESP RST, ESP BOOT. The row ends 0.4 mm short of the
+# top-right mounting hole's keep-out (HOLES)
+DIP_AT = (48.5 + DXM + 3.71, BTN_Y - 3.8 + 4.75, 90)        # courtyard centre
 BTN_X = [DIP_AT[0] + 3.71 + 0.6 + 2.85 + i * BTN_PITCH for i in range(4)]
-# J5 (STM32 expansion, DNP) in the strip along the bottom edge under the J1850 receive column (pin 1 left,
-# rows along x); the bottom edge right of it: J9 panic button, J10 microSD (card out of the edge), Qwiic;
-# J8 (ESP32 IO, DNP) above the module, its signal pins over the module pins they wire to
+# Four M3 mounting holes (3.2 mm, not plated), a rectangle of 81.5 x 63.0 mm: 3.5 mm in from the left end
+# and the long edges, the right pair left of the USB-C ports (15 mm in from the right end, where the ports
+# and the module take the corners). HOLE_KEEP round each centre is kept free of parts, tracks and vias on
+# both sides (the footprint's courtyard: a pan head, a 5.5 mm hex standoff or a 7 mm washer); pours may
+# run under it
+HOLES = [(3.5, 3.5), (W - 15.0, 3.5), (3.5, H - 3.5), (W - 15.0, H - 3.5)]
+HOLE_KEEP = 3.45
+# The bottom edge, left to right: the bottom-left hole, the test points, the panic input's parts and J9
+# (panic button, JST SH), J5 (STM32 expansion, DNP, under the J1850 receive column, pin 1 left, rows along
+# x; its pin 9 is the panic net too), J10 microSD (card out of the edge), Qwiic, the bottom-right hole,
+# the ESP32's USB-C. J8 (ESP32 IO, DNP) above the module, its signal pins over the module pins they wire to
 EXP_AT = (40.9, H - 2.4, 90)
-PANIC_AT = (62.3, H - 3.3, 0)       # JST SH, opening out, like the Qwiic socket
-SD_AT = (72.4, H - 6.55, 180)       # courtyard to the edge, card slot (contact side) facing out
+PANIC_AT = (35.88, H - 3.3, 0)      # JST SH, opening out, like the Qwiic socket
+SD_AT = (65.9, H - 6.55, 180)       # courtyard to the edge, card slot (contact side) facing out
 ESPIO_AT = (69.0, 21.35, 90)
-# the Qwiic socket on the bottom edge, opening out, left of the ESP32's USB-C
-QWIIC_AT = (USB_X - 10.5, H - 3.3, 0)
-LED_Y = 10.9
-TP_X = 6.0          # the test-point row's first pad (bottom-left, along the edge)
+# the Qwiic socket on the bottom edge, opening out, between the card and the bottom-right hole
+QWIIC_AT = (USB_X - 17.0, H - 3.3, 0)
+LED_X, LED_Y = 64.02 + DXM, 10.9    # the middle LED (the three sit under RESET / USER, over their resistors' tile)
+TP_X = 8.5          # the test points' first column (bottom-left, right of the hole): two rows of five
+TP_ROW = 3.3        # between the two rows
 # USB-C front face (footprint y +3.65) 0.3 mm past the long edges, so a plug seats fully
 USB_Y = H + 0.3 - 3.65
 GAP = 0.25
@@ -109,8 +122,9 @@ REGIONS = {
     "sd": (W - 40, H / 2, W - 10, H),
 }
 
-# copper keep-outs for placement and routing (the ESP32 antenna's is off the board's end)
-KEEPOUTS = []
+# keep-outs for placement (both sides) and routing: the mounting holes (the ESP32 antenna's is off the
+# board's end)
+KEEPOUTS = [(x - HOLE_KEEP, y - HOLE_KEEP, x + HOLE_KEEP, y + HOLE_KEEP) for x, y in HOLES]
 # copper beside the LDO's tab (U8 at (54.4, 48.2 + DY)): heat spreading + vias into the In2 3V3 plane
 LDO_TAB = (56.4 + DXM + MX, 45.0 + DY + MY, 60.2 + DXM + MX, 51.4 + DY + MY)
 
@@ -145,7 +159,7 @@ def fixed_for(design):
     # laid out round the middle of a 75 mm board: shifted by DY
     mid = {
         ref("mcu", "STM32G474RET6"): (65.0, 37.0, 0),
-        # MCU at (65, 37): 100n at VDD pins 16 / 32 / 48 / 64, VDDA (29) caps, crystal at PF0/PF1 (5/6)
+        # MCU at (65, 37): 100n at VDD pins 16 / 32 / 48 / 64, VDDA / VREF+ (29 / 28) caps, crystal at PF0/PF1 (5/6)
         ref("mcu", "100n", 0): (57.0, 41.0, 90),
         ref("mcu", "100n", 1): (68.5, 45.0, 0),
         ref("mcu", "100n", 2): (73.0, 33.0, 90),
@@ -156,7 +170,8 @@ def fixed_for(design):
         ref("mcu", "10p", 0): (51.4, 37.6, 180),     # HSE_IN (Y1 pin 1) / HSE_OUT (pin 3): signal pad toward Y1
         ref("mcu", "10p", 1): (51.4, 33.4, 180),
         ref("mcu", "100n", 5): (54.0, 39.5, 0),      # NRST (pin 7)
-        ref("mcu", "10n"): (69.5, 47.7, 90),          # VDDA
+        # VBAT sense 100n (PA4, pin 18): by hand, clear of the fan-out lanes of the MCU's west and south pins
+        ref("power", "100n", 4): (59.0, 43.5, 180),
         # QSPI flash under the MCU, next to its QSPI pins (PA6 / PA7 / PB0 / PB1 / PB10 on the bottom edge)
         ref("flash", "W25Q128JVSIQ"): (59.5, 55.4, 0),
         # input chain right of the plug: J6.16 -> PTC -> TVS -> ideal diode (LM74700 + FET)
@@ -173,12 +188,12 @@ def fixed_for(design):
     chain = {ref("power", v) for v in ("2A 60V", "5.0SMDJ26CA", "AO4264E", "LM74700QDBVRQ1", "47u 50V")} | \
         {ref("power", "100n", 0), ref("power", "100n", 1)}
     f = {r: (x + (0 if r in chain else DXM + MX), y + DY + (0 if r in chain else MY), rot) for r, (x, y, rot) in mid.items()}
+    NOTCHED.add(ref("power", "100n", 4))    # in the notch at the LQFP's south-west corner, 0.2 mm off the pin 16 cap's box
     if TWO_SIDED:
         BACK.add(ref("mcu", "100n", 2))     # VDD pin 48's cap right under the pin (the ESP32 is beside it)
     btn = [ref("ui", "RESET"), ref("ui", "USER"), ref("espusb", "ESP_RST"), ref("espusb", "ESP_BOOT")]
     f.update({r: (x, BTN_Y, BTN_ROT) for r, x in zip(btn, BTN_X, strict=True)})
-    led_mid = (BTN_X[0] + BTN_X[1]) / 2     # the three LEDs centred under RESET / USER
-    f.update({ref("ui", c): (led_mid + k * 3.5, LED_Y, 0) for c, k in zip(("red", "green", "blue"), (-1, 0, 1), strict=True)})
+    f.update({ref("ui", c): (LED_X + k * 3.5, LED_Y, 0) for c, k in zip(("red", "green", "blue"), (-1, 0, 1), strict=True)})
     f.update({
         ref("car", "OBD-II plug (J1962 male)"): PLUG,
         ref("exp", "EXP"): EXP_AT,
@@ -210,10 +225,13 @@ def fixed_for(design):
         ref("esp32", "TPS22918"): (W - 3.0, 11.0, 0),
         ref("espusb", "SS34"): (W - 5.5, H - 17.0, 0),
     }
-    # test points: one row along the bottom edge on the left, under the car-side circuits, on the
-    # small-part pitch, TP1 ... TP10 left to right (the supplies, GND, then the bus lines by protocol)
+    # test points: two rows of five at the bottom edge on the left, under the car-side circuits, on the
+    # small-part pitch: TP1 ... TP5 (the supplies and GND) over TP6 ... TP10 (the bus lines by protocol).
+    # The rows sit where every label fits above its pad: the top row's under the labels of D21 / D23
+    # (which are below their parts), the bottom row's between the rows
     tps = sorted((p.ref for p in design.parts if p.footprint.startswith("TestPoint:")), key=lambda r: int(r[2:]))
-    grid.update({r: (TP_X + i * CELL, H - 2.5, 0) for i, r in enumerate(tps)})
+    per_row = (len(tps) + 1) // 2
+    grid.update({r: (TP_X + (i % per_row) * CELL, H - 1.65 - (TP_ROW if i < per_row else 0), 0) for i, r in enumerate(tps)})
     grid[ref("ui", "CONFIG")] = DIP_AT
     f.update(grid)
     CENTRED.update(grid)
@@ -267,7 +285,6 @@ def near_rules(design):
 
     # MCU periphery
     on(ref("mcu", "4.7u"), (mcu, "32"))
-    on(ref("mcu", "600R@100MHz"), (mcu, "29"))
     on(ref("mcu", "10k"), (mcu, "61"))                      # BOOT0 pull-down
     on(ref("ui", "SWD"), (mcu, "46"), (mcu, "49"), dist=20)  # beside SWDIO / SWCLK
     for net, pin in (("ESP_CTS_M", "13"), ("MCU_TX_ESP_M", "14"), ("ESP_IO0_M", "58"), ("ESP_EN_M", "60")):
@@ -280,8 +297,7 @@ def near_rules(design):
     on(ref("power", "10u", 0), (fet, "5"))                  # VBAT_P 10u
     on(ref("power", "100n", 2), (fet, "7"))                 # VBAT_P 100n
     on(ref("power", "100k 0.1%"), (tvs, "1"), dist=16)               # VBAT sense: 100k at the source,
-    on(ref("power", "10k 0.1%"), (mcu, "18"))               # 10k + 100n at PA4
-    on(ref("power", "100n", 4), (mcu, "18"), dist=16)
+    on(ref("power", "10k 0.1%"), (mcu, "18"))               # 10k at PA4 (its 100n has a fixed spot, above)
     # 5 V OR + LDO
     ldo = ic("power", "AP2114H-3.3")
     on(ref("power", "10u", 2), (ldo, "3"))                  # LDO input
@@ -340,6 +356,9 @@ def near_rules(design):
     on(ref("espusb", "1N4148W", 0), (tps, "3"), dist=18)    # PB6 -> ON
     on(ref("espusb", "1N4148W", 1), (tps, "3"), dist=18)    # VBUS2 -> ON
     on(ch, (esp, "35"), dist=18)
+    # audit round 5: CONFIG switch 1's series resistor at the switch (last, so it takes what is free and
+    # moves nothing else). The VBUS2 bleed (R69) is in the USB2 tile, beside J7's CC resistors
+    on(by_net("ui", "1k", "ESP_ON_SW")[0], (ref("ui", "CONFIG"), "1"), dist=12)
     assert all(r in parts for r, _, _ in rules)
     return rules
 
@@ -371,34 +390,35 @@ TILES = [
     ("J1850 PWM+", (34.0, 43.4), [["Q5", "R36"], ["Q6", "R37"], ["D11", "R38"], ["D12"]]),
     ("J1850 receive", (43.5, 23.5), [["U12"], ["R43", "C43"], ["D14", "R47"], ["D15", "R44"], ["D16", "R48"],
                                      ["D17", "R49"], ["D18", "R57"], ["R45", "R46"], ["R58", "R59"],
-                                     ["R50", "R60"]]),
+                                     ["R50"]]),
     ("K-line", (6.25, 50.05), [["R51"], ["Q8", "R52"], ["D21", "R53"]]),
     ("L-line", (15.375, 50.05), [["R54"], ["Q9", "R55"], ["D23", "R56"]]),
     # middle: the LED resistors under their LEDs, the MCU's IO0 / EN link resistors and BOOT0
     # pull-down above it, the LDO's caps and the VBUS OR diode under the LDO, the flash's beside it,
-    # a column between the MCU and the ESP32 (I2C pull-ups, the VDDA bead, 4.7u, the UART link
+    # a column between the MCU and the ESP32 (I2C pull-ups, 4.7u, the UART link
     # resistors on their way to the module's UART pins)
-    ("LED resistors", (58.77, 12.75), [["R3", "R4", "R5", "R2"]], "below"),
+    ("LED resistors", (58.77, 12.75), [["R3", "R4", "R5"]], "below"),
     ("MCU top", (59.75, 19.6), [["R13", "R14"], ["R1"]]),
     ("LDO", (53.0, 50.1), [["C33"], ["C34"], ["D7@90"]]),
     # flash cap / pull-up, then the microSD's pull-ups and supply caps, between U3 and the card
     ("flash + microSD", (67.25, 50.6), [["C13", "R8", "R68"], ["RN1@90", "C50", "C51"]]),
     # left of the MCU's top-left corner (PC14 / PC15 interrupts, I2C): secure element over the accelerometer
     ("sense", (52.25, 12.4), [["U16@90"], ["C48", "C46"], ["U15", "C47"]]),
-    # panic input protection, over J9
-    ("panic", (58.2, 57.4), [["R67", "C49"], ["D28", "R66"]]),
-    ("MCU right", (76.0, 33.0), [["R16"], ["R17"], ["R18"], ["FB1"], ["C5"], ["R11"], ["R12"]]),
-    # ESP32 end. Above the module: the ESP_ON diodes and a 2 x 4 block (ESP32 pull-ups; U2's CC
+    # panic input: pull-up and cap over the clamp and the series resistor (that one nearest J9, right of it)
+    ("panic", (24.5, 63.4), [["R67", "C49"], ["D28", "R66"]]),
+    ("MCU right", (76.0, 33.0), [["R16"], ["R17"], ["R18"], ["C5"], ["R11"], ["R12"]]),
+    # ESP32 end. Above the module: the ESP_ON diodes, the EN pull-up and a 2 x 3 block (U2's CC
     # resistors and VBUS cap under U2; U5's ON / CT / VIN parts under U5), the bulk cap under it, the
     # module's 100n and EN cap right at pins 2 / 3 (x 83-92 under J8 is left for J8's traces).
     # Below it, mirrored: the CH340C (turned so VCC pin 16 meets its cap) and the auto-reset / USB
     # block, its ESD array nearest J7 as U2 is nearest J2.
     ("ESP_ON", (78.25, 13.5), [["D26@90", "D27@90"]]),
-    ("ESP32 strip", (85.25, 14.2), [["R9", "R6", "C12", "R15"], ["R10", "R7", "C18", "C17"]]),
+    ("ESP32 EN", (85.25, 14.2), [["R9"]]),
+    ("ESP32 strip", (88.75, 14.2), [["R6", "C12", "R15"], ["R7", "C18", "C17"]]),
     ("ESP bulk", (93.5, 18.5), [["C14@90"]]),
     ("ESP pins", (92.5, 23.45), [["C16", "C15"]]),
     ("CH340C", (80.25, 45.0), [["U14@180"], ["C45", "R63"], ["D25"]], "below"),
-    ("USB2", (89.0, 45.0), [["Q10", "Q11"], ["R64", "R65"], ["R61", "R62"], ["U13", "C44"]], "below", 1.4),
+    ("USB2", (89.0, 45.0), [["Q10", "Q11"], ["R64", "R65"], ["R61", "R62", "R69"], ["U13", "C44"]], "below", 1.4),
 ]
 
 
@@ -580,7 +600,7 @@ def place_all(board, design, fps):
            r not in BACK or tht(fps[r])) for r in fixed if fixed[r] != PLUG]
     for i, (ra, ca, ba, ta) in enumerate(fx):
         for rb, cb, bb, tb in fx[i + 1:]:
-            if ((ba and bb) or (ta and tb)) and _overlap(ca, cb) and not {ra, rb} <= power:
+            if ((ba and bb) or (ta and tb)) and _overlap(ca, cb) and not {ra, rb} <= power and not {ra, rb} & NOTCHED:
                 print(f"layout: fixed parts {ra} and {rb} overlap")
     # ICs that go underneath too: the CH340C under the ESP32 module, at its UART0 pins
     under = {p.ref for p in design.parts if p.value == "CH340C"}

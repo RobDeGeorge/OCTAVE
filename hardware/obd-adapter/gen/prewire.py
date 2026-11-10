@@ -12,6 +12,7 @@ Coordinates come from the placed pads, so moving a part in layout.py moves its c
 import pcbnew
 
 import layout
+import mklib
 
 MM = pcbnew.FromMM
 
@@ -19,7 +20,22 @@ MM = pcbnew.FromMM
 # the LDO's tab copper
 BUCK_KEEPOUT = (layout.BX - 11.0, layout.BY - 11.5, layout.BX + 13.0, layout.BY + 0.1)
 LDO_TAB = layout.LDO_TAB
-KEEPOUTS = [BUCK_KEEPOUT, LDO_TAB]
+# The plug's tab (x -1.3 to 0, inside the adapter board's slot) and the first 0.3 mm behind the
+# adapter's back face, where the joint fillets sit: no track or via on any layer. The route of
+# 2026-11-08 ran CAN2_H, CAN2_L and LLINE over the tab, up to 0.7 mm past the board's edge (REVIEW 50)
+TAB_KEEPOUT = (layout.X0 - mklib.ADAPTER[2] - 1.0, layout.PLUG[1] - mklib.TAB / 2,
+               layout.X0 + 0.3, layout.PLUG[1] + mklib.TAB / 2)
+KEEPOUTS = [BUCK_KEEPOUT, LDO_TAB, TAB_KEEPOUT]
+
+
+def on_tab(board):
+    """Tracks and vias with copper on the plug's tab (x < the board's left edge): there must be none."""
+    out = []
+    for t in board.GetTracks():
+        bb = t.GetBoundingBox()
+        if bb.GetLeft() < MM(layout.X0) and bb.GetBottom() > MM(TAB_KEEPOUT[1]) and bb.GetTop() < MM(TAB_KEEPOUT[3]):
+            out.append(f"{t.GetNetname()} ({pcbnew.ToMM(bb.GetLeft()):.2f}, {pcbnew.ToMM(bb.GetTop()):.2f})")
+    return out
 
 
 def _ref(design, block, value, i=0):
@@ -82,6 +98,12 @@ def wire(board, design):
     jx = vin[0] - 2.4
     track(board, "VBAT_P", [c1, c0, (jx, c0[1]), (jx, vin[1])], 1.0)
     track(board, "VBAT_P", [(jx, vin[1]), vin], 0.6)
+    # ... and out of the keep-out to a via just below it. The island (both caps and pin 2) lies inside the
+    # keep-out, which the grid finisher treats as closed to every net, so only Freerouting could reach it,
+    # and on 2026-11-09 it left the buck's input cut off from the ideal diode
+    vy = BUCK_KEEPOUT[3] + 0.9
+    track(board, "VBAT_P", [(jx, vin[1]), (jx, vy)], 0.6)
+    via(board, "VBAT_P", jx, vy)
     # BOOT across pins 1 / 8
     boot, sw = P(u7, "1"), P(u7, "8")
     b1, b2 = P(cboot, "1"), P(cboot, "2")
@@ -184,3 +206,13 @@ def wire(board, design):
         via(board, "3V3", tx + 1.7, vy)
     track(board, "3V3", [(tx + 1.7, ty - 2.4), (tx + 1.7, ty + 2.4)], 0.8)
     track(board, "3V3", [(tx, ty), (tx + 1.7, ty)], 1.2)
+
+    # accelerometer (LGA-12, 0.5 mm pitch): the plane fan-out's 0.3 mm stub can't leave its four 3V3 pads
+    # (the route of 2026-11-09 left all four open). VDD / VDD_IO (9, 10) run into the 10u beside them,
+    # CS / SA0 (2, 3) to a via on the other side
+    acc = ref("sense", "LIS2DH12TR")
+    p2, p3, p9, p10 = (P(acc, n) for n in ("2", "3", "9", "10"))
+    cap = P(ref("sense", "10u"), "1")
+    track(board, "3V3", [p10, p9, (cap[0] - abs(cap[1] - p9[1]), p9[1]), cap], 0.2)
+    track(board, "3V3", [p3, p2, (p2[0] - 0.89, p2[1])], 0.2)
+    via(board, "3V3", p2[0] - 0.89, p2[1])

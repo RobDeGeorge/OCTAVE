@@ -2687,6 +2687,17 @@
 		)
 		(uuid "554bbd10-3a5b-5663-9f44-083041b6031e")
 	)
+	(text "(open collector: PC0's internal pull-up, set by firmware)"
+		(exclude_from_sim no)
+		(at 175.26 155.4 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "d81f64c1-46c4-5068-9271-b289043dcc7b")
+	)
 	(text "L-line (J1962 pin 15): driver, 510R pull-up (transmit only)"
 		(exclude_from_sim no)
 		(at 25.4 175.26 0)
@@ -2743,7 +2754,7 @@
 		)
 		(uuid "bf4c4cbd-3c83-54dd-a39a-c8143c2b992e")
 	)
-	(text "RX: LM2901 unit C, K vs DLC_SW/2 (10k/10k), K high -> KLINE_RX high (10k pull-up to 3.3 V)."
+	(text "RX: LM2901 unit C, K vs DLC_SW/2 (10k/10k), K high -> KLINE_RX high (PC0's internal pull-up, set by firmware)."
 		(exclude_from_sim no)
 		(at 210.82 184.26 0)
 		(effects
@@ -2752,7 +2763,7 @@
 			)
 			(justify left top)
 		)
-		(uuid "6670bb3a-c947-5568-8cc3-1529aff57867")
+		(uuid "e4679bc7-1d66-5a4d-a93b-30cd7d92f278")
 	)
 	(text "Off in sleep: the J1850 supply, the LM2901 and the K/L 510R pull-ups. STN's note: pull-ups left on DLC"
 		(exclude_from_sim no)
@@ -4297,82 +4308,6 @@
 		)
 	)
 	(symbol
-		(lib_id "Device:R")
-		(at 177.8 138.43 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "eeb45d43-7526-5815-a5f0-a15efb304ed5")
-		(property "Reference" "R60"
-			(at 173.7837 137.16 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "10k"
-			(at 173.7837 139.7 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
-			(at 177.8 138.43 0)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 177.8 138.43 0)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" ""
-			(at 177.8 138.43 0)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "LCSC" "C25804"
-			(at 177.8 138.43 0)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "098de696-66b7-54b6-9e9d-7beecb48a500")
-		)
-		(pin "2"
-			(uuid "6f9ae5c2-587d-561d-9f76-0ab786510c36")
-		)
-		(instances
-			(project "obd-adapter"
-				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/87ac3972-63d6-5adc-a612-457c314a0b95"
-					(reference "R60")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
 		(lib_id "Device:D")
 		(at 39.37 195.58 180)
 		(unit 1)
@@ -5334,12 +5269,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "481b0509-6b62-568c-8d80-294982d0810e")
-	)
-	(junction
-		(at 177.8 142.24)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "9442e508-fccc-50d0-baba-a54570948a09")
 	)
 	(junction
 		(at 58.42 134.62)
@@ -6417,79 +6346,14 @@
 	)
 	(symbol
 		(lib_id "power:+3V3")
-		(at 177.8 134.62 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom no)
-		(on_board yes)
-		(dnp no)
-		(uuid "27851abf-7c6a-5de5-8928-93a92f34bcca")
-		(property "Reference" "#PWR100"
-			(at 177.8 134.62 0)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "3V3"
-			(at 177.8 129.62 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 177.8 134.62 0)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 177.8 134.62 0)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" ""
-			(at 177.8 134.62 0)
-			(hide yes)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "77e8b79b-56d3-5230-a57c-0e4e2c5fb12b")
-		)
-		(instances
-			(project "obd-adapter"
-				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/87ac3972-63d6-5adc-a612-457c314a0b95"
-					(reference "#PWR100")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "power:+3V3")
 		(at 30.48 195.58 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "d204db75-8f22-57c6-b0da-a3605dbef9f9")
-		(property "Reference" "#PWR101"
+		(uuid "6027264b-5741-5106-bf2a-9358c0a2f11e")
+		(property "Reference" "#PWR100"
 			(at 30.48 195.58 0)
 			(hide yes)
 			(effects
@@ -6534,12 +6398,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "5e941eaa-4304-57a1-94e1-e4dd8ab7ba6e")
+			(uuid "9ef92cc8-bbf6-5408-ad1d-7c460f3cf297")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/87ac3972-63d6-5adc-a612-457c314a0b95"
-					(reference "#PWR101")
+					(reference "#PWR100")
 					(unit 1)
 				)
 			)
@@ -6555,7 +6419,7 @@
 			)
 			(justify left)
 		)
-		(uuid "a3622efb-629d-5047-b2dd-9b3173649629")
+		(uuid "4c9d58c3-e432-555f-be66-bfbf2e7b4798")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 45.72 193.04 0)
 			(effects
@@ -6576,7 +6440,7 @@
 			)
 			(justify left)
 		)
-		(uuid "190ccb36-706f-521e-82bd-398b3b7c7b85")
+		(uuid "99bd082c-d5ee-5ddf-b250-09b45914fa49")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 139.7 195.58 0)
 			(effects
@@ -6595,8 +6459,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "17d3307c-c467-5eb9-95c8-bf26531c7305")
-		(property "Reference" "#PWR102"
+		(uuid "371b9146-77ff-5c76-82cf-6dea3455fbae")
+		(property "Reference" "#PWR101"
 			(at 78.74 215.9 0)
 			(hide yes)
 			(effects
@@ -6641,12 +6505,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "e5616c0e-e72c-5c46-a7bf-0ece3aaf0dc0")
+			(uuid "99c0f57e-bfb9-57fe-b8de-24048c0da747")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/87ac3972-63d6-5adc-a612-457c314a0b95"
-					(reference "#PWR102")
+					(reference "#PWR101")
 					(unit 1)
 				)
 			)
@@ -6662,7 +6526,7 @@
 			)
 			(justify right)
 		)
-		(uuid "cb3143d1-1e95-5a1b-ba08-caa1f2668084")
+		(uuid "ef0b7390-1f1a-5947-93a0-b9c99774872f")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 33.02 210.82 0)
 			(effects
@@ -6683,7 +6547,7 @@
 			)
 			(justify right)
 		)
-		(uuid "9a639d38-ee55-5b72-9319-37880ba197e6")
+		(uuid "019b445e-48b2-52f1-b3fb-c9ea5adb9a7e")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 58.42 213.36 0)
 			(effects
@@ -6702,8 +6566,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "0e4895cb-782c-574b-bbfa-71f4ab7dff5a")
-		(property "Reference" "#PWR103"
+		(uuid "7942510d-9a3b-525d-b132-9bd6ba961166")
+		(property "Reference" "#PWR102"
 			(at 40.64 218.44 0)
 			(hide yes)
 			(effects
@@ -6748,12 +6612,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "a887f878-4833-56d6-b496-b7ae41cf349d")
+			(uuid "166b4875-b943-5dd9-b0b1-f0493895c736")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/87ac3972-63d6-5adc-a612-457c314a0b95"
-					(reference "#PWR103")
+					(reference "#PWR102")
 					(unit 1)
 				)
 			)
@@ -6767,8 +6631,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "1cb0be0b-2f2f-5ba0-9e6a-7a6df984a1b8")
-		(property "Reference" "#PWR104"
+		(uuid "f0965b99-f0d9-50b3-b0bb-93c356f4a15b")
+		(property "Reference" "#PWR103"
 			(at 99.06 203.2 0)
 			(hide yes)
 			(effects
@@ -6813,12 +6677,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "7522682b-68d4-5055-85f1-f1b398a41879")
+			(uuid "323b6c88-a74a-5f08-a912-206bae3337ac")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/87ac3972-63d6-5adc-a612-457c314a0b95"
-					(reference "#PWR104")
+					(reference "#PWR103")
 					(unit 1)
 				)
 			)

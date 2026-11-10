@@ -89,8 +89,12 @@ def _shroud(grow=0.0):
 PLUG_MODEL = "${KIPRJMOD}/lib/3dmodels/J1962_Male_Straight_Jiatel_CR-PG001.step"
 EDGE_MODEL = "${KIPRJMOD}/lib/3dmodels/J1962_Edge_Joint_Assembly.step"
 ADAPTER = (40.0, 18.0, 1.6)       # adapter board w x h x thickness (gen/mkplug3d.py has the same)
-SLOT = (36.0, 1.8)                # its slot for the main board's tab: length x width
-TAB = 33.8                        # the main board's tab: width (it is ADAPTER[2] deep)
+SLOT = (36.0, 2.0)                # its slot for the main board's tab: length x width (the tab is 1.6 +-10 %
+                                  # thick with up to 0.07 of copper, mask and HASL on top: REVIEW 51)
+TAB = 33.8                        # the main board's tab: width
+TAB_DEPTH = 1.3                   # and how far it sticks out of the edge: 0.3 short of the adapter's front face.
+                                  # The recess in the back of the plug is narrower than the tab, so the tab must
+                                  # stay inside the adapter, also when that board is thin (1.44 mm): REVIEW 53
 
 
 def _model(path):
@@ -104,15 +108,20 @@ def _font(size=1.0, mirror=False):
     return e
 
 
-def j1962_plug_adapter(pitch=4.0, row=8.6, slot=(2.2, 1.2), pad=(3.1, 2.0), joint_w=2.5):
+def j1962_plug_adapter(pitch=4.0, row=8.6, slot=(2.6, 1.3), pad=(3.2, 2.0), joint_w=2.5):
     """The J1962 plug on its adapter board (board obd-adapter-plug), seen from the plug side.
 
     Plug: Shenzhen Jiatel OBD-II-16M-12V, CR-PG001 rev A (jiatelcn.com "OBD-II 16 Pin Straight Male
     Connector", drawing OBDII-Male-16pin.pdf). Contacts 2 x 8, 4.00 mm pitch, rows 8.60 mm apart;
-    0.8 x 1.8 mm blades whose tails stand 4.0 mm out of the back, so oval slots 2.2 x 1.2 (blade
-    diagonal 1.97, drawing tolerance +-0.3) with 3.1 x 2.0 pads. The vehicle's socket, seen from the
-    front, has 1-8 on the wide top row left to right and 9-16 below; the plug is its mirror image, so
-    on this face pin 1 is top right and pin 9 under it.
+    0.8 x 1.8 mm blades whose tails stand 4.0 mm out of the back, in oval slots 2.6 x 1.3 with
+    3.2 x 2.0 pads: the blade's corner is 0.47 from the centre of the slot's end radius (0.65), which
+    leaves 0.18 for the plating and the blade's position (2.2 x 1.2 left 0.03: REVIEW 49). The
+    vehicle's socket, seen from the front, has 1-8 on the wide top row left to right and 9-16 below;
+    the plug is its mirror image, so on this face pin 1 is top right and pin 9 under it.
+
+    Which way round the plug goes is printed on both sides (REVIEW 52): its shroud's outline (the
+    D shape, 0.6 mm in from the real one so it stays on the board) and the end pins' numbers on the
+    plug side, the numbers and which side of the main board each row is soldered to on the back.
 
     The main board's tab goes through the slot between the rows (Edge.Cuts, part of this footprint)
     and is soldered to the joint pads on the back (B.Cu): one per pin, from 0.25 mm off the slot edge
@@ -147,11 +156,26 @@ def j1962_plug_adapter(pitch=4.0, row=8.6, slot=(2.2, 1.2), pad=(3.1, 2.0), join
     for txt, x, y in (("1", x1, -row / 2), ("9", x1, row / 2), ("8", -x1, -row / 2), ("16", -x1, row / 2)):
         items.append(["fp_text", "user", Q(txt), ["at", x + (3.6 if x > 0 else -3.6), y, 0],      # past the row's end
                       ["layer", Q("B.SilkS")], _font(0.8, mirror=True)])
+        items.append(["fp_text", "user", Q(txt), ["at", x, y + (2.4 if y > 0 else -2.4), 0],      # outside its pad
+                      ["layer", Q("F.SilkS")], _font(0.8)])
+    sh = _shroud(-0.6)
+    for i, (a, b) in enumerate(zip(sh, sh[1:] + sh[:1])):
+        if i in (2, 4):     # the sloping ends cross the tab slot's round ends: leave a gap there
+            (xa, ya), (xb, yb) = (a, b) if a[1] < b[1] else (b, a)
+            at_y = lambda y: (round(xa + (xb - xa) * (y - ya) / (yb - ya), 3), y)
+            items += [_line((xa, ya), at_y(-SLOT[1] / 2 - 0.6), "F.SilkS", 0.15),
+                      _line(at_y(SLOT[1] / 2 + 0.6), (xb, yb), "F.SilkS", 0.15)]
+        else:
+            items.append(_line(a, b, "F.SilkS", 0.15))
+    for txt, y, layer in (("WIDE SIDE  1-8", -6.9, "F.SilkS"), ("LATCH SIDE  9-16", 6.9, "F.SilkS"),
+                          ("1-8: MAIN BOARD BOTTOM", -6.6, "B.SilkS"), ("9-16: MAIN BOARD TOP", 6.2, "B.SilkS")):
+        items.append(["fp_text", "user", Q(txt), ["at", 0, y, 0], ["layer", Q(layer)],
+                      _font(0.8, mirror=layer[0] == "B")])
     items.append(["fp_text", "user", Q("J1962 plug, mating face; wide side = pins 1-8"), ["at", 0, -6.5, 0],
                   ["layer", Q("F.Fab")], _font()])
     fp = ["footprint", Q(name), ["version", "20260206"], ["generator", Q("octave_gen")], ["layer", Q("F.Cu")],
           ["descr", Q("SAE J1962 (OBD-II) male plug Jiatel CR-PG001 (2x8, 4.00 mm pitch, rows 8.60 mm) on an "
-                      "adapter board, slot for a 1.6 mm board between the rows, joint pads on the back")],
+                      "adapter board, 2.0 mm slot for a 1.6 mm board between the rows, joint pads on the back")],
           ["tags", Q("OBD OBD2 OBD-II J1962 plug male adapter")],
           _text("Reference", "REF**", 0, -10.6, "F.Fab"), _text("Value", name, 0, 12.3, "F.Fab"),
           ["attr", "through_hole"], *items, ["embedded_fonts", "no"], _model(PLUG_MODEL)]
@@ -166,8 +190,9 @@ def j1962_edge_joint(pitch=4.0, pad=(3.0, 2.5)):
     below, which is the plug's own face turned 180 degrees.
 
     Origin: the board's left edge (x = 0 is the adapter's back face) at the middle of the pins. The
-    tab (x -1.6 to 0, TAB wide) is in the board outline (build.py). The courtyard covers the adapter
-    and the plug beyond the edge, on both sides. 3D: plug + adapter (gen/mkplug3d.py)."""
+    tab (x -TAB_DEPTH to 0, TAB wide) is in the board outline (build.py) and carries no copper
+    (prewire.TAB_KEEPOUT). The courtyard covers the adapter and the plug beyond the edge, on both
+    sides. 3D: plug + adapter (gen/mkplug3d.py)."""
     name = "J1962_Edge_Joint"
     items = []
     for k in range(1, 9):
@@ -182,10 +207,13 @@ def j1962_edge_joint(pitch=4.0, pad=(3.0, 2.5)):
         items += _poly([(tip, -20.13), (-at, -20.13), (-at, 20.13), (tip, 20.13)], f"{side}.Fab", 0.1)
         items += _poly([(tip - 0.3, -20.45), (pad[0] + 0.25, -20.45), (pad[0] + 0.25, 20.45), (tip - 0.3, 20.45)],
                        f"{side}.CrtYd", 0.05)
+    # the end pins' numbers and the battery pin, printed beside their pads: which way up the adapter
+    # goes is on the board itself (they were on the Fab layers only: REVIEW 52)
     for txt, y, layer, m in (("9", -14, "F.SilkS", False), ("16", 14, "F.SilkS", False),
                              ("1", -14, "B.SilkS", True), ("8", 14, "B.SilkS", True)):
-        items.append(["fp_text", "user", Q(txt), ["at", -at - 1.2, y, 90], ["layer", Q(layer.replace("SilkS", "Fab"))],
-                      _font(0.8, mirror=m)])
+        items.append(["fp_text", "user", Q(txt), ["at", pad[0] + 1.1, y, 0], ["layer", Q(layer)], _font(0.8, mirror=m)])
+    items.append(["fp_text", "user", Q("+12V"), ["at", pad[0] / 2 + 0.4, 14 + pad[1] / 2 + 1.0, 0], ["layer", Q("F.SilkS")],
+                  _font(0.8)])
     items.append(["fp_text", "user", Q("OBD-II plug (adapter + Jiatel CR-PG001)"), ["at", tip / 2, 0, 90],
                   ["layer", Q("F.Fab")], _font()])
     fp = ["footprint", Q(name), ["version", "20260206"], ["generator", Q("octave_gen")], ["layer", Q("F.Cu")],

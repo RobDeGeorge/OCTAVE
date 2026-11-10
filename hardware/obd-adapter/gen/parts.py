@@ -1,20 +1,21 @@
 """LCSC part numbers for JLCPCB assembly.
 
-Checked against JLCPCB's parts library on 2026-11-02 (stock in comments).
-Recheck the low-stock ones on the day you order: STM32G474RET6 (186 on
-2026-11-02, 20 earlier the same day), AP2114H (2.9k), 5.0SMDJ26CA (4k).
+Checked against JLCPCB's parts library on 2026-11-02 (stock in comments) and
+again on 2026-11-09. Recheck the low-stock ones on the day you order:
+STM32G474RET6 (112 on 2026-11-09; 186 and 20 on 2026-11-02), the 8.2 uH
+inductor (631), ATECC608B (794), AP2114H (2.9k), 5.0SMDJ26CA (4k).
 """
 
 LCSC = {
     # ICs and modules
-    "STM32G474RET6": "C521608",   # Ext, 186 in stock. Fallback STM32G474RBT6 C529413 (128 KB)
+    "STM32G474RET6": "C521608",   # Ext, 112 in stock (2026-11-09). Fallback STM32G474RBT6 C529413 (128 KB)
     "ESP32": "C701342",           # ESP32-WROOM-32E-N8, Ext, 25k
     "TCAN1044VDRQ1": "C1852061",  # CAN FD 8 Mbit/s with VIO, Ext, 15.5k
     "LM74700": "C2941042",        # LM74700QDBVRQ1, Ext, 6.9k
     "AO4264E": "C334232",         # 60 V N-FET for the ideal diode, Ext, 39k
     "TPS54360B": "C524806",       # 60 V 3.5 A buck, Ext, 59k
     "B560C": "C85100",            # 60 V 5 A Schottky (buck catch diode), Ext, 109k
-    "L8u2": "C96978",             # Sunlord SWPA8065S8R2MT 8.2 uH, Ext, 625
+    "L8u2": "C96978",             # Sunlord SWPA8065S8R2MT 8.2 uH, Ext, 631
     "AP2114H-3.3": "C150716",     # 1 A LDO, SOT-223 (1 GND, 2 VOUT + tab, 3 VIN), ceramic-stable, Ext, 2.9k
     "TPS22918": "C131941",        # ESP32 load switch, Ext, 55k
     "W25Q128JVSIQ": "C97521",     # Basic, 77k
@@ -22,7 +23,7 @@ LCSC = {
     "LM2901BIDR": "C22427890",    # TI, LM339 pinout, -40..125 C, 38 V abs max (LM2901 non-B: 36 V), Ext, 1.7k
     "LM317LIDR": "C183332",       # Ext, 95k
     "LIS2DH12TR": "C110926",      # ST 3-axis accelerometer, LGA-12 2x2, Ext
-    "ATECC608B": "C1518769",      # Microchip ATECC608B-SSHDA-T secure element, SOIC-8, Ext
+    "ATECC608B": "C1518769",      # Microchip ATECC608B-SSHDA-T secure element, SOIC-8, Ext, 794
     # discretes
     "MMBT3904": "C20526",         # Basic
     "MMBT3906": "C2143",          # Ext
@@ -39,15 +40,14 @@ LCSC = {
     "NUP2105L": "C233494",        # SZNUP2105LT1G, CAN ESD, Ext
     "PTC": "C49326266",           # 2920L200/60GR 2 A hold (~0.9 A at 85 C) 60 V, Ext, 20k
     "XTAL16M": "C13738",          # 16 MHz 3225 9 pF, Basic
-    "FB600": "C1002",             # GZ1608D601TF 600R 0603, Basic
     # connectors, UI
     "USBC": "C165948",            # HRO TYPE-C-31-M-12, Ext
     "CH340C": "C84681",           # USB-UART, internal clock, SOIC-16, Ext, 97k
     "SWD": "C41376037",           # 2x5 1.27 mm SMD header, Ext
-    "QWIIC": "C160404",
+    "QWIIC": "C160404",           # JST SM04B-SRSS-TB, Ext
     "SH2": "C160402",             # JST SM02B-SRSS-TB (panic button), Ext
     "MICROSD": "C585350",         # Molex 104031-0811 push-pull microSD, Ext
-    "ESD9B3.3": "C96512",         # onsemi ESD9B3.3ST5G, SOD-923 (panic input), Ext           # JST SM04B-SRSS-TB, Ext
+    "ESD9B3.3": "C96512",         # onsemi ESD9B3.3ST5G, SOD-923 (panic input), Ext
     "SW": "C318884",              # XKB TS-1187A 5.1 mm tactile, Basic
     "DIP4": "C40736",             # KINGTEK DSHP04TSGET 4-way SMD DIP, 1.27 mm, -40..85 C, 24 V 25 mA, Ext
     "LEDR": "C2286", "LEDG": "C12624", "LEDB": "C2288",
@@ -59,9 +59,9 @@ LCSC = {
     "C10u50": "C13585",           # 10 uF 50 V 1206
     "C47u50": "C2887275",         # 47 uF 50 V aluminium electrolytic 6.3x7.7 (VBAT_P bulk), Ext, 102k
     "CXTAL": "C1634",             # 10 pF C0G: crystal CL 9 pF, 10 + 10 in series + ~4 pF stray
-    "C6.8n": "C1631", "C1n": "C1588", "C39p": "C1666", "C12p": "C38523", "C10p": "C1634", "C10n": "C57112",
+    "C6.8n": "C1631", "C1n": "C1588", "C39p": "C1666", "C12p": "C38523", "C10p": "C1634",
     "R4.7k": "C23162", "R10k": "C25804", "R100k": "C25803", "R1k": "C21190",
-    "R510": "C23193", "R5.1k": "C23186", "R13k": "C22797", "R510k": "C23192",
+    "R510": "C23193", "R5.1k": "C23186", "R13k": "C22797", "R18k": "C25810", "R510k": "C23192",
     "R57.6k": "C23082", "R330": "C23138", "R4.7k_1206": "C17936", "R10k_1206": "C17902", "R470_1206": "C4502", "R47k": "C25819",
     "R2.2k": "C4190", "R680": "C23228", "R470": "C23179", "R10.2k": "C22772", "R84.5k": "C23118",
     "R162k": "C22815", "R120": "C22787", "R240": "C23350", "R787": "C23111", "R453": "C48136",

@@ -17,6 +17,7 @@ STEP = MM(0.1)
 LAYERS = (pcbnew.F_Cu, pcbnew.B_Cu)
 ALL = (pcbnew.F_Cu, pcbnew.In1_Cu, pcbnew.In2_Cu, pcbnew.B_Cu)
 VIA_D, VIA_DRILL = 0.6, 0.3
+EDGE = 0.4      # copper to board edge, as Freerouting is told (the DRC limit is 0.3)
 
 
 def _pieces(board, net):
@@ -89,7 +90,26 @@ class _Grid:
             if z.GetIsRuleArea():
                 bb = z.GetBoundingBox()
                 self.keepouts.append((bb.GetLeft(), bb.GetTop(), bb.GetRight(), bb.GetBottom()))
+        # the board outline: nothing here knew about it until a route came back along the bottom edge
+        self.edges = [(d.GetStart().x, d.GetStart().y, d.GetEnd().x, d.GetEnd().y) for d in board.GetDrawings()
+                      if d.GetLayer() == pcbnew.Edge_Cuts and d.GetShape() == pcbnew.SHAPE_T_SEGMENT]
         self.cache = {}
+
+    def off_edge(self, pt, reach):
+        """True if copper of radius `reach` at `pt` keeps EDGE from every outline segment."""
+        need = reach + MM(EDGE)
+        for ax, ay, bx, by in self.edges:
+            dx, dy = bx - ax, by - ay
+            L2 = dx * dx + dy * dy
+            u = 0 if not L2 else max(0.0, min(1.0, ((pt.x - ax) * dx + (pt.y - ay) * dy) / L2))
+            if math.hypot(pt.x - ax - u * dx, pt.y - ay - u * dy) < need:
+                return False
+        return True
+
+    def kept_out(self, pt, reach):
+        """True if copper of radius `reach` at `pt` reaches into a keep-out (a centre-only test let a track's
+        edge 25 um into a mounting hole's rule area)."""
+        return any(a - reach <= pt.x <= c + reach and b - reach <= pt.y <= d + reach for a, b, c, d in self.keepouts)
 
     def pos(self, i, j):
         return pcbnew.VECTOR2I(self.x0 + i * STEP, self.y0 + j * STEP)
@@ -114,7 +134,7 @@ class _Grid:
         k = (i, j, layer)
         if k not in self.cache:
             pt = self.pos(i, j)
-            if any(a <= pt.x <= c and b <= pt.y <= d for a, b, c, d in self.keepouts):
+            if self.kept_out(pt, self.half) or not self.off_edge(pt, self.half):
                 self.cache[k] = None
             else:
                 self.cache[k] = self._hit(pcbnew.SHAPE_CIRCLE(pt, self.half), pt, self.half + self.clr + MM(1),
@@ -126,7 +146,7 @@ class _Grid:
         if k not in self.cache:
             pt = self.pos(i, j)
             ring = pcbnew.SHAPE_CIRCLE(pt, MM(VIA_D / 2))
-            if any(p.GetEffectiveShape(L).Collide(ring, MM(0.05)) for p in self.smd for L in LAYERS
+            if self.kept_out(pt, MM(VIA_D / 2)) or not self.off_edge(pt, MM(VIA_D / 2)) or any(p.GetEffectiveShape(L).Collide(ring, MM(0.05)) for p in self.smd for L in LAYERS
                    if p.IsOnLayer(L) and (p.GetPosition() - pt).EuclideanNorm() < MM(4)):
                 self.cache[k] = None
                 return None
@@ -284,9 +304,11 @@ def _join(board, net, a, rest, width, clearance, keepouts, rip, whole=False, max
     m = MM(8)
     box = (min(ba[0], nb.GetLeft()) - m, min(ba[1], nb.GetTop()) - m,
            max(ba[2], nb.GetRight()) + m, max(ba[3], nb.GetBottom()) + m)
-    box = (max(box[0], MM(0.5)), max(box[1], MM(0.5)), min(box[2], MM(109.5)), min(box[3], MM(74.5)))
+    eb = board.GetBoardEdgesBoundingBox()    # the search stays on the board
+    lim = (eb.GetLeft() + MM(0.5), eb.GetTop() + MM(0.5), eb.GetRight() - MM(0.5), eb.GetBottom() - MM(0.5))
+    box = (max(box[0], lim[0]), max(box[1], lim[1]), min(box[2], lim[2]), min(box[3], lim[3]))
     if whole:
-        box = (MM(0.5), MM(0.5), MM(109.5), MM(74.5))
+        box = lim
     # put a grid point on the centre of the finest-pitch pad at either end: an LQFP pin at x.25 /
     # x.75 sits half a step off a 0.1 mm grid, and a track leaving it off-axis can't clear the
     # neighbouring pins, so the pin looks boxed in

@@ -1,12 +1,12 @@
 %TF.GenerationSoftware,KiCad,Pcbnew,10.0.8*%
-%TF.CreationDate,2026-11-08T20:26:40-07:00*%
+%TF.CreationDate,2026-11-10T06:53:08-07:00*%
 %TF.ProjectId,obd-adapter-plug,6f62642d-6164-4617-9074-65722d706c75,rev?*%
 %TF.SameCoordinates,Original*%
 %TF.FileFunction,Soldermask,Top*%
 %TF.FilePolarity,Negative*%
 %FSLAX46Y46*%
 G04 Gerber Fmt 4.6, Leading zero omitted, Abs format (unit mm)*
-G04 Created by KiCad (PCBNEW 10.0.8) date 2026-11-08 20:26:40*
+G04 Created by KiCad (PCBNEW 10.0.8) date 2026-11-10 06:53:08*
 %MOMM*%
 %LPD*%
 G01*
@@ -29,8 +29,8 @@ G04 Aperture macros list*
 20,1,$1+$1,$6,$7,$8,$9,0*
 20,1,$1+$1,$8,$9,$2,$3,0*%
 G04 Aperture macros list end*
-%ADD10RoundRect,0.300000X-1.250000X-0.700000X1.250000X-0.700000X1.250000X0.700000X-1.250000X0.700000X0*%
-%ADD11O,3.100000X2.000000*%
+%ADD10RoundRect,0.300000X-1.300000X-0.700000X1.300000X-0.700000X1.300000X0.700000X-1.300000X0.700000X0*%
+%ADD11O,3.200000X2.000000*%
 G04 APERTURE END LIST*
 D10*
 %TO.C,J1*%
