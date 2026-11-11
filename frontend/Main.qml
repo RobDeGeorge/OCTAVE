@@ -11,6 +11,14 @@ ApplicationWindow {
     // Store the system default font family at startup
     property string systemDefaultFont: ""
 
+    // What draws this window, set from C++ once the scene graph is up
+    // (src/util/graphicsrenderer.cpp): "OpenGL: <GL_RENDERER>", "Metal",
+    // "Direct3D 11", ...; "" until then. gpuRendered is true only when that
+    // names a GPU (not llvmpipe and its kind, and not an API that does not
+    // say); prewarmPageSoon() asks it.
+    property string graphicsRenderer: ""
+    property bool gpuRendered: false
+
     // Global font setting - applies to all child components
     // fontFamily always returns a valid font (systemDefaultFont or custom font)
     font.family: App.Style.fontFamily !== "" ? App.Style.fontFamily : systemDefaultFont
@@ -988,8 +996,18 @@ ApplicationWindow {
     }
 
     // Pages call this to have a page they lead to built in the background
-    // (see pagePrewarmTimer.enqueue)
+    // (see pagePrewarmTimer.enqueue). A Quick 3D page only when a GPU is
+    // known to draw the window: with Mesa's llvmpipe (a PC or VM without a
+    // GPU) building and warm-rendering CarMenu blocked the UI for 14-19 s,
+    // and 0.9.6-rc1 did that to everyone who opened Sensor Home, wanted or
+    // not; on an emulated Pi it ran into the 30 s watchdog. Without a GPU the
+    // page is built when it is opened, as before.
     function prewarmPageSoon(file) {
+        if (pagePrewarmTimer.heavyPages.indexOf(file) !== -1 && !gpuRendered) {
+            console.info("[NAV] Not pre-building", file + ": no GPU known to draw it ("
+                         + (graphicsRenderer !== "" ? graphicsRenderer : "renderer not known") + ")")
+            return
+        }
         pagePrewarmTimer.enqueue(file)
     }
 

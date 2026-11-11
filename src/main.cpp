@@ -41,6 +41,7 @@ extern "C" {
 #include "items/embeddeddhuitem.h"
 #include "util/logger.h"
 #include "util/qmlmodules.h"
+#include "util/graphicsrenderer.h"
 #include "util/uiwatchdog.h"
 #include "util/units.h"
 #include "service/commandserver.h"
@@ -889,6 +890,9 @@ int main(int argc, char *argv[])
         qCritical("Failed to load Main.qml from %s", qPrintable(qmlUrl.toString()));
         return -1;
     }
+    // What draws the window, into the log and Main.qml's graphicsRenderer /
+    // gpuRendered: without a GPU the 3D page is not built in the background
+    GraphicsRenderer::report(engine.rootObjects().constFirst());
 #ifdef OCTAVE_DEV_TOOLS
     devRuntime.afterLoad(service.server.get());   // its UI / perf / sim actions, with --profile
 #endif

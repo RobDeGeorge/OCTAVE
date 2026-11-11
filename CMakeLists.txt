@@ -292,6 +292,8 @@ qt_add_executable(octave
     src/util/dashboardgrid.cpp
     src/util/qmlmodules.h
     src/util/qmlmodules.cpp
+    src/util/graphicsrenderer.h
+    src/util/graphicsrenderer.cpp
     src/util/variantlistmodel.h
     src/util/variantlistmodel.cpp
     src/util/units.h
