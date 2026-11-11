@@ -410,10 +410,11 @@ jobs:
   cpp-build-macos:
     needs: [lint, cpp-compile-check]
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
-    # macos-14 (Xcode 15): the macOS 15 SDK on macos-latest drops the AGL
-    # framework that Qt 6.7.3's OpenGL support still links ("ld: framework
-    # 'AGL' not found"). Revisit when Qt is bumped to 6.8+.
-    runs-on: macos-14
+    # macos-15: GitHub retired the macos-14 image on 2026-11-02. Qt 6.7.3's
+    # OpenGL support links the AGL framework, which newer SDKs lack ("ld:
+    # framework 'AGL' not found"); cmake/FindWrapOpenGL.cmake leaves it out,
+    # so the job no longer depends on which Xcode the image selects.
+    runs-on: macos-15
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

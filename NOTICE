@@ -27,6 +27,9 @@ Third-party code bundled in this repository:
   the AirPlay receiver (Linux builds): the server code and its mDNS responder
   LGPL-2.1-or-later, playfair GPL-3.0, llhttp MIT; the whole GPL-3.0
   (third_party/uxplay/LICENSE, README.md)
+- cmake/FindWrapOpenGL.cmake: Qt's CMake find module, Copyright (C) 2022 The Qt
+  Company Ltd., BSD-3-Clause, with the AGL framework lines removed (macOS
+  builds only; build-time, nothing of it is in a package).
 - Fonts in frontend/assets/fonts/, all under the SIL Open Font License 1.1
   (full text: frontend/assets/fonts/symbols/OFL.txt):
   - Google Sans, Copyright 2025 The Google Sans Project Authors

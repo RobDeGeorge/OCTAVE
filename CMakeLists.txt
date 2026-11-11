@@ -21,6 +21,12 @@ endif()
 if(EMSCRIPTEN)
     list(REMOVE_ITEM OCTAVE_QT_COMPONENTS SerialPort Bluetooth)
 endif()
+# macOS: Qt 6.7's FindWrapOpenGL.cmake links the AGL framework, which recent
+# macOS SDKs no longer have. cmake/FindWrapOpenGL.cmake is Qt's file without it;
+# Qt appends its own module directory, so one listed first wins.
+if(APPLE AND NOT IOS)
+    list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+endif()
 find_package(Qt6 REQUIRED COMPONENTS ${OCTAVE_QT_COMPONENTS})
 
 # The offline wiki viewer is loaded on demand. Keep builds without a desktop

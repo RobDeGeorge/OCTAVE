@@ -77,8 +77,8 @@ Copy-Item -Recurse -Force frontend build/Debug/
         <h3>Why one artifact naming scheme</h3>
         <p>Commit <code>d7812ff</code> unified four conventions into <code>OCTAVE-&lt;version&gt;-&lt;platform&gt;[-&lt;arch&gt;].&lt;ext&gt;</code> with the leading <code>v</code> stripped from the tag. The Inno Setup <code>OutputBaseFilename</code>, the macdeployqt rename step, the AppImage script and the APK staging copy all follow it, and the workflow's artifact globs and release file list depend on it.</p>
 
-        <h3>Why macOS builds on <code>macos-14</code></h3>
-        <p>The macOS 15 SDK on <code>macos-latest</code> drops the AGL framework that Qt 6.7.3's OpenGL support still links (<code>ld: framework 'AGL' not found</code>). The job is pinned to <code>macos-14</code> / Xcode 15 until Qt is bumped to 6.8+ (commit <code>f559afc</code>).</p>
+        <h3>macOS and the AGL framework</h3>
+        <p>Qt 6.7.3's OpenGL support still links the AGL framework, which newer macOS SDKs no longer ship (<code>ld: framework 'AGL' not found</code>). The job was pinned to <code>macos-14</code> / Xcode 15 for that (commit <code>f559afc</code>) until GitHub retired that image on 2026-11-02. It now runs on <code>macos-15</code>, and <span class="file-path">cmake/FindWrapOpenGL.cmake</span> (Qt's own find module with the AGL lines removed, put ahead of Qt's on <code>CMAKE_MODULE_PATH</code> for macOS builds) keeps AGL off the link line whatever SDK is selected. Delete that file once the pinned Qt no longer links AGL.</p>
 
         <h3>Why Qt 6.7.3 specifically</h3>
         <p>Every CI job pins <code>version: '6.7.3'</code>, and the local build instructions use that version to match. This is a project toolchain choice, not a limit on public Qt availability: Qt also publishes <a href="https://download.qt.io/online/qtsdkrepository/linux_x64/desktop/qt6_683/">Qt 6.8.3 packages</a>. Upgrading requires checking the platform kits, QML modules, deploy tools, and Android Gradle configuration together.</p>

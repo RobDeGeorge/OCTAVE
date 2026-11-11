@@ -429,7 +429,7 @@ venv/bin/ruff check .
 | Platform | Runner | Build command | Output |
 |---|---|---|---|
 | Windows | `windows-latest` | `cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=…/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows -DCMAKE_BUILD_TYPE=Release` then `iscc.exe build_scripts/installer_windows.iss` | `OCTAVE-<v>-windows-x86_64.exe` |
-| macOS | `macos-14` | `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release` then `macdeployqt dist/OCTAVE.app -qmldir=frontend -dmg` | `OCTAVE-<v>-macos.dmg` |
+| macOS | `macos-15` | `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release` then `macdeployqt dist/OCTAVE.app -qmldir=frontend -dmg` | `OCTAVE-<v>-macos.dmg` |
 | Linux x86_64 | `ubuntu-22.04` | `bash packaging/linux/build-appimage.sh` (CMake Release + `linuxdeploy` + `linuxdeploy-plugin-qt`) | `OCTAVE-<v>-linux-x86_64.AppImage` |
 | Linux aarch64 | `ubuntu-22.04-arm` | same script; Qt's GStreamer media plugin is dropped after the build (jammy lacks libgstphotography) | `OCTAVE-<v>-linux-aarch64.AppImage` |
 | Android | `ubuntu-22.04` | `qt-cmake -S . -B build-android …` then `cmake --build build-android --target apk`, signed with a per-run keystore (v1+v2+v3) | `OCTAVE-<v>-android-arm64-v8a.apk` |
