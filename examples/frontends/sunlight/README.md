@@ -17,7 +17,7 @@ go run -tags novulkan .                  # --host H --port P --fullscreen --nigh
 
 Over the network (OCTAVE started with `--service-bind`), protocol 2 wants the screen paired: sunlight shows a keypad, you type the 6-digit code from OCTAVE's Settings > Service > Pair a device and press PAIR (or type it and Enter). The token is kept in `$XDG_CONFIG_HOME/octave-sunlight/tokens.json` (mode 0600, one per host:port; `--token-file` elsewhere, `--token` or `OCTAVE_TOKEN` to pass one), and a revoked one is forgotten so it asks again. The cover is fetched with the token as `Authorization: Bearer`, never in a URL. On the head unit itself nothing is asked while `serviceLoopbackOpen` is on (the default).
 
-Start it before or after OCTAVE: until the service answers, the top bar shows NO SIGNAL in orange and it retries every second. Needs Go 1.24 or newer. Gio builds against the Wayland, X11, EGL and xkbcommon dev packages (Debian / Raspberry Pi OS: `libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev libgles2-mesa-dev libegl1-mesa-dev libxcursor-dev libxfixes-dev`). The `novulkan` tag drops Gio's optional Vulkan renderer, so the Vulkan headers are not needed; it draws with OpenGL ES either way.
+Start it before or after OCTAVE: until the service answers, the top bar shows NO SIGNAL in orange and it retries every second. Needs Go 1.26 or newer. Gio builds against the Wayland, X11, EGL and xkbcommon dev packages (Debian / Raspberry Pi OS: `libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev libgles2-mesa-dev libegl1-mesa-dev libxcursor-dev libxfixes-dev`). The `novulkan` tag drops Gio's optional Vulkan renderer, so the Vulkan headers are not needed; it draws with OpenGL ES either way.
 
 | Key | Does |
 |---|---|
