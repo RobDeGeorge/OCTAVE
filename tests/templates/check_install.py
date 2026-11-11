@@ -9,6 +9,8 @@ started plainly (no --headless) with --sim.
   OCTAVE with 0.
 - hello-car-js (web): served at GET /, and a WebSocket with the page's
   Origin holds read + media only.
+- a fake exec frontend that writes down QT_QPA_PLATFORM: OCTAVE's own
+  offscreen choice is not handed to what it starts.
 
 ctest `templates_install`; OCTAVE_BIN names the binary.
 """
@@ -41,9 +43,11 @@ def free_port():
 class Run:
     """An octave process with an isolated home and the given config"""
 
-    def __init__(self, home, args):
+    def __init__(self, home, args, platform="offscreen"):
         env = dict(os.environ, HOME=home, XDG_CONFIG_HOME=home, XDG_DATA_HOME=home, XDG_CACHE_HOME=home,
-                   QT_QPA_PLATFORM="offscreen")
+                   QT_QPA_PLATFORM=platform)
+        if platform is None:   # as a user starts it: OCTAVE picks the platform
+            del env["QT_QPA_PLATFORM"]
         self.log = open(os.path.join(home, f"octave-{time.monotonic_ns()}.log"), "w+")
         self.proc = subprocess.Popen([BIN] + args, env=env, stdout=self.log, stderr=subprocess.STDOUT)
 
@@ -183,6 +187,40 @@ class TemplatesInstall(unittest.TestCase):
         self.assertNotIn("Main.qml", out)
         self.assertRegex(out, r"as the screen with \[.*'media'.*\]; settings refused: True")
         self.assertIn("hello-car-python: all checks passed", out)
+
+    @unittest.skipIf(sys.platform == "win32", "the fake frontend is a shell script")
+    def test_exec_frontend_does_not_inherit_the_offscreen_platform(self):
+        # With an exec frontend as the screen OCTAVE itself runs on Qt's
+        # offscreen platform. That choice is its own: the frontend, and the
+        # OCTAVE started again on the built-in screen when the frontend ends,
+        # take their environment from it and must not get QT_QPA_PLATFORM
+        # (0.9.6-rc3: the built-in screen came back with no window).
+        src = os.path.join(self.tmp, "env-frontend")
+        os.mkdir(src)
+        seen = os.path.join(self.tmp, "seen-platform")
+        script = os.path.join(src, "run.sh")
+        with open(script, "w") as fh:
+            fh.write('#!/bin/sh\nprintf %s "${QT_QPA_PLATFORM-unset}" > "$1"\n')
+        os.chmod(script, 0o755)
+        argv = ["sh", "{dir}/run.sh", seen]
+        with open(os.path.join(src, "octave-frontend.json"), "w") as fh:
+            json.dump({"id": "org.octave.test.env", "name": "Environment", "version": "1.0.0",
+                       "description": "Writes down the platform variable it was started with",
+                       "protocol": [2, 3], "scopes": ["media"],
+                       "exec": {"linux": argv, "macos": argv}}, fh)
+        self.assertEqual(install(self.tmp, self.config, src), "org.octave.test.env")
+
+        run = Run(self.tmp, ["--config", self.config, "--sim", "--service", str(free_port())], platform=None)
+        try:
+            code = run.proc.wait(90)   # the script's exit 0 ends OCTAVE
+        finally:
+            run.stop()
+        out = run.output()
+        run.log.close()
+        self.assertEqual(code, 0, out[-3000:])
+        self.assertIn("is the screen; loopback trust is off", out)
+        with open(seen) as fh:
+            self.assertEqual(fh.read(), "unset")
 
     def test_js_template_is_served(self):
         folder = os.path.join(ROOT, "templates", "hello-car-js")

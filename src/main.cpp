@@ -328,6 +328,31 @@ int dumpApi(QGuiApplication &app, const QString &dir)
 }
 
 #ifndef Q_OS_MOBILE
+// A run with no window draws on Qt's offscreen platform unless the caller
+// picked one. The variable is only for the QGuiApplication built inside:
+// it is taken back as soon as that exists, so nothing OCTAVE starts inherits
+// it. 0.9.6-rc3 left it set, and OCTAVE started again on the built-in screen
+// after an exec frontend (a trial's end, the escape) had no window at all;
+// a frontend written with Qt would have had none either.
+class OffscreenForThisProcess
+{
+public:
+    OffscreenForThisProcess() : m_ours(qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
+    {
+        if (m_ours)
+            qputenv("QT_QPA_PLATFORM", "offscreen");
+    }
+    void appBuilt()
+    {
+        if (m_ours)
+            qunsetenv("QT_QPA_PLATFORM");
+        m_ours = false;
+    }
+
+private:
+    bool m_ours;
+};
+
 // Why OCTAVE starts itself again when it quits (installed frontends,
 // frontendmanager.h)
 enum class Relaunch {
@@ -684,9 +709,9 @@ int main(int argc, char *argv[])
         trial = {};
     }
     if (boot.kind == FrontendManager::Boot::Exec) {
-        if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
-            qputenv("QT_QPA_PLATFORM", "offscreen");
+        OffscreenForThisProcess offscreen;
         QGuiApplication app(argc, argv);
+        offscreen.appBuilt();
         app.setOrganizationName("OCTAVE");
         app.setApplicationName("OCTAVE");
         return runHeadless(app, smokeTest, &boot, trial);
@@ -694,9 +719,9 @@ int main(int argc, char *argv[])
     if (headless) {
         // No window: the offscreen platform unless the caller picked one.
         // QGuiApplication still, for the fonts and images the managers use.
-        if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
-            qputenv("QT_QPA_PLATFORM", "offscreen");
+        OffscreenForThisProcess offscreen;
         QGuiApplication app(argc, argv);
+        offscreen.appBuilt();
         app.setOrganizationName("OCTAVE");
         app.setApplicationName("OCTAVE");
         return runHeadless(app, smokeTest);

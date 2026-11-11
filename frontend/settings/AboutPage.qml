@@ -30,13 +30,15 @@ Flickable {
         padding: aboutPage.dp(16)
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         property string heading: ""
-        property string body: ""
+        property var lines: []
         function showFile(name, title) {
             heading = title
-            body = typeof diagnosticsManager !== "undefined" && diagnosticsManager
-                   ? diagnosticsManager.licenseText(name) : ""
+            var body = typeof diagnosticsManager !== "undefined" && diagnosticsManager
+                       ? diagnosticsManager.licenseText(name) : ""
             if (body === "")
                 body = "Not available in this build. See github.com/RobDeGeorge/OCTAVE/blob/main/" + name
+            lines = body.replace(/\s+$/, "").split(/\r?\n/)
+            licenseBody.positionViewAtBeginning()
             open()
         }
         background: Rectangle {
@@ -64,28 +66,31 @@ Flickable {
                     onClicked: licenseTextPopup.close()
                 }
             }
-            Flickable {
+            // One Text per line of the file, built as it scrolls into view.
+            // The whole GPL as a single Text held the UI thread for 46 s on
+            // a Windows PC with no GPU (0.9.6-rc3)
+            ListView {
+                id: licenseBody
+                objectName: "licenseBody"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
-                contentWidth: width
-                contentHeight: licenseBody.implicitHeight
-                flickableDirection: Flickable.VerticalFlick
                 boundsBehavior: Flickable.StopAtBounds
-                Text {
-                    id: licenseBody
-                    objectName: "licenseBody"
-                    width: parent.width
-                    text: licenseTextPopup.body
+                model: licenseTextPopup.lines
+                delegate: Text {
+                    width: ListView.view ? ListView.view.width : 0
+                    text: modelData
                     textFormat: Text.PlainText
-                    wrapMode: Text.WordWrap
+                    wrapMode: Text.Wrap
                     color: App.Style.primaryTextColor
                     font.pixelSize: App.Spacing.overallText * 0.7
-                    font.family: "monospace"
+                    // The bundled fixed-width font (frontend/assets/fonts)
+                    font.family: "JetBrains Mono"
                 }
             }
         }
     }
+
     function registerWikiPopup() {
         if (wikiHost && wikiHost.activeWikiPopup === wikiPopup)
             wikiHost.activeWikiPopup = null
@@ -275,6 +280,11 @@ Flickable {
                 title: "Open-Source Licenses"
 
                 readonly property bool isAndroid: Qt.platform.os === "android"
+                // Null while the app quits: the context properties go before the page
+                readonly property bool hasAirPlay: typeof airPlayManager !== "undefined" && airPlayManager !== null
+                                                   && airPlayManager.available
+                readonly property bool hasNativeAndroidAuto: typeof androidAutoManager !== "undefined" && androidAutoManager !== null
+                                                             && androidAutoManager.nativeAvailable
                 readonly property var components: {
                     var all = [
                         { name: "Qt 6", license: "LGPL-3.0; GPL-3.0 for Qt Quick 3D and Qt Quick Timeline", use: "The whole application" },
@@ -287,12 +297,11 @@ Flickable {
                     if (!isAndroid) {
                         all.push({ name: "TagLib", license: "LGPL-2.1 / MPL-1.1", use: "Song tags and embedded album art" })
                         all.push({ name: "FFmpeg (libavcodec, libavutil; H.264, AAC and ALAC decoders)", license: "LGPL-2.1+", use: "Decoding the phone mirror's video and AirPlay's video and audio" })
-                        if (typeof airPlayManager !== "undefined" && airPlayManager.available) {
+                        if (hasAirPlay) {
                             all.push({ name: "UxPlay (AirPlay library)", license: "GPL-3.0; parts LGPL-2.1+ and MIT", use: "The AirPlay receiver" })
                             all.push({ name: "libplist", license: "LGPL-2.1+", use: "AirPlay's property lists" })
                         }
-                        if ((typeof androidAutoManager !== "undefined" && androidAutoManager.nativeAvailable)
-                                || (typeof airPlayManager !== "undefined" && airPlayManager.available))
+                        if (hasNativeAndroidAuto || hasAirPlay)
                             all.push({ name: "OpenSSL", license: "Apache-2.0", use: "The built-in Android Auto receiver's encryption, and AirPlay's" })
                         all.push({ name: "FFmpeg (inside Qt Multimedia)", license: "LGPL-2.1+; GPL-2.0+ in the aarch64 AppImage (Ubuntu's build)", use: "Playing local music" })
                         all.push({ name: "Android platform-tools (adb)", license: "Apache-2.0", use: "Talking to the phone (bundled in releases)" })

@@ -1568,11 +1568,17 @@ Item {
                                 anchors.rightMargin: dp(8)
                                 spacing: dp(6)
                                 z: 2
+                                // Summed over children, which notifies as
+                                // each button arrives. Repeater.itemAt() does
+                                // not: on a page pre-built in the background
+                                // the buttons are created after the Repeater
+                                // reports its count, so the sum stayed 0 and
+                                // they stacked outside the card (0.9.6-rc3).
                                 readonly property real oneLine: {
                                     var w = 0, n = 0
-                                    for (var i = 0; i < cardActionButtons.count; i++) {
-                                        var b = cardActionButtons.itemAt(i)
-                                        if (b && b.shown) { w += b.width; n++ }
+                                    for (var i = 0; i < children.length; i++) {
+                                        var b = children[i]
+                                        if (b.shown === true) { w += b.width; n++ }
                                     }
                                     return w + Math.max(0, n - 1) * spacing
                                 }
