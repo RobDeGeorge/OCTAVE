@@ -72,8 +72,11 @@ Item {
                           component: aboutContent, section: entry.section }
                 continue
             }
+            // Not a page the Repeater is taking away (see `leaving`), nor,
+            // while it rebuilds, the page of another section at this index.
             var loader = allPagesRepeater.itemAt(i)
-            var page = loader ? loader.item : null
+            var page = loader && !loader.leaving && loader.section === entry.section
+                ? loader.item : null
             if (!page || typeof page.tileModel === "undefined")
                 continue
             var tiles = []
@@ -144,8 +147,19 @@ Item {
         id: allPagesRepeater
         model: sidebarLayout.hubModel
         onItemAdded: sidebarLayout._allPagesLoaded++
-        onItemRemoved: sidebarLayout._allPagesLoaded++
+        onItemRemoved: function(index, item) {
+            item.leaving = true
+            sidebarLayout._allPagesLoaded++
+        }
         delegate: Loader {
+            // Set as the Repeater removes this page (a settings section
+            // switched on or off rebuilds them all). itemAt() still returns
+            // it until the rebuild is over, by when its context is gone: a
+            // tile built from it then called a summary that found no manager
+            // in scope, 105 "ReferenceError: settingsManager is not defined"
+            // and TypeError warnings at once (0.9.6-rc6).
+            property bool leaving: false
+            readonly property string section: modelData.section
             visible: false
             active: modelData.section !== "about"
             Component.onCompleted: if (active) setSource(modelData.source, { renderCards: false })

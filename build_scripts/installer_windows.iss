@@ -137,8 +137,9 @@ begin
   end;
 end;
 
-// Waits until adb.exe is free again (measured on 0.9.6-rc6: 0.1 to 0.4 s
-// after its adb is killed) and logs how long that took.
+// Waits until adb.exe is free again and logs how long that took. A killed adb
+// does not free its files at once: 0.1 to 0.4 s on an idle Windows 11, about
+// 1.3 s while an uninstall was running (measured on 0.9.6-rc6).
 function AdbFreeWithin(const Adb: String; const Seconds: Integer): Boolean;
 var
   I: Integer;
@@ -198,9 +199,9 @@ begin
   Log('  ' + S);
 end;
 
-// The same through PowerShell, for when WMI did not free the file. It also
-// ends an adb.exe that shows no path at all when none shows this one: the
-// file is in use, so one of them runs from it.
+// The same through PowerShell, for when WMI ended none or the file stayed in
+// use. It also ends an adb.exe that shows no path at all when none shows this
+// one: the file is in use, so one of them runs from it.
 procedure EndBundledAdbByPowerShell(const Adb: String);
 var
   Quoted: String;
@@ -223,13 +224,14 @@ begin
     Log('PowerShell did not start (' + SysErrorMessage(ResultCode) + ')');
 end;
 
-// Every step goes to the log: the rc6 step (one PowerShell line, nothing
-// logged) ended no adb, neither before an upgrade, where Setup's own retry
-// then got the file, nor before an uninstall, where nothing did, and its log
-// could not say why.
+// Ending the adb is half of it; the other half is the wait. The rc6 step
+// ended it and went on: the uninstaller, which tries each file once, was at
+// the three files 0.9 s later and the adb was gone 0.4 s after that. Every
+// step goes to the log, which in rc6 could say none of this.
 procedure StopBundledAdb;
 var
   Adb: String;
+  Ended: Integer;
 begin
   Adb := ExpandConstant('{app}\platform-tools\adb.exe');
   if not FileExists(Adb) then
@@ -237,8 +239,9 @@ begin
   if not BundledAdbHeld(Adb) then
     Exit;
   Log('The bundled adb is running (' + Adb + ' is in use)');
-  Log('WMI ended ' + IntToStr(EndBundledAdbByWmi(Adb)) + ' adb');
-  if AdbFreeWithin(Adb, 3) then
+  Ended := EndBundledAdbByWmi(Adb);
+  Log('WMI ended ' + IntToStr(Ended) + ' adb');
+  if (Ended > 0) and AdbFreeWithin(Adb, 10) then
     Exit;
   EndBundledAdbByPowerShell(Adb);
   AdbFreeWithin(Adb, 10);

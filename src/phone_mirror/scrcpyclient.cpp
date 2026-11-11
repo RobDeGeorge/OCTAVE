@@ -473,10 +473,11 @@ void ScrcpyClient::endOverdue(QProcess *proc)
     // to 30 s for it and logs "QProcess: Destroyed while process ... is still
     // running". That line came on Windows (0.9.6-rc5 and rc6: `adb mdns
     // services` over its 5 s, the firewall prompt for adb on screen) although
-    // the adb had been killed and given 1 s. Why it outlived that second is
-    // not known: killed from outside, an adb there was gone within 15 ms. So
-    // this waits longer and logs how long it took. Only the first argument
-    // is logged: an `adb pair` carries the pairing password.
+    // the adb had been killed and given 1 s. A killed adb can take longer
+    // than that to go on Windows (measured on rc6: 1.3 s while an uninstall
+    // ran, well under 0.1 s on an idle machine). So this waits longer and
+    // logs how long it took. Only the first argument is logged: an `adb
+    // pair` carries the pairing password.
     if (proc->state() == QProcess::NotRunning)
         return;
     QElapsedTimer took;
