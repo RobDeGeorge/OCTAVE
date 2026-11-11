@@ -202,8 +202,13 @@ void registerCoreActions(CommandServer &server, const CoreTargets &t)
         if (!kSettingsSections.contains(section))
             throw CommandError(QStringLiteral("Unknown settings section: %1. Valid: %2")
                                    .arg(section, kSettingsSections.join(", ")));
-        Gui::postGui([ui, section] { if (ui) ui->navigateToSettings(section); });
-        return QVariantMap{{"section", section}};
+        // optional: a card of that section to open as well (e.g. "device_frontends")
+        const QString tile = str(a, "tile");
+        Gui::postGui([ui, section, tile] { if (ui) ui->navigateToSettings(section, tile); });
+        QVariantMap out{{"section", section}};
+        if (!tile.isEmpty())
+            out.insert("tile", tile);
+        return out;
     });
     server.registerAction("set_window_size", [ui](const QVariantMap &a) -> QVariant {
         const int w = int(num(a, "width", 1280));

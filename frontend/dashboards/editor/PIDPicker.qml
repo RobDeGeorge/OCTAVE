@@ -181,10 +181,19 @@ Popup {
             Layout.fillWidth: true
             Layout.preferredHeight: picker.dp(44)
             placeholderText: "Search…"
+            placeholderTextColor: Qt.darker(App.Style.obdLabelColor, 1.4)
             focus: false
             font.family: App.Style.fontFamily
             font.pixelSize: App.Spacing.overallText
             color: App.Style.primaryTextColor
+            // as the widget gallery's search field: the Basic style's own
+            // background is white, which hides the theme's light text
+            background: Rectangle {
+                radius: picker.dpMin(6, 2)
+                color: Qt.darker(App.Style.obdBoxBackground, 1.25)
+                border.color: searchField.activeFocus ? App.Style.accent : Qt.darker(App.Style.obdBarColor, 1.6)
+                border.width: 1
+            }
         }
 
         ListView {

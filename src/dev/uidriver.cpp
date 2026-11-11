@@ -68,10 +68,12 @@ void UiDriver::navigateTo(const QString &qmlFile)
         invokeByName(w, "navigateTo", {qmlFile});
 }
 
-void UiDriver::navigateToSettings(const QString &section)
+void UiDriver::navigateToSettings(const QString &section, const QString &tile)
 {
+    // Main.qml's navigateToSettings(section, tile): invokeByName matches the
+    // argument count, so both are always passed
     if (QQuickWindow *w = window())
-        invokeByName(w, "navigateToSettings", {section});
+        invokeByName(w, "navigateToSettings", {section, tile});
 }
 
 void UiDriver::navigateHome()

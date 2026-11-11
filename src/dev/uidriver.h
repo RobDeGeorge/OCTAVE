@@ -32,7 +32,8 @@ public:
 
     // Navigation (Main.qml functions)
     void navigateTo(const QString &qmlFile);
-    void navigateToSettings(const QString &section);
+    // `tile`: a card of the section to open as well (its cardId), or empty
+    void navigateToSettings(const QString &section, const QString &tile = QString());
     void navigateHome();
     void navigateBack();
     QString currentPage() const;
