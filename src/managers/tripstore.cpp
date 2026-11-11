@@ -529,12 +529,18 @@ int TripStore::recoverOpenTrips()
     for (qint64 id : open) {
         qint64 endMs = 0;
         qint64 count = 0;
-        Query last(m_db);
-        if (last.prepare("SELECT MAX(ts_ms), COUNT(*) FROM samples WHERE trip_id = ?")) {
-            last.bind(1, id);
-            if (last.step()) {
-                endMs = last.int64(0);
-                count = last.int64(1);
+        // Each query in its own block: a SELECT that has returned a row keeps
+        // a read transaction open until it is finalised, and endTrip()'s WAL
+        // checkpoint then fails with "database table is locked", which ends up
+        // as the black box's status line after every recovery
+        {
+            Query last(m_db);
+            if (last.prepare("SELECT MAX(ts_ms), COUNT(*) FROM samples WHERE trip_id = ?")) {
+                last.bind(1, id);
+                if (last.step()) {
+                    endMs = last.int64(0);
+                    count = last.int64(1);
+                }
             }
         }
         if (count == 0) {
@@ -547,10 +553,12 @@ int TripStore::recoverOpenTrips()
         // finalisation was lost (or the trip was imported by a tool that
         // leaves summarising to us): close it clean
         bool ended = false;
-        Query ev(m_db);
-        if (ev.prepare("SELECT kind FROM events WHERE trip_id = ? ORDER BY ts_ms DESC LIMIT 1")) {
-            ev.bind(1, id);
-            ended = ev.step() && ev.text(0) == QLatin1String("trip_end");
+        {
+            Query ev(m_db);
+            if (ev.prepare("SELECT kind FROM events WHERE trip_id = ? ORDER BY ts_ms DESC LIMIT 1")) {
+                ev.bind(1, id);
+                ended = ev.step() && ev.text(0) == QLatin1String("trip_end");
+            }
         }
         qCInfo(lcTripStore) << "Recovering trip" << id << (ended ? "(ended, not finalised)" : "left open (power cut?)");
         endTrip(id, endMs, ended);

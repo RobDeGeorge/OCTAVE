@@ -247,7 +247,11 @@ private slots:
         }
         TripStore store;
         QVERIFY(store.open(dir));
+        // Recovery is routine (every power cut), so it must not report an
+        // error: the black box's status line shows the last one in red
+        QSignalSpy errors(&store, &TripStore::error);
         QCOMPARE(store.recoverOpenTrips(), 3);
+        QVERIFY2(errors.isEmpty(), qPrintable(errors.value(0).value(0).toString()));
         const QVariantList trips = store.listTrips();
         QCOMPARE(trips.size(), 2);
         const QVariantMap ended = trips.first().toMap();   // newest first
