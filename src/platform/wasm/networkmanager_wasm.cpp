@@ -23,6 +23,7 @@ QString NetworkManager::updateStatus() const { return m_updateStatus; }
 QString NetworkManager::updateMessage() const { return m_updateMessage; }
 QString NetworkManager::remoteCommit() const { return m_remoteCommit; }
 QString NetworkManager::remoteCommitMsg() const { return m_remoteCommitMsg; }
+QString NetworkManager::releaseUrl() const { return m_releaseUrl; }
 bool NetworkManager::workingTreeDirty() const { return false; }
 QString NetworkManager::selfUpdateStatus() const { return m_selfUpdateStatus; }
 QString NetworkManager::selfUpdateMessage() const { return m_selfUpdateMessage; }

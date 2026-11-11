@@ -435,6 +435,7 @@ bool AndroidAutoManager::setupAdbForward()
 
     if (proc.exitCode() == 0) {
         qCDebug(lcAndroidAuto) << "ADB forward successful";
+        m_dhuForwardSet = true;
         return true;
     }
 
@@ -694,9 +695,13 @@ void AndroidAutoManager::cleanup()
 
     closeDhu();
 
-    // Clean up the DHU port forward (only ours — phone mirror owns its own)
-    QString adb = findAdbPath();
-    if (!adb.isEmpty()) {
+    // Clean up the DHU port forward (only ours — phone mirror owns its own),
+    // and only when this run set one: any adb command starts the adb server,
+    // so an unconditional remove started adb at every quit of OCTAVE (on
+    // Windows that raised the firewall prompt for adb on a public network,
+    // with no phone feature ever opened; 0.9.6-rc4, N1).
+    if (m_dhuForwardSet) {
+        m_dhuForwardSet = false;
         runAdb({QStringLiteral("forward"), QStringLiteral("--remove"), QStringLiteral("tcp:5277")},
                10000);
     }

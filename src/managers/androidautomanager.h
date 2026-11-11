@@ -261,6 +261,7 @@ private:
     QString          m_phoneName;
     QString          m_serial;
     int              m_forwardPort = 0;
+    bool             m_dhuForwardSet = false;   // setupAdbForward() succeeded: cleanup() removes tcp:5277
     bool             m_nativeWanted = false;
     bool             m_stepRunning = false;
     bool             m_videoStreaming = false;

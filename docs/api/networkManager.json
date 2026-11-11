@@ -102,6 +102,14 @@
         },
         {
             "constant": false,
+            "name": "releaseUrl",
+            "notify": "releaseUrlChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
             "name": "workingTreeDirty",
             "notify": "workingTreeDirtyChanged",
             "readable": true,
@@ -184,6 +192,15 @@
             "params": [
                 {
                     "name": "msg",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "releaseUrlChanged",
+            "params": [
+                {
+                    "name": "url",
                     "type": "QString"
                 }
             ]

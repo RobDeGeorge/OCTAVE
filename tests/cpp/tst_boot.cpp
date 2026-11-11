@@ -12,6 +12,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLocalSocket>
@@ -768,6 +769,55 @@ time.sleep(4)   # an exit within 3 s of starting would count as a crash
         QVERIFY(!QFileInfo::exists(where.captured(1)));   // removed at exit
 #endif
         QCOMPARE(runPairCode(a, &out), 1);
+#endif
+    }
+
+    // Any adb command starts the adb server. Until 0.9.6-rc5 every quit ran
+    // `adb forward --remove tcp:5277` (the Android Auto clean-up), so OCTAVE
+    // started adb when it closed with no phone feature ever opened; on Windows
+    // that raised the firewall prompt for adb (0.9.6-rc4, N1). A start and a
+    // quit may ask adb for its version and nothing else.
+    void startingAndQuittingRunsNoAdbCommand()
+    {
+#ifndef Q_OS_UNIX
+        QSKIP("the fake adb is a shell script");
+#else
+        // A bundled adb beside the build comes before PATH (PhoneMirrorManager::findAdb)
+        const QString appDir = QFileInfo(kApp).absolutePath();
+        for (const char *bundled : {"/platform-tools/adb", "/../tools/platform-tools/linux/adb",
+                                    "/../tools/platform-tools/darwin/adb", "/../Resources/platform-tools/adb"}) {
+            if (QFileInfo::exists(appDir + QLatin1String(bundled)))
+                QSKIP("a bundled adb beside the build is used instead of the fake one");
+        }
+        QTemporaryDir tmp;
+        const QString bin = tmp.filePath("bin");
+        QVERIFY(QDir().mkpath(bin));
+        QVERIFY(QFile::copy(QStringLiteral(OCTAVE_SOURCE_DIR "/tests/cpp/fake-adb.sh"), bin + "/adb"));
+        QVERIFY(QFile::setPermissions(bin + "/adb", QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner));
+        const QString log = tmp.filePath("adb.log");
+
+        for (const QStringList &args : {QStringList{"--smoke"}, QStringList{"--headless", "--smoke"}}) {
+            QFile::remove(log);
+            QProcessEnvironment e = env(tmp);
+            e.insert("PATH", bin + QLatin1Char(':') + e.value("PATH"));
+            e.insert("FAKE_ADB_LOG", log);
+            QProcess app;
+            app.setProcessEnvironment(e);
+            app.setProcessChannelMode(QProcess::MergedChannels);
+            app.start(kApp, args);
+            QVERIFY2(finished(app), "did not exit within 60 s");
+            const QString out = QString::fromUtf8(app.readAll());
+            QVERIFY2(app.exitStatus() == QProcess::NormalExit && app.exitCode() == 0, qPrintable(out.right(3000)));
+            // The fake adb is the one the app found ...
+            QVERIFY2(out.contains(bin + "/adb"), qPrintable(out.right(3000)));
+            // ... and nothing but its version was asked of it
+            QFile f(log);
+            const QStringList calls = f.open(QIODevice::ReadOnly)
+                ? QString::fromUtf8(f.readAll()).split(QLatin1Char('\n'), Qt::SkipEmptyParts) : QStringList();
+            for (const QString &call : calls)
+                QVERIFY2(call == QLatin1String("version") || call == QLatin1String("--version"),
+                         qPrintable(args.join(QLatin1Char(' ')) + ": adb " + call));
+        }
 #endif
     }
 

@@ -3,6 +3,7 @@
 #include "networkmanager.h"
 
 #include "buildinfo.h"
+#include "../util/releasecheck.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -113,6 +114,11 @@ QString NetworkManager::remoteCommitMsg() const
     return m_remoteCommitMsg;
 }
 
+QString NetworkManager::releaseUrl() const
+{
+    return m_releaseUrl;
+}
+
 bool NetworkManager::workingTreeDirty() const
 {
     return m_workingTreeDirty;
@@ -148,10 +154,16 @@ void NetworkManager::checkForUpdates()
         return;
     m_updateCheckBusy = true;
 
-    m_updateStatus = QStringLiteral("checking");
-    emit updateStatusChanged(m_updateStatus);
-    m_updateMessage = QStringLiteral("Checking for updates...");
-    emit updateMessageChanged(m_updateMessage);
+    setUpdateResult(QStringLiteral("checking"), QStringLiteral("Checking for updates..."));
+
+    // A packaged build (AppImage, installer, .dmg, APK) has no checkout to
+    // compare with origin/main, and comparing a release binary with main would
+    // be wrong anyway: it is compared with the latest release. Until 0.9.6 it
+    // stopped at "Could not determine local version".
+    if (!hasCheckout()) {
+        checkLatestRelease();
+        return;
+    }
 
     // First, get local commit hash via git
     auto *gitProc = new QProcess(this);
@@ -168,13 +180,12 @@ void NetworkManager::checkForUpdates()
         }
 
         if (localHash.isEmpty()) {
-            m_updateStatus = QStringLiteral("error");
-            emit updateStatusChanged(m_updateStatus);
-            m_updateMessage = QStringLiteral("Could not determine local version");
-            emit updateMessageChanged(m_updateMessage);
-            m_updateCheckBusy = false;
+            // A checkout git cannot read (no git, a broken .git): the release
+            // check still has an answer
+            checkLatestRelease();
             return;
         }
+        setReleaseUrl(QString());
 
         // Now query GitHub API for remote HEAD
         QString url = QStringLiteral("https://api.github.com/repos/%1/commits/main").arg(QLatin1String(GITHUB_REPO));
@@ -274,13 +285,83 @@ void NetworkManager::checkForUpdates()
                    {QStringLiteral("rev-parse"), QStringLiteral("--short"), QStringLiteral("HEAD")});
 
     if (!gitProc->waitForStarted(5000)) {
-        gitProc->deleteLater();
-        m_updateStatus = QStringLiteral("error");
-        emit updateStatusChanged(m_updateStatus);
-        m_updateMessage = QStringLiteral("Could not determine local version");
-        emit updateMessageChanged(m_updateMessage);
-        m_updateCheckBusy = false;
+        gitProc->deleteLater();   // never started: finished() is not emitted
+        checkLatestRelease();
     }
+}
+
+bool NetworkManager::hasCheckout() const
+{
+#if defined(Q_OS_ANDROID) || defined(Q_OS_IOS)
+    return false;
+#else
+    return QFileInfo::exists(QDir(repoDir()).filePath(QStringLiteral(".git")));
+#endif
+}
+
+void NetworkManager::setUpdateResult(const QString &status, const QString &message)
+{
+    m_updateStatus = status;
+    emit updateStatusChanged(status);
+    m_updateMessage = message;
+    emit updateMessageChanged(message);
+}
+
+void NetworkManager::setReleaseUrl(const QString &url)
+{
+    if (url == m_releaseUrl)
+        return;
+    m_releaseUrl = url;
+    emit releaseUrlChanged(url);
+}
+
+// The second half of checkForUpdates() for a build with no checkout:
+// m_updateCheckBusy is set and the status is "checking".
+void NetworkManager::checkLatestRelease()
+{
+    const QString repo = QLatin1String(GITHUB_REPO);
+    QNetworkRequest request{QUrl(QStringLiteral("https://api.github.com/repos/%1/releases/latest").arg(repo))};
+    request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("OCTAVE-Updater"));
+    request.setRawHeader("Accept", "application/vnd.github+json");
+    request.setTransferTimeout(10000);
+
+    QNetworkReply *reply = m_nam->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, repo]() {
+        reply->deleteLater();
+        m_updateCheckBusy = false;
+
+        if (reply->error() != QNetworkReply::NoError) {
+            qCWarning(lcNetwork) << "Release check failed:" << reply->errorString();
+            setReleaseUrl(QString());
+            setUpdateResult(QStringLiteral("error"), QStringLiteral("Could not reach GitHub"));
+            return;
+        }
+        // "latest" is the newest release that is neither a draft nor a pre-release
+        const ReleaseCheck::Release latest = ReleaseCheck::parseLatest(reply->readAll(), repo);
+        if (!latest.valid) {
+            setReleaseUrl(QString());
+            setUpdateResult(QStringLiteral("error"), QStringLiteral("Could not parse GitHub response"));
+            return;
+        }
+
+        const QString mine = QStringLiteral(OCTAVE_VERSION);
+        const bool newer = ReleaseCheck::compareVersions(latest.version, mine) > 0;
+        qCInfo(lcNetwork) << "Update check: this build is" << mine << "latest release" << latest.tag
+                          << (newer ? "(newer)" : "(not newer)");
+        if (!newer) {
+            setReleaseUrl(QString());
+            setUpdateResult(QStringLiteral("up-to-date"), QStringLiteral("You're running the latest version"));
+            return;
+        }
+
+        m_remoteCommit = latest.tag;
+        emit remoteCommitChanged(m_remoteCommit);
+        m_remoteCommitMsg = latest.name == latest.tag ? QString() : latest.name;
+        emit remoteCommitMsgChanged(m_remoteCommitMsg);
+        setReleaseUrl(latest.url);
+        setUpdateResult(QStringLiteral("update-available"),
+                        QStringLiteral("Version %1 is available").arg(latest.version));
+    });
 }
 
 void NetworkManager::applySelfUpdate()

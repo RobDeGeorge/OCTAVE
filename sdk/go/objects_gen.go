@@ -1741,6 +1741,12 @@ func (o NetworkManager) GetRemoteCommitMsg() (v string, err error) {
 	return
 }
 
+// GetReleaseUrl reads the property "releaseUrl" (QString).
+func (o NetworkManager) GetReleaseUrl() (v string, err error) {
+	err = o.c.Get("networkManager", "releaseUrl", &v)
+	return
+}
+
 // GetWorkingTreeDirty reads the property "workingTreeDirty" (bool).
 func (o NetworkManager) GetWorkingTreeDirty() (v bool, err error) {
 	err = o.c.Get("networkManager", "workingTreeDirty", &v)

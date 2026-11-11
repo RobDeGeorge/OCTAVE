@@ -1600,6 +1600,16 @@ Flickable {
                             wirelessSection.resultOk = ok
                             wirelessSection.resultText = message
                             wirelessSection.pairingFromHere = false
+                            qrPopup.sync()
+                        }
+                    }
+                    Connections {
+                        target: typeof phoneMirrorManager !== "undefined" ? phoneMirrorManager : null
+                        ignoreUnknownSignals: true   // the mobile stand-in has no QR pairing
+                        function onQrPairingChanged() {
+                            if (!phoneMirrorManager.qrPairingActive)
+                                wirelessSection.pairingFromHere = false   // cancelled, timed out or done
+                            qrPopup.sync()
                         }
                     }
 
@@ -1632,6 +1642,7 @@ Flickable {
                                 wirelessSection.resultText = ""
                                 wirelessSection.pairingFromHere = true
                                 qrPanel.start()
+                                qrPopup.sync()
                             }
                         }
 
@@ -1666,9 +1677,17 @@ Flickable {
                         dim: true
                         closePolicy: Popup.NoAutoClose
                         padding: App.Spacing.overallSpacing * 1.5
-                        visible: wirelessSection.pairingFromHere
-                                 && (phoneMirrorManager ? phoneMirrorManager.qrPairingActive : false)
-                        onClosed: wirelessSection.pairingFromHere = false
+                        // Opened and closed by sync(), not bound to `visible`: the
+                        // binding's onClosed cleared pairingFromHere, which the
+                        // binding was reading at that moment ("Binding loop
+                        // detected for property visible" at every Cancel)
+                        function sync() {
+                            if (wirelessSection.pairingFromHere
+                                    && (phoneMirrorManager ? phoneMirrorManager.qrPairingActive : false))
+                                open()
+                            else
+                                close()
+                        }
                         width: parent ? parent.width * 0.75 : pageRoot.dp(900)
 
                         background: Rectangle {

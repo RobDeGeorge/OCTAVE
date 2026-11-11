@@ -9,7 +9,11 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMutex>
+#include <QRegularExpression>
+#include <QSemaphore>
+#include <QTcpServer>
 #include <QTcpSocket>
+#include <QThread>
 #include <QTemporaryDir>
 #include <QtEndian>
 #include <QTest>
@@ -450,6 +454,47 @@ private slots:
         QByteArray in;
         QVERIFY(wsConnect(late, server.port(), in));
         server.stop();
+    }
+
+    void aPortThatIsBeingLeftIsTriedAgain()
+    {
+        // Another instance still holds the port for a moment (a restart, a
+        // killed app that is closing): start() waits for it instead of
+        // leaving the service off for the whole run
+        quint16 port = 0;
+        QSemaphore listening;
+        std::unique_ptr<QThread> holder(QThread::create([&] {
+            QTcpServer taken;
+            if (taken.listen(QHostAddress::LocalHost, 0))
+                port = taken.serverPort();
+            listening.release();
+            QThread::msleep(900);
+            taken.close();
+        }));
+        holder->start();
+        listening.acquire();
+        QVERIFY(port != 0);
+        CommandServer server(port);
+        QElapsedTimer t;
+        t.start();
+        QVERIFY(server.start());
+        QVERIFY2(t.elapsed() >= 400, qPrintable(QString::number(t.elapsed())));
+        QCOMPARE(server.port(), port);
+        QTcpSocket s;
+        s.connectToHost(QHostAddress::LocalHost, port);
+        QVERIFY(s.waitForConnected(3000));
+        s.close();
+        server.stop();
+        QVERIFY(holder->wait(5000));
+    }
+
+    void aPortThatStaysTakenIsGivenUp()
+    {
+        QTcpServer taken;
+        QVERIFY(taken.listen(QHostAddress::LocalHost, 0));
+        CommandServer server(taken.serverPort());
+        QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("could not listen")));
+        QVERIFY(!server.start());
     }
 
     void aWebSocketReaderThatStaysBehindIsClosed()

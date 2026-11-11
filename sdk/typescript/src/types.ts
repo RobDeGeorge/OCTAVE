@@ -682,6 +682,8 @@ export interface NetworkManager {
     remoteCommit: string
     /** QString, notify remoteCommitMsgChanged */
     remoteCommitMsg: string
+    /** QString, notify releaseUrlChanged */
+    releaseUrl: string
     /** bool, notify workingTreeDirtyChanged */
     workingTreeDirty: boolean
     /** QString, notify selfUpdateStatusChanged */
@@ -706,6 +708,7 @@ export interface NetworkManager {
     updateMessageChanged: [message: string]
     remoteCommitChanged: [commit: string]
     remoteCommitMsgChanged: [msg: string]
+    releaseUrlChanged: [url: string]
     workingTreeDirtyChanged: [dirty: boolean]
     selfUpdateStatusChanged: [status: string]
     selfUpdateMessageChanged: [message: string]

@@ -34,6 +34,7 @@ Added:
 Changed (dashboard files, not the protocol): `warnAbove` on Bar and Segmented gauges is now the *warning* level, drawn in the theme's warning colour (amber); it was red. `critAbove` is the red level. The built-in presets moved their limits to `critAbove`; a user dashboard that wants red again sets `critAbove` instead.
 - `obdManager.simulated` / `simulatedChanged` / `simulatedAdapterRequested`: the built-in simulated car (`sim://elm327`) is an adapter in every build, picked in the adapter sheet or by `obdAdapterFinder.connectAdapter("sim://elm327")`; it is never saved as the OBD port.
 - `mediaManager.pick_browser_library`: in the browser demo, the browser's folder picker makes the folder picked the library for the visit (true); elsewhere it returns false.
+- `networkManager.releaseUrl` / `releaseUrlChanged`: a packaged build (no git checkout) now compares its version with the latest GitHub release instead of failing with "Could not determine local version"; while `updateStatus` is `"update-available"` this is the release's page on github.com, `remoteCommit` its tag and `remoteCommitMsg` its title.
 - The audio output picker: `settingsManager.audioOutputDevice` / `audioOutputDeviceChanged` / `save_audio_output_device` (a QAudioDevice id, empty = the system default), `mediaManager.audioOutputs` / `currentAudioOutput` / `audioOutputsChanged`, `phoneMirrorManager.setAudioOutputDevice`.
 
 ## Protocol 2

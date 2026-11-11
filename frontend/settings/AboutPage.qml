@@ -509,6 +509,9 @@ Flickable {
 
                         // ─── Update Action Area ───
                         ColumnLayout {
+                            id: updateActions
+                            // Empty unless a packaged build found a newer release
+                            readonly property string releaseUrl: (networkManager && networkManager.releaseUrl) || ""
                             Layout.fillWidth: true
                             Layout.topMargin: App.Spacing.overallSpacing * 0.3
                             spacing: App.Spacing.overallSpacing * 0.5
@@ -691,14 +694,39 @@ Flickable {
                                 }
                             }
 
-                            // Fallback for non-git environments (PyInstaller builds)
+                            // A packaged build: the release's page has the new package
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: App.Spacing.overallSpacing
+                                visible: updateActions.releaseUrl !== ""
+
+                                SettingsButton {
+                                    objectName: "updateDownloadButton"
+                                    text: "Download"
+                                    height: dp(30)
+                                    onClicked: Qt.openUrlExternally(updateActions.releaseUrl)
+                                }
+
+                                // The address too: a car screen may have no browser
+                                Text {
+                                    text: updateActions.releaseUrl.replace("https://", "")
+                                    color: App.Style.secondaryTextColor
+                                    font.pixelSize: App.Spacing.overallText * 0.75
+                                    font.family: App.Style.fontFamily
+                                    wrapMode: Text.WrapAnywhere
+                                    Layout.fillWidth: true
+                                }
+                            }
+
+                            // A checkout that cannot rebuild itself (no build directory, no cmake)
                             Text {
                                 text: "Pull the latest changes from GitHub to update."
                                 color: App.Style.secondaryTextColor
                                 font.pixelSize: App.Spacing.overallText * 0.75
                                 font.family: App.Style.fontFamily
                                 Layout.fillWidth: true
-                                visible: !networkManager || !networkManager.canSelfUpdate
+                                visible: (!networkManager || !networkManager.canSelfUpdate)
+                                         && updateActions.releaseUrl === ""
                             }
                         }
                     }

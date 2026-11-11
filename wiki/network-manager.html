@@ -175,9 +175,10 @@ NetworkManager (src/managers/networkmanager.cpp)
         <section id="update-checking">
           <h2>Update Checking Mechanism</h2>
           <p>
-            The update checker is git-based: it compares the local <code>HEAD</code> against the latest commit on the
-            <code>main</code> branch and asks git how the two are related. There is no release-tag or version-number
-            comparison, which has a consequence for packaged builds (see the box below).
+            In a source checkout the update checker is git-based: it compares the local <code>HEAD</code> against the
+            latest commit on the <code>main</code> branch and asks git how the two are related. A packaged build
+            (AppImage, Windows installer, <code>.dmg</code>, APK) has no checkout, so it compares its version with the
+            latest GitHub release instead (see <a href="#release-check">Packaged builds</a> below).
           </p>
 
           <h3>Step-by-Step Flow</h3>
@@ -185,8 +186,9 @@ NetworkManager (src/managers/networkmanager.cpp)
             <li>
               <strong>Get local commit hash</strong> -- <code>git rev-parse --short HEAD</code> in the repository root,
               <code>repoDir()</code> = <code>QCoreApplication::applicationDirPath() + "/.."</code>, which assumes the binary
-              lives one level below the checkout (e.g. <span class="file-path">build/octave</span>). Failure yields
-              <code>"error"</code> / "Could not determine local version".
+              lives one level below the checkout (e.g. <span class="file-path">build/octave</span>). With no
+              <span class="file-path">.git</span> there (<code>hasCheckout()</code>; never on Android or iOS), or when git
+              cannot be run or gives no hash, the check continues as the <a href="#release-check">release check</a>.
             </li>
             <li>
               <strong>Query GitHub API</strong> -- <code>GET https://api.github.com/repos/RobDeGeorge/OCTAVE/commits/main</code>
@@ -260,11 +262,11 @@ NetworkManager (src/managers/networkmanager.cpp)
           <pre><code><span class="cmt">// updateStatus can be one of:</span>
 <span class="str">""</span>                  <span class="cmt">// No check has run yet (About page hides the status row)</span>
 <span class="str">"checking"</span>          <span class="cmt">// Currently checking</span>
-<span class="str">"up-to-date"</span>        <span class="cmt">// Local matches remote and the binary was built from HEAD</span>
-<span class="str">"update-available"</span>  <span class="cmt">// Behind origin/main, or the binary is stale</span>
+<span class="str">"up-to-date"</span>        <span class="cmt">// Local matches remote and the binary was built from HEAD; packaged: no newer release</span>
+<span class="str">"update-available"</span>  <span class="cmt">// Behind origin/main, or the binary is stale; packaged: a newer release</span>
 <span class="str">"ahead"</span>             <span class="cmt">// Source checkout with local commits (dev build)</span>
 <span class="str">"diverged"</span>          <span class="cmt">// Both sides moved -- not a safe update</span>
-<span class="str">"error"</span>             <span class="cmt">// Check failed (GitHub unreachable, bad response, not a git checkout)</span></code></pre>
+<span class="str">"error"</span>             <span class="cmt">// Check failed (GitHub unreachable, bad response)</span></code></pre>
 
           <p>
             Only <code>"update-available"</code> raises the badge on the settings button
@@ -273,13 +275,35 @@ NetworkManager (src/managers/networkmanager.cpp)
             from the source tree and must never trigger an "update" that would move the checkout backwards.
           </p>
 
-          <div class="info-box warning">
-            <div class="info-box-title">Packaged builds normally cannot check for updates</div>
-            A normally installed binary has no source checkout at the expected repository path, so
-            <code>git rev-parse</code> fails in step 2 and the About page shows "Could not determine local version". The
-            update check is a source-checkout feature today; there is no fallback that compares the build's version tag
-            against GitHub releases.
-          </div>
+          <h3 id="release-check">Packaged builds: the release check</h3>
+          <p>
+            A normally installed binary has no source checkout beside it, and comparing a release binary with
+            <code>main</code> would be wrong anyway. <code>checkLatestRelease()</code> asks
+            <code>GET https://api.github.com/repos/RobDeGeorge/OCTAVE/releases/latest</code> (same headers and 10&nbsp;s
+            timeout; "latest" is the newest release that is neither a draft nor a pre-release) and compares its
+            <code>tag_name</code> with the version compiled into the binary (<code>OCTAVE_VERSION</code>). Until 0.9.6 these
+            builds showed "Could not determine local version".
+          </p>
+          <ul>
+            <li><strong>Newer release</strong>: <code>updateStatus</code> <code>"update-available"</code>,
+              <code>updateMessage</code> "Version X.Y.Z is available", <code>remoteCommit</code> the tag
+              (<code>v0.9.7</code>), <code>remoteCommitMsg</code> the release's title, and <code>releaseUrl</code> the
+              release's page. The About page shows a <strong>Download</strong> button that opens it in the browser, with
+              the address beside it (a car screen may have no browser). <code>canSelfUpdate</code> stays false: a package
+              is replaced by installing the new one.</li>
+            <li><strong>Same or older</strong>: <code>"up-to-date"</code>, <code>releaseUrl</code> empty. A release candidate
+              is older than its release and newer than the release before it.</li>
+            <li><strong>Failure</strong>: <code>"error"</code> with "Could not reach GitHub" (offline, rate limit, no
+              release) or "Could not parse GitHub response".</li>
+          </ul>
+          <p>
+            The two pure halves are in <span class="file-path">src/util/releasecheck.{h,cpp}</span>, held by
+            <span class="file-path">tests/cpp/tst_releasecheck.cpp</span>: <code>ReleaseCheck::compareVersions()</code>
+            (numeric per part, a leading <code>v</code> ignored, <code>0.9.6-rc2 &lt; 0.9.6</code>) and
+            <code>parseLatest()</code>, which takes the release's <code>html_url</code> only when it is a page of this
+            repository on github.com (anything else becomes the repository's releases page, as the link is opened in the
+            browser).
+          </p>
         </section>
 
         <!-- Self-Update -->
@@ -468,6 +492,7 @@ Windows: shutdown /s /t 5</code></pre>
               <tr><td><code>updateMessageChanged</code></td><td><code>str</code></td><td>Human-readable update status</td></tr>
               <tr><td><code>remoteCommitChanged</code></td><td><code>str</code></td><td>Latest remote commit hash</td></tr>
               <tr><td><code>remoteCommitMsgChanged</code></td><td><code>str</code></td><td>Latest remote commit message</td></tr>
+              <tr><td><code>releaseUrlChanged</code></td><td><code>str</code></td><td>The newer release's page (packaged builds), or empty</td></tr>
               <tr><td><code>workingTreeDirtyChanged</code></td><td><code>bool</code></td><td>Checkout gained/lost uncommitted changes</td></tr>
               <tr><td><code>selfUpdateStatusChanged</code></td><td><code>str</code></td><td>Self-update state machine</td></tr>
               <tr><td><code>selfUpdateMessageChanged</code></td><td><code>str</code></td><td>Self-update progress text</td></tr>
@@ -488,8 +513,9 @@ Windows: shutdown /s /t 5</code></pre>
               <tr><td><code>isConnected</code></td><td><code>bool</code></td><td><code>isConnectedChanged</code></td><td>True if internet is reachable</td></tr>
               <tr><td><code>updateStatus</code></td><td><code>str</code></td><td><code>updateStatusChanged</code></td><td>Current update check status</td></tr>
               <tr><td><code>updateMessage</code></td><td><code>str</code></td><td><code>updateMessageChanged</code></td><td>Human-readable update message</td></tr>
-              <tr><td><code>remoteCommit</code></td><td><code>str</code></td><td><code>remoteCommitChanged</code></td><td>Latest remote commit short hash</td></tr>
-              <tr><td><code>remoteCommitMsg</code></td><td><code>str</code></td><td><code>remoteCommitMsgChanged</code></td><td>Latest remote commit message (first line)</td></tr>
+              <tr><td><code>remoteCommit</code></td><td><code>str</code></td><td><code>remoteCommitChanged</code></td><td>Latest remote commit short hash; in a packaged build the newer release's tag</td></tr>
+              <tr><td><code>remoteCommitMsg</code></td><td><code>str</code></td><td><code>remoteCommitMsgChanged</code></td><td>Latest remote commit message (first line); in a packaged build the newer release's title</td></tr>
+              <tr><td><code>releaseUrl</code></td><td><code>str</code></td><td><code>releaseUrlChanged</code></td><td>Packaged builds: the page of the newer release on github.com while <code>updateStatus</code> is <code>"update-available"</code>; empty otherwise and in a checkout</td></tr>
               <tr><td><code>workingTreeDirty</code></td><td><code>bool</code></td><td><code>workingTreeDirtyChanged</code></td><td>Checkout has uncommitted changes; self-update is refused while true</td></tr>
               <tr><td><code>selfUpdateStatus</code></td><td><code>str</code></td><td><code>selfUpdateStatusChanged</code></td><td>Self-update state</td></tr>
               <tr><td><code>selfUpdateMessage</code></td><td><code>str</code></td><td><code>selfUpdateMessageChanged</code></td><td>Self-update progress message</td></tr>
@@ -530,7 +556,7 @@ ctx-&gt;setContextProperty(<span class="str">"networkManager"</span>, &amp;netwo
               <tr><th>QML file</th><th>Uses</th></tr>
             </thead>
             <tbody>
-              <tr><td><span class="file-path">frontend/settings/AboutPage.qml</span></td><td>"Check for Updates" button (disabled while <code>updateStatus === "checking"</code>), colour-coded status row with <code>updateMessage</code>, remote commit hash + message card, the self-update card (hidden while <code>workingTreeDirty</code>, replaced by a "commit or stash" warning), progress / error / restart-required states driven by <code>selfUpdateStatus</code> and <code>selfUpdateMessage</code>, and a "not available" card when <code>!canSelfUpdate</code></td></tr>
+              <tr><td><span class="file-path">frontend/settings/AboutPage.qml</span></td><td>"Check for Updates" button (disabled while <code>updateStatus === "checking"</code>), colour-coded status row with <code>updateMessage</code>, remote commit hash + message card, the self-update card (hidden while <code>workingTreeDirty</code>, replaced by a "commit or stash" warning), progress / error / restart-required states driven by <code>selfUpdateStatus</code> and <code>selfUpdateMessage</code>, a <strong>Download</strong> button with the address when <code>releaseUrl</code> is set (a packaged build with a newer release), and "Pull the latest changes from GitHub to update." for a checkout that cannot rebuild itself (<code>!canSelfUpdate</code>, no <code>releaseUrl</code>)</td></tr>
               <tr><td><span class="file-path">frontend/BottomBar.qml</span>, <span class="file-path">frontend/SettingsMenu.qml</span></td><td>Pulsing badge on the settings button while <code>updateStatus === "update-available"</code></td></tr>
               <tr><td><span class="file-path">frontend/settings/widgets/AboutWidget.qml</span>, <span class="file-path">frontend/settings/widgets/DeviceWidget.qml</span></td><td>Compact settings tiles: update status text/colour and a "Check Updates" button; connection dot, <code>networkName</code> and a refresh calling <code>refreshNetwork()</code></td></tr>
               <tr><td><span class="file-path">frontend/settings/DeviceSettingsPage.qml</span></td><td>Green/red dot from <code>isConnected</code>, <code>networkName</code> ("Not Connected" / "No internet access" texts), <code>refreshNetwork()</code>, and the power-off button calling <code>shutdown_device()</code></td></tr>

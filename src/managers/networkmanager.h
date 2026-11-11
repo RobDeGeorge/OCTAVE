@@ -41,6 +41,11 @@ class NetworkManager : public QObject
     Q_PROPERTY(QString updateMessage READ updateMessage NOTIFY updateMessageChanged)
     Q_PROPERTY(QString remoteCommit READ remoteCommit NOTIFY remoteCommitChanged)
     Q_PROPERTY(QString remoteCommitMsg READ remoteCommitMsg NOTIFY remoteCommitMsgChanged)
+    // A packaged build (no git checkout) is compared with the latest GitHub
+    // release instead of origin/main: remoteCommit is then that release's tag,
+    // remoteCommitMsg its title, and releaseUrl its page on github.com while
+    // updateStatus is "update-available" (empty otherwise, and in a checkout).
+    Q_PROPERTY(QString releaseUrl READ releaseUrl NOTIFY releaseUrlChanged)
     // True when the checkout has uncommitted changes. Self-update hard-resets the
     // tree, so the UI must be able to hide that button before it eats real work.
     Q_PROPERTY(bool workingTreeDirty READ workingTreeDirty NOTIFY workingTreeDirtyChanged)
@@ -61,6 +66,7 @@ public:
     QString updateMessage() const;
     QString remoteCommit() const;
     QString remoteCommitMsg() const;
+    QString releaseUrl() const;
     bool workingTreeDirty() const;
     QString selfUpdateStatus() const;
     QString selfUpdateMessage() const;
@@ -84,6 +90,7 @@ signals:
     void updateMessageChanged(const QString &message);
     void remoteCommitChanged(const QString &commit);
     void remoteCommitMsgChanged(const QString &msg);
+    void releaseUrlChanged(const QString &url);
     void workingTreeDirtyChanged(bool dirty);
 
     // Self-update signals
@@ -109,6 +116,11 @@ private:
     QString buildDir() const;
     QString findCmake() const;
     bool checkCanSelfUpdate();
+    // The update check of a build with no checkout beside it
+    bool hasCheckout() const;
+    void checkLatestRelease();
+    void setUpdateResult(const QString &status, const QString &message);
+    void setReleaseUrl(const QString &url);
     // Blocking git invocation for the short, cheap queries below. These run on the
     // GUI thread deliberately: they gate a destructive action, so their answer must
     // be current at the moment of the click, not whatever an async check last cached.
@@ -137,6 +149,7 @@ private:
     QString m_updateMessage;
     QString m_remoteCommit;
     QString m_remoteCommitMsg;
+    QString m_releaseUrl;
     bool m_workingTreeDirty = false;
 
     // Self-update

@@ -23,7 +23,6 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 |---|---|---|---|
 | [dashboards-roadmap.md](dashboards-roadmap.md) | Prove the dashboard editor and demand-driven polling on a touchscreen and in the car | M | S22, Jeep |
 | [future-tests.md](future-tests.md) | Wiring of the hardware inputs (the rest is checked by ctest `wiring`), then QML integration and OBD replay suites | S … L–XL | desktop, Jeep for OBD recordings |
-| [update-checker-packaged-builds.md](update-checker-packaged-builds.md) | Packaged builds compare against the latest GitHub release | M | VMs, S22 |
 | [dp-helper-consolidation.md](dp-helper-consolidation.md) | One shared `dp()` instead of 63 private copies | M | 10-min S22 check first |
 | [obd-adapter-discovery.md](obd-adapter-discovery.md) | Pick-and-connect Bluetooth OBD on every platform (Jeep test S, other platforms L) | S, then L | Pi + NEXAS, S22 |
 | [octave-companion-app.md](octave-companion-app.md) | Mirror setup walkthrough (no app), then the companion app: car link, phone GPS into the black box, traffic stop recorder, notifications / calls, keep-mirror-connected; v2 remote, parking, car health, hotspot | M, then L–XL | S22, Pi |

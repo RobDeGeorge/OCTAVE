@@ -513,8 +513,9 @@
             <tr><td><code>isConnected</code></td><td><code>bool</code></td><td>read-only</td><td><code>isConnectedChanged</code></td><td>Internet reachability; polled every 30 s online, backing off to 2 min after repeated misses</td></tr>
             <tr><td><code>updateStatus</code></td><td><code>QString</code></td><td>read-only</td><td><code>updateStatusChanged</code></td><td>Result of <code>checkForUpdates()</code>: <code>"checking"</code>, <code>"up-to-date"</code>, <code>"update-available"</code>, <code>"ahead"</code>, <code>"diverged"</code> or <code>"error"</code> (<code>""</code> before the first check)</td></tr>
             <tr><td><code>updateMessage</code></td><td><code>QString</code></td><td>read-only</td><td><code>updateMessageChanged</code></td><td>Human-readable update status line</td></tr>
-            <tr><td><code>remoteCommit</code></td><td><code>QString</code></td><td>read-only</td><td><code>remoteCommitChanged</code></td><td>Short hash of the newest commit on the GitHub <code>main</code> branch</td></tr>
-            <tr><td><code>remoteCommitMsg</code></td><td><code>QString</code></td><td>read-only</td><td><code>remoteCommitMsgChanged</code></td><td>Subject of that remote commit</td></tr>
+            <tr><td><code>remoteCommit</code></td><td><code>QString</code></td><td>read-only</td><td><code>remoteCommitChanged</code></td><td>Short hash of the newest commit on the GitHub <code>main</code> branch; in a packaged build (no checkout) the tag of the newer release</td></tr>
+            <tr><td><code>remoteCommitMsg</code></td><td><code>QString</code></td><td>read-only</td><td><code>remoteCommitMsgChanged</code></td><td>Subject of that remote commit; in a packaged build the newer release's title</td></tr>
+            <tr><td><code>releaseUrl</code></td><td><code>QString</code></td><td>read-only</td><td><code>releaseUrlChanged</code></td><td>Packaged builds compare their version with the latest GitHub release: the page of a newer release while <code>updateStatus</code> is <code>"update-available"</code>, empty otherwise and in a checkout</td></tr>
             <tr><td><code>workingTreeDirty</code></td><td><code>bool</code></td><td>read-only</td><td><code>workingTreeDirtyChanged</code></td><td>True when the checkout has uncommitted changes; the UI hides self-update because it hard-resets the tree</td></tr>
             <tr><td><code>selfUpdateStatus</code></td><td><code>QString</code></td><td>read-only</td><td><code>selfUpdateStatusChanged</code></td><td>State of <code>applySelfUpdate()</code>: <code>"idle"</code>, <code>"fetching"</code>, <code>"restart-required"</code> or <code>"error"</code></td></tr>
             <tr><td><code>selfUpdateMessage</code></td><td><code>QString</code></td><td>read-only</td><td><code>selfUpdateMessageChanged</code></td><td>Progress / result text of the self-update</td></tr>
@@ -543,6 +544,7 @@
             <tr><td><code>updateMessageChanged(QString message)</code></td><td>Notify for <code>updateMessage</code></td></tr>
             <tr><td><code>remoteCommitChanged(QString commit)</code></td><td>Notify for <code>remoteCommit</code></td></tr>
             <tr><td><code>remoteCommitMsgChanged(QString msg)</code></td><td>Notify for <code>remoteCommitMsg</code></td></tr>
+            <tr><td><code>releaseUrlChanged(QString url)</code></td><td>Notify for <code>releaseUrl</code></td></tr>
             <tr><td><code>workingTreeDirtyChanged(bool dirty)</code></td><td>Notify for <code>workingTreeDirty</code></td></tr>
             <tr><td><code>selfUpdateStatusChanged(QString status)</code></td><td>Notify for <code>selfUpdateStatus</code></td></tr>
             <tr><td><code>selfUpdateMessageChanged(QString message)</code></td><td>Notify for <code>selfUpdateMessage</code></td></tr>
@@ -1342,7 +1344,7 @@
             <tr><td><code>launchDhuSeamless()</code></td><td><code>bool</code></td><td>Prepare the headunit server and adb forward, then launch DHU; embedding is incomplete (see above)</td></tr>
             <tr><td><code>sendDhuClick(int x, int y)</code></td><td><code>void</code></td><td>Forward a click through DhuCapture (currently a logged stub)</td></tr>
             <tr><td><code>closeDhu()</code></td><td><code>void</code></td><td>Stop capture and kill the DHU process</td></tr>
-            <tr><td><code>cleanup()</code></td><td><code>void</code></td><td>At exit: end a built-in session with a bye-bye (waits up to 3 s), close the DHU, remove its <code>tcp:5277</code> forward</td></tr>
+            <tr><td><code>cleanup()</code></td><td><code>void</code></td><td>At exit: end a built-in session with a bye-bye (waits up to 3 s), close the DHU, remove its <code>tcp:5277</code> forward when this run set one (no adb command otherwise: any adb command starts the adb server)</td></tr>
             <tr><td><code>startNative()</code></td><td><code>bool</code></td><td>Experimental. Connect to the phone's head unit server and keep retrying (3 s while waiting for the phone, server or certificate; 8 s after an error) until <code>stopNative()</code>. False when it can't begin (<code>nativeState</code> says why); true when already connecting or running</td></tr>
             <tr><td><code>stopNative()</code></td><td><code>void</code></td><td>Experimental. Stop retrying; a running session ends with a bye-bye, the adb forward is removed, state returns to <code>idle</code></td></tr>
             <tr><td><code>injectTouch(int pointerId, int action, double x, double y)</code></td><td><code>void</code></td><td>Experimental. A touch on the picture: <code>pointerId</code> from the touch area, <code>action</code> 0 down / 1 up / 2 move, <code>x</code> / <code>y</code> in 0..1 of the video. Only while <code>running</code></td></tr>

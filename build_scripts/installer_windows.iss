@@ -73,6 +73,11 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 
 [UninstallRun]
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""OCTAVE adb"""; Flags: runhidden; RunOnceId: "DeleteAdbFirewallRule"; Check: IsAdminInstallMode
+; ... and the rules Windows itself made for this adb when its own prompt was
+; answered (on a public network the prompt still comes; Allow or Cancel both
+; leave two "adb.exe" rules behind). They name a file that is gone now, and a
+; left-over Block rule would win over "OCTAVE adb" after a reinstall.
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=all dir=in program=""{app}\platform-tools\adb.exe"""; Flags: runhidden; RunOnceId: "DeleteAdbPromptRules"; Check: IsAdminInstallMode
 
 [UninstallDelete]
 ; Clean up user data on uninstall (optional - remove if you want to preserve settings)

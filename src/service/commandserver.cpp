@@ -831,7 +831,23 @@ bool CommandServer::start()
     m_thread->start();
     bool ok = false;
     QMetaObject::invokeMethod(m_server, [this, &ok] {
-        ok = m_server->listen(m_bind, m_port);
+        // A port another OCTAVE is just leaving (a restart, an instance that
+        // was killed and is still closing) can be busy for a moment. Without
+        // a second try the service stayed off for the whole run, with nothing
+        // on the screen saying so (0.9.6-rc4 on Windows, N2). Port 0 picks a
+        // free one, so it never waits.
+        constexpr int kListenTries = 7;
+        constexpr int kListenRetryMs = 500;
+        for (int attempt = 1;; ++attempt) {
+            ok = m_server->listen(m_bind, m_port);
+            if (ok || m_port == 0 || attempt >= kListenTries
+                || m_server->serverError() != QAbstractSocket::AddressInUseError)
+                break;
+            if (attempt == 1)
+                qCInfo(lcCommand).noquote() << "port" << m_port << "is in use; trying again for"
+                                            << (kListenTries - 1) * kListenRetryMs / 1000 << "s";
+            QThread::msleep(kListenRetryMs);
+        }
         if (!ok)
             qCWarning(lcCommand).noquote() << "command server could not listen on" << m_bind.toString() + ':' + QString::number(m_port) << ":"
                                  << m_server->errorString();

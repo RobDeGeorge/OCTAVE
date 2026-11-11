@@ -269,15 +269,26 @@ Item {
         anchors.fill: parent
         color: backgroundColor
 
-        RowLayout {
+        // Side by side; one above the other when the page is taller than wide
+        // (a phone held upright, a portrait tablet), where a 36 % column left
+        // neither the list nor the chart room to be read
+        GridLayout {
+            id: pageLayout
+            objectName: "tripHistoryLayout"
             anchors.fill: parent
             anchors.margins: dp(16)
-            spacing: dp(16)
+            readonly property bool upright: height > width
+            columns: upright ? 1 : 2
+            columnSpacing: dp(16)
+            rowSpacing: dp(16)
 
-            // ── Left: drive list ─────────────────────────────────────
+            // ── Left (upright: top): drive list ──────────────────────
             Rectangle {
-                Layout.preferredWidth: Math.round(parent.width * 0.36)
-                Layout.fillHeight: true
+                objectName: "tripListCard"
+                Layout.preferredWidth: pageLayout.upright ? -1 : Math.round(pageLayout.width * 0.36)
+                Layout.fillWidth: pageLayout.upright
+                Layout.preferredHeight: pageLayout.upright ? Math.max(dp(200), Math.round(pageLayout.height * 0.36)) : -1
+                Layout.fillHeight: !pageLayout.upright
                 radius: dpMin(12, 4)
                 color: cardColor
 
@@ -635,8 +646,9 @@ Item {
                 }
             }
 
-            // ── Right: selected drive ────────────────────────────────
+            // ── Right (upright: below): selected drive ───────────────
             Rectangle {
+                objectName: "tripDetailCard"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 radius: dpMin(12, 4)

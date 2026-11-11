@@ -303,6 +303,8 @@ qt_add_executable(octave
     src/util/pathurl.h
     src/util/folderbrowser.h
     src/util/folderbrowser.cpp
+    src/util/releasecheck.h
+    src/util/releasecheck.cpp
     src/service/commandserver.h
     src/service/commandserver.cpp
     src/service/protocol.h

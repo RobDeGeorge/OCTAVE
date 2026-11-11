@@ -263,6 +263,32 @@ private slots:
         QCOMPARE(list->property("count").toInt(), 0);
         QVERIFY(find("tripTrendMetric_idleVoltage") == nullptr);
     }
+
+    // Side by side in a wide window; the list above the drive in one taller
+    // than wide, each as wide as the page (0.9.6: the page had no upright
+    // layout, the list was a 36 % sliver of a phone's width)
+    void theTwoPanelsStackWhenUpright()
+    {
+        QQuickItem *list = find("tripListCard");
+        QQuickItem *detail = find("tripDetailCard");
+        QQuickItem *layout = find("tripHistoryLayout");
+        QVERIFY(list && detail && layout);
+        QTRY_VERIFY(detail->width() > 0);
+        QVERIFY(detail->x() >= list->x() + list->width());
+        QCOMPARE(detail->y(), list->y());
+        QVERIFY(list->width() < layout->width() / 2);
+
+        window()->resize(480, 900);
+        QTRY_VERIFY(layout->height() > layout->width() && detail->y() >= list->y() + list->height());
+        QCOMPARE(detail->x(), list->x());
+        QCOMPARE(list->width(), layout->width());
+        QCOMPARE(detail->width(), layout->width());
+        QVERIFY(list->height() >= 150);
+        QVERIFY(detail->height() > list->height());
+
+        window()->resize(1280, 720);
+        QTRY_VERIFY(detail->x() >= list->x() + list->width() && detail->y() == list->y());
+    }
 };
 
 QTEST_MAIN(TstTripHistoryView)
