@@ -1057,6 +1057,11 @@ Item {
                     id: chooserTitle
                     anchors.centerIn: parent
                     text: "Dashboards"
+                    // Gives way when the button row reaches it (an upright
+                    // window: "In a browser" sat on top of it at 432 wide)
+                    readonly property Item lastButton: restoreDefaultsButton.visible ? restoreDefaultsButton
+                                                     : browserEditButton.visible ? browserEditButton : importDashboardButton
+                    visible: x > lastButton.x + lastButton.width + dp(10)
                     color: App.Style.primaryTextColor
                     font.pixelSize: App.Spacing.overallText * 1.3
                     font.bold: true
@@ -1550,7 +1555,12 @@ Item {
                             // only on user-authored ones. The "grid" sentinel
                             // (Parameter Cards) has no JSON spec and can't be
                             // deleted, so no actions at all.
-                            Row {
+                            // One line at the card's right while it fits
+                            // (oneLine); in a narrow card (an upright window)
+                            // the buttons wrap inside it. As a plain Row they
+                            // ran over the neighbouring card, cut at the left.
+                            Flow {
+                                id: cardActions
                                 visible: card.dash.id !== "grid"
                                 anchors.top: parent.top
                                 anchors.right: parent.right
@@ -1558,8 +1568,18 @@ Item {
                                 anchors.rightMargin: dp(8)
                                 spacing: dp(6)
                                 z: 2
+                                readonly property real oneLine: {
+                                    var w = 0, n = 0
+                                    for (var i = 0; i < cardActionButtons.count; i++) {
+                                        var b = cardActionButtons.itemAt(i)
+                                        if (b && b.shown) { w += b.width; n++ }
+                                    }
+                                    return w + Math.max(0, n - 1) * spacing
+                                }
+                                width: Math.min(Math.ceil(oneLine), card.width - dp(16))
 
                                 Repeater {
+                                    id: cardActionButtons
                                     model: [
                                         { "action": "edit",      "label": "Edit",   "danger": false, "show": card.dash.builtIn === false },
                                         { "action": "customize", "label": "Customize", "danger": false, "show": card.dash.builtIn === true },
@@ -1569,7 +1589,8 @@ Item {
                                     ]
                                     delegate: Rectangle {
                                         objectName: "dashCard_" + card.dash.id + "_" + modelData.action
-                                        visible: modelData.show
+                                        readonly property bool shown: modelData.show
+                                        visible: shown
                                         width: actionLabel.implicitWidth + dp(16)
                                         height: actionLabel.implicitHeight + dp(10)
                                         radius: dpMin(6, 2)

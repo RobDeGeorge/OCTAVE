@@ -681,7 +681,8 @@ Item {
                                     if (selectedTrip.modelYear > 0 || selectedTrip.make)
                                         parts.push([selectedTrip.modelYear > 0 ? selectedTrip.modelYear : "", selectedTrip.make].join(" ").trim())
                                     if (selectedTrip.vin) parts.push("VIN " + selectedTrip.vin)
-                                    if (selectedTrip.clean === false) parts.push("recovered after a power cut")
+                                    // an open trip is the one being recorded: not clean yet, not recovered either
+                                    if (selectedTrip.clean === false && !selectedTrip.open) parts.push("recovered after a power cut")
                                     return parts.join("  ·  ")
                                 }
                                 visible: text !== ""
@@ -871,7 +872,7 @@ Item {
                                 var left = plotLeft, bottom = fontPx * 1.8, top = fontPx * 0.7, right = plotRight
                                 var w = width - left - right, h = height - top - bottom
                                 if (w <= 10 || h <= 10) return
-                                ctx.font = fontPx + "px " + font
+                                ctx.font = fontPx + "px \"" + font + "\""   // quoted: Context2D reads an unquoted "Google Sans" as GoogleSans
                                 ctx.fillStyle = axisColor
                                 ctx.strokeStyle = axisColor
                                 ctx.lineWidth = 1
@@ -1192,7 +1193,7 @@ Item {
                                 var r = rows || []
                                 var left = plotLeft, top = plotTop, w = width - plotLeft - plotRight, h = height - plotTop - plotBottom
                                 if (w <= 10 || h <= 10) return
-                                ctx.font = fontPx + "px " + font
+                                ctx.font = fontPx + "px \"" + font + "\""   // quoted: Context2D reads an unquoted "Google Sans" as GoogleSans
                                 ctx.fillStyle = axisColor
                                 ctx.strokeStyle = axisColor
                                 ctx.lineWidth = 1

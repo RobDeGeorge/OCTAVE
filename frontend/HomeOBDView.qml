@@ -80,10 +80,16 @@ Item {
                 Rectangle {
                     id: shiftLight
                     visible: param === "RPM" && !!shiftLightManager && shiftLightManager.enabled && shiftLightManager.showOnHomeCard
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.rightMargin: dp(15)
-                    width: parent.height * (shiftLightManager ? shiftLightManager.lampSize : 0.5)
+                    // Beside the reading while the card is wide enough for
+                    // both (the widest reading, so it does not jump as the
+                    // revs change). In a narrow card (an upright window) it
+                    // sat on the reading: there it goes up beside the title,
+                    // no larger than fits above the reading.
+                    readonly property real wanted: parent.height * (shiftLightManager ? shiftLightManager.lampSize : 0.5)
+                    readonly property bool beside: wanted + dp(15) + dp(8) <= display.width - dp(5) - widestValue.width
+                    x: parent.width - width - (beside ? dp(15) : dp(8))
+                    y: beside ? (parent.height - height) / 2 : dp(8)
+                    width: beside ? wanted : Math.max(dp(12), Math.min(wanted, valueText.y + dp(5) - dp(14)))
                     height: width
                     radius: width / 2
 
@@ -160,6 +166,13 @@ Item {
                     }
                 }
 
+                // The widest this card's reading gets (the shift light asks)
+                TextMetrics {
+                    id: widestValue
+                    font: valueText.font
+                    text: Number(info.maxValue).toFixed(App.OBDParameterModel.decimalsFor(param)) + " " + info.unit
+                }
+
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.leftMargin: dp(5)
@@ -177,6 +190,7 @@ Item {
                     }
 
                     Text {
+                        id: valueText
                         text: display.hasValue
                               ? displayValue.toFixed(App.OBDParameterModel.decimalsFor(param)) + " " + info.unit
                               : "-- " + info.unit

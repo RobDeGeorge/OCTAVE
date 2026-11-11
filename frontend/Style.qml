@@ -77,8 +77,19 @@ QtObject {
         if (customThemes[currentTheme]) {
             return customThemes[currentTheme]
         }
-        // Fall back to built-in themes
-        return themes[currentTheme] || themes["SolarizedLight"]
+        // Fall back to built-in themes, then to the last palette that
+        // resolved (see lastActiveTheme)
+        return themes[currentTheme] || themes["SolarizedLight"] || lastActiveTheme
+    }
+    // While the app quits the managers go before the QML engine: themeCatalog
+    // reads null, `themes` is empty, and without this every colour binding
+    // below logged a TypeError into the error log at each exit.
+    // Written only while the catalog is there: once activeTheme reads it,
+    // a write would be a binding loop.
+    property var lastActiveTheme: null
+    onActiveThemeChanged: {
+        if (activeTheme && typeof themeCatalog !== "undefined" && themeCatalog)
+            lastActiveTheme = activeTheme
     }
 
     // Helper function for backward compatibility
