@@ -297,6 +297,16 @@ NetworkManager (src/managers/networkmanager.cpp)
               release) or "Could not parse GitHub response".</li>
           </ul>
           <p>
+            <strong>Windows and TLS.</strong> The Windows package carries OpenSSL DLLs for the Android Auto receiver,
+            and with them present Qt would use its OpenSSL backend for HTTPS. That backend trusts only the root
+            certificates already in the Windows store, and a newly installed Windows holds few (it fetches the others
+            the first time Schannel meets them), so the first check there failed with "SSL handshake failed: The issuer
+            certificate of a locally looked up certificate could not be found". <code>NetworkManager</code>'s constructor
+            therefore selects Qt's Schannel backend on Windows before anything uses TLS
+            (<code>QSslSocket::setActiveBackend("schannel")</code>, process-wide: Spotify's requests use it too). The
+            log line of each check names the backend in use ("TLS: schannel").
+          </p>
+          <p>
             The two pure halves are in <span class="file-path">src/util/releasecheck.{h,cpp}</span>, held by
             <span class="file-path">tests/cpp/tst_releasecheck.cpp</span>: <code>ReleaseCheck::compareVersions()</code>
             (numeric per part, a leading <code>v</code> ignored, <code>0.9.6-rc2 &lt; 0.9.6</code>) and

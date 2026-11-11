@@ -16,6 +16,7 @@
 #include <QNetworkRequest>
 #include <QProcess>
 #include <QRegularExpression>
+#include <QSslSocket>
 #include <QStandardPaths>
 #include <QSysInfo>
 #include <QThread>
@@ -37,6 +38,21 @@ NetworkManager::NetworkManager(QObject *parent)
     : QObject(parent)
     , m_selfUpdateStatus(QStringLiteral("idle"))
 {
+#ifdef Q_OS_WIN
+    // The Windows package carries OpenSSL for the Android Auto receiver, and
+    // with those DLLs present Qt picks its OpenSSL backend for HTTPS. That
+    // backend trusts only the roots already in the Windows certificate store,
+    // and a new Windows install holds few: it fetches the others when Schannel
+    // first meets them. So the release check failed there with "issuer
+    // certificate ... could not be found" (0.9.6-rc5, a clean Windows 11).
+    // Schannel is what Qt used before the DLLs were shipped. Has to be chosen
+    // before the first TLS use in the process, hence here.
+    if (QSslSocket::availableBackends().contains(QStringLiteral("schannel"))
+        && !QSslSocket::setActiveBackend(QStringLiteral("schannel")))
+        qCWarning(lcNetwork) << "Could not select the Schannel TLS backend; HTTPS uses"
+                             << QSslSocket::activeBackend();
+#endif
+
     // checkCanSelfUpdate() spawns `git --version`; do it after the UI is up
     // (see the singleShot below) rather than on the startup path.
     m_nam = new QNetworkAccessManager(this);
@@ -331,7 +347,8 @@ void NetworkManager::checkLatestRelease()
         m_updateCheckBusy = false;
 
         if (reply->error() != QNetworkReply::NoError) {
-            qCWarning(lcNetwork) << "Release check failed:" << reply->errorString();
+            qCWarning(lcNetwork) << "Release check failed:" << reply->errorString()
+                                 << "(TLS backend:" << QSslSocket::activeBackend() << ")";
             setReleaseUrl(QString());
             setUpdateResult(QStringLiteral("error"), QStringLiteral("Could not reach GitHub"));
             return;
@@ -347,7 +364,7 @@ void NetworkManager::checkLatestRelease()
         const QString mine = QStringLiteral(OCTAVE_VERSION);
         const bool newer = ReleaseCheck::compareVersions(latest.version, mine) > 0;
         qCInfo(lcNetwork) << "Update check: this build is" << mine << "latest release" << latest.tag
-                          << (newer ? "(newer)" : "(not newer)");
+                          << (newer ? "(newer)" : "(not newer)") << "TLS:" << QSslSocket::activeBackend();
         if (!newer) {
             setReleaseUrl(QString());
             setUpdateResult(QStringLiteral("up-to-date"), QStringLiteral("You're running the latest version"));
