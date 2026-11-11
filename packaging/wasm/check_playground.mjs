@@ -118,7 +118,14 @@ function rpmIn(text) {
   return m ? Number(m[1].replace(/,/g, '')) : NaN
 }
 
-const site = await (await fetch(new URL('frontends/glass/index.html', base))).ok
+// The server may still be starting (CI starts it just before this)
+let site = false
+for (let i = 0; ; i++) {
+  try { site = (await fetch(new URL('frontends/glass/index.html', base))).ok; break } catch (e) {
+    if (i >= 60) throw new Error(`no server at ${base}: ${e.cause?.code ?? e.message}`)
+    await sleep(500)
+  }
+}
 const frontends = wanted.length ? wanted : ['hello-car-js', ...(site ? ['glass'] : [])]
 const failures = []
 const b = new Browser()
