@@ -1,20 +1,20 @@
 ** Drc report for obd-adapter.kicad_pcb **
-** Created on 2026-11-10T06:52:27 **
+** Created on 2026-11-10T19:37:31 **
 ** Report includes: Errors, Warnings, Exclusions **
 
 ** Found 8 DRC violations **
 [silk_overlap]: Silkscreen clearance
     Rule: board setup constraints silk; warning
+    @(17.5729 mm, 53.7350 mm): Segment of R54 on F.Silkscreen
+    @(19.7500 mm, 54.3236 mm): Reference field of R54
+[silk_overlap]: Silkscreen clearance
+    Rule: board setup constraints silk; warning
+    @(82.0000 mm, 58.3136 mm): Reference field of C45
+    @(81.8594 mm, 57.7250 mm): Segment of C45 on F.Silkscreen
+[silk_overlap]: Silkscreen clearance
+    Rule: board setup constraints silk; warning
     @(95.8594 mm, 58.0450 mm): Segment of C44 on F.Silkscreen
     @(96.0000 mm, 58.6336 mm): Reference field of C44
-[silk_overlap]: Silkscreen clearance
-    Rule: board setup constraints silk; warning
-    @(81.8594 mm, 57.7250 mm): Segment of C45 on F.Silkscreen
-    @(82.0000 mm, 58.3136 mm): Reference field of C45
-[silk_overlap]: Silkscreen clearance
-    Rule: board setup constraints silk; warning
-    @(19.7500 mm, 54.3236 mm): Reference field of R54
-    @(17.5729 mm, 53.7350 mm): Segment of R54 on F.Silkscreen
 [lib_footprint_mismatch]: Footprint 'ESP32-WROOM-32E' does not match copy in library 'RF_Module'
     Local override; warning
     @(93.4400 mm, 35.0000 mm): Footprint U4

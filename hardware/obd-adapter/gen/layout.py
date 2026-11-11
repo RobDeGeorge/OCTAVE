@@ -167,7 +167,7 @@ def fixed_for(design):
         ref("mcu", "100n", 4): (66.0, 46.8, 0),
         ref("mcu", "1u"): (66.0, 48.6, 0),
         ref("mcu", "16MHz"): (55.2, 35.5, 90),
-        ref("mcu", "10p", 0): (51.4, 37.6, 180),     # HSE_IN (Y1 pin 1) / HSE_OUT (pin 3): signal pad toward Y1
+        ref("mcu", "10p", 0): (51.4, 37.6, 180),     # HSE_OUT (Y1 pin 1) / HSE_IN (pin 3): signal pad toward Y1
         ref("mcu", "10p", 1): (51.4, 33.4, 180),
         ref("mcu", "100n", 5): (54.0, 39.5, 0),      # NRST (pin 7)
         # VBAT sense 100n (PA4, pin 18): by hand, clear of the fan-out lanes of the MCU's west and south pins
@@ -255,11 +255,11 @@ def fixed_for(design):
         ref("power", "47u", 2): (X + 10.5, Y - 11.45, 90),
         ref("power", "SS34", 0): (X + 15.35, Y - 11.9, 180),  # 5V_BUCK -> 5V, anode at the caps
         ref("power", "13k"): (X + 5.6, Y + 0.63, 0),          # COMP: R19 + C27 along pin 6's row,
-        ref("power", "6.8n"): (X + 8.8, Y + 0.63, 0),         # 39p just below
-        ref("power", "39p"): (X + 5.6, Y + 2.3, 0),
-        ref("power", "10.2k"): (X + 2.9, Y + 4.7, 270),       # FB divider under pin 5
-        ref("power", "57.6k"): (X + 4.6, Y + 4.7, 90),
-        ref("power", "162k"): (X - 2.9, Y + 4.7, 270),        # RT under pin 4
+        ref("power", "6.8n"): (X + 8.8, Y + 0.63, 0),         # 47p just below
+        ref("power", "47p"): (X + 5.6, Y + 2.3, 0),
+        ref("power", "12k"): (X + 2.9, Y + 4.7, 270),       # FB divider under pin 5
+        ref("power", "68k"): (X + 4.6, Y + 4.7, 90),
+        ref("power", "160k"): (X - 2.9, Y + 4.7, 270),        # RT under pin 4
     })
     return f
 

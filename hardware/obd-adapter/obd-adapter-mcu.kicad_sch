@@ -4174,7 +4174,7 @@
 		)
 		(uuid "25c0a6fd-ad6c-5bdb-a21b-529e39ded80c")
 	)
-	(text "PC3 switches DLC_SW (battery to the J1850 supply, comparators, K/L pull-ups); PB2 picks 7.7 V VPW / 5.8 V PWM."
+	(text "PC3 switches DLC_SW (battery to the J1850 supply, comparators, K/L pull-ups); PB2 picks 7.24 V VPW / 4.79 V PWM."
 		(exclude_from_sim no)
 		(at 20 44 0)
 		(effects
@@ -4183,7 +4183,7 @@
 			)
 			(justify left top)
 		)
-		(uuid "14473036-11e0-5932-8f2b-32f15d4f203c")
+		(uuid "33ddbaac-f868-50b8-bfb9-ff90e5241e02")
 	)
 	(text "PB4/PB6 carry UCPD dead-battery pull-downs until firmware sets PWR_CR3.UCPD_DBDIS: both are safe low at reset."
 		(exclude_from_sim no)
@@ -6447,7 +6447,7 @@
 	)
 	(symbol
 		(lib_id "Device:Crystal_GND24")
-		(at 124.46 73.66 0)
+		(at 127 73.66 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -6455,7 +6455,7 @@
 		(dnp no)
 		(uuid "f44b3ec9-604f-5272-8834-0090f62b88dc")
 		(property "Reference" "Y1"
-			(at 129.54 65.024 0)
+			(at 132.08 65.024 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6464,7 +6464,7 @@
 			)
 		)
 		(property "Value" "16MHz"
-			(at 129.54 67.564 0)
+			(at 132.08 67.564 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6473,7 +6473,7 @@
 			)
 		)
 		(property "Footprint" "Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm"
-			(at 124.46 73.66 0)
+			(at 127 73.66 0)
 			(hide yes)
 			(effects
 				(font
@@ -6482,7 +6482,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 124.46 73.66 0)
+			(at 127 73.66 0)
 			(hide yes)
 			(effects
 				(font
@@ -6491,7 +6491,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 124.46 73.66 0)
+			(at 127 73.66 0)
 			(hide yes)
 			(effects
 				(font
@@ -6500,7 +6500,7 @@
 			)
 		)
 		(property "LCSC" "C13738"
-			(at 124.46 73.66 0)
+			(at 127 73.66 0)
 			(hide yes)
 			(effects
 				(font
@@ -6531,8 +6531,8 @@
 	)
 	(wire
 		(pts
+			(xy 123.19 73.66)
 			(xy 120.65 73.66)
-			(xy 118.11 73.66)
 		)
 		(stroke
 			(width 0)
@@ -6540,9 +6540,9 @@
 		)
 		(uuid "16056c95-008f-5075-b23b-d735a8f218c3")
 	)
-	(global_label "HSE_IN"
+	(global_label "HSE_OUT"
 		(shape passive)
-		(at 118.11 73.66 180)
+		(at 120.65 73.66 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -6552,7 +6552,7 @@
 		)
 		(uuid "04fcc867-5c1e-5806-9df7-e2e5f20784e5")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 118.11 73.66 0)
+			(at 120.65 73.66 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6563,8 +6563,8 @@
 	)
 	(wire
 		(pts
-			(xy 124.46 78.74)
-			(xy 124.46 81.28)
+			(xy 127 78.74)
+			(xy 127 81.28)
 		)
 		(stroke
 			(width 0)
@@ -6574,7 +6574,7 @@
 	)
 	(global_label "GND"
 		(shape passive)
-		(at 124.46 81.28 270)
+		(at 127 81.28 270)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -6584,7 +6584,7 @@
 		)
 		(uuid "7f282e2b-a740-55b0-963b-e2f5d1566b38")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 124.46 81.28 0)
+			(at 127 81.28 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6595,8 +6595,8 @@
 	)
 	(wire
 		(pts
-			(xy 128.27 73.66)
 			(xy 130.81 73.66)
+			(xy 133.35 73.66)
 		)
 		(stroke
 			(width 0)
@@ -6604,9 +6604,9 @@
 		)
 		(uuid "1ab7b009-bc93-5e04-9b34-d8aca0a4785f")
 	)
-	(global_label "HSE_OUT"
+	(global_label "HSE_IN"
 		(shape passive)
-		(at 130.81 73.66 0)
+		(at 133.35 73.66 0)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -6616,7 +6616,7 @@
 		)
 		(uuid "c1e6aa5d-e85c-5df3-af31-c67e32a8d3c4")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 130.81 73.66 0)
+			(at 133.35 73.66 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8467,7 +8467,7 @@
 			)
 		)
 	)
-	(global_label "HSE_IN"
+	(global_label "HSE_OUT"
 		(shape passive)
 		(at 107.95 208.28 180)
 		(fields_autoplaced yes)
@@ -8555,7 +8555,7 @@
 	)
 	(symbol
 		(lib_id "Device:C")
-		(at 149.86 208.28 90)
+		(at 147.32 208.28 90)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -8563,7 +8563,7 @@
 		(dnp no)
 		(uuid "7d07c200-4b85-53b4-878f-bf8a90b569ba")
 		(property "Reference" "C11"
-			(at 149.86 204.47 90)
+			(at 147.32 204.47 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8571,7 +8571,7 @@
 			)
 		)
 		(property "Value" "10p"
-			(at 149.86 212.09 90)
+			(at 147.32 212.09 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8579,7 +8579,7 @@
 			)
 		)
 		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
-			(at 149.86 208.28 0)
+			(at 147.32 208.28 0)
 			(hide yes)
 			(effects
 				(font
@@ -8588,7 +8588,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 149.86 208.28 0)
+			(at 147.32 208.28 0)
 			(hide yes)
 			(effects
 				(font
@@ -8597,7 +8597,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 149.86 208.28 0)
+			(at 147.32 208.28 0)
 			(hide yes)
 			(effects
 				(font
@@ -8606,7 +8606,7 @@
 			)
 		)
 		(property "LCSC" "C1634"
-			(at 149.86 208.28 0)
+			(at 147.32 208.28 0)
 			(hide yes)
 			(effects
 				(font
@@ -8629,9 +8629,9 @@
 			)
 		)
 	)
-	(global_label "HSE_OUT"
+	(global_label "HSE_IN"
 		(shape passive)
-		(at 146.05 208.28 180)
+		(at 143.51 208.28 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -8641,7 +8641,7 @@
 		)
 		(uuid "dfd31a56-de8a-52c0-9838-e60b8e62cdcd")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 146.05 208.28 0)
+			(at 143.51 208.28 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8652,7 +8652,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 153.67 208.28 90)
+		(at 151.13 208.28 90)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom no)
@@ -8660,7 +8660,7 @@
 		(dnp no)
 		(uuid "3a2ac31a-9f53-5cee-9be2-f7145a566910")
 		(property "Reference" "#PWR121"
-			(at 153.67 208.28 0)
+			(at 151.13 208.28 0)
 			(hide yes)
 			(effects
 				(font
@@ -8669,7 +8669,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 159.8703 208.28 0)
+			(at 157.3303 208.28 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8677,7 +8677,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 153.67 208.28 0)
+			(at 151.13 208.28 0)
 			(hide yes)
 			(effects
 				(font
@@ -8686,7 +8686,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 153.67 208.28 0)
+			(at 151.13 208.28 0)
 			(hide yes)
 			(effects
 				(font
@@ -8695,7 +8695,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 153.67 208.28 0)
+			(at 151.13 208.28 0)
 			(hide yes)
 			(effects
 				(font

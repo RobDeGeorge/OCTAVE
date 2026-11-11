@@ -471,7 +471,7 @@ def power_page(D, design):
     u7 = D.part(ref("TPS54360BDDAR"), xu7, RAIL + 5.08, fields="top")
     D.wire((xd, RAIL), u7["VIN"])
     # RT to ground; EN open (internal pull-up: UVLO only)
-    r19 = D.part(ref("162k"), x_rt, RAIL + 25.4, fields="left")
+    r19 = D.part(ref("160k"), x_rt, RAIL + 25.4, fields="left")
     D.wire(u7["RT/CLK"], (x_rt, u7["RT/CLK"][1]), r19["1"])
     D.power(r19["2"], "GND")
     D.name((x_rt + 5.08, u7["RT/CLK"][1]), "BUCK_RT", "down", length=5.08)
@@ -493,10 +493,10 @@ def power_page(D, design):
     l1 = D.part(ref("8.2u"), xl, SW, rot=90, fields="above")
     D.wire(u7["SW"], l1["1"])
     D.name((xd5 + 7.62, SW), "BUCK_SW", "up", length=2.54)
-    # compensation under the chip: COMP -> 39p to ground, and 13k + 6.8n to ground
+    # compensation under the chip: COMP -> 47p to ground, and 13k + 6.8n to ground
     comp_y = u7["COMP"][1]
     xc = u7["COMP"][0] + 5.08
-    c28 = D.part(ref("39p"), xc, RAIL + 30.48, fields="right")
+    c28 = D.part(ref("47p"), xc, RAIL + 30.48, fields="right")
     r22 = D.part(ref("13k"), xc + 10.16, RAIL + 30.48, fields="right")
     c27 = D.part(ref("6.8n"), xc + 10.16, RAIL + 43.18, fields="right")
     D.wire(u7["COMP"], (xc, comp_y), c28["1"])
@@ -514,8 +514,8 @@ def power_page(D, design):
     D.power((x, OUT), "5V_BUCK")
     xr = hang_row([ref("47u", 0), ref("47u", 1), ref("47u", 2)], x + 5.08, OUT)
     D.wire(l1["2"], (xr, OUT))
-    r20 = D.part(ref("57.6k"), xr, OUT + 45.72, fields="right")
-    r21 = D.part(ref("10.2k"), xr, OUT + 63.5, fields="right")
+    r20 = D.part(ref("68k"), xr, OUT + 45.72, fields="right")
+    r21 = D.part(ref("12k"), xr, OUT + 63.5, fields="right")
     D.wire((xr, OUT), r20["1"])
     D.wire(r20["2"], r21["1"])
     D.power(r21["2"], "GND")

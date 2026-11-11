@@ -254,6 +254,62 @@ The board of rounds 5 and 6 was routed afresh on 2026-11-09 (Freerouting 2.5, th
 - **Sticky placement.** `build.py pcb` now keeps a part where the frozen route has it when that spot is free (`layout.place_all`, `OBD_STICKY=0` to turn off), so a small change no longer shuffles the board. The replay still refuses a board whose placement differs from the freeze.
 - **Legal but ugly,** left as they are: `CAN1_L` 95 mm with 11 vias against 52 mm and 4 for `CAN1_H`; `J1850_VSEL` 14 vias; `ESP_RTS` 5 vias; `EXP_PC10` 104 mm (from pin 52 under the ESP32 module, down the right edge, along the bottom to J5). None is fast. The CAN1 pair is the one to redo first if CAN FD at 2 Mbit/s or more gives trouble.
 
+### Round 8 (2026-11-10): tidying the copper, parts without a fee, the buck switching
+
+A look for what could still go wrong on the routed board gave nine points. This round is the ones that could be dealt with at the desk: the copper that round 7 left ugly, the BOM lines that carry JLCPCB's fee for no reason, and the buck, which until now had only been analysed small-signal. The route is still the one of round 7: the changes below are hand edits to it, frozen again (`gen/routing.json`, 3243 items).
+
+| # | Severity | Finding | Status |
+|---|---|---|---|
+| 64 | Layout | `HSE_OUT` ran 18 mm through two vias under the STM32 because the crystal's two terminals were the wrong way round for the chip: pins 5 / 6 (PF0 / PF1) leave side by side and the tracks had to cross. | **Fixed:** Y1's pads swapped in the netlist (pad 3 on `HSE_IN`, pad 1 on `HSE_OUT`; a crystal has no polarity) and both tracks re-laid on the top side: 8.7 and 9.0 mm, no vias. The fan-out via of `ACC_INT1` moved 0.085 mm to let them past. |
+| 65 | Layout | The CAN1 pair was not a pair: `CAN1_L` hopped over `CAN1_H` and changed sides four times between the plug and the transceiver. | **Fixed, as far as the board allows:** from the plug to U9 both lines now run about 26 mm side by side, and `CAN1_L` goes to the bottom once (2 vias). It cannot stay on top: the 1.6 mm battery trace (`VBAT_IN`, on F.Cu at x = 4.6) and C19's `VBAT_F` spur lie across the way. Net totals: `CAN1_L` 93.5 mm and 9 vias (95 mm and 11), `CAN1_H` 51.7 mm and 4. |
+| 66 | Layout | Round 7 read `CAN1_L`'s 95 mm against `CAN1_H`'s 52 mm as a 43 mm mismatch in the pair. It is not: the difference is in the branches, to the termination (R26 beside U9 on `CAN1_H`, the switch SW6 on `CAN1_L`) and to the ESD diode. What is wrong is where that diode is: D8 hangs on a 16 mm stub past U9, where CAN2's D9 sits in line between the plug and its transceiver. | **Accepted for Rev 0:** 16 mm of stub does nothing at 2 or 5 Mbit/s, and the diode still clamps; it clamps better in line. **Rev A:** place D8 between J6 and U9. Round 7's "the CAN1 pair is the one to redo first" is withdrawn. |
+| 67 | Cost | Six BOM lines were extended parts ($3 loading fee each) where a part from JLCPCB's basic or preferred library does the same job: the buck's RT (162k), its feedback divider (57.6k / 10.2k), the 39 pF on COMP, the four SMF24A bus TVS and the 12 V gate-clamp zener. | **Fixed:** RT 160k (C22813, preferred), feedback 68k / 12k (C23231 / C22790, basic), 47 pF (C1671, basic), SMF24A C19077514 and BZT52C12 C19077410 (both preferred, same ratings class: 200 W SOD-123FL, 350 mW SOD-123 against 36 mW dissipated at the 42 V clamp). Same footprints, same positions, no copper changed. What the values do to the buck is below. |
+| 68 | Cost | The 33 V zener (D17) has a preferred equivalent too. | **Kept** as the 500 mW part (C173417): it takes 0.63 W through the 470 Ω while the TVS clamps a load dump at 42 V, and the preferred part is 350 mW. |
+| 69 | Record | Round 7 gave `ESP_RTS` 5 vias; it has 6. `ESP_EN`'s 92 mm is a six-point tree (the module, the 1k to the STM32, the pull-up, the RST button, the auto-reset transistor and the capacitor) close to its shortest, with its capacitor at the module's pin: nothing to tidy. | Corrected here and in the README. |
+| 70 | Check | The buck had been analysed small-signal only ("Not covered"). `sim/sim_buck_sw.py` now switches it cycle by cycle: start-up, steady state from 9 to 42 V, a load step, a 6 V crank, dropout, and a sweep of the slope compensation. | **No board change.** Results below. One thing the model cannot settle goes on the first board's bench list: the SW node at 6 to 7 V input (#71). |
+| 71 | Risk | Below about 7.5 V input the duty cycle passes 0.74 and the loop needs 0.22 to 0.35 A/µs of slope compensation to be free of subharmonic oscillation with 8.2 µH. TI does not publish the TPS54360B's internal ramp, so neither the model nor the datasheet can say that it has that much. | **Accepted, to measure:** the inductor is the one in TI's own 5 V / 600 kHz example, so it is expected to be fine. On the first board look at SW with 6 to 7 V on the plug and 0.5 to 1 A drawn from 5 V: pulse widths that alternate are the sign. The fix, if it shows, is a larger L1 in the same footprint (10 µH needs 0.29 A/µs at worst, 15 µH 0.19). It only matters during cranking; the output ripple it would cause is tens of millivolts. |
+
+**The buck with the new values** (#67). The datasheet's equations, then the averaged loop model (`sim/sim_buck.py`, re-run):
+
+| | Before | Now |
+|---|---|---|
+| RT, switching frequency (Eq. 7) | 162k, 597 kHz | 160k, 605 kHz |
+| Feedback divider, output | 57.6k / 10.2k, 5.32 V | 68k / 12k, 5.33 V |
+| Divider current | 78 µA | 67 µA |
+| COMP: 13k + 6.8 nF, pole capacitor, pole | 39 pF, 314 kHz | 47 pF, 260 kHz |
+| VPW threshold (18k / 47k from `5V_BUCK`) | 3.85 V (3.72 to 3.97) | 3.86 V (3.73 to 3.98) |
+| Phase margin, typical (12 V, 51 µF, 0.6 A) | 71.5° | 70.9° |
+| Phase margin, worst corner (42 V, 25 µF, 0.1 A, slope compensation at its high end) | 35.6° | 34.6° |
+
+- The loop loses about 1° of phase margin from the lower pole; crossover stays between 20 and 51 kHz across the corners, the best corner has 80.8°, and the gain margin at the worst corner is 11.9 dB. The load step (0.1 to 1.5 A) undershoots 165 to 202 mV.
+- The worst corner is a load dump on a board whose output capacitors have lost half their value to bias and age, at almost no load. It was 35.6° before this round as well; it is not something the part swap made.
+- `5V` after the SS34 stays about 4.9 V, the TCAN1044V's supply stays inside 4.5 to 5.5 V, and the parked current is unchanged to two figures (0.53 mA).
+
+**The buck, switching** (#70; `sim/sim_buck_sw.py`, results in `sim/out/buck_sw.json`, about 12 minutes in ngspice). A behavioural model built from the datasheet (clock, peak-current comparator, slope ramp, error amplifier, soft start, minimum on-time, pulse skipping, frequency foldback) round the board's own parts, with the ceramics derated for DC bias (51 µF of output capacitance, 36 µF at the corner). It is not TI's model, which ngspice cannot run. In continuous conduction its duty cycle, inductor ripple and output ripple agree with the hand formulas to 2 %.
+
+| Case | Result |
+|---|---|
+| Start-up, 12 V applied, 0.3 and 1.0 A | Rises in 1.6 ms (datasheet soft start: 1.7 ms), 15 mV overshoot, inductor peak 1.2 / 1.9 A. Charging the input capacitors takes a 5.9 A peak from the battery for the assumed harness (50 mΩ, 2 µH) and a 100 µs edge. |
+| Steady state, 9 / 12 / 14.4 / 24 / 42 V at 0.05 to 1.5 A | Output 5.333 V in all 20 cases. Ripple 1.0 to 4.3 mV p-p, and 8.5 mV at 42 V and 50 mA, where the part skips pulses. Inductor peak 2.0 A at most. |
+| The same at 1.5 A with L1 30 % low and 36 µF | Ripple 3.5 to 8.8 mV, inductor peak 2.2 A (4.2 A saturation, #24). |
+| Input side | `VBAT_P` ripple 75 mV p-p at most (42 V, 1.5 A). The 47 µF electrolytic carries 21 mA RMS at most; the ceramics take the rest. |
+| Load step 0.1 to 1.0 A and back, 12 V | 131 mV under, 117 mV over, back within 10 mV in 0.23 ms. With 36 µF: 138 / 123 mV. About 30 % more than the averaged model gives for the same step (101 mV). |
+| Cold crank 12 → 6 → 7 → 12 V, 0.25 and 0.5 A on 3V3 | `VBAT_P` 5.90 V at the bottom, duty 0.92 (0.93 with the switch at its maximum on-resistance). `5V_BUCK` stays between 5.331 and 5.343 V, `5V` at 4.98 V, and the LDO keeps 1.68 V of headroom where it needs 0.38 V. |
+| Dropout, 0.6 A | Regulates down to 5.6 V at the plug. Below that the output follows the battery, about 0.18 V under it, and 3V3 stays in regulation until about 4.25 V, just above the UVLO (4.1 V at the plug). |
+| Slope compensation, 0.6 A | Stable at every setting from 12 V up. At 9 V it needs 0.13 A/µs, at 7.5 V 0.22, at 6.5 V 0.28; the sweep's stable / unstable boundary falls where theory puts it. This is #71. |
+
+- The cases above use an assumed ramp of 0.6 A/µs. The sweep is what shows how much the result depends on it: not at all above 9 V.
+- Assumed, not measured: the ramp, the pulse-skipping current (0.17 A), the capacitors' bias derating and ESR, the harness. L1's resistance (31 mΩ) is from a distributor's listing.
+- Outside the model: ringing on the switch node, spikes from the capacitors' inductance, EMI (all layout), losses and temperature, the boot capacitor's refresh in dropout (the datasheet's 99 % limit was applied by hand).
+- The first version of the model had a latch that could stick half-way on the first soft-start pulse and showed 15 V on the output. That was the model (fixed: the minimum-on-time node clears only once the latch is off), reproduced and corrected before any of the figures above were taken.
+
+**Firmware started** (`firmware/`, not part of the board's verification, recorded here because it is where the obligations below now live). A bring-up skeleton for the STM32: the obligations as a pin table (`firmware/src/safe_pins.c`, each row citing its item), a pin map generated from `gen/obd_adapter.py` and the pin check, a serial console, CAN in bus-monitoring mode with TXD never given to the controller. It builds without warnings for the board and for a NUCLEO-G474RE and its host tests pass. **It has not run on hardware.** Writing it turned up two things about the board:
+
+- The only console on Rev 0 until there is USB code is USART1 on J5, and J5 is not fitted: solder it, or three wires.
+- The note on the MCU sheet gave the J1850 supply as 7.7 V / 5.8 V, the figures from before #10 and #32. Corrected to 7.24 V / 4.79 V (the text on the sheet only).
+
+**What the swap leaves with a fee:** 35 extended parts ($105 a batch, from 41 and $123). No fee-free equivalent exists for the rest: the ICs and connectors, the green and blue LEDs, USBLC6-2SC6, ESD9B3.3, the 0.1 % divider pair, the 470 Ω 1206, the 47 µF 50 V electrolytic and the 510 Ω 2 W resistors.
+
 ### Firmware obligations (all rounds)
 
 - Keep PA1/PA2/PB5/PB7 low or as inputs until the ESP32 is powered, and drive ESP_EN open-drain (item 23).
@@ -273,26 +329,27 @@ The board of rounds 5 and 6 was routed afresh on 2026-11-09 (Freerouting 2.5, th
 ## Result after the fixes
 
 - **ERC:** 0 errors, 0 warnings.
-- **DRC (the route of 2026-11-10, full run with schematic parity):** 0 errors, 0 unconnected pads, 0 schematic-parity issues, 0 courtyard overlaps, no dead-end tracks or vias, no copper on the plug's tab. 8 warnings: the silkscreen outlines of the two USB-C sockets run off the board edge (4), the reference text of R54, C44 and C45 touches its own part's outline (3), and U4's footprint differs from the library copy (the tented ground pad, on purpose). The route of 2026-11-08 had 138 silkscreen warnings and 2 dead-end stubs.
+- **DRC (the route of 2026-11-10 with round 8's hand edits, full run with schematic parity):** 0 errors, 0 unconnected pads, 0 schematic-parity issues, 0 courtyard overlaps, no dead-end tracks or vias, no copper on the plug's tab. 8 warnings: the silkscreen outlines of the two USB-C sockets run off the board edge (4), the reference text of R54, C44 and C45 touches its own part's outline (3), and U4's footprint differs from the library copy (the tented ground pad, on purpose). The route of 2026-11-08 had 138 silkscreen warnings and 2 dead-end stubs.
 - **Rules:** signals 0.15 mm track / 0.15 mm gap (Default class), battery-side nets 0.30 mm from everything, 0.2 mm from holes, 0.3 mm from the board edge (routed at 0.4), vias 0.6 / 0.3 mm. All within JLCPCB's standard 4-layer process (0.09 mm minimum).
 - **STM32 pin check:** re-run on the round 5 netlist, all 31 functions OK. PC3 (`DLC_SW_EN`) is a plain GPIO.
-- **Board:** 100 × 70 mm plus the plug tab, and the 40 × 18 mm plug adapter; 200 footprints and four mounting holes, 187 JLC-assembled parts, 83 BOM lines, 1 hand-fit (the J6 OBD-II plug), 2 headers not fitted (J5, J8), 10 test-point pads. Not re-priced since round 1 ($30.60 per board then, for 152 parts); round 3 adds the CH340C (extended part fee) and about $1 of parts.
-- **Copper:** 2604 track segments and 641 vias (639 at 0.6 / 0.3 mm, 2 at 0.45 / 0.2 mm), 3.1 m on F.Cu and 2.7 m on B.Cu, none on the inner layers. The GND plane (In1) and the 3V3 plane (In2) are each one piece with no long slots.
+- **Board:** 100 × 70 mm plus the plug tab, and the 40 × 18 mm plug adapter; 200 footprints and four mounting holes, 187 JLC-assembled parts, 83 BOM lines, 1 hand-fit (the J6 OBD-II plug), 2 headers not fitted (J5, J8), 10 test-point pads.
+- **Price** (JLCPCB's parts library, 2026-11-10, every line in stock): $33.59 of parts per board at quantity-1 prices, of which the STM32G474RET6 is $13.00, the ESP32 module $4.56, the LM74700 $2.36 and the flash $2.26. 43 BOM lines are basic parts, 4 preferred, 36 extended; the extended ones are 35 different parts, $105 of loading fees per batch (round 8, #67). Boards, stencil, setup and shipping come on top. Round 1's figure was $30.60 for 152 parts.
+- **Copper:** 2606 track segments and 637 vias (635 at 0.6 / 0.3 mm, 2 at 0.45 / 0.2 mm), 3.13 m on F.Cu and 2.70 m on B.Cu, none on the inner layers. The GND plane (In1) and the 3V3 plane (In2) are each one piece with no long slots.
 - **Power nets:** every supply and battery-side net is one connected piece. `VBAT_IN` is 1.6 mm wide. The thin sections of `VBAT_F` and `VBAT_P` (12 and 6 mm under 0.6 mm) are the LM74700's anode, cathode, EN and charge-pump connections, which carry no load current, and the 0.3 mm of `5V_BUCK` is the feedback sense.
 - **Track lengths:**
   - USB: J2's pair 52 / 48 mm, 2 vias each; J7's 30 / 24 mm, 5 and 2 vias. Full speed.
-  - CAN: `CAN1_H` 52 mm, `CAN1_L` 95 mm; `CAN2_H` 48 mm, `CAN2_L` 75 mm.
-  - Crystal: `HSE_IN` 9 mm, `HSE_OUT` 18 mm. `QSPI_CLK` 23 mm. `BUCK_FB` 3.7 mm.
+  - CAN: `CAN1_H` 52 mm, `CAN1_L` 94 mm; `CAN2_H` 48 mm, `CAN2_L` 75 mm. These are whole nets, with the branches to the termination switch and the ESD diodes; from the plug to the transceiver CAN1 runs about 26 mm on both lines (round 8, #65 and #66).
+  - Crystal: `HSE_IN` 8.7 mm, `HSE_OUT` 9.0 mm, top side, no vias (round 8, #64). `QSPI_CLK` 23 mm. `BUCK_FB` 3.7 mm.
   - 3V3_ESP: 118 mm in all (31 mm on 2026-11-08), but the supply path from the LDO past its capacitor to the module's pin is the short run in the top right corner; the rest are light branches to the CH340C, the microSD and RN1.
   - 3V3: a solid plane on In2.
   - The ESP32 EN and STM32 NRST caps sit at their pins. `NRST` is 52 mm and `ESP_EN` 92 mm (53 to 58 mm before), because they run to the STM32, SWD, the buttons and the auto-reset transistors.
 
 ## Not covered
 
-- **Model fidelity.** No vendor SPICE models ran in ngspice; TI's are encrypted. The LM317L, LM339, LM74700 and buck are datasheet-parameter models, and the buck was analysed small-signal rather than switching.
+- **Model fidelity.** No vendor SPICE models ran in ngspice; TI's are encrypted. The LM317L, LM339, LM74700 and buck are datasheet-parameter models. The buck has an averaged loop model and, since round 8, a switching one; both are built from the datasheet, and the part's internal slope compensation is a guess in both (#71).
 - **Re-simulation.** The fixes above were checked by hand calculation. Only the K/L back-feed diode was re-simulated.
 - **EMC.** No emissions or immunity testing.
-- **The copper, beyond DRC.** The route is rule-clean and complete, and nobody has looked at it. See the list in the README ("Before ordering", item 7): the buck loop, the USB pairs, the plug's edge pads, the crystal's tracks, and the long nets of round 7.
-- **The plug on a real part.** The footprints follow one drawing. Fit, tab depth and orientation are checked only on paper.
+- **The copper, beyond DRC.** The route is rule-clean and complete, and nobody has looked at it. See the list in the README ("Before ordering", item 7): the buck loop, the USB pairs, the plug's edge pads, the crystal's tracks, the CAN1 pair and the long nets of round 7.
+- **The plug on a real part.** The footprints follow one drawing. Fit, tab depth and orientation are checked only on paper. `fab/obd-adapter-plug-rev0-print-1to1.pdf` is the sheet to try a bought plug on before ordering (round 8).
 - **The J1850 PWM high-level limit** (5.25 V assumed, #10 and #32) and the VPW threshold change (#45) in simulation.
 - **Signal integrity.** Nothing was simulated or measured on the copper: no impedance control on the USB or CAN pairs (short, and slow enough not to need it on paper).

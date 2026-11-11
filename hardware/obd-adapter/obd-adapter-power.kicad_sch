@@ -3570,7 +3570,7 @@
 		)
 		(uuid "cff9e379-e38c-51a4-81f8-683d4bd5de15")
 	)
-	(text "TPS54360B: datasheet 600 kHz design (Fig. 32) with FB 57.6k/10.2k = 5.32 V, so 5V is ~4.9 V after the SS34 OR."
+	(text "TPS54360B: datasheet 600 kHz design (Fig. 32) with FB 68k/12k = 5.33 V, so 5V is ~4.9 V after the SS34 OR."
 		(exclude_from_sim no)
 		(at 20.32 28.86 0)
 		(effects
@@ -3579,7 +3579,7 @@
 			)
 			(justify left top)
 		)
-		(uuid "9e301dbc-e8a8-51cf-9d4c-791aeb89063f")
+		(uuid "461c2018-b634-5a69-bec1-29e38092aa43")
 	)
 	(text "EN left open (internal pull-up): the internal UVLO (~4.3 V) keeps the buck running through a 6 V cold crank."
 		(exclude_from_sim no)
@@ -4704,7 +4704,7 @@
 				)
 			)
 		)
-		(property "Value" "162k"
+		(property "Value" "160k"
 			(at 216.297 87.63 0)
 			(effects
 				(font
@@ -4739,7 +4739,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C22815"
+		(property "LCSC" "C22813"
 			(at 220.98 86.36 0)
 			(hide yes)
 			(effects
@@ -5017,7 +5017,7 @@
 				)
 			)
 		)
-		(property "Value" "39p"
+		(property "Value" "47p"
 			(at 266.6522 92.71 0)
 			(effects
 				(font
@@ -5052,7 +5052,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C1666"
+		(property "LCSC" "C1671"
 			(at 261.62 91.44 0)
 			(hide yes)
 			(effects
@@ -5466,15 +5466,15 @@
 		(dnp no)
 		(uuid "7c8a6c52-8c95-5ca2-b065-5f93f713da52")
 		(property "Reference" "R20"
-			(at 358.4098 110.49 0)
+			(at 357.0763 110.49 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Value" "57.6k"
-			(at 358.4098 113.03 0)
+		(property "Value" "68k"
+			(at 357.0763 113.03 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5508,7 +5508,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C23082"
+		(property "LCSC" "C23231"
 			(at 353.06 111.76 0)
 			(hide yes)
 			(effects
@@ -5542,15 +5542,15 @@
 		(dnp no)
 		(uuid "e19f73c0-8255-5d67-a0eb-7e757e2d7318")
 		(property "Reference" "R21"
-			(at 358.4098 128.27 0)
+			(at 357.0763 128.27 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Value" "10.2k"
-			(at 358.4098 130.81 0)
+		(property "Value" "12k"
+			(at 357.0763 130.81 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5584,7 +5584,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C22772"
+		(property "LCSC" "C22790"
 			(at 353.06 129.54 0)
 			(hide yes)
 			(effects

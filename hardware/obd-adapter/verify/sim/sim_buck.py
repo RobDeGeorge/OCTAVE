@@ -1,4 +1,4 @@
-"""Sim 6: TPS54360B (U6) averaged peak-current-mode model: loop gain (AC), startup + load step (tran).
+"""Sim 6: TPS54360B (U7) averaged peak-current-mode model: loop gain (AC), startup + load step (tran).
 TI's TPS54360B transient model is an encrypted PSpice model that ngspice cannot run, so this is the
 datasheet small-signal model (Fig. 29/30, Eq. 11-24) plus Ridley's sampling double pole at fsw/2."""
 import sys, os, json, math
@@ -6,10 +6,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 from gen import run, OUT
 
-FSW = 92417 * 162 ** -0.991 * 1e3          # DS Eq. 7 with R15 = 162k
+FSW = 92417 * 160 ** -0.991 * 1e3          # DS Eq. 7 with RT = 160k
 GM_EA, AOL, UGBW, GM_PS = 350e-6, 10000, 2.5e6, 12.0
 RO = AOL / GM_EA; CO = GM_EA / (2 * math.pi * UGBW)
-R16, R17 = 53.6e3, 10.2e3
+R16, R17 = 68e3, 12e3                      # the board's FB divider (gen/obd_adapter.py)
 VOUT = 0.8 * (1 + R16 / R17)
 
 
@@ -23,13 +23,13 @@ def deck(vin, cout, esr, iload, mc, analysis, tag, istep=None):
              'Vref ref 0 PWL(0 0 2.1m 0.8)' if analysis == 'tran' else 'Vref ref 0 0.8',
              # error amp gm into COMP
              f'Gea 0 comp ref fbx {GM_EA}', f'Ro comp 0 {RO}', f'Co comp 0 {CO}',
-             'R18 comp comp_rc 13k        ; R18', 'C22 comp_rc 0 6.8n          ; C22', 'C23 comp 0 39p              ; C23',
+             'R18 comp comp_rc 13k        ; R18', 'C22 comp_rc 0 6.8n          ; C22', 'C23 comp 0 47p              ; C23',
              # sampling double pole
              'Ebuf cb 0 comp 0 1', f'Rs cb s1 {R}', f'Ls s1 s2 {L}', f'Cs s2 0 {C}',
              # power stage: inductor current = gmps*(Vc - 0.6), limited 0..5.5 A (DS current limit typ)
              f'Bps 0 vout_n I = max(0,min(5.5,{GM_PS}*(V(s2)-0.6)))',
              f'Cout vout_n esr_n {cout}', f'Resr esr_n 0 {esr}',
-             'R16 vout_n fb 53.6k         ; R16', 'R17 fb 0 10.2k              ; R17']
+             f'R16 vout_n fb {R16}         ; R16', f'R17 fb 0 {R17}              ; R17']
     if analysis == 'ac':
         lines += ['Vinj fb fbx DC 0 AC 1', f'Rload vout_n 0 {VOUT / iload}', '.ac dec 200 10 1e6',
                   '.control\nrun\nlet T = -v(fb)/v(fbx)\nwrdata ' + os.path.join(OUT, tag + '.dat') +

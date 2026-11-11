@@ -29,14 +29,14 @@ LCSC = {
     "MMBT3906": "C2143",          # Ext
     "2N7002": "C8545",            # Basic
     "SI2309CDS": "C10493",        # Vishay 60 V P-FET SOT-23 (1 G, 2 S, 3 D), DLC_SW high side, Ext, 23k
-    "BZT52C12": "C173429",        # 12 V zener SOD-123 (P-FET gate clamp), Ext, 291k
+    "BZT52C12": "C19077410",      # 12 V zener SOD-123, 350 mW (P-FET gate clamp: 36 mW at the 42 V clamp), Preferred
     "AO3401A": "C15127",          # Basic, P-FET (J1850 Bus+)
     "B5819W": "C8598",            # Basic, 40 V 1 A Schottky SOD-123
     "1N4148W": "C81598",          # Basic, SOD-123
     "SS34": "C8678",              # Basic, 40 V 3 A
     "5.0SMDJ26CA": "C444401",     # 5 kW bidirectional input TVS (SMC), Ext, 4k
     "BZT52C33": "C173417",        # 33 V zener SOD-123 (comparator supply clamp), Ext, 3k
-    "SMF24A": "C123810",          # bus-line TVS, Ext
+    "SMF24A": "C19077514",        # bus-line TVS, 200 W SOD-123FL, Preferred
     "NUP2105L": "C233494",        # SZNUP2105LT1G, CAN ESD, Ext
     "PTC": "C49326266",           # 2920L200/60GR 2 A hold (~0.9 A at 85 C) 60 V, Ext, 20k
     "XTAL16M": "C13738",          # 16 MHz 3225 9 pF, Basic
@@ -59,12 +59,12 @@ LCSC = {
     "C10u50": "C13585",           # 10 uF 50 V 1206
     "C47u50": "C2887275",         # 47 uF 50 V aluminium electrolytic 6.3x7.7 (VBAT_P bulk), Ext, 102k
     "CXTAL": "C1634",             # 10 pF C0G: crystal CL 9 pF, 10 + 10 in series + ~4 pF stray
-    "C6.8n": "C1631", "C1n": "C1588", "C39p": "C1666", "C12p": "C38523", "C10p": "C1634",
+    "C6.8n": "C1631", "C1n": "C1588", "C47p": "C1671", "C12p": "C38523", "C10p": "C1634",
     "R4.7k": "C23162", "R10k": "C25804", "R100k": "C25803", "R1k": "C21190",
     "R510": "C23193", "R5.1k": "C23186", "R13k": "C22797", "R18k": "C25810", "R510k": "C23192",
-    "R57.6k": "C23082", "R330": "C23138", "R4.7k_1206": "C17936", "R10k_1206": "C17902", "R470_1206": "C4502", "R47k": "C25819",
-    "R2.2k": "C4190", "R680": "C23228", "R470": "C23179", "R10.2k": "C22772", "R84.5k": "C23118",
-    "R162k": "C22815", "R120": "C22787", "R240": "C23350", "R787": "C23111", "R453": "C48136",
+    "R68k": "C23231", "R330": "C23138", "R4.7k_1206": "C17936", "R10k_1206": "C17902", "R470_1206": "C4502", "R47k": "C25819",
+    "R2.2k": "C4190", "R680": "C23228", "R470": "C23179", "R12k": "C22790", "R84.5k": "C23118",
+    "R160k": "C22813", "R120": "C22787", "R240": "C23350", "R787": "C23111", "R453": "C48136",
     "R2.7k": "C13167", "R1.5k": "C22843", "R510_2512": "C5843118",  # Yageo 2 W 2512
     "RN10k": "C29718",            # UNI-ROYAL 4D03WGJ0103T5E 4 x 10k 0603x4 array, Basic
     "R100k_0.1%": "C122538", "R10k_0.1%": "C95204",

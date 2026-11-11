@@ -877,6 +877,8 @@ def _plug_fab(out):
     run(["kicad-cli", "pcb", "export", "drill", "--format", "excellon", "--excellon-separate-th",
          "--generate-map", "--map-format", "gerberx2", "-o", gdir + "/", PLUG_PCB], capture_output=True)
     shutil.make_archive(os.path.join(out, f"{PLUG_NAME}-rev{REV}-gerbers"), "zip", gdir)
+    import plugprint    # the 1:1 sheet a bought plug is checked on before the boards are ordered
+    plugprint.main(PLUG_PCB, os.path.join(out, f"{PLUG_NAME}-rev{REV}-print-1to1.pdf"))
 
 
 def fab():

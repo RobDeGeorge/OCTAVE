@@ -1,0 +1,26 @@
+{
+    "version": 3,
+    "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+    "configurePresets": [
+        {
+            "name": "arm",
+            "displayName": "Firmware (rev0 + nucleo), arm-none-eabi-gcc",
+            "binaryDir": "${sourceDir}/build/arm",
+            "toolchainFile": "${sourceDir}/cmake/arm-none-eabi.cmake",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "MinSizeRel" }
+        },
+        {
+            "name": "host",
+            "displayName": "Host tests of the pure logic, system compiler",
+            "binaryDir": "${sourceDir}/build/host",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+        }
+    ],
+    "buildPresets": [
+        { "name": "arm", "configurePreset": "arm" },
+        { "name": "host", "configurePreset": "host" }
+    ],
+    "testPresets": [
+        { "name": "host", "configurePreset": "host", "output": { "outputOnFailure": true } }
+    ]
+}

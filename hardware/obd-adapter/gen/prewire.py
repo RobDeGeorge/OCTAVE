@@ -89,8 +89,8 @@ def wire(board, design):
     d5 = ref("power", "B560C")
     cout = [ref("power", "47u", i) for i in range(3)]
     d6 = ref("power", "SS34", 0)
-    r_rt, r_fb_lo, r_fb_hi = ref("power", "162k"), ref("power", "10.2k"), ref("power", "57.6k")
-    r_comp, c_comp, c_hf = ref("power", "13k"), ref("power", "6.8n"), ref("power", "39p")
+    r_rt, r_fb_lo, r_fb_hi = ref("power", "160k"), ref("power", "12k"), ref("power", "68k")
+    r_comp, c_comp, c_hf = ref("power", "13k"), ref("power", "6.8n"), ref("power", "47p")
 
     # VIN: the input caps' VIN pads joined, then down the IC's left side into pin 2
     vin = P(u7, "2")

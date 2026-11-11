@@ -51,7 +51,7 @@ mcu.notes = [
     "HS-CAN (J1962 6/14) = FDCAN2 PB12/PB13. MS-CAN (3/11) = FDCAN3 PB3/PB4.",
     "J1850 on TIM3: CH1 VPW RX, CH2 PWM RX (input capture), CH3/CH4 TX Bus+/Bus- (output compare).",
     "K-line on LPUART1 (PC0 RX / PC1 TX, TXINV: the NPN inverts); 5-baud init bit-bangs PC1. ESP32 on USART2 + RTS/CTS.",
-    "PC3 switches DLC_SW (battery to the J1850 supply, comparators, K/L pull-ups); PB2 picks 7.7 V VPW / 5.8 V PWM.",
+    "PC3 switches DLC_SW (battery to the J1850 supply, comparators, K/L pull-ups); PB2 picks 7.24 V VPW / 4.79 V PWM.",
     "PB4/PB6 carry UCPD dead-battery pull-downs until firmware sets PWR_CR3.UCPD_DBDIS: both are safe low at reset.",
     "DLC_SW_EN is on PC3, not PC10: the system bootloader may drive USART3 TX (PC10) and would switch DLC_SW on.",
     "Firmware turns on the internal pull-ups of PA15 (USER button) and PC0 (KLINE_RX, an open-collector output).",
@@ -90,9 +90,11 @@ _ref("C")   # C8
 C(mcu, "100n", "NRST")
 R(mcu, "10k", "BOOT0", "GND")
 d.add(mcu, Part(_ref("Y"), "Device:Crystal_GND24", "16MHz", "Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm",
-                {"1": "HSE_IN", "3": "HSE_OUT", "2": "GND", "4": "GND"}, lcsc=LCSC.get("XTAL16M")))
-C(mcu, "10p", "HSE_IN", lcsc_key="CXTAL")
+                {"1": "HSE_OUT", "3": "HSE_IN", "2": "GND", "4": "GND"}, lcsc=LCSC.get("XTAL16M")))
+# a crystal has no polarity: pad 3 (the far one, top left) is on PF0 and pad 1 on PF1, so that the two tracks
+# from U1 pins 5 / 6 do not cross (REVIEW round 8: HSE_OUT ran 18 mm through two vias under the STM32)
 C(mcu, "10p", "HSE_OUT", lcsc_key="CXTAL")
+C(mcu, "10p", "HSE_IN", lcsc_key="CXTAL")
 
 # ---------------------------------------------------------------- debug, buttons, LEDs
 ui = d.block("ui", "Debug, buttons, LEDs")
@@ -193,7 +195,7 @@ pw = d.block("power", "Power: J1962 pin 16 -> PTC -> TVS -> ideal diode -> 5.3 V
 pw.notes = [
     "5.0SMDJ26CA (5 kW) is bidirectional on purpose: a unidirectional TVS would short a reversed battery through the PTC.",
     "Everything on VBAT_P must survive the ~42 V TVS clamp: LM74700 65 V, AO4264E 60 V, TPS54360B 60 V, caps 50 V.",
-    "TPS54360B: datasheet 600 kHz design (Fig. 32) with FB 57.6k/10.2k = 5.32 V, so 5V is ~4.9 V after the SS34 OR.",
+    "TPS54360B: datasheet 600 kHz design (Fig. 32) with FB 68k/12k = 5.33 V, so 5V is ~4.9 V after the SS34 OR.",
     "EN left open (internal pull-up): the internal UVLO (~4.3 V) keeps the buck running through a 6 V cold crank.",
     "5V_BUCK (not the OR'd 5V) feeds everything on the vehicle side: CAN VCC, the VPW reference, the Bus- pull-up.",
 ]
@@ -223,18 +225,20 @@ U(pw, "Regulator_Switching:TPS54360DDA", "TPS54360BDDAR",
    "GND": "GND", "GNDPAD": "GND", "BOOT": "BUCK_BOOT", "SW": "BUCK_SW"}, lcsc_key="TPS54360B")
 C(pw, "2.2u", "VBAT_P", fp=C1206)
 C(pw, "2.2u", "VBAT_P", fp=C1206)
-R(pw, "162k", "BUCK_RT", "GND", lcsc_key="R162k")
+# RT, the FB divider and the COMP pole capacitor are values from JLCPCB's no-fee libraries (REVIEW round 8):
+# they were 162k, 57.6k / 10.2k and 39p (597 kHz, 5.32 V, pole at 314 kHz) and give 605 kHz, 5.33 V, 260 kHz
+R(pw, "160k", "BUCK_RT", "GND")
 C(pw, "100n", "BUCK_BOOT", "BUCK_SW")
 d.add(pw, Part(_ref("L"), "Device:L", "8.2u", "Inductor_SMD:L_Changjiang_FNR8065S",
                {"1": "BUCK_SW", "2": "5V_BUCK"}, lcsc=LCSC["L8u2"],
                note="Sunlord SWPA8065S8R2MT; FNR8065S footprint is the same 8x8 land, check before fab"))
 d.add(pw, Part(_ref("D"), "Device:D_Schottky", "B560C", "Diode_SMD:D_SMC",
                {"K": "BUCK_SW", "A": "GND"}, lcsc=LCSC["B560C"]))
-R(pw, "57.6k", "5V_BUCK", "BUCK_FB")
-R(pw, "10.2k", "BUCK_FB", "GND")
+R(pw, "68k", "5V_BUCK", "BUCK_FB")
+R(pw, "12k", "BUCK_FB", "GND")
 R(pw, "13k", "BUCK_COMP", "BUCK_COMP_RC")
 C(pw, "6.8n", "BUCK_COMP_RC")
-C(pw, "39p", "BUCK_COMP", lcsc_key="C39p")
+C(pw, "47p", "BUCK_COMP")
 for _ in range(3):  # 47 uF 10 V 1206 is ~15-20 uF at 5 V; three restore TI's ~58 uF design
     C(pw, "47u", "5V_BUCK", fp=C1206)
 # 5 V diode-OR: car or USB
@@ -364,8 +368,8 @@ d.add(jb, Part(_ref("D"), "Device:D_Zener", "BZT52C33", "Diode_SMD:D_SOD-123",
                {"K": "CMP_VCC", "A": "GND"}, lcsc=LCSC["BZT52C33"]))
 C(jb, "100n", "CMP_VCC")
 R(jb, "10k", "J1850_P", "VPW_IN")
-# VPW threshold 5.32 V x 47 / 65 = 3.85 V (3.72-3.97 V over the buck's and the resistors' tolerance), the
-# middle of J1850's 3.5-4.25 V receive window. STN's 10 / 12.7 ratio is for a 5.0 V reference: on 5.32 V
+# VPW threshold 5.33 V x 47 / 65 = 3.86 V (3.73-3.98 V over the buck's and the resistors' tolerance), the
+# middle of J1850's 3.5-4.25 V receive window. STN's 10 / 12.7 ratio is for a 5.0 V reference: on 5.33 V
 # it gave 4.17 V nominal and up to 4.30 V (REVIEW 45). 18k / 47k draws 82 uA: the divider is on 5V_BUCK,
 # which stays up while the car is parked
 R(jb, "18k", "5V_BUCK", "VPW_REF")

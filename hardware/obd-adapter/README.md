@@ -4,19 +4,21 @@ Our own OBD-II adapter: STM32G474 (vehicle side) + ESP32 (Bluetooth Classic SPP,
 
 **Status:** generated, then verified: an STM32 pin check against ST's pin data, two independent datasheet audits and ngspice simulations. Every finding is fixed or accepted, see `verify/REVIEW.md`. Not yet reviewed by a human, not ordered. Read "Before ordering" below.
 
-**The main board is routed** (2026-11-10): 0 DRC errors, 0 unconnected pads, schematic and board agree. `gen/routing.json`, `obd-adapter.kicad_pcb`, `drc.rpt` and everything in `fab/` are that board, with the changes of 2026-11-09 in it (the buck loop, the parked-watch parts, the microSD, the mounting holes, `verify/REVIEW.md` rounds 5 to 7). The route is the autorouter's, finished by hand round the STM32; it has passed the rule check, not a person's eye.
+**The main board is routed** (2026-11-10): 0 DRC errors, 0 unconnected pads, schematic and board agree. `gen/routing.json`, `obd-adapter.kicad_pcb`, `drc.rpt` and everything in `fab/` are that board, with the changes of 2026-11-09 in it (the buck loop, the parked-watch parts, the microSD, the mounting holes, `verify/REVIEW.md` rounds 5 to 7). The route is the autorouter's, finished by hand round the STM32; it has passed the rule check, not a person's eye. Later the same day (`verify/REVIEW.md` round 8): the crystal's tracks and the CAN1 pair were re-laid by hand, and six BOM lines moved to parts from JLCPCB's no-fee libraries, which changed four values round the buck (RT 160k, feedback 68k / 12k, 47 pF on COMP).
 
 ## Files
 
 | Path | What |
 |---|---|
 | `gen/obd_adapter.py` | **The design.** Every part, its LCSC number and its pin-to-net map. Edit this, not the KiCad files. |
-| `gen/parts.py` | LCSC part numbers, checked against JLCPCB's parts library on 2026-11-02 and again on 2026-11-09. |
+| `gen/parts.py` | LCSC part numbers, checked against JLCPCB's parts library on 2026-11-02, 2026-11-09 and 2026-11-10. |
 | `gen/layout.py` | Board placement: fixed positions for the parts whose position matters, block regions for the rest. |
 | `gen/libdefs.py` | Project symbols KiCad doesn't ship (SOIC-8 N-MOSFET, TPS22918, CH340C, LIS2DH12), with the pinouts checked against the datasheets, and the two plug footprints (drawn by `gen/mklib.py`). |
 | `gen/build.py` | Regenerates everything (see below). |
 | `obd-adapter.kicad_sch` / `.kicad_pcb` | Generated KiCad 10 project. Open it in KiCad to review. |
-| `fab/` | Generated: Gerber zip, JLCPCB BOM + CPL, hand-fit list. |
+| `gen/plugprint.py` | Draws the 1:1 print of the plug's adapter board from its `.kicad_pcb` (run by `build.py fab`). |
+| `fab/` | Generated: Gerber zips, JLCPCB BOM + CPL, hand-fit list, and `obd-adapter-plug-rev0-print-1to1.pdf`, the sheet to try a bought plug on. |
+| `firmware/` | Bring-up firmware for the STM32 (bare-metal C, CMake + `arm-none-eabi-gcc`): reset-safe pins, clock, a serial console, battery voltage, I2C scan, CAN listen-only, K-line. Builds for the board and for a NUCLEO-G474RE; **not yet run on hardware**. See `firmware/README.md`. |
 | `verify/` | Pre-fab verification: `REVIEW.md` (every finding and its fix), the STM32 pin check, the ngspice sims and plots. |
 
 ```bash
@@ -44,8 +46,9 @@ The schematic and the board are generated from the same netlist, and `kicad-cli 
 **MCU: STM32G474RET6.** A 16 MHz crystal (for FDCAN timing), SWD on a 2x5 1.27 mm header, RESET / USER buttons, R/G/B LEDs and a 4-way `CONFIG` DIP switch (SW6): 1 ESP_ON, 2 / 3 the CAN1 / CAN2 120 Ω terminations, 4 BOOT0. All off in the car. VDDA / VREF+ are on 3V3 with their own 100 nF + 1 µF (no ferrite bead: the ADC only reads the battery divider). The USER button (PA15) and `KLINE_RX` (PC0) have no pull-up resistor; firmware uses the pins' own.
 
 **Power:** J1962 pin 16 → 2 A 60 V PTC (2920L200/60) → 5.0SMDJ26CA → LM74700 ideal diode + AO4264E → `VBAT_P` (with 47 µF bulk).
-- `VBAT_P` feeds a TPS54360B buck (60 V input; the datasheet's 600 kHz design with the output set to 5.32 V), then an SS34 diode-OR with USB VBUS (`5V` ≈ 4.9 V), then an AP2114H 3.3 V LDO (SOT-223).
-- The buck's EN divider is not fitted, so the internal UVLO keeps it running through a 6 V cold crank.
+- `VBAT_P` feeds a TPS54360B buck (60 V input; the datasheet's 600 kHz design with the output set to 5.33 V), then an SS34 diode-OR with USB VBUS (`5V` ≈ 4.9 V), then an AP2114H 3.3 V LDO (SOT-223).
+- The buck's EN divider is not fitted, so the internal UVLO keeps it running through a 6 V cold crank. A cycle-by-cycle simulation (`verify/sim/sim_buck_sw.py`, `verify/REVIEW.md` round 8) has `5V_BUCK` unmoved through that crank, regulating down to 5.6 V at the plug, with under 9 mV of ripple from 9 to 42 V and 131 mV of dip on a 0.1 to 1.0 A load step.
+- **To check on the first board:** the buck's SW node with 6 to 7 V on the plug and 0.5 to 1 A drawn from 5 V. Alternating pulse widths would mean the part's internal slope compensation (not published) is short for 8.2 µH at that duty cycle; a 10 or 15 µH inductor in the same footprint is the fix (`verify/REVIEW.md` #71).
 - The ESP32 has its own TPS22918 load switch, placed at the module's 3V3 pin. Its ON pin is a diode OR of `ESP_PWR_EN` (PB6, off at reset) and `VBUS2` (the ESP32's USB port), so plugging into J7 always powers the ESP32. CONFIG switch 1 (`ESP_ON`) also powers it without STM32 firmware, by pulling the PB6 net to 3V3 through 1k (R70); turn it off again for normal use. Firmware that drives PB6 low with the switch left on wastes 3.3 mA and the ESP32 stays off.
 - A 1k bleed (R69) holds `VBUS2` at ground while J7 is unplugged. Without it the reverse leakage of J7's SS34 (up to 0.4 mA in a hot car) raised the load switch's ON pin and the ESP32 switched itself on.
 - The ideal diode (U6 LM74700 driving Q1, an AO4264E 60 V FET) blocks a reversed battery and holds `VBAT_P` up through a negative pulse, for about 20 mV where a diode costs 0.3 V. A B560C Schottky in its place was tried on 2026-11-09 (three parts and 80 µA of parked current less) and taken out again: with the battery reversed its leakage pulled `VBAT_P` to −0.7 V at 100 °C, past the buck's −0.3 V rating, and it took 0.3 V off the cranking headroom (`verify/REVIEW.md` #54, `verify/sim/sim_input_d29.py`). The battery-voltage divider is ahead of it, on `VBAT_F`.
@@ -58,7 +61,7 @@ The schematic and the board are generated from the same netlist, and `kicad-cli 
 - **Supply:** LM317L with 240 / 680 / 470 Ω gives 7.24 V for VPW. A 2N7002 on `J1850_VSEL` (PB2) shorts the 470 Ω for 4.79 V (PWM).
 - **Bus+:** 2N7002 → AO3401A → Schottky, with a 10k + Schottky bus load.
 - **Bus−:** MMBT3904 sink with a 10k + Schottky pull-up to `5V_BUCK`.
-- **Receivers:** LM2901 on `CMP_VCC`, with 1N4148W input clamps. VPW compares Bus+ against 3.85 V (18k / 47k from `5V_BUCK`, the middle of the 3.5–4.25 V receive window). PWM compares Bus+ against Bus−. Both are active high, with 10k pull-ups to 3.3 V.
+- **Receivers:** LM2901 on `CMP_VCC`, with 1N4148W input clamps. VPW compares Bus+ against 3.86 V (18k / 47k from `5V_BUCK`, the middle of the 3.5–4.25 V receive window). PWM compares Bus+ against Bus−. Both are active high, with 10k pull-ups to 3.3 V.
 - **Timer:** everything is on TIM3 (CH1 VPW RX, CH2 PWM RX, CH3 / CH4 TX).
 - **No wave shaping.** Neither ELM, STN nor OpenDiag shapes the edges. SAE J1850 asks for about 0.24–0.37 V/µs; that is a Rev A experiment (an RC on the P-FET gate).
 
@@ -161,18 +164,19 @@ Pins 4 and 5 both go to GND. The ELM327 datasheet notes that a few vehicles have
    - The ideal-diode and buck values.
    - The plug's pin numbering (`lib/OCTAVE.pretty/J1962_Plug_Adapter` and `J1962_Edge_Joint`: pin 1 top right on the plug's mating face, 9–16 on the main board's top side).
 2. **Check the footprints marked in `gen/obd_adapter.py`:**
-   - The Sunlord SWPA8065S inductor uses the Changjiang FNR8065S land. The audit found it matches KiCad's own Sunlord 8x8 land; its saturation current is 4.2 A (`verify/REVIEW.md` #24).
-   - **The plug against a real one.** Buy the plug first and lay it on a 1:1 print of the adapter board. Check the 0.8 × 1.8 mm blade tails go into the 2.6 × 1.3 mm slots on the 4.00 × 8.60 mm grid, that pin 1 lands on the rounded-square pad and the plug's D shape matches the outline on the silkscreen, and that the plug's flange sits flat on the adapter with the main board's tab in the slot. The tab is 1.3 mm deep and should end inside the slot, 0.3 mm below the adapter's front face (0.14 mm on an adapter at the thin end of its tolerance): the recess in the back of the plug looks narrower than the tab (about 31.7 mm scaled off the drawing, against 33.8 mm), so the tab must not reach it.
+   - The Sunlord SWPA8065S inductor uses the Changjiang FNR8065S land. The audit found it matches KiCad's own Sunlord 8x8 land; its saturation current is 4.2 A (`verify/REVIEW.md` #24), against a simulated peak of 2.2 A.
+   - **The plug against a real one.** Buy the plug first and try it on `fab/obd-adapter-plug-rev0-print-1to1.pdf`, a 1:1 print of the adapter board (US Letter or A4, printed at 100 %; measure its 50 mm bar before trusting it). The sheet lists six checks. In short: check the 0.8 × 1.8 mm blade tails go into the 2.6 × 1.3 mm slots on the 4.00 × 8.60 mm grid, that pin 1 lands on the rounded-square pad and the plug's D shape matches the outline on the silkscreen, and that the plug's flange sits flat on the adapter with the main board's tab in the slot. The tab is 1.3 mm deep and should end inside the slot, 0.3 mm below the adapter's front face (0.14 mm on an adapter at the thin end of its tolerance): the recess in the back of the plug looks narrower than the tab (about 31.7 mm scaled off the drawing, against 33.8 mm), so the tab must not reach it.
 3. **Check part rotations in JLCPCB's placement preview.** KiCad and JLC disagree on the zero rotation of some packages (SOT-23, SOIC, the USB-C).
-4. **Recheck stock on order day.** The STM32G474RET6 had 112 in stock on 2026-11-09 (20, then 186, on 2026-11-02). Fallback: STM32G474RBT6 (128 KB flash), C529413. Low stock elsewhere: the 8.2 µH inductor (631), ATECC608B (794), AP2114H (2.9k), 5.0SMDJ26CA (4k).
+4. **Recheck stock on order day.** Every BOM line was in stock on 2026-11-10. The STM32G474RET6 had 289 (112 on 2026-11-09; 20, then 186, on 2026-11-02). Fallback: STM32G474RBT6 (128 KB flash), C529413. Low stock elsewhere: the 8.2 µH inductor (631), AP2114H (676), ATECC608B (783), LM2901 (1.7k), TCAN1044V (1.9k), the 33 V zener (2.9k), 5.0SMDJ26CA (3.9k).
 5. **Confirm the J1850 PWM high-level limit** (5.25 V assumed, `verify/REVIEW.md` #10 and #32) against SAE J1850 if you have it.
 6. Through-hole parts (the OBD-II plug, pin headers) need JLC's through-hole option or hand soldering; see `fab/*-hand-fit.txt`. Order the adapter board (`fab/obd-adapter-plug-rev0-gerbers.zip`, 2 layers, 1.6 mm) in the same cart; the main board must be 1.6 mm too, or the tab won't fit its slot.
 7. **Look at the copper in KiCad.** The route passes DRC with schematic parity (0 errors, 0 unconnected, 0 parity issues, 0 courtyard overlaps), but DRC does not judge quality. Worth a look:
    - The buck's switch node and input loop (hand-laid in `gen/prewire.py`).
    - The USB pairs. J2's run 52 / 48 mm with 2 vias each, J7's 30 / 24 mm with 5 and 2 vias. Both are full speed (12 Mbit/s), where a few millimetres of skew does not matter.
    - The plug's edge pads and the copper behind them.
-   - The crystal's tracks (`HSE_IN` 9 mm, `HSE_OUT` 18 mm).
-   - The nets the router made a meal of: `CAN1_L` (95 mm, 11 vias, against 52 mm and 4 for `CAN1_H`), `J1850_VSEL` (14 vias), `ESP_RTS` (5 vias) and `EXP_PC10` (104 mm round the ESP32 to the header). All legal, and all slow enough not to care, except that the CAN1 pair is not a pair for half its length: fine on a bench at 500 kbit/s, the first thing to tidy if CAN FD at 2 Mbit/s or more misbehaves.
+   - The crystal's tracks (`HSE_IN` 8.7 mm, `HSE_OUT` 9.0 mm, both on the top side with no vias since round 8).
+   - The nets the router made a meal of: `J1850_VSEL` (115 mm, 14 vias), `ESP_RTS` (6 vias) and `EXP_PC10` (105 mm round the ESP32 to the header). All legal, and all slow enough not to care.
+   - The CAN1 pair. From the plug to the transceiver (U9) both lines run about 26 mm; `CAN1_L` crosses to the bottom once (2 vias), because the battery trace and C19 close the top side to it. The totals (`CAN1_L` 94 mm with 9 vias, `CAN1_H` 52 mm with 4) are mostly the branches to the termination switch (SW6) and to the ESD diode D8, which hangs on a 16 mm stub past U9 where CAN2's D9 sits in line. A stub that short is harmless at CAN FD rates; Rev A should put D8 between the plug and U9 anyway.
 8. **The 8 DRC warnings that remain** are cosmetic: the outlines of the two USB-C sockets run off the board edge (4), the reference text of R54, C44 and C45 touches its own part's outline (3), and U4's footprint differs from the library copy (the tented ground pad, on purpose). One label, R22, has no clear spot and sits where it can. To move labels, do it in KiCad and copy the positions into `LABELS` in `gen/layout.py`, or the next `build.py pcb` puts them back.
 
 **How the board is routed** (`build.py route`):
@@ -189,6 +193,14 @@ Pins 4 and 5 both go to GND. The ELM327 datasheet notes that a few vehicles have
 - **Battery-side clearance.** `obd-adapter.kicad_dru` (generated) makes KiCad's DRC and interactive router enforce the battery-side clearance too.
 - **Freerouting is not deterministic.** A fresh route gives a different layout, and on this board it needs connections finished by hand before `build.py freeze`. Run the full `build.py route` DRC on the result: a DRC on a scratch copy with stale pours hides real errors among the false ones.
 
+## Firmware and the bench
+
+`firmware/` is where the STM32's firmware starts: a bring-up skeleton, not an ELM327 replacement. It applies the "Firmware obligations" of `verify/REVIEW.md` as a pin table (`firmware/src/safe_pins.c`), takes its pin map from `gen/obd_adapter.py` (`firmware/tools/gen_pins.py`, checked by its tests), and never transmits on CAN. It compiles without warnings for two targets and its host tests pass; nothing has run on a chip yet.
+
+- **Before the boards arrive:** a NUCLEO-G474RE (same chip, ST-LINK on board) runs the `nucleo` target, so the clock, console, ADC, I2C and CAN-listen code can be proven first. `can listen` on it needs a 3.3 V CAN transceiver breakout.
+- **On Rev 0 the console is USART1 on J5** (pin 5 TX, pin 6 RX, 3.3 V), and J5 is not fitted. Until the firmware has a USB serial port on J2 (its next step), solder J5 or three wires and use a 3.3 V USB serial adapter.
+- **The car side on the bench:** an OBD-II female breakout or extension cable into the plug, and 12 V on pin 16: CAN and J1850 have no supply on USB power alone.
+
 ## Parked current
 
 The board stays on with the engine off (J1962 pin 16 is unswitched battery): the STM32 sleeps and watches the accelerometer, the panic button and the buses. Estimate from datasheet typical values at 12.6 V, 25 °C, with the ESP32 and `DLC_SW` off, both CAN transceivers in standby and the STM32 in Stop 1. The buck's Eco-mode switching is assumed 75 % efficient. **Measure it on the first board.**
@@ -199,14 +211,14 @@ The board stays on with the engine off (J1962 pin 16 is unswitched battery): the
 | Battery-voltage divider (100k / 10k) | battery | 115 µA |
 | TPS54360B, not switching | battery | 146 µA |
 | AP2114H LDO ground current | 5 V | 65 µA |
-| Buck feedback divider (57.6k / 10.2k) | 5 V | 78 µA |
+| Buck feedback divider (68k / 12k) | 5 V | 67 µA |
 | VPW threshold divider (18k / 47k) | 5 V | 82 µA |
 | STM32G474 Stop 1 (ST's figure, RTC off) | 3.3 V | ~80 µA |
 | Two TCAN1044V in standby (VIO) | 3.3 V | 17 µA |
 | W25Q128 standby, LIS2DH12 at 10 Hz, ATECC608B asleep, TPS22918 off | 3.3 V | ~14 µA |
 | **Total from the battery** | | **≈ 0.53 mA (0.38 Ah / 30 days)** |
 
-- The VPW threshold divider was 2.7k / 10k (420 µA, ~0.72 mA in total), then 13k / 47k. It is 18k / 47k now: 82 µA and a 3.85 V threshold. The earlier ratios gave 4.17–4.19 V on the 5.32 V rail (`verify/REVIEW.md` #45).
+- The VPW threshold divider was 2.7k / 10k (420 µA, ~0.72 mA in total), then 13k / 47k. It is 18k / 47k now: 82 µA and a 3.86 V threshold on the 5.33 V rail. The earlier ratios gave 4.17–4.19 V (`verify/REVIEW.md` #45).
 - STM32 Standby instead of Stop 1, and the flash in power-down, would only save about 0.05 mA. Stop 1 keeps RAM and wakes on any EXTI pin, so the accelerometer can stay on PC14.
 - With the ESP32 on: about 2 mA from the battery while it advertises over BLE (~3 mA average at 3.3 V; the LDO is linear, so 3.3 V current costs about half that from 12.6 V), about 70 mA while Wi-Fi receives the phone's recordings.
 - For scale: cheap ELM327 dongles draw 10–60 mA all the time; a car's own parked drain is typically 20–50 mA.
