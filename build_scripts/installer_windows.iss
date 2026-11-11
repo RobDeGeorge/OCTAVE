@@ -115,8 +115,39 @@ begin
   RegDeleteKeyIncludingSubkeys(HKLM32, UninstallKey);
 end;
 
+// The adb server OCTAVE starts for a phone outlives the app (adb's own habit)
+// and keeps platform-tools\adb.exe and its two DLLs open: an uninstall then
+// left those three files and a running adb behind (0.9.6-rc5), and an upgrade
+// could not replace them. Stop it first. Only the adb in this folder, by its
+// path: `adb kill-server` would also end a server another SDK's adb started.
+procedure StopBundledAdb;
+var
+  Adb: String;
+  ResultCode: Integer;
+begin
+  Adb := ExpandConstant('{app}\platform-tools\adb.exe');
+  if not FileExists(Adb) then
+    Exit;
+  // The path goes into a single-quoted PowerShell string
+  StringChangeEx(Adb, '''', '''''', True);
+  Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+       '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Get-Process adb -ErrorAction SilentlyContinue'
+       + ' | Where-Object { $_.Path -eq ''' + Adb + ''' } | Stop-Process -Force -PassThru'
+       + ' | Wait-Process -Timeout 5 -ErrorAction SilentlyContinue"',
+       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssInstall then
+  begin
     MigrateOld32BitInstall;
+    StopBundledAdb;
+  end;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usUninstall then
+    StopBundledAdb;
 end;

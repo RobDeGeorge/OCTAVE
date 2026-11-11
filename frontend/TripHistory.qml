@@ -921,10 +921,12 @@ Item {
                                     var v = hi - (span * k) / 4
                                     ctx.fillText(Number(v).toFixed(span < 5 ? 1 : 0), left - 4, top + (h * k) / 4)
                                 }
-                                ctx.textAlign = "center"
                                 ctx.textBaseline = "top"
                                 for (var x = 0; x <= 4; x++) {
                                     var t = t0 + ((t1 - t0) * x) / 4
+                                    // The last one ends at the plot's edge: centred on
+                                    // it, its right half fell outside the canvas
+                                    ctx.textAlign = x === 4 ? "right" : "center"
                                     ctx.fillText(tripHistoryPage.fmtClock(t), X(t), top + h + 4)
                                 }
 

@@ -227,7 +227,15 @@ QString PhoneMirrorManager::runAdb(const QStringList &args, int timeoutMs) const
     proc.setProcessChannelMode(QProcess::MergedChannels);
     ScrcpyClient::hideConsoleWindow(&proc);
     proc.start(m_adbPath, args);
-    if (!proc.waitForFinished(timeoutMs) || proc.exitCode() != 0)
+    if (!proc.waitForFinished(timeoutMs)) {
+        // End it here: left to ~QProcess it is killed all the same, with
+        // "QProcess: Destroyed while process is still running" in the log
+        // (0.9.6-rc5, Windows, an adb held up by the firewall prompt)
+        proc.kill();
+        proc.waitForFinished(1000);
+        return {};
+    }
+    if (proc.exitCode() != 0)
         return {};
     return QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
 }

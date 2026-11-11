@@ -565,9 +565,13 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignHCenter
-                        // Portrait: spread the keys across more of the page width
+                        // Portrait: spread the keys across more of the page width.
+                        // From the container's width (the column is that less its
+                        // two margins), not the column's own: a spacing that follows
+                        // the width the layout is just handing out makes it start
+                        // over ("Detected recursive rearrange")
                         spacing: mediaControlsGrid.portrait
-                            ? Math.max(App.Spacing.mediaRoomBetweenButton, mediaControlsColumn.width * 0.07)
+                            ? Math.max(App.Spacing.mediaRoomBetweenButton, (mediaControlsContainer.width - dp(40)) * 0.07)
                             : App.Spacing.mediaRoomBetweenButton
 
                         // Portrait: shuffle joins this row (it is reparented
