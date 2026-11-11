@@ -319,7 +319,8 @@ OCTAVE stands on a lot of other people's work.
 | [TagLib](https://taglib.org/) | Reading tags and embedded album art |
 | [FFmpeg](https://ffmpeg.org/) (libavcodec, libavutil) | Decoding the phone mirror's H.264 stream |
 | [SQLite](https://sqlite.org/) | The black box (compiled in from `third_party/sqlite/`) |
-| [libplist](https://libimobiledevice.org/), [OpenSSL](https://www.openssl.org/) | The AirPlay receiver (Linux), with FFmpeg |
+| [OpenSSL](https://www.openssl.org/) | The built-in Android Auto receiver's encryption; the AirPlay receiver |
+| [libplist](https://libimobiledevice.org/) | The AirPlay receiver (Linux), with FFmpeg and OpenSSL |
 | [CMake](https://cmake.org/) | Build system |
 
 **Python helper tools (optional, `requirements.txt`)**

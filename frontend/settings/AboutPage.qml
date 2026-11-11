@@ -291,6 +291,9 @@ Flickable {
                             all.push({ name: "UxPlay (AirPlay library)", license: "GPL-3.0; parts LGPL-2.1+ and MIT", use: "The AirPlay receiver" })
                             all.push({ name: "libplist", license: "LGPL-2.1+", use: "AirPlay's property lists" })
                         }
+                        if ((typeof androidAutoManager !== "undefined" && androidAutoManager.nativeAvailable)
+                                || (typeof airPlayManager !== "undefined" && airPlayManager.available))
+                            all.push({ name: "OpenSSL", license: "Apache-2.0", use: "The built-in Android Auto receiver's encryption, and AirPlay's" })
                         all.push({ name: "FFmpeg (inside Qt Multimedia)", license: "LGPL-2.1+; GPL-2.0+ in the aarch64 AppImage (Ubuntu's build)", use: "Playing local music" })
                         all.push({ name: "Android platform-tools (adb)", license: "Apache-2.0", use: "Talking to the phone (bundled in releases)" })
                     } else {

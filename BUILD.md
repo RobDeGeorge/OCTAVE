@@ -130,7 +130,7 @@ Outputs: `build/octave.app`. CI runs `macdeployqt dist/OCTAVE.app -qmldir=fronte
 
 ### Windows
 
-CI uses **vcpkg** to provide `taglib` and `ffmpeg[core,avcodec]` and pins Qt 6.7.3 via `jurplel/install-qt-action`.
+CI uses **vcpkg** to provide `taglib`, `ffmpeg[core,avcodec]` and `openssl` (the built-in Android Auto receiver; without it the receiver is left out, or CMake finds some other OpenSSL on the machine whose DLLs you then have to ship yourself) and pins Qt 6.7.3 via `jurplel/install-qt-action`.
 
 > **Linux aarch64:** CI builds an `OCTAVE-<v>-linux-aarch64.AppImage` on an arm64 runner against the same
 > Qt 6.7.3 (`cpp-build-linux-arm64`), for Orange Pi / Raspberry Pi class dash hardware. Google ships no
@@ -445,5 +445,7 @@ venv/bin/ruff check .
 | Android SDK platform | 33 (`platforms;android-33`; the phone-server job uses 36) |
 | Android Build-Tools | 33.0.2 (phone-server job: 36.0.0, JDK 21) |
 | CMake | 3.21+ (latest stable in CI) |
+
+Every desktop package carries Qt's `offscreen` platform plugin beside the native one (`--headless` and exec frontends run on it; the deploy tools leave it out unless told): `EXTRA_PLATFORM_PLUGINS=libqoffscreen.so` in `packaging/linux/build-appimage.sh`, `qoffscreen.dll` copied into `platforms\`, `libqoffscreen.dylib` copied into the bundle before `macdeployqt -executable=…`. Each desktop job then runs the packaged app with `--headless --sim --smoke` (`packaging/smoke-sim.sh`; PowerShell on Windows) with the runner's own Qt removed from the environment, so a package that only works beside an installed Qt fails there.
 
 If a local build matches the pinned versions above, the same commands will produce the same artifacts as CI. Releases are cut on `v*` tag push and attach all five artifacts (`.exe`, `.dmg`, two AppImages, `.apk`) to a single GitHub Release.

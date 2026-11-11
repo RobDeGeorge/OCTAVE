@@ -18,7 +18,14 @@ shift
 # Nothing of the runner's own config is read or written
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-export HOME="$TMP" XDG_CONFIG_HOME="$TMP" XDG_DATA_HOME="$TMP" XDG_CACHE_HOME="$TMP" QT_QPA_PLATFORM=offscreen
+export HOME="$TMP" XDG_CONFIG_HOME="$TMP" XDG_DATA_HOME="$TMP" XDG_CACHE_HOME="$TMP"
+# ... nor of its Qt. install-qt-action exports QT_PLUGIN_PATH and
+# QML2_IMPORT_PATH; 0.9.6-rc1's AppImage found there the offscreen platform
+# plugin it did not carry, so this step passed and --headless aborted on
+# every other machine. The app picks the offscreen platform itself, as it
+# does for a user.
+unset QT_PLUGIN_PATH QML2_IMPORT_PATH QML_IMPORT_PATH QT_QPA_PLATFORM QT_QPA_PLATFORM_PLUGIN_PATH \
+      LD_LIBRARY_PATH DYLD_LIBRARY_PATH DYLD_FRAMEWORK_PATH
 ARGS=(--headless --sim --smoke --service 0 "$@")
 case "$BIN" in
     *.AppImage) ARGS=(--appimage-extract-and-run "${ARGS[@]}") ;;   # no FUSE needed
@@ -26,8 +33,16 @@ esac
 
 echo "==> $BIN ${ARGS[*]}"
 set +e
-timeout 90 "$BIN" "${ARGS[@]}" > "$TMP/out.log" 2>&1
-code=$?
+if command -v timeout > /dev/null 2>&1; then
+    timeout 90 "$BIN" "${ARGS[@]}" > "$TMP/out.log" 2>&1
+    code=$?
+else
+    # macOS has no timeout(1) (0.9.6-rc2's macOS job stopped here with 127).
+    # perl's alarm outlives the exec; SIGALRM ends the app with 128 + 14.
+    perl -e 'alarm shift; exec @ARGV or exit 127' 90 "$BIN" "${ARGS[@]}" > "$TMP/out.log" 2>&1
+    code=$?
+    [ "$code" -eq 142 ] && code=124
+fi
 set -e
 if [ "$code" -ne 0 ]; then
     echo "::error::$(basename "$BIN") --headless --sim --smoke exited with $code (124 = did not exit within 90 s)"

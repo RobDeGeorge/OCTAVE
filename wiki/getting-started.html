@@ -212,7 +212,7 @@ cmake --build build -j
         <p>
           Install Visual Studio 2022 with the "Desktop development with C++" workload, Qt 6.7.3 for MSVC from the Qt
           online installer, and <a href="https://vcpkg.io">vcpkg</a> for TagLib and FFmpeg
-          (<code>vcpkg install taglib:x64-windows "ffmpeg[core,avcodec]:x64-windows"</code>, as CI does). Then, in PowerShell:
+          (<code>vcpkg install taglib:x64-windows "ffmpeg[core,avcodec]:x64-windows" openssl:x64-windows</code>, as CI does). Then, in PowerShell:
         </p>
         <pre><code>cmake -S . -B build `
   -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `

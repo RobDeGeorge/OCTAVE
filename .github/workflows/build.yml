@@ -260,11 +260,15 @@ jobs:
         shell: bash
         run: python scripts/fetch_platform_tools.py --os windows
 
-      - name: Install TagLib and FFmpeg (vcpkg)
+      - name: Install TagLib, FFmpeg and OpenSSL (vcpkg)
         shell: bash
         run: |
-          # ffmpeg[avcodec] provides the H.264 decoder for the built-in phone-mirror client
-          "$VCPKG_INSTALLATION_ROOT/vcpkg" install taglib:x64-windows "ffmpeg[core,avcodec]:x64-windows"
+          # ffmpeg[avcodec] provides the H.264 decoder for the built-in phone-mirror client.
+          # openssl is the TLS of the built-in Android Auto receiver. The runner
+          # image has an OpenSSL of its own that CMake finds when vcpkg has none:
+          # 0.9.6-rc1 linked it, no libssl / libcrypto DLL was shipped and the
+          # deploy step refused the package. From vcpkg, resolve_dlls.py copies them.
+          "$VCPKG_INSTALLATION_ROOT/vcpkg" install taglib:x64-windows "ffmpeg[core,avcodec]:x64-windows" openssl:x64-windows
 
       - name: Configure CMake
         shell: bash
@@ -300,6 +304,9 @@ jobs:
           mkdir -p dist/OCTAVE/platform-tools
           cp tools/platform-tools/windows/* dist/OCTAVE/platform-tools/
           windeployqt --qmldir frontend --release dist/OCTAVE/octave.exe
+          # The offscreen platform plugin beside qwindows.dll: --headless and an
+          # exec frontend as the screen run on it, and windeployqt leaves it out.
+          cp "$(cygpath -u "$QT_ROOT_DIR")/plugins/platforms/qoffscreen.dll" dist/OCTAVE/platforms/
           # Visual C++ runtime, deployed app-local (Microsoft supports this for
           # the CRT DLLs). windeployqt only adds vc_redist when the MSVC
           # environment is set, which this bash step does not have, so the
@@ -317,6 +324,8 @@ jobs:
           python -m pip install --quiet pefile
           python packaging/windows/resolve_dlls.py dist/OCTAVE \
             "$VCPKG_INSTALLATION_ROOT/installed/x64-windows/bin" "$QT_ROOT_DIR/bin"
+          # The built-in Android Auto receiver's OpenSSL, from vcpkg (see the install step)
+          ls -l dist/OCTAVE/libssl-*.dll dist/OCTAVE/libcrypto-*.dll
           # The QML frontend, loaded at runtime from <appDir>/frontend (main.cpp),
           # exactly like the AppImage's usr/frontend. Never shipped before 0.9.4:
           # the installed app could not find Main.qml and exited.
@@ -333,6 +342,9 @@ jobs:
           # can mask a missing DLL, and require Main.qml to load (--smoke exits 0
           # after 5 s). A loader error dialog never exits, hence the timeout.
           $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          # ... and without the Qt variables install-qt-action exports, which
+          # point a packaged app at the runner's plugins and QML modules.
+          foreach ($v in "QT_PLUGIN_PATH", "QML2_IMPORT_PATH", "QML_IMPORT_PATH", "QT_QPA_PLATFORM_PLUGIN_PATH") { Remove-Item "Env:$v" -ErrorAction SilentlyContinue }
           $p = Start-Process -FilePath "dist\OCTAVE\OCTAVE.exe" -ArgumentList "--smoke" -PassThru
           $ok = $p.WaitForExit(90000)
           $logs = Join-Path $env:APPDATA "OCTAVE\logs"
@@ -367,8 +379,11 @@ jobs:
           # exits 0 after 5 s). packaging/smoke-sim.sh does this on Linux and
           # macOS; the log lines required are the ones only a working
           # simulated car and service produce.
+          # Nothing of the runner's Qt, and no QT_QPA_PLATFORM: the app picks
+          # the offscreen platform itself and must find it in its own folder
+          # (0.9.6-rc1's AppImage did not carry it; the runner's Qt hid that).
           $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
-          $env:QT_QPA_PLATFORM = "offscreen"
+          foreach ($v in "QT_PLUGIN_PATH", "QML2_IMPORT_PATH", "QML_IMPORT_PATH", "QT_QPA_PLATFORM_PLUGIN_PATH", "QT_QPA_PLATFORM") { Remove-Item "Env:$v" -ErrorAction SilentlyContinue }
           $log = Join-Path $env:RUNNER_TEMP "sim-smoke.log"
           $p = Start-Process -FilePath "dist\OCTAVE\OCTAVE.exe" -ArgumentList "--headless --sim --smoke --service 0" -PassThru -NoNewWindow -RedirectStandardError $log
           $ok = $p.WaitForExit(90000)
@@ -451,11 +466,24 @@ jobs:
           # adb inside the bundle so phone mirroring needs no user install
           mkdir -p dist/OCTAVE.app/Contents/Resources/platform-tools
           cp tools/platform-tools/darwin/* dist/OCTAVE.app/Contents/Resources/platform-tools/
-          macdeployqt dist/OCTAVE.app -qmldir=frontend -dmg
+          # The offscreen platform plugin beside cocoa: --headless and an exec
+          # frontend as the screen run on it, and macdeployqt leaves it out.
+          mkdir -p dist/OCTAVE.app/Contents/PlugIns/platforms
+          cp "$QT_ROOT_DIR/plugins/platforms/libqoffscreen.dylib" dist/OCTAVE.app/Contents/PlugIns/platforms/
+          macdeployqt dist/OCTAVE.app -qmldir=frontend \
+            -executable=dist/OCTAVE.app/Contents/PlugIns/platforms/libqoffscreen.dylib -dmg
           # The only FFmpeg in the bundle is Qt's own (LGPL, for media playback);
           # OCTAVE links the static decoder. No codec libraries belong here.
           bad="$(ls dist/OCTAVE.app/Contents/Frameworks | grep -E '^lib(x264|x265|xvidcore|SvtAv1|aom|vpx|mp3lame|dav1d)' || true)"
           if [ -n "$bad" ]; then echo "::error::App bundle carries $bad"; exit 1; fi
+          # TagLib and OpenSSL (the built-in Android Auto receiver) come from
+          # Homebrew: macdeployqt must have copied them into the bundle and
+          # pointed the binary at the copies, or the app only starts on a Mac
+          # that has the same Homebrew packages.
+          otool -L dist/OCTAVE.app/Contents/MacOS/octave
+          ls dist/OCTAVE.app/Contents/Frameworks | grep -E '^lib' || true
+          left="$(otool -L dist/OCTAVE.app/Contents/MacOS/octave | awk 'NR>1 {print $1}' | grep -E '^(/opt/homebrew|/usr/local|/Users)/' || true)"
+          if [ -n "$left" ]; then echo "::error::octave still loads from the build machine: $left"; exit 1; fi
           # Rename to the unified scheme: OCTAVE-<version>-macos.dmg.
           # Workflow runs on tag pushes only, so GITHUB_REF_NAME is always vX.Y.
           VERSION="${GITHUB_REF_NAME#v}"

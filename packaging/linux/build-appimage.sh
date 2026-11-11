@@ -206,6 +206,11 @@ cd "$REPO_ROOT"
 export QML_SOURCES_PATHS="$APPDIR/usr/frontend"
 # Skip linuxdeploy's auto-AppRun (we wrote our own with the right QML paths).
 export DEPLOY_PLATFORM_THEMES=1
+# The offscreen platform plugin beside xcb: --headless and an exec frontend
+# as the screen run on it (src/main.cpp). linuxdeploy-plugin-qt deploys only
+# xcb by itself, and 0.9.6-rc1's AppImage aborted on --headless ("Could not
+# find the Qt platform plugin offscreen").
+export EXTRA_PLATFORM_PLUGINS="libqoffscreen.so"
 
 OUTPUT_NAME="OCTAVE-${VERSION}-linux-${ARCH}.AppImage"
 
@@ -220,6 +225,11 @@ echo "==> Running linuxdeploy"
     $TAGLIB_ARG \
     --plugin qt \
     --output appimage
+
+if [ ! -f "$APPDIR/usr/plugins/platforms/libqoffscreen.so" ]; then
+    echo "ERROR: the AppImage has no offscreen platform plugin (usr/plugins/platforms): --headless would abort"
+    exit 1
+fi
 
 # linuxdeploy writes <Name>-<arch>.AppImage in cwd; rename to include version.
 mkdir -p "$DIST_DIR"
