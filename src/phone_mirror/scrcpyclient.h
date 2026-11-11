@@ -74,6 +74,9 @@ public:
     // On Windows, keep adb from flashing a console window (CREATE_NO_WINDOW);
     // no-op elsewhere. Shared with PhoneMirrorManager.
     static void hideConsoleWindow(QProcess *proc);
+    // Ends a helper (adb) that overran its time and stays until it is gone,
+    // so the QProcess can be destroyed. Shared with PhoneMirrorManager.
+    static void endOverdue(QProcess *proc);
     // adb serial of a phone reached over the network ("ip:port" from adb
     // connect, or an mDNS "adb-…._adb-tls-connect._tcp" name) rather than USB.
     static bool isNetworkSerial(const QString &serial);

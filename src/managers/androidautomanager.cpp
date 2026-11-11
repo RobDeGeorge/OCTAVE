@@ -315,6 +315,19 @@ QString AndroidAutoManager::findAdbPath() const
 
 // ─── ADB helpers ─────────────────────────────────────────────────────
 
+// An adb that overran its time is ended here and waited for. Returning with
+// it running left the kill to ~QProcess, which also waits (up to 30 s) and
+// logs "QProcess: Destroyed while process ... is still running". 10 s, as
+// ScrcpyClient::endOverdue(): on Windows 1 s was not always enough.
+static void endOverdueAdb(QProcess &proc)
+{
+    if (proc.state() == QProcess::NotRunning)
+        return;
+    proc.kill();
+    if (!proc.waitForFinished(10000))
+        qCWarning(lcAndroidAuto) << "adb" << proc.arguments().value(0) << "is still running 10 s after it was killed";
+}
+
 QString AndroidAutoManager::runAdb(const QStringList &args, int timeoutMs) const
 {
     QString adb = findAdbPath();
@@ -332,8 +345,10 @@ QString AndroidAutoManager::runAdb(const QStringList &args, int timeoutMs) const
 #endif
     proc.start();
 
-    if (!proc.waitForFinished(timeoutMs))
+    if (!proc.waitForFinished(timeoutMs)) {
+        endOverdueAdb(proc);
         return {};
+    }
 
     return QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
 }
@@ -430,6 +445,7 @@ bool AndroidAutoManager::setupAdbForward()
 
     if (!proc.waitForFinished(10000)) {
         qCWarning(lcAndroidAuto) << "ADB forward timed out";
+        endOverdueAdb(proc);
         return false;
     }
 

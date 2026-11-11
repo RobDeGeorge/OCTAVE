@@ -547,7 +547,7 @@ Windows: shutdown /s /t 5</code></pre>
               <tr><td><code>applySelfUpdate()</code></td><td>--</td><td>Begin the git self-update pipeline after re-checking the preconditions</td></tr>
               <tr><td><code>restartApp()</code></td><td>--</td><td>Restart the OCTAVE application</td></tr>
               <tr><td><code>shutdown_device()</code></td><td>--</td><td>Shut down the host OS and quit OCTAVE</td></tr>
-              <tr><td><code>cleanup()</code></td><td>--</td><td>Stop timers and kill any running git / network-name process at exit</td></tr>
+              <tr><td><code>cleanup()</code></td><td>--</td><td>Stop timers and kill every helper process still running (git, network name, Ethernet) at exit</td></tr>
             </tbody>
           </table>
         </section>
@@ -578,7 +578,9 @@ ctx-&gt;setContextProperty(<span class="str">"networkManager"</span>, &amp;netwo
           <p>
             <code>cleanup()</code> is called from the <code>aboutToQuit</code> handler in <span class="file-path">src/main.cpp</span>
             (and from the destructor). It stops both timers and kills and waits (3&nbsp;s each) on any still-running
-            self-update git/cmake process or network-name process.
+            self-update git/cmake process, then on every other helper process the manager owns (the network-name
+            query, the Ethernet query it starts, the one-line git queries), each disconnected first so that ending
+            one starts no other. None is left to be destroyed while it runs.
           </p>
 
           <h3>Timers Summary</h3>

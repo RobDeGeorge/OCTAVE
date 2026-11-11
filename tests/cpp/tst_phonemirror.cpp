@@ -486,6 +486,35 @@ private slots:
         QCOMPARE(changes, QStringList{"unauthorized"});
     }
 
+    // An adb that overruns its time is ended and waited for where it was
+    // started: one still running when its QProcess goes logs "QProcess:
+    // Destroyed while process ... is still running" (0.9.6-rc5 / rc6, Windows)
+    void anOverdueAdbIsEndedBeforeItsProcessObjectGoes()
+    {
+        PhoneMirrorManager m;
+        m.m_adbPath = kFakeAdb;
+        gate(true);   // `adb devices` hangs
+        static QStringList warnings;
+        warnings.clear();
+        const QtMessageHandler previous = qInstallMessageHandler(
+            [](QtMsgType type, const QMessageLogContext &, const QString &text) {
+                if (type == QtWarningMsg)
+                    warnings << text;
+            });
+        QElapsedTimer t;
+        t.start();
+        int code = 0;
+        const QString full = m.runAdbFull({QStringLiteral("devices")}, 150, &code);
+        const QString plain = m.runAdb({QStringLiteral("devices")}, 150);
+        const qint64 took = t.elapsed();
+        qInstallMessageHandler(previous);
+        gate(false);
+        QCOMPARE(code, -1);
+        QVERIFY(full.isEmpty() && plain.isEmpty());
+        QVERIFY2(took < 3000, qPrintable(QString::number(took)));
+        QVERIFY2(warnings.isEmpty(), qPrintable(warnings.join(QLatin1Char('\n'))));
+    }
+
     void startWithoutPhoneReportsOffTheGuiThread()
     {
         PhoneMirrorManager m;

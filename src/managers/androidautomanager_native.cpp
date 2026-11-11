@@ -59,8 +59,13 @@ QString adbOutput(const QString &adb, const QStringList &args, int timeoutMs, bo
 #endif
     proc.start();
     const bool done = proc.waitForFinished(timeoutMs);
-    if (!done)
+    if (!done) {
+        // ... and stay until it is gone: destroyed while still going, the
+        // QProcess kills it again and logs "Destroyed while process ... is
+        // still running" (10 s as ScrcpyClient::endOverdue())
         proc.kill();
+        proc.waitForFinished(10000);
+    }
     if (ok)
         *ok = done && proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0;
     const QByteArray out = proc.readAllStandardOutput();

@@ -523,9 +523,22 @@ void NetworkManager::cleanup()
         m_connectivityProcess->kill();
         m_connectivityProcess->waitForFinished(3000);
     }
-    if (m_networkNameProcess) {
-        m_networkNameProcess->kill();
-        m_networkNameProcess->waitForFinished(3000);
+    // Every other helper: the network name query, the Ethernet query it
+    // starts when it has no Wi-Fi name, the one-line git queries (the last
+    // two are held by no member). Cut off from this object first: on Windows
+    // the name query's handler starts the Ethernet one even when the query
+    // was killed. One left running is destroyed with the manager:
+    // `QProcess: Destroyed while process ("netsh") is still running.`
+    // (0.9.6-rc6, Windows, at quit)
+    const QList<QProcess *> helpers = findChildren<QProcess *>(QString(), Qt::FindDirectChildrenOnly);
+    for (QProcess *helper : helpers) {
+        if (helper == m_gitProcess || helper == m_connectivityProcess)
+            continue;   // ended above, with their handlers
+        helper->disconnect(this);
+        if (helper->state() != QProcess::NotRunning) {
+            helper->kill();
+            helper->waitForFinished(3000);
+        }
     }
 }
 

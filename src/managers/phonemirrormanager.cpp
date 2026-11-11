@@ -211,8 +211,7 @@ int PhoneMirrorManager::adbToolsMajor(const QString &adbPath)
         if (m.hasMatch())
             major = m.captured(1).toInt();
     } else {
-        proc.kill();
-        proc.waitForFinished(1000);
+        ScrcpyClient::endOverdue(&proc);
     }
     QMutexLocker lock(&mutex);
     cache.insert(adbPath, major);
@@ -228,11 +227,7 @@ QString PhoneMirrorManager::runAdb(const QStringList &args, int timeoutMs) const
     ScrcpyClient::hideConsoleWindow(&proc);
     proc.start(m_adbPath, args);
     if (!proc.waitForFinished(timeoutMs)) {
-        // End it here: left to ~QProcess it is killed all the same, with
-        // "QProcess: Destroyed while process is still running" in the log
-        // (0.9.6-rc5, Windows, an adb held up by the firewall prompt)
-        proc.kill();
-        proc.waitForFinished(1000);
+        ScrcpyClient::endOverdue(&proc);
         return {};
     }
     if (proc.exitCode() != 0)
@@ -251,8 +246,7 @@ QString PhoneMirrorManager::runAdbFull(const QStringList &args, int timeoutMs, i
     ScrcpyClient::hideConsoleWindow(&proc);
     proc.start(m_adbPath, args);
     if (!proc.waitForFinished(timeoutMs)) {
-        proc.kill();
-        proc.waitForFinished(1000);
+        ScrcpyClient::endOverdue(&proc);
         return QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
     }
     if (exitCode)

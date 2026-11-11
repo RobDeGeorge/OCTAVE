@@ -63,6 +63,9 @@ extern "C" {
 
 Q_LOGGING_CATEGORY(lcScrcpyClient, "octave.phonemirror.client")
 
+// How long endOverdue() stays with a killed process
+static constexpr int kEndOverdueWaitMs = 10000;
+
 namespace {
 
 // Control message types (app/src/control_msg.h)
@@ -464,6 +467,29 @@ void ScrcpyClient::hideConsoleWindow(QProcess *proc)
 #endif
 }
 
+void ScrcpyClient::endOverdue(QProcess *proc)
+{
+    // A QProcess destroyed while its process still runs kills it, waits up
+    // to 30 s for it and logs "QProcess: Destroyed while process ... is still
+    // running". That line came on Windows (0.9.6-rc5 and rc6: `adb mdns
+    // services` over its 5 s, the firewall prompt for adb on screen) although
+    // the adb had been killed and given 1 s. Why it outlived that second is
+    // not known: killed from outside, an adb there was gone within 15 ms. So
+    // this waits longer and logs how long it took. Only the first argument
+    // is logged: an `adb pair` carries the pairing password.
+    if (proc->state() == QProcess::NotRunning)
+        return;
+    QElapsedTimer took;
+    took.start();
+    proc->kill();
+    if (!proc->waitForFinished(kEndOverdueWaitMs))
+        qCWarning(lcScrcpyClient) << proc->program() << proc->arguments().value(0) << "is still running"
+                                  << took.elapsed() << "ms after it was killed";
+    else if (took.elapsed() > 1000)
+        qCInfo(lcScrcpyClient) << proc->program() << proc->arguments().value(0) << "took" << took.elapsed()
+                               << "ms to end after it was killed";
+}
+
 bool ScrcpyClient::adbRun(const QStringList &args, QString *output, int timeoutMs, bool interruptible)
 {
     QProcess p;
@@ -485,10 +511,8 @@ bool ScrcpyClient::adbRun(const QStringList &args, QString *output, int timeoutM
         if (interruptible && m_stopping.load())
             break;
     }
-    if (!finished && p.state() != QProcess::NotRunning) {
-        p.kill();
-        p.waitForFinished(1000);
-    }
+    if (!finished)
+        endOverdue(&p);
     const bool ok = finished && p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0;
     if (output)
         *output = QString::fromUtf8(p.readAllStandardOutput()).trimmed();
@@ -658,7 +682,7 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
             fail(attach ? QStringLiteral("could not attach to the running server")
                         : QStringLiteral("scrcpy server did not answer within 20 s"));
         pumpServerLog();
-        if (m_proc) { m_proc->kill(); m_proc->waitForFinished(1000); delete m_proc; m_proc = nullptr; }
+        if (m_proc) { endOverdue(m_proc); delete m_proc; m_proc = nullptr; }
         adbRun({QStringLiteral("forward"), QStringLiteral("--remove"), QStringLiteral("tcp:%1").arg(m_port)}, nullptr, 5000, false);
         return;
     }
@@ -746,7 +770,7 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
     pumpServerLog();
     if (m_proc) {
         m_proc->terminate();
-        if (!m_proc->waitForFinished(2000)) { m_proc->kill(); m_proc->waitForFinished(1000); }
+        if (!m_proc->waitForFinished(2000)) endOverdue(m_proc);
         delete m_proc; m_proc = nullptr;
     }
     adbRun({QStringLiteral("forward"), QStringLiteral("--remove"), QStringLiteral("tcp:%1").arg(m_port)}, nullptr, 5000, false);
