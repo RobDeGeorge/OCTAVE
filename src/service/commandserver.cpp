@@ -1,4 +1,6 @@
 #include "commandserver.h"
+
+#include <utility>
 #include "memberscope.h"
 #include "staticfiles.h"
 #include "websocket.h"
@@ -865,6 +867,20 @@ void CommandServer::stop()
     delete m_thread;
     m_thread = nullptr;
     qCInfo(lcCommand) << "command server stopped";
+}
+
+QByteArray CommandServer::handleLineOn(const std::shared_ptr<Connection> &connection, const QByteArray &line)
+{
+    std::shared_ptr<Connection> outer = std::exchange(t_connection, connection);
+    QByteArray reply;
+    try {
+        reply = handleLine(line);
+    } catch (...) {
+        t_connection = std::move(outer);
+        throw;
+    }
+    t_connection = std::move(outer);
+    return reply;
 }
 
 QByteArray CommandServer::handleLine(const QByteArray &line)

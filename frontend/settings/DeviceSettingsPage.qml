@@ -36,6 +36,9 @@ Flickable {
     readonly property var _pairing: typeof servicePairing !== "undefined" ? servicePairing : null
     // Installed frontends: other screens for OCTAVE (src/managers/frontendmanager.h)
     readonly property var _frontends: typeof frontendManager !== "undefined" ? frontendManager : null
+    // The browser build: the site's web frontends, shown over this screen at once
+    // (src/platform/wasm/webfrontends.h); nothing to install, nothing to restart
+    readonly property bool _inBrowser: Qt.platform.os === "wasm"
     property string frontendStatus: ""
 
     function frontendName(id) {
@@ -371,9 +374,18 @@ Flickable {
             readonly property var fm: pageRoot._frontends
 
             SettingDescription {
+                visible: pageRoot._inBrowser
+                text: "Other screens for OCTAVE, made by anyone with the service API, running on this same car. "
+                      + "Use one to see it in place of this screen; its OCTAVE button, or mute pressed five times "
+                      + "within four seconds, brings this screen back. More in the frontend gallery on the wiki."
+            }
+            SettingDescription {
+                visible: !pageRoot._inBrowser
                 text: "Other screens for OCTAVE, made by anyone with the service API. A web frontend is served to "
-                      + "browsers; a program frontend replaces this screen. The choice takes effect at the next start. "
-                      + "To get this screen back: start with --qml, or put a file named USE_QML in the frontends folder."
+                      + "browsers; a program frontend replaces this screen. Try one for two minutes and this screen "
+                      + "comes back by itself (so does turning the car off and on). To get this screen back at any "
+                      + "time: press mute five times within four seconds (the knob, a gesture or the frontend's own "
+                      + "button), start with --qml, or put a file named USE_QML in the frontends folder."
             }
 
             Text {
@@ -394,21 +406,31 @@ Flickable {
                 height: pageRoot.dp(30)
                 onClicked: fm.clearForcedQml()
             }
-            Text {
-                visible: !!fm && !fm.forcedQml && fm.activeId !== fm.runningId
+            RowLayout {
+                visible: !!fm && !pageRoot._inBrowser && !fm.forcedQml && fm.activeId !== fm.runningId
                 Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                text: fm ? "Showing " + pageRoot.frontendName(fm.runningId) + " now; " + pageRoot.frontendName(fm.activeId)
-                           + " from the next start." : ""
-                color: App.Style.secondaryTextColor
-                font.pixelSize: App.Spacing.overallText * 0.8
-                font.family: App.Style.fontFamily
+                spacing: App.Spacing.overallSpacing
+                Text {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: fm ? "Showing " + pageRoot.frontendName(fm.runningId) + " now; " + pageRoot.frontendName(fm.activeId)
+                               + " from the next start." : ""
+                    color: App.Style.secondaryTextColor
+                    font.pixelSize: App.Spacing.overallText * 0.8
+                    font.family: App.Style.fontFamily
+                }
+                SettingsButton {
+                    objectName: "restartForFrontend"
+                    text: "Restart now"
+                    height: pageRoot.dp(28)
+                    onClicked: fm.restartNow()
+                }
             }
 
             RowLayout {
                 Layout.fillWidth: true
                 spacing: App.Spacing.overallSpacing
-                visible: !!fm
+                visible: !!fm && !pageRoot._inBrowser
                 SettingsButton {
                     objectName: "installFrontendFolder"
                     text: "Install from folder"
@@ -478,15 +500,29 @@ Flickable {
                                 elide: Text.ElideRight
                             }
                             SettingsButton {
+                                objectName: "tryFrontend_" + modelData.id
+                                // A program frontend replaces this screen: try it, and this screen comes back
+                                visible: modelData.kind !== "web"
+                                text: "Try"
+                                enabled: !modelData.active && modelData.compatible
+                                tooltipText: modelData.compatible ? "Restart on it now; back to this screen after two minutes"
+                                                                  : modelData.problem
+                                height: pageRoot.dp(28)
+                                onClicked: if (!fm.tryFrontend(modelData.id, 120)) pageRoot.frontendStatus = fm.lastError
+                            }
+                            SettingsButton {
                                 objectName: "useFrontend_" + modelData.id
                                 text: modelData.active ? "In use" : "Use"
                                 enabled: !modelData.active && modelData.compatible
-                                tooltipText: modelData.compatible ? "Make this the screen from the next start" : modelData.problem
+                                tooltipText: !modelData.compatible ? modelData.problem
+                                             : pageRoot._inBrowser ? "Show it in place of this screen"
+                                             : "Make this the screen from the next start"
                                 height: pageRoot.dp(28)
                                 onClicked: if (!fm.setActive(modelData.id)) pageRoot.frontendStatus = fm.lastError
                             }
                             SettingsButton {
                                 objectName: "removeFrontend_" + modelData.id
+                                visible: !pageRoot._inBrowser   // the site's own: nothing installed
                                 text: "Remove"
                                 enabled: modelData.id !== fm.runningId
                                 height: pageRoot.dp(28)

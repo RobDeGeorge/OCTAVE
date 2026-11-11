@@ -2,6 +2,8 @@
 
 Clients for OCTAVE's service API: read and drive the app (media, volume, live OBD and IMU values, settings, dashboards) from another program, with no Qt. The objects and their types are in [`docs/api/`](../docs/api/README.md); the protocol envelope (ops, replies, errors, events, stream records, HTTP routes, pairing) is [`docs/api/protocol.json`](../docs/api/protocol.json), JSON Schema checked against the server, and in prose in [`wiki/utilities.html#service-protocol`](../wiki/utilities.html#service-protocol). Writing a client in another language: start from `protocol.json` and the `<object>.json` files, develop against `tools/api/fake_server.py` (a stdlib fake of the service that validates everything it sends against the spec; no OCTAVE build needed), then check it against a running app the way `sdk/python/tests/test_protocol_spec.py` does.
 
+**License:** MIT ([`LICENSE`](LICENSE), and a copy in each client folder), while OCTAVE itself is GPL-3.0-or-later. Copy these clients into your frontend under any license you choose; see [Your Frontend, Your License](../wiki/writing-a-frontend.html#license).
+
 Turn the service on first. It is off by default, and listens on 127.0.0.1:9876:
 
 ```bash

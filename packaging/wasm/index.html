@@ -37,7 +37,9 @@
     body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
 
     /* The Qt screen: full viewport, hidden until onLoaded. */
-    #screen { position: absolute; inset: 0; width: 100%; height: 100%; display: none; }
+    /* z-index 0: its own stacking context, so the z-indexes Qt gives its windows
+       stay below a frontend shown over it (#frontend). */
+    #screen { position: absolute; inset: 0; width: 100%; height: 100%; display: none; z-index: 0; }
 
     /* Loading / error panel. */
     #loader {
@@ -61,6 +63,23 @@
     .links { margin-top: 0.5rem; }
     .links a + a::before { content: "\00b7"; color: var(--muted); margin: 0 0.5rem; }
     noscript { display: block; margin-top: 1rem; color: var(--error); }
+
+    /* A frontend chosen in Settings > Device > Frontends, over the Qt screen
+       (frontend-host.js), and the button that brings the built-in screen back. */
+    #frontend { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; display: none; z-index: 2; }
+    #back {
+      position: absolute; left: 10px; bottom: 10px; z-index: 3; display: none;
+      font: 600 13px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: 0.12em;
+      color: var(--text); background: rgba(20, 24, 29, 0.78); border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 999px; padding: 10px 16px; min-height: 40px; cursor: pointer;
+      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    }
+    #back:hover, #back:focus-visible { border-color: var(--accent); outline: none; }
+    #toast {
+      position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 4; display: none;
+      max-width: min(92vw, 520px); padding: 10px 14px; border-radius: 8px; font-size: 0.9rem;
+      background: var(--panel); border-left: 3px solid var(--error); color: var(--text);
+    }
   </style>
 </head>
 <body>
@@ -75,14 +94,20 @@
       <p class="note">
         Loads about 80 MB once; Chrome, Edge or Firefox on a desktop work best.
         No hardware needed: the OBD page's Connect button offers a simulated car. With a Bluetooth LE OBD2 adapter in Chrome or Edge (on Linux, after enabling chrome://flags/#enable-experimental-web-platform-features), the same button connects your own car; the data stays in your browser.
-        <span class="links"><a href="wiki/">Wiki</a><a href="https://github.com/RobDeGeorge/OCTAVE">Source</a><a href="https://github.com/RobDeGeorge/OCTAVE/releases/latest">Download</a></span>
+        <span class="links"><a href="wiki/">Wiki</a><a href="wiki/frontend-gallery.html">Frontends</a><a href="playground.html">Frontend playground</a><a href="https://github.com/RobDeGeorge/OCTAVE">Source</a><a href="https://github.com/RobDeGeorge/OCTAVE/releases/latest">Download</a></span>
       </p>
     </div>
   </div>
   <div id="screen"></div>
+  <!-- sandbox without allow-same-origin: an opaque origin, so the frontend can't touch
+       this site or its storage; it reaches the core only through frontend-host.js -->
+  <iframe id="frontend" title="Frontend" sandbox="allow-scripts allow-forms"></iframe>
+  <button id="back" type="button" title="Back to OCTAVE's built-in screen (or press mute five times)">&#8592; OCTAVE</button>
+  <div id="toast" role="status"></div>
 
   <script src="octave.js"></script>
   <script src="qtloader.js"></script>
+  <script src="frontend-host.js"></script>
   <script>
     (async function () {
       const loader = document.getElementById('loader');
@@ -181,9 +206,13 @@
       }
       sessionStorage.removeItem('octaveCoiRetried');
 
+      // The site's web frontends: the core lists them in Settings > Device >
+      // Frontends (src/platform/wasm/webfrontends.h), read from this at start
+      const host = window.OctaveFrontendHost;
+      const catalogReady = host.catalog().then((list) => { globalThis.octaveFrontendCatalog = list; return list; });
       try {
         render();
-        const [wasmBytes, dataBytes] = await Promise.all([download('octave.wasm'), download('octave.data')]);
+        const [wasmBytes, dataBytes, catalog] = await Promise.all([download('octave.wasm'), download('octave.data'), catalogReady]);
         phase = 'Compiling';
         fill.style.width = '';
         bar.classList.add('indeterminate');
@@ -192,6 +221,7 @@
         phase = 'Starting';
         status.textContent = phase;
 
+        showFrontends(catalog).catch((e) => console.error("frontends:", e));
         await qtLoad({
           // Hand Emscripten the package we already downloaded (name is octave.data).
           getPreloadedPackage: (name, size) => dataBytes,
@@ -214,6 +244,65 @@
       } catch (e) {
         console.error(e);
         fail(String(e && e.message ? e.message : e));
+      }
+
+      // A frontend over the built-in screen while frontendManager.activeId
+      // names one: Use in Settings > Device > Frontends, ?frontend=<slug>, or
+      // the last one this browser showed
+      async function showFrontends(catalog) {
+        const frame = document.getElementById('frontend');
+        const back = document.getElementById('back');
+        const toast = document.getElementById('toast');
+        const service = await host.service();
+        const own = host.connect(service);
+        const bridge = host.bridge(frame, service);
+        const remember = (slug) => {
+          try { slug ? localStorage.setItem('octaveFrontend', slug) : localStorage.removeItem('octaveFrontend'); } catch (e) { /* no storage */ }
+          const u = new URL(location.href);
+          slug ? u.searchParams.set('frontend', slug) : u.searchParams.delete('frontend');
+          history.replaceState(null, '', u);
+        };
+        const say = (text) => {
+          toast.textContent = text;
+          toast.style.display = 'block';
+          clearTimeout(say.timer);
+          say.timer = setTimeout(() => { toast.style.display = 'none'; }, 6000);
+        };
+        let shown = '';
+        async function show(id) {
+          if (id === shown) return;
+          shown = id;
+          bridge.closeAll();
+          const entry = catalog.find((e) => e.id === id);
+          if (!entry) {
+            frame.style.display = back.style.display = 'none';
+            frame.removeAttribute('srcdoc');
+            if (!id) remember('');
+            return;
+          }
+          try {
+            // A frontend with no car shows nothing: the simulated one, unless a car is connected
+            const connected = await own.request('get', { object: 'obdManager', property: 'connected' }).catch(() => true);
+            if (!connected) await own.call('obdManager', 'connect_to_adapter', 'sim://elm327').catch(() => {});
+            await host.load(frame, entry.path);
+            if (shown !== id) return;
+            frame.style.display = back.style.display = 'block';
+            frame.focus();
+            remember(entry.slug);
+          } catch (e) {
+            say('Could not show ' + (entry.name || id) + ': ' + e.message);
+            own.call('frontendManager', 'setActive', '').catch(() => {});
+          }
+        }
+        own.on((m) => {
+          if (m.event === 'property' && m.object === 'frontendManager' && m.name === 'activeId') show(m.value || '');
+        });
+        back.addEventListener('click', () => own.call('frontendManager', 'setActive', '').catch((e) => say(e.message)));
+        await own.request('subscribe', { object: 'frontendManager', properties: ['activeId'] });
+        let asked = new URLSearchParams(location.search).get('frontend');
+        if (asked === null) { try { asked = localStorage.getItem('octaveFrontend'); } catch (e) { asked = null; } }
+        const first = asked && catalog.find((e) => e.slug === asked);
+        if (first) own.call('frontendManager', 'setActive', first.id).catch((e) => say(e.message));
       }
     })();
   </script>

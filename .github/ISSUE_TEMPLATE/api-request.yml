@@ -1,0 +1,34 @@
+name: API request
+description: Your frontend needs something the service API doesn't offer.
+title: "API: "
+labels: ["api"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check the [Service API Reference](https://robdegeorge.com/OCTAVE/wiki/api-reference.html) first.
+        New members usually land as *experimental* (they may change before they are made stable), so they can come quickly.
+  - type: textarea
+    id: need
+    attributes:
+      label: What your frontend is trying to do
+      description: The user-facing goal, not the API you imagine.
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: What you tried, and why it isn't enough
+      description: The objects and members you looked at (e.g. `nowPlaying.artRevision`), and what's missing.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: A proposal (optional)
+      description: A property, method, signal or op, and what it returns.
+  - type: input
+    id: frontend
+    attributes:
+      label: Your frontend (optional)
+      placeholder: https://github.com/you/your-frontend

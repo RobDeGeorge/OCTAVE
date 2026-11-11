@@ -1,0 +1,12 @@
+{
+  "id": "org.octave.example.console",
+  "name": "Console",
+  "version": "0.1.0",
+  "description": "A dense, keyboard-first operator console in a full-screen terminal (Python + Textual)",
+  "protocol": [1, 3],
+  "scopes": ["media", "vehicle", "phone", "settings", "files", "system"],
+  "exec": {
+    "linux": ["python3", "{dir}/launch.py"],
+    "macos": ["python3", "{dir}/launch.py"]
+  }
+}

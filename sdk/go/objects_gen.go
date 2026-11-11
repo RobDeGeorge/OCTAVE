@@ -1186,6 +1186,12 @@ func (o FrontendManager) GetLastError() (v string, err error) {
 	return
 }
 
+// GetTrialSecondsLeft reads the property "trialSecondsLeft" (int).
+func (o FrontendManager) GetTrialSecondsLeft() (v int, err error) {
+	err = o.c.Get("frontendManager", "trialSecondsLeft", &v)
+	return
+}
+
 // InstallFromFolder calls installFromFolder(QString) -> QString.
 func (o FrontendManager) InstallFromFolder(path string) (v string, err error) {
 	err = o.c.Call("frontendManager", "installFromFolder", &v, path)
@@ -1219,6 +1225,22 @@ func (o FrontendManager) ClearForcedQml() error {
 func (o FrontendManager) ManifestOf(id string) (v map[string]any, err error) {
 	err = o.c.Call("frontendManager", "manifestOf", &v, id)
 	return
+}
+
+// TryFrontend calls tryFrontend(QString, int) -> bool.
+func (o FrontendManager) TryFrontend(id string, seconds int) (v bool, err error) {
+	err = o.c.Call("frontendManager", "tryFrontend", &v, id, seconds)
+	return
+}
+
+// KeepTrial calls keepTrial().
+func (o FrontendManager) KeepTrial() error {
+	return o.c.Call("frontendManager", "keepTrial", nil)
+}
+
+// RestartNow calls restartNow().
+func (o FrontendManager) RestartNow() error {
+	return o.c.Call("frontendManager", "restartNow", nil)
 }
 
 // GestureSensor is the service object "gestureSensor" (C++ GestureManager); NewGestureSensor(c) binds it to a client.

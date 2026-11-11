@@ -349,6 +349,7 @@
             <tr><td><code>forcedQml</code></td><td>bool</td><td>read</td><td><code>activeChanged</code></td></tr>
             <tr><td><code>forcedQmlReason</code></td><td>QString</td><td>read</td><td><code>activeChanged</code></td></tr>
             <tr><td><code>lastError</code></td><td>QString</td><td>read</td><td><code>lastErrorChanged</code></td></tr>
+            <tr><td><code>trialSecondsLeft</code></td><td>int</td><td>read</td><td><code>trialChanged</code></td></tr>
           </tbody>
         </table>
         <table>
@@ -360,9 +361,12 @@
             <tr><td><code>setActive(QString id)</code></td><td><code>bool</code></td><td>invokable</td><td><code>system</code></td></tr>
             <tr><td><code>clearForcedQml()</code></td><td>&ndash;</td><td>invokable</td><td><code>system</code></td></tr>
             <tr><td><code>manifestOf(QString id)</code></td><td><code>QVariantMap</code></td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>tryFrontend(QString id, int seconds)</code></td><td><code>bool</code></td><td>invokable</td><td><code>system</code></td></tr>
+            <tr><td><code>keepTrial()</code></td><td>&ndash;</td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>restartNow()</code></td><td>&ndash;</td><td>invokable</td><td><code>system</code></td></tr>
           </tbody>
         </table>
-        <p><strong>Signals</strong> (<code>subscribe</code>): <code>frontendsChanged()</code>, <code>activeChanged()</code>, <code>lastErrorChanged()</code>, <code>installed(QString id)</code>.</p>
+        <p><strong>Signals</strong> (<code>subscribe</code>): <code>frontendsChanged()</code>, <code>activeChanged()</code>, <code>lastErrorChanged()</code>, <code>installed(QString id)</code>, <code>trialChanged()</code>, <code>trialExpired()</code>, <code>restartRequested()</code>.</p>
 
         <h3 id="gestureSensor"><code>gestureSensor</code> <span class="cmt">&mdash; GestureManager</span></h3>
         <p>Hand-written notes: <a href="signals-slots-reference.html#gestureSensor">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/gestureSensor.json</span>.</p>
@@ -1287,7 +1291,7 @@
             <tr><td><code>toPercent(float linear)</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
           </tbody>
         </table>
-        <p><strong>Signals</strong> (<code>subscribe</code>): <code>volumeApplied(int percent, float linear)</code>, <code>percentChanged(int percent)</code>, <code>mutedChanged(bool muted)</code>, <code>effectivelyMutedChanged()</code>.</p>
+        <p><strong>Signals</strong> (<code>subscribe</code>): <code>volumeApplied(int percent, float linear)</code>, <code>percentChanged(int percent)</code>, <code>mutedChanged(bool muted)</code>, <code>effectivelyMutedChanged()</code>, <code>escapeGesture()</code>.</p>
 
         <h2 id="parameters">Parameters</h2>
         <p>Every OBD PID and IMU reading (129), the keys of <code>paramStore</code> (<span class="file-path">docs/api/parameters.json</span>). Values are in the native unit; <code>parameterCatalog.toDisplay(id, value)</code> converts to the user's units.</p>

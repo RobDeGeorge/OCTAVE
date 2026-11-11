@@ -7,6 +7,8 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QHash>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLoggingCategory>
 #include <QRandomGenerator>
 #include <QtCore/private/qzipreader_p.h>
@@ -16,6 +18,8 @@ Q_LOGGING_CATEGORY(lcFrontends, "octave.frontends")
 namespace {
 const QString kActiveFile = QStringLiteral("ACTIVE");
 const QString kUseQmlFile = QStringLiteral("USE_QML");
+const QString kTrialFile = QStringLiteral("TRIAL");
+const QString kTrialRunningFile = QStringLiteral("TRIAL.running");
 
 QString readSmall(const QString &path, qint64 max = 4096)
 {
@@ -115,6 +119,34 @@ bool writeSmall(const QString &path, const QString &text)
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
         return false;
     return f.write(text.toUtf8() + '\n') > 0;
+}
+FrontendManager::Trial readTrial(const QString &path)
+{
+    FrontendManager::Trial t;
+    QFile f(path);
+    if (f.size() > 4096 || !f.open(QIODevice::ReadOnly))
+        return t;
+    const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
+    const QString id = o.value(QStringLiteral("id")).toString();
+    const QString previous = o.value(QStringLiteral("previous")).toString();
+    // Plain folder names only: these become ACTIVE, which is never a path
+    if (!FrontendManifest::validId(id) || (!previous.isEmpty() && !FrontendManifest::validId(previous)))
+        return t;
+    t.id = id;
+    t.previous = previous;
+    t.seconds = qBound(FrontendManager::kMinTrialSeconds,
+                       o.value(QStringLiteral("seconds")).toInt(FrontendManager::kDefaultTrialSeconds),
+                       FrontendManager::kMaxTrialSeconds);
+    return t;
+}
+
+// ACTIVE = `id`, or no ACTIVE for the QML UI
+void writeActive(const QString &root, const QString &id)
+{
+    if (id.isEmpty())
+        QFile::remove(QDir(root).filePath(kActiveFile));
+    else
+        writeSmall(QDir(root).filePath(kActiveFile), id);
 }
 } // namespace
 
@@ -494,6 +526,128 @@ bool FrontendManager::setActive(const QString &id)
     emit activeChanged();
     emit frontendsChanged();
     return true;
+}
+
+bool FrontendManager::tryFrontend(const QString &id, int seconds)
+{
+    if (m_root.isEmpty())
+        return refuse(QStringLiteral("no frontends folder"));
+    QStringList errors;
+    const FrontendManifest m = FrontendManifest::validId(id) ? load(m_root, id, &errors) : FrontendManifest();
+    if (m.id.isEmpty())
+        return refuse(QStringLiteral("can't try %1: %2").arg(id, errors.isEmpty() ? QStringLiteral("not installed") : errors.join(QStringLiteral("; "))));
+    if (const QString problem = problemWith(m); !problem.isEmpty())
+        return refuse(QStringLiteral("can't try %1: %2").arg(id, problem));
+    if (!m.isExec())
+        return refuse(QStringLiteral("%1 is a web frontend: it is served to browsers and doesn't replace this screen, so Use it instead").arg(m.name.isEmpty() ? id : m.name));
+    // Going back to: what this run shows, unless that is the one tried
+    QString previous = m_runningId == id ? activeId() : m_runningId;
+    if (previous == id)
+        previous.clear();
+    QJsonObject trial{{QStringLiteral("id"), id}, {QStringLiteral("previous"), previous},
+                      {QStringLiteral("seconds"), qBound(kMinTrialSeconds, seconds, kMaxTrialSeconds)}};
+    if (!writeSmall(QDir(m_root).filePath(kTrialFile), QString::fromUtf8(QJsonDocument(trial).toJson(QJsonDocument::Compact))))
+        return refuse(QStringLiteral("could not save the trial"));
+    // The trial's own file is what says "go back"; a stale running one would undo it at the start
+    QFile::remove(QDir(m_root).filePath(kTrialRunningFile));
+    writeActive(m_root, id);
+    QFile::remove(QDir(m_root).filePath(kUseQmlFile));
+    qCInfo(lcFrontends).noquote() << "trying" << id << "for" << trial.value(QStringLiteral("seconds")).toInt()
+                                  << "s, then back to" << (previous.isEmpty() ? QStringLiteral("the QML UI") : previous);
+    m_lastError.clear();
+    emit lastErrorChanged();
+    emit activeChanged();
+    emit frontendsChanged();
+    emit restartRequested();
+    return true;
+}
+
+void FrontendManager::keepTrial()
+{
+    if (m_root.isEmpty())
+        return;
+    const bool had = QFile::remove(QDir(m_root).filePath(kTrialRunningFile));
+    if (m_trialTimer)
+        m_trialTimer->stop();
+    if (m_trialLeft != 0 || had) {
+        qCInfo(lcFrontends).noquote() << "kept" << m_runningId << "as the screen";
+        m_trialLeft = 0;
+        emit trialChanged();
+    }
+}
+
+void FrontendManager::restartNow()
+{
+    qCInfo(lcFrontends) << "restart asked for";
+    emit restartRequested();
+}
+
+void FrontendManager::startTrialCountdown(int seconds)
+{
+    if (!m_trialTimer) {
+        m_trialTimer = new QTimer(this);
+        m_trialTimer->setInterval(1000);
+        connect(m_trialTimer, &QTimer::timeout, this, [this]() {
+            m_trialLeft = qMax(0, m_trialLeft - 1);
+            emit trialChanged();
+            if (m_trialLeft == 0) {
+                m_trialTimer->stop();
+                qCInfo(lcFrontends).noquote() << "the time to try" << m_runningId << "is up";
+                emit trialExpired();
+            }
+        });
+    }
+    m_trialLeft = qBound(1, seconds, kMaxTrialSeconds);
+    m_trialTimer->start();
+    emit trialChanged();
+}
+
+FrontendManager::Trial FrontendManager::beginTrial(const QString &root)
+{
+    const QString running = QDir(root).filePath(kTrialRunningFile);
+    if (QFile::exists(running)) {
+        // The last trial run never ended its trial: go back now
+        const Trial stale = readTrial(running);
+        endTrial(root);
+        QFile::remove(QDir(root).filePath(kTrialFile));
+        Trial none;
+        none.note = QStringLiteral("the trial of %1 did not end on its own: back to %2")
+                        .arg(stale.id.isEmpty() ? QStringLiteral("a frontend") : stale.id,
+                             stale.previous.isEmpty() ? QStringLiteral("the QML UI") : stale.previous);
+        return none;
+    }
+    const QString pending = QDir(root).filePath(kTrialFile);
+    if (!QFile::exists(pending))
+        return {};
+    Trial t = readTrial(pending);
+    if (!t.active()) {
+        QFile::remove(pending);
+        Trial none;
+        none.note = QStringLiteral("TRIAL could not be read; ignored");
+        return none;
+    }
+    QFile::remove(running);
+    if (!QFile::rename(pending, running)) {
+        // Without the running file a power cut would keep the tried screen: don't try it
+        writeActive(root, t.previous);
+        QFile::remove(pending);
+        Trial none;
+        none.note = QStringLiteral("could not start the trial of %1: back to the previous screen").arg(t.id);
+        return none;
+    }
+    t.note = QStringLiteral("trying %1 for %2 s").arg(t.id).arg(t.seconds);
+    return t;
+}
+
+void FrontendManager::endTrial(const QString &root)
+{
+    const QString running = QDir(root).filePath(kTrialRunningFile);
+    const Trial t = readTrial(running);
+    if (t.active())
+        writeActive(root, t.previous);
+    else if (QFile::exists(running))
+        writeActive(root, QString());   // unreadable: the QML UI is the safe screen
+    QFile::remove(running);
 }
 
 void FrontendManager::clearForcedQml()

@@ -147,6 +147,44 @@ private slots:
         QVERIFY(volume.muted());
     }
 
+    void fiveMutePressesAreTheEscape()
+    {
+        // The way back to the built-in screen (frontendmanager.h): five
+        // accepted toggles within four seconds, from any input
+        VolumeController volume(nullptr);
+        volume.applyVolume(40);
+        QSignalSpy escape(&volume, &VolumeController::escapeGesture);
+        for (int i = 0; i < VolumeController::kEscapePresses - 1; ++i) {
+            volume.toggleMute();
+            QTest::qWait(170);   // past the debounce
+        }
+        QCOMPARE(escape.count(), 0);
+        volume.toggleMute();
+        QCOMPARE(escape.count(), 1);
+        QVERIFY(volume.muted());   // the presses still toggled: an odd count ends muted
+
+        // Bounces don't count, and the count starts again after the escape
+        QTest::qWait(170);
+        for (int i = 0; i < 4; ++i)
+            volume.toggleMute();   // one accepted, three bounces
+        QCOMPARE(escape.count(), 1);
+    }
+
+    void slowMutePressesAreNotTheEscape()
+    {
+        VolumeController volume(nullptr);
+        volume.applyVolume(40);
+        QSignalSpy escape(&volume, &VolumeController::escapeGesture);
+        // Five presses spread over more than the window
+        const int gap = VolumeController::kEscapeWindowMs / (VolumeController::kEscapePresses - 1) + 100;
+        for (int i = 0; i < VolumeController::kEscapePresses; ++i) {
+            volume.toggleMute();
+            if (i + 1 < VolumeController::kEscapePresses)
+                QTest::qWait(gap);
+        }
+        QCOMPARE(escape.count(), 0);
+    }
+
     void anyRaiseUnmutes()
     {
         // Decided 2026-10-22: knob, gesture, slider or command server, turning

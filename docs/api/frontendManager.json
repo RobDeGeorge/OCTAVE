@@ -68,6 +68,38 @@
             ],
             "returns": "QVariantMap",
             "scope": "read"
+        },
+        {
+            "kind": "invokable",
+            "name": "tryFrontend",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                },
+                {
+                    "name": "seconds",
+                    "type": "int"
+                }
+            ],
+            "returns": "bool",
+            "scope": "system"
+        },
+        {
+            "kind": "invokable",
+            "name": "keepTrial",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "read"
+        },
+        {
+            "kind": "invokable",
+            "name": "restartNow",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "system"
         }
     ],
     "object": "frontendManager",
@@ -118,6 +150,14 @@
             "readable": true,
             "type": "QString",
             "writable": false
+        },
+        {
+            "constant": false,
+            "name": "trialSecondsLeft",
+            "notify": "trialChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
         }
     ],
     "signals": [
@@ -143,6 +183,21 @@
                     "name": "id",
                     "type": "QString"
                 }
+            ]
+        },
+        {
+            "name": "trialChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "trialExpired",
+            "params": [
+            ]
+        },
+        {
+            "name": "restartRequested",
+            "params": [
             ]
         }
     ]

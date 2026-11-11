@@ -214,6 +214,11 @@ public:
 
     // Called from connection threads
     QByteArray handleLine(const QByteArray &line);
+    // A request on `connection` from outside the server's own threads: the
+    // in-page service of the browser build (src/platform/wasm/webservice.h),
+    // whose connections have no socket. The same ops, trust and limits as a
+    // socket's line; call it on one thread per connection at a time
+    QByteArray handleLineOn(const std::shared_ptr<Connection> &connection, const QByteArray &line);
 
     // Trust (servicepairing.h): `trusted(connection)` decides every op and
     // action but the `open` ones; `httpTrusted(connection, headers,

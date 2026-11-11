@@ -1,0 +1,61 @@
+name: Show your frontend
+description: You built a frontend for OCTAVE. Tell us, and we'll add it to the gallery.
+title: "Frontend: "
+labels: ["frontend-showcase"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for building on OCTAVE. Frontends that are public, installable and follow the
+        [checklist for a car's screen](https://robdegeorge.com/OCTAVE/wiki/frontend-gallery.html#good-citizen)
+        go into the [gallery](https://robdegeorge.com/OCTAVE/wiki/frontend-gallery.html#community).
+  - type: input
+    id: name
+    attributes:
+      label: Name
+    validations:
+      required: true
+  - type: input
+    id: repo
+    attributes:
+      label: Repository
+      description: A public repository, ideally with the GitHub topic `octave-frontend`.
+      placeholder: https://github.com/you/your-frontend
+    validations:
+      required: true
+  - type: input
+    id: stack
+    attributes:
+      label: Language and toolkit
+      placeholder: Rust + Slint, TypeScript + React, ...
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - web (runs in a browser, served by OCTAVE)
+        - exec (a program that replaces the screen)
+        - remote (a phone, tablet or second screen)
+        - script / tool
+    validations:
+      required: true
+  - type: input
+    id: playground
+    attributes:
+      label: Playground link (web frontends)
+      description: Works when your frontend is on a host that allows CORS, such as GitHub Pages.
+      placeholder: https://robdegeorge.com/OCTAVE/playground.html?frontend=https://you.github.io/your-frontend/
+  - type: textarea
+    id: about
+    attributes:
+      label: What it does, and a screenshot
+      description: Paste or drag a screenshot in.
+    validations:
+      required: true
+  - type: textarea
+    id: missing
+    attributes:
+      label: Anything the API made hard or impossible?
+      description: Optional. This is how the API gets better.

@@ -362,7 +362,10 @@ time.sleep(4)   # the simulated car records a trip meanwhile
         QProcess app;
         app.setProcessEnvironment(env(tmp));
         app.setProcessChannelMode(QProcess::MergedChannels);
-        app.start(kApp, {"--config", config, "--sim", "--service", QString::number(freePort())});
+        // No --service and serviceEnabled unset, as on a fresh install: the
+        // exec frontend turns the service on itself (--command-port only
+        // picks the port)
+        app.start(kApp, {"--config", config, "--sim", "--command-port", QString::number(freePort())});
         QVERIFY(app.waitForStarted(10000));
         QVERIFY2(finished(app), "did not exit within 60 s");   // the frontend's exit 0 ends it
         const QString out = QString::fromUtf8(app.readAll());
@@ -386,6 +389,155 @@ time.sleep(4)   # the simulated car records a trip meanwhile
         QFile again(config + "/frontends/ACTIVE");
         QVERIFY(again.open(QIODevice::ReadOnly));
         QCOMPARE(again.readAll().trimmed(), QByteArray("org.test.screen"));
+#endif
+    }
+
+    // The fake exec frontend org.test.screen (python3) running `body` with
+    // rpc() over its token; ACTIVE names it. "" when python3 is missing
+    static QString installScriptFrontend(const QString &config, const QByteArray &body)
+    {
+        if (QStandardPaths::findExecutable("python3").isEmpty())
+            return {};
+        const QString fe = config + "/frontends/org.test.screen";
+        QDir().mkpath(fe);
+#ifdef Q_OS_MACOS
+        const QString platform = "macos";
+#else
+        const QString platform = "linux";
+#endif
+        QFile m(fe + "/octave-frontend.json");
+        if (!m.open(QIODevice::WriteOnly))
+            return {};
+        m.write(QStringLiteral(R"({"id": "org.test.screen", "name": "Test screen", "version": "1",
+            "protocol": [1, 9], "scopes": ["read", "media"], "exec": {"%1": ["python3", "{dir}/main.py"]}})")
+                    .arg(platform).toUtf8());
+        m.close();
+        QFile script(fe + "/main.py");
+        if (!script.open(QIODevice::WriteOnly))
+            return {};
+        script.write(R"(import json, os, socket, time
+for _ in range(100):
+    try:
+        s = socket.create_connection((os.environ["OCTAVE_HOST"], int(os.environ["OCTAVE_PORT"])), timeout=5)
+        break
+    except OSError:
+        time.sleep(0.1)
+f = s.makefile("rb")
+n = [0]
+def rpc(msg):
+    n[0] += 1
+    msg["id"] = n[0]
+    s.sendall((json.dumps(msg) + "\n").encode())
+    while True:
+        r = json.loads(f.readline())
+        if r.get("id") == n[0]:
+            return r
+rpc({"op": "hello", "token": os.environ["OCTAVE_TOKEN"]})
+out = {}
+def done():
+    json.dump(out, open(os.path.join(os.environ["OCTAVE_FRONTEND_DIR"], "result.json"), "w"))
+)" + body);
+        script.close();
+        QFile active(config + "/frontends/ACTIVE");
+        if (!active.open(QIODevice::WriteOnly))
+            return {};
+        active.write("org.test.screen\n");
+        return fe;
+    }
+
+    // The escape: mute five times (here from the frontend itself, as the
+    // knob would) ends the frontend's run and OCTAVE comes back on the QML UI
+    void muteFiveTimesIsTheWayBack()
+    {
+#if !defined(Q_OS_LINUX) && !defined(Q_OS_MACOS)
+        QSKIP("the fake frontend is a Unix program");
+#else
+        QTemporaryDir tmp;
+        const QString config = tmp.filePath("config");
+        const QString fe = installScriptFrontend(config, R"(
+out["trial"] = rpc({"op": "get", "object": "frontendManager", "property": "trialSecondsLeft"})
+done()
+for _ in range(5):
+    rpc({"op": "call", "object": "volumeController", "method": "toggleMute"})
+    time.sleep(0.25)
+time.sleep(30)
+)");
+        if (fe.isEmpty())
+            QSKIP("no python3 for the fake frontend");
+        QProcess app;
+        app.setProcessEnvironment(env(tmp));
+        app.setProcessChannelMode(QProcess::MergedChannels);
+        // --smoke: the exec run would end after 5 s, the QML one after its load
+        app.start(kApp, {"--config", config, "--service", QString::number(freePort()), "--smoke"});
+        QVERIFY(app.waitForStarted(10000));
+        QVERIFY2(finished(app), "did not exit within 60 s");
+        const QString out = QString::fromUtf8(app.readAll());
+        QVERIFY2(app.exitCode() == 0, qPrintable(out.right(3000)));
+        QVERIFY2(out.contains("back to the built-in screen"), qPrintable(out.right(3000)));
+        QFile r(fe + "/result.json");
+        QVERIFY2(r.open(QIODevice::ReadOnly), qPrintable(out.right(3000)));
+        const QJsonObject res = QJsonDocument::fromJson(r.readAll()).object();
+        QCOMPARE(res.value("trial").toObject().value("result").toInt(-1), 0);   // not a trial
+        QFile useQml(config + "/frontends/USE_QML");
+        QVERIFY(useQml.open(QIODevice::ReadOnly));
+        QVERIFY(useQml.readAll().contains("mute was pressed"));
+        QString log;
+        QElapsedTimer t;
+        t.start();
+        while (t.elapsed() < 60000 && !log.contains("Smoke test: Main.qml loaded")) {
+            QTest::qWait(500);
+            QFile f(config + "/logs/octave-cpp.log");
+            if (f.open(QIODevice::ReadOnly))
+                log = QString::fromUtf8(f.readAll());
+        }
+        QVERIFY2(log.contains("Smoke test: Main.qml loaded"), qPrintable(log.right(3000)));
+        QTest::qWait(7000);   // its --smoke exit, before the folder goes
+#endif
+    }
+
+    // Trying a screen: the run counts down, and the frontend may keep itself
+    void aTriedFrontendCanKeepItself()
+    {
+#if !defined(Q_OS_LINUX) && !defined(Q_OS_MACOS)
+        QSKIP("the fake frontend is a Unix program");
+#else
+        QTemporaryDir tmp;
+        const QString config = tmp.filePath("config");
+        const QString fe = installScriptFrontend(config, R"(
+out["before"] = rpc({"op": "get", "object": "frontendManager", "property": "trialSecondsLeft"})
+out["keep"] = rpc({"op": "call", "object": "frontendManager", "method": "keepTrial"})
+out["after"] = rpc({"op": "get", "object": "frontendManager", "property": "trialSecondsLeft"})
+done()
+time.sleep(4)   # an exit within 3 s of starting would count as a crash
+)");
+        if (fe.isEmpty())
+            QSKIP("no python3 for the fake frontend");
+        QFile trial(config + "/frontends/TRIAL");
+        QVERIFY(trial.open(QIODevice::WriteOnly));
+        trial.write(R"({"id": "org.test.screen", "previous": "", "seconds": 120})");
+        trial.close();
+        QProcess app;
+        app.setProcessEnvironment(env(tmp));
+        app.setProcessChannelMode(QProcess::MergedChannels);
+        app.start(kApp, {"--config", config, "--service", QString::number(freePort())});
+        QVERIFY(app.waitForStarted(10000));
+        QVERIFY2(finished(app), "did not exit within 60 s");   // the frontend's exit 0 ends it
+        const QString out = QString::fromUtf8(app.readAll());
+        QVERIFY2(app.exitCode() == 0, qPrintable(out.right(3000)));
+        QVERIFY2(out.contains("trying org.test.screen for 120 s"), qPrintable(out.right(3000)));
+        QFile r(fe + "/result.json");
+        QVERIFY2(r.open(QIODevice::ReadOnly), qPrintable(out.right(3000)));
+        const QJsonObject res = QJsonDocument::fromJson(r.readAll()).object();
+        const int before = res.value("before").toObject().value("result").toInt();
+        QVERIFY2(before > 100 && before <= 120, qPrintable(QJsonDocument(res).toJson()));
+        QVERIFY2(res.value("keep").toObject().value("ok").toBool(), qPrintable(QJsonDocument(res).toJson()));
+        QCOMPARE(res.value("after").toObject().value("result").toInt(-1), 0);
+        // Kept: still the screen, and no trial left to undo at the next start
+        QVERIFY(!QFile::exists(config + "/frontends/TRIAL.running"));
+        QVERIFY(!QFile::exists(config + "/frontends/TRIAL"));
+        QFile active(config + "/frontends/ACTIVE");
+        QVERIFY(active.open(QIODevice::ReadOnly));
+        QCOMPARE(active.readAll().trimmed(), QByteArray("org.test.screen"));
 #endif
     }
 
@@ -433,6 +585,53 @@ time.sleep(4)   # the simulated car records a trip meanwhile
                 log = QString::fromUtf8(f.readAll());
         }
         QVERIFY2(log.contains("USE_QML: the QML UI instead of org.test.broken"), qPrintable(log.right(3000)));
+        QVERIFY2(log.contains("Smoke test: Main.qml loaded"), qPrintable(log.right(3000)));
+        QTest::qWait(7000);   // its --smoke exit, before the folder goes
+#endif
+    }
+
+    // The service can't listen (the port is taken): the built-in screen,
+    // not an OCTAVE that exits at every start
+    void anExecFrontendWithoutTheServiceFallsBackToQml()
+    {
+#if !defined(Q_OS_LINUX) && !defined(Q_OS_MACOS)
+        QSKIP("exec frontends on Unix only in this test");
+#else
+        QTemporaryDir tmp;
+        const QString config = tmp.filePath("config");
+        const QString fe = config + "/frontends/org.test.screen";
+        QDir().mkpath(fe);
+        QFile m(fe + "/octave-frontend.json");
+        QVERIFY(m.open(QIODevice::WriteOnly));
+        m.write(R"({"id": "org.test.screen", "name": "Screen", "version": "1", "protocol": [1, 9],
+            "exec": {"linux": ["sleep", "30"], "macos": ["sleep", "30"]}})");
+        m.close();
+        QFile active(config + "/frontends/ACTIVE");
+        QVERIFY(active.open(QIODevice::WriteOnly));
+        active.write("org.test.screen\n");
+        active.close();
+        QTcpServer taken;
+        QVERIFY(taken.listen(QHostAddress::LocalHost));
+
+        QProcess app;
+        app.setProcessEnvironment(env(tmp));
+        app.setProcessChannelMode(QProcess::MergedChannels);
+        app.start(kApp, {"--config", config, "--command-port", QString::number(taken.serverPort()), "--smoke"});
+        QVERIFY(app.waitForStarted(10000));
+        QVERIFY2(finished(app), "did not exit within 60 s");
+        const QString out = QString::fromUtf8(app.readAll());
+        QVERIFY2(app.exitCode() == 0, qPrintable(out.right(3000)));
+        QVERIFY2(out.contains("can't run (the service could not listen"), qPrintable(out.right(3000)));
+        QVERIFY(QFile::exists(config + "/frontends/USE_QML"));
+        QString log;
+        QElapsedTimer t;
+        t.start();
+        while (t.elapsed() < 60000 && !log.contains("Smoke test: Main.qml loaded")) {
+            QTest::qWait(500);
+            QFile f(config + "/logs/octave-cpp.log");
+            if (f.open(QIODevice::ReadOnly))
+                log = QString::fromUtf8(f.readAll());
+        }
         QVERIFY2(log.contains("Smoke test: Main.qml loaded"), qPrintable(log.right(3000)));
         QTest::qWait(7000);   // its --smoke exit, before the folder goes
 #endif

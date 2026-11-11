@@ -68,6 +68,8 @@ extern "C" {
 #endif
 #ifdef OCTAVE_WASM
 #include "platform/wasm/webbluetooth.h"
+#include "platform/wasm/webservice.h"
+#include "platform/wasm/webfrontends.h"
 #endif
 
 namespace {
@@ -325,13 +327,51 @@ int dumpApi(QGuiApplication &app, const QString &dir)
 }
 
 #ifndef Q_OS_MOBILE
+// Why OCTAVE starts itself again when it quits (installed frontends,
+// frontendmanager.h)
+enum class Relaunch {
+    No,
+    OnQml,      // the frontend gave up, or the escape: USE_QML is written
+    AsChosen,   // tryFrontend / restartNow / a trial's end: what ACTIVE says
+};
+
+// The same binary and arguments. AsChosen drops --qml, which would
+// otherwise hide the screen just chosen. An AppImage's own path is in
+// $APPIMAGE (the mounted one goes away)
+void startAgain(const QStringList &arguments, Relaunch why)
+{
+#if QT_CONFIG(process)
+    const QString self = qEnvironmentVariableIsSet("APPIMAGE") ? qEnvironmentVariable("APPIMAGE")
+                                                                : QCoreApplication::applicationFilePath();
+    QStringList args = arguments.mid(1);
+    if (why == Relaunch::AsChosen)
+        args.removeAll(QStringLiteral("--qml"));
+    // Its output goes to the log files only: an inherited stdout can be a
+    // pipe or terminal that closes, and a write to it would end the new one
+    QProcess again;
+    again.setProgram(self);
+    again.setArguments(args);
+    again.setStandardOutputFile(QProcess::nullDevice());
+    again.setStandardErrorFile(QProcess::nullDevice());
+    if (!again.startDetached())
+        qCritical("could not start OCTAVE again");
+    OctaveLog::flush();
+#else
+    Q_UNUSED(arguments);
+    Q_UNUSED(why);
+#endif
+}
+#endif
+
+#ifndef Q_OS_MOBILE
 // --headless: every manager and the service, no QML engine and no window
 // (TODO/open-backend.md, contract step 2). Another frontend, a script or
 // the SDK drives it over the service protocol; video (phone mirror,
 // Android Auto) has nowhere to go and is not decoded for anyone.
 // `exec`: the installed exec frontend to start and supervise as the
 // screen (frontendsupervisor.h); null for a plain --headless
-int runHeadless(QGuiApplication &app, bool smokeTest, const FrontendManager::Boot *exec = nullptr)
+int runHeadless(QGuiApplication &app, bool smokeTest, const FrontendManager::Boot *exec = nullptr,
+                const FrontendManager::Trial &trial = {})
 {
 #ifndef OCTAVE_DEV_TOOLS
     if (app.arguments().contains(QStringLiteral("--dev")) || app.arguments().contains(QStringLiteral("--profile")))
@@ -359,7 +399,13 @@ int runHeadless(QGuiApplication &app, bool smokeTest, const FrontendManager::Boo
         core.servicePairing.setLoopbackOpenForRun(false);
         core.frontendManager.setRunningId(exec->manifest.id);
     }
-    Service service = makeService(app.arguments(), core, true);
+    // The exec frontend reaches OCTAVE through the service, so it is on
+    // whatever the serviceEnabled setting says (--service, --command-port
+    // and --service-bind still pick where)
+    QStringList serviceArgs = app.arguments();
+    if (exec)
+        serviceArgs << QStringLiteral("--service");
+    Service service = makeService(serviceArgs, core, true);
 #ifdef OCTAVE_DEV_TOOLS
     // --headless --dev: also the sim_* actions, no UI
     const QDir frontendDir = findFrontendDir();
@@ -368,6 +414,20 @@ int runHeadless(QGuiApplication &app, bool smokeTest, const FrontendManager::Boo
                                                     QDir(frontendDir.absoluteFilePath(QStringLiteral(".."))), &core.sim});
     devRuntime.startHeadless(service.server.get());
 #endif
+    if (exec && (!service.server || !service.server->start())) {
+        // Without the service the frontend can't reach anything: the built-in
+        // screen instead, never a car that doesn't start
+        const QString why = service.server ? QStringLiteral("the service could not listen on port %1")
+                                                 .arg(service.server->port())
+                                           : QStringLiteral("the service could not start");
+        qCritical("Frontend %s can't run (%s): starting again on the QML UI", qPrintable(exec->manifest.id),
+                  qPrintable(why));
+        FrontendManager::endTrial(core.frontendManager.root());
+        FrontendManager::forceQml(core.frontendManager.root(), why);
+        core.shutdown();
+        startAgain(app.arguments(), Relaunch::OnQml);
+        return 0;
+    }
     if (!service.server || !service.server->start()) {
         qCritical("--headless: the service did not start, nothing could reach the app; exiting");
         core.shutdown();
@@ -381,7 +441,13 @@ int runHeadless(QGuiApplication &app, bool smokeTest, const FrontendManager::Boo
     // The installed exec frontend as the screen. Exit code 0 quits OCTAVE;
     // repeated crashes write USE_QML and start OCTAVE again on the QML UI
     std::unique_ptr<FrontendSupervisor> supervisor;
-    bool relaunchOnQml = false;
+    Relaunch relaunch = Relaunch::No;
+    // tryFrontend / restartNow over the service: start again on what ACTIVE says
+    QObject::connect(&core.frontendManager, &FrontendManager::restartRequested, &app, [&app, &relaunch]() {
+        if (relaunch == Relaunch::No)
+            relaunch = Relaunch::AsChosen;
+        app.quit();
+    });
     if (exec) {
         qInfo("Frontend %s %s (exec) is the screen; loopback trust is off for this run",
               qPrintable(exec->manifest.id), qPrintable(exec->manifest.version));
@@ -389,12 +455,30 @@ int runHeadless(QGuiApplication &app, bool smokeTest, const FrontendManager::Boo
                                                           service.server->port());
         QObject::connect(supervisor.get(), &FrontendSupervisor::exitedCleanly, &app, &QGuiApplication::quit);
         const QString root = core.frontendManager.root();
-        QObject::connect(supervisor.get(), &FrontendSupervisor::gaveUp, &app, [&app, &relaunchOnQml, root](const QString &why) {
+        // Back to the built-in screen: the trial (if any) is over, USE_QML keeps it there
+        auto backToQml = [&app, &relaunch, root](const QString &why) {
+            FrontendManager::endTrial(root);
             FrontendManager::forceQml(root, why);
-            qWarning("Frontend gave up (%s): starting again on the QML UI", qPrintable(why));
-            relaunchOnQml = true;
+            relaunch = Relaunch::OnQml;
             app.quit();
+        };
+        QObject::connect(supervisor.get(), &FrontendSupervisor::gaveUp, &app, [backToQml](const QString &why) {
+            qWarning("Frontend gave up (%s): starting again on the QML UI", qPrintable(why));
+            backToQml(why);
         });
+        // The escape: mute pressed five times, from the knob or anything else
+        QObject::connect(&core.volumeController, &VolumeController::escapeGesture, &app, [backToQml]() {
+            qWarning("Mute pressed %d times: back to the built-in screen", VolumeController::kEscapePresses);
+            backToQml(QStringLiteral("mute was pressed %1 times").arg(VolumeController::kEscapePresses));
+        });
+        if (trial.active()) {
+            core.frontendManager.startTrialCountdown(trial.seconds);
+            QObject::connect(&core.frontendManager, &FrontendManager::trialExpired, &app, [&app, &relaunch, root]() {
+                FrontendManager::endTrial(root);
+                relaunch = Relaunch::AsChosen;
+                app.quit();
+            });
+        }
         // From the event loop, so a frontend that can't start at all still
         // reaches quit() with the loop running
         QTimer::singleShot(0, supervisor.get(), &FrontendSupervisor::start);
@@ -414,24 +498,8 @@ int runHeadless(QGuiApplication &app, bool smokeTest, const FrontendManager::Boo
         OctaveLog::flush();
     });
     const int code = app.exec();
-#if QT_CONFIG(process)
-    if (relaunchOnQml) {
-        // The same binary and arguments; USE_QML makes it the QML UI. An
-        // AppImage's own path is in $APPIMAGE (the mounted one goes away)
-        const QString self = qEnvironmentVariableIsSet("APPIMAGE") ? qEnvironmentVariable("APPIMAGE")
-                                                                    : QCoreApplication::applicationFilePath();
-        // Its output goes to the log files only: an inherited stdout can be a
-        // pipe or terminal that closes, and a write to it would end the new one
-        QProcess again;
-        again.setProgram(self);
-        again.setArguments(app.arguments().mid(1));
-        again.setStandardOutputFile(QProcess::nullDevice());
-        again.setStandardErrorFile(QProcess::nullDevice());
-        if (!again.startDetached())
-            qCritical("could not start OCTAVE again on the QML UI");
-        OctaveLog::flush();
-    }
-#endif
+    if (relaunch != Relaunch::No)
+        startAgain(app.arguments(), relaunch);
     return code;
 }
 #endif
@@ -600,17 +668,27 @@ int main(int argc, char *argv[])
     bool qmlFlag = false;
     for (int i = 1; i < argc; ++i)
         qmlFlag = qmlFlag || std::strcmp(argv[i], "--qml") == 0;
+    const QString frontendsRoot = SettingsManager::getAppDataDir() + QStringLiteral("/frontends");
+    // A screen being tried (tryFrontend): only as the exec frontend it names
+    FrontendManager::Trial trial = headless ? FrontendManager::Trial() : FrontendManager::beginTrial(frontendsRoot);
+    if (!trial.note.isEmpty())
+        qWarning("Frontends: %s", qPrintable(trial.note));
     const FrontendManager::Boot boot = headless ? FrontendManager::Boot()
-        : FrontendManager::bootChoice(SettingsManager::getAppDataDir() + QStringLiteral("/frontends"), qmlFlag);
+        : FrontendManager::bootChoice(frontendsRoot, qmlFlag);
     if (!boot.note.isEmpty())
         qWarning("%s", qPrintable(boot.note));
+    if (trial.active() && (boot.kind != FrontendManager::Boot::Exec || boot.manifest.id != trial.id)) {
+        qWarning("Frontends: %s can't be tried in this run; back to the previous screen", qPrintable(trial.id));
+        FrontendManager::endTrial(frontendsRoot);
+        trial = {};
+    }
     if (boot.kind == FrontendManager::Boot::Exec) {
         if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
             qputenv("QT_QPA_PLATFORM", "offscreen");
         QGuiApplication app(argc, argv);
         app.setOrganizationName("OCTAVE");
         app.setApplicationName("OCTAVE");
-        return runHeadless(app, smokeTest, &boot);
+        return runHeadless(app, smokeTest, &boot, trial);
     }
     if (headless) {
         // No window: the offscreen platform unless the caller picked one.
@@ -783,6 +861,17 @@ int main(int argc, char *argv[])
 
     // ---- Service (makeService: off unless asked for) ----
     Service service = makeService(app.arguments(), core, false);
+#ifdef OCTAVE_WASM
+    // A page can't listen on a port: the service is the page's own
+    // (Module.octaveService, webservice.h), always on, for the frontend
+    // playground (packaging/wasm/playground.html)
+    if (!service.server)
+        service = makeService(app.arguments() << QStringLiteral("--service"), core, false);
+    if (service.server)
+        WebService::install(service.server.get());
+    // The site's web frontends in Settings > Device > Frontends (webfrontends.h)
+    WebFrontends::install(&core.frontendManager, &core.volumeController);
+#endif
 
     // ---- Load Main.qml ----
 #ifdef Q_OS_ANDROID
@@ -803,7 +892,11 @@ int main(int argc, char *argv[])
 #ifdef OCTAVE_DEV_TOOLS
     devRuntime.afterLoad(service.server.get());   // its UI / perf / sim actions, with --profile
 #endif
+#ifndef OCTAVE_WASM
     const bool serving = service.server && service.server->start();
+#else
+    const bool serving = false;   // no socket in the browser: the page's own (above)
+#endif
     if (serving)
         core.servicePairing.setListening(service.server->bindAddress(), service.server->port());
 #ifndef Q_OS_MOBILE
@@ -845,7 +938,20 @@ int main(int argc, char *argv[])
         OctaveLog::flush();                   // last: everything the cleanup above logged reaches disk
     });
 
+#ifndef Q_OS_MOBILE
+    // Settings > Device > Frontends: Try, Restart now
+    bool restart = false;
+    QObject::connect(&core.frontendManager, &FrontendManager::restartRequested, &app, [&app, &restart]() {
+        restart = true;
+        app.quit();
+    });
+    const int code = app.exec();
+    if (restart)
+        startAgain(app.arguments(), Relaunch::AsChosen);
+    return code;
+#else
     return app.exec();
+#endif
 }
 
 #include "main.moc"

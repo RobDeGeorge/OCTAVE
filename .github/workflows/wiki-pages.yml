@@ -5,6 +5,9 @@ name: Site to GitHub Pages
 # Layout of the deployed site:
 #   /OCTAVE/            the app, built for the browser with Qt for WebAssembly
 #                       (packaging/wasm/build.sh + packaging/wasm/index.html)
+#   /OCTAVE/playground.html  the frontend playground: web frontends against the
+#                       same core (packaging/wasm/playground.html), with the
+#                       bundled ones under /OCTAVE/frontends/
 #   /OCTAVE/wiki/       wiki/, minus the index builder scripts
 #   /OCTAVE/<page>.html redirect stubs to /OCTAVE/wiki/<page>.html, generated
 #                       here so the old wiki links keep working
@@ -21,6 +24,9 @@ on:
       - 'CMakeLists.txt'
       - 'packaging/wasm/**'
       - 'wiki/**'
+      - 'templates/hello-car-js/**'
+      - 'examples/frontends/glass/**'
+      - 'sdk/typescript/**'
       - '.github/workflows/wiki-pages.yml'
   workflow_dispatch:
 
@@ -77,6 +83,15 @@ jobs:
         with:
           version: ${{ env.EMSDK_VERSION }}
           actions-cache-folder: 'emsdk-cache'
+      # The playground's bundled glass frontend (build.sh stages dist/)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build the glass example frontend
+        run: |
+          npm --prefix sdk/typescript ci --no-audit --no-fund
+          npm --prefix examples/frontends/glass ci --no-audit --no-fund
+          npm --prefix examples/frontends/glass run build
       - name: Build and stage
         run: |
           QT_HOST="$RUNNER_TEMP/qt/Qt/$QT_VERSION/gcc_64" \
@@ -85,6 +100,19 @@ jobs:
           OUT_DIR="$GITHUB_WORKSPACE/wasm-site" \
           bash packaging/wasm/build.sh
           du -sh wasm-site
+      # Both bundled frontends must show live values from the core in the
+      # playground (headless Chrome). Advisory until it has a few green runs
+      # on the hosted runners
+      - name: Check the frontend playground
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          python3 packaging/wasm/serve.py wasm-site 8091 &
+          server=$!
+          CHROME=google-chrome node packaging/wasm/check_playground.mjs http://127.0.0.1:8091/
+          status=$?
+          kill $server
+          exit $status
       - uses: actions/upload-artifact@v4
         with:
           name: octave-wasm
