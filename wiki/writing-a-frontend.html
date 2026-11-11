@@ -66,7 +66,7 @@ octave --headless             <span class="cmt"># no UI at all: your frontend is
         </ul>
         <pre><code><span class="cmt"># a whole session by hand</span>
 $ printf '{"op":"hello","id":1}\n{"op":"get","object":"volumeController","property":"percent","id":2}\n' | nc -q1 127.0.0.1 9876
-{"id":1,"ok":true,"result":{"app":{"build":"release","headless":true,"version":"0.9.5"},"auth":"trusted","loopbackOpen":true,"objects":["settingsManager",...],"protocolVersion":3,"scopes":["full"]}}
+{"id":1,"ok":true,"result":{"app":{"build":"release","headless":true,"version":"0.9.6"},"auth":"trusted","loopbackOpen":true,"objects":["settingsManager",...],"protocolVersion":3,"scopes":["full"]}}
 {"id":2,"ok":true,"result":32}</code></pre>
         <p>Every reply has <code>ok</code>; a failure has <code>"ok": false</code> and an <code>error</code> string. Anything with an <code>event</code> key is not a reply but a subscription event, and can arrive between replies.</p>
 

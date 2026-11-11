@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(OCTAVE VERSION 0.9.5 LANGUAGES C CXX)
+project(OCTAVE VERSION 0.9.6 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -739,7 +739,7 @@ if(ANDROID)
     # Properties must be set before the auto-finalize step that qt_add_executable
     # schedules (via CMake's DEFERRED mechanism).
     # The APK's version follows project(): versionName is the version string,
-    # versionCode is major*10000 + minor*100 + patch (0.9.5 -> 905). Android
+    # versionCode is major*10000 + minor*100 + patch (0.9.6 -> 906). Android
     # only installs an APK whose code is higher than the installed one, so it
     # must keep rising; it was hand-edited up to 6 before this.
     math(EXPR OCTAVE_ANDROID_VERSION_CODE
