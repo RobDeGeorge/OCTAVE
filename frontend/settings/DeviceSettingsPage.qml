@@ -36,6 +36,9 @@ Flickable {
     readonly property var _pairing: typeof servicePairing !== "undefined" ? servicePairing : null
     // Installed frontends: other screens for OCTAVE (src/managers/frontendmanager.h)
     readonly property var _frontends: typeof frontendManager !== "undefined" ? frontendManager : null
+    // The browser build: the site's web frontends, shown over this screen at once
+    // (src/platform/wasm/webfrontends.h); nothing to install, nothing to restart
+    readonly property bool _inBrowser: Qt.platform.os === "wasm"
     property string frontendStatus: ""
 
     function frontendName(id) {
@@ -371,6 +374,13 @@ Flickable {
             readonly property var fm: pageRoot._frontends
 
             SettingDescription {
+                visible: pageRoot._inBrowser
+                text: "Other screens for OCTAVE, made by anyone with the service API, running on this same car. "
+                      + "Use one to see it in place of this screen; its OCTAVE button, or mute pressed five times "
+                      + "within four seconds, brings this screen back. More in the frontend gallery on the wiki."
+            }
+            SettingDescription {
+                visible: !pageRoot._inBrowser
                 text: "Other screens for OCTAVE, made by anyone with the service API. A web frontend is served to "
                       + "browsers; a program frontend replaces this screen. Try one for two minutes and this screen "
                       + "comes back by itself (so does turning the car off and on). To get this screen back at any "
@@ -397,7 +407,7 @@ Flickable {
                 onClicked: fm.clearForcedQml()
             }
             RowLayout {
-                visible: !!fm && !fm.forcedQml && fm.activeId !== fm.runningId
+                visible: !!fm && !pageRoot._inBrowser && !fm.forcedQml && fm.activeId !== fm.runningId
                 Layout.fillWidth: true
                 spacing: App.Spacing.overallSpacing
                 Text {
@@ -420,7 +430,7 @@ Flickable {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: App.Spacing.overallSpacing
-                visible: !!fm
+                visible: !!fm && !pageRoot._inBrowser
                 SettingsButton {
                     objectName: "installFrontendFolder"
                     text: "Install from folder"
@@ -504,12 +514,15 @@ Flickable {
                                 objectName: "useFrontend_" + modelData.id
                                 text: modelData.active ? "In use" : "Use"
                                 enabled: !modelData.active && modelData.compatible
-                                tooltipText: modelData.compatible ? "Make this the screen from the next start" : modelData.problem
+                                tooltipText: !modelData.compatible ? modelData.problem
+                                             : pageRoot._inBrowser ? "Show it in place of this screen"
+                                             : "Make this the screen from the next start"
                                 height: pageRoot.dp(28)
                                 onClicked: if (!fm.setActive(modelData.id)) pageRoot.frontendStatus = fm.lastError
                             }
                             SettingsButton {
                                 objectName: "removeFrontend_" + modelData.id
+                                visible: !pageRoot._inBrowser   // the site's own: nothing installed
                                 text: "Remove"
                                 enabled: modelData.id !== fm.runningId
                                 height: pageRoot.dp(28)

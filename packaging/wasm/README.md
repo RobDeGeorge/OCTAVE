@@ -61,6 +61,24 @@ python3 packaging/wasm/serve.py /tmp/octave-site 8080
 Then open `http://127.0.0.1:8080/`. The demo runs the simulated car
 (`--dev` style carsim) and talks to no hardware.
 
+## Frontends on the demo page
+
+`index.html` lists the site's web frontends (`frontends/catalog.json`) in
+Settings > Device > Frontends, as installed frontends are listed on a head
+unit. The page reads the catalog into `globalThis.octaveFrontendCatalog`
+before the core starts, and `src/platform/wasm/webfrontends.{h,cpp}` puts a
+folder with each one's manifest into the frontends root in the page's
+memory, so `frontendManager.frontends` and `setActive` work unchanged. Use
+applies at once (no restart in a page): the page follows
+`frontendManager.activeId` over its own `Module.octaveService` connection
+and shows the chosen frontend over the Qt screen in the same sandboxed
+iframe as the playground, starting the simulated car when no car is
+connected. Its **OCTAVE** button (`setActive("")`), or mute pressed five
+times, brings the built-in screen back. `index.html?frontend=<slug>` opens
+on one, and the browser remembers the last one shown (`localStorage`).
+Install from folder / zip and Remove are hidden there: the files are the
+site's.
+
 ## The frontend playground
 
 `playground.html` runs a web frontend (one written for the service API,
@@ -88,11 +106,19 @@ simulated car itself (`obdManager.connect_to_adapter("sim://elm327")`).
   allows CORS, as GitHub Pages does) safe to offer. `localStorage` throws in
   there, so a frontend must not depend on it.
 - **Bundled frontends**: `frontends/hello-car-js/` (the template) and
-  `frontends/glass/` (the example, when built), staged by `build.sh`.
+  `frontends/glass/` (the example, when built), staged by
+  `stage_frontends.py` (from `build.sh`) with `frontends/catalog.json`: each
+  one's own `octave-frontend.json` plus its `slug` and `path`. To offer
+  another, add it to `FRONTENDS` there.
+- **Shared code**: the stand-in, the bridge and the loader are
+  `frontend-host.js`, used by this page and `index.html`.
 - **Not available there**: `GET /art` and `/export` (no HTTP server: covers
   don't show), pairing (the page counts as a program on the device), video.
 - **The check**: `node packaging/wasm/check_playground.mjs
   http://127.0.0.1:8080/` loads each bundled frontend in headless Chromium
   and passes when it shows two different RPM readings from the core
-  (`SHOT_DIR=` keeps screenshots). The Pages workflow runs it after the
+  (`SHOT_DIR=` keeps screenshots); then on `index.html` it checks that
+  `frontendManager.frontends` lists the catalog, that `setActive` shows one
+  on top with live values, and that the OCTAVE button brings the screen
+  back. The Pages workflow runs it after the
   build (advisory for now).

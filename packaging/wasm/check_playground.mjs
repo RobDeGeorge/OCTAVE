@@ -7,6 +7,9 @@
 //
 // Default frontends: hello-car-js (and glass when the site has it). Exits 0
 // when each showed a changing RPM; SHOT_DIR=dir keeps a screenshot of each.
+// Then index.html: Settings > Device > Frontends lists the site's frontends
+// (frontendManager.frontends), Use (setActive) shows one over the built-in
+// screen with live values, and its OCTAVE button brings the screen back.
 // Needs Node 22+ (WebSocket) and chromium / google-chrome on PATH (CHROME=).
 
 import { spawn } from 'node:child_process'
@@ -151,6 +154,51 @@ try {
       for (const line of b.console.slice(-15)) console.log('    ' + line)
     }
     b.console = []
+  }
+
+  // The demo page: a frontend chosen as the screen
+  const demo = 'hello-car-js'
+  console.log(`… index.html: ${demo} from Settings > Device > Frontends`)
+  try {
+    await b.send('Page.navigate', { url: new URL('index.html', base).href })
+    await b.waitFor(`!!globalThis.octaveService`, 180000, 'the core to offer Module.octaveService')
+    const listed = await b.eval(`(async () => {
+      const own = OctaveFrontendHost.connect(globalThis.octaveService)
+      globalThis.__check = own
+      const list = await own.request('get', { object: 'frontendManager', property: 'frontends' })
+      return list.map((f) => f.id + ':' + f.kind + ':' + f.compatible)
+    })()`)
+    const catalog = await (await fetch(new URL('frontends/catalog.json', base))).json()
+    for (const f of catalog) {
+      if (!listed.includes(`${f.id}:web:true`)) throw new Error(`${f.id} not listed as a usable web frontend (listed: ${listed.join(', ')})`)
+    }
+    const id = catalog.find((f) => f.slug === demo).id
+    await b.eval(`globalThis.__check.call('frontendManager', 'setActive', ${JSON.stringify(id)})`)
+    // Shown, and on top: what is at the middle of the page is the frontend, not Qt's screen
+    await b.waitFor(`document.getElementById('back').style.display === 'block'
+      && document.elementFromPoint(innerWidth / 2, innerHeight / 2) === document.getElementById('frontend')`, 30000, 'the frontend over the screen')
+    const seen = new Set()
+    const until = Date.now() + 60000
+    let text = ''
+    while (Date.now() < until && seen.size < 2) {
+      text = await frameText(b)
+      const rpm = rpmIn(text)
+      if (Number.isFinite(rpm) && rpm > 0) seen.add(rpm)
+      await sleep(700)
+    }
+    if (process.env.SHOT_DIR) await b.shot(path.join(process.env.SHOT_DIR, `index-${demo}.png`))
+    if (seen.size < 2) throw new Error(`no live RPM (saw ${[...seen].join(', ') || 'none'}); its text: ${text.slice(0, 300)}`)
+    if (!(await b.eval(`location.search.includes('frontend=${demo}')`))) throw new Error('?frontend= not set')
+    await b.eval(`document.getElementById('back').click()`)
+    await b.waitFor(`document.getElementById('frontend').style.display === 'none'
+      && document.getElementById('screen').contains(document.elementFromPoint(innerWidth / 2, innerHeight / 2))`, 15000, 'the built-in screen back')
+    const after = await b.eval(`globalThis.__check.request('get', { object: 'frontendManager', property: 'activeId' })`)
+    if (after !== '') throw new Error(`activeId is still ${after}`)
+    console.log(`PASS index.html: listed ${catalog.length}, showed ${demo} (RPM ${[...seen].join(' -> ')}), OCTAVE button back`)
+  } catch (e) {
+    failures.push('index.html')
+    console.log(`FAIL index.html: ${e.message}`)
+    for (const line of b.console.slice(-15)) console.log('    ' + line)
   }
 } finally {
   b.stop()

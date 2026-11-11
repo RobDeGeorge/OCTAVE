@@ -491,6 +491,8 @@ if(EMSCRIPTEN)
         src/platform/wasm/weblibrary.cpp
         src/platform/wasm/webservice.h
         src/platform/wasm/webservice.cpp
+        src/platform/wasm/webfrontends.h
+        src/platform/wasm/webfrontends.cpp
     )
     set_source_files_properties(src/managers/obdadapterfinder.cpp src/managers/networkmanager.cpp
                                 PROPERTIES HEADER_FILE_ONLY ON)

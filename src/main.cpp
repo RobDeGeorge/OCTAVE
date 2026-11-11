@@ -69,6 +69,7 @@ extern "C" {
 #ifdef OCTAVE_WASM
 #include "platform/wasm/webbluetooth.h"
 #include "platform/wasm/webservice.h"
+#include "platform/wasm/webfrontends.h"
 #endif
 
 namespace {
@@ -868,6 +869,8 @@ int main(int argc, char *argv[])
         service = makeService(app.arguments() << QStringLiteral("--service"), core, false);
     if (service.server)
         WebService::install(service.server.get());
+    // The site's web frontends in Settings > Device > Frontends (webfrontends.h)
+    WebFrontends::install(&core.frontendManager, &core.volumeController);
 #endif
 
     // ---- Load Main.qml ----

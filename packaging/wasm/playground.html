@@ -146,20 +146,19 @@
 
   <script src="octave.js"></script>
   <script src="qtloader.js"></script>
+  <script src="frontend-host.js"></script>
   <script>
   (async function () {
-    // ── bundled frontends (staged next to this page by build.sh / CI) ──
-    const BUNDLED = [
-      { id: 'hello-car-js', name: 'Hello, car (template)' },
-      { id: 'glass', name: 'Glass (TypeScript + Svelte)' },
-    ];
+    const host = window.OctaveFrontendHost;
+    // ── the site's frontends (frontends/catalog.json, staged by build.sh / CI) ──
+    const BUNDLED = await host.catalog();
     const $ = (id) => document.getElementById(id);
     const pick = $('pick'), urlBox = $('url'), frame = $('frontend'), logBox = $('log');
-    for (const f of BUNDLED) pick.add(new Option(f.name, f.id));
+    for (const f of BUNDLED) pick.add(new Option(f.name, f.slug));
 
     const params = new URLSearchParams(location.search);
     const asked = params.get('frontend') || 'hello-car-js';
-    if (BUNDLED.some((f) => f.id === asked)) pick.value = asked; else urlBox.value = asked;
+    if (BUNDLED.some((f) => f.slug === asked)) pick.value = asked; else urlBox.value = asked;
 
     // ── the message log ──
     let events = 0, eventLine = null;
@@ -231,10 +230,7 @@
     }
 
     // The service, once the core has installed it (webservice.cpp)
-    const serviceReady = new Promise((resolve) => {
-      if (globalThis.octaveService) resolve(globalThis.octaveService);
-      else globalThis.onOctaveServiceReady = resolve;
-    });
+    const serviceReady = host.service();
 
     try {
       render();
@@ -259,23 +255,8 @@
     const service = await serviceReady;
 
     // The playground's own connection: drives the car for the buttons
-    let ownId = 0, nextId = 1;
-    const pending = new Map();
-    function request(op, args) {
-      return new Promise((resolve, reject) => {
-        const id = nextId++;
-        pending.set(id, { resolve, reject });
-        service.send(ownId, JSON.stringify({ op, id, ...args }));
-      });
-    }
-    ownId = service.open((text) => {
-      const m = JSON.parse(text);
-      const p = pending.get(m.id);
-      if (!p) return;
-      pending.delete(m.id);
-      m.ok ? p.resolve(m.result) : p.reject(new Error(m.error));
-    });
-    const call = (object, method, ...args) => request('call', { object, method, args });
+    const own = host.connect(service);
+    const call = (object, method, ...args) => own.call(object, method, ...args);
 
     status.textContent = 'Starting the simulated car';
     // The adapter sheet's "Simulated car": the real OBD stack on a simulated
@@ -293,148 +274,32 @@
       simButtons[b.dataset.sim]().catch((e) => log(b.textContent + ': ' + e.message, 'err'));
     }));
 
-    // ── the frontend in its iframe ──
-    // Runs in the iframe before any of the frontend's own scripts: WebSocket
-    // becomes a stand-in that carries each text frame to this page by
-    // postMessage, and this page to Module.octaveService and back. The
-    // iframe is sandboxed (an opaque origin), so the bridge is all it has.
-    function shimSource() {
-      return `(function () {
-  var parentWindow = window.parent;
-  var sockets = new Map();
-  var next = 0;
-  function post(m) { m.octave = 1; parentWindow.postMessage(m, '*'); }
-  window.addEventListener('message', function (e) {
-    if (e.source !== parentWindow) return;
-    var m = e.data;
-    if (!m || m.octave !== 1) return;
-    var s = sockets.get(m.sock);
-    if (!s) return;
-    if (m.type === 'opened') s._opened(m.ok);
-    else if (m.type === 'message') s._message(m.data);
-    else if (m.type === 'closed') s._closed();
-  });
-  class OctaveSocket extends EventTarget {
-    constructor(url) {
-      super();
-      this.url = String(url); this.readyState = 0; this.protocol = ''; this.extensions = '';
-      this.binaryType = 'blob'; this.bufferedAmount = 0;
-      this.onopen = this.onmessage = this.onclose = this.onerror = null;
-      this._sock = ++next;
-      sockets.set(this._sock, this);
-      post({ type: 'open', sock: this._sock });
-    }
-    _fire(type, ev) {
-      const h = this['on' + type];
-      if (typeof h === 'function') { try { h.call(this, ev); } catch (e) { setTimeout(() => { throw e; }); } }
-      this.dispatchEvent(ev);
-    }
-    _opened(ok) {
-      if (this.readyState !== 0) return;
-      if (!ok) {
-        this.readyState = 3;
-        sockets.delete(this._sock);
-        this._fire('error', new Event('error'));
-        this._fire('close', new CloseEvent('close', { code: 1006, wasClean: false }));
-        return;
-      }
-      this.readyState = 1;
-      this._fire('open', new Event('open'));
-    }
-    _message(text) {
-      if (this.readyState === 1) this._fire('message', new MessageEvent('message', { data: text }));
-    }
-    _closed() {
-      if (this.readyState === 3) return;
-      this.readyState = 3;
-      sockets.delete(this._sock);
-      this._fire('close', new CloseEvent('close', { code: 1006, wasClean: false }));
-    }
-    send(data) {
-      if (this.readyState !== 1) throw new DOMException('WebSocket is not open', 'InvalidStateError');
-      post({ type: 'send', sock: this._sock, data: typeof data === 'string' ? data : new TextDecoder().decode(data) });
-    }
-    close() {
-      if (this.readyState >= 2) return;
-      const wasOpen = this.readyState === 1;
-      this.readyState = 3;
-      sockets.delete(this._sock);
-      post({ type: 'close', sock: this._sock });
-      if (wasOpen) this._fire('close', new CloseEvent('close', { code: 1000, wasClean: true }));
-    }
-  }
-  for (const [k, v] of [['CONNECTING', 0], ['OPEN', 1], ['CLOSING', 2], ['CLOSED', 3]]) {
-    Object.defineProperty(OctaveSocket, k, { value: v });
-    Object.defineProperty(OctaveSocket.prototype, k, { value: v });
-  }
-  window.WebSocket = OctaveSocket;
-})();`;
-    }
-
-    // The bridge: the frontend's sockets (by its own numbers) to service
-    // connections. Each load of a frontend starts afresh, closing the last
-    // one's connections
-    let socks = new Map();
-    function closeFrontendConnections() {
-      for (const id of socks.values()) service.close(id);
-      socks = new Map();
-    }
+    // ── the frontend in its iframe (frontend-host.js) ──
     function trace(dir, text) {
       if (dir === '<' && text.startsWith('{"event"')) return countEvent();
       log((dir === '>' ? '→ ' : '← ') + text, dir === '>' ? 'in' : (text.includes('"ok":false') ? 'err' : ''));
     }
-    window.addEventListener('message', (e) => {
-      if (e.source !== frame.contentWindow) return;
-      const m = e.data;
-      if (!m || m.octave !== 1 || typeof m.sock !== 'number') return;
-      const target = e.source;
-      const mine = socks;
-      const reply = (msg) => { msg.octave = 1; msg.sock = m.sock; target.postMessage(msg, '*'); };
-      if (m.type === 'open') {
-        if (socks.has(m.sock)) return;
-        const id = service.open((text) => { trace('<', text); reply({ type: 'message', data: text }); });
-        if (id) socks.set(m.sock, id);
-        reply({ type: 'opened', ok: !!id });
-      } else if (m.type === 'send' && typeof m.data === 'string') {
-        const id = mine.get(m.sock);
-        if (!id) return reply({ type: 'closed' });
-        trace('>', m.data);
-        service.send(id, m.data);
-      } else if (m.type === 'close') {
-        const id = mine.get(m.sock);
-        if (id) { service.close(id); mine.delete(m.sock); }
-      }
-    });
+    const bridge = host.bridge(frame, service, trace);
 
     function frontendUrl(value) {
-      if (BUNDLED.some((f) => f.id === value)) return new URL(`frontends/${value}/`, location.href);
-      const u = new URL(value, location.href);
-      return u;
+      const f = BUNDLED.find((e) => e.slug === value);
+      return f ? f.path : value;
     }
 
     async function loadFrontend(value) {
-      closeFrontendConnections();
+      bridge.closeAll();
       frame.style.display = 'none';
       $('loader').style.display = 'flex';
       $('loader').classList.remove('failed');
       status.textContent = 'Loading the frontend';
-      let base;
       try {
-        base = frontendUrl(value);
-        const page = base.pathname.endsWith('.html') ? base : new URL('index.html', base);
-        if (!page.pathname.endsWith('.html')) throw new Error('not a page');
-        const response = await fetch(page, { mode: 'cors' });
-        if (!response.ok) throw new Error(`HTTP ${response.status} for ${page}`);
-        let html = await response.text();
-        const head = `<base href="${new URL('.', page).href}"><script>${shimSource()}<\/script>`;
-        html = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + head) : head + html;
-        frame.srcdoc = html;
+        const page = await host.load(frame, frontendUrl(value));
         frame.style.display = 'block';
         $('loader').style.display = 'none';
         const u = new URL(location.href);
         u.searchParams.set('frontend', value);
         history.replaceState(null, '', u);
-        log('loaded ' + page.href);
+        log('loaded ' + page);
       } catch (e) {
         fail(`Could not load the frontend ${value}: ${e.message}. A frontend from another site must allow it (CORS; GitHub Pages does), and its files must be fetchable from this page.`);
       }
