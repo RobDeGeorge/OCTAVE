@@ -30,7 +30,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | [phone-spotify-library.md](phone-spotify-library.md) | Step 1 (shared song rows, shuffle/repeat to the phone) M; library reader is a maybe | M … L | S22 + Spotify |
 | [arm64-qt-ffmpeg-lgpl.md](arm64-qt-ffmpeg-lgpl.md) | aarch64 AppImage ships an LGPL FFmpeg for Qt's music playback instead of Ubuntu's GPL one | M (or with a Qt upgrade) | arm64 CI, Pi |
 | [iphone-airplay.md](iphone-airplay.md) | An iPhone mirrors to OCTAVE over AirPlay and is driven by OCTAVE as a Bluetooth mouse: code done, every check needs an iPhone | S … M | desktop + iPhone, then Pi |
-| [frontend-platform.md](frontend-platform.md) | The frontend platform landed on the desktop (2026-10-23); left: watch the first release run of the `--sim` smoke steps, an installed exec frontend on Windows, macOS and the Pi, many clients measured on the Pi, two items in review (`--pair-code`, web-frontend scopes on the head unit) | S-M | CI, Win11 VM, Pi |
+| [frontend-platform.md](frontend-platform.md) | The frontend platform landed on the desktop (2026-10-23); left: an installed exec frontend on Windows, macOS and the Pi, many clients measured on the Pi, two items in review (`--pair-code`, web-frontend scopes on the head unit) | S-M | CI, Win11 VM, Pi |
 
 ## 3. Several sessions (L)
 

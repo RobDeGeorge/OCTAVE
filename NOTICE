@@ -61,7 +61,7 @@ Third-party libraries in the release packages (not in this repository):
 - OpenSSL (Apache-2.0), linked dynamically: the TLS of the built-in Android
   Auto receiver (desktop) and AirPlay's cryptography (Linux). The Linux
   AppImages bundle Ubuntu 22.04's libssl / libcrypto 3.0, the Windows release
-  vcpkg's DLLs; the Android APK carries the prebuilt 3.1.8 of android/openssl/
-  for Qt's HTTPS.
+  vcpkg's DLLs (3.6), the macOS app Homebrew's libssl / libcrypto 4; the
+  Android APK carries the prebuilt 3.1.8 of android/openssl/ for Qt's HTTPS.
 - libplist 2.x (LGPL-2.1-or-later), linked dynamically, Linux only (AirPlay).
 - Android platform-tools (adb), Apache-2.0, shipped next to the binary.
