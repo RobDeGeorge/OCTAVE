@@ -1,7 +1,7 @@
 # Compile the QML ahead of time (Windows first-launch stall)
 
-**Status:** deferred (found in 0.9.5 RC testing, 2026-10-17; predates 0.9.5)
-**Last updated:** 2026-10-18
+**Status:** deferred; the premise is in doubt, measure before building anything (see "Check first")
+**Last updated:** 2026-11-11
 
 **Goal:** Ship pre-compiled QML so a fresh install doesn't spend seconds compiling it before the first frame.
 
@@ -18,7 +18,21 @@ Evidence (rc3, kora, 5 fresh installs):
 
 Today QML is loaded at runtime from `frontend/` (`CMakeLists.txt:364-367`, "loaded at runtime (not compiled into resources)"). Windows reads it from `<appDir>/frontend`, the AppImage from `usr/frontend`, and Android bundles it via `QT_QML_ROOT_PATH` (`CMakeLists.txt:406-407`).
 
-## Steps
+## Check first (2026-11-11): is it the QML at all?
+
+A Linux measurement says no. A copy of the debug build with an empty cache (`octave --smoke`, Qt 6.12, zion) logs "Main.qml loaded" at 0.87 s and writes 52 `.qmlc` files; with the cache warm it is 0.81 to 0.82 s. Compiling the QML costs about 0.05 s there. A slow VM and Qt 6.7.3 will be slower, but not by the 2 to 5 s seen on Windows.
+
+In the rc3 logs the gap is between "Scanned dashboards" and "Restoring playback state", which is `engine.load(Main.qml)`: 4.9, 2.2, 2.9, 2.2 and 3.0 s on the five fresh installs. That call also creates the window and the first scene, so the D3D11 pipeline and shader caches written by the same run (`qtpipelinecache-*`, `_qt_QGfxShaderBuilder_*`) and DLLs loaded for the first time (Defender) sit in the same gap. The VM draws with "Direct3D 11 (no GPU known)". There is no warm Windows number to compare with.
+
+Asked of kora on 2026-11-11 (results in `_OCTAVE_rc/v0.9.7/results/firstlaunch-split/` when run): the same gap on the published 0.9.6 with nothing deleted, with only `qmlcache` deleted, only `qtpipelinecache-*`, only `_qt_QGfxShaderBuilder_*`, the whole cache dir, after a reboot with the caches intact, and on a fresh install.
+
+- If deleting `qmlcache` alone brings the stall back: carry on with the steps below.
+- If it is the pipeline / shader cache: pre-compiling the QML does not help. Look at what the first frame draws (the home page's effects, `MultiEffect` / `ShaderEffect` users) and at shipping the pipeline cache or drawing a plain first frame.
+- If it is cold DLLs (the reboot case is as slow as a fresh install): nothing in the frontend helps; a splash drawn before `engine.load` is the honest fix.
+
+Rewrite or delete this file once the numbers are in.
+
+## Steps (only if the QML is the cause)
 
 1. Check what depends on loose QML files: the Pi self-updater (`git pull` and restart reads `frontend/` straight from the checkout), dev hot-reload, the `src/dev/qml/` overlay, the user dashboards in `<config>/dashboards/` (JSON, not affected), and the qmllint CI pass.
 2. Pick an approach:
