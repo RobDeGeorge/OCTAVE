@@ -10,7 +10,8 @@ the cover next to this file.
 
 Installed as OCTAVE's screen (octave-frontend.json beside this file), OCTAVE
 starts it with OCTAVE_HOST, OCTAVE_PORT and OCTAVE_TOKEN in the environment:
-it uses those, and never asks for a pairing code.
+it uses those, and never asks for a pairing code. It quits when its standard
+input ends, which is how OCTAVE asks a frontend to quit.
 
 octave_client/ beside this file is OCTAVE's stdlib-only Python client
 (sdk/python/octave_client), copied in so this folder is complete on its own.
@@ -92,9 +93,18 @@ def main():
     octave.subscribe("nowPlaying", properties=["hasTrack", "title", "artist", "playing", "artRevision"], throttle_ms=250)
 
     values, track, seen_cover, pressed = {}, {}, [None], [False]
+    quit_asked = threading.Event()
     if args.check is None:
         print("Enter toggles play / pause, Ctrl-C quits.")
-        threading.Thread(target=lambda: [octave.call("nowPlaying", "togglePlay") for _ in sys.stdin], daemon=True).start()
+
+        def keys():
+            for _ in sys.stdin:
+                octave.call("nowPlaying", "togglePlay")
+            # The end of input. OCTAVE closes a frontend's standard input when it wants it to quit:
+            # on Windows that is the only request a program without a window gets.
+            quit_asked.set()
+
+        threading.Thread(target=keys, daemon=True).start()
 
     def show():
         if args.check is not None and not sys.stdout.isatty():
@@ -106,7 +116,7 @@ def main():
 
     deadline = time.monotonic() + (args.check or float("inf"))
     try:
-        while time.monotonic() < deadline:
+        while time.monotonic() < deadline and not quit_asked.is_set():
             for event in octave.events(timeout=0.5):   # events() returns after half a second of quiet
                 if event["event"] == "params":
                     values.update(event["values"])
@@ -120,7 +130,7 @@ def main():
                 else:
                     continue
                 show()
-                if time.monotonic() > deadline:
+                if time.monotonic() > deadline or quit_asked.is_set():
                     break
     except KeyboardInterrupt:
         pass

@@ -3,7 +3,9 @@
 // folder or on PATH, the environment and a session token holding only the
 // manifest's scopes, exit 0 ends it, crashes restart it with back-off until
 // it gives up, a long run forgives earlier crashes, stop() ends a program
-// that runs on, and every token is revoked when its run ends.
+// that runs on (by the end of its standard input alone when it takes no
+// SIGTERM, by a kill when it takes neither), and every token is revoked
+// when its run ends.
 
 #include "managers/frontendsupervisor.h"
 #include "managers/settingsmanager.h"
@@ -118,6 +120,62 @@ private slots:
         QVERIFY(!s.running());
         QVERIFY(t.elapsed() < 5000);
         QVERIFY(m_pairing->checkToken(token).isEmpty());
+    }
+
+    // The request to quit a console program sees on Windows too, where
+    // there is no SIGTERM: its standard input ends. This one ignores SIGTERM.
+    void theEndOfItsInputAsksItToQuit()
+    {
+        const QString out = m_tmp->filePath("quit.txt");
+        const QString dir = frontend(QStringLiteral("#!/bin/sh\ntrap '' TERM\necho up > '%1'\n"
+                                                    "while read line; do :; done\n"
+                                                    "echo 'input closed' >> '%1'\nexit 0\n").arg(out));
+        FrontendSupervisor s(manifest({"bin/run"}), dir, m_pairing.get(), 19841);
+        FrontendSupervisor::Options o;
+        o.stopGraceMs = 20000;   // far longer than the test may take: only the input can end it in time
+        s.setOptions(o);
+        QSignalSpy clean(&s, &FrontendSupervisor::exitedCleanly);
+        s.start();
+        QTRY_VERIFY_WITH_TIMEOUT(QFileInfo(out).size() > 0, 10000);
+        QTest::qWait(100);   // the trap is set and it is reading
+        QVERIFY(s.running());   // an open input, never written to, ends nothing
+        QElapsedTimer t;
+        const QStringList warnings = supervisorWarnings([&] {
+            t.start();
+            s.stop();
+        });
+        QVERIFY2(t.elapsed() < 5000, qPrintable(QString::number(t.elapsed())));
+        QVERIFY(!s.running());
+        QVERIFY2(warnings.isEmpty(), qPrintable(warnings.join(" | ")));   // it quit; nothing was killed
+        QFile f(out);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        QVERIFY(f.readAll().contains("input closed"));
+        QCOMPARE(clean.count(), 0);   // OCTAVE asked: not the user quitting
+    }
+
+    // One that takes neither request is killed after the grace, with a
+    // warning that says what a frontend is expected to do
+    void whatIgnoresBothRequestsIsKilled()
+    {
+        const QString out = m_tmp->filePath("deaf.txt");
+        const QString dir = frontend(QStringLiteral("#!/bin/sh\ntrap '' TERM\necho up > '%1'\n"
+                                                    "while :; do sleep 0.05; done\n").arg(out));
+        FrontendSupervisor s(manifest({"bin/run"}), dir, m_pairing.get(), 19841);
+        FrontendSupervisor::Options o;
+        o.stopGraceMs = 300;
+        s.setOptions(o);
+        s.start();
+        QTRY_VERIFY_WITH_TIMEOUT(QFileInfo(out).size() > 0, 10000);
+        QTest::qWait(100);
+        QElapsedTimer t;
+        const QStringList warnings = supervisorWarnings([&] {
+            t.start();
+            s.stop();
+        });
+        QVERIFY(!s.running());
+        QVERIFY2(t.elapsed() >= 300 && t.elapsed() < 5000, qPrintable(QString::number(t.elapsed())));
+        QCOMPARE(warnings.size(), 1);
+        QVERIFY2(warnings.first().contains("standard input closing; killed"), qPrintable(warnings.first()));
     }
 
     void crashesRestartThenItGivesUp()
@@ -247,6 +305,21 @@ private slots:
     }
 
 private:
+    // The supervisor's warnings while run() runs
+    template <typename F>
+    QStringList supervisorWarnings(F run)
+    {
+        static QStringList warnings;
+        warnings.clear();
+        const QtMessageHandler previous = qInstallMessageHandler([](QtMsgType type, const QMessageLogContext &c, const QString &m) {
+            if (type == QtWarningMsg && QByteArray(c.category ? c.category : "") == "octave.frontends.supervisor")
+                warnings << m;
+        });
+        run();
+        qInstallMessageHandler(previous);
+        return warnings;
+    }
+
     FrontendManifest manifest(const QStringList &argv, const QStringList &scopes = {"read"})
     {
         FrontendManifest m;

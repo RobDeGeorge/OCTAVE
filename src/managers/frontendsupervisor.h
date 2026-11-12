@@ -27,9 +27,11 @@
 // cut at logLineMax characters; what is over goes, with one "N lines
 // dropped" note a second, so a frontend that prints megabytes cannot keep
 // the logger busy.
-// stop() asks the program to quit (SIGTERM on Unix), and kills it after
-// stopGraceMs. Needs QProcess (QT_CONFIG(process)); without it start()
-// gives up at once.
+// stop() asks the program to quit: it closes the program's standard input
+// (the one request a console program sees on every platform) and sends
+// SIGTERM on Unix, WM_CLOSE to its windows on Windows; it kills what is
+// still running after stopGraceMs. Needs QProcess (QT_CONFIG(process));
+// without it start() gives up at once.
 
 #include "frontendmanifest.h"
 

@@ -235,9 +235,15 @@ void FrontendSupervisor::stop()
     m_restart.stop();
 #if QT_CONFIG(process)
     if (m_process && m_process->state() != QProcess::NotRunning) {
+        // The request to quit every program can see: the end of its
+        // standard input. terminate() adds SIGTERM on Unix and WM_CLOSE on
+        // Windows, which a program without a window never receives.
+        m_process->closeWriteChannel();
         m_process->terminate();
         if (!m_process->waitForFinished(m_options.stopGraceMs)) {
-            qCWarning(lcSupervisor).noquote() << m_manifest.id << "did not quit within" << m_options.stopGraceMs << "ms; killed";
+            qCWarning(lcSupervisor).noquote() << m_manifest.id << "did not quit within" << m_options.stopGraceMs
+                                              << "ms of its standard input closing; killed"
+                                                 " (a frontend quits at the end of its input: wiki/writing-a-frontend.html)";
             m_process->kill();
             m_process->waitForFinished(1000);
         }
