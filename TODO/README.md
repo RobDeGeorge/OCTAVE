@@ -36,7 +36,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | File | Goal | Effort | Needs |
 |---|---|---|---|
 | [media-source-arbiter.md](media-source-arbiter.md) | One music source at a time: done for Android Auto; left: by-ear checks, phone mirror on the same rules, visualizer | S | desktop, AA phone, Pi |
-| [qml-precompile.md](qml-precompile.md) | Ship pre-compiled QML so first launch doesn't stall (first: a Windows measurement of whether the QML is the cause) | S, then L | Win11 VM, Pi, S22 |
+| [qml-precompile.md](qml-precompile.md) | Ship pre-compiled QML, if a Pi needs it (on Windows it is 0.3 s and not the first-launch stall; measure on a Pi first) | S, then L | Pi, Win11 VM, S22 |
 | [user-primitives.md](user-primitives.md) | Gauge groups that move as one (composites); code widgets only behind an opt-in. Presets are done | L (code widgets XL) | desktop |
 | [open-backend.md](open-backend.md) | The contract is done (2026-10-23); left: two small service follow-ups, the hardware checks noted along the way, and the core library / process split after v1.0 road time | S; library M; split L | desktop, Pi, phone, Android |
 | [traffic-stop-mode.md](traffic-stop-mode.md) | One trigger: the phone records its cameras, texts contacts with location and uploads encrypted pieces; the Pi and the OBD adapter keep backup copies | M spikes, then L–XL | S22, ESP32 + microSD, adapter |

@@ -1,46 +1,36 @@
-# Compile the QML ahead of time (Windows first-launch stall)
+# Compile the QML ahead of time
 
-**Status:** deferred; the premise is in doubt, measure before building anything (see "Check first")
+**Status:** parked; measured on 2026-11-11, the gain is small and it is not the Windows first-launch stall
 **Last updated:** 2026-11-11
 
-**Goal:** Ship pre-compiled QML so a fresh install doesn't spend seconds compiling it before the first frame.
+**Goal:** Ship pre-compiled QML so a first launch doesn't compile it, if a slow device turns out to need that.
 
 ## Why it's parked
 
-On Windows, 2 of 5 fresh first launches stalled for 10–20 s before the first frame. A second launch never stalls. 0.9.4 showed about 7 s. adb was measured at ≤1.1 s cold, so it isn't the cause. The fix changes how the frontend ships on every platform (self-update, AppImage, Windows, APK), so it's too risky to slip into a point release.
+This file used to blame the Windows first-launch stall (2 of 5 fresh installs took 10 to 20 s to the first frame in 0.9.5 RC testing) on QML being compiled. kora measured it on the Win11 VM with the published 0.9.6 (37 launches, 2 vCPUs, no GPU; `_OCTAVE_rc/v0.9.7/results/firstlaunch-split/SUMMARY.txt`), and it is not the cause:
 
-Evidence (rc3, kora, 5 fresh installs):
-- The first run creates `%LOCALAPPDATA%\OCTAVE\OCTAVE\cache\` with `qmlcache` (59 .qmlc files), `qtpipelinecache-*` and `_qt_QGfxShaderBuilder_6.7.3`.
-- First log line to first frame took 2.9–6.0 s. The largest gap was while `Main.qml` compiles (up to 4.9 s).
-- Watchdog stalls appeared in 0 of the 5 runs, plus one 7.5 s stall in the automated run, which matches 0.9.4.
-- Logs are in `_OCTAVE_rc/v0.9.5/results/0.9.5-rc3/win11-firstlaunch/`.
-- Defender scanning the new DLLs and the D3D pipeline cache may add to it. Compiling the QML ahead of time only removes the QML part.
+- Loading `Main.qml` ("Scanned dashboards" to "Restoring playback state") takes 0.77 s warm and 1.05 to 1.16 s with only `qmlcache` deleted: about 0.3 s. On Linux (zion, Qt 6.12) the difference is 0.05 s.
+- The D3D11 pipeline cache and the shader cache cost nothing measurable.
+- A reboot with every cache warm costs more than the QML cache does: 1.6 to 1.9 s (DLLs read for the first time).
+- A fresh install loads in 1.4 to 1.6 s, first frame after 1.8 to 2.3 s. The very first launch on a pristine Windows, 30 s after boot: 3.0 s, first frame after 4.1 s, with Defender busy.
+- The stalls (7.8, 15.0 and 14.9 s, with watchdog lines) came in two minutes during which Windows Update and the Store were installing app packages, a few minutes after the image's first boot. One of the three was a warm launch. The time before the first log line grew too. The launches right after were normal.
 
-Today QML is loaded at runtime from `frontend/` (`CMakeLists.txt:364-367`, "loaded at runtime (not compiled into resources)"). Windows reads it from `<appDir>/frontend`, the AppImage from `usr/frontend`, and Android bundles it via `QT_QML_ROOT_PATH` (`CMakeLists.txt:406-407`).
+So the stall follows what a new Windows does in its first minutes, and nothing in OCTAVE's packaging removes it. A first-launch check on a fresh VM should wait for Windows to settle, or note what it was installing.
 
-## Check first (2026-11-11): is it the QML at all?
+What a cold QML cache does cost is the background pre-building of pages after the first frame: 2.5 s warm, 4.2 s with `qmlcache` deleted, 5 to 5.7 s on a fresh install (`SettingsMenu.qml` alone 0.5 s against 0.9 to 1.2 s). That runs while the home page is already usable.
 
-A Linux measurement says no. A copy of the debug build with an empty cache (`octave --smoke`, Qt 6.12, zion) logs "Main.qml loaded" at 0.87 s and writes 52 `.qmlc` files; with the cache warm it is 0.81 to 0.82 s. Compiling the QML costs about 0.05 s there. A slow VM and Qt 6.7.3 will be slower, but not by the 2 to 5 s seen on Windows.
+The work below changes how the frontend ships in every package (Windows, AppImage, APK, the Pi's self-update), which is too much for 0.3 s of load on a PC. It stays here for one case that has not been measured: a Raspberry Pi or the Orange Pi, where compiling the QML (59 `.qmlc` files after a first run) may cost seconds.
 
-In the rc3 logs the gap is between "Scanned dashboards" and "Restoring playback state", which is `engine.load(Main.qml)`: 4.9, 2.2, 2.9, 2.2 and 3.0 s on the five fresh installs. That call also creates the window and the first scene, so the D3D11 pipeline and shader caches written by the same run (`qtpipelinecache-*`, `_qt_QGfxShaderBuilder_*`) and DLLs loaded for the first time (Defender) sit in the same gap. The VM draws with "Direct3D 11 (no GPU known)". There is no warm Windows number to compare with.
+## Steps
 
-Asked of kora on 2026-11-11 (results in `_OCTAVE_rc/v0.9.7/results/firstlaunch-split/` when run): the same gap on the published 0.9.6 with nothing deleted, with only `qmlcache` deleted, only `qtpipelinecache-*`, only `_qt_QGfxShaderBuilder_*`, the whole cache dir, after a reboot with the caches intact, and on a fresh install.
-
-- If deleting `qmlcache` alone brings the stall back: carry on with the steps below.
-- If it is the pipeline / shader cache: pre-compiling the QML does not help. Look at what the first frame draws (the home page's effects, `MultiEffect` / `ShaderEffect` users) and at shipping the pipeline cache or drawing a plain first frame.
-- If it is cold DLLs (the reboot case is as slow as a fresh install): nothing in the frontend helps; a splash drawn before `engine.load` is the honest fix.
-
-Rewrite or delete this file once the numbers are in.
-
-## Steps (only if the QML is the cause)
-
-1. Check what depends on loose QML files: the Pi self-updater (`git pull` and restart reads `frontend/` straight from the checkout), dev hot-reload, the `src/dev/qml/` overlay, the user dashboards in `<config>/dashboards/` (JSON, not affected), and the qmllint CI pass.
-2. Pick an approach:
+1. Measure on a Pi first: the same gap and the pre-build time, with `~/.cache/OCTAVE/OCTAVE/qmlcache` deleted and warm, three launches each. Under 1 s of difference: delete this file. **Effort:** S. **Needs:** the Orange Pi or a Raspberry Pi.
+2. Check what depends on loose QML files: the Pi self-updater (`git pull` and restart reads `frontend/` straight from the checkout), dev hot-reload, the `src/dev/qml/` overlay, the qmllint CI pass, and the C++ that reads data files from the frontend folder (`themes.json`, fonts, dashboard presets, `widget-catalog.json`, templates; `findFrontendDir()` in `src/main.cpp`). **Effort:** S. **Needs:** nothing.
+3. Pick an approach. **Effort:** M. **Needs:** nothing.
    - (a) `qt_add_qml_module` with qmlcachegen / the Qt Quick Compiler, putting QML in `qrc:/`. This means fixing relative imports, `Qt.resolvedUrl` and `Qt.createComponent("X.qml")` paths (e.g. `SensorHome.qml:56`), and `App.*` singleton imports.
-   - (b) Smaller: keep loose files but ship the `.qmlc` cache, generated at build time with `qmlcachegen` next to each `.qml`.
-3. Wire it in for each package (Windows installer, AppImage, APK, Linux arm64), keeping the source-checkout and dev paths working.
-4. Measure the first launch on 5 fresh installs, the same way as rc3.
+   - (b) Smaller: keep loose files and ship a `.qmlc` next to each `.qml`, generated at build time with `qmlcachegen` (Qt looks there before its cache folder). The cache is only used when it matches the Qt build and the source file's time stamp, which squashfs (AppImage, whole seconds) and APK assets (none) may not preserve; try it in a package before believing it.
+4. Wire it in for each package (Windows installer, AppImage, APK, Linux arm64), keeping the source-checkout and dev paths working. **Effort:** L. **Needs:** the kora Win11 VM, the Orange Pi (self-update path), the Galaxy S22 (APK smoke test).
+5. Measure again on the Pi and on a fresh Windows install, the same way. **Effort:** S. **Needs:** the Pi, the kora Win11 VM.
 
-**Effort:** L. **Needs:** the kora Win11 VM (fresh installs), the Orange Pi (self-update path) and the Galaxy S22 (APK smoke test).
+Order: 1 decides whether 2 to 5 happen at all.
 
-Delete this file when the first launch no longer compiles QML.
+Delete this file when step 1 says it isn't worth it, or when a first launch no longer compiles QML.
