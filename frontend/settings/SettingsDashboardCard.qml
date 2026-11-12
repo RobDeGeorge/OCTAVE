@@ -100,37 +100,44 @@ Rectangle {
         }
         spacing: App.Spacing.rowSpacing * 0.3
 
-        // Category name row with indicator
-        RowLayout {
-            id: titleRow
+        // Category name row with indicator. The row sits in an Item so the
+        // mouse area can fill it: an anchored item inside a layout is not allowed.
+        Item {
             Layout.fillWidth: true
-            spacing: App.Spacing.overallSpacing * 0.5
+            implicitHeight: titleRow.implicitHeight
             z: 2
 
-            Text {
-                text: hubCard.categoryName
-                color: titleMouseArea.containsMouse ? App.Style.accent : App.Style.primaryTextColor
-                font.pixelSize: App.Spacing.overallText * 1.3
-                font.bold: true
-                font.family: App.Style.fontFamily
-                font.letterSpacing: App.EnvironmentTheme.active.labelLetterSpacing
-                font.capitalization: App.EnvironmentTheme.active.labelUppercase ? Font.AllUppercase : Font.MixedCase
-                Layout.fillWidth: true
-                // Shrink to fit rather than truncate so titles always show the whole word.
-                fontSizeMode: Text.HorizontalFit
-                minimumPixelSize: dp(8)
-                elide: Text.ElideNone
+            RowLayout {
+                id: titleRow
+                anchors.left: parent.left
+                anchors.right: parent.right
+                spacing: App.Spacing.overallSpacing * 0.5
 
-                Behavior on color { ColorAnimation { duration: 150 } }
-            }
+                Text {
+                    text: hubCard.categoryName
+                    color: titleMouseArea.containsMouse ? App.Style.accent : App.Style.primaryTextColor
+                    font.pixelSize: App.Spacing.overallText * 1.3
+                    font.bold: true
+                    font.family: App.Style.fontFamily
+                    font.letterSpacing: App.EnvironmentTheme.active.labelLetterSpacing
+                    font.capitalization: App.EnvironmentTheme.active.labelUppercase ? Font.AllUppercase : Font.MixedCase
+                    Layout.fillWidth: true
+                    // Shrink to fit rather than truncate so titles always show the whole word.
+                    fontSizeMode: Text.HorizontalFit
+                    minimumPixelSize: dp(8)
+                    elide: Text.ElideNone
 
-            Text {
-                text: "\u203A"
-                color: titleMouseArea.containsMouse ? App.Style.accent : App.Style.secondaryTextColor
-                font.pixelSize: App.Spacing.overallText * 1.1
-                font.family: App.Style.fontFamily
+                    Behavior on color { ColorAnimation { duration: 150 } }
+                }
 
-                Behavior on color { ColorAnimation { duration: 150 } }
+                Text {
+                    text: "\u203A"
+                    color: titleMouseArea.containsMouse ? App.Style.accent : App.Style.secondaryTextColor
+                    font.pixelSize: App.Spacing.overallText * 1.1
+                    font.family: App.Style.fontFamily
+
+                    Behavior on color { ColorAnimation { duration: 150 } }
+                }
             }
 
             // Title row mouse area — always goes to detail page
