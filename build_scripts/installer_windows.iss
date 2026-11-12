@@ -52,7 +52,7 @@ Name: "quicklaunchicon"; Description: "{cm:CreateQuickLaunchIcon}"; GroupDescrip
 
 [Files]
 ; Main application files
-Source: "..\dist\OCTAVE\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\OCTAVE\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; BeforeInstall: EndRunningAppOnce
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
@@ -124,44 +124,46 @@ end;
 //
 // Whether one is running is read off the file: a running program's file
 // cannot be opened for writing. Not held: nothing to do.
-function BundledAdbHeld(const Adb: String): Boolean;
+function FileInUse(const Path: String): Boolean;
 var
   F: TFileStream;
 begin
   Result := False;
   try
-    F := TFileStream.Create(Adb, fmOpenReadWrite or fmShareExclusive);
+    F := TFileStream.Create(Path, fmOpenReadWrite or fmShareExclusive);
     F.Free;
   except
     Result := True;
   end;
 end;
 
-// Waits until adb.exe is free again and logs how long that took. A killed adb
-// does not free its files at once: 0.1 to 0.4 s on an idle Windows 11, about
-// 1.3 s while an uninstall was running (measured on 0.9.6-rc6).
-function AdbFreeWithin(const Adb: String; const Seconds: Integer): Boolean;
+// Waits until the file (adb.exe, OCTAVE.exe) is free again and logs how long
+// that took. A killed adb does not free its files at once: 0.1 to 0.4 s on an
+// idle Windows 11, about 1.3 s while an uninstall was running (measured on
+// 0.9.6-rc6).
+function FreeWithin(const Path: String; const Seconds: Integer): Boolean;
 var
   I: Integer;
 begin
   Result := True;
   for I := 0 to Seconds * 5 do
   begin
-    if not BundledAdbHeld(Adb) then
+    if not FileInUse(Path) then
     begin
-      Log('adb.exe is free, ' + IntToStr(I * 200) + ' ms later');
+      Log(ExtractFileName(Path) + ' is free, ' + IntToStr(I * 200) + ' ms later');
       Exit;
     end;
     Sleep(200);
   end;
-  Log('adb.exe is still in use ' + IntToStr(Seconds) + ' s later');
+  Log(ExtractFileName(Path) + ' is still in use ' + IntToStr(Seconds) + ' s later');
   Result := False;
 end;
 
-// Ends every adb.exe that runs from this install: asked of WMI, inside this
-// process, with nothing to start and no command line to quote. Each adb.exe
-// seen goes to the log with its path. Returns how many it ended.
-function EndBundledAdbByWmi(const Adb: String): Integer;
+// The processes called Name (adb.exe, OCTAVE.exe) that run from this install,
+// by their path: asked of WMI, inside this process, with nothing to start and
+// no command line to quote. Each one seen goes to the log with its path.
+// Returns how many run from Exe, and ends those when Terminate is set.
+function ProcessesFromInstall(const Name, Exe: String; const Terminate: Boolean): Integer;
 var
   Locator, Services, Processes, Process: Variant;
   I, Pid: Integer;
@@ -171,7 +173,7 @@ begin
   try
     Locator := CreateOleObject('WbemScripting.SWbemLocator');
     Services := Locator.ConnectServer('.', 'root\CIMV2');
-    Processes := Services.ExecQuery('SELECT * FROM Win32_Process WHERE Name = "adb.exe"');
+    Processes := Services.ExecQuery('SELECT * FROM Win32_Process WHERE Name = "' + Name + '"');
     for I := 0 to Processes.Count - 1 do
     begin
       Process := Processes.ItemIndex(I);
@@ -180,15 +182,16 @@ begin
         Path := ''
       else
         Path := Process.ExecutablePath;
-      Log('adb.exe, process ' + IntToStr(Pid) + ', from "' + Path + '"');
-      if CompareText(Path, Adb) = 0 then
+      Log(Name + ', process ' + IntToStr(Pid) + ', from "' + Path + '"');
+      if CompareText(Path, Exe) = 0 then
       begin
-        Process.Terminate();
+        if Terminate then
+          Process.Terminate();
         Result := Result + 1;
       end;
     end;
   except
-    Log('Asking WMI for the adb processes failed: ' + GetExceptionMessage);
+    Log('Asking WMI for the ' + Name + ' processes failed: ' + GetExceptionMessage);
   end;
 end;
 
@@ -236,15 +239,15 @@ begin
   Adb := ExpandConstant('{app}\platform-tools\adb.exe');
   if not FileExists(Adb) then
     Exit;
-  if not BundledAdbHeld(Adb) then
+  if not FileInUse(Adb) then
     Exit;
   Log('The bundled adb is running (' + Adb + ' is in use)');
-  Ended := EndBundledAdbByWmi(Adb);
+  Ended := ProcessesFromInstall('adb.exe', Adb, True);
   Log('WMI ended ' + IntToStr(Ended) + ' adb');
-  if (Ended > 0) and AdbFreeWithin(Adb, 10) then
+  if (Ended > 0) and FreeWithin(Adb, 10) then
     Exit;
   EndBundledAdbByPowerShell(Adb);
-  AdbFreeWithin(Adb, 10);
+  FreeWithin(Adb, 10);
 end;
 
 // The backstop for the uninstall, which tries each file once: whatever was
@@ -278,6 +281,55 @@ begin
   RemoveDir(ExpandConstant('{app}'));
 end;
 
+// A running OCTAVE keeps OCTAVE.exe and its DLLs open. With the wizard Setup
+// lists it on "Preparing to Install" and closes it (Restart Manager). A silent
+// install does the same where it can, and cannot from another session, which
+// is where a deployment tool running as SYSTEM is: the first file then failed
+// with "DeleteFile failed; code 5" and Setup exited 5 (0.9.6-rc7). The
+// uninstaller has no such step at all. So what Restart Manager left running is
+// ended here, by its path as the adb is. Returns how many were ended.
+function EndRunningApp: Integer;
+var
+  Exe: String;
+begin
+  Exe := ExpandConstant('{app}\{#MyAppExeName}');
+  Result := ProcessesFromInstall('{#MyAppExeName}', Exe, True);
+  if Result = 0 then
+    Exit;
+  Log('WMI ended ' + IntToStr(Result) + ' {#MyAppExeName}');
+  FreeWithin(Exe, 10);
+end;
+
+function HasSwitch(const Name: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 1 to ParamCount do
+    if CompareText(ParamStr(I), Name) = 0 then
+      Result := True;
+end;
+
+var
+  RunningAppSeen: Boolean;
+
+// BeforeInstall of [Files], so before the first file and after Restart Manager
+// had its turn (Setup closes applications inside the install step, after
+// CurStepChanged(ssInstall)). Only a silent install ends the app: with the
+// wizard the user was asked, and for an answer of "do not close" Setup has its
+// own Retry box. /NOCLOSEAPPLICATIONS is the same answer on a command line.
+// The adb once more either way: an OCTAVE that was showing the QR pairing
+// popup starts a new one within seconds of the first being ended.
+procedure EndRunningAppOnce;
+begin
+  if RunningAppSeen then
+    Exit;
+  RunningAppSeen := True;
+  if WizardSilent and not HasSwitch('/NOCLOSEAPPLICATIONS') then
+    EndRunningApp;
+  StopBundledAdb;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssInstall then
@@ -287,10 +339,34 @@ begin
   end;
 end;
 
+// The uninstaller with a window asks for OCTAVE to be closed, in Inno Setup's
+// own words for it, and goes on once none runs from this folder. Cancel keeps
+// the install. A silent uninstall ends it instead (CurUninstallStepChanged).
+function InitializeUninstall: Boolean;
+var
+  Exe: String;
+begin
+  Result := True;
+  if UninstallSilent then
+    Exit;
+  Exe := ExpandConstant('{app}\{#MyAppExeName}');
+  while ProcessesFromInstall('{#MyAppExeName}', Exe, False) > 0 do
+    if SuppressibleMsgBox(FmtMessage(SetupMessage(msgUninstallAppRunningError), ['{#MyAppName}']),
+                          mbError, MB_OKCANCEL, IDCANCEL) <> IDOK then
+    begin
+      Result := False;
+      Exit;
+    end;
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usUninstall then
-    StopBundledAdb
+  begin
+    if UninstallSilent then
+      EndRunningApp;
+    StopBundledAdb;
+  end
   else if CurUninstallStep = usPostUninstall then
     RemoveAdbLeftovers;
 end;
