@@ -10,7 +10,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 
 | File | Goal | Effort | Needs |
 |---|---|---|---|
-| [windows-adb-firewall.md](windows-adb-firewall.md) | The adb firewall rule shipped in 0.9.6 and was checked; left: count the rule after an install over the top, and Rob's call on the Public profile | S | Win11 VM, a phone |
+| [windows-adb-firewall.md](windows-adb-firewall.md) | The adb firewall rule covers private and public networks from 0.9.7; left: two checks of the widened rule (a fresh install, an install over a 0.9.6 whose prompt was cancelled) | S | Win11 VM |
 | [phone-mirror-robustness.md](phone-mirror-robustness.md) | Mirror recovers fast from network and USB changes, works beyond Samsung | S … L | phone on the Pi, then other phones |
 | [android-cpp-port.md](android-cpp-port.md) | APK good enough to daily-drive: icon, splash, log check, then permissions / audio focus, then a daily-drive week | S … L | S22 |
 | [sensorhome-3d-first-visit.md](sensorhome-3d-first-visit.md) | Check on the phone that the first 3D View tap no longer freezes (code done) | S | S22, Pi |

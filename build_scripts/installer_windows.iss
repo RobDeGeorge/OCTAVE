@@ -62,21 +62,25 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: quicklaunchicon
 
 [Run]
-; Allow the bundled adb through Windows Firewall on private networks, so the
-; first QR pairing (adb listens for the phone over mDNS) doesn't stop on an
-; "allow adb, Publisher: Unknown" prompt. Delete first so an upgrade doesn't
-; stack duplicate rules. Admin installs only: a per-user install can't change
-; the firewall and keeps the prompt.
+; Allow the bundled adb through Windows Firewall on private and public
+; networks, so the first QR pairing (adb listens for the phone over mDNS)
+; doesn't stop on an "allow adb, Publisher: Unknown" prompt wherever the PC
+; is. First delete every inbound rule for this adb: an older "OCTAVE adb", so
+; an upgrade doesn't stack duplicates, and the rules Windows made when its own
+; prompt was answered under 0.9.6 on a public network (Cancel there left Block
+; rules, and a Block rule wins over this one). Admin installs only: a per-user
+; install can't change the firewall and keeps the prompt.
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""OCTAVE adb"""; Flags: runhidden; Check: IsAdminInstallMode
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""OCTAVE adb"" dir=in action=allow program=""{app}\platform-tools\adb.exe"" profile=private enable=yes"; Flags: runhidden; Check: IsAdminInstallMode
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=all dir=in program=""{app}\platform-tools\adb.exe"""; Flags: runhidden; Check: IsAdminInstallMode
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""OCTAVE adb"" dir=in action=allow program=""{app}\platform-tools\adb.exe"" profile=private,public enable=yes"; Flags: runhidden; Check: IsAdminInstallMode
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""OCTAVE adb"""; Flags: runhidden; RunOnceId: "DeleteAdbFirewallRule"; Check: IsAdminInstallMode
 ; ... and the rules Windows itself made for this adb when its own prompt was
-; answered (on a public network the prompt still comes; Allow or Cancel both
-; leave two "adb.exe" rules behind). They name a file that is gone now, and a
-; left-over Block rule would win over "OCTAVE adb" after a reinstall.
+; answered (0.9.6 on a public network, any version on a domain network; Allow
+; or Cancel both leave two "adb.exe" rules behind). They name a file that is
+; gone now.
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=all dir=in program=""{app}\platform-tools\adb.exe"""; Flags: runhidden; RunOnceId: "DeleteAdbPromptRules"; Check: IsAdminInstallMode
 
 [UninstallDelete]
