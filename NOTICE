@@ -8,6 +8,9 @@ https://github.com/RobDeGeorge/OCTAVE
 Licensed under the GNU General Public License, version 3 or (at your option)
 any later version (GPL-3.0-or-later). See LICENSE for the full text.
 
+The full texts of the other licenses named below are in licenses/ and in the
+app under Settings > About > Open-Source Licenses.
+
 Except: sdk/, templates/ and examples/frontends/ (the service clients, starter
 projects and example frontends) are under the MIT License (the LICENSE file in
 each), so frontends built on them may use any license.

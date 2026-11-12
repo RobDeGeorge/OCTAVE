@@ -33,6 +33,9 @@ endfunction()
 
 octave_add_test(tst_elm327protocol SOURCES managers/elm327protocol.cpp managers/parametercatalog.h managers/parametercatalog.cpp)
 octave_add_test(tst_dtcdescriptions SOURCES managers/dtcdescriptions.h managers/dtcdescriptions.cpp)
+# The license texts of Settings > About: same resource as the app's
+octave_add_test(tst_licensetexts SOURCES util/licensetexts.h util/licensetexts.cpp)
+octave_add_license_texts(tst_licensetexts)
 octave_add_test(tst_adaptivebitrate)
 octave_add_test(tst_settingsmanager SOURCES managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
 octave_add_test(tst_volumecontroller SOURCES managers/volumecontroller.h managers/volumecontroller.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)

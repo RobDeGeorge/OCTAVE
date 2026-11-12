@@ -288,6 +288,8 @@ qt_add_executable(octave
     src/util/uiwatchdog.h
     src/util/uiwatchdog.cpp
     src/util/perfscope.h
+    src/util/licensetexts.h
+    src/util/licensetexts.cpp
     src/util/dashboardgrid.h
     src/util/dashboardgrid.cpp
     src/util/qmlmodules.h
@@ -628,6 +630,30 @@ if(NOT ANDROID AND NOT IOS AND CMAKE_BUILD_TYPE STREQUAL "Debug")
 else()
     set(_octave_tests_default OFF)
 endif()
+
+# ---- License texts, for Settings > About > Open-Source Licenses ----
+# OCTAVE's LICENSE and NOTICE plus one text per license of a bundled component
+# (licenses/), compiled in and read by src/util/licensetexts.cpp, whose names()
+# holds the same list; the frontend/ folder doesn't carry them. A function
+# because tst_licensetexts compiles the same resource.
+set(OCTAVE_LICENSE_TEXTS LGPL-3.0 LGPL-2.1 GPL-2.0 MPL-1.1 Apache-2.0 MIT OFL-1.1)
+function(octave_add_license_texts target)
+    qt_add_resources(${target} "licenses"
+        PREFIX "/licenses"
+        BASE "${CMAKE_SOURCE_DIR}"
+        FILES "${CMAKE_SOURCE_DIR}/LICENSE" "${CMAKE_SOURCE_DIR}/NOTICE"
+    )
+    set(_texts)
+    foreach(_name IN LISTS OCTAVE_LICENSE_TEXTS)
+        list(APPEND _texts "${CMAKE_SOURCE_DIR}/licenses/${_name}.txt")
+    endforeach()
+    qt_add_resources(${target} "license_texts"
+        PREFIX "/licenses"
+        BASE "${CMAKE_SOURCE_DIR}/licenses"
+        FILES ${_texts}
+    )
+endfunction()
+
 option(OCTAVE_BUILD_TESTS "Build the QtTest suite in tests/cpp (ctest)" ${_octave_tests_default})
 message(STATUS "C++ tests (ctest): ${OCTAVE_BUILD_TESTS}")
 if(OCTAVE_BUILD_TESTS)
@@ -675,13 +701,8 @@ qt_add_resources(octave "phone_server"
           "${CMAKE_SOURCE_DIR}/tools/phone-server/NOTICE"
 )
 
-# OCTAVE's license and third-party notice, for Settings > About > licenses
-# (DiagnosticsManager::licenseText); the frontend/ folder doesn't carry them.
-qt_add_resources(octave "licenses"
-    PREFIX "/licenses"
-    BASE "${CMAKE_SOURCE_DIR}"
-    FILES "${CMAKE_SOURCE_DIR}/LICENSE" "${CMAKE_SOURCE_DIR}/NOTICE"
-)
+# The license texts for Settings > About (DiagnosticsManager::licenseText)
+octave_add_license_texts(octave)
 
 # ---- QML import path: reuse existing frontend/ directory ----
 # The QML files live in frontend/ and are loaded at runtime (not compiled into resources).

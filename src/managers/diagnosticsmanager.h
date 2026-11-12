@@ -44,8 +44,10 @@ public:
     Q_INVOKABLE QString exportLogs();
     // Desktop: open the log folder in the file manager
     Q_INVOKABLE bool openLogFolder();
-    // Full text of OCTAVE's "LICENSE" (GPL-3.0) or "NOTICE", compiled in as
-    // resources; "" for any other name
+    // Full text of OCTAVE's "LICENSE" (GPL-3.0) or "NOTICE", or of a bundled
+    // component's license ("LGPL-3.0", "LGPL-2.1", "GPL-2.0", "MPL-1.1",
+    // "Apache-2.0", "MIT", "OFL-1.1"), compiled in as resources
+    // (src/util/licensetexts); "" for any other name
     Q_INVOKABLE QString licenseText(const QString &name) const;
 
 signals:

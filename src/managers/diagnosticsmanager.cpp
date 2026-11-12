@@ -1,5 +1,6 @@
 #include "diagnosticsmanager.h"
 #include "settingsmanager.h"
+#include "../util/licensetexts.h"
 
 #include <QClipboard>
 #include <QDateTime>
@@ -131,10 +132,5 @@ bool DiagnosticsManager::openLogFolder()
 
 QString DiagnosticsManager::licenseText(const QString &name) const
 {
-    if (name != QLatin1String("LICENSE") && name != QLatin1String("NOTICE"))
-        return {};
-    QFile f(QStringLiteral(":/licenses/") + name);
-    if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
-        return {};
-    return QString::fromUtf8(f.readAll());
+    return LicenseTexts::text(name);
 }

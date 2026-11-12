@@ -16,7 +16,7 @@ Flickable {
         contentArea: aboutPage.stackView
     }
 
-    // Full text of LICENSE / NOTICE for the licenses card
+    // Full text of LICENSE / NOTICE / a component's license for the licenses card
     Popup {
         id: licenseTextPopup
         objectName: "licenseTextPopup"
@@ -36,7 +36,8 @@ Flickable {
             var body = typeof diagnosticsManager !== "undefined" && diagnosticsManager
                        ? diagnosticsManager.licenseText(name) : ""
             if (body === "")
-                body = "Not available in this build. See github.com/RobDeGeorge/OCTAVE/blob/main/" + name
+                body = "Not available in this build. See github.com/RobDeGeorge/OCTAVE/blob/main/"
+                       + (name === "LICENSE" || name === "NOTICE" ? name : "licenses/" + name + ".txt")
             lines = body.replace(/\s+$/, "").split(/\r?\n/)
             licenseBody.positionViewAtBeginning()
             open()
@@ -271,8 +272,9 @@ Flickable {
             }
 
             // ─── Open-source licenses ───
-            // What this build bundles, with each license, and the full text of
-            // OCTAVE's own license and NOTICE (compiled in; see CMakeLists.txt).
+            // What this build bundles, with each license, and the full texts:
+            // OCTAVE's own license and NOTICE and each component's license
+            // (compiled in; see octave_add_license_texts in CMakeLists.txt).
             SettingsCard {
                 id: licensesCard
                 objectName: "licensesCard"
@@ -280,36 +282,60 @@ Flickable {
                 title: "Open-Source Licenses"
 
                 readonly property bool isAndroid: Qt.platform.os === "android"
+                readonly property bool isBrowser: Qt.platform.os === "wasm"
                 // Null while the app quits: the context properties go before the page
                 readonly property bool hasAirPlay: typeof airPlayManager !== "undefined" && airPlayManager !== null
                                                    && airPlayManager.available
                 readonly property bool hasNativeAndroidAuto: typeof androidAutoManager !== "undefined" && androidAutoManager !== null
                                                              && androidAutoManager.nativeAvailable
+                // texts: the license texts (licenseTexts below, by file) a component is under
                 readonly property var components: {
                     var all = [
-                        { name: "Qt 6", license: "LGPL-3.0; GPL-3.0 for Qt Quick 3D and Qt Quick Timeline", use: "The whole application" },
-                        { name: "QR Code generator library (Project Nayuki)", license: "MIT", use: "The phone-pairing QR code" },
-                        { name: "scrcpy server (fork)", license: "Apache-2.0", use: "The program that runs on the phone during mirroring" },
-                        { name: "Google Sans", license: "OFL-1.1", use: "UI text (selectable font)" },
-                        { name: "JetBrains Mono", license: "OFL-1.1", use: "UI text (selectable font)" },
-                        { name: "OCTAVE Symbols (subset of Noto Sans Symbols / Symbols 2)", license: "OFL-1.1", use: "Icon glyphs" }
+                        { name: "Qt 6", license: "LGPL-3.0; GPL-3.0 for Qt Quick 3D and Qt Quick Timeline", use: "The whole application", texts: ["LGPL-3.0", "LICENSE"] },
+                        { name: "QR Code generator library (Project Nayuki)", license: "MIT", use: "The phone-pairing QR code", texts: ["MIT"] },
+                        { name: "scrcpy server (fork)", license: "Apache-2.0", use: "The program that runs on the phone during mirroring", texts: ["Apache-2.0"] },
+                        { name: "SQLite", license: "Public domain", use: "The black box's trip store", texts: [] },
+                        { name: "Google Sans", license: "OFL-1.1", use: "UI text (selectable font)", texts: ["OFL-1.1"] },
+                        { name: "JetBrains Mono", license: "OFL-1.1", use: "UI text (selectable font)", texts: ["OFL-1.1"] },
+                        { name: "OCTAVE Symbols (subset of Noto Sans Symbols / Symbols 2)", license: "OFL-1.1", use: "Icon glyphs", texts: ["OFL-1.1"] }
                     ]
-                    if (!isAndroid) {
-                        all.push({ name: "TagLib", license: "LGPL-2.1 / MPL-1.1", use: "Song tags and embedded album art" })
-                        all.push({ name: "FFmpeg (libavcodec, libavutil; H.264, AAC and ALAC decoders)", license: "LGPL-2.1+", use: "Decoding the phone mirror's video and AirPlay's video and audio" })
+                    if (isBrowser) {
+                        all.push({ name: "TagLib", license: "LGPL-2.1 / MPL-1.1", use: "Song tags and embedded album art", texts: ["LGPL-2.1", "MPL-1.1"] })
+                        all.push({ name: "coi-serviceworker", license: "MIT", use: "Lets the page run OCTAVE's threads", texts: ["MIT"] })
+                    } else if (!isAndroid) {
+                        all.push({ name: "TagLib", license: "LGPL-2.1 / MPL-1.1", use: "Song tags and embedded album art", texts: ["LGPL-2.1", "MPL-1.1"] })
+                        all.push({ name: "FFmpeg (libavcodec, libavutil; H.264, AAC and ALAC decoders)", license: "LGPL-2.1+", use: "Decoding the phone mirror's video and AirPlay's video and audio", texts: ["LGPL-2.1"] })
                         if (hasAirPlay) {
-                            all.push({ name: "UxPlay (AirPlay library)", license: "GPL-3.0; parts LGPL-2.1+ and MIT", use: "The AirPlay receiver" })
-                            all.push({ name: "libplist", license: "LGPL-2.1+", use: "AirPlay's property lists" })
+                            all.push({ name: "UxPlay (AirPlay library)", license: "GPL-3.0; parts LGPL-2.1+ and MIT", use: "The AirPlay receiver", texts: ["LICENSE", "LGPL-2.1", "MIT"] })
+                            all.push({ name: "libplist", license: "LGPL-2.1+", use: "AirPlay's property lists", texts: ["LGPL-2.1"] })
                         }
                         if (hasNativeAndroidAuto || hasAirPlay)
-                            all.push({ name: "OpenSSL", license: "Apache-2.0", use: "The built-in Android Auto receiver's encryption, and AirPlay's" })
-                        all.push({ name: "FFmpeg (inside Qt Multimedia)", license: "LGPL-2.1+; GPL-2.0+ in the aarch64 AppImage (Ubuntu's build)", use: "Playing local music" })
-                        all.push({ name: "Android platform-tools (adb)", license: "Apache-2.0", use: "Talking to the phone (bundled in releases)" })
+                            all.push({ name: "OpenSSL", license: "Apache-2.0", use: "The built-in Android Auto receiver's encryption, and AirPlay's", texts: ["Apache-2.0"] })
+                        all.push({ name: "FFmpeg (inside Qt Multimedia)", license: "LGPL-2.1+; GPL-2.0+ in the aarch64 AppImage (Ubuntu's build)", use: "Playing local music", texts: ["LGPL-2.1", "GPL-2.0"] })
+                        all.push({ name: "Android platform-tools (adb)", license: "Apache-2.0", use: "Talking to the phone (bundled in releases)", texts: ["Apache-2.0"] })
                     } else {
-                        all.push({ name: "OpenSSL 3", license: "Apache-2.0", use: "HTTPS" })
+                        all.push({ name: "OpenSSL 3", license: "Apache-2.0", use: "HTTPS", texts: ["Apache-2.0"] })
                     }
                     return all
                 }
+                // Every text diagnosticsManager.licenseText() serves, in button
+                // order (tst_licensetexts reads the file names from here)
+                readonly property var licenseTexts: [
+                    { file: "LICENSE", label: "GPL-3.0", title: "GNU General Public License v3" },
+                    { file: "LGPL-3.0", label: "LGPL-3.0", title: "GNU Lesser General Public License v3" },
+                    { file: "LGPL-2.1", label: "LGPL-2.1", title: "GNU Lesser General Public License v2.1" },
+                    { file: "GPL-2.0", label: "GPL-2.0", title: "GNU General Public License v2" },
+                    { file: "MPL-1.1", label: "MPL-1.1", title: "Mozilla Public License 1.1" },
+                    { file: "Apache-2.0", label: "Apache-2.0", title: "Apache License 2.0" },
+                    { file: "MIT", label: "MIT", title: "MIT License: the components' notices" },
+                    { file: "OFL-1.1", label: "OFL-1.1", title: "SIL Open Font License 1.1" },
+                    { file: "NOTICE", label: "Notices", title: "Copyright and third-party notices" }
+                ]
+                // The ones a component of this build is under, plus OCTAVE's own two
+                readonly property var shownTexts: licenseTexts.filter(function(t) {
+                    return t.file === "LICENSE" || t.file === "NOTICE"
+                        || components.some(function(c) { return c.texts.indexOf(t.file) >= 0 })
+                })
 
                 Text {
                     Layout.fillWidth: true
@@ -347,22 +373,29 @@ Flickable {
                     }
                 }
 
-                RowLayout {
+                // One button per license text: as many in a row as fit, then
+                // the rows evened out (nine in rows of seven is 5 + 4, not 7 + 2)
+                GridLayout {
+                    readonly property int fit: Math.max(2, Math.floor(licensesCard.width / aboutPage.dp(140)))
+                    readonly property int count: Math.max(1, licensesCard.shownTexts.length)
                     Layout.fillWidth: true
-                    spacing: aboutPage.dp(8)
-                    SettingsButton {
-                        objectName: "showLicenseButton"
-                        text: "GPL-3.0 Text"
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: aboutPage.dp(44)
-                        onClicked: licenseTextPopup.showFile("LICENSE", "GNU General Public License v3")
-                    }
-                    SettingsButton {
-                        objectName: "showNoticeButton"
-                        text: "Notices"
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: aboutPage.dp(44)
-                        onClicked: licenseTextPopup.showFile("NOTICE", "Copyright and third-party notices")
+                    columns: Math.ceil(count / Math.ceil(count / fit))
+                    columnSpacing: aboutPage.dp(8)
+                    rowSpacing: aboutPage.dp(8)
+                    Repeater {
+                        model: licensesCard.shownTexts
+                        delegate: SettingsButton {
+                            required property var modelData
+                            objectName: modelData.file === "LICENSE" ? "showLicenseButton"
+                                      : modelData.file === "NOTICE" ? "showNoticeButton"
+                                      : "showLicenseText_" + modelData.file
+                            text: modelData.label
+                            Layout.fillWidth: true
+                            // The same for all, so the columns come out equal
+                            Layout.preferredWidth: aboutPage.dp(110)
+                            Layout.preferredHeight: aboutPage.dp(44)
+                            onClicked: licenseTextPopup.showFile(modelData.file, modelData.title)
+                        }
                     }
                 }
             }
