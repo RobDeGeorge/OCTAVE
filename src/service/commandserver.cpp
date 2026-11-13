@@ -288,10 +288,25 @@ private:
         return sock.waitForReadyRead(20);
     }
 
-    static void flush(QTcpSocket &sock, int timeoutMs = 10000)
+    // Until everything queued is with the kernel. One waitForBytesWritten()
+    // returns after the first piece, which cut a file of several MB short
+    // when the connection closed after it (a frontend's .wasm). Gives up
+    // after timeoutMs with no progress, or six times that in all
+    // One wait, for the event loop: it comes round again
+    static void flushOnce(QTcpSocket &sock, int timeoutMs)
     {
         if (sock.bytesToWrite() > 0)
             sock.waitForBytesWritten(timeoutMs);
+    }
+    static void flush(QTcpSocket &sock, int timeoutMs = 10000)
+    {
+        QElapsedTimer total;
+        total.start();
+        while (sock.bytesToWrite() > 0 && sock.state() == QAbstractSocket::ConnectedState
+               && total.elapsed() < 6LL * timeoutMs) {
+            if (!sock.waitForBytesWritten(timeoutMs))
+                break;
+        }
     }
 
     // False once the client has left maxUnsentBytes unread for maxBehindMs
@@ -363,7 +378,7 @@ private:
             if (!keepingUp(sock, behind))
                 return;
             // Behind: short waits, so the check above runs every ~100 ms
-            flush(sock, behind.isValid() ? 100 : 10000);
+            flushOnce(sock, behind.isValid() ? 100 : 10000);
         } while (pump(sock, buf));
     }
 
@@ -511,7 +526,7 @@ private:
             }
             if (!keepingUp(sock, behind))
                 return;
-            flush(sock, behind.isValid() ? 100 : 10000);
+            flushOnce(sock, behind.isValid() ? 100 : 10000);
         } while (pump(sock, incoming));
     }
 
