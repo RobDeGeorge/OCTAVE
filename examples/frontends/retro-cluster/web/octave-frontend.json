@@ -1,0 +1,10 @@
+{
+  "id": "org.octave.example.retro-cluster.web",
+  "name": "Retro Cluster",
+  "version": "0.1.0",
+  "description": "A mid-80s vacuum-fluorescent instrument cluster in Rust + egui",
+  "preview": "preview.png",
+  "protocol": [1, 3],
+  "scopes": ["media", "vehicle", "files"],
+  "web": {"root": "."}
+}

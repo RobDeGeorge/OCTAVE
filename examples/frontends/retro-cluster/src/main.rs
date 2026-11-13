@@ -5,13 +5,17 @@
 //!
 //!     ./build/octave --service          (or --headless, or --dev --service)
 //!     cargo run --release -- [--host H] [--port P] [--fullscreen] [--theme N]
+//!
+//! build_web.sh builds the same cluster for a browser (wasm32): a page OCTAVE
+//! serves, talking to the service over the page's WebSocket (link_web.rs).
 
 #![allow(clippy::too_many_arguments)]
 
 mod link;
 mod vfd;
 
-use std::time::{Duration, Instant};
+// std's own, except in a browser, where std has no clock
+use web_time::{Duration, Instant};
 
 use eframe::egui::{self, Color32, Key, Painter, Pos2, Rect, Sense, pos2, vec2};
 use serde_json::json;
@@ -63,11 +67,13 @@ struct PageState {
 struct Args {
     address: String,
     token: Option<String>,
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     fullscreen: bool,
     theme: usize,
     page: Page,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn parse_args() -> Args {
     let mut a = Args { address: String::new(), token: std::env::var("OCTAVE_TOKEN").ok().filter(|t| !t.is_empty()),
                        fullscreen: false, theme: 0, page: Page::Drive };
@@ -85,13 +91,7 @@ fn parse_args() -> Args {
             "--pair" => pair_code = it.next(),
             "--fullscreen" => a.fullscreen = true,
             "--page" => {
-                a.page = match it.next().as_deref() {
-                    Some("diag") => Page::Diag,
-                    Some("dtc") => Page::Codes,
-                    Some("trips") => Page::Trips,
-                    Some("audio") => Page::Audio,
-                    _ => Page::Drive,
-                }
+                a.page = page_named(it.next().as_deref());
             }
             "--theme" => a.theme = it.next().and_then(|t| t.parse().ok()).unwrap_or(0) % PALETTES.len(),
             "-h" | "--help" => {
@@ -123,6 +123,55 @@ fn parse_args() -> Args {
     a
 }
 
+fn page_named(name: Option<&str>) -> Page {
+    match name {
+        Some("diag") => Page::Diag,
+        Some("dtc") => Page::Codes,
+        Some("trips") => Page::Trips,
+        Some("audio") => Page::Audio,
+        _ => Page::Drive,
+    }
+}
+
+/// The browser build: the cluster on the page's canvas (web/index.html).
+/// ?theme=0|1|2 and ?page=drive|diag|dtc|trips|audio are the flags a page has.
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    use wasm_bindgen::JsCast as _;
+    let window = web_sys::window().expect("a page");
+    let document = window.document().expect("a document");
+    let query = window.location().search().ok().and_then(|q| web_sys::UrlSearchParams::new_with_str(&q).ok());
+    let param = |k: &str| query.as_ref().and_then(|q| q.get(k));
+    let args = Args {
+        address: String::new(),
+        token: None,
+        fullscreen: false,
+        theme: param("theme").and_then(|t| t.parse::<usize>().ok()).unwrap_or(0) % PALETTES.len(),
+        page: page_named(param("page").as_deref()),
+    };
+    let canvas = document.get_element_by_id("cluster").and_then(|e| e.dyn_into::<web_sys::HtmlCanvasElement>().ok());
+    wasm_bindgen_futures::spawn_local(async move {
+        let started = match canvas {
+            Some(canvas) => eframe::WebRunner::new()
+                .start(canvas, eframe::WebOptions::default(), Box::new(move |cc| Ok(Box::new(Cluster::new(cc, args)))))
+                .await
+                .map_err(|e| e.as_string().unwrap_or_else(|| format!("{e:?}"))),
+            None => Err("the page has no canvas".to_string()),
+        };
+        // web/index.html's loading line: gone once the cluster draws, else it says why not
+        if let Some(loading) = document.get_element_by_id("loading") {
+            match started {
+                Ok(()) => loading.remove(),
+                Err(e) => {
+                    loading.set_class_name("failed");
+                    loading.set_text_content(Some(&format!("Retro Cluster could not start: {e}")));
+                }
+            }
+        }
+    });
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
     let args = parse_args();
     let options = eframe::NativeOptions {
@@ -156,6 +205,7 @@ struct Cluster {
     sent_demand: Option<Vec<String>>,
     sent_bars: Option<bool>,
     peaks: Vec<f32>,
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     fullscreen: bool,
 }
 
@@ -208,6 +258,7 @@ impl Cluster {
 
     fn keys(&mut self, ui: &egui::Ui) {
         let (vol, page) = (self.link.state.lock().unwrap().volume, self.page);
+        #[cfg(not(target_arch = "wasm32"))]
         let mut quit = false;
         ui.input(|i| {
             if i.key_pressed(Key::Space) {
@@ -240,14 +291,18 @@ impl Cluster {
             if i.key_pressed(Key::T) {
                 self.theme = (self.theme + 1) % PALETTES.len();
             }
+            // a page has no window of its own to resize or close
+            #[cfg(not(target_arch = "wasm32"))]
             if i.key_pressed(Key::F11) {
                 self.fullscreen = !self.fullscreen;
                 ui.ctx().send_viewport_cmd(egui::ViewportCommand::Fullscreen(self.fullscreen));
             }
+            #[cfg(not(target_arch = "wasm32"))]
             if i.modifiers.ctrl && i.key_pressed(Key::Q) {
                 quit = true;
             }
         });
+        #[cfg(not(target_arch = "wasm32"))]
         if quit {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
         }
@@ -342,6 +397,18 @@ impl eframe::App for Cluster {
         }
         ui.ctx().request_repaint_after(Duration::from_millis(33));
     }
+}
+
+/// HH:MM on this device's clock.
+#[cfg(not(target_arch = "wasm32"))]
+fn local_time() -> String {
+    chrono::Local::now().format("%H:%M").to_string()
+}
+
+#[cfg(target_arch = "wasm32")]
+fn local_time() -> String {
+    let now = js_sys::Date::new_0();
+    format!("{:02}:{:02}", now.get_hours(), now.get_minutes())
 }
 
 enum Action {
@@ -443,7 +510,7 @@ impl Draw<'_> {
 
         // The clock: the app's own string (clock.time, in the user's 12/24 h
         // format); local time only against a backend too old to send it
-        let text = self.s.clock.clone().filter(|c| !c.is_empty()).unwrap_or_else(|| chrono::Local::now().format("%H:%M").to_string());
+        let text = self.s.clock.clone().filter(|c| !c.is_empty()).unwrap_or_else(local_time);
         let digits: String = text.chars().filter(|c| c.is_ascii_digit()).take(4).collect();
         let r = self.cv.r(1104.0, 14.0, 132.0, 42.0);
         let cw = r.width() / 4.0;

@@ -1,6 +1,6 @@
 # Retro Cluster
 
-A second OCTAVE frontend, written to prove the open backend: **Rust + egui** instead of C++ / QML, painted as a mid-80s vacuum-fluorescent instrument cluster instead of the bundled UI's look. It is a separate program that talks to OCTAVE over the service API (`docs/api/`, protocol versions 1 to 3). It is one of the example frontends in `examples/frontends/` (MIT licensed); the QML UI in `frontend/` is the one that ships. `examples/frontends/check_all.sh` checks that it builds (`cargo clippy -D warnings`).
+A second OCTAVE frontend, written to prove the open backend: **Rust + egui** instead of C++ / QML, painted as a mid-80s vacuum-fluorescent instrument cluster instead of the bundled UI's look. It is a separate program that talks to OCTAVE over the service API (`docs/api/`, protocol versions 1 to 3). The same code also builds for the browser (`wasm32`), where it is a web frontend: see [In a browser](#in-a-browser). It is one of the example frontends in `examples/frontends/` (MIT licensed); the QML UI in `frontend/` is the one that ships. `examples/frontends/check_all.sh` checks that it builds (`cargo clippy -D warnings`).
 
 Everything on screen is drawn from shapes: a 5x7 dot-matrix font, slanted seven-segment digits with ghosted unlit segments, segment ladders and a sweep tachometer. There are no font or image files.
 
@@ -53,6 +53,29 @@ Then on the head unit: Settings > Device > Frontends > **Install from folder** (
 
 Pressing mute five times within four seconds always ends it and brings back OCTAVE's built-in screen: the cluster's own MUTE button and M key count (they call `volumeController.toggleMute()`), as do the ESP32 knob and the gesture sensor; `octave --qml` gives the built-in screen for one start. The rules are in `wiki/writing-a-frontend.html#install`.
 
+## In a browser
+
+The same program builds as a **web frontend**: egui draws into a WebGL canvas, and the client speaks the protocol over the browser's own `WebSocket` (one JSON message per text frame) instead of TCP.
+
+```bash
+cd examples/frontends/retro-cluster
+./build_web.sh                                              # dist-web/: index.html, boot.js, retro_cluster.js, retro_cluster_bg.wasm, octave-frontend.json
+./build/octave --headless --sim --service --web-root examples/frontends/retro-cluster/dist-web   # from the repo root; then open http://127.0.0.1:9876/
+```
+
+It needs the `wasm32-unknown-unknown` target (`rustup target add wasm32-unknown-unknown`; on Arch the `rust-wasm` package) and the `wasm-bindgen` program of exactly the version in `Cargo.lock` (`cargo install wasm-bindgen-cli --version <that> --locked`, or `WASM_BINDGEN=/path/to/it`); the script says which when it differs. With `wasm-opt` (binaryen) on the PATH the result is run through it.
+
+`dist-web/` (not committed) is a web frontend folder with its own manifest (`web/octave-frontend.json`, id `org.octave.example.retro-cluster.web`, `"web": {"root": "."}`; `build_web.sh` fails if its name, version, description, protocol or scopes drift from the native manifest). `retro_cluster_bg.wasm` is about 3 MB (1.1 MB gzipped), built for size.
+
+- **Where the service is**: the host that served the page (`ws://` + `location.host`, `wss://` on an https page). The query does the flags' job: `?page=audio&theme=1`.
+- **Pairing**: none in the page. On the head unit's own browser, and as an installed web frontend, nothing is asked. A browser on another device needs a token already in its `localStorage` (`retro-cluster.token`); the cluster has no keypad for the code, so there it shows NOT PAIRED. The cover is fetched from `/art` with the token as `Authorization`.
+- **In OCTAVE's browser demo** the folder runs in a sandboxed frame against the core in the page: every file is loaded by relative URL with CORS, the WebSocket there is the page's stand-in (text frames only, which is all the cluster sends), storage is refused, and there is no `/art`, so the dot-matrix cover stays dark.
+- **Shape**: the same 1280x800 canvas scaled to the page. Upright on a phone it is a small strip across the middle: turn the phone.
+
+What differs from the native program: no F11 / `--fullscreen` and no Ctrl+Q; the rest of the keyboard works with a keyboard attached.
+
+`web/index.html` and `web/boot.js` are the page (the loader is a file because OCTAVE serves a frontend with a Content-Security-Policy that allows no inline script); `src/link_web.rs` is the browser's side of what `src/link_tcp.rs` does natively, and `main()` has one body for each.
+
 ## Pages
 
 - **DRIVE**: sweep tachometer (shift-light flash from `shiftLightManager`), speed, coolant / oil (intake air if the car has no oil PID) / fuel / voltage ladders, a trip computer (load, throttle, MAF, MAP), the black-box trip timer, and the tape deck, with the album cover redrawn as a 40x40 dithered dot matrix.
@@ -74,10 +97,11 @@ Pressing mute five times within four seconds always ends it and brings back OCTA
 | `audioAnalyzer` | `setDemand("retro-cluster", on)` while AUDIO shows, `levels` (40 ms throttle) |
 | `shiftLightManager`, `clock` | the SHIFT lamp, the clock text (`clock.time`) |
 
-`src/link.rs` is the whole client (about 450 lines, `std::net` plus `serde_json`): a thread connects, subscribes, folds events into a `State` the UI reads, and reconnects. `src/vfd.rs` holds the drawing primitives, `src/main.rs` the layout, on a 1280x800 canvas scaled to the window.
+`src/link.rs` and `src/link_tcp.rs` are the whole client (about 700 lines, `std::net` plus `serde_json`): a thread connects, subscribes, folds events into a `State` the UI reads, and reconnects (`link.rs` is what is said and what the answers mean, `link_tcp.rs` the socket; `link_web.rs` is the socket of the browser build). `src/vfd.rs` holds the drawing primitives, `src/main.rs` the layout, on a 1280x800 canvas scaled to the window.
 
 ## Known gaps
 
 - No phone-mirror video: media streams are not on the service yet (`TODO/open-backend.md`, step 6).
 - If the process is killed (not closed), its OBD demand stays registered until OCTAVE restarts.
+- The browser build has no layout for an upright phone and no pairing keypad.
 - Not tried on the Pi or the Jeep box yet; egui needs OpenGL ES 2 or better.

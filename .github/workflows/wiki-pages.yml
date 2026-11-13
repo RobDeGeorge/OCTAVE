@@ -98,15 +98,24 @@ jobs:
           npm --prefix examples/frontends/glass run build
       # The native examples that also build for the browser (stage_frontends.py
       # stages each dist-web/): sunlight with Go's js/wasm port, the arcade with
-      # the emsdk installed above (its first run builds the SDL2 port)
+      # the emsdk installed above (its first run builds the SDL2 port),
+      # retro-cluster with Rust's wasm32 target and the wasm-bindgen program of
+      # the version its Cargo.lock names (the release binary, not a compile)
       - uses: actions/setup-go@v5
         with:
           go-version-file: examples/frontends/sunlight/go.mod
           cache-dependency-path: examples/frontends/sunlight/go.sum
-      - name: Build the sunlight and arcade examples for the browser
+      - name: Rust's wasm32 target and wasm-bindgen
+        run: |
+          rustup target add wasm32-unknown-unknown
+          v=$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/[^0-9.]/, ""); print; exit }' examples/frontends/retro-cluster/Cargo.lock)
+          curl -fsSL "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/$v/wasm-bindgen-$v-x86_64-unknown-linux-musl.tar.gz" | tar -xz -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/wasm-bindgen-$v-x86_64-unknown-linux-musl" >> "$GITHUB_PATH"
+      - name: Build the sunlight, arcade and retro-cluster examples for the browser
         run: |
           (cd examples/frontends/sunlight && bash build_web.sh)
           (cd examples/frontends/arcade && bash build_web.sh)
+          (cd examples/frontends/retro-cluster && bash build_web.sh)
       - name: Build and stage
         run: |
           QT_HOST="$RUNNER_TEMP/qt/Qt/$QT_VERSION/gcc_64" \

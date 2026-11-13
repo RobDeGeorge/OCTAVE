@@ -6,10 +6,22 @@ description = "An experimental OCTAVE frontend: a retro VFD instrument cluster i
 license = "GPL-3.0-or-later"
 
 [dependencies]
-chrono = { version = "0.4", default-features = false, features = ["clock"] }
-eframe = { version = "0.37", default-features = false, features = ["glow", "wayland", "x11"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
 serde_json = "1"
+# std::time::Instant, which a browser's std does not have
+web-time = "1"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+eframe = { version = "0.37", default-features = false, features = ["glow", "wayland", "x11"] }
+
+# The browser build (build_web.sh): WebGL, the page's WebSocket
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+eframe = { version = "0.37", default-features = false, features = ["glow"] }
+js-sys = "0.3"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = ["Document", "Element", "Headers", "HtmlCanvasElement", "Location", "MessageEvent", "RequestInit", "Response", "Storage", "UrlSearchParams", "WebSocket", "Window"] }
 
 [profile.release]
 opt-level = 3

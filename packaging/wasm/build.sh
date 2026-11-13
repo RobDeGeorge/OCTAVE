@@ -54,7 +54,7 @@ if [ -n "${OUT_DIR:-}" ]; then
     # index.html, the playground's picker) and frontends/catalog.json: the
     # JavaScript template, and those that have been built: glass
     # (npm --prefix examples/frontends/glass ci && npm --prefix examples/frontends/glass run build),
-    # sunlight and the arcade (./build_web.sh in each)
+    # sunlight, the arcade and retro-cluster (./build_web.sh in each)
     python3 "$here/stage_frontends.py" "$OUT_DIR"
     echo "staged site in $OUT_DIR"
 fi

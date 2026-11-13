@@ -34,6 +34,7 @@ FRONTENDS = {
     # Native frontends built for the browser as well (each one's build_web.sh)
     "sunlight": SRC / "examples" / "frontends" / "sunlight" / "dist-web",
     "arcade": SRC / "examples" / "frontends" / "arcade" / "dist-web",
+    "retro-cluster": SRC / "examples" / "frontends" / "retro-cluster" / "dist-web",
 }
 # slug -> its picture for the chooser (the manifest's `preview`, 640 x 400),
 # copied to <slug>/preview.png whether or not the built folder carries it
@@ -42,12 +43,12 @@ PREVIEWS = {
     "glass": EXAMPLES / "glass" / "public" / "preview.png",
     "sunlight": EXAMPLES / "sunlight" / "preview.png",
     "arcade": EXAMPLES / "arcade" / "preview.png",
+    "retro-cluster": EXAMPLES / "retro-cluster" / "preview.png",
 }
 # Programs with no browser build: listed in the chooser with their picture,
 # greyed out (frontends/native.json), so the page shows what a head unit can run
 NATIVE = {
     "console": EXAMPLES / "console",
-    "retro-cluster": EXAMPLES / "retro-cluster",
 }
 # The template's own folder also has its README / LICENSE; only these are served
 ONLY = {"hello-car-js": ["index.html", "app.js", "octave.js", "octave-frontend.json"]}

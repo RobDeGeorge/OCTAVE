@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="data:,">
+<title>OCTAVE Retro Cluster</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; color: #35f0c0; overflow: hidden; overscroll-behavior: none; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  /* egui sizes the canvas's pixels to this box */
+  #cluster { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; box-sizing: border-box; text-align: center; font: 700 20px/1.3 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.12em; text-transform: uppercase; pointer-events: none; }
+  #loading.failed { color: #ff5a3c; }
+</style>
+</head>
+<body>
+<canvas id="cluster"></canvas>
+<div id="loading">Loading Retro Cluster</div>
+<!-- a file, not inline: OCTAVE serves the page with a Content-Security-Policy that allows no inline script.
+     crossorigin: the browser demo runs this page in a sandboxed frame (another origin than its files) -->
+<script type="module" src="boot.js" crossorigin="anonymous"></script>
+</body>
+</html>

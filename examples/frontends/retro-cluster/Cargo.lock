@@ -1923,7 +1923,12 @@ dependencies = [
  "chrono",
  "eframe",
  "image",
+ "js-sys",
  "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "web-time",
 ]
 
 [[package]]

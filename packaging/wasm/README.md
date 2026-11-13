@@ -106,15 +106,16 @@ simulated car itself (`obdManager.connect_to_adapter("sim://elm327")`).
   allows CORS, as GitHub Pages does) safe to offer. `localStorage` throws in
   there, so a frontend must not depend on it.
 - **Bundled frontends**: `frontends/hello-car-js/` (the template),
-  `frontends/glass/`, and two native examples built for the browser,
-  `frontends/sunlight/` and `frontends/arcade/` (each when built: glass with
-  npm, the other two with their `build_web.sh`), staged by
+  `frontends/glass/`, and three native examples built for the browser,
+  `frontends/sunlight/`, `frontends/arcade/` and `frontends/retro-cluster/`
+  (each when built: glass with npm, the others with their `build_web.sh`),
+  staged by
   `stage_frontends.py` (from `build.sh`) with `frontends/catalog.json`: each
   one's own `octave-frontend.json` plus its `slug`, `path` and `preview`
   (its picture for the chooser in Settings > Device > Frontends). To offer
   another, add it to `FRONTENDS` there. `frontends/native.json` lists the
-  examples with no browser build (console, retro-cluster): the chooser shows
-  them greyed out.
+  example with no browser build (the console): the chooser shows it greyed
+  out.
 - **Shared code**: the stand-in, the bridge and the loader are
   `frontend-host.js`, used by this page and `index.html`.
 - **Not available there**: `GET /art` and `/export` (no HTTP server: covers
