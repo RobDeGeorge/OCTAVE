@@ -1,5 +1,6 @@
 /* OCTAVE Arcade: a C + SDL2 frontend over the service API, drawn like an
- * 8-bit arcade dashboard on a 320x200 canvas scaled up whole. */
+ * 8-bit arcade dashboard on a small canvas scaled up whole: 320x200, or
+ * 200x320 when the window or page is taller than wide. */
 #include <SDL.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -45,7 +46,47 @@ EM_JS(int, js_token_save, (const char *token), {
         return 0;
     }
 })
+/* The page's shape and its side of a canvas change (web/pre.js), and the
+ * page named in the address (?page=media). */
+EM_JS(int, js_page_tall, (void), {
+    return Module['arcadePageTall'] && Module['arcadePageTall']() ? 1 : 0;
+})
+EM_JS(void, js_canvas_changed, (void), {
+    if (Module['arcadeFit']) Module['arcadeFit']();
+})
+EM_JS(int, js_query_page, (void), {
+    try {
+        var p = new URLSearchParams(location.search).get('page');
+        return p === 'media' ? 1 : p === 'dtc' ? 2 : 0;
+    } catch (e) {
+        return 0;
+    }
+})
 #endif
+
+/* The canvas takes the shape of what shows it: tall when that is taller
+ * than wide. Asked every frame, so turning the phone or resizing the
+ * window swaps the layout at once. */
+static void fit(App *a)
+{
+    int w = 0, h = 0;
+#ifdef __EMSCRIPTEN__
+    bool changed = ui_set_tall(&a->ui, js_page_tall());
+#else
+    if (SDL_GetRendererOutputSize(a->r, &w, &h) != 0 || w <= 0 || h <= 0)
+        return;   /* minimised: keep the shape it had */
+    bool changed = ui_set_tall(&a->ui, h > w);
+#endif
+    if (!changed)
+        return;
+    ui_size(&a->ui, &w, &h);
+#ifdef __EMSCRIPTEN__
+    /* the window is the canvas, one to one; the page then scales it */
+    SDL_SetWindowSize(a->win, w, h);
+    js_canvas_changed();
+#endif
+    SDL_RenderSetLogicalSize(a->r, w, h);
+}
 
 /* A new token: keep it for the next run. */
 static void keep_token(App *a)
@@ -79,6 +120,7 @@ static bool frame(App *a)
     bool running = true;
     State s;
     SDL_Event e;
+    fit(a);
     link_snapshot(a->link, &s);
     if (s.paired_now)
         keep_token(a);
@@ -123,7 +165,7 @@ static void web_frame(void *arg) { frame(arg); }
 
 static void usage(void)
 {
-    puts("octave-arcade [--host H] [--port P] [--fullscreen] [--page drive|media|dtc] [--scale N]\n"
+    puts("octave-arcade [--host H] [--port P] [--fullscreen] [--page drive|media|dtc] [--scale N] [--portrait]\n"
          "              [--token T | OCTAVE_TOKEN=T] [--token-file PATH]   (pairing, protocol 2, over the network)\n"
          "OCTAVE_HOST, OCTAVE_PORT and OCTAVE_TOKEN (set when OCTAVE runs it as the screen) are the defaults");
 }
@@ -138,13 +180,14 @@ int main(int argc, char **argv)
     const char *token_file = NULL;
     char token_buf[80] = {0};
     const char *env_port = getenv("OCTAVE_PORT");
-    int port = env_port && atoi(env_port) > 0 ? atoi(env_port) : 9876, fullscreen = 0, scale = 4;
+    int port = env_port && atoi(env_port) > 0 ? atoi(env_port) : 9876, fullscreen = 0, scale = 4, portrait = 0;
     Page page = PAGE_DRIVE;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--host") == 0 && i + 1 < argc) host = argv[++i];
         else if (strcmp(argv[i], "--port") == 0 && i + 1 < argc) port = atoi(argv[++i]);
         else if (strcmp(argv[i], "--scale") == 0 && i + 1 < argc) scale = atoi(argv[++i]);
         else if (strcmp(argv[i], "--fullscreen") == 0) fullscreen = 1;
+        else if (strcmp(argv[i], "--portrait") == 0) portrait = 1;
         else if (strcmp(argv[i], "--token") == 0 && i + 1 < argc) token = argv[++i];
         else if (strcmp(argv[i], "--token-file") == 0 && i + 1 < argc) token_file = argv[++i];
         else if (strcmp(argv[i], "--page") == 0 && i + 1 < argc) {
@@ -168,9 +211,12 @@ int main(int argc, char **argv)
     }
 
 #ifdef __EMSCRIPTEN__
-    /* a page: no flags or environment. The canvas is 320x200 and the page scales it (web/pre.js) */
+    /* a page: no flags or environment. The canvas is 320x200 or 200x320, as the page is
+     * shaped, and the page scales it (web/pre.js) */
     scale = 1;
     fullscreen = 0;
+    portrait = js_page_tall();
+    page = (Page)js_query_page();
     token_file = NULL;
     char *stored = js_token_load();
     if (stored) {
@@ -189,8 +235,11 @@ int main(int argc, char **argv)
 #ifndef __EMSCRIPTEN__
     window_flags |= SDL_WINDOW_RESIZABLE;
 #endif
+    int w, h;
+    ui_set_tall(&app.ui, portrait);
+    ui_size(&app.ui, &w, &h);
     app.win = SDL_CreateWindow("OCTAVE Arcade", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                               UI_W * scale, UI_H * scale, window_flags);
+                               w * scale, h * scale, window_flags);
     if (!app.win) {
         fprintf(stderr, "SDL window: %s\n", SDL_GetError());
         return 1;
@@ -207,7 +256,10 @@ int main(int argc, char **argv)
         fprintf(stderr, "SDL renderer: %s\n", SDL_GetError());
         return 1;
     }
-    SDL_RenderSetLogicalSize(app.r, UI_W, UI_H);
+#ifdef __EMSCRIPTEN__
+    js_canvas_changed();
+#endif
+    SDL_RenderSetLogicalSize(app.r, w, h);
     SDL_RenderSetIntegerScale(app.r, SDL_TRUE);
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
 

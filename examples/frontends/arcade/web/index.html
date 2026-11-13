@@ -9,7 +9,8 @@
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
   body { display: flex; align-items: center; justify-content: center; position: fixed; inset: 0;
          -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
-  /* 320x200 pixels, scaled up whole by arcade.js (web/pre.js): never smoothed */
+  /* 320x200 pixels (200x320 on a page taller than wide), scaled up whole by arcade.js
+     (web/pre.js): never smoothed */
   canvas { display: block; width: 320px; height: 200px; background: #0c0a14; outline: none; touch-action: none;
            image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: pixelated; }
   #status { position: fixed; left: 0; right: 0; bottom: 12px; margin: 0; text-align: center;

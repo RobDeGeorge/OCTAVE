@@ -1,6 +1,6 @@
 # Arcade
 
-A fourth OCTAVE frontend, written to prove the open backend from plain C: **C11 + SDL2**, no toolkit, no font or image files. It draws an 8-bit arcade dashboard on a 320x200 canvas scaled up whole (4x on the 1280x800 head unit): a 5x5 pixel font made of rectangles, segmented ladders, chunky buttons, a flat sixteen-colour palette, and the album cover crushed to 24x24 big pixels snapped to that palette. It talks to OCTAVE over the service API (`docs/api/`, protocol versions 1 to 3): JSON lines over a TCP socket, plus one short HTTP GET for the cover. It is one of the example frontends in `examples/frontends/` (MIT licensed); the QML UI in `frontend/` is the one that ships.
+A fourth OCTAVE frontend, written to prove the open backend from plain C: **C11 + SDL2**, no toolkit, no font or image files. It draws an 8-bit arcade dashboard on a 320x200 canvas scaled up whole (4x on the 1280x800 head unit), or on a 200x320 one with its own layout when the window or page is taller than wide: a 5x5 pixel font made of rectangles, segmented ladders, chunky buttons, a flat sixteen-colour palette, and the album cover crushed to 24x24 big pixels snapped to that palette. It talks to OCTAVE over the service API (`docs/api/`, protocol versions 1 to 3): JSON lines over a TCP socket, plus one short HTTP GET for the cover. It is one of the example frontends in `examples/frontends/` (MIT licensed); the QML UI in `frontend/` is the one that ships.
 
 ## Run
 
@@ -11,7 +11,7 @@ A fourth OCTAVE frontend, written to prove the open backend from plain C: **C11 
 
 cd examples/frontends/arcade
 cmake -S . -B build && cmake --build build -j4
-./build/octave-arcade                    # --host H --port P --fullscreen --page drive|media|dtc --scale N --token-file PATH
+./build/octave-arcade                    # --host H --port P --fullscreen --page drive|media|dtc --scale N --portrait --token-file PATH
 ```
 
 Needs `libsdl2-dev` (Debian / Ubuntu / Raspberry Pi OS) or `sdl2` / `sdl2-compat` (Arch), CMake 3.16 and a C11 compiler. It builds warning-free with `-Wall -Wextra -Wpedantic`; the two vendored libraries (`third_party/`, cJSON v1.7.18 and stb_image v2.30, with their licences) are compiled with warnings off. Start it before or after OCTAVE: until the service answers it shows NO SIGNAL and retries every second, and it re-subscribes on every reconnect.
@@ -44,7 +44,7 @@ cd examples/frontends/arcade
 # then http://127.0.0.1:9876/ ; from a phone add --service-bind 0.0.0.0 and open http://<the car's address>:9876/
 ```
 
-`dist-web/` holds `index.html`, `arcade.js`, `arcade.wasm` (about 0.8 MB together, 0.25 MB gzipped) and its own `octave-frontend.json` (`org.octave.example.arcade.web`, `"web": {"root": "."}`), so the folder installs like any web frontend. The page scales the 320x200 picture up whole, centred on black, never smoothed: by a whole number of screen pixels where that fits, to the full width on a phone held upright (landscape is the bigger picture). Every action is a tap target; the keys in the table work too, apart from F11 and Ctrl+Q.
+`dist-web/` holds `index.html`, `arcade.js`, `arcade.wasm` (about 0.8 MB together, 0.25 MB gzipped) and its own `octave-frontend.json` (`org.octave.example.arcade.web`, `"web": {"root": "."}`), so the folder installs like any web frontend. The page scales the picture up whole, centred on black, never smoothed: by a whole number of screen pixels where that costs under a tenth of the size, otherwise to the page's full width or height. A phone held upright gets the 200x320 portrait layout across its full width, and turning it swaps the layout at once. `?page=media` or `?page=dtc` in the address opens on that page. Every action is a tap target; the keys in the table work too, apart from F11 and Ctrl+Q.
 
 - **Pairing**: from another device the PAIR keypad comes up as it does natively. The token is kept in the page's `localStorage` when the browser allows it; otherwise it lasts until the page closes.
 - **Cover**: fetched from `/art` with a media ticket (`mediaTicket`), never the token, and decoded by the same stb_image code.
@@ -82,6 +82,8 @@ Pressing mute five times within four seconds always ends it and brings back OCTA
 | `GET /art` | the current cover as PNG / JPEG bytes, decoded with stb_image |
 
 `src/link.c` is the protocol (cJSON): hello, pairing, subscribe, fold events into a `State` the UI copies out each frame. How the messages travel is one more file: `src/link_tcp.c` natively (POSIX sockets, an SDL thread and mutex, reconnect, the HTTP GET for the cover), `src/link_web.c` in a browser (the page's WebSocket and `fetch`, no thread); `src/link_impl.h` is what the two halves share. `src/font.c` is the pixel font, `src/art.c` the cover crusher, `src/ui.c` the three pages and their buttons, `src/main.c` the window and the event loop (the browser's frame clock on the web), `web/` the page around the canvas.
+
+The two canvas shapes are two tables in `src/ui.c` (`wide` and `tall`: where every text, ladder and button sits); the drawing and the hit-testing read whichever is in force. `src/main.c` picks one every frame from the shape of the window (natively: resize it, or start with `--portrait`) or of the page (`web/pre.js`), so the picture is never rotated or squeezed, only laid out again.
 
 ## Known gaps
 
