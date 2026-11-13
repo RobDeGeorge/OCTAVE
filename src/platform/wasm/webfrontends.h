@@ -8,7 +8,8 @@
 // globalThis.octaveFrontendCatalog before the core starts. install() puts a
 // folder for each into the frontends root in the page's memory, so
 // Settings > Device > Frontends lists them as on a head unit, and Use is
-// FrontendManager::setActive as everywhere.
+// FrontendManager::setActive as everywhere. The page also fetches each
+// one's preview picture (`previewData`), written beside the manifest.
 //
 // The files themselves stay on the site: the page follows
 // frontendManager.activeId over its own service connection and shows the

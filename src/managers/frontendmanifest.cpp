@@ -77,6 +77,9 @@ FrontendManifest FrontendManifest::parse(const QByteArray &json, QStringList *er
     m.name = text("name", 64, true);
     m.version = text("version", 32, true);
     m.description = text("description", 500, false);
+    m.preview = text("preview", 256, false);
+    if (!m.preview.isEmpty() && (!safeRelativePath(m.preview) || !previewSuffix(m.preview)))
+        errs << QStringLiteral("\"preview\" must be a .png, .jpg or .webp picture inside the frontend");
 
     const QJsonArray proto = o.value(QLatin1String("protocol")).toArray();
     if (proto.size() != 2 || !proto.at(0).isDouble() || !proto.at(1).isDouble()
@@ -165,6 +168,14 @@ bool FrontendManifest::validateFiles(const FrontendManifest &m, const QDir &dir,
     if (errors)
         *errors += errs;
     return errs.isEmpty();
+}
+
+bool FrontendManifest::previewSuffix(const QString &path)
+{
+    for (const char *suffix : {".png", ".jpg", ".jpeg", ".webp"})
+        if (path.endsWith(QLatin1String(suffix), Qt::CaseInsensitive))
+            return true;
+    return false;
 }
 
 QVariantMap FrontendManifest::toMap() const

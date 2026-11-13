@@ -46,7 +46,7 @@ All the keys are on screen too, for the touch panel. Tap the tape (the progress 
 ```bash
 cd examples/frontends/retro-cluster
 cargo install --path . --root dist                      # -> dist/bin/retro-cluster (a release build)
-cp octave-frontend.json dist/
+cp octave-frontend.json preview.png dist/
 ```
 
 Then on the head unit: Settings > Device > Frontends > **Install from folder** (`examples/frontends/retro-cluster/dist`), and **Try** (a timed trial that goes back by itself) or **Use** (from the next start). Over the service: `frontendManager.installFromFolder(path)`, then `tryFrontend(id, seconds)` or `setActive(id)`. Started that way it reads `OCTAVE_HOST`, `OCTAVE_PORT` and `OCTAVE_TOKEN` from its environment (the flags still win), sends the token with `hello`, and logs one `connected ...` line that OCTAVE relays into its own log as `[org.octave.example.retro-cluster] ...`. The token holds exactly the manifest's scopes, and while it is the screen nothing else on the head unit gets in without one (pair other tools with `octave --pair-code`). Quitting with Ctrl+Q (exit code 0) quits OCTAVE too.

@@ -29,7 +29,7 @@
 
         <h2 id="try">Try One Now</h2>
         <p>The <a href="../playground.html">frontend playground</a> runs a web frontend against the real OCTAVE core (compiled to WebAssembly) and a simulated car, in your browser, with nothing to install. The car's own screen runs next to it, so you can watch both follow the same engine. Any web frontend loads with <code>playground.html?frontend=&lt;url&gt;</code>, so a link is enough to show yours.</p>
-        <p>On <a href="../">the browser demo</a> they are in Settings &gt; Device &gt; Frontends too: <em>Use</em> one and it replaces the built-in screen, on the same car; its <em>OCTAVE</em> button brings the built-in screen back.</p>
+        <p>On <a href="../">the browser demo</a> they are in Settings &gt; Device &gt; Frontends too: tap one's picture and it replaces the built-in screen, on the same car (glass, sunlight and the arcade run there; the console and the retro cluster are programs and show greyed out); its <em>OCTAVE</em> button brings the built-in screen back.</p>
         <p>The native ones run against any OCTAVE release with <code>octave --headless --sim</code> (a simulated car, no window). Install one as the car's screen from Settings &gt; Device &gt; Frontends, and press <em>Try</em>: the built-in screen comes back after two minutes, or at any time when you press mute five times within four seconds (<a href="writing-a-frontend.html#install">details</a>).</p>
 
         <h2 id="examples">Example Frontends</h2>
@@ -53,9 +53,10 @@
             <img src="images/frontends/sunlight.png" alt="Sunlight: large black-on-white readouts" loading="lazy">
             <div class="gallery-body">
               <h3>Sunlight</h3>
-              <div class="gallery-stack">Go + Gio &middot; native</div>
+              <div class="gallery-stack">Go + Gio &middot; native, and in a browser</div>
               <p>Brutalist black on white, readable in direct sun, with an inverted night mode. Drive readouts, every saved dashboard drawn from its spec, trouble codes, trips, media with the cover.</p>
               <div class="gallery-links">
+                <a href="../?frontend=sunlight">Try it live</a>
                 <a href="https://github.com/RobDeGeorge/OCTAVE/tree/main/examples/frontends/sunlight">Source</a>
               </div>
             </div>
@@ -77,9 +78,10 @@
             <img src="images/frontends/arcade.png" alt="Arcade: a 320 by 200 pixel dashboard in 16 colours" loading="lazy">
             <div class="gallery-body">
               <h3>Arcade</h3>
-              <div class="gallery-stack">C11 + SDL2 &middot; native</div>
+              <div class="gallery-stack">C11 + SDL2 &middot; native, and in a browser</div>
               <p>An 8-bit arcade dashboard: 320&times;200 pixels scaled up, its own pixel font, 16 colours. Drive readouts, media with a palette-crushed cover, trouble codes. Proof that plain C and a JSON library are enough.</p>
               <div class="gallery-links">
+                <a href="../?frontend=arcade">Try it live</a>
                 <a href="https://github.com/RobDeGeorge/OCTAVE/tree/main/examples/frontends/arcade">Source</a>
               </div>
             </div>

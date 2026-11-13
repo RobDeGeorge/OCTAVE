@@ -6,8 +6,8 @@ OCTAVE's managers are served to any program over the service API (`docs/api/`, `
 |---|---|---|---|
 | [`glass/`](glass/) | TypeScript + Svelte 5 (browser, served by the app with `--web-root`) | frosted glass tablet UI, light and dark | aims at everything the QML app does |
 | [`console/`](console/) | Python + Textual (terminal) | dense, keyboard-first operator console | live data, OBD and trouble codes, trips, the library, dashboards, every setting, an API explorer |
-| [`sunlight/`](sunlight/) | Go + Gio (native) | brutalist black on white for direct sunlight, inverted night mode | drive readouts, every saved dashboard drawn from its JSON spec, trouble codes, trips, media with the cover |
-| [`arcade/`](arcade/) | C11 + SDL2 (native) | 8-bit arcade dashboard: 320x200 pixels scaled up, own pixel font, 16 colours | drive readouts, media with a palette-crushed cover, trouble codes |
+| [`sunlight/`](sunlight/) | Go + Gio (native; also a browser build, `build_web.sh`) | brutalist black on white for direct sunlight, inverted night mode | drive readouts, every saved dashboard drawn from its JSON spec, trouble codes, trips, media with the cover |
+| [`arcade/`](arcade/) | C11 + SDL2 (native; also a browser build, `build_web.sh`) | 8-bit arcade dashboard: 320x200 pixels scaled up, own pixel font, 16 colours | drive readouts, media with a palette-crushed cover, trouble codes |
 | [`retro-cluster/`](retro-cluster/) | Rust + egui (native) | 1980s vacuum-fluorescent instrument cluster | driving gauges, every PID, trouble codes, trips, a spectrum analyzer, media with a dot-matrix cover |
 
 Each has a README: how to run it, its keys, its pages, which API objects it uses, and what it can't do yet.
@@ -37,7 +37,9 @@ Each carries an `octave-frontend.json`, so after its build step it installs on t
 | console | `pip install --target vendor textual pillow` + copy `sdk/python/octave_client` into `vendor/` | `console` (no `.venv` inside) | exec, `python3 launch.py` in a full-screen terminal | media, vehicle, phone, settings, files, system |
 | sunlight | `go build -tags novulkan -o bin/sunlight .` | `sunlight` | exec | media, vehicle |
 | arcade | `cmake -S . -B build && cmake --build build` | `arcade` | exec | media, vehicle |
-| retro-cluster | `cargo install --path . --root dist && cp octave-frontend.json dist/` | `retro-cluster/dist` | exec | media, vehicle, files |
+| retro-cluster | `cargo install --path . --root dist && cp octave-frontend.json preview.png dist/` | `retro-cluster/dist` | exec | media, vehicle, files |
+
+sunlight and the arcade also build for the browser (`./build_web.sh` in each, into `dist-web/`: Go's js/wasm port, Emscripten with SDL2): that folder installs as a web frontend (ids ending `.web`), and the browser demo offers both in Settings > Device > Frontends. Each manifest names a `preview.png`, the picture in that chooser.
 
 glass and retro-cluster install from `dist/` because the installer copies the whole folder, refuses links (`node_modules/` has some) and stops at 256 MB (`target/` is past it). Screenshots of each against the simulated car: `wiki/images/frontends/`.
 

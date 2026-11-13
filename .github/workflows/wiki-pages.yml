@@ -26,6 +26,10 @@ on:
       - 'wiki/**'
       - 'templates/hello-car-js/**'
       - 'examples/frontends/glass/**'
+      - 'examples/frontends/sunlight/**'
+      - 'examples/frontends/arcade/**'
+      - 'examples/frontends/console/**'
+      - 'examples/frontends/retro-cluster/**'
       - 'sdk/typescript/**'
       - '.github/workflows/wiki-pages.yml'
   workflow_dispatch:
@@ -92,6 +96,17 @@ jobs:
           npm --prefix sdk/typescript ci --no-audit --no-fund
           npm --prefix examples/frontends/glass ci --no-audit --no-fund
           npm --prefix examples/frontends/glass run build
+      # The native examples that also build for the browser (stage_frontends.py
+      # stages each dist-web/): sunlight with Go's js/wasm port, the arcade with
+      # the emsdk installed above (its first run builds the SDL2 port)
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: examples/frontends/sunlight/go.mod
+          cache-dependency-path: examples/frontends/sunlight/go.sum
+      - name: Build the sunlight and arcade examples for the browser
+        run: |
+          (cd examples/frontends/sunlight && ./build_web.sh)
+          (cd examples/frontends/arcade && ./build_web.sh)
       - name: Build and stage
         run: |
           QT_HOST="$RUNNER_TEMP/qt/Qt/$QT_VERSION/gcc_64" \

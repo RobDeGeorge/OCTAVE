@@ -126,6 +126,8 @@ private slots:
         QTest::newRow("unknown scope") << with("scopes", QJsonArray{"read", "root"}) << "unknown scope \"root\"";
         QTest::newRow("web root escapes") << with("web", QJsonObject{{"root", "../x"}}) << "\"web.root\"";
         QTest::newRow("web root absolute") << with("web", QJsonObject{{"root", "/etc"}}) << "\"web.root\"";
+        QTest::newRow("preview escapes") << with("preview", "../shot.png") << "\"preview\"";
+        QTest::newRow("preview not a picture") << with("preview", "run.sh") << "\"preview\"";
         QTest::newRow("both web and exec") << with("exec", QJsonObject{{"linux", QJsonArray{"x"}}}) << "exactly one";
         QJsonObject neither = webManifest();
         neither.remove("web");
@@ -185,6 +187,27 @@ private slots:
         // No staging folder left behind
         QCOMPARE(QDir(tmp.filePath("frontends")).entryList(QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot),
                  QStringList{"com.example.dash"});
+    }
+
+    // The manifest's picture, for the chooser: a URL when the file is there
+    void aPreviewIsListedAsAUrl()
+    {
+        QTemporaryDir tmp;
+        FrontendManager fm;
+        fm.setRoot(tmp.filePath("frontends"));
+        QJsonObject m = webManifest();
+        m.insert("preview", "shots/preview.png");
+        const QString src = makeWebFolder(tmp, m);
+        write(src + "/shots/preview.png", "png");
+        QVERIFY(!fm.installFromFolder(src).isEmpty());
+        const QString url = fm.manifestOf("com.example.dash").value("preview").toString();
+        QVERIFY2(url.startsWith("file:") && url.endsWith("/frontends/com.example.dash/shots/preview.png"), qPrintable(url));
+
+        // Named but missing: still installs, only without a picture
+        const QString src2 = makeWebFolder(tmp, m, "src2");
+        QVERIFY2(!fm.installFromFolder(src2).isEmpty(), qPrintable(fm.lastError()));
+        QVERIFY(fm.manifestOf("com.example.dash").contains("preview"));
+        QCOMPARE(fm.manifestOf("com.example.dash").value("preview").toString(), QString());
     }
 
     void reinstallingReplaces()

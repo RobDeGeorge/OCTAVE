@@ -11,6 +11,7 @@
 #include <QJsonObject>
 #include <QLoggingCategory>
 #include <QRandomGenerator>
+#include <QUrl>
 #include <QtCore/private/qzipreader_p.h>
 
 Q_LOGGING_CATEGORY(lcFrontends, "octave.frontends")
@@ -236,6 +237,15 @@ QVariantList FrontendManager::frontends() const
         row.insert(QStringLiteral("compatible"), problem.isEmpty());
         row.insert(QStringLiteral("problem"), problem);
         row.insert(QStringLiteral("path"), root.filePath(id));
+        // Its picture for the chooser, as a URL an Image can show ("" = none).
+        // A missing or oversized file is only a frontend without a picture
+        QString preview;
+        if (!m.preview.isEmpty()) {
+            const QFileInfo file(root.filePath(id + QLatin1Char('/') + m.preview));
+            if (file.isFile() && file.size() <= kMaxPreviewBytes)
+                preview = QUrl::fromLocalFile(file.absoluteFilePath()).toString();
+        }
+        row.insert(QStringLiteral("preview"), preview);
         out.append(row);
     }
     return out;

@@ -209,7 +209,28 @@
       // The site's web frontends: the core lists them in Settings > Device >
       // Frontends (src/platform/wasm/webfrontends.h), read from this at start
       const host = window.OctaveFrontendHost;
-      const catalogReady = host.catalog().then((list) => { globalThis.octaveFrontendCatalog = list; return list; });
+      // Each one's picture for the chooser comes along as base64 (`previewData`):
+      // the core writes it beside the manifest, as an installed frontend has it
+      const withPreview = async (entry) => {
+        if (typeof entry.preview !== 'string') return entry;
+        try {
+          const r = await fetch(entry.preview);
+          const bytes = r.ok ? new Uint8Array(await r.arrayBuffer()) : null;
+          if (!bytes || bytes.length > 512 * 1024) return entry;
+          let text = '';
+          for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+          return { ...entry, previewData: btoa(text) };
+        } catch (e) {
+          return entry;
+        }
+      };
+      // frontends/native.json: programs with no browser build, listed greyed out
+      const nativeOnes = fetch('frontends/native.json').then((r) => (r.ok ? r.json() : []))
+        .then((list) => (Array.isArray(list) ? list : [])).catch(() => []);
+      const catalogReady = Promise.all([host.catalog(), nativeOnes]).then(async ([list, native]) => {
+        globalThis.octaveFrontendCatalog = await Promise.all([...list, ...native].map(withPreview));
+        return list;
+      });
       try {
         render();
         const [wasmBytes, dataBytes, catalog] = await Promise.all([download('octave.wasm'), download('octave.data'), catalogReady]);

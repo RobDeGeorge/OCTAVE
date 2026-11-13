@@ -1652,7 +1652,7 @@
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>frontends</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>frontendsChanged</code></td><td><code>[{id, name, version, description, kind, protocol, scopes, command, active, compatible, problem, path}]</code>; a broken folder is listed with its <code>problem</code></td></tr>
+            <tr><td><code>frontends</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>frontendsChanged</code></td><td><code>[{id, name, version, description, kind, protocol, scopes, command, active, compatible, problem, path, preview}]</code> (<code>preview</code>: the URL of the manifest's picture, <code>""</code> without one); a broken folder is listed with its <code>problem</code></td></tr>
             <tr><td><code>activeId</code></td><td><code>QString</code></td><td>read-only</td><td><code>activeChanged</code></td><td>The frontend used from the next start; <code>""</code> for the built-in QML UI</td></tr>
             <tr><td><code>runningId</code></td><td><code>QString</code></td><td>constant</td><td>&mdash;</td><td>What this run shows, decided at start (<code>""</code> = the QML UI)</td></tr>
             <tr><td><code>forcedQml</code>, <code>forcedQmlReason</code></td><td><code>bool</code>, <code>QString</code></td><td>read-only</td><td><code>activeChanged</code></td><td><code>USE_QML</code> is present (an exec frontend is not started) and its text</td></tr>

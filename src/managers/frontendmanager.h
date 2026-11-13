@@ -54,7 +54,8 @@ class FrontendManager : public QObject
     Q_CLASSINFO("octave.scope", "system")
     Q_CLASSINFO("octave.scope.read", "manifestOf keepTrial")
     // [{id, name, version, description, kind, protocol, scopes, command,
-    //   active, compatible, problem, path}]
+    //   active, compatible, problem, path, preview}]; preview is the URL of
+    //   the manifest's picture, "" without one
     Q_PROPERTY(QVariantList frontends READ frontends NOTIFY frontendsChanged)
     // The one used from the next start, "" for the built-in QML UI
     Q_PROPERTY(QString activeId READ activeId NOTIFY activeChanged)
@@ -79,6 +80,7 @@ public:
     static constexpr int kMaxFiles = 10000;
     static constexpr qint64 kMaxBytes = 256LL * 1024 * 1024;
     static constexpr int kMaxDepth = 24;
+    static constexpr qint64 kMaxPreviewBytes = 4LL * 1024 * 1024;
 
     explicit FrontendManager(QObject *parent = nullptr);
 

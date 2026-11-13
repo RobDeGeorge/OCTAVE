@@ -52,8 +52,9 @@ if [ -n "${OUT_DIR:-}" ]; then
         "$here"/LICENSE.coi-serviceworker "$OUT_DIR/"
     # The web frontends the site offers (Settings > Device > Frontends on
     # index.html, the playground's picker) and frontends/catalog.json: the
-    # JavaScript template, and glass when it has been built
-    # (npm --prefix examples/frontends/glass ci && npm --prefix examples/frontends/glass run build)
+    # JavaScript template, and those that have been built: glass
+    # (npm --prefix examples/frontends/glass ci && npm --prefix examples/frontends/glass run build),
+    # sunlight and the arcade (./build_web.sh in each)
     python3 "$here/stage_frontends.py" "$OUT_DIR"
     echo "staged site in $OUT_DIR"
 fi

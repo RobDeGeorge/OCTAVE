@@ -74,6 +74,159 @@ Flickable {
         onAccepted: pageRoot.finishFrontendInstall(pageRoot._frontends.installFromZip(selectedFile.toString()))
     }
 
+    // A screen in the Frontends card: its picture, its name, what it may
+    // change. The whole box is the Use button; buttons given as children
+    // (Try, Remove) sit in a row at its foot.
+    component FrontendTile: Rectangle {
+        id: tile
+        // An inline component sees no ids of the page around it
+        function dp(size) { return Math.round(size * (App.Spacing.effectiveScale || 1.0)) }
+        function dpMin(size, floor) { return Math.max(floor, Math.round(size * (App.Spacing.effectiveScale || 1.0))) }
+        property string title: ""
+        property string kindText: ""
+        property string detail: ""
+        property string problem: ""        // why it can't be used; "" when it can
+        property string preview: ""        // a picture's URL; "" shows the first letter
+        property bool inUse: false
+        property real pictureHeight: tile.dp(100)
+        property bool showActions: false
+        readonly property bool usable: problem === ""
+        readonly property string text: inUse ? "In use" : "Use"
+        readonly property int pad: tile.dpMin(3, 2)
+        default property alias actions: actionRow.data
+        signal clicked()
+
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        Layout.preferredWidth: 1           // equal columns whatever the captions say
+        Layout.alignment: Qt.AlignTop
+        implicitHeight: tileBody.implicitHeight + pad * 2
+        radius: tile.dpMin(App.EnvironmentTheme.active.cardRadius, 2)
+        color: App.Style.headerBackgroundColor
+        border.width: inUse ? pad : 1
+        border.color: inUse ? App.Style.accent
+                    : tileArea.containsMouse ? Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.7)
+                    : Qt.rgba(App.Style.primaryTextColor.r, App.Style.primaryTextColor.g, App.Style.primaryTextColor.b, 0.18)
+        opacity: usable ? 1 : 0.55
+        scale: tileArea.pressed ? 0.98 : 1
+        Behavior on scale { NumberAnimation { duration: 90 } }
+        Behavior on border.color { ColorAnimation { duration: 150 } }
+
+        MouseArea {
+            id: tileArea
+            anchors.fill: parent
+            enabled: tile.usable && !tile.inUse
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: tile.clicked()
+        }
+
+        ColumnLayout {
+            id: tileBody
+            anchors { left: parent.left; right: parent.right; top: parent.top; margins: tile.pad }
+            spacing: 0
+
+            Item {
+                Layout.fillWidth: true
+                Layout.preferredHeight: tile.pictureHeight
+                clip: true
+                Rectangle {
+                    anchors.fill: parent
+                    radius: Math.max(0, tile.radius - tile.pad)
+                    color: Qt.rgba(App.Style.primaryTextColor.r, App.Style.primaryTextColor.g,
+                                   App.Style.primaryTextColor.b, 0.08)
+                    Text {
+                        anchors.centerIn: parent
+                        visible: tilePicture.status !== Image.Ready
+                        textFormat: Text.PlainText
+                        text: tile.title.charAt(0).toUpperCase()
+                        color: App.Style.secondaryTextColor
+                        font.pixelSize: parent.height * 0.45
+                        font.bold: true
+                        font.family: App.Style.fontFamily
+                    }
+                }
+                Image {
+                    id: tilePicture
+                    anchors.fill: parent
+                    source: tile.preview
+                    visible: status === Image.Ready
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    sourceSize.width: 640
+                    sourceSize.height: 400
+                    smooth: true
+                }
+                Rectangle {
+                    visible: tile.inUse
+                    anchors { top: parent.top; right: parent.right; margins: tile.dp(6) }
+                    width: inUseLabel.implicitWidth + tile.dp(14)
+                    height: inUseLabel.implicitHeight + tile.dp(6)
+                    radius: height / 2
+                    color: App.Style.accent
+                    Text {
+                        id: inUseLabel
+                        anchors.centerIn: parent
+                        text: "In use"
+                        color: "white"
+                        font.pixelSize: App.Spacing.overallText * 0.7
+                        font.bold: true
+                        font.family: App.Style.fontFamily
+                    }
+                }
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.margins: tile.dp(8)
+                spacing: tile.dp(2)
+                Text {
+                    Layout.fillWidth: true
+                    textFormat: Text.PlainText     // from the frontend's manifest
+                    text: tile.title
+                    color: App.Style.primaryTextColor
+                    font.pixelSize: App.Spacing.overallText * 0.9
+                    font.bold: true
+                    font.family: App.Style.fontFamily
+                    elide: Text.ElideRight
+                }
+                Text {
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 0
+                    visible: text !== ""
+                    textFormat: Text.PlainText
+                    text: tile.kindText
+                    color: App.Style.secondaryTextColor
+                    font.pixelSize: App.Spacing.overallText * 0.7
+                    font.family: App.Style.fontFamily
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 2
+                    elide: Text.ElideRight
+                }
+                Text {
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 0
+                    visible: text !== ""
+                    textFormat: Text.PlainText
+                    text: tile.usable ? tile.detail : "Can't be used: " + tile.problem
+                    color: tile.usable ? App.Style.secondaryTextColor : App.Style.statusDisconnected
+                    font.pixelSize: App.Spacing.overallText * 0.7
+                    font.family: App.Style.fontFamily
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 3
+                    elide: Text.ElideRight
+                }
+                RowLayout {
+                    id: actionRow
+                    visible: tile.showActions
+                    Layout.fillWidth: true
+                    Layout.topMargin: tile.dp(4)
+                    spacing: tile.dp(6)
+                }
+            }
+        }
+    }
+
     property var tileModel: [
         { cardId: "device_name", title: "Device", component: deviceContent,
           summary: function() {
@@ -376,13 +529,14 @@ Flickable {
             SettingDescription {
                 visible: pageRoot._inBrowser
                 text: "Other screens for OCTAVE, made by anyone with the service API, running on this same car. "
-                      + "Use one to see it in place of this screen; its OCTAVE button, or mute pressed five times "
+                      + "Tap one to see it in place of this screen; its OCTAVE button, or mute pressed five times "
                       + "within four seconds, brings this screen back. More in the frontend gallery on the wiki."
             }
             SettingDescription {
                 visible: !pageRoot._inBrowser
                 text: "Other screens for OCTAVE, made by anyone with the service API. A web frontend is served to "
-                      + "browsers; a program frontend replaces this screen. Try one for two minutes and this screen "
+                      + "browsers; a program frontend replaces this screen. Tap one to make it the screen from the next "
+                      + "start, or Try a program for two minutes and this screen "
                       + "comes back by itself (so does turning the car off and on). To get this screen back at any "
                       + "time: press mute five times within four seconds (the knob, a gesture or the frontend's own "
                       + "button), start with --qml, or put a file named USE_QML in the frontends folder."
@@ -461,83 +615,74 @@ Flickable {
                 title: "Screens"
                 visible: !!fm
 
-                RowLayout {
+                // One box per screen, with its picture: the box is the Use button
+                GridLayout {
+                    id: screenGrid
+                    objectName: "frontendTiles"
                     Layout.fillWidth: true
-                    spacing: App.Spacing.overallSpacing
-                    Text {
-                        Layout.fillWidth: true
-                        text: "Built-in  \u2022  this screen"
-                        color: App.Style.primaryTextColor
-                        font.pixelSize: App.Spacing.overallText * 0.85
-                        font.family: App.Style.fontFamily
-                    }
-                    SettingsButton {
+                    readonly property int count: 1 + (fm ? fm.frontends.length : 0)
+                    readonly property real cellWidth: Math.max(1, (width - (columns - 1) * columnSpacing) / columns)
+                    columns: Math.max(1, Math.min(count, 4, Math.floor((width + columnSpacing)
+                                                                       / (pageRoot.dp(160) + columnSpacing))))
+                    columnSpacing: App.Spacing.overallSpacing
+                    rowSpacing: App.Spacing.overallSpacing
+
+                    FrontendTile {
                         objectName: "useBuiltInFrontend"
-                        text: fm && fm.activeId === "" ? "In use" : "Use"
-                        enabled: !!fm && fm.activeId !== ""
-                        height: pageRoot.dp(28)
+                        title: "Built-in"
+                        kindText: "this screen"
+                        detail: "OCTAVE's own screen"
+                        preview: Qt.resolvedUrl("../assets/frontend_builtin.png")
+                        inUse: !!fm && fm.activeId === ""
+                        pictureHeight: screenGrid.cellWidth * 0.625
                         onClicked: if (!fm.setActive("")) pageRoot.frontendStatus = fm.lastError
                     }
-                }
 
-                Repeater {
-                    model: fm ? fm.frontends : []
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 0
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: App.Spacing.overallSpacing
-                            Text {
-                                Layout.fillWidth: true
-                                textFormat: Text.PlainText   // from the frontend's manifest
-                                text: (modelData.name || modelData.id) + (modelData.version ? " " + modelData.version : "")
-                                      + "  \u2022  " + (modelData.kind === "web" ? "web" : "program")
-                                      + "  \u2022  " + pageRoot.scopeWords(modelData.scopes)
-                                color: App.Style.primaryTextColor
-                                font.pixelSize: App.Spacing.overallText * 0.85
-                                font.family: App.Style.fontFamily
-                                elide: Text.ElideRight
-                            }
+                    Repeater {
+                        model: fm ? fm.frontends : []
+                        FrontendTile {
+                            id: installedTile
+                            required property var modelData
+                            objectName: "useFrontend_" + modelData.id
+                            title: (modelData.name || modelData.id) + (modelData.version ? " " + modelData.version : "")
+                            kindText: (modelData.kind === "web" ? "web" : "program") + "  \u2022  "
+                                      + pageRoot.scopeWords(modelData.scopes)
+                            detail: modelData.description || ""
+                            problem: modelData.compatible ? ""
+                                     : pageRoot._inBrowser && modelData.kind === "exec"
+                                       ? "it is a program, for a head unit or a desktop, not a browser"
+                                     : (modelData.problem || "it can't run here")
+                            preview: modelData.preview || ""
+                            inUse: !!modelData.active
+                            pictureHeight: screenGrid.cellWidth * 0.625
+                            showActions: !pageRoot._inBrowser   // the site's own: nothing installed, nothing to try
+                            onClicked: if (!fm.setActive(modelData.id)) pageRoot.frontendStatus = fm.lastError
+
                             SettingsButton {
-                                objectName: "tryFrontend_" + modelData.id
+                                objectName: "tryFrontend_" + installedTile.modelData.id
                                 // A program frontend replaces this screen: try it, and this screen comes back
-                                visible: modelData.kind !== "web"
+                                visible: installedTile.modelData.kind !== "web"
                                 text: "Try"
-                                enabled: !modelData.active && modelData.compatible
-                                tooltipText: modelData.compatible ? "Restart on it now; back to this screen after two minutes"
-                                                                  : modelData.problem
-                                height: pageRoot.dp(28)
-                                onClicked: if (!fm.tryFrontend(modelData.id, 120)) pageRoot.frontendStatus = fm.lastError
+                                enabled: !installedTile.modelData.active && installedTile.modelData.compatible
+                                opacity: enabled ? 1 : 0.4
+                                tooltipText: installedTile.modelData.compatible
+                                             ? "Restart on it now; back to this screen after two minutes"
+                                             : installedTile.modelData.problem
+                                height: pageRoot.dp(26)
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: pageRoot.dp(48)
+                                onClicked: if (!fm.tryFrontend(installedTile.modelData.id, 120)) pageRoot.frontendStatus = fm.lastError
                             }
                             SettingsButton {
-                                objectName: "useFrontend_" + modelData.id
-                                text: modelData.active ? "In use" : "Use"
-                                enabled: !modelData.active && modelData.compatible
-                                tooltipText: !modelData.compatible ? modelData.problem
-                                             : pageRoot._inBrowser ? "Show it in place of this screen"
-                                             : "Make this the screen from the next start"
-                                height: pageRoot.dp(28)
-                                onClicked: if (!fm.setActive(modelData.id)) pageRoot.frontendStatus = fm.lastError
-                            }
-                            SettingsButton {
-                                objectName: "removeFrontend_" + modelData.id
-                                visible: !pageRoot._inBrowser   // the site's own: nothing installed
+                                objectName: "removeFrontend_" + installedTile.modelData.id
                                 text: "Remove"
-                                enabled: modelData.id !== fm.runningId
-                                height: pageRoot.dp(28)
-                                onClicked: if (!fm.remove(modelData.id)) pageRoot.frontendStatus = fm.lastError
+                                enabled: installedTile.modelData.id !== fm.runningId
+                                opacity: enabled ? 1 : 0.4
+                                height: pageRoot.dp(26)
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: pageRoot.dp(48)
+                                onClicked: if (!fm.remove(installedTile.modelData.id)) pageRoot.frontendStatus = fm.lastError
                             }
-                        }
-                        Text {
-                            visible: !modelData.compatible || !!modelData.description
-                            Layout.fillWidth: true
-                            wrapMode: Text.WordWrap
-                            textFormat: Text.PlainText
-                            text: modelData.compatible ? (modelData.description || "") : "Can't be used: " + modelData.problem
-                            color: modelData.compatible ? App.Style.secondaryTextColor : App.Style.statusDisconnected
-                            font.pixelSize: App.Spacing.overallText * 0.75
-                            font.family: App.Style.fontFamily
                         }
                     }
                 }

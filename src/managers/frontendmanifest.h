@@ -9,6 +9,7 @@
 //     "name": "Example Dash",
 //     "version": "1.2.0",
 //     "description": "...",               // optional
+//     "preview": "preview.png",           // optional: a picture of it (.png, .jpg, .webp) for the chooser
 //     "protocol": [2, 2],                 // the protocol versions it speaks, min and max
 //     "scopes": ["read", "media"],        // the permissions it asks for (servicescopes.h)
 //     "web":  {"root": "dist"},           // a folder with index.html, served at GET /
@@ -38,6 +39,7 @@ struct FrontendManifest {
     QString name;
     QString version;
     QString description;
+    QString preview;                     // a picture inside the folder, or empty
     int protocolMin = 0;
     int protocolMax = 0;
     QStringList scopes;
@@ -66,6 +68,8 @@ struct FrontendManifest {
     // ".."): what ACTIVE, setActive and remove may name, so no id ever
     // reaches a path join as anything but a plain folder name
     static bool validId(const QString &id);
+    // A file name a preview may have (.png, .jpg, .jpeg, .webp)
+    static bool previewSuffix(const QString &path);
 
     // For lists and the service: {id, name, version, description, kind,
     // protocol, scopes, command}
