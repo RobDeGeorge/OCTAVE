@@ -99,6 +99,9 @@ func (a *App) dtcPage(p *Painter, r image.Rectangle) {
 	p.Text(labelR.Inset(labelR.Dy()/5), map[bool]string{true: " CODE", false: " CODES"}[len(codes) == 1], sansBold, 0, Left, pal.Ink)
 
 	bottomH := max(p.px(80), r.Dy()/7)
+	if p.tall {
+		bottomH = max(p.px(140), r.Dy()/5) // the ECU's answer over the two buttons
+	}
 	grid := image.Rect(r.Min.X, top.Max.Y+gap, r.Max.X, r.Max.Y-bottomH-gap)
 	switch {
 	case !known:
@@ -107,6 +110,9 @@ func (a *App) dtcPage(p *Painter, r image.Rectangle) {
 		p.Text(grid.Inset(grid.Dy()/3), "NO STORED CODES", sansBold, 0, Center, pal.Ink)
 	default:
 		cols := min(4, len(codes))
+		if p.tall {
+			cols = min(2, len(codes))
+		}
 		rows := (min(len(codes), 8) + cols - 1) / cols
 		rowR := split(grid, rows, gap, true)
 		for i, c := range codes {
@@ -131,6 +137,10 @@ func (a *App) dtcPage(p *Painter, r image.Rectangle) {
 
 	bottom := image.Rect(r.Min.X, r.Max.Y-bottomH, r.Max.X, r.Max.Y)
 	b := split(bottom, 3, gap, false)
+	if p.tall {
+		halves := split(bottom, 2, gap, true)
+		b = append(split(halves[1], 2, gap, false), halves[0])
+	}
 	if p.Button(b[0], &ui.read, "READ", false) {
 		a.session.Go("obdManager", "read_dtc")
 		a.session.Go("obdManager", "get_mil_status")
@@ -179,17 +189,24 @@ func (a *App) tripsPage(p *Painter, r image.Rectangle) {
 	sortTrips(list)
 	left := image.Rect(r.Min.X, r.Min.Y, r.Min.X+r.Dx()*45/100, r.Max.Y)
 	right := image.Rect(left.Max.X+gap*2, r.Min.Y, r.Max.X, r.Max.Y)
-	p.Fill(image.Rect(left.Max.X+gap-p.Rule()/2, r.Min.Y, left.Max.X+gap+p.Rule()/2+1, r.Max.Y), pal.Ink)
+	if p.tall { // upright: the list over the summary
+		left = image.Rect(r.Min.X, r.Min.Y, r.Max.X, r.Min.Y+r.Dy()*50/100)
+		right = image.Rect(r.Min.X, left.Max.Y+gap*2, r.Max.X, r.Max.Y)
+		p.Fill(image.Rect(r.Min.X, left.Max.Y+gap-p.Rule()/2, r.Max.X, left.Max.Y+gap+p.Rule()/2+1), pal.Ink)
+	} else {
+		p.Fill(image.Rect(left.Max.X+gap-p.Rule()/2, r.Min.Y, left.Max.X+gap+p.Rule()/2+1, r.Max.Y), pal.Ink)
+	}
 
 	if len(list) == 0 {
 		p.Text(left.Inset(left.Dy()/3), "NO TRIPS", sansBold, 0, Center, pal.Ink)
 		return
 	}
-	const perPage = 6
-	pages := (len(list) + perPage - 1) / perPage
-	ui.page = max(0, min(ui.page, pages-1))
 	navH := max(p.px(64), r.Dy()/9)
 	listR := image.Rect(left.Min.X, left.Min.Y, left.Max.X, left.Max.Y-navH-gap)
+	// six to a page, fewer where that would make the rows too small to tap
+	perPage := max(2, min(6, (listR.Dy()+gap)/(p.px(52)+gap)))
+	pages := (len(list) + perPage - 1) / perPage
+	ui.page = max(0, min(ui.page, pages-1))
 	rows := split(listR, perPage, gap, true)
 	if ui.selected == 0 {
 		ui.selected = list[0].ID
@@ -321,6 +338,10 @@ func (a *App) pairPage(p *Painter, r image.Rectangle) {
 	gap := p.Rule() * 2
 	left := image.Rect(r.Min.X, r.Min.Y, r.Min.X+r.Dx()*45/100, r.Max.Y)
 	right := image.Rect(left.Max.X+gap*2, r.Min.Y, r.Max.X, r.Max.Y)
+	if p.tall { // upright: the code over the keypad
+		left = image.Rect(r.Min.X, r.Min.Y, r.Max.X, r.Min.Y+r.Dy()*40/100)
+		right = image.Rect(r.Min.X, left.Max.Y+gap*2, r.Max.X, r.Max.Y)
+	}
 	rows := split(left, 6, gap, true)
 	p.Text(rows[0], "PAIR THIS SCREEN", sansBold, 0, Left, pal.Ink)
 	p.Text(rows[1], "ON THE HEAD UNIT: SETTINGS > SERVICE", sansBold, 0, Left, pal.Ink)

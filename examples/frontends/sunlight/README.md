@@ -1,8 +1,8 @@
 # Sunlight
 
-A third OCTAVE frontend, written to prove the open backend: **Go + Gio** instead of C++ / QML, and a brutalist screen built to be read in direct sunlight on the Pi instead of the bundled UI's look. Black on white (an inverted night mode is one tap away), huge numerals, thick rules, hard edges, no gradients or blur, and one accent colour (signal orange) for anything worth a glance. It is a separate program that talks to OCTAVE over the service API (`docs/api/`, protocol versions 1 to 3, with pairing) with its own client in plain `net` + `encoding/json`. It is one of the example frontends in `examples/frontends/` (MIT licensed); the QML UI in `frontend/` is the one that ships. `examples/frontends/check_all.sh` runs `go vet`, `go test` and, given an X display, `verify_controls.py`.
+A third OCTAVE frontend, written to prove the open backend: **Go + Gio** instead of C++ / QML, and a brutalist screen built to be read in direct sunlight on the Pi instead of the bundled UI's look. Black on white (an inverted night mode is one tap away), huge numerals, thick rules, hard edges, no gradients or blur, and one accent colour (signal orange) for anything worth a glance. It is a separate program that talks to OCTAVE over the service API (`docs/api/`, protocol versions 1 to 3, with pairing) with its own client in plain `net` + `encoding/json`. The same code also builds for the browser (`GOOS=js GOARCH=wasm`), where it is a web frontend for a phone: see [In a browser](#in-a-browser). It is one of the example frontends in `examples/frontends/` (MIT licensed); the QML UI in `frontend/` is the one that ships. `examples/frontends/check_all.sh` runs `go vet`, `go test` and, given an X display, `verify_controls.py`.
 
-It renders the user's dashboards straight from their `schema: 1` / `2` JSON (the landscape layout; a schema 2 portrait layout is ignored), with its own Go drawing of every gauge type: the dashboard format is usable from another language, with no QML involved.
+It renders the user's dashboards straight from their `schema: 1` / `2` JSON (on a screen taller than wide, as `dashboardManager.orientedSpec` turns them: the spec's own portrait layout or the one OCTAVE derives), with its own Go drawing of every gauge type: the dashboard format is usable from another language, with no QML involved.
 
 ## Run
 
@@ -46,6 +46,27 @@ Then on the head unit: Settings > Device > Frontends > **Install from folder** (
 
 Pressing mute five times within four seconds always ends it and brings back OCTAVE's built-in screen: the ESP32 knob, the gesture sensor, or anything else that calls `volumeController.toggleMute()` (this frontend's own M key and mute button set `volumeController.muted` directly, a definite state, so they don't count toward the five); `octave --qml` gives the built-in screen for one start. The rules are in `wiki/writing-a-frontend.html#install`.
 
+## In a browser
+
+The same program builds as a **web frontend**: Gio draws into a WebGL canvas, and the client speaks the protocol over the browser's own `WebSocket` (one JSON message per text frame) instead of TCP.
+
+```bash
+cd examples/frontends/sunlight
+./build_web.sh                                              # dist-web/: index.html, boot.js, wasm_exec.js, sunlight.wasm, octave-frontend.json
+./build/octave --headless --sim --service --web-root examples/frontends/sunlight/dist-web   # from the repo root; then open http://127.0.0.1:9876/
+```
+
+`dist-web/` (not committed) is a web frontend folder with its own manifest (`web/octave-frontend.json`, id `org.octave.example.sunlight.web`, `"web": {"root": "."}`; `build_web.sh` fails if its name, version, description, protocol or scopes drift from the native manifest). `sunlight.wasm` is about 12.5 MB (3.3 MB gzipped) and `wasm_exec.js` is copied from the Go toolchain that built it; the page shows a loading line with the megabytes so far.
+
+- **Where the service is**: the host that served the page (`ws://` + `location.host`, `wss://` on an https page). There are no flags; the query does their job: `?page=media&night=1&dash=ID`.
+- **Pairing**: on the head unit's own browser nothing is asked. From a phone (OCTAVE started with `--service-bind`) the same keypad comes up; the token is kept in the browser's `localStorage` (`sunlight.token`), asking only for the manifest's `media` and `vehicle` scopes. The cover is fetched from `/art` with the token as `Authorization`.
+- **In OCTAVE's browser demo** the folder runs in a sandboxed frame against the core in the page: every file is loaded by relative URL with CORS and no credentials, the WebSocket there is the page's stand-in (text frames only, which is all Sunlight sends), storage is refused (so no token is kept, and none is needed), and there is no `/art`, so MEDIA has no cover.
+- **Touch and shape**: everything is a touch target, and a window taller than wide (a phone held upright) gets its own arrangement: the tabs in a row of their own, speed over RPM, the transport and volume in two rows, the trip list over its summary, the pairing code over the keypad, and dashboards in their portrait layout. The native program lays out the same way when its window is upright.
+
+What differs from the native program: no F11 / `--fullscreen` (use the browser's own, or Add to Home Screen) and no Ctrl+Q; the rest of the keyboard works with a keyboard attached.
+
+`web/index.html` and `web/boot.js` are the page (the loader is a file because OCTAVE serves a frontend with a Content-Security-Policy that allows no inline script); `link/transport_js.go`, `link/tokens_js.go` and `main_js.go` are the browser's side of what `transport_tcp.go`, `tokens.go` and `main_native.go` do natively.
+
 ## Pages
 
 - **DRIVE**: speed and RPM in giant monospaced numerals, a 24-segment shift bar (segments past the shift light's first flag are orange; the whole bar flashes while `shiftLightManager.lit`), and coolant, fuel and voltage tiles with a bar against the PID's range. Orange marks hot coolant, low fuel or odd voltage.
@@ -73,13 +94,14 @@ The top bar holds the page tabs, the OBD state and car, the REC lamp with the tr
 | `tripRecorder` | `trips`, the current trip, `requestDetail` (answered by `detailReady`) |
 | `clock` | `clock.time` |
 
-`link/` is the client (about 600 lines): `link.go` the connection (request / reply matching by id, events on a channel), `state.go` what the UI reads (values, display conversion, history for sparklines, properties), `session.go` the reconnecting session, subscriptions and demand. `dash/` parses and normalises a spec the way the schema documents it (defaults, clamping, cells moved back onto the grid, overlaps shrunk or dropped) and lays the cells out. `ui.go` holds the drawing primitives, `gauges.go` the widgets, `main.go` the pages.
+`link/` is the client (about 600 lines): `link.go` the connection (request / reply matching by id, events on a channel) over a transport of whole messages (`transport_tcp.go`: lines over TCP; `transport_js.go`: WebSocket text frames in a browser), `state.go` what the UI reads (values, display conversion, history for sparklines, properties), `session.go` the reconnecting session, subscriptions and demand. `dash/` parses and normalises a spec the way the schema documents it (defaults, clamping, cells moved back onto the grid, overlaps shrunk or dropped) and lays the cells out. `ui.go` holds the drawing primitives, `gauges.go` the widgets, `main.go` the pages.
 
 ## Tests
 
 ```bash
 cd examples/frontends/sunlight
 go vet -tags novulkan ./... && go test -tags novulkan ./...
+GOOS=js GOARCH=wasm go vet ./...                                         # the browser build's files
 python3 verify_controls.py --display :83 --port 9876 --bin ./sunlight    # on an X display such as Xvfb :83
 ```
 
@@ -91,3 +113,4 @@ python3 verify_controls.py --display :83 --port 9876 --bin ./sunlight    # on an
 - Colour props in a spec are ignored by design, and font props have no meaning here.
 - No phone-mirror video (media streams are not on the service yet: `TODO/open-backend.md`, step 6).
 - Not tried on the Pi or the Jeep box yet: built and screenshotted on Xvfb with Mesa's software GL.
+- The browser build was driven in headless Chromium with touch emulation (served by OCTAVE, paired, and inside a sandboxed frame), not yet on a real phone.

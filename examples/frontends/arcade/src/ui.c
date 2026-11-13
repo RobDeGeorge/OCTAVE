@@ -355,8 +355,13 @@ static void draw_pair(SDL_Renderer *r, const Ui *ui, const State *s)
         font_draw(r, 20, 90, 1, s->pair_error);
     }
     SDL_SetRenderDrawColor(r, C_DIM, 255);
+#ifdef __EMSCRIPTEN__
+    font_draw(r, 20, 150, 1, "TAP THE DIGITS, THEN OK");
+    font_draw(r, 20, 160, 1, "THIS BROWSER KEEPS THE TOKEN IF IT CAN");
+#else
     font_draw(r, 20, 150, 1, "KEYS 0-9, BACKSPACE, ENTER");
     font_draw(r, 20, 160, 1, ui->token_path[0] ? "TOKEN IS SAVED TO" : "RUN WITH --token-file TO KEEP IT");
+#endif
     if (ui->token_path[0]) {
         char path[48];
         snprintf(path, sizeof path, "%.46s", ui->token_path + (strlen(ui->token_path) > 46 ? strlen(ui->token_path) - 46 : 0));

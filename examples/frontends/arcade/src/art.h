@@ -13,7 +13,7 @@ typedef struct {
 } Art;
 
 /* Refetch when the revision changed. Cheap when nothing changed. */
-void art_update(Art *a, SDL_Renderer *r, const Link *l, const State *s);
+void art_update(Art *a, SDL_Renderer *r, Link *l, const State *s);
 void art_free(Art *a);
 
 #endif

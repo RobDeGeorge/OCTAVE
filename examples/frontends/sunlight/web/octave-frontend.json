@@ -1,0 +1,10 @@
+{
+  "id": "org.octave.example.sunlight.web",
+  "name": "Sunlight",
+  "version": "0.1.0",
+  "description": "Black on white, huge numerals, for reading in direct sunlight (Go + Gio); renders your dashboards",
+  "preview": "preview.png",
+  "protocol": [1, 3],
+  "scopes": ["media", "vehicle"],
+  "web": {"root": "."}
+}

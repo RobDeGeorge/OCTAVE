@@ -10,7 +10,7 @@ import (
 
 	"gioui.org/f32"
 	"gioui.org/font"
-	"gioui.org/font/gofont"
+	"gioui.org/font/opentype"
 	"gioui.org/gesture"
 	"gioui.org/layout"
 	"gioui.org/op"
@@ -20,6 +20,8 @@ import (
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
+	"golang.org/x/image/font/gofont/gobold"
+	"golang.org/x/image/font/gofont/gomonobold"
 )
 
 type C = layout.Context
@@ -50,16 +52,37 @@ type Painter struct {
 	pal Palette
 	gtx C
 	px  func(dp float32) int
+	// tall: the window is taller than wide (a phone held upright); pages stack
+	// what they otherwise put side by side
+	tall bool
 }
 
 func newTheme() *material.Theme {
 	th := material.NewTheme()
-	th.Shaper = text.NewShaper(text.NoSystemFonts(), text.WithCollection(gofont.Collection()))
+	th.Shaper = text.NewShaper(text.NoSystemFonts(), text.WithCollection(faces()))
 	return th
+}
+
+// faces is the two faces sunlight draws with, and no others: every face is
+// carried in the program (a megabyte or so each matters to the browser build).
+func faces() []font.FontFace {
+	var out []font.FontFace
+	for _, f := range []struct {
+		font font.Font
+		ttf  []byte
+	}{{sansBold, gobold.TTF}, {monoBold, gomonobold.TTF}} {
+		face, err := opentype.Parse(f.ttf)
+		if err != nil {
+			panic(err) // the embedded Go fonts always parse
+		}
+		out = append(out, font.FontFace{Font: f.font, Face: face})
+	}
+	return out
 }
 
 func (p *Painter) begin(gtx C, pal Palette) {
 	p.gtx, p.pal = gtx, pal
+	p.tall = gtx.Constraints.Max.Y > gtx.Constraints.Max.X
 	p.px = func(dp float32) int { return gtx.Dp(unit.Dp(dp)) }
 }
 
@@ -188,14 +211,19 @@ func (p *Painter) Button(r image.Rectangle, clk *widget.Clickable, label string,
 	}
 	p.Fill(r, bg)
 	p.Box(r, p.pal.Ink)
-	pad := p.Rule() * 3
-	p.Text(r.Inset(pad), label, sansBold, p.px(34), Center, fg)
+	p.Text(r.Inset(p.buttonPad(r)), label, sansBold, p.px(34), Center, fg)
 	gtx := p.gtx
 	gtx.Constraints = layout.Exact(r.Size())
 	st := op.Offset(r.Min).Push(gtx.Ops)
 	clk.Layout(gtx, func(gtx C) layout.Dimensions { return layout.Dimensions{Size: r.Size()} })
 	st.Pop()
 	return clicked
+}
+
+// buttonPad is the room around a button's label: three rules, less on a
+// button small enough (a phone's tab) that the label needs the space.
+func (p *Painter) buttonPad(r image.Rectangle) int {
+	return min(p.Rule()*3, r.Dx()/8, r.Dy()/5)
 }
 
 // Tap reports where r was tapped (relative to r), if it was.
@@ -265,7 +293,7 @@ func (p *Painter) ButtonColors(r image.Rectangle, clk *widget.Clickable, label s
 	}
 	clicked := clk.Clicked(p.gtx)
 	p.Box(r, p.pal.Ink)
-	p.Text(r.Inset(p.Rule()*3), label, sansBold, p.px(34), Center, p.pal.Paper)
+	p.Text(r.Inset(p.buttonPad(r)), label, sansBold, p.px(34), Center, p.pal.Paper)
 	gtx := p.gtx
 	gtx.Constraints = layout.Exact(r.Size())
 	st := op.Offset(r.Min).Push(gtx.Ops)

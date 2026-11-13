@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#000000">
+<title>OCTAVE Arcade</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; position: fixed; inset: 0;
+         -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  /* 320x200 pixels, scaled up whole by arcade.js (web/pre.js): never smoothed */
+  canvas { display: block; width: 320px; height: 200px; background: #0c0a14; outline: none; touch-action: none;
+           image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: pixelated; }
+  #status { position: fixed; left: 0; right: 0; bottom: 12px; margin: 0; text-align: center;
+            font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 1px; color: #f0508c; }
+  #status:empty { display: none; }
+</style>
+</head>
+<body>
+<canvas id="canvas" width="320" height="200" tabindex="-1"></canvas>
+<p id="status">LOADING</p>
+<noscript><p style="color:#f0508c;font-family:monospace">OCTAVE Arcade needs JavaScript and WebAssembly.</p></noscript>
+<!-- no inline script: OCTAVE serves a web frontend with script-src 'self'. crossorigin: in the
+     browser demo this page is in a frame of another origin that only takes CORS loads -->
+<script src="arcade.js" crossorigin></script>
+</body>
+</html>

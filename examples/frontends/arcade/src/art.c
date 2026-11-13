@@ -1,5 +1,6 @@
 #include "art.h"
 
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -16,7 +17,7 @@ static const Uint8 palette[][3] = {
 static int nearest(int r, int g, int b)
 {
     int best = 0;
-    long bd = 1L << 40;
+    long bd = LONG_MAX;
     for (size_t i = 0; i < sizeof palette / sizeof palette[0]; i++) {
         long dr = r - palette[i][0], dg = g - palette[i][1], db = b - palette[i][2];
         long d = dr * dr * 2 + dg * dg * 4 + db * db * 3;
@@ -28,7 +29,7 @@ static int nearest(int r, int g, int b)
     return best;
 }
 
-void art_update(Art *a, SDL_Renderer *r, const Link *l, const State *s)
+void art_update(Art *a, SDL_Renderer *r, Link *l, const State *s)
 {
     if (!s->has_track || s->art_revision <= 0) {
         if (a->tex) {
@@ -41,10 +42,13 @@ void art_update(Art *a, SDL_Renderer *r, const Link *l, const State *s)
     }
     if (a->revision == s->art_revision && (a->tex || a->tried))
         return;
+    size_t len = 0;
+    bool pending = false;
+    unsigned char *bytes = link_fetch_art(l, s->art_revision, &len, &pending);
+    if (pending)
+        return;   /* a browser fetches in the background: the old cover stays until then */
     a->revision = s->art_revision;
     a->tried = true;
-    size_t len = 0;
-    unsigned char *bytes = link_fetch_art(l, &len);
     if (!bytes)
         return;
     int w = 0, h = 0, comp = 0;

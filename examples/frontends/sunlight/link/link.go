@@ -1,14 +1,13 @@
 // Package link is sunlight's OCTAVE client: JSON lines over TCP (net +
-// encoding/json only), request / reply matching by id, subscription events
+// encoding/json only; in a browser one JSON message per WebSocket text frame,
+// transport_js.go), request / reply matching by id, subscription events
 // folded into a State the UI reads, and a session that reconnects.
 package link
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"slices"
 	"sync"
 	"time"
@@ -53,7 +52,7 @@ func ParseLine(line []byte) (Message, error) {
 
 // Client is one connection. Request may be called from any goroutine.
 type Client struct {
-	conn    net.Conn
+	conn    transport
 	mu      sync.Mutex
 	nextID  int64
 	pending map[int64]chan Message
@@ -63,9 +62,18 @@ type Client struct {
 	Timeout time.Duration
 }
 
-// Dial connects and starts reading. Events arrive on Events().
+// transport carries whole protocol messages: a line of the TCP stream
+// (transport_tcp.go) or a WebSocket text frame (transport_js.go).
+type transport interface {
+	ReadMessage() ([]byte, error) // blocks; an error ends the connection
+	WriteMessage(msg []byte) error
+	Close() error
+}
+
+// Dial connects and starts reading. Events arrive on Events(). addr is
+// host:port (in a browser the page's own host, which may be empty).
 func Dial(addr string, timeout time.Duration) (*Client, error) {
-	conn, err := net.DialTimeout("tcp", addr, timeout)
+	conn, err := dial(addr, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -79,10 +87,12 @@ func Dial(addr string, timeout time.Duration) (*Client, error) {
 func (c *Client) Events() <-chan Message { return c.events }
 
 func (c *Client) read() {
-	sc := bufio.NewScanner(c.conn)
-	sc.Buffer(make([]byte, 0, 1<<16), 16<<20)
-	for sc.Scan() {
-		m, err := ParseLine(sc.Bytes())
+	for {
+		line, rerr := c.conn.ReadMessage()
+		if rerr != nil {
+			break
+		}
+		m, err := ParseLine(line)
 		if err != nil {
 			continue
 		}
@@ -135,7 +145,7 @@ func (c *Client) Request(op string, args map[string]any) (json.RawMessage, error
 	}
 	line, err := json.Marshal(msg)
 	if err == nil {
-		_, err = c.conn.Write(append(line, '\n'))
+		err = c.conn.WriteMessage(line)
 	}
 	c.mu.Unlock()
 	if err != nil {
@@ -235,9 +245,14 @@ func (c *Client) HelloToken(token string) (HelloReply, error) {
 }
 
 // Pair trades the 6-digit code from OCTAVE's Settings for a token; the
-// connection is trusted from then on.
-func (c *Client) Pair(code, name string) (string, error) {
-	raw, err := c.Request("pair", map[string]any{"code": code, "name": name})
+// connection is trusted from then on. scopes asks for only those permissions
+// (none: what the service gives by default).
+func (c *Client) Pair(code, name string, scopes ...string) (string, error) {
+	args := map[string]any{"code": code, "name": name}
+	if len(scopes) > 0 {
+		args["scopes"] = scopes
+	}
+	raw, err := c.Request("pair", args)
 	if err != nil {
 		return "", err
 	}

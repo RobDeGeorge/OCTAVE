@@ -3,7 +3,8 @@ project(octave_arcade C)
 
 # OCTAVE Arcade: a C + SDL2 frontend over the service API. Builds
 # warning-free with -Wall -Wextra; the vendored libraries are compiled
-# with warnings off (they are not ours to fix).
+# with warnings off (they are not ours to fix). The browser build is
+# build_web.sh (Emscripten), with src/link_web.c in src/link_tcp.c's place.
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -20,6 +21,6 @@ target_include_directories(vendored PUBLIC third_party/cjson third_party/stb)
 target_compile_options(vendored PRIVATE -w)
 target_link_libraries(vendored PUBLIC m)
 
-add_executable(octave-arcade src/main.c src/link.c src/font.c src/ui.c src/art.c)
+add_executable(octave-arcade src/main.c src/link.c src/link_tcp.c src/font.c src/ui.c src/art.c)
 target_compile_options(octave-arcade PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(octave-arcade PRIVATE vendored PkgConfig::SDL2 Threads::Threads)

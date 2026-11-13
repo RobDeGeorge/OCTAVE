@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<link rel="icon" href="data:,">
+<title>OCTAVE Sunlight</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #fff; color: #000; overflow: hidden; overscroll-behavior: none; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  #loading { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; box-sizing: border-box; text-align: center; font: 700 22px/1.2 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.04em; text-transform: uppercase; }
+  #bar { width: min(70vw, 420px); height: 28px; border: 5px solid #000; box-sizing: border-box; }
+  #fill { height: 100%; width: 0; background: #000; }
+  #loading.failed { color: #ff3b00; }
+  #loading.failed #bar { display: none; }
+</style>
+</head>
+<body>
+<!-- Gio puts its canvas in here, over the whole viewport -->
+<div id="giowindow"></div>
+<div id="loading"><div id="line">Loading Sunlight</div><div id="bar"><div id="fill"></div></div></div>
+<!-- crossorigin: the browser demo runs this page in a sandboxed frame (another origin than its files) -->
+<script src="wasm_exec.js" crossorigin="anonymous" defer></script>
+<!-- a file, not inline: OCTAVE serves the page with a Content-Security-Policy that allows no inline script -->
+<script src="boot.js" crossorigin="anonymous" defer></script>
+</body>
+</html>

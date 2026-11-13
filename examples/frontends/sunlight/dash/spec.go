@@ -13,8 +13,9 @@ import (
 )
 
 // SupportedSchema is the newest spec version this package reads. Schema 2
-// only adds an optional portrait layout (layouts.portrait); sunlight is a
-// landscape screen, so it reads the main layout and ignores that one.
+// only adds an optional portrait layout (layouts.portrait), which this
+// package does not read: on an upright screen sunlight asks OCTAVE for the
+// spec already turned (dashboardManager.orientedSpec) and parses that.
 const SupportedSchema = 2
 
 // Cell is one widget on the grid.

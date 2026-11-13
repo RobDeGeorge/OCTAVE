@@ -5,17 +5,12 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
-	"io"
 	"log"
-	"net"
-	"net/http"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 
@@ -88,29 +83,25 @@ type App struct {
 	artMu  sync.Mutex
 }
 
-func main() {
-	// OCTAVE sets OCTAVE_HOST / OCTAVE_PORT / OCTAVE_TOKEN when it runs Sunlight as the screen; the flags win
-	defHost, defPort := "127.0.0.1", 9876
-	if h := os.Getenv("OCTAVE_HOST"); h != "" {
-		defHost = h
-	}
-	if p, err := strconv.Atoi(os.Getenv("OCTAVE_PORT")); err == nil && p > 0 {
-		defPort = p
-	}
-	host := flag.String("host", defHost, "OCTAVE service host (default OCTAVE_HOST, then 127.0.0.1)")
-	port := flag.Int("port", defPort, "OCTAVE service port (default OCTAVE_PORT, then 9876)")
-	full := flag.Bool("fullscreen", false, "start fullscreen")
-	nightMode := flag.Bool("night", false, "start in night mode (white on black)")
-	start := flag.String("page", "drive", "drive, dash, media, dtc or trips")
-	dashID := flag.String("dash", "", "dashboard id to open on the DASH page")
-	token := flag.String("token", os.Getenv("OCTAVE_TOKEN"), "a paired device's token (protocol 2, over the network); default OCTAVE_TOKEN, then the token file")
-	tokenFile := flag.String("token-file", link.DefaultTokens().Path, "where tokens are kept, one per host:port (0600)")
-	flag.Parse()
+// options is what the command line (main_native.go) or the page's address
+// (main_js.go) asks for.
+type options struct {
+	addr       string // host:port of the service ("" in a page without one)
+	night      bool
+	fullscreen bool
+	page       string
+	dash       string
+	token      string
+	tokens     link.Tokens
+	scopes     []string // what pairing asks for (nil: the service's default)
+}
 
-	a := &App{addr: net.JoinHostPort(*host, strconv.Itoa(*port)), nightMode: *nightMode, fullscreen: *full,
-		dashWant: *dashID, pairDone: make(chan error, 1), specs: map[string]*dash.Spec{}, loading: map[string]bool{}, cells: map[int]*cellUI{}}
+func main() {
+	o := readOptions()
+	a := &App{addr: o.addr, nightMode: o.night, fullscreen: o.fullscreen,
+		dashWant: o.dash, pairDone: make(chan error, 1), specs: map[string]*dash.Spec{}, loading: map[string]bool{}, cells: map[int]*cellUI{}}
 	for i, n := range pageNames {
-		if n == upper(*start) {
+		if n == upper(o.page) {
 			a.page = page(i)
 		}
 	}
@@ -121,8 +112,9 @@ func main() {
 	}
 	a.painter.th = newTheme()
 	a.session = link.NewSession(a.addr, a.win.Invalidate)
-	a.session.Tokens = link.Tokens{Path: *tokenFile}
-	a.session.Token = *token
+	a.session.Tokens = o.tokens
+	a.session.Scopes = o.scopes
+	a.session.Token = o.token
 	if a.session.Token == "" {
 		a.session.Token = a.session.Tokens.Get(a.addr)
 	}
@@ -190,8 +182,10 @@ func (a *App) keys(gtx C) {
 		}
 		switch {
 		case e.Name == "Q" && e.Modifiers.Contain(key.ModCtrl):
-			a.session.Close()
-			os.Exit(0)
+			if canQuit {
+				a.session.Close()
+				os.Exit(0)
+			}
 		case e.Name == key.NameSpace:
 			a.session.Go("nowPlaying", "togglePlay")
 		case e.Name == key.NameLeftArrow:
@@ -230,7 +224,11 @@ func (a *App) frame(gtx C) {
 	full := image.Rectangle{Max: gtx.Constraints.Max}
 	p.Fill(full, pal.Paper)
 	gap := p.Rule() * 2
-	bar := image.Rect(0, 0, full.Dx(), max(p.px(76), full.Dy()/10))
+	barH := max(p.px(76), full.Dy()/10)
+	if p.tall {
+		barH = p.px(128) // two rows: the tabs, then the status
+	}
+	bar := image.Rect(0, 0, full.Dx(), barH)
 	a.topBar(p, bar.Inset(gap))
 	p.Fill(image.Rect(0, bar.Max.Y, full.Dx(), bar.Max.Y+p.Rule()), pal.Ink)
 	body := image.Rect(gap, bar.Max.Y+p.Rule()+gap, full.Dx()-gap, full.Dy()-gap)
@@ -266,19 +264,29 @@ func (a *App) topBar(p *Painter, r image.Rectangle) {
 	st := a.session.State
 	gap := p.Rule() * 2
 	tabW := min(r.Dx()/9, p.px(150))
+	tabs := make([]image.Rectangle, len(pageNames))
+	for i := range tabs {
+		tabs[i] = image.Rect(r.Min.X+i*(tabW+gap), r.Min.Y, r.Min.X+i*(tabW+gap)+tabW, r.Max.Y)
+	}
+	rest := image.Rect(r.Min.X+len(pageNames)*(tabW+gap)+gap, r.Min.Y, r.Max.X, r.Max.Y)
+	if p.tall {
+		// upright: the tabs take the whole first row, the status the second
+		rows := split(r, 2, gap, true)
+		tabs, rest = split(rows[0], len(pageNames), gap, false), rows[1]
+		tabW = rest.Dx() / 5
+	}
 	for i, name := range pageNames {
-		tr := image.Rect(r.Min.X+i*(tabW+gap), r.Min.Y, r.Min.X+i*(tabW+gap)+tabW, r.Max.Y)
-		if p.Button(tr, &a.tabs[i], name, a.page == page(i)) {
+		if p.Button(tabs[i], &a.tabs[i], name, a.page == page(i)) {
 			a.page = page(i)
 		}
 	}
-	nightR := image.Rect(r.Max.X-tabW, r.Min.Y, r.Max.X, r.Max.Y)
+	nightR := image.Rect(rest.Max.X-tabW, rest.Min.Y, rest.Max.X, rest.Max.Y)
 	if p.Button(nightR, &a.nightBtn, map[bool]string{true: "DAY", false: "NIGHT"}[a.nightMode], false) {
 		a.nightMode = !a.nightMode
 	}
-	clockR := image.Rect(nightR.Min.X-gap-tabW, r.Min.Y, nightR.Min.X-gap, r.Max.Y)
+	clockR := image.Rect(nightR.Min.X-gap-tabW, rest.Min.Y, nightR.Min.X-gap, rest.Max.Y)
 	p.Text(clockR.Inset(p.Rule()*2), st.Clock(), monoBold, 0, Right, pal.Ink)
-	mid := image.Rect(r.Min.X+len(pageNames)*(tabW+gap)+gap, r.Min.Y, clockR.Min.X-gap, r.Max.Y)
+	mid := image.Rect(rest.Min.X, rest.Min.Y, clockR.Min.X-gap, rest.Max.Y)
 	connected, status, version := st.Link()
 	rows := split(mid, 2, 0, true)
 	if !connected {
@@ -313,6 +321,11 @@ func (a *App) drive(p *Painter, r image.Rectangle) {
 		image.Rect(r.Min.X, r.Min.Y+r.Dy()*68/100+gap, r.Max.X, r.Max.Y),
 	}
 	top := split(rows[0], 2, gap, false)
+	if p.tall { // upright: speed over RPM
+		rows[0].Max.Y = r.Min.Y + r.Dy()*60/100
+		rows[1] = image.Rect(r.Min.X, rows[0].Max.Y+gap, r.Max.X, r.Min.Y+r.Dy()*68/100)
+		top = split(rows[0], 2, gap, true)
+	}
 	a.bigTile(p, top[0], "SPEED")
 	a.bigTile(p, top[1], "RPM")
 	a.shiftBar(p, rows[1])
@@ -371,9 +384,14 @@ func (a *App) smallTile(p *Painter, r image.Rectangle, id string) {
 	}
 	p.Text(rows[0], upper(title), sansBold, 0, Left, pal.Ink)
 	num := image.Rect(in.Min.X, rows[1].Min.Y, in.Max.X, rows[3].Max.Y)
-	numR, unitR := cutRight(num, num.Dx()/4)
-	p.Text(numR, Format(v, ok, prm.Decimals), monoBold, 0, Right, pal.Ink)
-	p.Text(image.Rect(unitR.Min.X+p.Rule()*2, unitR.Min.Y+unitR.Dy()/2, unitR.Max.X, unitR.Max.Y), prm.Unit, sansBold, 0, Left, pal.Ink)
+	if r.Dy() > r.Dx() { // a narrow tile (a phone held upright): the unit under the number, not beside it
+		p.Text(image.Rect(in.Min.X, rows[1].Min.Y, in.Max.X, rows[2].Max.Y), Format(v, ok, prm.Decimals), monoBold, 0, Center, pal.Ink)
+		p.Text(rows[3].Inset(rows[3].Dy()/6), prm.Unit, sansBold, 0, Center, pal.Ink)
+	} else {
+		numR, unitR := cutRight(num, num.Dx()/4)
+		p.Text(numR, Format(v, ok, prm.Decimals), monoBold, 0, Right, pal.Ink)
+		p.Text(image.Rect(unitR.Min.X+p.Rule()*2, unitR.Min.Y+unitR.Dy()/2, unitR.Max.X, unitR.Max.Y), prm.Unit, sansBold, 0, Left, pal.Ink)
+	}
 	barR := rows[4]
 	barR.Min.Y += barR.Dy() / 4
 	p.Box(barR, pal.Ink)
@@ -453,17 +471,33 @@ func (a *App) dashboards() []dashInfo {
 	return list
 }
 
-func (a *App) spec(id string) *dash.Spec {
+// spec returns a dashboard's spec, loading it on first use (nil until it is
+// here). tall asks for it as laid out on an upright screen: its own portrait
+// layout, or the one OCTAVE derives (dashboardManager.orientedSpec); an app
+// without that call gives the landscape layout.
+func (a *App) spec(id string, tall bool) *dash.Spec {
+	k := id
+	if tall {
+		k += "\x00tall"
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if s, ok := a.specs[id]; ok {
+	if s, ok := a.specs[k]; ok {
 		return s
 	}
-	if !a.loading[id] && a.session.Client() != nil {
-		a.loading[id] = true
+	if !a.loading[k] && a.session.Client() != nil {
+		a.loading[k] = true
 		go func() {
 			var raw json.RawMessage
 			err := a.session.CallSync(&raw, "dashboardManager", "loadDashboard", id)
+			if err == nil && tall {
+				var turned json.RawMessage
+				if a.session.CallSync(&turned, "dashboardManager", "orientedSpec", raw, true) == nil {
+					if _, perr := dash.Parse(turned); perr == nil {
+						raw = turned
+					}
+				}
+			}
 			var s *dash.Spec
 			if err == nil {
 				if parsed, perr := dash.Parse(raw); perr == nil {
@@ -476,8 +510,8 @@ func (a *App) spec(id string) *dash.Spec {
 				log.Printf("dashboard %s: %v", id, err)
 			}
 			a.mu.Lock()
-			a.specs[id] = s
-			delete(a.loading, id)
+			a.specs[k] = s
+			delete(a.loading, k)
 			a.mu.Unlock()
 			a.win.Invalidate()
 		}()
@@ -491,6 +525,9 @@ func (a *App) dashPage(p *Painter, r image.Rectangle) {
 	gap := p.Rule() * 2
 	head := image.Rect(r.Min.X, r.Min.Y, r.Max.X, r.Min.Y+max(p.px(64), r.Dy()/10))
 	btnW := min(r.Dx()/6, p.px(170))
+	if p.tall {
+		btnW = r.Dx() / 4
+	}
 	if p.Button(image.Rect(head.Min.X, head.Min.Y, head.Min.X+btnW, head.Max.Y), &a.dashPrev, "< PREV", false) {
 		a.dashIndex--
 	}
@@ -515,7 +552,7 @@ func (a *App) dashPage(p *Painter, r image.Rectangle) {
 	a.dashIndex = ((a.dashIndex % len(list)) + len(list)) % len(list)
 	cur := list[a.dashIndex]
 	p.Text(labelR, fmt.Sprintf("%s  %d/%d", upper(cur.Label), a.dashIndex+1, len(list)), sansBold, 0, Center, pal.Ink)
-	s := a.spec(cur.ID)
+	s := a.spec(cur.ID, p.tall)
 	if s == nil {
 		a.session.Demand(nil)
 		p.Text(grid.Inset(grid.Dy()/3), "LOADING", sansBold, 0, Center, pal.Ink)
@@ -552,11 +589,23 @@ func (a *App) media(p *Painter, r image.Rectangle) {
 		image.Rect(r.Min.X, r.Min.Y+r.Dy()*64/100+gap, r.Max.X, r.Min.Y+r.Dy()*82/100),
 		image.Rect(r.Min.X, r.Min.Y+r.Dy()*82/100+gap, r.Max.X, r.Max.Y),
 	}
+	if p.tall { // upright: two rows of transport, and of volume
+		for i, pct := range [][2]int{{0, 46}, {46, 56}, {56, 80}, {80, 100}} {
+			rows[i] = image.Rect(r.Min.X, r.Min.Y+r.Dy()*pct[0]/100+gap, r.Max.X, r.Min.Y+r.Dy()*pct[1]/100)
+		}
+		rows[0].Min.Y = r.Min.Y
+	}
 	info := rows[0]
 	a.artMu.Lock()
 	hasArt, art := a.hasArt, a.art
 	a.artMu.Unlock()
-	if hasArt {
+	if hasArt && p.tall {
+		side := min(info.Dx(), info.Dy()*55/100)
+		artR := image.Rect(info.Min.X, info.Min.Y, info.Min.X+side, info.Min.Y+side)
+		drawImage(p, artR.Inset(p.Rule()), art)
+		p.Box(artR, pal.Ink)
+		info.Min.Y = artR.Max.Y + gap
+	} else if hasArt {
 		side := info.Dy()
 		artR := image.Rect(info.Min.X, info.Min.Y, info.Min.X+side, info.Max.Y)
 		drawImage(p, artR.Inset(p.Rule()), art)
@@ -594,6 +643,10 @@ func (a *App) media(p *Painter, r image.Rectangle) {
 
 	// transport
 	t := split(rows[2], 4, gap, false)
+	if p.tall {
+		halves := split(rows[2], 2, gap, true)
+		t = append(split(halves[0], 2, gap, false), split(halves[1], 2, gap, false)...)
+	}
 	if p.Button(t[0], &a.prevBtn, "PREV", false) {
 		a.session.Go("nowPlaying", "previous")
 	}
@@ -613,16 +666,24 @@ func (a *App) media(p *Painter, r image.Rectangle) {
 	muted := st.Bool("volumeController", "muted") || st.Bool("volumeController", "effectivelyMuted")
 	v := rows[3]
 	btnW := v.Dx() / 7
-	if p.Button(image.Rect(v.Min.X, v.Min.Y, v.Min.X+btnW, v.Max.Y), &a.volDown, "VOL -", false) {
+	downR := image.Rect(v.Min.X, v.Min.Y, v.Min.X+btnW, v.Max.Y)
+	upR := image.Rect(v.Min.X+btnW+gap, v.Min.Y, v.Min.X+2*btnW+gap, v.Max.Y)
+	muteR := image.Rect(v.Max.X-btnW, v.Min.Y, v.Max.X, v.Max.Y)
+	volR := image.Rect(v.Min.X+2*btnW+2*gap, v.Min.Y, v.Max.X-btnW-gap, v.Max.Y)
+	if p.tall { // the bar over its three buttons
+		halves := split(v, 2, gap, true)
+		b := split(halves[1], 3, gap, false)
+		volR, downR, upR, muteR = halves[0], b[0], b[1], b[2]
+	}
+	if p.Button(downR, &a.volDown, "VOL -", false) {
 		a.session.Go("volumeController", "applyVolume", max(0, pct-5))
 	}
-	if p.Button(image.Rect(v.Min.X+btnW+gap, v.Min.Y, v.Min.X+2*btnW+gap, v.Max.Y), &a.volUp, "VOL +", false) {
+	if p.Button(upR, &a.volUp, "VOL +", false) {
 		a.session.Go("volumeController", "applyVolume", min(100, pct+5))
 	}
-	if p.Button(image.Rect(v.Max.X-btnW, v.Min.Y, v.Max.X, v.Max.Y), &a.muteBtn, "MUTE", muted) {
+	if p.Button(muteR, &a.muteBtn, "MUTE", muted) {
 		a.session.GoSet("volumeController", "muted", !st.Bool("volumeController", "muted"))
 	}
-	volR := image.Rect(v.Min.X+2*btnW+2*gap, v.Min.Y, v.Max.X-btnW-gap, v.Max.Y)
 	p.Box(volR, pal.Ink)
 	in := volR.Inset(p.Rule() * 2)
 	col := pal.Ink
@@ -660,19 +721,11 @@ func (a *App) fetchArt() {
 		return
 	}
 	go func() {
-		cl := http.Client{Timeout: 5 * time.Second}
-		req, _ := http.NewRequest(http.MethodGet, "http://"+a.addr+"/art", nil)
-		if h := a.session.AuthHeader(); h != "" {
-			req.Header.Set("Authorization", h) // never the token in a URL
-		}
-		resp, err := cl.Do(req)
+		// the platform's GET /art: the token as Authorization, never in a URL
+		body, err := fetchArt(a.addr, a.session.AuthHeader())
 		var img image.Image
 		if err == nil {
-			defer resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				body, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
-				img, _, err = image.Decode(bytes.NewReader(body))
-			}
+			img, _, err = image.Decode(bytes.NewReader(body))
 		}
 		a.artMu.Lock()
 		if k == a.artKey {
@@ -710,13 +763,4 @@ func upper(s string) string {
 		}
 	}
 	return string(b)
-}
-
-// deviceName is how this screen shows in OCTAVE's list of paired devices.
-func deviceName() string {
-	host, _ := os.Hostname()
-	if host == "" {
-		return "OCTAVE Sunlight"
-	}
-	return "OCTAVE Sunlight on " + host
 }

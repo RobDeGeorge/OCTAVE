@@ -16,7 +16,7 @@ cmake -S . -B build && cmake --build build -j4
 
 Needs `libsdl2-dev` (Debian / Ubuntu / Raspberry Pi OS) or `sdl2` / `sdl2-compat` (Arch), CMake 3.16 and a C11 compiler. It builds warning-free with `-Wall -Wextra -Wpedantic`; the two vendored libraries (`third_party/`, cJSON v1.7.18 and stb_image v2.30, with their licences) are compiled with warnings off. Start it before or after OCTAVE: until the service answers it shows NO SIGNAL and retries every second, and it re-subscribes on every reconnect.
 
-Over the network (OCTAVE started with `--service-bind 0.0.0.0`, protocol 2) the service refuses everything until the device pairs: the PAIR page shows a keypad for the 6-digit code from the car's Settings, Service, Pair a device (keys 0-9, Backspace, Enter work too). Keep the token with `--token-file PATH` (written on a successful pair, read on the next start), or pass one with `--token T` / `OCTAVE_TOKEN`; without either the token is printed once. The cover is fetched with `Authorization: Bearer`. A token OCTAVE rejects is dropped and the PAIR page returns.
+Over the network (OCTAVE started with `--service-bind 0.0.0.0`, protocol 2) the service refuses everything until the device pairs: the PAIR page shows a keypad for the 6-digit code from the car's Settings, Service, Pair a device (keys 0-9, Backspace, Enter work too). It asks for the manifest's two permissions, media and vehicle, and no more. Keep the token with `--token-file PATH` (written on a successful pair, read on the next start), or pass one with `--token T` / `OCTAVE_TOKEN`; without either the token is printed once. The cover is fetched with `Authorization: Bearer`. A token OCTAVE rejects is dropped and the PAIR page returns.
 
 | Key | Does |
 |---|---|
@@ -31,7 +31,25 @@ Over the network (OCTAVE started with `--service-bind 0.0.0.0`, protocol 2) the 
 | Ctrl+Q | quit |
 | 0-9, Backspace, Enter | the pairing code (PAIR page) |
 
-Every key is on screen too: the pages are laid out for a finger (mouse clicks and touch both land as taps).
+Every key is on screen too: the pages are laid out for a finger (mouse clicks and touch both land as taps, a finger once).
+
+## In a browser
+
+The same C also builds as a **web frontend** with Emscripten (SDL2 from its ports; one thread, no socket emulation): `src/link_web.c` takes `src/link_tcp.c`'s place and talks to OCTAVE over the page's own WebSocket, one JSON message per text frame.
+
+```bash
+cd examples/frontends/arcade
+./build_web.sh                           # emcc on PATH, or an emsdk at $EMSDK or ~/emsdk
+./build/octave --headless --sim --service --web-root examples/frontends/arcade/dist-web    # from the repo root
+# then http://127.0.0.1:9876/ ; from a phone add --service-bind 0.0.0.0 and open http://<the car's address>:9876/
+```
+
+`dist-web/` holds `index.html`, `arcade.js`, `arcade.wasm` (about 0.8 MB together, 0.25 MB gzipped) and its own `octave-frontend.json` (`org.octave.example.arcade.web`, `"web": {"root": "."}`), so the folder installs like any web frontend. The page scales the 320x200 picture up whole, centred on black, never smoothed: by a whole number of screen pixels where that fits, to the full width on a phone held upright (landscape is the bigger picture). Every action is a tap target; the keys in the table work too, apart from F11 and Ctrl+Q.
+
+- **Pairing**: from another device the PAIR keypad comes up as it does natively. The token is kept in the page's `localStorage` when the browser allows it; otherwise it lasts until the page closes.
+- **Cover**: fetched from `/art` with a media ticket (`mediaTicket`), never the token, and decoded by the same stb_image code.
+- **Inside the OCTAVE browser demo** (a sandboxed frame with no origin of its own) it runs on the page's stand-in `WebSocket`. There is no host to fetch `/art` from there, so the cover stays the placeholder, and nothing is stored.
+- It draws with SDL's software renderer on a 2D canvas: no WebGL context for a phone to drop in the background. There is no inline script, as OCTAVE serves web frontends with `script-src 'self' 'wasm-unsafe-eval'`.
 
 ## Install it as the screen
 
@@ -63,7 +81,7 @@ Pressing mute five times within four seconds always ends it and brings back OCTA
 | `shiftLightManager`, `clock`, `berryIMU` | the SHIFT flash, the clock text, whether an IMU is there |
 | `GET /art` | the current cover as PNG / JPEG bytes, decoded with stb_image |
 
-`src/link.c` is the whole client (about 330 lines: POSIX sockets, cJSON, an SDL thread and mutex): connect, hello, subscribe, fold events into a `State` the UI copies out each frame, reconnect. `src/font.c` is the pixel font, `src/art.c` the cover crusher, `src/ui.c` the three pages and their buttons, `src/main.c` the window and the event loop.
+`src/link.c` is the protocol (cJSON): hello, pairing, subscribe, fold events into a `State` the UI copies out each frame. How the messages travel is one more file: `src/link_tcp.c` natively (POSIX sockets, an SDL thread and mutex, reconnect, the HTTP GET for the cover), `src/link_web.c` in a browser (the page's WebSocket and `fetch`, no thread); `src/link_impl.h` is what the two halves share. `src/font.c` is the pixel font, `src/art.c` the cover crusher, `src/ui.c` the three pages and their buttons, `src/main.c` the window and the event loop (the browser's frame clock on the web), `web/` the page around the canvas.
 
 ## Known gaps
 

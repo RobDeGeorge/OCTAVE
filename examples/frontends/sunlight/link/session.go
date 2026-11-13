@@ -39,9 +39,10 @@ var subscriptions = []subscription{
 type Session struct {
 	Addr     string
 	State    *State
-	OnChange func() // called after each batch of events, from the session goroutine
-	Token    string // a paired device's token (protocol 2), "" for none
-	Tokens   Tokens // where a new token is kept
+	OnChange func()   // called after each batch of events, from the session goroutine
+	Token    string   // a paired device's token (protocol 2), "" for none
+	Tokens   Tokens   // where a new token is kept
+	Scopes   []string // the permissions Pair asks for (nil: the service's default)
 
 	mu       sync.Mutex
 	client   *Client
@@ -190,7 +191,7 @@ func (s *Session) Pair(code, name string) error {
 	if c == nil || ch == nil {
 		return errNotConnected
 	}
-	token, err := c.Pair(code, name)
+	token, err := c.Pair(code, name, s.Scopes...)
 	if err != nil {
 		return err
 	}

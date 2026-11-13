@@ -1,6 +1,8 @@
-/* The service-protocol client: one TCP connection carrying JSON lines
- * (wiki/utilities.html#service-protocol, docs/api/). A reader thread folds
- * events into `State`; the UI reads it under the lock and sends calls. */
+/* The service-protocol client (wiki/utilities.html#service-protocol,
+ * docs/api/). Natively one TCP connection carrying JSON lines, with a
+ * reader thread that folds events into `State`; in a browser the page's
+ * WebSocket, event-driven. The UI copies the state out each frame and
+ * sends calls. */
 #ifndef ARCADE_LINK_H
 #define ARCADE_LINK_H
 
@@ -62,8 +64,10 @@ void link_snapshot(Link *l, State *out);
 /* Send {"op":"call",...}; `args_json` is a JSON array literal or NULL. */
 void link_call(Link *l, const char *object, const char *method, const char *args_json);
 void link_set(Link *l, const char *object, const char *prop, const char *value_json);
-/* Fetch GET /art over a second, short connection. Returns malloc'd bytes
- * (caller frees) and sets *len, or NULL when there is none. */
-unsigned char *link_fetch_art(const Link *l, size_t *len);
+/* The cover of art revision `revision` from GET /art. Returns malloc'd
+ * bytes (caller frees) and sets *len, or NULL when there is none. The
+ * browser build fetches in the background: it sets *pending and returns
+ * NULL until the answer is in, so ask again next frame. */
+unsigned char *link_fetch_art(Link *l, int revision, size_t *len, bool *pending);
 
 #endif
