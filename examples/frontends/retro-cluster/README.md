@@ -70,7 +70,7 @@ It needs the `wasm32-unknown-unknown` target (`rustup target add wasm32-unknown-
 - **Where the service is**: the host that served the page (`ws://` + `location.host`, `wss://` on an https page). The query does the flags' job: `?page=audio&theme=1`.
 - **Pairing**: none in the page. On the head unit's own browser, and as an installed web frontend, nothing is asked. A browser on another device needs a token already in its `localStorage` (`retro-cluster.token`); the cluster has no keypad for the code, so there it shows NOT PAIRED. The cover is fetched from `/art` with the token as `Authorization`.
 - **In OCTAVE's browser demo** the folder runs in a sandboxed frame against the core in the page: every file is loaded by relative URL with CORS, the WebSocket there is the page's stand-in (text frames only, which is all the cluster sends), storage is refused, and there is no `/art`, so the dot-matrix cover stays dark.
-- **Shape**: the same 1280x800 canvas scaled to the page. Upright on a phone it is a small strip across the middle: turn the phone.
+- **Shape**: a page (or a window of the native program) taller than wide gets an upright arrangement on an 800x1600 canvas: the tabs in a row of their own, the speed over the ladders and the trip computer, the transport keys in a window under the display, live data in one column, the trip summary under the list, the cover over the analyzer. Each part is still written in the wide layout's coordinates and placed by `Draw::place`.
 
 What differs from the native program: no F11 / `--fullscreen` and no Ctrl+Q; the rest of the keyboard works with a keyboard attached.
 
@@ -97,11 +97,11 @@ What differs from the native program: no F11 / `--fullscreen` and no Ctrl+Q; the
 | `audioAnalyzer` | `setDemand("retro-cluster", on)` while AUDIO shows, `levels` (40 ms throttle) |
 | `shiftLightManager`, `clock` | the SHIFT lamp, the clock text (`clock.time`) |
 
-`src/link.rs` and `src/link_tcp.rs` are the whole client (about 700 lines, `std::net` plus `serde_json`): a thread connects, subscribes, folds events into a `State` the UI reads, and reconnects (`link.rs` is what is said and what the answers mean, `link_tcp.rs` the socket; `link_web.rs` is the socket of the browser build). `src/vfd.rs` holds the drawing primitives, `src/main.rs` the layout, on a 1280x800 canvas scaled to the window.
+`src/link.rs` and `src/link_tcp.rs` are the whole client (about 700 lines, `std::net` plus `serde_json`): a thread connects, subscribes, folds events into a `State` the UI reads, and reconnects (`link.rs` is what is said and what the answers mean, `link_tcp.rs` the socket; `link_web.rs` is the socket of the browser build). `src/vfd.rs` holds the drawing primitives, `src/main.rs` the layout, on a 1280x800 canvas scaled to the window (800x1600 when the window is upright).
 
 ## Known gaps
 
 - No phone-mirror video: media streams are not on the service yet (`TODO/open-backend.md`, step 6).
 - If the process is killed (not closed), its OBD demand stays registered until OCTAVE restarts.
-- The browser build has no layout for an upright phone and no pairing keypad.
+- The browser build has no pairing keypad.
 - Not tried on the Pi or the Jeep box yet; egui needs OpenGL ES 2 or better.

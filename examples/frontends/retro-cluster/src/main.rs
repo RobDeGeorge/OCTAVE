@@ -27,6 +27,10 @@ use vfd::{PALETTES, Palette};
 /// screen) and scaled to fit the window.
 const DESIGN: egui::Vec2 = egui::Vec2::new(1280.0, 800.0);
 
+/// A window taller than wide (a phone held upright) gets this canvas: the
+/// same parts, each at its own place and size (`Draw::place`).
+const DESIGN_TALL: egui::Vec2 = egui::Vec2::new(800.0, 1600.0);
+
 const DRIVE_IDS: [&str; 11] = [
     "SPEED",
     "RPM",
@@ -41,8 +45,10 @@ const DRIVE_IDS: [&str; 11] = [
     "INTAKE_PRESSURE",
 ];
 
-const DIAG_COLS: usize = 3;
-const DIAG_ROWS: usize = 15;
+/// Live data: columns and rows of readings on one page.
+fn diag_grid(tall: bool) -> (usize, usize) {
+    if tall { (1, 12) } else { (3, 15) }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Page {
@@ -205,6 +211,8 @@ struct Cluster {
     sent_demand: Option<Vec<String>>,
     sent_bars: Option<bool>,
     peaks: Vec<f32>,
+    /// The window is taller than wide
+    tall: bool,
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     fullscreen: bool,
 }
@@ -225,6 +233,7 @@ impl Cluster {
             sent_demand: None,
             sent_bars: None,
             peaks: Vec::new(),
+            tall: false,
             fullscreen: args.fullscreen,
         }
     }
@@ -238,7 +247,8 @@ impl Cluster {
             Page::Drive => DRIVE_IDS.iter().map(|s| s.to_string()).collect(),
             Page::Diag => {
                 let all = self.diag_ids(s);
-                let per = DIAG_COLS * DIAG_ROWS;
+                let (cols, rows) = diag_grid(self.tall);
+                let per = cols * rows;
                 all.into_iter().skip(self.pages.diag_page * per).take(per).collect()
             }
             // Trouble codes and trips poll nothing; keep the speed for the header
@@ -317,10 +327,14 @@ struct Canvas {
 }
 
 impl Canvas {
-    fn fit(screen: Rect) -> Canvas {
-        let scale = (screen.width() / DESIGN.x).min(screen.height() / DESIGN.y);
-        let size = DESIGN * scale;
+    fn fit(screen: Rect, design: egui::Vec2) -> Canvas {
+        let scale = (screen.width() / design.x).min(screen.height() / design.y);
+        let size = design * scale;
         Canvas { origin: screen.center() - size / 2.0, scale }
+    }
+    /// A canvas that draws design point `src` at this one's `dst`, `k` times the size.
+    fn sub(&self, src: (f32, f32), dst: (f32, f32), k: f32) -> Canvas {
+        Canvas { origin: self.origin + vec2(dst.0 - src.0 * k, dst.1 - src.1 * k) * self.scale, scale: self.scale * k }
     }
     fn r(&self, x: f32, y: f32, w: f32, h: f32) -> Rect {
         Rect::from_min_size(self.p(x, y), vec2(w, h) * self.scale)
@@ -341,17 +355,19 @@ impl eframe::App for Cluster {
         let t = self.started.elapsed().as_secs_f64();
 
         self.keys(ui);
+        let screen = ui.max_rect();
+        self.tall = screen.height() > screen.width();
+        let design = if self.tall { DESIGN_TALL } else { DESIGN };
 
         let state_handle = self.link.state.clone();
         let s = state_handle.lock().unwrap();
         self.update_demand(&s);
 
         let pal = PALETTES[self.theme];
-        let screen = ui.max_rect();
         let painter = ui.painter().clone();
         painter.rect_filled(screen, 0.0, Color32::BLACK);
-        let cv = Canvas::fit(screen);
-        painter.rect_filled(cv.r(0.0, 0.0, DESIGN.x, DESIGN.y), 0.0, pal.bg);
+        let cv = Canvas::fit(screen, design);
+        painter.rect_filled(cv.r(0.0, 0.0, design.x, design.y), 0.0, pal.bg);
 
         // The bulb check: every segment sweeps up and back for 1.6 s at start
         let self_test = (t < 1.6).then(|| (std::f64::consts::PI * t / 1.6).sin());
@@ -363,7 +379,7 @@ impl eframe::App for Cluster {
         let speed_target = s.display("SPEED").unwrap_or(0.0);
         self.speed_smooth += (speed_target - self.speed_smooth) * k;
 
-        let mut ctx = Draw { ui, painter: &painter, cv, pal, s: &s, t, self_test, online };
+        let mut ctx = Draw { ui, painter: &painter, cv, base: cv, tall: self.tall, pal, s: &s, t, self_test, online };
         let mut actions: Vec<Action> = Vec::new();
         ctx.header(self.page, &mut actions);
         match self.page {
@@ -383,7 +399,7 @@ impl eframe::App for Cluster {
         if !online && self_test.is_none() {
             ctx.no_signal();
         }
-        vfd::scanlines(&painter, cv.r(0.0, 0.0, DESIGN.x, DESIGN.y), cv.s(3.0).max(2.0));
+        vfd::scanlines(&painter, cv.r(0.0, 0.0, design.x, design.y), cv.s(3.0).max(2.0));
         let volume = s.volume;
         drop(s);
 
@@ -421,7 +437,11 @@ enum Action {
 struct Draw<'a> {
     ui: &'a mut egui::Ui,
     painter: &'a Painter,
+    /// Where the part being drawn goes (`place`)
     cv: Canvas,
+    /// The whole window's canvas
+    base: Canvas,
+    tall: bool,
     pal: Palette,
     s: &'a State,
     t: f64,
@@ -430,6 +450,30 @@ struct Draw<'a> {
 }
 
 impl Draw<'_> {
+    /// Where the next part is drawn. Every part is written in the wide
+    /// layout's coordinates; in an upright window the part whose corner is
+    /// `src` there goes to `dst` on the tall canvas, `k` times the size.
+    fn place(&mut self, src: (f32, f32), dst: (f32, f32), k: f32) {
+        self.cv = if self.tall { self.base.sub(src, dst, k) } else { self.base };
+    }
+
+    /// A body page's frame (the area between the header and the deck): its
+    /// width and height in the page's own units. Upright it is `k` times the size.
+    fn body(&mut self, k: f32) -> (f32, f32) {
+        self.place((30.0, 78.0), (10.0, 170.0), k);
+        let (w, h) = if self.tall { (780.0 / k, 954.0 / k) } else { (1220.0, 492.0) };
+        vfd::window(self.painter, self.cv.r(30.0, 78.0, w, h), &self.pal);
+        (w, h)
+    }
+
+    /// Text broken every `per` characters, `dy` apart.
+    fn lines(&self, x: f32, y: f32, p: f32, text: &str, per: usize, dy: f32, color: Color32) {
+        let chars: Vec<char> = text.chars().collect();
+        for (i, line) in chars.chunks(per).enumerate() {
+            self.label(x, y + i as f32 * dy, p, &line.iter().collect::<String>(), color);
+        }
+    }
+
     /// A dot-matrix label at design coordinates, pitch in design units.
     fn label(&self, x: f32, y: f32, p: f32, text: &str, color: Color32) {
         vfd::text(self.painter, self.cv.p(x, y), self.cv.s(p), text, color, None);
@@ -471,6 +515,8 @@ impl Draw<'_> {
 
     fn header(&mut self, page: Page, actions: &mut Vec<Action>) {
         let pal = self.pal;
+        // Upright: name, lamps and clock in one row, the tabs larger in a row of their own
+        self.place((36.0, 12.0), (24.0, 12.0), 1.0);
         self.label(36.0, 16.0, 4.0, "OCTAVE", pal.lit);
         self.label(38.0, 50.0, 1.7, "RETRO CLUSTER", self.dim());
 
@@ -481,6 +527,7 @@ impl Draw<'_> {
             ("TRIPS", Page::Trips, 80.0),
             ("AUDIO", Page::Audio, 80.0),
         ];
+        self.place((196.0, 12.0), (30.0, 80.0), 1.5);
         let mut x = 196.0;
         for (name, p, w) in tabs {
             if self.key(name, x, 12.0, w, 46.0, name, page == p) {
@@ -501,6 +548,7 @@ impl Draw<'_> {
             ("REC", self.s.recording || test, pal.hot),
             ("SHIFT", (self.s.shift_active && self.s.shift_lit) || test, pal.hot),
         ];
+        self.place((760.0, 12.0), (250.0, 12.0), 1.0);
         let mut x = 760.0;
         for (name, on, color) in lamps {
             let w = 14.0 + name.len() as f32 * 11.0;
@@ -512,6 +560,7 @@ impl Draw<'_> {
         // format); local time only against a backend too old to send it
         let text = self.s.clock.clone().filter(|c| !c.is_empty()).unwrap_or_else(local_time);
         let digits: String = text.chars().filter(|c| c.is_ascii_digit()).take(4).collect();
+        self.place((1104.0, 12.0), (620.0, 12.0), 1.0);
         let r = self.cv.r(1104.0, 14.0, 132.0, 42.0);
         let cw = r.width() / 4.0;
         for (i, c) in format!("{digits:>4}").chars().enumerate() {
@@ -533,10 +582,12 @@ impl Draw<'_> {
     fn tach(&mut self, rpm: f64) {
         let pal = self.pal;
         let max = self.s.catalog.get("RPM").map(|i| i.max).unwrap_or(8000.0).max(1000.0);
-        let frame = self.cv.r(30.0, 78.0, 1220.0, 150.0);
+        // Upright: half the segments, each nearly twice the size
+        self.place((30.0, 78.0), (16.0, 170.0), 1.2);
+        let (w, n) = if self.tall { (640.0f32, 36usize) } else { (1220.0, 72) };
+        let frame = self.cv.r(30.0, 78.0, w, 150.0);
         vfd::window(self.painter, frame, &pal);
-        let n = 72usize;
-        let (x0, x1, base) = (56.0f32, 1224.0f32, 186.0f32);
+        let (x0, x1, base) = (56.0f32, 30.0 + w - 26.0, 186.0f32);
         let pitch = (x1 - x0) / n as f32;
         let shift = self.s.shift_active && self.s.shift_lit;
         let lit_n = ((rpm / max).clamp(0.0, 1.0) * n as f64).round() as usize;
@@ -567,12 +618,13 @@ impl Draw<'_> {
         }
         self.label(56.0, 92.0, 1.8, "RPM X1000", self.dim());
         let rpm_text = if self.online || self.self_test.is_some() { format!("{:>5.0}", rpm) } else { "  ---".into() };
-        self.label_right(1224.0, 92.0, 1.8, &rpm_text, pal.lit);
+        self.label_right(x1, 92.0, 1.8, &rpm_text, pal.lit);
     }
 
     fn gauges(&mut self, speed: f64) {
         let pal = self.pal;
-        // Left: four ladders
+        // Left: four ladders. Upright: the speed first, the ladders and the trip computer side by side under it
+        self.place((30.0, 248.0), (17.0, 760.0), 1.13);
         let left = self.cv.r(30.0, 248.0, 330.0, 322.0);
         vfd::window(self.painter, left, &pal);
         let oil = if self.s.is_supported("OIL_TEMP") { "OIL_TEMP" } else { "INTAKE_TEMP" };
@@ -606,6 +658,7 @@ impl Draw<'_> {
         }
 
         // Centre: the big speed readout
+        self.place((380.0, 248.0), (88.0, 362.0), 1.2);
         let mid = self.cv.r(380.0, 248.0, 520.0, 322.0);
         vfd::window(self.painter, mid, &pal);
         let speed_v = if self.self_test.is_some() { Some(888.0) } else if self.online { self.s.display("SPEED").map(|_| speed.round()) } else { None };
@@ -624,6 +677,7 @@ impl Draw<'_> {
         self.label(420.0, 542.0, 2.0, &vehicle, self.dim());
 
         // Right: the trip computer
+        self.place((920.0, 248.0), (410.0, 760.0), 1.13);
         let right = self.cv.r(920.0, 248.0, 330.0, 322.0);
         vfd::window(self.painter, right, &pal);
         let rows = ["ENGINE_LOAD", "THROTTLE_POS", "MAF", "INTAKE_PRESSURE"];
@@ -643,27 +697,32 @@ impl Draw<'_> {
 
     fn diag(&mut self, ids: &[String], page: &mut usize, actions: &mut Vec<Action>) {
         let pal = self.pal;
-        let frame = self.cv.r(30.0, 78.0, 1220.0, 492.0);
-        vfd::window(self.painter, frame, &pal);
-        let per = DIAG_COLS * DIAG_ROWS;
+        // Upright: one column, nearly twice the size
+        let (w, _) = self.body(1.9);
+        let tall = self.tall;
+        let (cols, rows) = diag_grid(tall);
+        let per = cols * rows;
         let pages = ids.len().div_ceil(per).max(1);
         *page = (*page).min(pages - 1);
         self.label(52.0, 94.0, 2.2, "LIVE DATA", pal.lit);
         let summary = format!("{} PIDS  PAGE {}/{}", ids.len(), *page + 1, pages);
-        self.label(240.0, 96.0, 1.8, &summary, self.dim());
+        let (sx, sy) = if tall { (52.0, 122.0) } else { (240.0, 96.0) };
+        self.label(sx, sy, 1.8, &summary, self.dim());
 
-        if self.key("pgup", 1040.0, 86.0, 90.0, 36.0, "▲", *page > 0) && *page > 0 {
+        let xr = 30.0 + w;
+        if self.key("pgup", xr - 210.0, 86.0, 90.0, 36.0, "▲", *page > 0) && *page > 0 {
             *page -= 1;
         }
-        if self.key("pgdn", 1142.0, 86.0, 90.0, 36.0, "▼", *page + 1 < pages) && *page + 1 < pages {
+        if self.key("pgdn", xr - 108.0, 86.0, 90.0, 36.0, "▼", *page + 1 < pages) && *page + 1 < pages {
             *page += 1;
         }
 
-        let col_w = 1180.0 / DIAG_COLS as f32;
+        let col_w = (w - 40.0) / cols as f32;
+        let y0 = if tall { 156.0 } else { 140.0 };
         for (n, id) in ids.iter().skip(*page * per).take(per).enumerate() {
-            let (col, row) = (n / DIAG_ROWS, n % DIAG_ROWS);
+            let (col, row) = (n / rows, n % rows);
             let x = 52.0 + col as f32 * col_w;
-            let y = 140.0 + row as f32 * 27.0;
+            let y = y0 + row as f32 * 27.0;
             let info = self.s.catalog.get(id);
             let name: String = info.map(|i| i.title.clone()).unwrap_or_else(|| id.clone()).chars().take(19).collect();
             let value = self.s.display(id);
@@ -686,12 +745,14 @@ impl Draw<'_> {
         if !s.vin.is_empty() {
             footer.push_str(&format!("  VIN {}", s.vin));
         }
-        let footer: String = footer.chars().take(118).collect();
-        self.label(52.0, 548.0, 1.4, &footer, self.dim());
+        let footer: String = footer.chars().take(if tall { 132 } else { 118 }).collect();
+        // (line length, the footer's first line, the warning's)
+        let (per_line, fy, wy) = if tall { (44, 524.0, 488.0) } else { (118, 548.0, 530.0) };
+        self.lines(52.0, fy, 1.4, &footer, per_line, 16.0, self.dim());
         if let Some(p) = s.protocol.filter(|p| !link::PROTOCOL_VERSIONS.contains(p)) {
-            self.label(52.0, 530.0, 1.4, &format!("WARNING: UNKNOWN PROTOCOL {p}; THIS CLUSTER KNOWS 1 TO 3"), pal.hot);
+            self.lines(52.0, wy, 1.4, &format!("WARNING: UNKNOWN PROTOCOL {p}; THIS CLUSTER KNOWS 1 TO 3"), per_line, 16.0, pal.hot);
         } else if !s.trusted {
-            self.label(52.0, 530.0, 1.4, "NOT PAIRED: RUN RETRO-CLUSTER --PAIR CODE (SETTINGS > DEVICE > SERVICE)", pal.hot);
+            self.lines(52.0, wy, 1.4, "NOT PAIRED: RUN RETRO-CLUSTER --PAIR CODE (SETTINGS > DEVICE > SERVICE)", per_line, 16.0, pal.hot);
         }
         let _ = actions;
     }
@@ -701,8 +762,9 @@ impl Draw<'_> {
     fn codes(&mut self, ps: &mut PageState, actions: &mut Vec<Action>) {
         let pal = self.pal;
         let s = self.s;
-        let frame = self.cv.r(30.0, 78.0, 1220.0, 492.0);
-        vfd::window(self.painter, frame, &pal);
+        // Upright: the keys and the freeze frame under the list, side by side
+        self.body(1.3);
+        let tall = self.tall;
 
         let mil = s.mil || self.self_test.is_some();
         let blink = (self.t * 1.5) as i64 % 2 == 0;
@@ -718,19 +780,19 @@ impl Draw<'_> {
             let y = 200.0 + i as f32 * 52.0;
             self.label(56.0, y, 4.5, &d.code, pal.warn);
             let desc = if d.description.is_empty() { "NO DESCRIPTION FROM THE ECU" } else { &d.description };
-            let desc: String = desc.chars().take(52).collect();
+            let desc: String = desc.chars().take(if tall { 30 } else { 52 }).collect();
             self.label(240.0, y + 10.0, 2.0, &desc, self.dim());
         }
         if s.dtcs.len() > 6 {
             self.label(56.0, 516.0, 2.0, &format!("+{} MORE", s.dtcs.len() - 6), self.dim());
         }
 
-        // Keys on the right
-        let kx = 900.0;
-        if self.key("read", kx, 100.0, 330.0, 64.0, "READ CODES", false) {
+        // Keys on the right; the freeze frame under them (upright: beside them)
+        let (kx, ky, fx, fy, fr) = if tall { (56.0, 540.0, 410.0, 540.0, 606.0) } else { (900.0, 100.0, 900.0, 404.0, 1226.0) };
+        if self.key("read", kx, ky, 330.0, 64.0, "READ CODES", false) {
             actions.push(Action::Call("obdManager", "read_dtc", vec![]));
         }
-        if self.key("freeze", kx, 180.0, 330.0, 64.0, "FREEZE FRAME", !s.freeze.is_empty()) {
+        if self.key("freeze", kx, ky + 80.0, 330.0, 64.0, "FREEZE FRAME", !s.freeze.is_empty()) {
             actions.push(Action::Call("obdManager", "read_freeze_frame", vec![]));
         }
         let armed = ps.clear_armed.is_some_and(|at| at.elapsed() < Duration::from_secs(4));
@@ -738,7 +800,7 @@ impl Draw<'_> {
             ps.clear_armed = None;
         }
         let clear_label = if armed { "PRESS AGAIN TO CLEAR" } else { "CLEAR CODES" };
-        if self.key("clear", kx, 260.0, 330.0, 64.0, clear_label, armed) {
+        if self.key("clear", kx, ky + 160.0, 330.0, 64.0, clear_label, armed) {
             if armed {
                 actions.push(Action::Call("obdManager", "clear_dtc", vec![]));
                 ps.clear_armed = None;
@@ -747,21 +809,21 @@ impl Draw<'_> {
             }
         }
         if armed {
-            self.label(kx, 334.0, 1.8, "ERASES CODES + FREEZE FRAME", pal.hot);
+            self.label(kx, ky + 234.0, 1.8, "ERASES CODES + FREEZE FRAME", pal.hot);
         }
         if let Some((ok, msg, at)) = &s.dtc_result
             && at.elapsed() < Duration::from_secs(10)
         {
             let text: String = format!("{} {}", if *ok { "CLEARED." } else { "CLEAR FAILED:" }, msg).chars().take(30).collect();
-            self.label(kx, 360.0, 1.8, &text, if *ok { pal.lit } else { pal.hot });
+            self.label(kx, ky + 260.0, 1.8, &text, if *ok { pal.lit } else { pal.hot });
         }
-        self.label(kx, 404.0, 2.0, "FREEZE FRAME", self.dim());
+        self.label(fx, fy, 2.0, "FREEZE FRAME", self.dim());
         if s.freeze.is_empty() {
-            self.label(kx, 430.0, 2.6, "NONE", pal.ghost);
+            self.label(fx, fy + 26.0, 2.6, "NONE", pal.ghost);
         }
         // The first frame's code, then its readings in the user's units
         if let Some(d) = s.freeze.first() {
-            self.label(kx, 430.0, 2.6, &d.code, pal.lit);
+            self.label(fx, fy + 26.0, 2.6, &d.code, pal.lit);
             let preferred = ["RPM", "SPEED", "COOLANT_TEMP", "ENGINE_LOAD", "MAF", "INTAKE_PRESSURE"];
             let mut shown: Vec<&(String, f64)> = preferred.iter().filter_map(|id| d.values.iter().find(|(k, _)| k == id)).collect();
             shown.extend(d.values.iter().filter(|(k, _)| !preferred.contains(&k.as_str())));
@@ -769,9 +831,9 @@ impl Draw<'_> {
                 let info = s.catalog.get(id);
                 let name = info.map(|i| if i.short_title.is_empty() { i.title.clone() } else { i.short_title.clone() }).unwrap_or_else(|| id.clone());
                 let (val, unit) = info.map(|i| (v * i.scale + i.offset, i.unit.clone())).unwrap_or((*v, String::new()));
-                let y = 462.0 + i as f32 * 22.0;
-                self.label(kx, y, 1.8, &name.to_uppercase(), self.dim());
-                self.label_right(1226.0, y, 1.8, &format!("{:.*} {}", info.map(|i| i.decimals.min(1)).unwrap_or(0), val, unit), pal.lit);
+                let y = fy + 58.0 + i as f32 * 22.0;
+                self.label(fx, y, 1.8, &name.to_uppercase(), self.dim());
+                self.label_right(fr, y, 1.8, &format!("{:.*} {}", info.map(|i| i.decimals.min(1)).unwrap_or(0), val, unit), pal.lit);
             }
         }
     }
@@ -780,8 +842,10 @@ impl Draw<'_> {
     fn trips(&mut self, ps: &mut PageState, actions: &mut Vec<Action>) {
         let pal = self.pal;
         let s = self.s;
-        let frame = self.cv.r(30.0, 78.0, 1220.0, 492.0);
-        vfd::window(self.painter, frame, &pal);
+        // Upright: a shorter list, the drive's summary under it
+        self.body(1.2);
+        // (rows listed, the arrows' x, the lower arrow's y, the summary's x, its shift down, its right edge)
+        let (rows, ax, ay, x, dy, xr) = if self.tall { (7usize, 612.0, 338.0, 56.0, 300.0, 660.0) } else { (11usize, 620.0, 470.0, 720.0, 0.0, 1226.0) };
         self.label(52.0, 94.0, 2.2, "BLACK BOX", pal.lit);
         self.label(240.0, 96.0, 1.8, &format!("{} DRIVES", s.trips.len()), self.dim());
 
@@ -792,7 +856,6 @@ impl Draw<'_> {
             return;
         }
         ps.trip_index = ps.trip_index.min(trips.len() - 1);
-        let rows = 11usize;
         let first = ps.trip_index.saturating_sub(rows - 1);
         for (n, t) in trips.iter().enumerate().skip(first).take(rows) {
             let y = 132.0 + (n - first) as f32 * 38.0;
@@ -817,10 +880,10 @@ impl Draw<'_> {
                 self.label(420.0, y, 2.2, &t.vehicle.to_uppercase().chars().take(14).collect::<String>(), c);
             }
         }
-        if self.key("tup", 620.0, 132.0, 64.0, 60.0, "▲", ps.trip_index > 0) && ps.trip_index > 0 {
+        if self.key("tup", ax, 132.0, 64.0, 60.0, "▲", ps.trip_index > 0) && ps.trip_index > 0 {
             ps.trip_index -= 1;
         }
-        if self.key("tdn", 620.0, 470.0, 64.0, 60.0, "▼", ps.trip_index + 1 < trips.len()) && ps.trip_index + 1 < trips.len() {
+        if self.key("tdn", ax, ay, 64.0, 60.0, "▼", ps.trip_index + 1 < trips.len()) && ps.trip_index + 1 < trips.len() {
             ps.trip_index += 1;
         }
 
@@ -829,10 +892,9 @@ impl Draw<'_> {
             ps.detail_asked = Some(trip.id);
             actions.push(Action::Call("tripRecorder", "requestDetail", vec![json!(trip.id)]));
         }
-        let x = 720.0;
-        self.label(x, 132.0, 2.0, "SUMMARY", self.dim());
+        self.label(x, 132.0 + dy, 2.0, "SUMMARY", self.dim());
         let Some(d) = s.trip_details.get(&trip.id) else {
-            self.label(x, 170.0, 2.4, "READING...", pal.ghost);
+            self.label(x, 170.0 + dy, 2.4, "READING...", pal.ghost);
             return;
         };
         // The summary is in native units; show the user's
@@ -857,25 +919,25 @@ impl Draw<'_> {
             ("EVENTS", d["eventCount"].as_i64().unwrap_or(0).to_string()),
         ];
         for (i, (k, v)) in rows.iter().enumerate() {
-            let y = 164.0 + i as f32 * 34.0;
+            let y = 164.0 + dy + i as f32 * 34.0;
             self.label(x, y, 2.0, k, self.dim());
-            self.label_right(1226.0, y, 2.4, &v.to_uppercase(), pal.lit);
+            self.label_right(xr, y, 2.4, &v.to_uppercase(), pal.lit);
         }
         if let Some(ev) = d["events"].as_array().and_then(|e| e.first()) {
             let text = format!("{} {}", ev["kind"].as_str().unwrap_or(""), ev["detail"].as_str().unwrap_or(""));
             let text: String = text.to_uppercase().chars().take(40).collect();
-            self.label(x, 444.0, 1.8, &text, pal.warn);
+            self.label(x, 444.0 + dy, 1.8, &text, pal.warn);
         }
-        if self.key("export", x, 470.0, 240.0, 60.0, "EXPORT", false) {
+        if self.key("export", x, 470.0 + dy, 240.0, 60.0, "EXPORT", false) {
             actions.push(Action::Call("tripRecorder", "exportTrip", vec![json!(trip.id)]));
         }
-        if trip.open && self.key("endtrip", x + 256.0, 470.0, 250.0, 60.0, "END TRIP", true) {
+        if trip.open && self.key("endtrip", x + 256.0, 470.0 + dy, 250.0, 60.0, "END TRIP", true) {
             actions.push(Action::Call("tripRecorder", "endTripNow", vec![]));
         }
         if let Some(path) = &s.export_path {
             let name = path.rsplit('/').next().unwrap_or(path);
             let text: String = format!("SAVED {name}").chars().take(60).collect();
-            self.label(x, 540.0, 1.4, &text, self.dim());
+            self.label(x, 540.0 + dy, 1.4, &text, self.dim());
         }
     }
 
@@ -884,11 +946,12 @@ impl Draw<'_> {
     fn audio(&mut self, peaks: &mut Vec<f32>, dt: f32) {
         let pal = self.pal;
         let s = self.s;
-        let frame = self.cv.r(30.0, 78.0, 1220.0, 492.0);
-        vfd::window(self.painter, frame, &pal);
+        // Upright: the cover over the analyzer
+        self.body(1.0);
+        let tall = self.tall;
 
         let art = s.art.as_ref().filter(|(rev, _)| *rev == s.art_revision).map(|(_, d)| d.as_slice());
-        vfd::dither_art(self.painter, self.cv.r(56.0, 104.0, 440.0, 440.0), link::ART_DOTS as usize, art, &pal);
+        vfd::dither_art(self.painter, self.cv.r(if tall { 200.0 } else { 56.0 }, 104.0, 440.0, 440.0), link::ART_DOTS as usize, art, &pal);
 
         // 48 columns from the 96 bands (the louder of each pair), 8 segments each
         let cols = 48usize;
@@ -901,7 +964,7 @@ impl Draw<'_> {
             (0..cols).map(|c| s.levels.iter().skip(c * per).take(per).copied().max().unwrap_or(0) as f32).collect()
         };
         peaks.resize(cols, 0.0);
-        let (x0, x1, top, bottom) = (530.0f32, 1226.0f32, 120.0f32, 440.0f32);
+        let (x0, x1, top, bottom) = if tall { (56.0f32, 784.0f32, 580.0f32, 900.0f32) } else { (530.0, 1226.0, 120.0, 440.0) };
         let pitch = (x1 - x0) / cols as f32;
         let seg_h = (bottom - top) / 8.0;
         for (c, &level) in levels.iter().enumerate() {
@@ -924,11 +987,11 @@ impl Draw<'_> {
         let freqs = ["60", "250", "1K", "4K", "16K"];
         for (i, f) in freqs.iter().enumerate() {
             let x = x0 + (x1 - x0) * (i as f32 + 0.5) / freqs.len() as f32;
-            vfd::text_center(self.painter, self.cv.p(x, 458.0), self.cv.s(1.8), f, self.dim());
+            vfd::text_center(self.painter, self.cv.p(x, bottom + 18.0), self.cv.s(1.8), f, self.dim());
         }
         let np = &s.now;
         let title: String = if np.has_track { np.title.chars().take(26).collect() } else { "NO TRACK".into() };
-        self.label(530.0, 484.0, 3.2, &title, pal.lit);
+        self.label(x0, bottom + 44.0, 3.2, &title, pal.lit);
         let sub: String = [np.artist.as_str(), np.album.as_str()]
             .iter()
             .filter(|t| !t.is_empty())
@@ -938,9 +1001,9 @@ impl Draw<'_> {
             .chars()
             .take(52)
             .collect();
-        self.label(530.0, 520.0, 2.0, &sub, self.dim());
+        self.label(x0, bottom + 80.0, 2.0, &sub, self.dim());
         if s.levels.is_empty() && self.online && self.self_test.is_none() {
-            self.label(530.0, 96.0, 1.6, "NO LEVELS FROM THE ANALYZER (NOTHING PLAYING?)", pal.ghost);
+            self.label(x0, top - 24.0, 1.6, "NO LEVELS FROM THE ANALYZER (NOTHING PLAYING?)", pal.ghost);
         }
     }
 
@@ -949,7 +1012,10 @@ impl Draw<'_> {
         let pal = self.pal;
         let s = self.s;
         let np = &s.now;
-        let frame = self.cv.r(30.0, 594.0, 1220.0, 186.0);
+        // Upright: the display in one window, the keys larger in another under it
+        let tall = self.tall;
+        self.place((30.0, 594.0), (15.0, 1140.0), 1.0);
+        let frame = self.cv.r(30.0, 594.0, if tall { 770.0 } else { 1220.0 }, 186.0);
         vfd::window(self.painter, frame, &pal);
 
         let line = if self.online && !s.trusted {
@@ -1007,6 +1073,10 @@ impl Draw<'_> {
         self.label_right(786.0, 716.0, 3.0, &remain, self.dim());
 
         // Transport keys
+        self.place((808.0, 598.0), (65.0, 1330.0), 1.55);
+        if tall {
+            vfd::window(self.painter, self.cv.r(808.0, 598.0, 432.0, 174.0), &pal);
+        }
         let (kx, ky, kw, kh) = (820.0, 610.0, 96.0, 62.0);
         if self.key("prev", kx, ky, kw, kh, "◀◀", false) {
             actions.push(Action::Call("nowPlaying", "previous", vec![]));
@@ -1041,6 +1111,7 @@ impl Draw<'_> {
 
     fn no_signal(&mut self) {
         let pal = self.pal;
+        self.place((290.0, 300.0), (50.0, 600.0), 1.0);
         let r = self.cv.r(290.0, 300.0, 700.0, 190.0);
         self.painter.rect_filled(r.expand(self.cv.s(14.0)), 12.0, pal.bg.gamma_multiply(0.92));
         vfd::window(self.painter, r, &pal);

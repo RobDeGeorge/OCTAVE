@@ -75,6 +75,12 @@
       backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
     }
     #back:hover, #back:focus-visible { border-color: var(--accent); outline: none; }
+    /* Upright (a phone): the button gets a strip of its own above the frontend,
+       where it covers none of the frontend's controls. */
+    @media (orientation: portrait) {
+      #frontend { box-sizing: border-box; border-top: 44px solid #000; }
+      #back { left: 8px; top: 4px; bottom: auto; min-height: 36px; padding: 8px 14px; }
+    }
     #toast {
       position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 4; display: none;
       max-width: min(92vw, 520px); padding: 10px 14px; border-radius: 8px; font-size: 0.9rem;
