@@ -105,8 +105,8 @@ jobs:
           cache-dependency-path: examples/frontends/sunlight/go.sum
       - name: Build the sunlight and arcade examples for the browser
         run: |
-          (cd examples/frontends/sunlight && ./build_web.sh)
-          (cd examples/frontends/arcade && ./build_web.sh)
+          (cd examples/frontends/sunlight && bash build_web.sh)
+          (cd examples/frontends/arcade && bash build_web.sh)
       - name: Build and stage
         run: |
           QT_HOST="$RUNNER_TEMP/qt/Qt/$QT_VERSION/gcc_64" \
