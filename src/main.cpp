@@ -8,6 +8,8 @@
 #include "util/assetstore.h"
 #include <QQuickStyle>
 #include <QScreen>
+#include <QStyleHints>
+#include <QWheelEvent>
 #include <QObject>
 #include <QDir>
 #include <QFile>
@@ -599,6 +601,38 @@ void warnUnknownFlags(int argc, char *argv[])
 
 } // namespace
 
+// A mouse wheel on Wayland arrives with a pixel delta as well (about 15 px a
+// notch), and Flickable prefers that to the notch count, so the wheel step
+// set in main() never applied there. Resend such an event without the pixel
+// delta. A touchpad scroll has a phase (begin / update / end) and is left alone.
+class MouseWheelAsNotches : public QObject
+{
+public:
+    using QObject::QObject;
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+        if (m_resending || event->type() != QEvent::Wheel)
+            return false;
+        auto *wheel = static_cast<QWheelEvent *>(event);
+        if (wheel->phase() != Qt::NoScrollPhase || wheel->pixelDelta().isNull()
+            || wheel->angleDelta().isNull())
+            return false;
+        QWheelEvent notches(wheel->position(), wheel->globalPosition(), QPoint(), wheel->angleDelta(),
+                            wheel->buttons(), wheel->modifiers(), Qt::NoScrollPhase, wheel->inverted(),
+                            wheel->source(), wheel->pointingDevice());
+        m_resending = true;
+        QCoreApplication::sendEvent(watched, &notches);
+        m_resending = false;
+        event->setAccepted(notches.isAccepted());
+        return true;
+    }
+
+private:
+    bool m_resending = false;
+};
+
 int main(int argc, char *argv[])
 {
     if (const QString text = earlyExitText(argc, argv); !text.isEmpty()) {
@@ -918,6 +952,19 @@ int main(int argc, char *argv[])
     // What draws the window, into the log and Main.qml's graphicsRenderer /
     // gpuRendered: without a GPU the 3D page is not built in the background
     GraphicsRenderer::report(engine.rootObjects().constFirst());
+    // Mouse wheel: Flickable moves wheelScrollLines * 24 px per notch, which
+    // is 72 px by default whatever the window size; make a notch about a
+    // quarter of the window so every list and page scrolls at a usable pace.
+    // Touch flicks and touchpad pixel scrolling do not use this.
+    if (auto *win = qobject_cast<QWindow *>(engine.rootObjects().constFirst())) {
+        auto applyWheelStep = [win]() {
+            const int lines = qBound(3, qRound(win->height() / 4.0 / 24.0), 40);
+            QGuiApplication::styleHints()->setWheelScrollLines(lines);
+        };
+        applyWheelStep();
+        win->installEventFilter(new MouseWheelAsNotches(win));
+        QObject::connect(win, &QWindow::heightChanged, win, applyWheelStep);
+    }
 #ifdef OCTAVE_DEV_TOOLS
     devRuntime.afterLoad(service.server.get());   // its UI / perf / sim actions, with --profile
 #endif

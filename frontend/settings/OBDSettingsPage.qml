@@ -24,7 +24,7 @@ Item {
     property int dragSourceIndex: -1
     property int dropPreviewIndex: -1
 
-    // ── Live connection log (the same one OBDHome.qml shows) ─────────
+    // ── Live connection log ──────────────────────────────────────────
     // Surfaces every BLE state transition so the user can debug from this
     // page without needing adb logcat. The manager keeps the last 60 lines.
     readonly property var connectionLog: obdManager ? obdManager.connectionLog : []
@@ -1201,7 +1201,7 @@ Item {
                             property real maxScroll: Math.max(0, leftColumn.implicitHeight - leftScrollContainer.height)
 
                             onWheel: function(wheel) {
-                                var delta = wheel.angleDelta.y / 120 * dp(40);
+                                var delta = wheel.angleDelta.y / 120 * Math.max(dp(40), leftScrollContainer.height / 4);
                                 scrollY = Math.max(0, Math.min(maxScroll, scrollY - delta));
                                 wheel.accepted = true;
                             }
