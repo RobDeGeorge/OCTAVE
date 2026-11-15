@@ -14,17 +14,21 @@ on:
     branches:
       - main
 
+# Read-only by default; the release job asks for contents: write itself
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
           fetch-depth: 0   # the API compatibility check reads docs/api/ at the base
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: '3.11'
 
@@ -65,7 +69,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
 
       - name: Install build dependencies
         run: |
@@ -77,7 +81,7 @@ jobs:
             libpulse-dev libssl-dev libplist-dev
 
       - name: Install Qt 6
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06  # v4
         with:
           version: '6.7.3'
           host: 'linux'
@@ -91,12 +95,12 @@ jobs:
       # WebSocket global), Go for sdk_go and template_go. Python 3 is on the
       # runner already (sdk_python, template_python, api_compat).
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with:
           node-version: '22'
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff  # v5
         with:
           go-version: '1.22'
 
@@ -145,18 +149,18 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
 
       - name: Set up JDK 21
         # Match the JDK used for the committed jar; javac output differs
         # between JDK majors even for -source/-target 1.8.
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3  # v4
         with:
           distribution: 'temurin'
           java-version: '21'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407  # v3
         with:
           # The action's default also installs the legacy "tools" package,
           # which Google removed from the SDK repository (sdkmanager:
@@ -195,7 +199,7 @@ jobs:
           fi
 
       - name: Upload the freshly built jar
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: octave-phone-server
           path: build-phone-server/octave-phone-server
@@ -210,10 +214,10 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with:
           node-version: '22'
 
@@ -224,7 +228,7 @@ jobs:
           npm test
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff  # v5
         with:
           go-version: '1.22'
 
@@ -244,10 +248,10 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
 
       - name: Install Qt 6
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06  # v4
         with:
           version: '6.7.3'
           host: 'windows'
@@ -415,7 +419,7 @@ jobs:
           Get-ChildItem dist\
 
       - name: Upload Windows installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: OCTAVE-Windows-cpp
           path: dist/OCTAVE-*-windows-x86_64.exe
@@ -432,10 +436,10 @@ jobs:
     runs-on: macos-15
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
 
       - name: Install Qt 6
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06  # v4
         with:
           version: '6.7.3'
           host: 'mac'
@@ -497,14 +501,14 @@ jobs:
         run: bash packaging/smoke-sim.sh dist/OCTAVE.app/Contents/MacOS/octave
 
       - name: Upload macOS .app
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: OCTAVE-macOS-cpp-App
           path: dist/OCTAVE.app/
           retention-days: 30
 
       - name: Upload macOS .dmg
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: OCTAVE-macOS-cpp-DMG
           path: dist/OCTAVE-*-macos.dmg
@@ -516,7 +520,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
 
       - name: Install build dependencies
         run: |
@@ -531,7 +535,7 @@ jobs:
         run: bash packaging/ffmpeg/build-h264-decoder.sh "$RUNNER_TEMP/ffmpeg"
 
       - name: Install Qt 6
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06  # v4
         with:
           version: '6.7.3'
           host: 'linux'
@@ -568,7 +572,7 @@ jobs:
         run: bash packaging/smoke-sim.sh dist/OCTAVE-*-linux-x86_64.AppImage
 
       - name: Upload Linux AppImage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: OCTAVE-Linux-cpp-AppImage
           path: dist/OCTAVE-*-linux-x86_64.AppImage
@@ -585,7 +589,7 @@ jobs:
     runs-on: ubuntu-22.04-arm
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
 
       - name: Install build dependencies
         run: |
@@ -605,7 +609,7 @@ jobs:
         run: bash packaging/ffmpeg/build-h264-decoder.sh "$RUNNER_TEMP/ffmpeg"
 
       - name: Install Qt 6
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06  # v4
         with:
           version: '6.7.3'
           host: 'linux_arm64'
@@ -643,7 +647,7 @@ jobs:
         run: bash packaging/smoke-sim.sh dist/OCTAVE-*-linux-aarch64.AppImage
 
       - name: Upload Linux AppImage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: OCTAVE-Linux-arm64-cpp-AppImage
           path: dist/OCTAVE-*-linux-aarch64.AppImage
@@ -656,16 +660,16 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3  # v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
       - name: Install Qt 6 (host)
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06  # v4
         with:
           version: '6.7.3'
           host: 'linux'
@@ -673,7 +677,7 @@ jobs:
           modules: 'qtmultimedia qtserialport qtconnectivity qtsensors qt5compat qtshadertools qtquick3d qtquicktimeline'
 
       - name: Install Qt 6 (Android arm64)
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06  # v4
         with:
           version: '6.7.3'
           host: 'linux'
@@ -682,7 +686,7 @@ jobs:
           modules: 'qtmultimedia qtserialport qtconnectivity qtsensors qt5compat qtshadertools qtquick3d qtquicktimeline qtwebview'
 
       - name: Set up Android SDK + NDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407  # v3
         with:
           packages: platform-tools   # see phone-server job: legacy "tools" is gone
 
@@ -692,7 +696,7 @@ jobs:
           echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/26.1.10909125" >> $GITHUB_ENV
 
       - name: Cache Gradle dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: |
             ~/.gradle/caches
@@ -890,7 +894,7 @@ jobs:
           ls -la dist/
 
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: OCTAVE-Android-APK
           path: dist/OCTAVE-*-android-arm64-v8a.apk
@@ -915,12 +919,12 @@ jobs:
 
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
         with:
           path: artifacts/
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2
         with:
           # Five installers, one per platform/arch. The macOS .app.zip is produced
           # by the build job as a workflow artifact (downloadable from the run
