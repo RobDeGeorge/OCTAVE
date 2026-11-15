@@ -30,7 +30,9 @@
 | Measure gauge text re-fit (`fontSizeMode: Text.HorizontalFit` at up to 30 Hz) and arc re-tessellation before changing them | `frontend/gauges/` | M |
 | Trip ids and prune order use the wall clock; a head unit with no RTC and a stale boot clock can prune the wrong trips | `src/managers/triprecorder.cpp:292`, `tripstore.cpp` (prune) | M |
 
-## 3. Needs a browser build (Qt wasm kit)
+## 3. Needs a browser build run in a browser
+
+The branch compiles for the browser (2026-11-15, `packaging/wasm/build.sh` with `QT_WASM=~/Qt/6.12.0/wasm_multithread QT_HOST=/usr` on zion). These need the page opened and used, not only built.
 
 | Item | Where | Effort |
 |---|---|---|
@@ -38,7 +40,6 @@
 | Tag bytes stay in wasm memory for every picked song; the 512 MB cap is reached at about 4,000 MP3s and later songs silently lose their tags | `src/platform/wasm/weblibrary.cpp` | M |
 | More than 400 queued events in one pump are dropped with no `dropped` notice | `webservice.cpp:88-95` | S |
 | A frontend that reloads itself restarts socket numbering and is never answered | `frontend-host.js:102` | S |
-| The media manager's new background tag pass was not compiled for wasm | `src/managers/mediamanager.cpp` | S |
 
 ## 4. Needs a CI release run
 
@@ -64,7 +65,7 @@
 
 ## 6. Refactors, one at a time, after the above
 
-1. Done 2026-11-15: `SettingsManager` is table-driven (one row per setting, one store of truth, writable properties). Left from it: derive the pinned-settings registry's slot names from the table; compile it on Windows and wasm (the dead file locking and its includes were removed).
+1. Done 2026-11-15: `SettingsManager` is table-driven (one row per setting, one store of truth, writable properties). Left from it: derive the pinned-settings registry's slot names from the table; compile it on Windows (the dead file locking and its includes were removed; the browser build compiles).
 2. `OBDManager` split (connection lifecycle, scheduling, diagnostics) and the removal of the dead state and the cargo-cult locks. **Effort:** L.
 3. `MediaPlayer.qml` on a real C++ list model (today a JS array, five invokable calls per row, a 300 ms refresh timer). **Effort:** L.
 4. `OBDMenu.qml`: the 1,870-line shift-light popup into its own file, on `SettingsSlider` and the gauge library. **Effort:** M.
