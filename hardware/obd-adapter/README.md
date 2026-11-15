@@ -4,7 +4,7 @@ Our own OBD-II adapter: STM32G474 (vehicle side) + ESP32 (Bluetooth Classic SPP,
 
 **Status:** generated, then verified: an STM32 pin check against ST's pin data, two independent datasheet audits and ngspice simulations. Every finding is fixed or accepted, see `verify/REVIEW.md`. Not yet reviewed by a human, not ordered. Read "Before ordering" below.
 
-**The main board is routed** (2026-11-10): 0 DRC errors, 0 unconnected pads, schematic and board agree. `gen/routing.json`, `obd-adapter.kicad_pcb`, `drc.rpt` and everything in `fab/` are that board, with the changes of 2026-11-09 in it (the buck loop, the parked-watch parts, the microSD, the mounting holes, `verify/REVIEW.md` rounds 5 to 7). The route is the autorouter's, finished by hand round the STM32; it has passed the rule check, not a person's eye. Later the same day (`verify/REVIEW.md` round 8): the crystal's tracks and the CAN1 pair were re-laid by hand, and six BOM lines moved to parts from JLCPCB's no-fee libraries, which changed four values round the buck (RT 160k, feedback 68k / 12k, 47 pF on COMP).
+**The main board is routed** (2026-11-10): 0 DRC errors, 0 unconnected pads, schematic and board agree. `gen/routing.json`, `obd-adapter.kicad_pcb`, `drc.rpt` and everything in `fab/` are that board, with the changes of 2026-11-09 in it (the buck loop, the parked-watch parts, the microSD, the mounting holes, `verify/REVIEW.md` rounds 5 to 7; round 9 moved C23 to the buck's VIN pin). The route is the autorouter's, finished by hand round the STM32; it has passed the rule check, not a person's eye. Later the same day (`verify/REVIEW.md` round 8): the crystal's tracks and the CAN1 pair were re-laid by hand, and six BOM lines moved to parts from JLCPCB's no-fee libraries, which changed four values round the buck (RT 160k, feedback 68k / 12k, 47 pF on COMP).
 
 ## Files
 
@@ -171,7 +171,7 @@ Pins 4 and 5 both go to GND. The ELM327 datasheet notes that a few vehicles have
 5. **Confirm the J1850 PWM high-level limit** (5.25 V assumed, `verify/REVIEW.md` #10 and #32) against SAE J1850 if you have it.
 6. Through-hole parts (the OBD-II plug, pin headers) need JLC's through-hole option or hand soldering; see `fab/*-hand-fit.txt`. Order the adapter board (`fab/obd-adapter-plug-rev0-gerbers.zip`, 2 layers, 1.6 mm) in the same cart; the main board must be 1.6 mm too, or the tab won't fit its slot.
 7. **Look at the copper in KiCad.** The route passes DRC with schematic parity (0 errors, 0 unconnected, 0 parity issues, 0 courtyard overlaps), but DRC does not judge quality. Worth a look:
-   - The buck's switch node and input loop (hand-laid in `gen/prewire.py`).
+   - The buck's switch node and input loop (hand-laid in `gen/prewire.py`). C23 (100 nF) sits at U7's VIN pin since `verify/REVIEW.md` #72; the 2.2 µF pair is 6 mm away.
    - The USB pairs. J2's run 52 / 48 mm with 2 vias each, J7's 30 / 24 mm with 5 and 2 vias. Both are full speed (12 Mbit/s), where a few millimetres of skew does not matter.
    - The plug's edge pads and the copper behind them.
    - The crystal's tracks (`HSE_IN` 8.7 mm, `HSE_OUT` 9.0 mm, both on the top side with no vias since round 8).

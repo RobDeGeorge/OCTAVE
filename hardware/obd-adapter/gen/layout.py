@@ -260,6 +260,11 @@ def fixed_for(design):
         ref("power", "12k"): (X + 2.9, Y + 4.7, 270),       # FB divider under pin 5
         ref("power", "68k"): (X + 4.6, Y + 4.7, 90),
         ref("power", "160k"): (X - 2.9, Y + 4.7, 270),        # RT under pin 4
+        # VIN high-frequency cap right at pin 2 (REVIEW #72): pad 1 (VBAT_P) on pin 2's row, pad 2 (GND)
+        # beside the unused EN pin, its via to the In1 plane just below. It was C23 in the VBAT_P tile.
+        ref("power", "100n", 2): (X - 4.6, Y + 0.145, 270),
+        # C21 (VBAT_P 10u) stays where the tile had it, now that C23 has left the tile
+        ref("power", "10u", 0): (22.5, 33.505, 90),
     })
     return f
 
@@ -295,7 +300,6 @@ def near_rules(design):
     fet = ic("power", "AO4264E")
     tvs = ic("power", "5.0SMDJ26CA")
     on(ref("power", "10u", 0), (fet, "5"))                  # VBAT_P 10u
-    on(ref("power", "100n", 2), (fet, "7"))                 # VBAT_P 100n
     on(ref("power", "100k 0.1%"), (tvs, "1"), dist=16)               # VBAT sense: 100k at the source,
     on(ref("power", "10k 0.1%"), (mcu, "18"))               # 10k at PA4 (its 100n has a fixed spot, above)
     # 5 V OR + LDO
@@ -377,7 +381,6 @@ TILES = [
     # both CAN pairs), the K / L-line TVSs under D4 (pins 7 / 15)
     ("bus clamps", (4.0, 23.5), [["D19", "D20", "D9", "D8"]]),
     ("K/L clamps", (6.25, 45.3), [["D22@90", "D24@90"]]),
-    ("VBAT_P caps", (20.75, 28.66), [["C23"], ["C21@90"]]),
     ("DLC_SW", (34.75, 2.55), [["Q3", "Q2"], ["R31", "R29"], ["D10"], ["R30"], ["C40"]]),
     # three columns of front ends, tops level: bus side (CAN2, CAN1, J1850 PWM-), J1850 drive (its
     # supply, PWM+), the LM2901 receiver with all four input channels round it (each row a channel's

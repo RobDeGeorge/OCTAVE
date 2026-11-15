@@ -310,6 +310,14 @@ A look for what could still go wrong on the routed board gave nine points. This 
 
 **What the swap leaves with a fee:** 35 extended parts ($105 a batch, from 41 and $123). No fee-free equivalent exists for the rest: the ICs and connectors, the green and blue LEDs, USBLC6-2SC6, ESD9B3.3, the 0.1 % divider pair, the 470 Ω 1206, the 47 µF 50 V electrolytic and the 510 Ω 2 W resistors.
 
+### Round 9 (2026-11-10): a VIN capacitor at the buck's pin
+
+A first human look at the copper (the buck's input loop, README "Before ordering" item 7).
+
+| # | Severity | Finding | Status |
+|---|---|---|---|
+| 72 | Layout | Round 2's fix (L1) placed the input caps "on pin 2", but on the routed board C24 / C25 (2.2 µF) sit 6.3 mm from U7's VIN pin, through about 8.7 mm of 1.0 / 0.6 mm track, and no small ceramic sat at the pin: the high-frequency part of the switch current had that track's inductance in its loop (roughly 60 to 70 mm² from the caps through VIN, SW, D5 and back). | **Fixed without a new part:** C23, the 100 nF on `VBAT_P` that sat in a tile by the input chain, moves to U7: pad 1 on the pin-2 track (1.5 mm from the pin), pad 2 on the GND side beside the unused EN pin with a via into In1 1 mm below it, which runs under the IC to its thermal-pad vias. The VIN trunk moves 0.35 mm left (`jx` 3.15 mm from pin 2) to keep 0.3 mm from the cap's GND pad; C21 is pinned where the tile had it. Rerouted with `OBD_REROUTE=patch` (C23 the only part moved; `VBAT_P`'s bottom-side escape re-laid), a stray `VBAT_P` via and four exact duplicate items left by the patch removed by hand, frozen (3286 items). DRC as before: 0 errors, 0 unconnected, 0 parity, the same 8 cosmetic warnings. BOM unchanged; one CPL line. The 6 to 7 V SW-node check (#71) stays on the bench list and is where this shows. |
+
 ### Firmware obligations (all rounds)
 
 - Keep PA1/PA2/PB5/PB7 low or as inputs until the ESP32 is powered, and drive ESP_EN open-drain (item 23).
@@ -334,7 +342,7 @@ A look for what could still go wrong on the routed board gave nine points. This 
 - **STM32 pin check:** re-run on the round 5 netlist, all 31 functions OK. PC3 (`DLC_SW_EN`) is a plain GPIO.
 - **Board:** 100 × 70 mm plus the plug tab, and the 40 × 18 mm plug adapter; 200 footprints and four mounting holes, 187 JLC-assembled parts, 83 BOM lines, 1 hand-fit (the J6 OBD-II plug), 2 headers not fitted (J5, J8), 10 test-point pads.
 - **Price** (JLCPCB's parts library, 2026-11-10, every line in stock): $33.59 of parts per board at quantity-1 prices, of which the STM32G474RET6 is $13.00, the ESP32 module $4.56, the LM74700 $2.36 and the flash $2.26. 43 BOM lines are basic parts, 4 preferred, 36 extended; the extended ones are 35 different parts, $105 of loading fees per batch (round 8, #67). Boards, stencil, setup and shipping come on top. Round 1's figure was $30.60 for 152 parts.
-- **Copper:** 2606 track segments and 637 vias (635 at 0.6 / 0.3 mm, 2 at 0.45 / 0.2 mm), 3.13 m on F.Cu and 2.70 m on B.Cu, none on the inner layers. The GND plane (In1) and the 3V3 plane (In2) are each one piece with no long slots.
+- **Copper:** 2651 track segments and 635 vias (round 9; 633 at 0.6 / 0.3 mm, 2 at 0.45 / 0.2 mm), 3.13 m on F.Cu and 2.70 m on B.Cu, none on the inner layers. The GND plane (In1) and the 3V3 plane (In2) are each one piece with no long slots.
 - **Power nets:** every supply and battery-side net is one connected piece. `VBAT_IN` is 1.6 mm wide. The thin sections of `VBAT_F` and `VBAT_P` (12 and 6 mm under 0.6 mm) are the LM74700's anode, cathode, EN and charge-pump connections, which carry no load current, and the 0.3 mm of `5V_BUCK` is the feedback sense.
 - **Track lengths:**
   - USB: J2's pair 52 / 48 mm, 2 vias each; J7's 30 / 24 mm, 5 and 2 vias. Full speed.

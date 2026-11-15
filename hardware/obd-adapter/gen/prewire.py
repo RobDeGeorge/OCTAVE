@@ -95,9 +95,20 @@ def wire(board, design):
     # VIN: the input caps' VIN pads joined, then down the IC's left side into pin 2
     vin = P(u7, "2")
     c0, c1 = P(cin[0], "1"), P(cin[1], "1")
-    jx = vin[0] - 2.4
+    # (the trunk runs 3.15 mm left of pin 2, so the VIN HF cap fits between it and the pins, its courtyard
+    # clear of U7's and its GND pad 0.3 mm from the trunk's stub)
+    jx = vin[0] - 3.15
     track(board, "VBAT_P", [c1, c0, (jx, c0[1]), (jx, vin[1])], 1.0)
     track(board, "VBAT_P", [(jx, vin[1]), vin], 0.6)
+    # VIN HF cap (REVIEW #72): the 2.2u pair sits 6 mm from pin 2, so a 100n beside the pin carries the
+    # switching edges. Pad 1 lies on the pin-2 track; pad 2 drops to a via into In1, which runs straight
+    # under the IC to its thermal-pad vias
+    chf = ref("power", "100n", 2)
+    h1, h2 = P(chf, "1"), P(chf, "2")
+    track(board, "VBAT_P", [(h1[0], vin[1]), h1], 0.6)
+    gvy = h2[1] + 1.0
+    track(board, "GND", [h2, (h2[0], gvy)], 0.6)
+    via(board, "GND", h2[0], gvy)
     # ... and out of the keep-out to a via just below it. The island (both caps and pin 2) lies inside the
     # keep-out, which the grid finisher treats as closed to every net, so only Freerouting could reach it,
     # and on 2026-11-09 it left the buck's input cut off from the ideal diode
