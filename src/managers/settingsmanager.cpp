@@ -13,6 +13,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -1790,58 +1791,42 @@ void SettingsManager::save_custom_theme(const QString &name, const QVariantMap &
 void SettingsManager::downloadThemeArtAsync(const QString &themeName, const QString &url,
                                               const QString &artDir, const QString &safeName)
 {
-    // Use a thread to download, then poll on the main thread
-    m_pendingThemeArtName.clear();
-    m_pendingThemeArtUrl.clear();
-
+    // Download on a thread; the result comes back to this (GUI) thread as a
+    // queued call. It used to be left in two members the GUI polled every
+    // 100 ms with no lock, and a failed download left that timer running
+    // for the life of the process.
     QThread *thread = QThread::create([this, themeName, url, artDir, safeName]() {
         QDir().mkpath(artDir);
-        QString dest = artDir + QStringLiteral("/theme_") + safeName + QStringLiteral(".jpg");
+        const QString dest = artDir + QStringLiteral("/theme_") + safeName + QStringLiteral(".jpg");
         // Use QProcess + curl as a portable download approach
 #if QT_CONFIG(process)
         QProcess proc;
         proc.start(QStringLiteral("curl"), {QStringLiteral("-sL"), QStringLiteral("-o"), dest, url});
-        proc.waitForFinished(30000);
-        const bool downloaded = proc.exitCode() == 0;
+        const bool downloaded = proc.waitForFinished(30000) && proc.exitStatus() == QProcess::NormalExit
+                                && proc.exitCode() == 0;
 #else
         const bool downloaded = false;   // no processes in the browser (wasm)
 #endif
-        if (downloaded && QFile::exists(dest)) {
-            m_pendingThemeArtName = themeName;
-            m_pendingThemeArtUrl  = QUrl::fromLocalFile(dest).toString();
-            qCDebug(lcSettings) << "Downloaded theme art to:" << dest;
-        } else {
+        if (!downloaded || !QFile::exists(dest)) {
             qCWarning(lcSettings) << "Failed to download theme album art from:" << url;
+            return;
         }
-    });
-
-    connect(thread, &QThread::finished, thread, &QThread::deleteLater);
-
-    // Poll for completion
-    QTimer *timer = new QTimer(this);
-    timer->setInterval(100);
-    connect(timer, &QTimer::timeout, this, [this, timer]() {
-        if (!m_pendingThemeArtName.isEmpty()) {
-            timer->stop();
-            timer->deleteLater();
-            QString name = m_pendingThemeArtName;
-            QString localUrl = m_pendingThemeArtUrl;
-            m_pendingThemeArtName.clear();
-            m_pendingThemeArtUrl.clear();
-
+        qCDebug(lcSettings) << "Downloaded theme art to:" << dest;
+        const QString localUrl = QUrl::fromLocalFile(dest).toString();
+        QMetaObject::invokeMethod(this, [this, themeName, localUrl]() {
             QJsonObject settings = loadSettings();
             QJsonObject themes = settings.value(QStringLiteral("customThemes")).toObject();
-            if (themes.contains(name)) {
-                QJsonObject t = themes.value(name).toObject();
-                t[QStringLiteral("albumArt")] = localUrl;
-                themes[name] = t;
-                settings[QStringLiteral("customThemes")] = themes;
-                saveSettings(settings);
-                emit customThemesChanged();
-            }
-        }
+            if (!themes.contains(themeName))
+                return;   // deleted while the picture was on its way
+            QJsonObject t = themes.value(themeName).toObject();
+            t[QStringLiteral("albumArt")] = localUrl;
+            themes[themeName] = t;
+            settings[QStringLiteral("customThemes")] = themes;
+            saveSettings(settings);
+            emit customThemesChanged();
+        }, Qt::QueuedConnection);
     });
-    timer->start();
+    connect(thread, &QThread::finished, thread, &QThread::deleteLater);
     thread->start();
 }
 
@@ -2709,18 +2694,44 @@ QString SettingsManager::getGitRepoDir() const
     return QFileInfo(m_backendDir).absolutePath();
 }
 
-QString SettingsManager::get_git_commit_hash()
+// One git question about OCTAVE's own checkout, asked once a run. The About
+// page binds to three of these: each used to start git on the GUI thread
+// with a 5 s wait every time the binding was evaluated, and with no .git
+// of its own, git answered for whatever repository the binary sat inside.
+namespace {
+QString gitAnswer(const QString &repoDir, const QStringList &args)
 {
 #if QT_CONFIG(process)
-    QProcess proc;
-    proc.setWorkingDirectory(getGitRepoDir());
-    proc.start(QStringLiteral("git"), {QStringLiteral("rev-parse"), QStringLiteral("--short"), QStringLiteral("HEAD")});
-    if (proc.waitForFinished(5000) && proc.exitCode() == 0) {
-        const QString hash = QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
-        if (!hash.isEmpty())
-            return hash;
+    static QHash<QString, QString> answers;
+    const QString key = args.join(QLatin1Char(' '));
+    const auto known = answers.constFind(key);
+    if (known != answers.constEnd())
+        return *known;
+    QString out;
+    if (QFileInfo::exists(repoDir + QStringLiteral("/.git"))) {
+        QProcess proc;
+        proc.setWorkingDirectory(repoDir);
+        proc.start(QStringLiteral("git"), args);
+        if (proc.waitForFinished(2000) && proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0)
+            out = QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
+        else
+            proc.kill();
     }
+    answers.insert(key, out);
+    return out;
+#else
+    Q_UNUSED(repoDir)
+    Q_UNUSED(args)
+    return QString();
 #endif
+}
+} // namespace
+
+QString SettingsManager::get_git_commit_hash()
+{
+    const QString hash = gitAnswer(getGitRepoDir(), {QStringLiteral("rev-parse"), QStringLiteral("--short"), QStringLiteral("HEAD")});
+    if (!hash.isEmpty())
+        return hash;
     // Packaged builds (APK, installers) have neither .git nor git: use the
     // value CMake baked in at configure time.
 #ifdef OCTAVE_GIT_COMMIT
@@ -2732,14 +2743,7 @@ QString SettingsManager::get_git_commit_hash()
 
 QString SettingsManager::get_git_commit_date()
 {
-    QString dateStr;
-#if QT_CONFIG(process)
-    QProcess proc;
-    proc.setWorkingDirectory(getGitRepoDir());
-    proc.start(QStringLiteral("git"), {QStringLiteral("log"), QStringLiteral("-1"), QStringLiteral("--format=%ci")});
-    if (proc.waitForFinished(5000) && proc.exitCode() == 0)
-        dateStr = QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
-#endif
+    QString dateStr = gitAnswer(getGitRepoDir(), {QStringLiteral("log"), QStringLiteral("-1"), QStringLiteral("--format=%ci")});
 #ifdef OCTAVE_GIT_DATE
     if (dateStr.isEmpty())
         dateStr = QStringLiteral(OCTAVE_GIT_DATE);   // baked in by CMake for packaged builds
@@ -2754,12 +2758,5 @@ QString SettingsManager::get_git_commit_date()
 
 QString SettingsManager::get_git_commit_message()
 {
-#if QT_CONFIG(process)
-    QProcess proc;
-    proc.setWorkingDirectory(getGitRepoDir());
-    proc.start(QStringLiteral("git"), {QStringLiteral("log"), QStringLiteral("-1"), QStringLiteral("--format=%s")});
-    if (proc.waitForFinished(5000) && proc.exitCode() == 0)
-        return QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
-#endif
-    return QString();
+    return gitAnswer(getGitRepoDir(), {QStringLiteral("log"), QStringLiteral("-1"), QStringLiteral("--format=%s")});
 }

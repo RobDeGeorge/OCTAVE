@@ -17,6 +17,10 @@
 #include <QElapsedTimer>
 #include <QMediaDevices>
 #include <QRegularExpression>
+#include <QFuture>
+
+#include <atomic>
+#include <memory>
 
 class SettingsManager;
 
@@ -112,7 +116,9 @@ public slots:
     // ──────────────────────────────────────────────────────────────
 
     // QML compatibility aliases (snake_case names called from QML)
-    Q_INVOKABLE void connect_settings_manager(QObject *) { /* already wired in main.cpp */ }
+    // Does nothing: AppCore wires the settings manager (setSettingsManager).
+    // Kept because it is published API and Main.qml still calls it.
+    Q_INVOKABLE void connect_settings_manager(QObject *) {}
     Q_INVOKABLE void _save_playback_state() { _save_playback_state_now(); }
     Q_INVOKABLE void _clear_temp_files() { clearTempFilesInternal(); }
     // Write the persistent tag store now if it changed (called at shutdown)
@@ -235,6 +241,21 @@ private:
     void clearTempFilesInternal();
     void _cache_metadata(const QString &filename);
     void _cache_metadata_from_file(const QString &filename);
+    // Every place that drops the tag cache also abandons the background
+    // pass that was filling it
+    void _clear_metadata_cache();
+    // The background tag pass: tags of `files` not yet in the cache are
+    // read (or taken from the tag store) on a worker; when it is done the
+    // cache has them and the playlist statistics are computed and signalled.
+    // Nothing on the GUI thread opens a music file for the statistics or a
+    // sort.
+    void _warm_metadata(const QStringList &files);
+    void _finish_stats(const QStringList &files);
+    // The loaded track is about to be deleted or moved: let go of the file
+    bool _is_loaded_track(const QString &filename) const;
+    void _stop_for_removal();
+    // Background work that uses `this`; the destructor waits for it
+    void _track(const QFuture<void> &work);
     // Persistent tag store (<appdata>/metadata_cache.json): tags are read from a file once, then served from here
     // on every later run as long as its size and mtime are unchanged.
     void _load_meta_store();
@@ -331,9 +352,12 @@ private:
 
     // Caching
     QHash<QString, QString> m_albumArtCache;     // albumId -> file:// URL
+    // filename -> tags, for the playlist in use (cleared when it changes).
+    // As large as that playlist: it was capped at 1000 with an arbitrary
+    // entry evicted, so sorting a bigger playlist re-read tags inside the
+    // comparator.
     QHash<QString, MediaMetadata> m_metadataCache;
     int m_maxCacheFiles = 500;
-    int m_metadataCacheMax = 1000;
     QHash<QString, int> m_accessCount;
 
     // Album Art Capture theme active state
@@ -357,8 +381,18 @@ private:
     QHash<QString, QString> m_allMusicFilePaths;  // filename -> directory path
     bool m_isAllMusicActive = false;
 
-    // Scan guard
+    // Scan guard: the scan is synchronous but emits (scanProgress,
+    // playlistsChanged ...) as it goes, and a handler may ask for another
     bool m_scanInProgress = false;
+
+    // Background tag pass (_warm_metadata)
+    int m_warmGeneration = 0;
+    bool m_warmRunning = false;
+    QStringList m_warmFiles;
+    std::shared_ptr<std::atomic_bool> m_warmCancel;
+    QList<QFuture<void>> m_background;
+    // Tag reads from files so far (tests count them)
+    static std::atomic<int> s_tagReads;
 
     // Display names
     QHash<QString, QString> m_displayNames;
@@ -378,6 +412,9 @@ private:
     // Timers
     QTimer m_positionTimer;
     QTimer m_saveStateTimer;
+    // While playing: the position is saved every 10 s, so a power cut
+    // mid-song (ignition off) resumes within seconds of where it was
+    QTimer m_positionSaveTimer;
     QTimer m_precacheTimer;
 
     // Junk patterns for display name stripping

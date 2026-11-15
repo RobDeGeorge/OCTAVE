@@ -207,11 +207,24 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
         <!-- Metadata Caching -->
         <h2 id="metadata-caching">Metadata Caching and the Tag Store</h2>
         <p>
-          Every lookup (<code>get_band</code>, <code>get_album</code>, <code>get_formatted_duration</code>, the
-          "now playing" metadata, library statistics) goes through <code>_cache_metadata(filename)</code>, which fills an
+          A per-track lookup (<code>get_band</code>, <code>get_album</code>, <code>get_formatted_duration</code>, the
+          "now playing" metadata) goes through <code>_cache_metadata(filename)</code>, which fills an
           in-memory map (<code>m_metadataCache</code>, filename &rarr; title, artist,
-          album, duration in seconds) capped at 1000 entries. When the cap is hit the <code>QHash</code> drops whichever entry <code>begin()</code> points at. The map is
+          album, duration in seconds). The map holds the whole selected playlist (it is not capped) and is
           cleared on every <code>select_playlist()</code> and <code>scan_library()</code>.
+        </p>
+        <p>
+          The playlist as a whole is read in the <strong>background</strong>: <code>select_playlist()</code> starts a
+          tag pass (<code>_warm_metadata()</code>) on a worker thread, which takes each track from the persistent tag
+          store when its size and modification time still match and reads the file's tags otherwise. When it is done
+          the map has every track and the statistics are computed and sent as <code>totalDurationChanged</code>,
+          <code>albumCountChanged</code> and <code>artistCountChanged</code>. Until then
+          <code>get_total_duration()</code> / <code>get_album_count()</code> / <code>get_artist_count()</code> return
+          the previous (or zero) values at once, and <code>sort_media_files()</code> sorts tracks whose tags have
+          not arrived as "Unknown Album" / "Unknown Artist": neither opens a file on the GUI thread, so a view
+          should listen to the three signals and sort again when they come (<span class="file-path">MediaPlayer.qml</span>
+          does). A playlist change or a rescan abandons the pass under way. On mobile builds without TagLib the tags
+          come from the platform and are still read in place.
         </p>
         <p>
           Behind it sits the <strong>persistent tag store</strong> <code>&lt;app data&gt;/metadata_cache.json</code>
@@ -542,7 +555,9 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           The current song, position (ms) and playlist name are saved through
           <code>settingsManager.save_playback_state()</code>. To avoid a disk write on every rapid track change, saves go
           through a <strong>1&nbsp;s single-shot debounce timer</strong> (<code>m_saveStateTimer</code>): next / previous
-          restart it, pause and play-toggle restart it, only the last call wins.
+          restart it, pause and play-toggle restart it, only the last call wins. While a track is playing the position
+          is also saved every <strong>10&nbsp;s</strong> (<code>m_positionSaveTimer</code>, running only while playing),
+          so a power cut mid-song, which is how a car normally stops, resumes within seconds of where it was.
         </p>
         <pre><code><span class="cmt">// src/managers/mediamanager.cpp — constructor</span>
 m_saveStateTimer.<span class="fn">setInterval</span>(<span class="num">1000</span>);
@@ -769,9 +784,9 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
             <tr><td><code>get_band</code> / <code>get_album</code></td><td>(str) -&gt; str</td><td>Artist / album from metadata</td></tr>
             <tr><td><code>get_formatted_duration</code></td><td>(str) -&gt; str</td><td>"M:SS" duration string (also emits <code>durationFormatChanged</code>)</td></tr>
             <tr><td><code>get_display_name</code></td><td>(str) -&gt; str</td><td>Cleaned display name</td></tr>
-            <tr><td><code>get_total_duration</code> / <code>get_album_count</code> / <code>get_artist_count</code></td><td>() -&gt; str / int</td><td>Library statistics for the selected playlist (cached)</td></tr>
+            <tr><td><code>get_total_duration</code> / <code>get_album_count</code> / <code>get_artist_count</code></td><td>() -&gt; str / int</td><td>Library statistics for the selected playlist. Returns at once: while the playlist's tags are still being read in the background these are the previous values, and the three <code>*Changed</code> signals carry the result</td></tr>
             <tr><td><code>invalidate_stats_cache</code></td><td>()</td><td>Force recalculation of library statistics</td></tr>
-            <tr><td><code>sort_media_files</code></td><td>(str column, bool ascending) -&gt; list</td><td>Current list sorted by "title", "album" or "artist"</td></tr>
+            <tr><td><code>sort_media_files</code></td><td>(str column, bool ascending) -&gt; list</td><td>Current list sorted by "title", "album" or "artist". Opens no file: tracks whose tags have not been read yet sort as "Unknown ..."; sort again on <code>totalDurationChanged</code></td></tr>
             <tr><td><code>extract_colors_from_album_art</code></td><td>(str)</td><td>Run the k-means theme extraction for a file's cover</td></tr>
             <tr><td><code>scan_library</code></td><td>(bool resetDisplayNames=true)</td><td>Rescan the library root into playlists (emits <code>scanProgress</code>, <code>playlistsChanged</code>); callable with or without the bool from QML</td></tr>
             <tr><td><code>set_library_root</code></td><td>(str)</td><td>Set and scan a new root, select its first playlist (connected to <code>mediaFolderChanged</code>)</td></tr>

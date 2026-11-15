@@ -7,6 +7,8 @@
 #include <QAudioDevice>
 #include <QCryptographicHash>
 #include <QDir>
+#include <QElapsedTimer>
+#include <QtEndian>
 #include <QFile>
 #include <QMediaDevices>
 #include <QSignalSpy>
@@ -231,7 +233,192 @@ private slots:
         QFile::remove(cover);
     }
 
+    // The playlist statistics: asking returns at once with nothing read on
+    // this thread; the tags are read in the background and the three
+    // signals carry the result
+    void statisticsArriveBySignalNotByBlocking()
+    {
+        auto mm = taggedLibrary({{"stat-a.wav", "One", "Ann", "First"},
+                                 {"stat-b.wav", "Two", "Ann", "Second"},
+                                 {"stat-c.wav", "Three", "Bob", "Second"}});
+        QSignalSpy duration(mm.get(), &MediaManager::totalDurationChanged);
+        QSignalSpy albums(mm.get(), &MediaManager::albumCountChanged);
+        QSignalSpy artists(mm.get(), &MediaManager::artistCountChanged);
+
+        // select_playlist() has asked already; asking again changes nothing
+        mm->get_total_duration();
+        mm->get_album_count();
+        QVERIFY(!mm->m_statsCache.isValid);
+        QVERIFY(mm->m_metadataCache.isEmpty());   // no file was opened here
+        QCOMPARE(duration.count(), 0);
+
+        QTRY_COMPARE_WITH_TIMEOUT(duration.count(), 1, 10000);
+        QCOMPARE(albums.count(), 1);
+        QCOMPARE(artists.count(), 1);
+        QCOMPARE(albums.first().at(0).toInt(), 2);
+        QCOMPARE(artists.first().at(0).toInt(), 2);
+        QCOMPARE(duration.first().at(0).toString(), mm->_format_duration(3000));   // three 1 s tracks
+        // and from then on the getters have them
+        QCOMPARE(mm->get_album_count(), 2);
+        QCOMPARE(mm->get_artist_count(), 2);
+        QCOMPARE(mm->get_total_duration(), mm->_format_duration(3000));
+        QCOMPARE(mm->get_album("stat-c.wav"), QStringLiteral("Second"));
+    }
+
+    // More tracks than the old 1000-entry tag cache held: a sort by album
+    // or artist opens no file (it used to re-read tags inside the
+    // comparator once the cache started evicting)
+    void aSortOfABigPlaylistReadsNoTags()
+    {
+        const int n = 1100;
+        QList<Song> songs;
+        for (int i = 0; i < n; ++i)
+            songs.append({QStringLiteral("big%1.wav").arg(i, 4, 10, QLatin1Char('0')), QStringLiteral("T%1").arg(i),
+                          QStringLiteral("Artist %1").arg(i % 13, 2, 10, QLatin1Char('0')),
+                          QStringLiteral("Album %1").arg(i % 7, 2, 10, QLatin1Char('0'))});
+        const int before = MediaManager::s_tagReads.load();
+        auto mm = taggedLibrary(songs);
+        QSignalSpy duration(mm.get(), &MediaManager::totalDurationChanged);
+        QTRY_VERIFY_WITH_TIMEOUT(duration.count() >= 1, 60000);
+        waitForBackground(mm.get());
+        QCOMPARE(mm->m_metadataCache.size(), n);
+        QCOMPARE(mm->get_album_count(), 7);
+        QCOMPARE(mm->get_artist_count(), 13);
+        QVERIFY(MediaManager::s_tagReads.load() - before >= n);   // every file was read, in the background
+
+        const int afterWarm = MediaManager::s_tagReads.load();
+        QElapsedTimer t;
+        t.start();
+        const QStringList byAlbum = mm->sort_media_files("album", true);
+        const QStringList byAlbumDown = mm->sort_media_files("album", false);
+        const QStringList byArtist = mm->sort_media_files("artist", true);
+        mm->sort_media_files("title", true);
+        QCOMPARE(MediaManager::s_tagReads.load(), afterWarm);
+        QVERIFY2(t.elapsed() < 3000, qPrintable(QString::number(t.elapsed())));
+
+        QCOMPARE(byAlbum.size(), n);
+        QCOMPARE(mm->get_album(byAlbum.first()), QStringLiteral("Album 00"));
+        QCOMPARE(mm->get_album(byAlbum.last()), QStringLiteral("Album 06"));
+        QCOMPARE(mm->get_album(byAlbumDown.first()), QStringLiteral("Album 06"));
+        QCOMPARE(mm->get_band(byArtist.first()), QStringLiteral("Artist 00"));
+        QCOMPARE(mm->get_band(byArtist.last()), QStringLiteral("Artist 12"));
+        for (int i = 1; i < n; ++i)
+            QVERIFY(mm->get_album(byAlbum.at(i - 1)) <= mm->get_album(byAlbum.at(i)));
+        QCOMPARE(MediaManager::s_tagReads.load(), afterWarm);
+    }
+
+    // A second visit takes the tags from the tag store: no file is opened
+    void aKnownLibraryIsNotReadAgain()
+    {
+        const QList<Song> songs{{"again-a.wav", "One", "Ann", "First"}, {"again-b.wav", "Two", "Bob", "Second"}};
+        {
+            auto mm = taggedLibrary(songs);
+            QSignalSpy duration(mm.get(), &MediaManager::totalDurationChanged);
+            QTRY_VERIFY_WITH_TIMEOUT(duration.count() >= 1, 10000);
+            waitForBackground(mm.get());
+        }   // destroyed: the store is written
+        const int before = MediaManager::s_tagReads.load();
+        auto mm = std::make_unique<MediaManager>();
+        QSignalSpy duration(mm.get(), &MediaManager::totalDurationChanged);
+        mm->set_library_root(m_lib->path());
+        mm->select_playlist("Road");
+        QTRY_VERIFY_WITH_TIMEOUT(duration.count() >= 1, 10000);
+        waitForBackground(mm.get());
+        QCOMPARE(mm->get_artist_count(), 2);
+        QCOMPARE(MediaManager::s_tagReads.load(), before);
+    }
+
+    // While playing, the position is saved on a timer: a car cuts the power,
+    // it does not pause or quit first
+    void positionIsSavedWhilePlaying()
+    {
+        SettingsManager sm;
+        auto mm = library({"a.mp3", "zz-periodic.mp3"});
+        mm->setSettingsManager(&sm);
+        mm->select_playlist(m_playlist);
+        QVERIFY(sm.get_last_played_song() != QStringLiteral("zz-periodic.mp3"));
+        QVERIFY(!mm->m_positionSaveTimer.isActive());
+        QCOMPARE(mm->m_positionSaveTimer.interval(), 10000);
+
+        mm->m_currentIndex = int(mm->m_currentPlaylist.indexOf("zz-periodic.mp3"));
+        QVERIFY(mm->m_currentIndex >= 0);
+        mm->m_positionSaveTimer.setInterval(40);
+        mm->_set_playing_state(true);   // as play_file() does, without a decoder
+        QVERIFY(mm->m_positionSaveTimer.isActive());
+        QVERIFY(!mm->m_saveStateTimer.isActive());   // not the skip / pause save
+        QTRY_COMPARE_WITH_TIMEOUT(sm.get_last_played_song(), QStringLiteral("zz-periodic.mp3"), 3000);
+
+        mm->_set_playing_state(false);
+        QVERIFY(!mm->m_positionSaveTimer.isActive());
+    }
+
+    // Destroyed while the background pass is reading: it stops and is
+    // waited for, nothing is left running against a dead object
+    void destroyedMidPassWaitsForTheWorker()
+    {
+        QList<Song> songs;
+        for (int i = 0; i < 300; ++i)
+            songs.append({QStringLiteral("gone%1.wav").arg(i), "T", "A", "B"});
+        auto mm = taggedLibrary(songs);
+        QVERIFY(mm->m_warmRunning);
+        const QList<QFuture<void>> work = mm->m_background;
+        QVERIFY(!work.isEmpty());
+        mm.reset();
+        for (const QFuture<void> &f : work)
+            QVERIFY(f.isFinished());
+    }
+
 private:
+    struct Song {
+        QString file, title, artist, album;
+    };
+
+    // One second of silence as a WAV, with title / artist / album in a RIFF
+    // INFO chunk (what TagLib reads from a .wav)
+    static QByteArray wav(const Song &song)
+    {
+        auto le32 = [](quint32 v) { QByteArray b(4, '\0'); qToLittleEndian(v, b.data()); return b; };
+        auto le16 = [](quint16 v) { QByteArray b(2, '\0'); qToLittleEndian(v, b.data()); return b; };
+        auto chunk = [&le32](const char *id, QByteArray data) {
+            QByteArray c = QByteArray(id, 4) + le32(quint32(data.size())) + data;
+            if (data.size() % 2)
+                c += '\0';
+            return c;
+        };
+        auto text = [&chunk](const char *id, const QString &value) { return chunk(id, value.toUtf8() + '\0'); };
+        const QByteArray fmt = le16(1) + le16(1) + le32(8000) + le32(8000) + le16(1) + le16(8);
+        const QByteArray info = QByteArray("INFO") + text("INAM", song.title) + text("IART", song.artist)
+                                + text("IPRD", song.album);
+        const QByteArray body = QByteArray("WAVE") + chunk("fmt ", fmt) + chunk("data", QByteArray(8000, '\x80'))
+                                + chunk("LIST", info);
+        return QByteArray("RIFF") + le32(quint32(body.size())) + body;
+    }
+
+    // A scanned library with one folder ("Road") of tagged one-second WAVs
+    std::unique_ptr<MediaManager> taggedLibrary(const QList<Song> &songs)
+    {
+        m_lib = std::make_unique<QTemporaryDir>();
+        const QDir road(m_lib->filePath("Road"));
+        QDir().mkpath(road.path());
+        for (const Song &song : songs) {
+            QFile f(road.filePath(song.file));
+            if (!f.open(QIODevice::WriteOnly))
+                qFatal("cannot create %s", qPrintable(f.fileName()));
+            f.write(wav(song));
+        }
+        auto mm = std::make_unique<MediaManager>();
+        mm->set_library_root(m_lib->path());
+        m_playlist = QStringLiteral("Road");
+        mm->select_playlist(m_playlist);
+        return mm;
+    }
+
+    static void waitForBackground(MediaManager *mm)
+    {
+        for (QFuture<void> &f : mm->m_background)
+            f.waitForFinished();
+    }
+
     // A scanned library with one folder ("Road") holding `files`
     std::unique_ptr<MediaManager> library(const QStringList &files)
     {

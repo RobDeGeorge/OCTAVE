@@ -1811,6 +1811,11 @@ Item {
         // Statistics updates
         function onTotalDurationChanged(duration) {
             totalDurationText.text = duration
+            // The tags of this playlist are in (they are read in the
+            // background): an album / artist order made before that was
+            // sorted on "Unknown ..." for the tracks still to come
+            if (currentSortColumn === "album" || currentSortColumn === "artist")
+                sortMediaFiles()
         }
 
         function onAlbumCountChanged(count) {

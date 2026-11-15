@@ -169,6 +169,8 @@ static QString cleanForSort(const QString &filename)
     return QString(filename).toLower().replace(re, QString());
 }
 
+std::atomic<int> MediaManager::s_tagReads{0};
+
 // ─── Constructor ───────────────────────────────────────────────────
 
 MediaManager::MediaManager(QObject *parent)
@@ -242,6 +244,18 @@ MediaManager::MediaManager(QObject *parent)
             m_positionTimer.stop();
     });
 
+    // The position used to be saved only on a skip, a pause or a clean
+    // exit; a car cuts the power instead. save_playback_state() goes
+    // through the settings' debounced, atomic write.
+    m_positionSaveTimer.setInterval(10000);
+    connect(&m_positionSaveTimer, &QTimer::timeout, this, &MediaManager::_save_playback_state_now);
+    connect(this, &MediaManager::playStateChanged, this, [this](bool playing) {
+        if (playing)
+            m_positionSaveTimer.start();
+        else
+            m_positionSaveTimer.stop();
+    });
+
     // Debounce timer for saving playback state (1s after last track change)
     m_saveStateTimer.setInterval(1000);
     m_saveStateTimer.setSingleShot(true);
@@ -281,7 +295,20 @@ MediaManager::~MediaManager()
         m_player->stop();
     }
     m_positionTimer.stop();
+    m_positionSaveTimer.stop();
     m_precacheTimer.stop();
+    // Workers still running use this object (cover extraction, colours) or
+    // would report to it: stop the tag pass and wait for all of them
+    if (m_warmCancel)
+        m_warmCancel->store(true);
+    for (QFuture<void> &work : m_background)
+        work.waitForFinished();
+}
+
+void MediaManager::_track(const QFuture<void> &work)
+{
+    m_background.removeIf([](const QFuture<void> &f) { return f.isFinished(); });
+    m_background.append(work);
 }
 
 // ─── Settings manager wiring ───────────────────────────────────────
@@ -621,8 +648,6 @@ void MediaManager::_cache_metadata(const QString &filename)
         return;
     MediaMetadata stored;
     if (_meta_from_store(filename, filePath, &stored)) {
-        if (m_metadataCache.size() >= m_metadataCacheMax)
-            m_metadataCache.erase(m_metadataCache.begin());
         m_metadataCache.insert(filename, stored);
         return;   // cover, if any, is found by get_album_art()'s hash fast path
     }
@@ -746,14 +771,6 @@ void MediaManager::_cache_metadata_from_file(const QString &filename)
     const QString displayName = _get_original_filename(filename);
     const QString baseName = QFileInfo(displayName).completeBaseName();
 
-    // Manage cache size
-    if (m_metadataCache.size() >= m_metadataCacheMax) {
-        m_metadataCache.erase(m_metadataCache.begin());
-    }
-
-    const QString ext = QFileInfo(filePath).suffix().toLower();
-    Q_UNUSED(ext);
-
 #ifdef Q_OS_ANDROID
     // Android: use MediaMetadataRetriever via JNI (no TagLib cross-compile).
     // Returns "title\n<t>\nartist\n<a>\nalbum\n<al>\nduration\n<secs>".
@@ -822,6 +839,7 @@ void MediaManager::_cache_metadata_from_file(const QString &filename)
 MediaMetadata MediaManager::_read_tags(const QString &filePath, const QString &baseName)
 {
     // Pure TagLib read; safe on a worker thread.
+    s_tagReads.fetch_add(1, std::memory_order_relaxed);
     std::unique_ptr<TagLib::IOStream> stream;
     const auto fileRef = openTags<TagLib::FileRef>(filePath, stream);
     if (fileRef->isNull() || !fileRef->tag())
@@ -1516,7 +1534,9 @@ void MediaManager::extractColorsFrom(const QString &imagePath, const QString &fi
             return;
         _apply_album_colors(watcher->result(), filename);
     });
-    watcher->setFuture(QtConcurrent::run([this, imagePath]() { return _extract_album_colors(imagePath); }));
+    const QFuture<QString> work = QtConcurrent::run([this, imagePath]() { return _extract_album_colors(imagePath); });
+    _track(QFuture<void>(work));
+    watcher->setFuture(work);
 }
 
 void MediaManager::_apply_album_colors(const QString &themeJson, const QString &filename)
@@ -2028,7 +2048,7 @@ void MediaManager::_scan_library_inner(bool resetDisplayNames)
     // Clear existing caches
     m_playlists.clear();
     m_playlistNames.clear();
-    m_metadataCache.clear();
+    _clear_metadata_cache();
     m_albumArtCache.clear();
     m_accessCount.clear();
     m_allMusicFilePaths.clear();
@@ -2301,7 +2321,7 @@ void MediaManager::select_playlist(const QString &name)
     }
     m_currentIndex = 0;
 
-    m_metadataCache.clear();
+    _clear_metadata_cache();
 
     invalidate_stats_cache();
     _calculate_all_stats();
@@ -2384,6 +2404,19 @@ QString MediaManager::_get_original_filename(const QString &filename)
 
 // ─── Song deletion ─────────────────────────────────────────────────
 
+bool MediaManager::_is_loaded_track(const QString &filename) const
+{
+    return m_currentIndex >= 0 && m_currentIndex < m_currentPlaylist.size()
+           && m_currentPlaylist[m_currentIndex] == filename;
+}
+
+void MediaManager::_stop_for_removal()
+{
+    m_player->stop();
+    m_isPlaying = false;
+    emit playStateChanged(false);
+}
+
 bool MediaManager::delete_song(const QString &filename)
 {
     if (filename.isEmpty())
@@ -2395,14 +2428,8 @@ bool MediaManager::delete_song(const QString &filename)
 
     // Stop if it is the loaded track (playing or paused) so the player
     // doesn't keep a handle on a file that is about to disappear
-    bool isCurrent = (!m_currentPlaylist.isEmpty()
-                      && m_currentIndex >= 0 && m_currentIndex < m_currentPlaylist.size()
-                      && m_currentPlaylist[m_currentIndex] == filename);
-    if (isCurrent) {
-        m_player->stop();
-        m_isPlaying = false;
-        emit playStateChanged(false);
-    }
+    if (_is_loaded_track(filename))
+        _stop_for_removal();
 
     if (!QFile::remove(filePath)) {
         qCWarning(lcMedia) << "Failed to delete:" << filePath;
@@ -2514,14 +2541,8 @@ bool MediaManager::move_song_to_playlist(const QString &filename, const QString 
 
     // Stop if it is the loaded track (playing or paused) so the player
     // doesn't keep a handle on a file that is about to disappear
-    bool isCurrent = (!m_currentPlaylist.isEmpty()
-                      && m_currentIndex >= 0 && m_currentIndex < m_currentPlaylist.size()
-                      && m_currentPlaylist[m_currentIndex] == filename);
-    if (isCurrent) {
-        m_player->stop();
-        m_isPlaying = false;
-        emit playStateChanged(false);
-    }
+    if (_is_loaded_track(filename))
+        _stop_for_removal();
 
     if (!QFile::rename(sourcePath, destPath)) {
         qCWarning(lcMedia) << "Failed to move:" << sourcePath;
@@ -2580,11 +2601,8 @@ bool MediaManager::delete_playlist(const QString &name)
     if (!_is_safe_path(m_libraryRoot, folderPath))
         return false;
 
-    if (m_currentPlaylistName == trimmed && m_isPlaying) {
-        m_player->stop();
-        m_isPlaying = false;
-        emit playStateChanged(false);
-    }
+    if (m_currentPlaylistName == trimmed && m_isPlaying)
+        _stop_for_removal();
 
     QDir dir(folderPath);
     if (!dir.removeRecursively()) {
@@ -2873,28 +2891,61 @@ void MediaManager::invalidate_stats_cache()
     m_statsCache.isValid = false;
 }
 
+void MediaManager::_clear_metadata_cache()
+{
+    m_metadataCache.clear();
+    // The pass under way was reading for the list (and the paths) that just
+    // went: its results are ignored and it stops at the next file
+    if (m_warmCancel)
+        m_warmCancel->store(true);
+    m_warmCancel.reset();
+    ++m_warmGeneration;
+    m_warmRunning = false;
+    m_warmFiles.clear();
+}
+
 void MediaManager::_calculate_all_stats()
 {
     if (m_statsCache.isValid)
         return;
 
-    QStringList files = _get_current_playlist_files();
+    const QStringList files = _get_current_playlist_files();
+#ifdef OCTAVE_TAGLIB
+    // Tags not known yet are read on a worker, never here: this is reached
+    // from QML bindings (get_total_duration ...) and from select_playlist,
+    // and a first visit to a few thousand tracks used to freeze the screen
+    // while every file was opened. The values so far are returned now; the
+    // three *Changed signals carry the real ones when the pass is done.
+    for (const QString &filename : files) {
+        if (!m_metadataCache.contains(filename)) {
+            _warm_metadata(files);
+            return;
+        }
+    }
+#else
+    // Mobile reads tags through the platform (cheap); keep it on this thread
+    for (const QString &filename : files)
+        _cache_metadata(filename);
+#endif
+    _finish_stats(files);
+}
+
+void MediaManager::_finish_stats(const QStringList &files)
+{
     qint64 totalMs = 0;
     QSet<QString> albums;
     QSet<QString> artists;
 
     for (const QString &filename : files) {
-        if (!m_metadataCache.contains(filename))
-            _cache_metadata(filename);
-
-        if (m_metadataCache.contains(filename)) {
-            const MediaMetadata &meta = m_metadataCache[filename];
-            totalMs += static_cast<qint64>(meta.durationSeconds) * 1000;
-            if (!meta.album.isEmpty() && meta.album != QStringLiteral("Unknown Album"))
-                albums.insert(meta.album);
-            if (!meta.artist.isEmpty() && meta.artist != QStringLiteral("Unknown Artist"))
-                artists.insert(meta.artist);
-        }
+        const auto it = m_metadataCache.constFind(filename);
+        if (it == m_metadataCache.constEnd())
+            continue;   // no such file any more, or outside the library
+        const MediaMetadata &meta = *it;
+        totalMs += static_cast<qint64>(meta.durationSeconds) * 1000;
+        if (!meta.album.isEmpty() && meta.album != QStringLiteral("Unknown Album"))
+            albums.insert(meta.album);
+        if (!meta.artist.isEmpty() && meta.artist != QStringLiteral("Unknown Artist"))
+            artists.insert(meta.artist);
     }
 
     m_statsCache.totalDurationMs = totalMs;
@@ -2906,6 +2957,123 @@ void MediaManager::_calculate_all_stats()
     emit totalDurationChanged(m_statsCache.totalDurationFormatted);
     emit albumCountChanged(m_statsCache.albumCount);
     emit artistCountChanged(m_statsCache.artistCount);
+}
+
+void MediaManager::_warm_metadata(const QStringList &files)
+{
+#ifndef OCTAVE_TAGLIB
+    for (const QString &filename : files)
+        _cache_metadata(filename);
+    _finish_stats(files);
+#else
+    if (m_warmRunning && m_warmFiles == files)
+        return;   // already reading for this list
+    if (m_warmCancel)
+        m_warmCancel->store(true);
+    const int generation = ++m_warmGeneration;
+    const auto cancel = std::make_shared<std::atomic_bool>(false);
+    m_warmCancel = cancel;
+    m_warmFiles = files;
+    m_warmRunning = true;
+
+    // What the worker needs, taken here: it touches no member
+    struct Job {
+        QString filename, filePath, baseName;
+        bool hasStored = false;
+        QJsonObject stored;   // the tag store's entry, checked against the file there
+    };
+    struct Result {
+        QString filename;
+        MediaMetadata meta;
+        bool exists = false;
+        bool fromStore = false;
+        bool hadStored = false;
+        qint64 size = 0;
+        qint64 mtime = 0;
+    };
+    QList<Job> jobs;
+    for (const QString &filename : files) {
+        if (m_metadataCache.contains(filename))
+            continue;
+        const QString filePath = _get_file_path(filename);
+        if (filePath.isEmpty())
+            continue;
+        Job job{filename, filePath, QFileInfo(_get_original_filename(filename)).completeBaseName(), false, {}};
+        const QJsonValue stored = m_metaStore.value(filename);
+        if (stored.isObject()) {
+            job.hasStored = true;
+            job.stored = stored.toObject();
+        }
+        jobs.append(job);
+    }
+
+    auto *watcher = new QFutureWatcher<QList<Result>>(this);
+    connect(watcher, &QFutureWatcher<QList<Result>>::finished, this, [this, watcher, generation, files]() {
+        watcher->deleteLater();
+        const QList<Result> results = watcher->result();
+        const bool current = generation == m_warmGeneration;
+        for (const Result &r : results) {
+            // A tag read is worth keeping whichever list it was made for
+            // (the store checks size and mtime before it believes an entry)
+            if (!r.fromStore) {
+                if (r.exists) {
+                    QJsonObject e;
+                    e[QStringLiteral("title")] = r.meta.title;
+                    e[QStringLiteral("artist")] = r.meta.artist;
+                    e[QStringLiteral("album")] = r.meta.album;
+                    e[QStringLiteral("duration")] = r.meta.durationSeconds;
+                    e[QStringLiteral("size")] = double(r.size);
+                    e[QStringLiteral("mtime")] = double(r.mtime);
+                    m_metaStore[r.filename] = e;
+                } else if (r.hadStored) {
+                    m_metaStore.remove(r.filename);   // deleted or renamed track
+                }
+                if (r.exists || r.hadStored) {
+                    m_metaStoreDirty = true;
+                    m_metaStoreSaveTimer.start();
+                }
+            }
+            if (current && !m_metadataCache.contains(r.filename))
+                m_metadataCache.insert(r.filename, r.meta);
+        }
+        if (!current)
+            return;   // the playlist changed meanwhile; its own pass reports
+        m_warmRunning = false;
+        m_warmFiles.clear();
+        _finish_stats(files);
+    });
+    const QFuture<QList<Result>> work = QtConcurrent::run([jobs, cancel]() {
+        QList<Result> out;
+        out.reserve(jobs.size());
+        for (const Job &j : jobs) {
+            if (cancel->load())
+                break;
+            Result r;
+            r.filename = j.filename;
+            r.hadStored = j.hasStored;
+            const QFileInfo fi(j.filePath);
+            r.exists = fi.exists();
+            if (r.exists) {
+                r.size = fi.size();
+                r.mtime = fi.lastModified().toSecsSinceEpoch();
+            }
+            if (r.exists && j.hasStored && j.stored.value(QStringLiteral("size")).toDouble() == double(r.size)
+                && qint64(j.stored.value(QStringLiteral("mtime")).toDouble()) == r.mtime) {
+                r.fromStore = true;
+                r.meta = {j.stored.value(QStringLiteral("title")).toString(),
+                          j.stored.value(QStringLiteral("artist")).toString(),
+                          j.stored.value(QStringLiteral("album")).toString(),
+                          j.stored.value(QStringLiteral("duration")).toInt()};
+            } else {
+                r.meta = _read_tags(j.filePath, j.baseName);
+            }
+            out.append(r);
+        }
+        return out;
+    });
+    _track(QFuture<void>(work));
+    watcher->setFuture(work);
+#endif
 }
 
 QString MediaManager::_format_duration(qint64 ms)
@@ -2940,26 +3108,47 @@ QStringList MediaManager::sort_media_files(const QString &sortColumn, bool ascen
 {
     QStringList files = m_currentPlaylist.isEmpty() ? get_media_files(false) : m_currentPlaylist;
 
-    if (sortColumn == QStringLiteral("title")) {
-        std::sort(files.begin(), files.end(), [&](const QString &a, const QString &b) {
-            QString aKey = cleanForSort(QFileInfo(a).completeBaseName());
-            QString bKey = cleanForSort(QFileInfo(b).completeBaseName());
-            return ascending ? aKey < bKey : aKey > bKey;
-        });
-    } else if (sortColumn == QStringLiteral("album")) {
-        std::sort(files.begin(), files.end(), [&](const QString &a, const QString &b) {
-            QString aKey = cleanForSort(get_album(a));
-            QString bKey = cleanForSort(get_album(b));
-            return ascending ? aKey < bKey : aKey > bKey;
-        });
-    } else if (sortColumn == QStringLiteral("artist")) {
-        std::sort(files.begin(), files.end(), [&](const QString &a, const QString &b) {
-            QString aKey = cleanForSort(get_band(a));
-            QString bKey = cleanForSort(get_band(b));
-            return ascending ? aKey < bKey : aKey > bKey;
-        });
+    const bool byTitle = sortColumn == QStringLiteral("title");
+    const bool byAlbum = sortColumn == QStringLiteral("album");
+    const bool byArtist = sortColumn == QStringLiteral("artist");
+    if (!byTitle && !byAlbum && !byArtist)
+        return files;
+
+    if (!byTitle) {
+#ifdef OCTAVE_TAGLIB
+        // Sort by what is known: no file is opened here. Tags still on
+        // their way (a playlist just selected) count as "Unknown ..." for
+        // now, and the statistics signals that end the background pass are
+        // when a view sorts again (MediaPlayer.qml does).
+        _calculate_all_stats();
+#else
+        for (const QString &f : std::as_const(files))
+            _cache_metadata(f);
+#endif
     }
 
+    // One key per file, made once: the comparator used to build two for
+    // every comparison, through a cache lookup that could read the file
+    QList<QPair<QString, QString>> keyed;
+    keyed.reserve(files.size());
+    for (const QString &f : std::as_const(files)) {
+        QString key;
+        if (byTitle) {
+            key = QFileInfo(f).completeBaseName();
+        } else {
+            const auto it = m_metadataCache.constFind(f);
+            if (it != m_metadataCache.constEnd())
+                key = byAlbum ? it->album : it->artist;
+            else
+                key = byAlbum ? QStringLiteral("Unknown Album") : QStringLiteral("Unknown Artist");
+        }
+        keyed.append({cleanForSort(key), f});
+    }
+    std::stable_sort(keyed.begin(), keyed.end(), [ascending](const auto &a, const auto &b) {
+        return ascending ? a.first < b.first : a.first > b.first;
+    });
+    for (int i = 0; i < keyed.size(); ++i)
+        files[i] = keyed.at(i).second;
     return files;
 }
 
@@ -3144,8 +3333,6 @@ void MediaManager::_precache_neighbors_start()
         for (int i = 0; i < results.size(); ++i) {
             const QString &f = results[i].first;
             if (!m_metadataCache.contains(f)) {
-                if (m_metadataCache.size() >= m_metadataCacheMax)
-                    m_metadataCache.erase(m_metadataCache.begin());
                 m_metadataCache.insert(f, results[i].second);
                 _meta_to_store(f, tagJobs[i].filePath, results[i].second);
             }
@@ -3181,12 +3368,14 @@ void MediaManager::_precache_neighbors_start()
                 }
             }
         });
-        artWatcher->setFuture(QtConcurrent::run([this, artJobs]() {
+        const QFuture<QList<QPair<QString, QString>>> artWork = QtConcurrent::run([this, artJobs]() {
             QList<QPair<QString, QString>> out;
             for (const ArtJob &j : artJobs)
                 out.append({j.albumId, _extract_art_for(j.filePath, j.albumId)});
             return out;
-        }));
+        });
+        _track(QFuture<void>(artWork));   // uses this: the destructor waits
+        artWatcher->setFuture(artWork);
     });
     tagWatcher->setFuture(QtConcurrent::run([tagJobs]() {
         QList<QPair<QString, MediaMetadata>> out;
@@ -3215,7 +3404,7 @@ void MediaManager::update_media_directory(const QString &directory)
         return;
 
     m_mediaDir = directory;
-    m_metadataCache.clear();
+    _clear_metadata_cache();
     m_albumArtCache.clear();
     m_accessCount.clear();
     invalidate_stats_cache();

@@ -747,8 +747,6 @@ private:
     bool m_obdParamsDirty = false;
 
     // Pending theme art download result
-    QString m_pendingThemeArtName;
-    QString m_pendingThemeArtUrl;
 
     // --- Setting member variables ---
     QString m_deviceName;
