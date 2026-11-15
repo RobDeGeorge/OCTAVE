@@ -28,6 +28,8 @@ Not done: nothing was tried on a real touchscreen for this review. The app was n
 
 ## 2. What is wrong, by severity
 
+> **Historical (note added 2026-11-15).** These findings describe the editor as it was on 2026-10-30. The rewrite that followed fixed many of them (undo / redo, the floating toolbar, grid density, the settings sheet), and the `file:line` references below no longer match the code. Check the current editor before acting on any item.
+
 ### Critical — makes the editor unusable or untrustworthy on touch
 
 1. **Targets are far below any touch minimum.** New dashboards are 12×6 with 16 dp gutters and every free cell is its own `+` button (`EditorCanvas.qml:115`).

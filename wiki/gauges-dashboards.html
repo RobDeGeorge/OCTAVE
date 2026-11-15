@@ -194,34 +194,30 @@ berryIMU (8 signals) ─────────┴─> paramStore (C++, 33 ms f
 
         <h2 id="binding-api">Shared Binding API</h2>
         <p>
-          Every PID-bound primitive pastes the same ~15-line preamble: a <code>paramId</code> string, a
-          <code>_pInfo</code> lookup that scans <code>allParameters</code>, and properties defaulted from it. The self-binding
-          widgets (<a href="#self-binding">below</a>) skip <code>paramId</code> and read their ids directly.
+          The seven value gauges (Circular, Arc, Bar, Segmented, Linear, DigitalReadout, Sparkline) are each a
+          <span class="file-path">frontend/gauges/ValueGaugeBase.qml</span> that only draws: the base holds the
+          <code>paramId</code> string, the <code>_pInfo</code> row (one map lookup,
+          <code>App.OBDParameterModel.displayInfo(paramId)</code>, not a scan), the properties defaulted from it, the
+          reading and the alert rule below. <code>WarningLight</code> binds the same way without the alert properties. The
+          self-binding widgets (<a href="#self-binding">below</a>) skip <code>paramId</code> and read their ids directly.
         </p>
-        <pre><code><span class="kw">property</span> <span class="kw">string</span> paramId: <span class="str">""</span>
-<span class="kw">readonly property var</span> _pInfo: {
-    <span class="kw">if</span> (!paramId) <span class="kw">return</span> <span class="kw">null</span>
-    <span class="kw">var</span> all = App.OBDParameterModel.allParameters
-    <span class="kw">for</span> (<span class="kw">var</span> i = <span class="num">0</span>; i &lt; all.length; i++)
-        <span class="kw">if</span> (all[i].id === paramId) <span class="kw">return</span> all[i]
-    <span class="kw">return</span> <span class="kw">null</span>
-}
-<span class="kw">property</span> <span class="kw">string</span> title: _pInfo ? _pInfo.title : <span class="str">""</span>
-<span class="kw">property</span> <span class="kw">string</span> unit:  _pInfo ? _pInfo.unit  : <span class="str">""</span>
-<span class="kw">property</span> <span class="kw">real</span>   min:   _pInfo ? _pInfo.min   : <span class="num">0</span>
-<span class="kw">property</span> <span class="kw">real</span>   max:   _pInfo ? _pInfo.max   : <span class="num">100</span>
-<span class="kw">property</span> <span class="kw">real</span>   value: paramId ? (App.OBDParameterModel.liveValue(paramId) || <span class="num">0</span>) : <span class="num">0</span></code></pre>
+        <pre><code>ValueGaugeBase {
+    id: root
+    <span class="cmt">// from the base, all overridable per widget:</span>
+    <span class="cmt">//   paramId, title, unit, min, max, value (NaN = no reading), hasValue, decimals,</span>
+    <span class="cmt">//   warnAbove / warnBelow / critAbove / critBelow, alertFlash, alertHysteresis,</span>
+    <span class="cmt">//   warnColor, critColor, alertLevel (read-only)</span>
+}</code></pre>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Default</th><th>Notes</th></tr></thead>
           <tbody>
             <tr><td><code>paramId</code></td><td>string</td><td><code>""</code></td><td>Any id from <code>allParameters</code>. Drives title/unit/min/max/value.</td></tr>
             <tr><td><code>title</code>, <code>unit</code></td><td>string</td><td>from paramId</td><td>Override the label / suffix (a preset can set <code>"title"</code> in <code>props</code>).</td></tr>
-            <tr><td><code>min</code>, <code>max</code></td><td>real</td><td>from paramId (0 / 100 when unbound)</td><td>Range used for normalisation. Presets override them freely (the TJ preset rescales RPM to 0-6000, coolant to 60-115). <code>DigitalReadout</code> has no min/max.</td></tr>
+            <tr><td><code>min</code>, <code>max</code></td><td>real</td><td>from paramId (0 / 100 when unbound)</td><td>Range used for normalisation. Presets override them freely (the TJ preset rescales RPM to 0-6000, coolant to 60-115). <code>DigitalReadout</code> draws no scale and uses them only for the alert hold.</td></tr>
             <tr><td><code>value</code></td><td>real</td><td>live</td><td>Override for previews and demos.</td></tr>
             <tr><td><code>decimals</code></td><td>int</td><td>0</td><td>Digits after the point in numeric readouts; WarningLight has no decimals property.</td></tr>
             <tr><td><code>labelColor</code>, <code>valueColor</code></td><td>color</td><td><code>App.Style.obdLabelColor</code>, <code>App.Style.obdValueColor</code></td><td>Numeric readout colors; WarningLight has its own label colors. Other default colors come from <code>App.Style</code> (<code>obdBarColor</code>, <code>obdBoxBackground</code>, <code>statusDanger</code>, <code>accent</code>).</td></tr>
             <tr><td><code>octaveSupportedKinds</code></td><td>var (readonly)</td><td>per widget</td><td>Kinds the widget accepts, <code>["*"]</code> = any, <code>[]</code> = self-binding. Must mirror <code>WidgetCatalog.supportedKinds</code>.</td></tr>
-            <tr><td><code>octaveEditableProps</code></td><td>var (readonly)</td><td>per widget</td><td>Manifest of editable props declared in the gauge itself. <strong>Not read by the current editor</strong> -- the properties panel uses the curated <code>editableProps</code> list in <code>WidgetCatalog</code> instead (see <a href="#widget-catalog">WidgetCatalog</a>).</td></tr>
           </tbody>
         </table>
         <p>
@@ -245,7 +241,11 @@ berryIMU (8 signals) ─────────┴─> paramStore (C++, 33 ms f
           <code>warnBelow</code> (level 1, <code>warnColor</code> = the theme's <code>statusWarning</code>, amber) and
           <code>critAbove</code> / <code>critBelow</code> (level 2, <code>critColor</code> = <code>statusDanger</code>,
           red), inclusive, critical winning; <code>alertLevel</code> is 0 without a reading. At a level the value text and
-          the fill take its colour, and <code>alertFlash</code> blinks the value while critical. Circular and Arc draw each
+          the fill take its colour, and <code>alertFlash</code> blinks the value while critical. A level is entered at its
+          limit and left only once the value is back inside it by a hold (<code>alertHysteresis</code>, display unit;
+          default 1&nbsp;% of the range and at least one step of the readout; <code>Alerts.levelHeld()</code>), so a
+          reading sitting on a limit does not flicker the colour, restart the flash or pop the dashboard's alert banner in
+          and out. <code>WarningLight</code> holds its lamp the same way. Circular and Arc draw each
           band as a thin arc on the inner edge of the scale (<code>Alerts.bands()</code>; a warning band stops where a
           critical one starts); <code>redlineStart</code> stays a separate red zone. All four limits are stored in the
           PID's own unit (<code>paramUnit</code>). Until 2026-10-30 Bar and Segmented had only <code>warnAbove</code>,
@@ -279,7 +279,7 @@ berryIMU (8 signals) ─────────┴─> paramStore (C++, 33 ms f
             <tr><td><code>sweepAngle</code></td><td>real</td><td>270</td><td>Three-quarter dial; 180 gives a half-dial.</td></tr>
             <tr><td><code>showNeedle</code></td><td>bool</td><td>false</td><td>Needle (3 dp wide, 92 % of radius, <code>transformOrigin: Item.Bottom</code>) + hub; the readout shifts up by 45 % of the radius to clear it.</td></tr>
             <tr><td><code>showTicks</code></td><td>bool</td><td>true</td><td></td></tr>
-            <tr><td><code>majorTickCount</code></td><td>int</td><td>9</td><td>Inclusive of both endpoints. Total ticks = <code>(major - 1) * minorPerMajor + 1</code>.</td></tr>
+            <tr><td><code>majorTickCount</code></td><td>int</td><td>9</td><td>Inclusive of both endpoints. Total ticks = <code>(major - 1) * minorTicksPerMajor + 1</code>.</td></tr>
             <tr><td><code>minorTicksPerMajor</code></td><td>int</td><td>5</td><td></td></tr>
             <tr><td><code>redlineStart</code></td><td>real</td><td>NaN</td><td>When set and strictly inside (min, max): a red arc from that value to max, and the fill turns red once <code>value &gt;= redlineStart</code>.</td></tr>
             <tr><td><code>showCenterReadout</code></td><td>bool</td><td>true</td><td>Title, value, unit stacked; font sizes capped at 22 % / 30-42 % / 18 % of the arc radius.</td></tr>
@@ -686,8 +686,14 @@ cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
         </table>
         <p>
           The catalog is what the panel reads, so the gauge never has to be instantiated to build the inspector.
-          Older gauges also carry legacy <code>octaveEditableProps</code> manifests; new widgets only need the catalog
-          entry and URL mapping. Anything not listed is still settable in the JSON by hand.
+          New widgets only need the catalog entry and URL mapping. A cell's <code>props</code> reach the widget through
+          <span class="file-path">frontend/dashboards/CellProps.js</span> (renderer and editor canvas alike), and only
+          the keys the catalog names for its type: <code>editableProps</code>, <code>colorProps</code>,
+          <code>specProps</code> (the other documented props, set in the JSON by hand: <code>trackColor</code>,
+          <code>labelColor</code>, <code>warnColor</code> ...), <code>title</code> / <code>unit</code> with
+          <code>labelProps</code> and <code>min</code> / <code>max</code> with <code>rangeProps</code>. Any other key is
+          ignored, so a dashboard file cannot set <code>visible</code>, <code>width</code> or <code>value</code> on a
+          widget; a value of the wrong type is logged and that option keeps its default.
         </p>
 
         <h2 id="obdmenu">OBDMenu Integration: Active Dashboard and Chooser</h2>

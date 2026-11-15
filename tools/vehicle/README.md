@@ -93,7 +93,7 @@ the app's GLB set and `Rig.js`/`rig.json` through `rig_export.py`. There is no
 blender -b --python-exit-code 1 --python tools/vehicle/export_jeep_twin.py -- \
   --blend dev/jeep-twin/<candidate>/jeep-twin.blend --output /new/dir/jeep_tj_2003.glb
 venv/bin/python tools/vehicle/check_jeep_asset.py /new/dir
-cp /new/dir/jeep_tj_2003.glb frontend/assets/ && cp /new/dir/jeep_tj/* frontend/assets/jeep_tj/
+cp /new/dir/jeep_tj_2003.glb tools/vehicle/reference/ && cp /new/dir/jeep_tj/* frontend/assets/jeep_tj/
 ```
 
 In the app the suspension, soft top and cabin are static body geometry; only the
@@ -160,7 +160,7 @@ Soft-top component layout is informed by the
 This establishes hardware relationships, not the owner's exact top model or
 measured surface dimensions. Geometry and fabric shading are generated locally.
 
-`frontend/assets/jeep_tj_2003.glb` is an original model reconstructed manually
+`tools/vehicle/reference/jeep_tj_2003.glb` (the full model the parts are checked against; the app loads only the parts in `frontend/assets/jeep_tj/`) is an original model reconstructed manually
 from photographs of one 2003 TJ Sahara: Shale Green paint, Dark Khaki hardtop,
 full doors with lowered windows, Canyon wheels, 31-inch tires, and Khaki cabin.
 The app model uses silver metallic paint, a black hardtop, black upholstery,

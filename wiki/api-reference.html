@@ -28,13 +28,15 @@
 
         <h2 id="overview">Overview</h2>
         <p>This page is generated from <span class="file-path">docs/api/</span> (<code>./build/octave --dump-api docs/api</code>, then <code>python wiki/build_api_reference.py</code>); <code>tst_apidocs</code> fails when that copy is out of date. The protocol itself (<code>hello</code>, <code>describe</code>, <code>get</code>, <code>set</code>, <code>call</code>, <code>subscribe</code>, <code>rows</code>, <code>stream</code>, <code>pair</code>) is specified in <span class="file-path">docs/api/protocol.json</span> (JSON Schema, checked against the server) and described in <a href="utilities.html#service-protocol">Utilities: Service protocol</a>; versioning and the dashboard file schema in <span class="file-path">docs/api/README.md</span> and <span class="file-path">docs/api/dashboard-spec.schema.json</span>. What each member means is in the hand-written <a href="signals-slots-reference.html">Signals &amp; Slots API</a>.</p>
-        <p>The same objects are QML context properties under the same names. Types are Qt's names (<code>QString</code>, <code>QVariantMap</code>, ...); on the wire they are JSON. 27 objects:</p>
+        <p>The same objects are QML context properties under the same names. Types are Qt's names (<code>QString</code>, <code>QVariantMap</code>, ...); on the wire they are JSON. 29 objects:</p>
         <ul>
             <li><a href="#airPlayManager">airPlayManager</a></li>
             <li><a href="#androidAutoManager">androidAutoManager</a></li>
             <li><a href="#audioAnalyzer">audioAnalyzer</a></li>
             <li><a href="#berryIMU">berryIMU</a></li>
+            <li><a href="#busMonitor">busMonitor</a></li>
             <li><a href="#clock">clock</a></li>
+            <li><a href="#customPids">customPids</a></li>
             <li><a href="#dashboardManager">dashboardManager</a></li>
             <li><a href="#diagnosticsManager">diagnosticsManager</a></li>
             <li><a href="#esp32VolumeManager">esp32VolumeManager</a></li>
@@ -200,6 +202,38 @@
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>orientationChanged(float w, float x, float y, float z)</code>, <code>pitchChanged(float pitch)</code>, <code>rollChanged(float roll)</code>, <code>headingChanged(float heading)</code>, <code>altitudeChanged(float altitude)</code>, <code>accelMagnitudeChanged(float mag)</code>, <code>lateralGChanged(float g)</code>, <code>longitudinalGChanged(float g)</code>, <code>baroTempChanged(float temp)</code>, <code>connectionStatusChanged(QString status)</code>, <code>hasTemperatureChanged(bool has)</code>.</p>
 
+        <h3 id="busMonitor"><code>busMonitor</code> <span class="cmt">&mdash; BusMonitor</span></h3>
+        <p><strong>Experimental:</strong> this object may change or go in any release.</p>
+        <p>Hand-written notes: <a href="signals-slots-reference.html#busMonitor">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/busMonitor.json</span>.</p>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
+          <tbody>
+            <tr><td><code>available</code></td><td>bool</td><td>read</td><td><code>availableChanged</code></td></tr>
+            <tr><td><code>active</code></td><td>bool</td><td>read</td><td><code>activeChanged</code></td></tr>
+            <tr><td><code>filter</code></td><td>QString</td><td>read</td><td><code>activeChanged</code></td></tr>
+            <tr><td><code>note</code></td><td>QString</td><td>read</td><td><code>noteChanged</code></td></tr>
+            <tr><td><code>ids</code></td><td>QVariantList</td><td>read</td><td><code>idsChanged</code></td></tr>
+            <tr><td><code>frameCount</code></td><td>int</td><td>read</td><td><code>idsChanged</code></td></tr>
+            <tr><td><code>framesPerSecond</code></td><td>int</td><td>read</td><td><code>idsChanged</code></td></tr>
+            <tr><td><code>overruns</code></td><td>int</td><td>read</td><td><code>idsChanged</code></td></tr>
+            <tr><td><code>canRecord</code></td><td>bool</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>recording</code></td><td>bool</td><td>read</td><td><code>recordingChanged</code></td></tr>
+            <tr><td><code>logFile</code></td><td>QString</td><td>read</td><td><code>recordingChanged</code></td></tr>
+          </tbody>
+        </table>
+        <table>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
+          <tbody>
+            <tr><td><code>start(QString filter)</code></td><td><code>bool</code></td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>start()</code></td><td><code>bool</code></td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>stop()</code></td><td>&ndash;</td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>clear()</code></td><td>&ndash;</td><td>invokable</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>startRecording()</code></td><td><code>bool</code></td><td>invokable</td><td><code>files</code></td></tr>
+            <tr><td><code>stopRecording()</code></td><td>&ndash;</td><td>invokable</td><td><code>files</code></td></tr>
+          </tbody>
+        </table>
+        <p><strong>Signals</strong> (<code>subscribe</code>): <code>availableChanged()</code>, <code>activeChanged()</code>, <code>noteChanged()</code>, <code>idsChanged()</code>, <code>recordingChanged()</code>.</p>
+
         <h3 id="clock"><code>clock</code> <span class="cmt">&mdash; Clock</span></h3>
         <p>Hand-written notes: <a href="signals-slots-reference.html#clock">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/clock.json</span>.</p>
         <table>
@@ -215,6 +249,26 @@
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>timeChanged(QString timeStr)</code>.</p>
+
+        <h3 id="customPids"><code>customPids</code> <span class="cmt">&mdash; CustomPids</span></h3>
+        <p><strong>Experimental:</strong> this object may change or go in any release.</p>
+        <p>Hand-written notes: <a href="signals-slots-reference.html#customPids">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/customPids.json</span>.</p>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
+          <tbody>
+            <tr><td><code>file</code></td><td>QString</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>fileExists</code></td><td>bool</td><td>read</td><td><code>fileExistsChanged</code></td></tr>
+            <tr><td><code>pids</code></td><td>QVariantList</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>errors</code></td><td>QStringList</td><td>constant</td><td>&ndash;</td></tr>
+          </tbody>
+        </table>
+        <table>
+          <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
+          <tbody>
+            <tr><td><code>createExample()</code></td><td><code>bool</code></td><td>invokable</td><td><code>vehicle</code></td></tr>
+          </tbody>
+        </table>
+        <p><strong>Signals</strong> (<code>subscribe</code>): <code>fileExistsChanged()</code>.</p>
 
         <h3 id="dashboardManager"><code>dashboardManager</code> <span class="cmt">&mdash; DashboardManager</span></h3>
         <p>Hand-written notes: <a href="signals-slots-reference.html#dashboardManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/dashboardManager.json</span>.</p>
@@ -546,6 +600,7 @@
           <tbody>
             <tr><td><code>supported</code></td><td>bool</td><td>constant</td><td>&ndash;</td></tr>
             <tr><td><code>canScan</code></td><td>bool</td><td>constant</td><td>&ndash;</td></tr>
+            <tr><td><code>canPickSerial</code> <span class="cmt">(experimental)</span></td><td>bool</td><td>constant</td><td>&ndash;</td></tr>
             <tr><td><code>bluetoothOn</code></td><td>bool</td><td>read</td><td><code>bluetoothOnChanged</code></td></tr>
             <tr><td><code>scanning</code></td><td>bool</td><td>read</td><td><code>scanningChanged</code></td></tr>
             <tr><td><code>devices</code></td><td>QVariantList</td><td>read</td><td><code>devicesChanged</code></td></tr>
@@ -558,6 +613,7 @@
           <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
             <tr><td><code>startScan()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>pickSerialPort()</code> <span class="cmt">(experimental)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
             <tr><td><code>stopScan()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
             <tr><td><code>connectAdapter(QString address)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
             <tr><td><code>cancel()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>

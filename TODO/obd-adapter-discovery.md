@@ -1,8 +1,8 @@
 # OBD adapter discovery: scan, pair, trust, connect on every platform
 
 **Goal:** anyone can plug in a Bluetooth OBD-II dongle, tap "Connect Bluetooth OBD2", pick it from a list and have OCTAVE pair and connect, on every platform, without touching OS Bluetooth settings or typing a MAC.
-**Status:** active. Desktop Linux / Pi code is done but not yet proven in the car; the browser demo (Web Bluetooth, BLE) is done in code but untested on a real dongle; Android, Windows/macOS and BLE-on-desktop are not started.
-**Last updated:** 2026-10-26
+**Status:** active. Desktop Linux / Pi code is done but not yet proven in the car; the browser demo (Web Bluetooth for BLE, Web Serial for USB cables) is done in code but untested on a real dongle; Android, Windows/macOS and BLE-on-desktop are not started.
+**Last updated:** 2026-11-14
 
 Done (desktop Linux, `78558d9`, `da94533`): `OBDAdapterFinder` (`src/managers/obdadapterfinder.{h,cpp}`, QML `obdAdapterFinder`), `BluezPairer` / PIN agent (`src/platform/bluezpairer.{h,cpp}`, `OCTAVE_BLUEZ` only), `frontend/OBDAdapterSheet.qml`, `tests/cpp/tst_obdadapterfinder.cpp`. On success it saves an `rfcomm://MAC/channel` adapter (`RfcommSocket`). The sheet is platform-agnostic; on unsupported platforms it lists `obdManager.availableAdapters`.
 
@@ -52,7 +52,7 @@ Done in code: `src/platform/wasm/webbluetooth.{h,cpp}` + `obdadapterfinder_wasm.
 1. Desktop Chrome (Windows or macOS; on Linux Web Bluetooth may need enabling in chrome://flags) and Android Chrome with a BLE dongle in the car: OBD Home > Connect Bluetooth OBD2 > Pick Bluetooth Adapter, pick, connect. Check the chooser opens from the tap (user activation) and live PIDs flow.
 2. The NEXAS over its LE side (ISSC service): does it serve ELM327 there or only on Classic?
 3. Throughput: BLE adds latency per command; compare PIDs/s to the Pi. Ignition cycle: does the automatic GATT reconnect come back?
-4. Later, if wanted: Web Serial for USB cables and paired Classic dongles on desktop Chrome, as a second `webserial://` transport beside it.
+4. Web Serial (`src/platform/wasm/webserial.{h,cpp}`, done in code 2026-11-14; `packaging/wasm/check_webserial.mjs` passes against a fake ELM327 in headless Chromium, never run against a real adapter): desktop Chrome or Edge with an ELM327 on a USB cable: Pick USB Adapter, pick the port, check live PIDs flow at 38400 baud; pull the cable and plug it back in (the retry should reopen it with no new pick); connect a Bluetooth LE adapter afterwards and check the port closes. Also try a Bluetooth Classic dongle paired in the system's settings: does it appear in the port list and connect? An adapter that ships at another rate (115200) would need a rate probe.
 
 **Effort:** S (M if a dongle's GATT layout differs). **Needs:** a BLE OBD dongle, a laptop or Android phone with Chrome, the Jeep.
 

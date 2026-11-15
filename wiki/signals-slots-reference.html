@@ -32,6 +32,8 @@
             <li><a href="#obdManager">OBDManager</a></li>
             <li><a href="#obdAdapterFinder">OBDAdapterFinder</a></li>
             <li><a href="#parameterCatalog">ParameterCatalog</a></li>
+            <li><a href="#customPids">CustomPids</a></li>
+            <li><a href="#busMonitor">BusMonitor</a></li>
             <li><a href="#paramStore">ParameterStore</a></li>
             <li><a href="#nowPlaying">NowPlaying</a></li>
             <li><a href="#spotifyManager">SpotifyManager</a></li>
@@ -46,6 +48,10 @@
             <li><a href="#phoneMirrorManager">PhoneMirrorManager</a></li>
             <li><a href="#dashboardManager">DashboardManager</a></li>
             <li><a href="#frontendManager">FrontendManager</a></li>
+            <li><a href="#themeCatalog">ThemeCatalog</a></li>
+            <li><a href="#fontCatalog">FontCatalog</a></li>
+            <li><a href="#units">Units</a></li>
+            <li><a href="#sim">Simulator</a></li>
             <li><a href="#perfMonitor">PerfMonitor</a> <span class="platform-badge desktop">developer only</span></li>
           </ul>
         </nav>
@@ -61,7 +67,7 @@
         </div>
 
         <h2 id="registry">Context property registry</h2>
-        <p>17 QObject context properties, plus the <code>dhuCapture</code> sub-object and the developer-only <code>perfMonitor</code>. The scalar context values are described above.</p>
+        <p>The QObject context properties, plus the <code>dhuCapture</code> sub-object and the developer-only <code>perfMonitor</code>. The scalar context values are described above.</p>
         <table>
           <thead><tr><th>QML name</th><th>Class &amp; file</th><th>Notes</th></tr></thead>
           <tbody>
@@ -76,6 +82,8 @@
             <tr><td><a href="#obdManager"><code>obdManager</code></a></td><td><code>OBDManager</code> &mdash; <span class="file-path">src/managers/obdmanager.h</span></td><td></td></tr>
             <tr><td><a href="#obdAdapterFinder"><code>obdAdapterFinder</code></a></td><td><code>OBDAdapterFinder</code> &mdash; <span class="file-path">src/managers/obdadapterfinder.h</span></td><td><code>supported</code> is true on desktop Linux only (phase 1)</td></tr>
             <tr><td><a href="#parameterCatalog"><code>parameterCatalog</code></a></td><td><code>ParameterCatalog</code> &mdash; <span class="file-path">src/managers/parametercatalog.h</span></td><td>Title / unit / range / kind of every OBD PID and IMU reading</td></tr>
+            <tr><td><a href="#customPids"><code>customPids</code></a></td><td><code>CustomPids</code> &mdash; <span class="file-path">src/managers/custompids.h</span></td><td>The manufacturer-specific readings of the user's <code>custom-pids.json</code> (experimental)</td></tr>
+            <tr><td><a href="#busMonitor"><code>busMonitor</code></a></td><td><code>BusMonitor</code> &mdash; <span class="file-path">src/managers/busmonitor.h</span></td><td>The raw messages on the vehicle bus while the adapter only listens (experimental)</td></tr>
             <tr><td><a href="#nowPlaying"><code>nowPlaying</code></a></td><td><code>NowPlaying</code> &mdash; <span class="file-path">src/managers/nowplaying.h</span></td><td>What is playing and its controls, phone, Android Auto, Spotify or local</td></tr>
             <tr><td><a href="#spotifyManager"><code>spotifyManager</code></a></td><td><code>SpotifyManager</code> &mdash; <span class="file-path">src/managers/spotifymanager.h</span></td><td>Spotify Web API: sign-in, library, remote control of the Spotify app (experimental)</td></tr>
             <tr><td><a href="#paramStore"><code>paramStore</code></a></td><td><code>ParameterStore</code> &mdash; <span class="file-path">src/managers/parameterstore.h</span></td><td>Latest value of every OBD PID and IMU reading, one notifying key per id</td></tr>
@@ -90,6 +98,10 @@
             <tr><td><a href="#phoneMirrorManager"><code>phoneMirrorManager</code></a></td><td><code>PhoneMirrorManager</code> &mdash; <span class="file-path">src/managers/phonemirrormanager.h</span></td><td>Mobile builds register a stub (see the section)</td></tr>
             <tr><td><a href="#dashboardManager"><code>dashboardManager</code></a></td><td><code>DashboardManager</code> &mdash; <span class="file-path">src/managers/dashboardmanager.h</span></td><td></td></tr>
             <tr><td><a href="#frontendManager"><code>frontendManager</code></a></td><td><code>FrontendManager</code> &mdash; <span class="file-path">src/managers/frontendmanager.h</span></td><td></td></tr>
+            <tr><td><a href="#themeCatalog"><code>themeCatalog</code></a></td><td><code>ThemeCatalog</code> &mdash; <span class="file-path">src/managers/themecatalog.h</span></td><td>The colour themes as data and the palette in force</td></tr>
+            <tr><td><a href="#fontCatalog"><code>fontCatalog</code></a></td><td><code>FontCatalog</code> &mdash; <span class="file-path">src/util/fontcatalog.h</span></td><td>The bundled fonts</td></tr>
+            <tr><td><a href="#units"><code>units</code></a></td><td><code>Units</code> &mdash; <span class="file-path">src/util/units.h</span></td><td>Formatting and unit conversion</td></tr>
+            <tr><td><a href="#sim"><code>sim</code></a></td><td><code>Simulator</code> &mdash; <span class="file-path">src/sim/simulator.h</span></td><td>Experimental; inert unless the run is simulated</td></tr>
             <tr><td><a href="#perfMonitor"><code>perfMonitor</code></a></td><td><code>PerfMonitor</code> &mdash; <span class="file-path">src/dev/perfmonitor.h</span></td><td>Only with <code>--profile</code>, in <code>OCTAVE_DEV_TOOLS</code> builds; registered by <code>OctaveDev::Runtime</code></td></tr>
           </tbody>
         </table>
@@ -163,10 +175,14 @@
             <tr><td><code>gaugeTempUnit</code>, <code>gaugeSpeedUnit</code></td><td><code>QString</code></td><td>read-only</td><td><code>gaugeTempUnitChanged</code>, <code>gaugeSpeedUnitChanged</code></td><td>Units the gauges and dashboards show: <code>"C"</code> | <code>"F"</code> (default C), <code>"mph"</code> | <code>"km/h"</code> (default mph); <code>ParameterCatalog</code> converts</td></tr>
             <tr><td><code>obdAutoReconnectAttempts</code></td><td><code>int</code></td><td>read-only</td><td><code>obdAutoReconnectAttemptsChanged</code></td><td>Max automatic reconnect attempts before giving up &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>fuelTankCapacity</code></td><td><code>float</code></td><td>read-only</td><td><code>fuelTankCapacityChanged</code></td><td>Legacy tank-capacity setting in gallons; no current consumer uses it &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
+            <tr><td><code>blackBoxEnabled</code></td><td><code>bool</code></td><td>read-only</td><td><code>blackBoxEnabledChanged</code></td><td>Record every drive into the black box (<a href="#tripRecorder">TripRecorder</a>). Default true</td></tr>
+            <tr><td><code>blackBoxSweepAll</code></td><td><code>bool</code></td><td>read-only</td><td><code>blackBoxSweepAllChanged</code></td><td>Also sweep the PIDs that are not on screen, so the record covers everything the vehicle supports. Default true</td></tr>
+            <tr><td><code>blackBoxMaxMB</code></td><td><code>int</code></td><td>read-only</td><td><code>blackBoxMaxMBChanged</code></td><td>On-disk cap for the history (database plus trip files), in MB. Default 500</td></tr>
             <tr><td><code>homeOBDParameters</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>homeOBDParametersChanged</code></td><td>Ordered list of PID ids shown on the home screen &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>maxHomeObdParameters</code></td><td><code>int</code></td><td>constant</td><td>&mdash;</td><td>Most home-screen OBD cards (8)</td></tr>
             <tr><td><code>customThemes</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>customThemesChanged</code></td><td>Names of user-saved themes &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>customThemeData</code></td><td><code>QVariantMap</code></td><td>read-only</td><td><code>customThemesChanged</code></td><td>Every saved custom theme, name &rarr; theme object, as on disk; Main.qml assigns it to <code>Style.customThemes</code></td></tr>
+            <tr><td><code>nowPlayingPresets</code></td><td><code>QVariantList</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>The Now Playing look presets, <code>[{label, settings: {key: value}}]</code>; apply one with <code>applyNowPlayingPreset(label)</code></td></tr>
             <tr><td><code>directoryHistory</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>directoryHistoryChanged</code></td><td>Recently used media folders (max 10) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>windowState</code></td><td><code>QString</code></td><td>read-only</td><td><code>windowStateChanged</code></td><td><code>"windowed"</code> / <code>"fullscreen"</code> / <code>"maximized"</code> &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
             <tr><td><code>lastSettingsSection</code></td><td><code>QString</code></td><td>read-only</td><td><code>lastSettingsSectionChanged</code></td><td>Settings section to reopen (e.g. <code>"mediaSettings"</code>) &mdash; <a href="settings-reference.html">Settings Reference</a></td></tr>
@@ -260,6 +276,9 @@
             <tr><td><code>save_gauge_temp_unit(QString unit)</code>, <code>save_gauge_speed_unit(QString unit)</code></td><td><code>void</code></td><td>Save a gauge unit (other values ignored), then emit its notify</td></tr>
             <tr><td><code>save_obd_auto_reconnect_attempts(int attempts)</code></td><td><code>void</code></td><td>Save <code>obdAutoReconnectAttempts</code>, then emit <code>obdAutoReconnectAttemptsChanged</code></td></tr>
             <tr><td><code>save_fuel_tank_capacity(float capacity)</code></td><td><code>void</code></td><td>Save <code>fuelTankCapacity</code>, then emit <code>fuelTankCapacityChanged</code></td></tr>
+            <tr><td><code>save_black_box_enabled(bool enabled)</code></td><td><code>void</code></td><td>Save <code>blackBoxEnabled</code>, then emit <code>blackBoxEnabledChanged</code></td></tr>
+            <tr><td><code>save_black_box_sweep_all(bool enabled)</code></td><td><code>void</code></td><td>Save <code>blackBoxSweepAll</code>, then emit <code>blackBoxSweepAllChanged</code></td></tr>
+            <tr><td><code>save_black_box_max_mb(int megabytes)</code></td><td><code>void</code></td><td>Save <code>blackBoxMaxMB</code>, then emit <code>blackBoxMaxMBChanged</code></td></tr>
             <tr><td><code>save_obd_parameter_enabled(QString parameter, bool enabled)</code></td><td><code>void</code></td><td>Legacy per-PID enable flag, kept for settings-file compatibility; writes are debounced (800 ms) then <code>obdParametersChanged</code> fires. No longer drives polling (see <code>obdManager.setParameterDemand</code>)</td></tr>
             <tr><td><code>save_supported_obd_parameters(QVariantList parameters)</code></td><td><code>void</code></td><td>Store the PID list found by the last vehicle scan; emits <code>supportedOBDParametersChanged</code></td></tr>
             <tr><td><code>save_home_obd_parameters(QVariantList parameters)</code></td><td><code>void</code></td><td>Store the ordered home-screen PID list (deduplicated, capped at 8); emits <code>homeOBDParametersChanged</code></td></tr>
@@ -303,6 +322,8 @@
             <tr><td><code>toggle_pin_setting(QString settingId)</code></td><td><code>void</code></td><td>Pin/unpin a registry setting id on the Quick Panel; emits <code>pinnedSettingsChanged</code></td></tr>
             <tr><td><code>reset_to_defaults()</code></td><td><code>void</code></td><td>Write the factory defaults, reload every cached member from them exactly as the constructor does (<code>populateMembers()</code>) and emit every property signal</td></tr>
             <tr><td><code>save_setting(QString key, QVariant value)</code></td><td><code>void</code></td><td>Generic write of any key; emits <code>genericSettingChanged(key)</code> (typed properties are not refreshed)</td></tr>
+            <tr><td><code>apply_settings(QVariantMap values)</code></td><td><code>QVariantMap</code></td><td>Many settings at once, each through its own <code>save_*</code> slot, so every rule and notify signal of a single save applies. A value must already be the slot's type. Keys with no save slot and the file-only keys are refused, never written. Returns <code>{applied: [keys], refused: {key: reason}}</code></td></tr>
+            <tr><td><code>applyNowPlayingPreset(QString label)</code></td><td><code>bool</code></td><td>Apply one of <code>nowPlayingPresets</code> through <code>apply_settings</code>; false for an unknown label</td></tr>
             <tr><td><code>get_setting(QString key)</code></td><td><code>QVariant</code></td><td>Raw value of any key (<code>undefined</code> when missing); use <code>get_setting_with_default()</code> for a fallback</td></tr>
             <tr><td><code>get_setting_with_default(QString key, QVariant defaultValue)</code></td><td><code>QVariant</code></td><td>Raw value of any key, or <code>defaultValue</code> when missing</td></tr>
             <tr><td><code>get_obd_parameter_enabled(QString parameter, bool defaultVal)</code></td><td><code>bool</code></td><td>Legacy per-PID enable flag (default <code>true</code> when never set); no longer drives polling</td></tr>
@@ -405,6 +426,7 @@
             <tr><td><code>obdFastModeChanged(bool value)</code></td><td>Emitted after <code>obdFastMode</code> is saved</td></tr>
             <tr><td><code>obdAutoReconnectAttemptsChanged(int value)</code></td><td>Emitted after <code>obdAutoReconnectAttempts</code> is saved</td></tr>
             <tr><td><code>fuelTankCapacityChanged(float value)</code></td><td>Emitted after <code>fuelTankCapacity</code> is saved</td></tr>
+            <tr><td><code>blackBoxEnabledChanged(bool value)</code>, <code>blackBoxSweepAllChanged(bool value)</code>, <code>blackBoxMaxMBChanged(int value)</code></td><td>Emitted after the matching black box setting is saved</td></tr>
             <tr><td><code>obdParametersChanged()</code></td><td>The per-PID enabled map changed (debounced after <code>save_obd_parameter_enabled</code>)</td></tr>
             <tr><td><code>homeOBDParametersChanged()</code></td><td>Home-screen PID list changed</td></tr>
             <tr><td><code>supportedOBDParametersChanged()</code></td><td>Vehicle-scan PID list changed</td></tr>
@@ -561,7 +583,7 @@
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
           <tbody>
             <tr><td><code>percent</code></td><td><code>int</code></td><td>read-only</td><td><code>percentChanged</code></td><td>The live volume 0&ndash;100 (also <code>settingsManager.currentVolume</code>). Sliders bind to this</td></tr>
-            <tr><td><code>muted</code></td><td><code>bool</code></td><td>read/write</td><td><code>mutedChanged</code></td><td>Mute flag; <code>main.cpp</code> forwards it to <code>mediaManager.setMuted</code>, <code>phoneMirrorManager.setMuted</code> and the ESP32 mute LED</td></tr>
+            <tr><td><code>muted</code></td><td><code>bool</code></td><td>read/write</td><td><code>mutedChanged</code></td><td>Mute flag; <code>appcore.cpp</code> forwards it to <code>mediaManager.setMuted</code>, <code>phoneMirrorManager.setMuted</code> and the ESP32 mute LED</td></tr>
             <tr><td><code>effectivelyMuted</code></td><td><code>bool</code></td><td>read-only</td><td><code>effectivelyMutedChanged</code></td><td><code>muted</code> or <code>percent == 0</code>: what the mute icons show</td></tr>
           </tbody>
         </table>
@@ -582,7 +604,7 @@
           <tbody>
             <tr><td><code>percentChanged(int percent)</code>, <code>mutedChanged(bool muted)</code>, <code>effectivelyMutedChanged()</code></td><td>Property notifies; <code>volumeApplied</code> still fires on every <code>applyVolume()</code> except an echo of <code>percentChanged</code>, <code>percentChanged</code> only on a real change</td></tr>
             <tr><td><code>escapeGesture()</code></td><td>Mute pressed five times within four seconds (every accepted <code>toggleMute()</code> counts, from any input). While an installed program frontend is the screen, OCTAVE answers it by going back to the built-in UI (<a href="writing-a-frontend.html#install">Writing a Frontend</a>) <span class="cmt">(experimental)</span></td></tr>
-            <tr><td><code>volumeApplied(int percent, float linear)</code></td><td>After every <code>applyVolume()</code>: clamped percent and the linear 0&ndash;1 value. <code>main.cpp</code> connects it to <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code> and <code>esp32VolumeManager.send_volume_update(percent)</code></td></tr>
+            <tr><td><code>volumeApplied(int percent, float linear)</code></td><td>After every <code>applyVolume()</code>: clamped percent and the linear 0&ndash;1 value. <code>appcore.cpp</code> connects it to <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code> and <code>esp32VolumeManager.send_volume_update(percent)</code></td></tr>
           </tbody>
         </table>
 
@@ -649,6 +671,7 @@
             <tr><td><code>get_default_media_dir()</code></td><td><code>QString</code></td><td>The default music folder for this OS</td></tr>
             <tr><td><code>get_media_folder_name()</code></td><td><code>QString</code></td><td>Basename of the current media folder</td></tr>
             <tr><td><code>pick_browser_library()</code></td><td><code>bool</code></td><td>Browser demo: opens the browser's folder picker and makes the folder picked the library for the visit (true); elsewhere false, so the caller opens a folder dialog</td></tr>
+            <tr><td><code>browse_music_folders(QString path)</code></td><td><code>QVariantMap</code></td><td>Folder browser for choosing the music folder without a file dialog. <code>""</code> lists the browse roots (<code>{roots: [{name, path}]}</code>); a path inside them returns <code>{path, parent, dirs, audioFiles, truncated}</code>; anything else <code>{error}</code>. Choose one with <code>settingsManager.save_media_folder(path)</code></td></tr>
             <tr><td><code>get_total_duration()</code></td><td><code>QString</code></td><td>Total library duration, formatted</td></tr>
             <tr><td><code>get_album_count()</code></td><td><code>int</code></td><td>Unique album count</td></tr>
             <tr><td><code>get_artist_count()</code></td><td><code>int</code></td><td>Unique artist count</td></tr>
@@ -699,15 +722,15 @@
           <tbody>
             <tr><td><code>setViewActive(bool active)</code></td><td><code>void</code></td><td>A view showing the bars is on screen: the QML UI's consumer, <code>setDemand("view", active)</code>. Nothing runs and no file is decoded while no consumer wants the bars</td></tr>
             <tr><td><code>setDemand(QString consumer, bool wanted)</code></td><td><code>void</code></td><td>A frontend's bars are on screen under its own consumer name; runs while any consumer wants them; released when its service connection closes</td></tr>
-            <tr><td><code>setPlaying(bool)</code>, <code>setLocalFile(QString path)</code>, <code>setPosition(qint64 ms)</code></td><td><code>void</code></td><td>What is playing, fed by <code>main.cpp</code> from <code>nowPlaying.playing</code>, <code>MediaManager::currentMediaChanged</code> and <code>MediaManager::positionChanged</code> (local bars change at that 100 ms rate)</td></tr>
+            <tr><td><code>setPlaying(bool)</code>, <code>setLocalFile(QString path)</code>, <code>setPosition(qint64 ms)</code></td><td><code>void</code></td><td>What is playing, fed by <code>appcore.cpp</code> from <code>nowPlaying.playing</code>, <code>MediaManager::currentMediaChanged</code> and <code>MediaManager::positionChanged</code> (local bars change at that 100 ms rate)</td></tr>
             <tr><td><code>analyze_file(QString filePath)</code></td><td><code>void</code></td><td>Decode a file and pre-compute FFT levels in 100 ms chunks off the GUI thread (QtConcurrent / ThreadPoolExecutor); a file requested mid-analysis is queued</td></tr>
             <tr><td><code>update_position(float positionSeconds)</code></td><td><code>void</code></td><td>Select the chunk for a playback position (seconds) and emit <code>fftDataChanged</code> when active</td></tr>
             <tr><td><code>set_active(bool active)</code></td><td><code>void</code></td><td>Enable/disable emission; disabling emits a row of zeros to clear the visualizer</td></tr>
             <tr><td><code>get_current_levels()</code></td><td><code>QVariantList</code></td><td>Last emitted bar levels</td></tr>
             <tr><td><code>get_num_bars()</code></td><td><code>int</code></td><td>Number of bars (96)</td></tr>
-            <tr><td><code>set_live(bool live)</code></td><td><code>void</code></td><td>Switch between file analysis and live phone PCM (main.cpp, from <code>nowPlaying.source</code>); resets the live buffers on a mode change</td></tr>
+            <tr><td><code>set_live(bool live)</code></td><td><code>void</code></td><td>Switch between file analysis and live phone PCM (appcore.cpp, from <code>nowPlaying.source</code>); resets the live buffers on a mode change</td></tr>
             <tr><td><code>update_live()</code></td><td><code>void</code></td><td>Publish spectrum levels for the phone audio currently being heard; run by the analyzer's own 50 ms timer while live and shown</td></tr>
-            <tr><td><code>feed_live_pcm(QByteArray pcm, int bufferedMs)</code></td><td><code>void</code></td><td>Slot connected in <code>main.cpp</code>. Receives s16le 48 kHz stereo PCM handed to the output sink and its queued delay from <code>PhoneMirrorManager.audioPlayed</code></td></tr>
+            <tr><td><code>feed_live_pcm(QByteArray pcm, int bufferedMs)</code></td><td><code>void</code></td><td>Slot connected in <code>appcore.cpp</code>. Receives s16le 48 kHz stereo PCM handed to the output sink and its queued delay from <code>PhoneMirrorManager.audioPlayed</code></td></tr>
             <tr><td><code>is_analyzed()</code></td><td><code>bool</code></td><td>True when FFT data for the current file is ready</td></tr>
             <tr><td><code>clear()</code></td><td><code>void</code></td><td>Drop the pre-computed data and reset the levels</td></tr>
           </tbody>
@@ -736,7 +759,7 @@
             <tr><td><code>connectionState</code></td><td><code>ConnectionState</code></td><td>read-only</td><td><code>connectionStatusChanged</code></td><td><code>Disconnected</code> / <code>Connecting</code> / <code>Connected</code> / <code>NoVehicle</code> / <code>Failed</code>, classified from <code>connectionStatus</code> (<code>OBDManager::stateFor</code>); QML: <code>import OCTAVE.OBD 1.0</code>, <code>OBDManager.Connecting</code></td></tr>
             <tr><td><code>connectionDetail</code></td><td><code>QString</code></td><td>read-only</td><td><code>connectionStatusDetailChanged</code></td><td>Last <code>connectionStatusDetailChanged</code> message, bound by the Connection card</td></tr>
             <tr><td><code>connectionProgress</code></td><td><code>int</code></td><td>read-only</td><td><code>connectionProgressChanged</code></td><td>Last <code>connectionProgressChanged</code> percent (0&ndash;100)</td></tr>
-            <tr><td><code>connectionLog</code></td><td><code>QStringList</code></td><td>read-only</td><td><code>connectionLogChanged</code></td><td>The last 60 connection log lines, oldest first; OBDHome and the OBD settings page bind it (<code>clearConnectionLog()</code> empties it)</td></tr>
+            <tr><td><code>connectionLog</code></td><td><code>QStringList</code></td><td>read-only</td><td><code>connectionLogChanged</code></td><td>The last 60 connection log lines, oldest first; the OBD settings page binds it (<code>clearConnectionLog()</code> empties it)</td></tr>
             <tr><td><code>availableAdapters</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>availableAdaptersChanged</code></td><td>Rich <code>[{name, identifier, kind}, &hellip;]</code> list bound by the OBD settings page; <code>kind</code> is <code>ble</code>, <code>serial-rfcomm</code>, <code>serial-usb</code>, <code>com</code>, <code>tty</code> or <code>serial</code>. On Android the list is the phone's bonded devices from <code>OctaveOBDBridge.bondedDevices()</code>, named <code>"&lt;name&gt; &middot; &lt;MAC&gt;"</code>; it stays empty until <code>BLUETOOTH_CONNECT</code> is granted, which the bridge requests on the first Connect tap</td></tr>
             <tr><td><code>vin</code></td><td><code>QString</code></td><td>read-only</td><td><code>vinChanged</code></td><td>17-character VIN read at connect (Mode 09 PID 02); <code>""</code> when the vehicle reports none</td></tr>
             <tr><td><code>vehicleMake</code></td><td><code>QString</code></td><td>read-only</td><td><code>vinChanged</code></td><td>Manufacturer decoded from the VIN's WMI; <code>""</code> if unknown</td></tr>
@@ -918,6 +941,8 @@
             <tr><td><code>dtcClearResult(bool success, QString message)</code></td><td>Clear-codes result (success, message)</td></tr>
             <tr><td><code>freezeFrameChanged(QVariantList data)</code></td><td>Freeze frame read: <code>[{code, description, values: {paramId: value}}]</code></td></tr>
             <tr><td><code>obdParameterChanged(QString paramId, float value)</code></td><td>One value from a multi-value PID (0x61 and up: torque, boost, odometer, &hellip;); <code>OBDParameterModel</code> routes it by id</td></tr>
+            <tr><td><code>simulatedChanged()</code></td><td>The <code>simulated</code> property changed: the selected adapter is, or is no longer, the built-in simulated car</td></tr>
+            <tr><td><code>simulatedAdapterRequested()</code></td><td><code>connect_to_adapter("sim://elm327")</code> was called; <code>DemoDrive</code> (<span class="file-path">src/sim/demodrive</span>) starts the simulated car on it</td></tr>
             <tr><td><code>parameterSampled(QString paramId, float value)</code></td><td>Every decoded reading, base or multi-value, by parameter id, on desktop and Android; the <a href="#tripRecorder">black box</a> and the value store (<a href="#paramStore"><code>paramStore</code></a>) tap this</td></tr>
             <tr><td><code>vinChanged(QString vin)</code></td><td>VIN read at connect or by <code>read_vin()</code></td></tr>
             <tr><td><code>connectionLogLineAppended(QString line)</code></td><td>One connection log line (kept in <code>connectionLog</code>)</td></tr>
@@ -933,7 +958,7 @@
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>parameters</code></td><td><code>QVariantList</code></td><td>constant</td><td>&mdash;</td><td>Every parameter, in display order, as <code>{id, title, shortTitle, unit, min, max, kind, decimals, source, aliasOf, group}</code>; <code>group</code> is the system it belongs to (one of <code>groups</code>). <code>kind</code> is <code>percentage</code> | <code>temperature</code> | <code>voltage</code> | <code>pressure</code> | <code>bidirectional</code> | <code>numeric</code> (what <code>WidgetCatalog</code> matches widgets on); <code>decimals</code> is 0 or 1 for text readouts; <code>source</code> is <code>"obd"</code> or <code>"imu"</code>; <code>shortTitle</code> may be empty</td></tr>
+            <tr><td><code>parameters</code></td><td><code>QVariantList</code></td><td>constant</td><td>&mdash;</td><td>Every parameter, in display order, as <code>{id, title, shortTitle, unit, min, max, kind, decimals, source, aliasOf, group, custom}</code> (<code>custom</code>: from the user's <a href="#customPids">custom PID file</a>, appended after the built-in rows in group Custom); <code>group</code> is the system it belongs to (one of <code>groups</code>). <code>kind</code> is <code>percentage</code> | <code>temperature</code> | <code>voltage</code> | <code>pressure</code> | <code>bidirectional</code> | <code>numeric</code> (what <code>WidgetCatalog</code> matches widgets on); <code>decimals</code> is 0 or 1 for text readouts; <code>source</code> is <code>"obd"</code> or <code>"imu"</code>; <code>shortTitle</code> may be empty</td></tr>
             <tr><td><code>displayParameters</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>displayParametersChanged</code></td><td>The same rows in the gauges' units (<code>setDisplayUnits</code>): unit, min and max converted, plus <code>displayScale</code> / <code>displayOffset</code> (value = raw &times; scale + offset; 1 / 0 when unchanged). Temperatures (every kind <code>temperature</code> row) by <code>gaugeTempUnit</code>, SPEED by <code>gaugeSpeedUnit</code>, ALTITUDE by <code>sensorAltitudeUnit</code>; OBDParameterModel serves gauges from it. <code>parameters</code> stays in each parameter's own unit</td></tr>
             <tr><td><code>groups</code></td><td><code>QStringList</code></td><td>constant</td><td>&mdash;</td><td>The <code>group</code> values in the order pickers list them: Engine, Fuel &amp; air, Temperatures, Electrical, Speed &amp; motion, Emissions, Diagnostics, Sensors (the IMU)</td></tr>
           </tbody>
@@ -949,10 +974,65 @@
           </tbody>
         </table>
 
+        <!-- CustomPids -->
+        <h2 id="customPids">CustomPids <span class="cmt">&mdash; <code>customPids</code></span></h2>
+        <p><span class="file-path">src/managers/custompids.h</span> &mdash; QML context property <code>customPids</code>. Experimental (not covered by the protocol version).</p>
+        <p>What <span class="file-path">&lt;config&gt;/custom-pids.json</span> gave at startup: manufacturer-specific readings (mode 22 / 21, an optional ECU header, a formula) that then behave like any catalog parameter. The file is read once; every property is fixed until the next start. See <a href="obd-manager.html#custom-pids">OBD Manager &gt; Custom PIDs</a> and <span class="file-path">docs/CUSTOM_PIDS.md</span>.</p>
+        <h3>Properties</h3>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>file</code></td><td><code>QString</code></td><td>constant</td><td>&mdash;</td><td>Path of <code>custom-pids.json</code></td></tr>
+            <tr><td><code>fileExists</code></td><td><code>bool</code></td><td>read-only</td><td><code>fileExistsChanged</code></td><td>Whether the file is there (changes when <code>createExample()</code> writes it)</td></tr>
+            <tr><td><code>pids</code></td><td><code>QVariantList</code></td><td>constant</td><td>&mdash;</td><td>The entries loaded: <code>[{id, title, unit, mode, pid, header, formula}]</code>, mode / pid / header as hex text</td></tr>
+            <tr><td><code>errors</code></td><td><code>QStringList</code></td><td>constant</td><td>&mdash;</td><td>One line per entry left out, and why</td></tr>
+          </tbody>
+        </table>
+        <h3>Invokables &amp; Slots</h3>
+        <table>
+          <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>createExample()</code></td><td><code>bool</code></td><td>Write a starter file when there is none (never over an existing one); it loads at the next start</td></tr>
+          </tbody>
+        </table>
+
+        <!-- BusMonitor -->
+        <h2 id="busMonitor">BusMonitor <span class="cmt">&mdash; <code>busMonitor</code></span></h2>
+        <p><span class="file-path">src/managers/busmonitor.h</span> &mdash; QML context property <code>busMonitor</code>. Experimental (not covered by the protocol version).</p>
+        <p>Every message the adapter hears on the vehicle bus while it only listens (<a href="obd-manager.html#bus-monitor">Bus Monitor</a>). Nothing here sends to the bus. Live readings pause while <code>active</code>, and any other OBD request ends it.</p>
+        <h3>Properties</h3>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>available</code></td><td><code>bool</code></td><td>read-only</td><td><code>availableChanged</code></td><td>A vehicle is connected through an adapter that can be put in monitor mode (never on the Android BLE path)</td></tr>
+            <tr><td><code>active</code></td><td><code>bool</code></td><td>read-only</td><td><code>activeChanged</code></td><td>Listening now</td></tr>
+            <tr><td><code>filter</code></td><td><code>QString</code></td><td>read-only</td><td><code>activeChanged</code></td><td>The filter of this session (or the last), upper-cased; <code>""</code> for everything</td></tr>
+            <tr><td><code>note</code></td><td><code>QString</code></td><td>read-only</td><td><code>noteChanged</code></td><td>Why <code>start()</code> refused or listening ended by itself; <code>""</code> otherwise</td></tr>
+            <tr><td><code>ids</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>idsChanged</code></td><td>One row per message id, sorted by id, refreshed four times a second: <code>{id, count, periodMs, bytes, changed}</code>. <code>id</code> is hex text (3 digits for 11-bit CAN, 8 for 29-bit, 6 for the header of a J1850 / ISO message), <code>bytes</code> the latest data as two-digit hex strings, <code>changed</code> a bool per byte, true when it changed within the last second. At most 1024 rows</td></tr>
+            <tr><td><code>frameCount</code></td><td><code>int</code></td><td>read-only</td><td><code>idsChanged</code></td><td>Messages heard since <code>start()</code> / <code>clear()</code></td></tr>
+            <tr><td><code>framesPerSecond</code></td><td><code>int</code></td><td>read-only</td><td><code>idsChanged</code></td><td>The current rate</td></tr>
+            <tr><td><code>overruns</code></td><td><code>int</code></td><td>read-only</td><td><code>idsChanged</code></td><td>Times the adapter's buffer filled; messages were lost each time (use a filter)</td></tr>
+            <tr><td><code>canRecord</code></td><td><code>bool</code></td><td>constant</td><td>&mdash;</td><td>False in the browser build</td></tr>
+            <tr><td><code>recording</code></td><td><code>bool</code></td><td>read-only</td><td><code>recordingChanged</code></td><td>Writing messages to <code>logFile</code></td></tr>
+            <tr><td><code>logFile</code></td><td><code>QString</code></td><td>read-only</td><td><code>recordingChanged</code></td><td>The file of the recording in progress, or of the last one</td></tr>
+          </tbody>
+        </table>
+        <h3>Invokables &amp; Slots</h3>
+        <table>
+          <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>start(QString filter = "")</code></td><td><code>bool</code></td><td>Clear the table and listen. <code>filter</code>: one message id, 3 or 8 hex digits with <code>X</code> for any digit (<code>7E8</code>, <code>0CX</code>), CAN only; empty for everything. False, with <code>note</code>, for anything else or when nothing is connected</td></tr>
+            <tr><td><code>stop()</code></td><td><code>void</code></td><td>Stop listening; the adapter's settings are put back and polling resumes</td></tr>
+            <tr><td><code>clear()</code></td><td><code>void</code></td><td>Empty the table and the counters</td></tr>
+            <tr><td><code>startRecording()</code></td><td><code>bool</code></td><td>Write every message from now until listening ends to a new file under <span class="file-path">&lt;config&gt;/history/bus/</span>, in the can-utils log format. False when not listening or the file can't be written. Scope <code>files</code></td></tr>
+            <tr><td><code>stopRecording()</code></td><td><code>void</code></td><td>Close the file. Scope <code>files</code></td></tr>
+          </tbody>
+        </table>
+
         <!-- ParameterStore -->
         <h2 id="paramStore">ParameterStore <span class="cmt">&mdash; <code>paramStore</code></span></h2>
         <p><span class="file-path">src/managers/parameterstore.h</span> &mdash; QML context property <code>paramStore</code>, a <code>QQmlPropertyMap</code></p>
-        <p>The latest value of every <a href="#parameterCatalog">catalog</a> id, one notifying key per id: bind <code>paramStore.RPM</code> or <code>paramStore[id]</code> and the binding re-evaluates only when that id changes; an id with no reading yet is <code>undefined</code>. <span class="file-path">src/main.cpp</span> feeds it from <code>obdManager.parameterSampled</code> and the eight <code>berryIMU</code> signals; QML writes are rejected. Writes are coalesced: values land together every 33 ms (<code>kFlushMs</code>). A catalog alias (<code>IGNITION_TIMING</code>) is written whenever its target arrives. <code>OBDParameterModel.liveValue(id)</code> reads it for every gauge and card. Tests: <span class="file-path">tests/cpp/tst_parameterstore.cpp</span>.</p>
+        <p>The latest value of every <a href="#parameterCatalog">catalog</a> id, one notifying key per id: bind <code>paramStore.RPM</code> or <code>paramStore[id]</code> and the binding re-evaluates only when that id changes; an id with no reading yet is <code>undefined</code>. <span class="file-path">src/appcore.cpp</span> feeds it from <code>obdManager.parameterSampled</code> and the eight <code>berryIMU</code> signals; QML writes are rejected. Writes are coalesced: values land together every 33 ms (<code>kFlushMs</code>). A catalog alias (<code>IGNITION_TIMING</code>) is written whenever its target arrives. <code>OBDParameterModel.liveValue(id)</code> reads it for every gauge and card. Tests: <span class="file-path">tests/cpp/tst_parameterstore.cpp</span>.</p>
         <h3>Invokables &amp; Slots</h3>
         <table>
           <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
@@ -1044,6 +1124,11 @@
           <tbody>
             <tr><td><code>commandFailed(message)</code></td><td>A control the user pressed didn't work; <code>message</code> says why. Main.qml shows it in the app-wide notice. Volume changes report through <code>status</code> only.</td></tr>
             <tr><td><code>playbackRequested()</code></td><td>Spotify took a play from OCTAVE: <code>nowPlaying</code> makes it the source</td></tr>
+            <tr><td><code>startedElsewhere()</code></td><td>Spotify started playing by itself (from the phone or another app)</td></tr>
+            <tr><td><code>clientIdChanged()</code>, <code>userChanged()</code></td><td>Notify <code>clientId</code> and <code>userName</code></td></tr>
+            <tr><td><code>libraryChanged()</code>, <code>libraryLoadingChanged()</code></td><td>Notify <code>playlists</code> / <code>albums</code> and <code>libraryLoading</code></td></tr>
+            <tr><td><code>collectionChanged()</code>, <code>collectionTracksChanged()</code></td><td>Notify <code>collectionUri</code> / <code>collection</code> and <code>collectionTracks</code> / <code>collectionLoading</code></td></tr>
+            <tr><td><code>artChanged()</code>, <code>positionReported()</code>, <code>modesChanged()</code></td><td>Notify <code>artUrl</code>, <code>positionMs</code>, and <code>shuffle</code> / <code>repeat</code></td></tr>
           </tbody>
         </table>
 
@@ -1075,7 +1160,7 @@
         <table>
           <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>setRpm(double rpm)</code></td><td><code>void</code></td><td>Feed a reading; re-matches the band. Connected to <code>obdManager.rpmChanged</code> in <code>main.cpp</code></td></tr>
+            <tr><td><code>setRpm(double rpm)</code></td><td><code>void</code></td><td>Feed a reading; re-matches the band. Connected to <code>obdManager.rpmChanged</code> in <code>appcore.cpp</code></td></tr>
             <tr><td><code>setFlags(QVariantList flags)</code></td><td><code>void</code></td><td>Save the flags to <code>rpm_flags</code> (the RPM editor on OBDMenu calls this); applied live</td></tr>
           </tbody>
         </table>
@@ -1153,9 +1238,10 @@
           <tbody>
             <tr><td><code>supported</code></td><td><code>bool</code></td><td>constant</td><td>Discovery + pairing + connect work here (desktop Linux). False elsewhere; the sheet then falls back to <code>obdManager.availableAdapters</code></td></tr>
             <tr><td><code>canScan</code></td><td><code>bool</code></td><td>constant</td><td><code>startScan()</code> can look for adapters: <code>supported</code> on desktop; in the browser demo, whether the browser has Web Bluetooth (false in Firefox, Safari and Linux Chromium without its flag, where the sheet hides "Pick Bluetooth Adapter" and offers only the simulated car)</td></tr>
+            <tr><td><code>canPickSerial</code></td><td><code>bool</code></td><td>constant</td><td><code>pickSerialPort()</code> can open a list of serial ports: the browser demo in a browser with Web Serial (Chrome / Edge on a computer), where the sheet shows "Pick USB Adapter". False in the app. Experimental</td></tr>
             <tr><td><code>bluetoothOn</code></td><td><code>bool</code></td><td><code>bluetoothOnChanged</code></td><td>A controller exists and is powered</td></tr>
             <tr><td><code>scanning</code></td><td><code>bool</code></td><td><code>scanningChanged</code></td><td>Discovery running (15 s)</td></tr>
-            <tr><td><code>devices</code></td><td><code>QVariantList</code></td><td><code>devicesChanged</code></td><td><code>[{address, name, rssi, kind: "classic"|"ble"|"dual", likelyObd, paired, connectable, note}]</code>; likely adapters first, then by signal (<code>rssi</code> 0 = cached, not heard this scan)</td></tr>
+            <tr><td><code>devices</code></td><td><code>QVariantList</code></td><td><code>devicesChanged</code></td><td><code>[{address, name, rssi, kind: "classic"|"ble"|"dual"|"serial"|"sim", likelyObd, paired, connectable, note}]</code> (<code>"serial"</code>: a browser serial port from <code>pickSerialPort()</code>); likely adapters first, then by signal (<code>rssi</code> 0 = cached, not heard this scan)</td></tr>
             <tr><td><code>busyAddress</code></td><td><code>QString</code></td><td><code>busyChanged</code></td><td>Adapter being paired / connected, <code>""</code> when idle</td></tr>
             <tr><td><code>status</code></td><td><code>QString</code></td><td><code>statusChanged</code></td><td>Human-readable progress or outcome</td></tr>
             <tr><td><code>statusIsError</code></td><td><code>bool</code></td><td><code>statusChanged</code></td><td><code>status</code> describes a failure</td></tr>
@@ -1166,6 +1252,7 @@
           <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
           <tbody>
             <tr><td><code>startScan()</code></td><td><code>void</code></td><td>Clear the list and run Classic + LE discovery; no-op while pairing</td></tr>
+            <tr><td><code>pickSerialPort()</code></td><td><code>void</code></td><td>Browser demo: open the browser's serial port list (an adapter on a USB cable, or a paired Bluetooth Classic one), then list and connect the pick. Needs a tap. Does nothing in the app. Experimental</td></tr>
             <tr><td><code>stopScan()</code></td><td><code>void</code></td><td>Stop discovery (the sheet calls it on close; a pairing under way continues)</td></tr>
             <tr><td><code>connectAdapter(QString address)</code></td><td><code>void</code></td><td>Pair with PINs 1234 / 0000 / 6789 / 1111, trust, look up the SPP channel, then <code>obdManager.connect_direct()</code> and a named saved-adapter chip</td></tr>
             <tr><td><code>cancel()</code></td><td><code>void</code></td><td>Cancel pairing / channel lookup / scan and clear the status</td></tr>
@@ -1592,6 +1679,7 @@
             <tr><td><code>lastImportReport</code></td><td><code>QVariantMap</code></td><td>read-only</td><td><code>lastImportReportChanged</code></td><td>Experimental. What the last successful import kept and left out: <code>{id, label, cells, droppedCells, droppedProps, movedCells, portraitDropped, unknownTypes, paramIds}</code></td></tr>
             <tr><td><code>preview</code></td><td><code>QVariantMap</code></td><td>read-only</td><td><code>previewChanged</code></td><td>Experimental. A dashboard being edited on another device, <code>{id, spec}</code>, shown on the dashboard page; <code>{}</code> when none</td></tr>
             <tr><td><code>widgetPresets</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>widgetPresetsChanged</code></td><td>Experimental. My widgets: <code>[{id, label, baseType, paramId, props}]</code> from <code>&lt;config&gt;/widgets/</code></td></tr>
+            <tr><td><code>widgetCatalog</code></td><td><code>QVariantMap</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>The widget registry from <span class="file-path">frontend/dashboards/widget-catalog.json</span>: <code>{schema, widgets: [{type, displayName, glyph, defaultColSpan, defaultRowSpan, supportedKinds, labelProps, rangeProps, colorProps, editableProps}], colorSwatches}</code>. Empty if the file is missing</td></tr>
             <tr><td><code>templates</code></td><td><code>QVariantList</code></td><td>constant</td><td>&mdash;</td><td>Experimental. The starting points for a new dashboard (<span class="file-path">frontend/dashboards/templates/*.json</span>, in their <code>order</code>): <code>[{id, label, description, order, gridColumns, gridRows, cells}]</code>, each cell's data a <code>slot</code> <code>{prefer, kinds}</code> that <code>fromTemplate()</code> fills</td></tr>
             <tr><td><code>supportedSchema</code></td><td><code>int</code></td><td>constant</td><td>&mdash;</td><td>Highest dashboard <code>schema</code> this build reads (<code>kSupportedSchema</code>, 2: the portrait layout); DashboardRenderer shows a "needs a newer OCTAVE" message for newer specs</td></tr>
           </tbody>
@@ -1682,7 +1770,99 @@
             <tr><td><code>frontendsChanged()</code>, <code>activeChanged()</code>, <code>lastErrorChanged()</code></td><td>As the properties change</td></tr>
             <tr><td><code>installed(QString id)</code></td><td>An install finished</td></tr>
             <tr><td><code>trialChanged()</code></td><td><code>trialSecondsLeft</code> changed (every second during a trial)</td></tr>
+            <tr><td><code>trialExpired()</code></td><td>The time for the screen being tried is up; <span class="file-path">main.cpp</span> goes back to the previous screen</td></tr>
             <tr><td><code>restartRequested()</code></td><td>OCTAVE is about to restart (<code>tryFrontend</code>, <code>restartNow</code>)</td></tr>
+          </tbody>
+        </table>
+
+        <!-- ThemeCatalog -->
+        <h2 id="themeCatalog">ThemeCatalog <span class="cmt">&mdash; <code>themeCatalog</code></span></h2>
+        <p><span class="file-path">src/managers/themecatalog.h</span> &mdash; QML context property <code>themeCatalog</code></p>
+        <p>The colour themes as data (<span class="file-path">frontend/themes.json</span>), so any frontend can draw the user's theme. <code>activeTheme</code> is resolved the way <span class="file-path">Style.qml</span> resolves it: album-art colours for "Album Art Capture", then a custom theme of that name, then a built-in, else <code>SolarizedLight</code>. See <a href="theme-system.html">Theme System</a>.</p>
+        <h3>Properties</h3>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>themes</code></td><td><code>QVariantMap</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>Built-in palettes, name &rarr; palette</td></tr>
+            <tr><td><code>themeNames</code></td><td><code>QStringList</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>Built-in theme names in file order</td></tr>
+            <tr><td><code>lightThemeNames</code>, <code>darkThemeNames</code></td><td><code>QStringList</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>The light and dark groups</td></tr>
+            <tr><td><code>activeThemeName</code></td><td><code>QString</code></td><td>read-only</td><td><code>activeThemeChanged</code></td><td>Name of the theme in force</td></tr>
+            <tr><td><code>activeTheme</code></td><td><code>QVariantMap</code></td><td>read-only</td><td><code>activeThemeChanged</code></td><td>The palette in force right now, live from the theme settings</td></tr>
+          </tbody>
+        </table>
+        <h3>Signals</h3>
+        <table>
+          <thead><tr><th>Signal</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>activeThemeChanged()</code></td><td>The active theme or its palette changed (theme setting, custom themes or album-art colours)</td></tr>
+          </tbody>
+        </table>
+
+        <!-- FontCatalog -->
+        <h2 id="fontCatalog">FontCatalog <span class="cmt">&mdash; <code>fontCatalog</code></span></h2>
+        <p><span class="file-path">src/util/fontcatalog.h</span> &mdash; QML context property <code>fontCatalog</code></p>
+        <p>The fonts OCTAVE ships (<span class="file-path">frontend/assets/fonts</span>), registered with Qt once at startup. No methods or signals.</p>
+        <h3>Properties</h3>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>fonts</code></td><td><code>QVariantList</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td><code>{name, family}</code> per UI font: <code>name</code> is what the picker shows and <code>fontSetting</code> stores, <code>family</code> what <code>Text.font.family</code> takes</td></tr>
+            <tr><td><code>symbolFamily</code></td><td><code>QString</code></td><td>read-only, constant</td><td><code>&mdash;</code></td><td>Family of the icon-glyph font; <code>""</code> if it failed to load</td></tr>
+          </tbody>
+        </table>
+
+        <!-- Units -->
+        <h2 id="units">Units <span class="cmt">&mdash; <code>units</code></span></h2>
+        <p><span class="file-path">src/util/units.h</span> &mdash; QML context property <code>units</code></p>
+        <p>Display formatting and unit conversion in one place, so no page carries its own copy. Built in <span class="file-path">main.cpp</span> and registered through <code>AppCore</code>. Every method needs only the <code>read</code> scope. No properties or signals.</p>
+        <h3>Invokables &amp; Slots</h3>
+        <table>
+          <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>formatDuration(double ms)</code></td><td><code>QString</code></td><td><code>m:ss</code>, or <code>h:mm:ss</code> from one hour; negative, NaN or infinite gives <code>0:00</code></td></tr>
+            <tr><td><code>formatSeconds(double s)</code></td><td><code>QString</code></td><td><code>formatDuration</code> for a value in seconds</td></tr>
+            <tr><td><code>cardinal(double headingDeg)</code></td><td><code>QString</code></td><td>8-point compass label for a heading in degrees (N at 0, NE at 45, ...)</td></tr>
+            <tr><td><code>cToF(double c)</code></td><td><code>double</code></td><td>Celsius to Fahrenheit</td></tr>
+            <tr><td><code>mToFt(double m)</code></td><td><code>double</code></td><td>Metres to feet</td></tr>
+            <tr><td><code>mphToKph(double mph)</code></td><td><code>double</code></td><td>Miles per hour to km/h</td></tr>
+            <tr><td><code>linearToDb(double x)</code>, <code>dbToLinear(double db)</code></td><td><code>double</code></td><td>Amplitude ratio to decibels and back (20 log10); silence reads -120 dB</td></tr>
+          </tbody>
+        </table>
+
+        <!-- Simulator -->
+        <h2 id="sim">Simulator <span class="cmt">&mdash; <code>sim</code></span></h2>
+        <p><span class="file-path">src/sim/simulator.h</span> &mdash; QML context property <code>sim</code></p>
+        <p>The simulator for frontend authors (<code>octave --sim</code>, implied by <code>--dev</code>, or the "Simulated car" adapter): a simulated car behind the real <code>OBDManager</code>, IMU motion through the real <code>berryIMU</code> manager, a test video loop and pairing codes. Built in every configuration and <strong>experimental</strong> (not covered by the protocol version). Every control returns false and does nothing when the run is not simulated. Controls need the <code>vehicle</code> scope, <code>status</code> needs <code>read</code>, <code>pairingCode</code> needs <code>full</code>.</p>
+        <h3>Properties</h3>
+        <table>
+          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify signal</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>active</code></td><td><code>bool</code></td><td>read-only</td><td><code>activeChanged</code></td><td>The simulator has been started in this run; <code>obdManager.simulated</code> says whether its adapter is the one selected</td></tr>
+          </tbody>
+        </table>
+        <h3>Invokables &amp; Slots</h3>
+        <table>
+          <thead><tr><th>Signature</th><th>Returns</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>setThrottle(double percent)</code>, <code>setBrake(double percent)</code></td><td><code>bool</code></td><td>Pedals, 0&ndash;100</td></tr>
+            <tr><td><code>rev(double intensity)</code></td><td><code>bool</code></td><td>A blip of the throttle, 0&ndash;100 (50 when 0)</td></tr>
+            <tr><td><code>setEngineOn(bool on)</code>, <code>toggleEngine()</code></td><td><code>bool</code></td><td>Engine on or off</td></tr>
+            <tr><td><code>setGear(int gear)</code>, <code>upshift()</code>, <code>downshift()</code></td><td><code>bool</code></td><td>Gear, 1&ndash;6</td></tr>
+            <tr><td><code>setSpeed(double mph)</code>, <code>setRpm(double rpm)</code></td><td><code>bool</code></td><td>Jump straight to a value; the physics carries on from there</td></tr>
+            <tr><td><code>setRealistic(bool on)</code></td><td><code>bool</code></td><td>Bluetooth-like latency and a 2 % NO DATA rate (on at start)</td></tr>
+            <tr><td><code>scenario(QString name)</code></td><td><code>bool</code></td><td><code>"cold"</code>, <code>"hot"</code>, <code>"low_fuel"</code>, or anything else for normal</td></tr>
+            <tr><td><code>setDropouts(bool on)</code>, <code>dropoutNow()</code>, <code>setFailureRate(double rate)</code>, <code>setLinkUp(bool up)</code></td><td><code>bool</code></td><td>Link faults: random dropouts, one now, the NO DATA rate (0&ndash;1), the adapter unplugged (false) or back (true)</td></tr>
+            <tr><td><code>setImu(bool on)</code></td><td><code>bool</code></td><td>The simulated IMU motion (G-force, compass, tilt, altitude)</td></tr>
+            <tr><td><code>setVideo(bool on)</code></td><td><code>bool</code></td><td>A test H.264 clip looped into the <code>phoneMirrorManager.video</code> stream at 30 fps (640x360 for 2 s, then 1280x720, so clients see a config change)</td></tr>
+            <tr><td><code>pairingCode()</code></td><td><code>QVariantMap</code></td><td>Shows a pairing code as the Settings page would: <code>{code, secondsLeft}</code>, <code>{}</code> when not simulated</td></tr>
+            <tr><td><code>status()</code></td><td><code>QVariantMap</code></td><td>The car's values and link settings, plus <code>imu</code> and <code>video</code>; <code>{}</code> when not simulated</td></tr>
+          </tbody>
+        </table>
+        <h3>Signals</h3>
+        <table>
+          <thead><tr><th>Signal</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>activeChanged()</code></td><td>The simulator was started</td></tr>
           </tbody>
         </table>
 

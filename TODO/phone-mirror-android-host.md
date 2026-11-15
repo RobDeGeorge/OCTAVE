@@ -8,7 +8,7 @@
 
 Running OCTAVE's Android build on a tablet and mirroring a phone onto it is a natural setup: a cheap tablet in the dash instead of a Pi. Today it can't work, for two independent reasons:
 
-1. **No decoder.** `CMakeLists.txt:87` only looks for FFmpeg under `if(NOT ANDROID)`, so the APK has no `OCTAVE_HAVE_FFMPEG`, and `ScrcpyClient::available()` is false.
+1. **No decoder.** `CMakeLists.txt:185` only looks for FFmpeg under `if(NOT ANDROID AND NOT EMSCRIPTEN)`, so the APK has no `OCTAVE_HAVE_FFMPEG`, and `ScrcpyClient::available()` is false.
 2. **No adb.** The client drives everything by running the `adb` binary through `QProcess`: `devices`, `push`, `forward`, `shell app_process`, `pair`, `connect` (`phonemirrormanager.cpp:42` onward, `findAdb()` at line 117). An Android app can't ship and run adb this way, and wouldn't have the host side's USB or pairing state if it did.
 
 Because of that, `phonemirrormanager` is a mobile stub (`phonemirrormanager.h:481` onward) and its `nativeAvailable` is false (`:545`), which hides the bottom-bar button. Everything above the transport carries over unchanged: the scrcpy protocol client, the `phone_server/` jar, touch mapping, MirrorKeeper, media/queue messages and the QML view.

@@ -164,7 +164,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           <code>/storage/emulated/0/Music</code>) and is created if missing. The manager's own built-in
           <code>&lt;app dir&gt;/media</code> directory is therefore only the
           initial value of <code>m_mediaDir</code> before settings are wired, and what <code>get_default_media_dir()</code>
-          reports. Wiring happens in <code>setSettingsManager()</code> (called from <code>main.cpp</code>; the
+          reports. Wiring happens in <code>setSettingsManager()</code> (called from <code>appcore.cpp</code>; the
           <code>connect_settings_manager()</code> slot is a no-op kept for <span class="file-path">Main.qml</span>), which calls <code>set_library_root()</code>,
           connects <code>mediaFolderChanged</code> to it, and schedules <code>_restore_playback_state()</code> 500&nbsp;ms later.
         </p>
@@ -234,7 +234,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           <li>A stale entry is removed when that filename is looked up and its size/mtime check fails. There is no full-library pruning pass for the tag store, so entries for files no longer requested can remain on disk.</li>
           <li>Only on a miss does <code>_cache_metadata_from_file()</code> read the tags; the result is written back with <code>_meta_to_store()</code>.</li>
           <li>Writes are coalesced: a single-shot 2&nbsp;s timer is restarted on every change and <code>_save_meta_store()</code> writes the compact JSON once, atomically (<code>QSaveFile</code>), so a power cut leaves the old store or the new one. The dirty flag is only cleared when the write succeeded, so a failed write is retried on the next change or at shutdown.</li>
-          <li>Shutdown flushes it explicitly: <code>flush_metadata_store()</code> is called from the <code>aboutToQuit</code> handler in <code>main.cpp</code> (the destructor also saves).</li>
+          <li>Shutdown flushes it explicitly: <code>flush_metadata_store()</code> is called from <code>AppCore::shutdown()</code>, which <code>main.cpp</code>'s <code>aboutToQuit</code> handler runs (the destructor also saves).</li>
         </ul>
         <p>
           Tag strings are sanitized (control characters replaced by spaces, whitespace collapsed, truncated to 200
@@ -360,7 +360,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           <tbody>
             <tr><td><code>next_track()</code></td><td>Advances the index by 1 (wraps around), calls <code>play_file()</code>, restarts the debounced state save. Also called on <code>EndOfMedia</code></td></tr>
             <tr><td><code>previous_track()</code></td><td>Decrements the index by 1 (wraps around), calls <code>play_file()</code>, restarts the debounced state save</td></tr>
-            <tr><td><code>toggle_play()</code></td><td>If no source is set, plays the current file. If playing, pauses and saves state. If paused, checks for a bad media status (<code>InvalidMedia</code>, <code>NoMedia</code>, <code>StalledMedia</code>) and forces recovery instead of resuming. If the pause lasted at least 30&nbsp;s (<code>kLongPauseMs</code> / <code>LONG_PAUSE_SECONDS</code>) and the file exists, it reloads the track at its current position with <code>_reseat_source()</code> before <code>play()</code>, re-applies mute and emits <code>playStateChanged(true)</code> without the state check (the source is still loading). Otherwise, after <code>play()</code> it verifies <code>playbackState()</code> is <code>PlayingState</code> and forces recovery if not</td></tr>
+            <tr><td><code>toggle_play()</code></td><td>If no source is set, plays the current file. If playing, pauses and saves state. If paused, checks for a bad media status (<code>InvalidMedia</code>, <code>NoMedia</code>, <code>StalledMedia</code>) and forces recovery instead of resuming. If the pause lasted at least 30&nbsp;s (<code>kLongPauseMs</code>) and the file exists, it reloads the track at its current position with <code>_reseat_source()</code> before <code>play()</code>, re-applies mute and emits <code>playStateChanged(true)</code> without the state check (the source is still loading). Otherwise, after <code>play()</code> it verifies <code>playbackState()</code> is <code>PlayingState</code> and forces recovery if not</td></tr>
             <tr><td><code>pause()</code></td><td>Pauses the player, emits <code>playStateChanged(false)</code>, starts the debounced state save, remembers the volume for unmute</td></tr>
             <tr><td><code>set_position(ms)</code></td><td>Seeks to a position in milliseconds</td></tr>
           </tbody>
@@ -482,7 +482,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           <li><code>applyVolume()</code> emits <code>volumeApplied(percent, linear)</code> and knows no manager; <code>AppCore::wireVolume</code> (<span class="file-path">src/appcore.cpp</span>) connects it to <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code>, Android Auto and AirPlay, <code>spotifyManager.setVolume(percent)</code> while Spotify is the source (see <a href="#spotify">Spotify</a>), and <code>esp32VolumeManager.send_volume_update(percent)</code> (desktop builds).</li>
         </ul>
         <p>
-          <span class="file-path">main.cpp</span> calls <code>applyVolume(settingsManager.currentVolume)</code> once at startup after every manager
+          <span class="file-path">appcore.cpp</span> calls <code>applyVolume(settingsManager.currentVolume)</code> once at startup after every manager
           exists, which is what replaces the constructor's 0.5 placeholder.
         </p>
 
@@ -515,7 +515,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           <a href="phone-mirror-android-auto.html">PhoneMirrorManager</a> measures each PCM chunk's peak, sets
           <code>audioPlaying</code> with a 1.5&nbsp;s release hold, and emits <code>duckingChanged(factor)</code> (the
           <code>scrcpyAudioDuckLevel</code> setting, default 0.1 = -20&nbsp;dB, or 1.0 when the phone is silent or
-          <code>scrcpyAudioDuckEnabled</code> is off); <span class="file-path">main.cpp</span> connects that signal to <code>mediaManager.setDucking</code>.
+          <code>scrcpyAudioDuckEnabled</code> is off); <span class="file-path">appcore.cpp</span> connects that signal to <code>mediaManager.setDucking</code>.
           The factor is ramped with a <code>QVariantAnimation</code> (<code>OutCubic</code>): 80&nbsp;ms attack so a
           prompt is not stepped on, 500&nbsp;ms release so music does not jump back up between sentences. Volume changes
           and mute keep working while ducked.
@@ -550,8 +550,8 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
 <span class="fn">connect</span>(&amp;m_saveStateTimer, &amp;<span class="cls">QTimer</span>::timeout, <span class="kw">this</span>, &amp;<span class="cls">MediaManager</span>::_save_playback_state_now);</code></pre>
         <p>
           At shutdown the state is flushed immediately: <span class="file-path">Main.qml</span> calls
-          <code>mediaManager._save_playback_state()</code> on close, <code>main.cpp</code>'s <code>aboutToQuit</code>
-          handler calls it again before <code>settingsManager.flushPendingSave()</code>, and the destructor flushes a
+          <code>mediaManager._save_playback_state()</code> on close, <code>AppCore::shutdown()</code> (run by <code>main.cpp</code>'s <code>aboutToQuit</code>
+          handler) calls it again before <code>settingsManager.flushPendingSave()</code>, and the destructor flushes a
           pending debounced save. <code>_save_playback_state()</code> is a <code>Q_INVOKABLE</code> alias of
           <code>_save_playback_state_now()</code> that saves immediately.
         </p>
@@ -720,7 +720,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
           </thead>
           <tbody>
             <tr><td><code>playbackStateChanged</code></td><td>int</td><td>Raw <code>QMediaPlayer</code> playback state, forwarded on every change: 0 stopped, 1 playing, 2 paused</td></tr>
-            <tr><td><code>playStateChanged</code></td><td>bool</td><td>True when playing, False when paused/stopped; also drives the position timer (whose <code>positionChanged</code> reports also drive the waveform analyzer, through <code>main.cpp</code>)</td></tr>
+            <tr><td><code>playStateChanged</code></td><td>bool</td><td>True when playing, False when paused/stopped; also drives the position timer (whose <code>positionChanged</code> reports also drive the waveform analyzer, through <code>appcore.cpp</code>)</td></tr>
             <tr><td><code>currentMediaChanged</code></td><td>str</td><td>Filename of the now-playing (or restored) track (<code>nowPlaying</code> follows it, and through its art the Album Art Capture colours)</td></tr>
             <tr><td><code>mediaListChanged</code></td><td>list</td><td>New ordered file list after a playlist selection, shuffle toggle, strip or scan</td></tr>
             <tr><td><code>metadataChanged</code></td><td>str, str, str</td><td>Title, artist, album for the current track</td></tr>
@@ -789,7 +789,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
             <tr><td><code>strip_filenames</code></td><td>()</td><td>Re-clean every display name, reporting via <code>scanProgress</code></td></tr>
             <tr><td><code>flush_metadata_store</code></td><td>()</td><td>Write the tag store now if dirty (called at shutdown)</td></tr>
             <tr><td><code>_save_playback_state</code></td><td>()</td><td>Save song / position / playlist immediately; called from <span class="file-path">Main.qml</span> on close</td></tr>
-            <tr><td><code>connect_settings_manager</code></td><td>(QObject)</td><td>No-op kept for <span class="file-path">Main.qml</span>; the wiring (library root, restore, theme) is done by <code>setSettingsManager()</code> in <code>main.cpp</code></td></tr>
+            <tr><td><code>connect_settings_manager</code></td><td>(QObject)</td><td>No-op kept for <span class="file-path">Main.qml</span>; the wiring (library root, restore, theme) is done by <code>setSettingsManager()</code> in <code>appcore.cpp</code></td></tr>
             <tr><td><code>_clear_temp_files</code></td><td>()</td><td>Delete every file in the temp dir; retained for compatibility, no longer called</td></tr>
           </tbody>
         </table>

@@ -19,7 +19,7 @@ These are stubs (no-ops) on Android today: `gesturemanager`, `androidautomanager
 
 ## Remaining work, easiest first
 
-1. **App icon.** `android/res/mipmap-anydpi-v26/` is empty and the manifest has no `android:icon`, so the launcher shows the stock Android icon. Add an adaptive icon (foreground + background) plus PNG fallbacks for each mipmap density, and set `android:icon` / `android:roundIcon` on `<application>`.
+1. **App icon.** `android/res/` has no icon files (git tracks only `values/`; `mipmap-anydpi-v26/` is an empty folder git does not carry, so create it) and the manifest has no `android:icon`, so the launcher shows the stock Android icon. Add an adaptive icon (foreground + background) plus PNG fallbacks for each mipmap density, and set `android:icon` / `android:roundIcon` on `<application>`.
    **Effort:** S. **Needs:** S22 to eyeball the launcher.
 2. **Splash screen.** Nothing exists. Add a `windowBackground`/splash theme (Android 12+ `SplashScreen` attributes) showing the OCTAVE mark until Qt draws its first frame.
    **Effort:** S. **Needs:** S22.

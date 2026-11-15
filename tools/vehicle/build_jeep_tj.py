@@ -21,7 +21,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--preview", type=Path)
 parser.add_argument("--blend", type=Path)
 parser.add_argument(
-    "--output", type=Path, default=Path(__file__).resolve().parents[2] / "frontend/assets/jeep_tj_2003.glb"
+    "--output", type=Path, default=Path(__file__).resolve().parents[2] / "frontend/assets/jeep_tj_2003.glb"  # copy the result to tools/vehicle/reference/, see README
 )
 opts = parser.parse_args(args)
 steering_geometry = json.loads(Path(__file__).with_name("steering_geometry.json").read_text())

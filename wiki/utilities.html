@@ -278,7 +278,7 @@ worker thread ("ui-watchdog")                     GUI thread
           <tbody>
             <tr><td><code>applyVolume(percent)</code></td><td><code>public slot void (int)</code></td><td>Clamps to 0&ndash;100, stores the raw percent in memory via <code>SettingsManager.setCurrentVolume()</code>, computes the linear value and emits <code>volumeApplied</code></td></tr>
             <tr><td><code>toLinear(percent)</code></td><td><code>public slot float (float)</code></td><td>Pure curve math for QML; no dispatch</td></tr>
-            <tr><td><code>volumeApplied(int percent, float linear)</code></td><td>signal</td><td>Emitted after every <code>applyVolume()</code>; <span class="file-path">main.cpp</span> connects the outputs (media, phone mirror, ESP32) to it</td></tr>
+            <tr><td><code>volumeApplied(int percent, float linear)</code></td><td>signal</td><td>Emitted after every <code>applyVolume()</code>; <span class="file-path">appcore.cpp</span> connects the outputs (media, phone mirror, ESP32) to it</td></tr>
             <tr><td><code>toLinearStatic(float)</code></td><td><code>static float</code></td><td>Curve without an instance (tests, one-off math)</td></tr>
             <tr><td>constructor</td><td><code>VolumeController(SettingsManager *, QObject *parent = nullptr)</code></td><td>Holds only the settings pointer; outputs are reached through the signal</td></tr>
           </tbody>

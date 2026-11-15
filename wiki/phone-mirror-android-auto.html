@@ -191,7 +191,7 @@
               <tr><td><code>qrPairingRows</code>, <code>qrPairingActive</code></td><td><code>list</code>, <code>bool</code></td><td>The QR code being shown (one <code>'0'</code>/<code>'1'</code> string per row) and whether one is waiting</td></tr>
               <tr><td><code>currentBitRate</code></td><td><code>int</code></td><td>Video bit rate of the running session in bps, following adaptive changes; 0 when idle</td></tr>
               <tr><td><code>mediaAvailable</code>, <code>mediaPlaying</code>, <code>mediaTitle</code>, <code>mediaArtist</code>, <code>mediaAlbum</code>, <code>mediaApp</code>, <code>mediaDuration</code>, <code>mediaCanSeek</code></td><td>various</td><td>The phone's active media session as <code>PhoneMedia</code> reports it (<code>mediaApp</code> is the package name, <code>mediaDuration</code> ms); notify <code>mediaChanged</code>. See <a href="#pm-media">Phone media</a></td></tr>
-              <tr><td><code>mediaArtUrl</code></td><td><code>str</code></td><td><code>file://</code> URL of the album art (<code>&lt;app data&gt;/temp/phone_media_art_{0,1}.jpg</code>, alternating so QML reloads), <code>""</code> for none; notify <code>mediaArtChanged</code></td></tr>
+              <tr><td><code>mediaArtUrl</code></td><td><code>str</code></td><td><code>file://</code> URL of the album art (<code>&lt;app data&gt;/temp/phone_media_art_&lt;n&gt;.jpg</code>, a new name for every cover, as QML caches pictures by URL; the last two are kept), <code>""</code> for none; notify <code>mediaArtChanged</code></td></tr>
               <tr><td><code>mediaQueue</code>, <code>mediaQueueActiveId</code>, <code>mediaQueueTitle</code></td><td><code>list</code>, <code>qint64</code>, <code>str</code></td><td>Phone app’s published play queue, current item ID (<code>-1</code> for none), and queue title; notify <code>mediaQueueChanged</code>. Each entry has <code>id</code>, <code>title</code>, <code>artist</code>, <code>art_uri</code> and a local <code>art</code> URL</td></tr>
               <tr><td><code>mediaActive</code></td><td><code>bool</code></td><td>The phone is the source OCTAVE's media controls drive; notify <code>mediaActiveChanged(bool)</code></td></tr>
               <tr><td><code>lastErrorKind</code></td><td><code>str</code></td><td>What the last <code>scrcpyError</code> was about: <code>"noPhone"</code> / <code>"device"</code> (both retried by the view) / <code>"setup"</code> / <code>"fatal"</code>; <code>""</code> after a successful start</td></tr>
@@ -212,8 +212,8 @@
               <tr><td><code>frameSizeChanged</code></td><td><code>int, int</code></td><td>Frame size; also notifies <code>activeDisplaySize</code>, <code>frameWidth</code>, <code>frameHeight</code></td></tr>
               <tr><td><code>frameReady</code></td><td>--</td><td>A frame reached the sink (the view counts these as proof of life; "Connecting..." shows until the first one)</td></tr>
               <tr><td><code>audioActiveChanged</code>, <code>audioPlayingChanged</code>, <code>phoneAsleepChanged</code>, <code>phoneInUseChanged</code></td><td><code>bool</code></td><td>Property notifications</td></tr>
-              <tr><td><code>duckingChanged</code></td><td><code>float</code></td><td>Factor other sources should apply: the duck level while <code>audioPlaying</code> and ducking is on, 1.0 otherwise. <code>main.cpp</code> routes it to <code>MediaManager.setDucking()</code></td></tr>
-              <tr><td><code>wirelessAddressChanged</code></td><td><code>str</code></td><td>Remembered Wi-Fi phone changed; <code>main.cpp</code> saves it to <code>scrcpyWirelessAddress</code></td></tr>
+              <tr><td><code>duckingChanged</code></td><td><code>float</code></td><td>Factor other sources should apply: the duck level while <code>audioPlaying</code> and ducking is on, 1.0 otherwise. <code>appcore.cpp</code> routes it to <code>MediaManager.setDucking()</code></td></tr>
+              <tr><td><code>wirelessAddressChanged</code></td><td><code>str</code></td><td>Remembered Wi-Fi phone changed; <code>appcore.cpp</code> saves it to <code>scrcpyWirelessAddress</code></td></tr>
               <tr><td><code>connectionTypeChanged</code>, <code>wirelessBusyChanged</code>, <code>qrPairingChanged</code></td><td>--</td><td>Property notifications</td></tr>
               <tr><td><code>audioPlayed</code></td><td><code>QByteArray, int</code></td><td>PCM handed to the audio sink and buffered delay in ms; connected to <code>AudioAnalyzer.feed_live_pcm()</code> for the phone waveform</td></tr>
               <tr><td><code>currentBitRateChanged</code>, <code>mediaChanged</code>, <code>mediaArtChanged</code>, <code>mediaQueueChanged</code></td><td>--</td><td>Property notifications (<code>mediaChanged</code> on every media state report: play/pause, position, metadata)</td></tr>
@@ -438,7 +438,7 @@
           </ol>
           <p><strong>Ducking</strong> (settings <code>scrcpyAudioDuckEnabled</code>, default on; <code>scrcpyAudioDuckLevel</code>, default 0.1 =
             −20 dB): the manager computes <code>duckingFactor = duckLevel</code> while <code>audioPlaying &amp;&amp; duckEnabled</code>, else 1.0,
-            and emits <code>duckingChanged</code> on change. <code>main.cpp</code> connects it to
+            and emits <code>duckingChanged</code> on change. <code>appcore.cpp</code> connects it to
             <code>MediaManager.setDucking()</code>, which ramps the local output (80 ms attack, 500 ms release) independently of the
             user's volume and mute. Expect lip-sync to trail the picture
             slightly. Validated on the Pi by measurement (+6 dB = x1.89 RMS, live slider, clean teardown with zero underruns);
@@ -525,7 +525,7 @@
             pauses; a local track starting calls <code>releaseMedia(true)</code> (the phone pauses). Frontends read the live source through <code>nowPlaying</code>, not these properties. With no media app the views show "Phone" / "Nothing playing". The Media Room shows a "Phone" source pill meanwhile; tapping it (<code>nowPlaying.useLocal()</code>) hands the controls
             back to local media and pauses the phone. The same rules with Android Auto: <a href="#aa-native-music">Which source plays the music</a>. Shuffle is dimmed (it belongs to the phone app) and there are no side cards.</p>
           <p><strong>Queue:</strong> <code>PhoneMedia</code> follows the selected app’s <code>MediaController</code> queue and active queue ID, sending up to 500 entries. Queue artwork is fetched separately, scaled to 160 px and sent once per URI per session. The manager stores it under <code>&lt;app data&gt;/temp/phone_queue_art/</code> and batches artwork notifications for 150 ms. <code>MediaPlayer.qml</code> shows this queue while the phone is active and a queue is available; selecting an entry calls <code>mediaSkipToQueueItem(id)</code>. The available tracks and skip behavior depend on what the phone app publishes. This is its active queue, not a browsable account library.</p>
-          <p><strong>Waveform:</strong> the client emits <code>audioPlayed(pcm, bufferedMs)</code> as audio is handed to the sink. <code>main.cpp</code> routes it to <code>AudioAnalyzer.feed_live_pcm()</code>; <code>main.cpp</code> also switches it to live analysis while <code>nowPlaying</code>'s source is the phone. Without captured phone audio, the controls can still work but there is no live PCM waveform.</p>
+          <p><strong>Waveform:</strong> the client emits <code>audioPlayed(pcm, bufferedMs)</code> as audio is handed to the sink. <code>appcore.cpp</code> routes it to <code>AudioAnalyzer.feed_live_pcm()</code>; <code>appcore.cpp</code> also switches it to live analysis while <code>nowPlaying</code>'s source is the phone. Without captured phone audio, the controls can still work but there is no live PCM waveform.</p>
           <p><strong>QML</strong> reads what is playing from <a href="signals-slots-reference.html#nowPlaying"><code>nowPlaying</code></a>, which
             follows the phone while <code>mediaActive</code> and local media otherwise. Position is not streamed by the phone:
             <code>nowPlaying</code> extrapolates <code>mediaPosition()</code> every 500 ms while the phone plays (one clock for
@@ -598,7 +598,7 @@
               then finds the phone's <code>_adb-tls-connect</code> port on the same host over mDNS (polled up to 8 s) and runs
               <code>adb connect</code> (adb exits 0 on failure, so success is read from the output). Cancel bumps a generation counter the
               waiting job checks every second; the outcome arrives as <code>wirelessResult</code>.</li>
-            <li><strong>Remembering and reconnecting</strong>: a successful pairing sets <code>wirelessAddress</code>, which <code>main.cpp</code>
+            <li><strong>Remembering and reconnecting</strong>: a successful pairing sets <code>wirelessAddress</code>, which <code>appcore.cpp</code>
               saves to <code>scrcpyWirelessAddress</code>. At startup and whenever <code>getDeviceState()</code> finds no usable phone (the
               view polls it), the manager tries that address in the background at most every 5 s. Wireless debugging picks a new port each
               time it is switched on, so when the saved address fails it looks for an <code>_adb-tls-connect</code> service on the same host

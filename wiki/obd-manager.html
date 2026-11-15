@@ -35,6 +35,8 @@
             <li><a href="#data-watchdog">Data Watchdog</a></li>
             <li><a href="#supported-parameters">Supported OBD Parameters</a></li>
             <li><a href="#watcher-system">Which PIDs Get Polled</a></li>
+            <li><a href="#custom-pids">Custom PIDs (manufacturer-specific readings)</a></li>
+            <li><a href="#bus-monitor">Bus Monitor (listen only)</a></li>
             <li><a href="#black-box">Black Box: Trip Recorder</a></li>
             <li><a href="#vehicle-scanning">Vehicle Scanning</a></li>
             <li><a href="#diagnostics">Diagnostics (DTC)</a></li>
@@ -86,6 +88,7 @@
             <tr><td><span class="file-path">frontend/OBDParameterModel.qml</span></td><td><span class="platform-badge all">QML</span></td><td>Singleton every gauge binds to: catalog metadata, <code>liveValue(id)</code> over the C++ <code>paramStore</code>, demo mode and the vehicle gate (see <a href="#parameter-model">below</a>).</td></tr>
             <tr><td><span class="file-path">src/sim/simelm327.{h,cpp}</span>, <span class="file-path">src/sim/carsim.{h,cpp}</span></td><td><span class="platform-badge desktop">Simulator</span></td><td>Simulated ELM327 <code>QIODevice</code> and car physics for <code>octave --sim</code> (and <code>--dev</code>, or the simulated adapter), plugged in below the real manager through <code>OBDConnectionWorker::setCustomTransport()</code> (<code>addCustomTransport()</code> registers one beside it) + <code>OBDManager::setPortOverride("sim://elm327")</code> by <code>Simulator</code> (the <code>sim</code> object). Built in every configuration, inert unless started.</td></tr>
             <tr><td><span class="file-path">src/platform/wasm/webbluetooth.{h,cpp}</span>, <span class="file-path">src/platform/wasm/obdadapterfinder_wasm.cpp</span></td><td><span class="platform-badge all">Browser</span></td><td>The browser demo's real adapter: a Bluetooth LE ELM327 over Web Bluetooth (Chrome / Edge). The browser's chooser picks it, a JS helper carries the GATT link (same vendor profiles as <code>OctaveOBDBridge.java</code>), and a <code>QIODevice</code> on port <code>webbt://&lt;id&gt;</code> (<code>addCustomTransport()</code>) feeds the unchanged worker. See <a href="building.html">Building</a> &gt; WebAssembly.</td></tr>
+            <tr><td><span class="file-path">src/platform/wasm/webserial.{h,cpp}</span>, <span class="file-path">src/platform/wasm/webport.{h,cpp}</span></td><td><span class="platform-badge all">Browser</span></td><td>The browser demo's adapter on a USB cable (or a Bluetooth Classic one paired in the system), over Web Serial (Chrome / Edge on a computer): the browser's port chooser from the sheet's "Pick USB Adapter", 38400 baud, port <code>webserial://&lt;id&gt;</code>. <code>WebPortChannel</code> is the main-thread-to-worker pipe it shares with Web Bluetooth.</td></tr>
           </tbody>
         </table>
 
@@ -117,10 +120,10 @@ Desktop                                   Android
         <table>
           <thead><tr><th>QML file</th><th>What it uses</th></tr></thead>
           <tbody>
-            <tr><td><span class="file-path">frontend/OBDParameterModel.qml</span></td><td>Serves the C++ <code>paramStore</code> (fed from <code>parameterSampled</code> in <span class="file-path">main.cpp</span>) as <code>liveValue(id)</code> and the <code>ParameterCatalog</code> metadata. Gauges, the parameter-card grid and home cards read this shared model; the global RPM overlays also listen directly to <code>rpmChanged</code>.</td></tr>
+            <tr><td><span class="file-path">frontend/OBDParameterModel.qml</span></td><td>Serves the C++ <code>paramStore</code> (fed from <code>parameterSampled</code> in <span class="file-path">appcore.cpp</span>) as <code>liveValue(id)</code> and the <code>ParameterCatalog</code> metadata. Gauges, the parameter-card grid and home cards read this shared model; the global RPM overlays also listen directly to <code>rpmChanged</code>.</td></tr>
             <tr><td><span class="file-path">frontend/OBDMenu.qml</span></td><td>Parameter-card grid (one card per parameter the connected vehicle supports; registers the <code>"cards"</code> poll demand), the dashboards chooser/renderer, the RPM/shift-light settings popup. While no adapter is connected no dashboard renders at all (<code>obdConnected</code> gates the renderer, the cards grid, swipe and the page dots): the page shows "No vehicle connected" and a "Connect Bluetooth OBD2" button (<code>obdConnectButton</code>) that opens <code>OBDAdapterSheet</code>, whichever dashboard is active.</td></tr>
             <tr><td><span class="file-path">frontend/OBDAdapterSheet.qml</span></td><td>Everything on <code>obdAdapterFinder</code>; in fallback mode <code>availableAdapters</code>, <code>scan()</code> and <code>connect_to_adapter()</code>; <code>connected</code> closes the sheet 1.5 s after the adapter comes up.</td></tr>
-            <tr><td><span class="file-path">frontend/OBDHome.qml</span></td><td>Status row bound to <code>connectionStatusChanged</code> / <code>connectionStatusDetailChanged</code>, the connection log (<code>connectionLog</code>), and the sub-page buttons; while <code>connected</code> is false, only "No vehicle connected" and the "Connect Bluetooth OBD2" button (<code>OBDConnectButton</code>).</td></tr>
+            <tr><td><span class="file-path">frontend/OBDHome.qml</span></td><td>Status row bound to <code>connectionStatusChanged</code> / <code>connectionStatusDetailChanged</code> and the sub-page buttons; while <code>connected</code> is false, only "No vehicle connected" and the "Connect Bluetooth OBD2" button (<code>OBDConnectButton</code>).</td></tr>
             <tr><td><span class="file-path">frontend/OBDDiagnostics.qml</span></td><td><code>enter_diagnostic_mode()</code> on creation and on every <code>visible</code> transition, <code>exit_diagnostic_mode()</code> when hidden or destroyed, plus <code>read_dtc</code> / <code>read_current_dtc</code> / <code>read_status</code> / <code>read_freeze_frame</code> / <code>clear_dtc</code>.</td></tr>
             <tr><td><span class="file-path">frontend/HomeOBDView.qml</span></td><td>Home-screen cards for the parameters in <code>homeOBDParameters</code>, plus the RPM card's shift-light disc.</td></tr>
             <tr><td><span class="file-path">frontend/Main.qml</span></td><td>Connects <code>obdManager.rpmChanged</code> by hand in <code>Component.onCompleted</code> to drive the global full-screen flash and aura overlays.</td></tr>
@@ -687,6 +690,55 @@ QTimer::singleShot(delay * <span class="num">1000</span>, <span class="kw">this<
         </p>
 
         <!-- Vehicle Scanning -->
+        <!-- Custom PIDs -->
+        <h2 id="custom-pids">Custom PIDs (manufacturer-specific readings)</h2>
+        <p>
+          Readings the standard PIDs don't carry (transmission temperature, oil level, ...) come from a file the user
+          edits, <span class="file-path">&lt;config&gt;/custom-pids.json</span>; the user guide with the file format and
+          the formula language is <span class="file-path">docs/CUSTOM_PIDS.md</span>. Each entry is an id, display
+          metadata, a read-by-identifier request (mode <code>22</code> with a two-byte id, or <code>21</code> with one
+          byte), an optional ECU <code>header</code> and a Torque-style <code>formula</code> over the reply's data bytes
+          (<code>A-40</code>, <code>(A*256+B)/10</code>, <code>SIGNED(A)</code>, <code>{A:0}</code>, <code>&amp; | &lt;&lt; &gt;&gt;</code>).
+          Reading only: any other mode is refused when the file is read, the request is built by OCTAVE from the mode and
+          id, and a header is three or six hex digits, so nothing in the file reaches the adapter as written.
+        </p>
+        <ul>
+          <li><span class="file-path">src/managers/custompids.{h,cpp}</span>: <code>PidFormula</code> (compiles a formula to postfix steps; <code>evaluate(bytes)</code> gives no value for a short reply or a division by zero), <code>CustomPids::parse()</code> (the file: a bad entry is skipped with a line in <code>errors</code>, the rest load; at most 64) and the <code>customPids</code> object (experimental: <code>file</code>, <code>fileExists</code>, <code>pids</code>, <code>errors</code>, <code>createExample()</code>).</li>
+          <li>The file is read once, when <code>AppCore</code> constructs <code>customPids</code>, before anything reads the parameter catalog: <code>ParameterCatalog::addCustom()</code> appends the rows (<code>custom: true</code>, group <code>Custom</code>) and refuses once the table has been read, as other threads read it without a lock. So an edit takes a restart.</li>
+          <li><code>OBDManager::setCustomPids()</code> gets the requests (<code>CustomPidRequest</code>: id, mode, pid, header, decoder). A custom PID is in the poll list, as key <code>{kCustomPidMode, index}</code>, while its id is demanded (foreground or background), whatever the vehicle scan found; once a scan has a result the custom ids are added to <code>vehicleSupportedParameters</code>, so the gauges' support gate passes them and the black box sweeps them.</li>
+          <li><code>OBDConnectionWorker::pollCustom()</code>: with a header, <code>ATSH&lt;header&gt;</code>, the request (<code>ELM327Protocol::formatDataRequest</code>, 1 s, no response count: replies are often multi-frame), then <code>ATSH&lt;default&gt;</code> again before it returns, so the standard PIDs, trouble codes and the scan never run under another ECU's address. The default comes from <code>ELM327Protocol::defaultHeader(ATDPN)</code>: <code>7DF</code> (11-bit CAN), <code>DB33F1</code> (29-bit CAN), <code>686AF1</code> (J1850 VPW, ISO 9141-2), <code>616AF1</code> (J1850 PWM). Where it isn't known (KWP2000, J1939, user CAN) an entry with a header is not polled. If the restore fails twice the worker reports a lost connection: the reconnect's <code>ATZ</code> resets the header.</li>
+          <li>The value goes out as <code>extendedDataReceived</code> &rarr; <code>obdParameterChanged(id, value)</code> + <code>parameterSampled</code>, the path of the multi-value PIDs, so <code>paramStore</code>, every gauge and the black box take it unchanged.</li>
+          <li>An entry unanswered three times in a row (<code>kCustomMissLimit</code>) is tried once every 30 s (<code>kCustomRetryMs</code>) from then on, with a line in the connection log.</li>
+          <li>The simulated car (<span class="file-path">src/sim/simelm327.cpp</span>) tracks <code>ATSH</code>: its transmission ECU at <code>7E1</code> answers <code>22 1940</code> (fluid temperature, one byte, &deg;C + 40), its engine ECU answers <code>22 2000</code> (battery millivolts) and is silent while another ECU is addressed, which is how <span class="file-path">tests/cpp/tst_obdsim.cpp</span> proves the header goes back. <span class="file-path">tests/cpp/tst_custompids.cpp</span> covers the formulas, the file and the request / reply helpers.</li>
+          <li>Not on the Android BLE path (<code>rebuildAndroidPollList()</code> drops the custom keys). UI: Settings &gt; OBD &gt; Custom PIDs, and group Custom in the dashboard editor's PID picker.</li>
+        </ul>
+
+        <!-- Bus monitor -->
+        <h2 id="bus-monitor">Bus Monitor (listen only)</h2>
+        <p>
+          <code>BusMonitor</code> (<span class="file-path">src/managers/busmonitor.{h,cpp}</span>, QML context property
+          <code>busMonitor</code>, experimental) shows every message the adapter hears on the vehicle bus as a table
+          with one row per message id: how often it comes, its latest bytes, and which of them changed within the last
+          second. It is for finding out which message carries what (press the brake, see which byte moves). The user
+          guide is <span class="file-path">docs/BUS_MONITOR.md</span>; the card is Settings &gt; OBD &gt; Bus Monitor.
+        </p>
+        <p>
+          Listen only: the adapter is put in its monitor mode (<code>ATMA</code>), in which it transmits nothing and on
+          CAN does not acknowledge frames (<code>ATCSM1</code>). Nothing in OCTAVE can send a message to the bus, and
+          the filter is checked to be hex digits and <code>X</code> before it reaches <code>ATCRA</code>
+          (<code>ELM327Protocol::busFilter()</code>).
+        </p>
+        <ul>
+          <li><code>OBDManager::startBusMonitor(filter)</code> / <code>stopBusMonitor()</code> / <code>canMonitorBus()</code> (C++ only, not in the service API) queue <code>OBDConnectionWorker::doStartBusMonitor()</code> / <code>doStopBusMonitor()</code>; what is heard comes back through the <code>BusSink</code> the manager was given (<code>setBusSink()</code>), which <code>BusMonitor</code> implements.</li>
+          <li>Starting: polling stops, then <code>ATH1</code> (each line starts with the message id), on CAN <code>ATCSM1</code>, <code>ATCAF0</code> (data bytes as they are) and, with a filter, <code>ATCRA&lt;filter&gt;</code>, then <code>ATMA</code>. A timer on the worker thread (<code>onMonitorTimer()</code>) reads what the adapter prints, <code>ELM327Protocol::parseMonitorLine()</code> turns each line into a <code>BusFrame</code> (11-bit id: 3 digits; 29-bit: 8; J1850 / ISO 9141-2 / KWP2000: the three header bytes, 6), and batches go out every 50 ms.</li>
+          <li><code>BUFFER FULL</code>: the bus is faster than the link to the adapter (38400 baud carries about 200 messages a second). The adapter drops back to its prompt; the worker counts an overrun and sends <code>ATMA</code> again. Four returns to the prompt with nothing heard in between end monitoring with the adapter's last line as the note.</li>
+          <li>Stopping: one space (any byte ends monitor mode; a carriage return at the prompt would repeat <code>ATMA</code>), then <code>ATH0</code>, <code>ATCAF1</code> and <code>ATAR</code> are put back and polling resumes. If the adapter won't take them the connection is dropped and re-made from <code>ATZ</code>.</li>
+          <li>While it listens the adapter can't answer requests: live readings and the black box pause, and the data watchdog is off (<code>OBDManager::onWorkerBusMonitor()</code>). <code>sendCommand()</code> ends monitoring before it writes, so any other request (trouble codes, the vehicle scan two seconds after connecting, a custom PID) stops it with the note "Stopped for another request".</li>
+          <li><code>BusMonitor</code> keeps at most 1024 ids, rebuilds <code>ids</code> four times a second, and can record to <span class="file-path">&lt;config&gt;/history/bus/bus-&lt;date&gt;-&lt;time&gt;.log</span> in the can-utils log format (<code>(1731600000.123000) can0 0C9#0000000000000000</code>), which candump, SavvyCAN and Wireshark read. Not in the browser build (<code>canRecord</code> false).</li>
+          <li>The simulated car (<span class="file-path">src/sim/simelm327.cpp</span>) answers <code>ATMA</code> with six made-up broadcast messages of an 11-bit bus that follow the car (<code>0C9</code> engine speed and pedal every 20 ms, <code>1F5</code> gear, <code>3E9</code> speed, <code>4C1</code> temperatures, <code>4D1</code> fuel, <code>120</code> odometer every second), honours <code>ATCRA</code>, reports <code>BUFFER FULL</code> every 500 unfiltered messages, and with <code>ATH1</code> left on puts <code>7E8</code> and a length byte in front of every reply. Tests: <code>tst_obdsim</code> (<code>busMonitorListensAndPutsTheAdapterBack</code>), <code>tst_elm327protocol</code> (<code>monitorLines</code>, <code>busFilters</code>).</li>
+          <li>Limits: not on the Android BLE path (<code>available</code> stays false); the older buses are not filtered at the adapter; many cars built since about 2010 keep internal traffic behind a gateway, so the OBD port shows nothing until something asks.</li>
+        </ul>
+
         <!-- Black box -->
         <h2 id="black-box">Black Box: Trip Recorder</h2>
         <p>

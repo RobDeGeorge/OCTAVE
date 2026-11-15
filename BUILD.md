@@ -46,7 +46,7 @@ for the MCP / screenshot / perf tooling) and links Qt Test. The simulated car it
   build time: CMake probes for it and prints `QtQuick3D NOT found` if absent, in which case the
   app still builds and the "3D View" card on the Sensors hub greys itself out at runtime.
   Note that `RuntimeLoader` also needs Qt's **assimp asset-import plugin** to parse the vehicle
-  model (`frontend/assets/jeep_tj_2003.glb` and the hinge parts under `frontend/assets/jeep_tj/`).
+  model (the hinge parts under `frontend/assets/jeep_tj/`; the full model they are checked against is `tools/vehicle/reference/jeep_tj_2003.glb`, which no package ships).
   Official Qt (online installer / aqtinstall) bundles it with the `qtquick3d` module; distro Qt
   packages often split it out — on Arch, `qt6-quick3d` additionally needs `assimp` installed, or
   the model silently fails to load with `Failed to load asset import plugin with key: "assimp"`.
@@ -71,14 +71,14 @@ are all found: `sudo apt install libplist-dev libssl-dev libavcodec-dev`
 
 ```bash
 sudo apt install -y build-essential cmake ninja-build pkg-config \
-                    libgl1-mesa-dev libxkbcommon-dev libfontconfig1 libdbus-1-3 \
+                    libgl1-mesa-dev libegl1-mesa-dev libpulse-dev libxkbcommon-dev libfontconfig1 libdbus-1-3 \
                     libxcb-cursor0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 \
                     libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
                     libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xkb1
 # Qt 6.7.3 — install via the Qt online installer or aqtinstall:
 pipx install aqtinstall
 aqt install-qt linux desktop 6.7.3 linux_gcc_64 -O ~/Qt \
-    -m qtmultimedia qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools qtquicktimeline
+    -m qtmultimedia qtserialport qtconnectivity qtquick3d qt5compat qtshadertools qtquicktimeline
 
 export PATH="$HOME/Qt/6.7.3/gcc_64/bin:$PATH"
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -87,16 +87,7 @@ cmake --build build -j
 
 Outputs: `build/octave`. CI packages this into a portable `OCTAVE-<version>-linux-x86_64.AppImage` via `packaging/linux/build-appimage.sh` (see [CI parity](#ci-parity)) — no local installer needed for development.
 
-On Rhea's desktop, **Mod+D → OCTAVE** launches the native app from the Dropbox
-checkout through `scripts/octave-desktop.sh`. Each launch incrementally builds
-the current local source, then runs `build-desktop-<hostname>/octave`; QML and
-assets load directly from the checkout's `frontend/`. The computer-specific
-build directory avoids conflicting with CMake caches synced from other machines.
-This uses locally available Dropbox files and does not fetch or reset Git.
-Build failures stop the launch and show a desktop notification; details are in
-`~/.local/state/octave/desktop-launch.log` (or `$XDG_STATE_HOME/octave/`).
-The menu entry is installed at
-`~/.local/share/applications/octave-dropbox.desktop`.
+`scripts/octave-desktop.sh` is an optional launcher for running straight from a source checkout (it builds incrementally into `build-desktop-<hostname>/`, then runs that binary); see `docs/desktop-source-launch.md`.
 
 To produce an AppImage locally (matches CI's layout, but linked against your distro's glibc — only safe to run on the same distro):
 
@@ -119,7 +110,7 @@ xcode-select --install
 # Qt 6.7.3 (Apple Silicon and Intel both supported)
 pipx install aqtinstall
 aqt install-qt mac desktop 6.7.3 -O ~/Qt \
-    -m qtmultimedia qtserialport qtconnectivity qtsensors qtquick3d qt5compat qtshadertools qtquicktimeline
+    -m qtmultimedia qtserialport qtconnectivity qtquick3d qt5compat qtshadertools qtquicktimeline
 
 export PATH="$HOME/Qt/6.7.3/macos/bin:$PATH"
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -375,7 +366,7 @@ cmake --build build-wasm
 
 Everything is gated on CMake's `EMSCRIPTEN`, which defines `OCTAVE_WASM` and `Q_OS_MOBILE`:
 
-- Qt SerialPort and Bluetooth, TagLib and FFmpeg are dropped. `src/platform/wasm/` holds stand-ins: a `QSerialPort` / `QSerialPortInfo` whose `open()` always fails, and inert `obdadapterfinder_wasm.cpp` / `networkmanager_wasm.cpp` that replace the real sources (`HEADER_FILE_ONLY` on the originals). `QProcess` users (the settings manager's git/curl, the OBD manager destructor) are behind `#if QT_CONFIG(process)`; the IMU manager and the simulator's IMU feed take their desktop (no I²C) branch.
+- Qt SerialPort, Qt Bluetooth and FFmpeg are dropped; TagLib is built from its release tarball (`FetchContent`, hash-pinned) because the browser library reads tags with it. `src/platform/wasm/` holds what replaces the rest: a `QSerialPort` / `QSerialPortInfo` whose `open()` always fails, an inert `networkmanager_wasm.cpp`, and `obdadapterfinder_wasm.cpp`, the adapter finder over Web Bluetooth and Web Serial. The two `.cpp` files replace the real sources (`HEADER_FILE_ONLY` on the originals). `QProcess` users (the settings manager's git/curl, the OBD manager destructor) are behind `#if QT_CONFIG(process)`; the IMU manager and the simulator's IMU feed take their desktop (no I²C) branch.
 - `-sDISABLE_EXCEPTION_CATCHING=0`: Assimp's glTF1 probe throws on `.glb`, so exceptions stay on.
 - `frontend/` is staged by `packaging/wasm/stage_frontend.cmake` into `build-wasm/wasm_fs` (a build step with a stamp in `LINK_DEPENDS`, so a QML edit relinks) and preloaded at `/frontend` in the page's in-memory filesystem. That is `octave.data`. The README screenshots, `assets/-src` and the full-size `jeep_tj_2003.glb` are excluded.
 - `src/sim/demodrive.{h,cpp}` (`DemoDrive`, owned by `AppCore` in every build) starts the simulator of `src/sim/` (the same one `--sim` runs): the real `OBDManager` on its `CarSim` + `SimElm327` (port `sim://elm327`, realistic mode off) and the IMU fed by its `ImuFeed`, then runs an autopilot: idle with throttle blips, pull away to a 35–70 mph target, cruise, coast, brake to a stop. Choose **Simulated car** in the adapter picker to start it on desktop, mobile or WebAssembly; no developer flags are needed. Selecting hardware or closing OBD stops the demo motion, and the saved hardware adapter is preserved.

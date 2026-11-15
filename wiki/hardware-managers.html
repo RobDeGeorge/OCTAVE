@@ -421,7 +421,7 @@ m_reconnectAttempts++;
           </p>
           <p>
             <code>applyVolume</code> does not call the outputs itself: it emits <code>volumeApplied(int percent, float linear)</code>,
-            and <span class="file-path">src/main.cpp</span> connects that to <code>mediaManager.setVolume(linear)</code>,
+            and <span class="file-path">src/appcore.cpp</span> connects that to <code>mediaManager.setVolume(linear)</code>,
             <code>phoneMirrorManager.setVolume(linear)</code> and <code>esp32VolumeManager.send_volume_update(percent)</code>
             (desktop only). <span class="file-path">src/main.cpp</span> calls
             <code>applyVolume(settingsManager.currentVolume())</code> once after every manager is constructed so all outputs start
@@ -927,7 +927,7 @@ tz = yw*qz - yz*qw</code></pre>
     <span class="str">"WAVE"</span>:              <span class="str">"play_pause"</span>
 }</code></pre>
           <p>
-            The action handler is a lambda on <code>actionTriggered</code> in <span class="file-path">src/main.cpp</span>. The
+            The action handler is a lambda on <code>actionTriggered</code> in <span class="file-path">src/appcore.cpp</span>. The
             three track actions go to the phone instead of local media while phone mirroring holds the media controls
             (<code>phoneMirrorManager.mediaActive()</code>):
           </p>
@@ -948,7 +948,7 @@ tz = yw*qz - yz*qw</code></pre>
             <tbody>
               <tr><td><code>gestureSensorEnabled</code></td><td><code>true</code></td><td>toggle</td><td><code>connect_settings_manager()</code>, then live on <code>gestureSensorEnabledChanged</code>; the settings toggle and the dashboard Accessories widget only call <code>save_gesture_sensor_enabled()</code></td></tr>
               <tr><td><code>gestureMapping</code></td><td>table above</td><td>chip picker per gesture</td><td><code>get_gesture_mapping_dict()</code> at startup; <code>setGestureAction()</code> / <code>resetMappingToDefaults()</code> write back through <code>save_gesture_mapping()</code></td></tr>
-              <tr><td><code>gestureVolumeStep</code></td><td><code>5</code></td><td>1&ndash;100</td><td>The action handler in <span class="file-path">src/main.cpp</span></td></tr>
+              <tr><td><code>gestureVolumeStep</code></td><td><code>5</code></td><td>1&ndash;100</td><td>The action handler in <span class="file-path">src/appcore.cpp</span></td></tr>
               <tr><td><code>gestureCooldown</code></td><td><code>300</code> ms</td><td>100&ndash;2000, step 50</td><td><code>connect_settings_manager()</code>, then live on <code>gestureCooldownChanged</code>; slider and chips only call <code>save_gesture_cooldown()</code></td></tr>
             </tbody>
           </table>
@@ -974,7 +974,7 @@ tz = yw*qz - yz*qw</code></pre>
           <table>
             <thead><tr><th>Property</th><th>Type</th><th>Description</th></tr></thead>
             <tbody>
-              <tr><td><code>connectionStatus</code></td><td><code>QString</code></td><td>Bindable form of <code>getConnectionStatus()</code>; read by <span class="file-path">frontend/settings/widgets/AccessoriesWidget.qml</span>. Added to the desktop class in commit <code>78ab72c</code> (it had been mobile-stub-only).</td></tr>
+              <tr><td><code>connectionStatus</code></td><td><code>QString</code></td><td>Bindable form of <code>getConnectionStatus()</code>. Added to the desktop class in commit <code>78ab72c</code> (it had been mobile-stub-only).</td></tr>
             </tbody>
           </table>
           <h4>Slots</h4>

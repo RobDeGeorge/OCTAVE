@@ -159,7 +159,7 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
         <p>
           The slot names are snake_case (<code>save_theme_setting</code>, not <code>saveThemeSetting</code>), and the QML is
           written against those names. The camelCase exceptions are <code>setCurrentVolume()</code>, which only <code>VolumeController</code> calls,
-          and the shutdown flush <code>flushPendingSave()</code>, which only <span class="file-path">src/main.cpp</span> calls.
+          and the shutdown flush <code>flushPendingSave()</code>, which only <code>AppCore::shutdown()</code> (<span class="file-path">src/appcore.cpp</span>) calls.
         </p>
 
         <p>
@@ -237,7 +237,7 @@ Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
               emit xxxChanged(value) ──► QML bindings update immediately
                     ⋮
         500 ms of quiet  ──► flushPendingSave() ──► writeSettingsToDisk()   (QSaveFile: temp + rename)
-        aboutToQuit      ──► flushPendingSave()      (src/main.cpp, after MediaManager saves playback state)</pre>
+        aboutToQuit      ──► flushPendingSave()      (AppCore::shutdown(), after MediaManager saves playback state)</pre>
 
         <p>
           Consequences worth knowing: a slider drag that fires twenty <code>save_*</code> calls costs one write;
@@ -442,7 +442,7 @@ reg[QStringLiteral(<span class="str">"theme_setting"</span>)] = entry(<span clas
           <tbody>
             <tr><td><code>loadSettings()</code> (private)</td><td>Returns a copy of the in-memory object once loaded. Before that (constructor only), it attempts a shared lock and reads the file. A missing file is initialized with defaults; a corrupt file triggers backup recovery, falling back to defaults if recovery fails.</td></tr>
             <tr><td><code>saveSettings(settings)</code> (private)</td><td>Validates into the in-memory copy and arms the 500&nbsp;ms timer. On the constructor path (migration, first run) it writes immediately.</td></tr>
-            <tr><td><code>flushPendingSave()</code></td><td>Invokable. Writes now if a save is pending and stops the timer. Called from <code>aboutToQuit</code> in <span class="file-path">src/main.cpp</span>, after <code>MediaManager</code> has saved playback state so that write is included.</td></tr>
+            <tr><td><code>flushPendingSave()</code></td><td>Invokable. Writes now if a save is pending and stops the timer. Called from <code>AppCore::shutdown()</code> (<span class="file-path">src/appcore.cpp</span>, run on <code>aboutToQuit</code>), after <code>MediaManager</code> has saved playback state so that write is included.</td></tr>
             <tr><td><code>writeSettingsToDisk(settings)</code> (private)</td><td>The atomic temp+rename write; takes an already validated object.</td></tr>
             <tr><td><code>updateSetting(key, value)</code> (private)</td><td>Convenience funnel: copy, set key, <code>saveSettings</code>. The calling setter emits its own signal.</td></tr>
             <tr><td><code>get_setting(key)</code>, <code>get_setting_with_default(key, default)</code></td><td>Read any key from memory. <code>get_setting</code> returns an invalid <code>QVariant</code> (<code>undefined</code> in QML) for unknown keys.</td></tr>
@@ -655,7 +655,7 @@ QVariant SettingsManager::<span class="fn">get_setting_with_default</span>(<span
           pushed to SettingsManager as a JSON string. This is the single distribution point: <code>MediaManager</code>
           calls <code>set_album_art_colors()</code>, QML reads
           <code>settingsManager.albumArtColors</code> as a theme object (see <a href="theme-system.html">Theme System</a>), and
-          <span class="file-path">src/main.cpp</span> sends its <code>accent</code> to the ESP32 knob's LEDs when
+          <span class="file-path">src/appcore.cpp</span> sends its <code>accent</code> to the ESP32 knob's LEDs when
           <code>esp32LedColorMode</code> is <code>"theme"</code>.
         </p>
         <pre><code>Q_PROPERTY(QVariantMap albumArtColors READ albumArtColors NOTIFY albumArtColorsChanged)   <span class="cmt">// parsed from the stored string</span>
@@ -696,7 +696,7 @@ Connections {
 <span class="cmt">// Generic key with a QML-side default</span>
 property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span class="str">"rpm_shift_light_enabled"</span>, <span class="kw">true</span>)</code></pre>
 
-        <p>On <code>aboutToQuit</code>, <span class="file-path">src/main.cpp</span> calls <code>mediaManager._save_playback_state()</code> before <code>settingsManager.flushPendingSave()</code>, so the final settings write includes playback state.</p>
+        <p>On <code>aboutToQuit</code>, <code>AppCore::shutdown()</code> (<span class="file-path">src/appcore.cpp</span>) calls <code>mediaManager._save_playback_state()</code> before <code>settingsManager.flushPendingSave()</code>, so the final settings write includes playback state.</p>
 
         <!-- Design Decisions -->
         <h2 id="design-decisions">Design Decisions</h2>
@@ -844,7 +844,7 @@ property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span 
             <tr><td><code>genericSettingChanged</code></td><td>QString (key)</td><td><code>save_setting()</code> called</td></tr>
             <tr><td><code>albumArtColorsChanged</code></td><td>&mdash;</td><td>New palette pushed by MediaManager; also drives the ESP32 LEDs in theme mode</td></tr>
             <tr><td><code>scrcpyAudioGainChanged</code>, <code>scrcpyAudioDuckEnabledChanged</code>, <code>scrcpyAudioDuckLevelChanged</code>, <code>scrcpyPhoneScreenOffChanged</code>, <code>scrcpyDisplayDpiChanged</code>, <code>scrcpyBitRateUsbChanged</code>, <code>scrcpyBitRateWifiChanged</code>, <code>scrcpyAutoWifiChanged</code>, <code>scrcpyBitRateAutoChanged</code></td><td>double / bool / double / bool / int / int / int / bool / bool</td><td>Connected directly to <code>PhoneMirrorManager</code> setters at startup</td></tr>
-            <tr><td><code>esp32LedColorModeChanged</code>, <code>esp32LedStaticColorChanged</code></td><td>QString</td><td><span class="file-path">src/main.cpp</span> connects these to the ESP32 LED sync lambdas</td></tr>
+            <tr><td><code>esp32LedColorModeChanged</code>, <code>esp32LedStaticColorChanged</code></td><td>QString</td><td><span class="file-path">src/appcore.cpp</span> connects these to the ESP32 LED sync lambdas</td></tr>
           </tbody>
         </table>
 
