@@ -9,6 +9,10 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMetaMethod>
+#include <QMetaProperty>
+#include <QSet>
+#include <QHash>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
@@ -503,6 +507,361 @@ private slots:
         QVERIFY(!mgr.sensorCards().contains("Warp"));
         QCOMPARE(cards.count(), 0);
         QCOMPARE(mgr.sensorCards().size(), 6);
+    }
+
+    // ── the settings table (2026-11: one row per plain setting) ──────────
+    // Every row against the meta-object and the defaults, and every writable
+    // property against the table, so neither can gain an entry alone.
+
+    void tableMatchesTheMetaObject()
+    {
+        SettingsManager sm;
+        const QMetaObject *mo = sm.metaObject();
+        const QVariantList table = SettingsManager::describeTable();
+        QVERIFY2(table.size() > 80, qPrintable(QString::number(table.size())));
+        QSet<QString> keys;
+        for (const QVariant &rv : table) {
+            const QVariantMap r = rv.toMap();
+            const QString key = r.value("key").toString();
+            const QByteArray k = key.toLatin1();
+            QVERIFY2(!keys.contains(key), k.constData());
+            keys.insert(key);
+            const QString type = r.value("type").toString();
+            // The default is of the declared type, and is the file's default
+            QCOMPARE(QString::fromLatin1(r.value("default").metaType().name()), type);
+            QVERIFY2(sm.m_defaultSettings.contains(key), k.constData());
+            QCOMPARE(sm.m_defaultSettings.value(key).toVariant().toString(), r.value("default").toString());
+
+            const int pi = mo->indexOfProperty(k.constData());
+            const QString shape = r.value("shape").toString();
+            if (shape == "part") {
+                QVERIFY2(pi < 0, k.constData());
+                continue;
+            }
+            QVERIFY2(pi >= 0, k.constData());
+            const QMetaProperty prop = mo->property(pi);
+            QVERIFY2(prop.hasNotifySignal(), k.constData());
+            if (shape == "derived") {
+                QVERIFY2(!prop.isWritable(), k.constData());   // a list or a map made of the stored string
+                continue;
+            }
+            QVERIFY2(prop.isWritable(), k.constData());
+            const QString propType = QString::fromLatin1(prop.typeName());
+            QVERIFY2(propType == type || (type == "double" && propType == "float"), k.constData());
+            // Its save slot exists and takes one value
+            const QByteArray slot = r.value("slot").toString().toLatin1();
+            QVERIFY2(!slot.isEmpty(), k.constData());
+            bool found = false;
+            for (int i = mo->methodOffset(); i < mo->methodCount(); ++i)
+                found = found || (mo->method(i).name() == slot && mo->method(i).parameterCount() == 1);
+            QVERIFY2(found, slot.constData());
+        }
+
+        // Every property is a row, or one of these that are not plain settings
+        const QSet<QString> writableElsewhere = {"mediaFolder", "homeOBDParameters", "scrcpyAudioGainDb",
+                                                 "scrcpyAudioDuckLevelDb"};
+        const QSet<QString> readOnly = {"albumArtColors", "obdSavedAdapters", "settingsMenuVisibility", "currentVolume",
+                                        "maxHomeObdParameters", "customThemes", "customThemeData", "nowPlayingPresets",
+                                        "directoryHistory", "sensorCards", "pinnedSettings"};
+        for (int i = mo->propertyOffset(); i < mo->propertyCount(); ++i) {
+            const QString name = QString::fromLatin1(mo->property(i).name());
+            if (mo->property(i).isWritable())
+                QVERIFY2(keys.contains(name) || writableElsewhere.contains(name), qPrintable(name));
+            else
+                QVERIFY2(readOnly.contains(name), qPrintable(name));
+        }
+
+        // The pinned-settings registry names the same slot as the table
+        const QJsonObject registry = QJsonDocument::fromJson(sm.get_settings_registry().toUtf8()).object();
+        QVERIFY(registry.size() > 20);
+        for (auto it = registry.begin(); it != registry.end(); ++it) {
+            const QJsonObject e = it.value().toObject();
+            for (const QVariant &rv : table) {
+                if (rv.toMap().value("key").toString() == e.value("key").toString())
+                    QCOMPARE(e.value("saveSlot").toString(), rv.toMap().value("slot").toString());
+            }
+        }
+    }
+
+    // A value the row takes that is not `current`
+    static QVariant another(const QVariantMap &r, const QVariant &current)
+    {
+        const QString type = r.value("type").toString();
+        const QString rule = r.value("rule").toString();
+        const QString key = r.value("key").toString();
+        if (type == "bool")
+            return !current.toBool();
+        if (type == "int") {
+            if (key == "scrcpyDisplayDpi")
+                return current.toInt() == 200 ? 240 : 200;
+            const bool ranged = rule == "clamp" || rule == "within";
+            const int hi = ranged ? r.value("hi").toInt() : 1000000;
+            return current.toInt() + 1 <= hi ? current.toInt() + 1 : current.toInt() - 1;
+        }
+        if (type == "double") {
+            if (key == "esp32VolumeStepSize")
+                return current.toDouble() == 2.5 ? 3.0 : 2.5;
+            const bool ranged = rule == "clamp" || rule == "within";
+            const double lo = ranged ? r.value("lo").toDouble() : 0.0;
+            const double hi = ranged ? r.value("hi").toDouble() : 100.0;
+            const double mid = lo + (hi - lo) * 0.25;   // 0.25, 0.5, 0.875: exact as a float too
+            return qFuzzyCompare(current.toDouble() + 1.0, mid + 1.0) ? lo + (hi - lo) * 0.5 : mid;
+        }
+        if (rule == "oneOf") {
+            const QStringList allowed = r.value("allowed").toStringList();
+            return allowed.first() == current.toString() ? allowed.last() : allowed.first();
+        }
+        if (key == "obdSavedAdapters")
+            return current.toString() == "[]" ? QStringLiteral(R"([{"mac":"AA:BB","name":"n"}])") : QStringLiteral("[]");
+        if (key == "albumArtColors")
+            return current.toString().isEmpty() ? QStringLiteral(R"({"accent":"#ff8800"})") : QString();
+        return current.toString() + QStringLiteral("x");
+    }
+
+    static bool same(const QVariant &a, const QVariant &b)
+    {
+        if (a.typeId() == QMetaType::Double || b.typeId() == QMetaType::Double || a.typeId() == QMetaType::Float)
+            return std::abs(a.toDouble() - b.toDouble()) < 1e-6;
+        return a.toString() == b.toString();
+    }
+
+    // What says a row changed: its own property's signal, or the property it is part of
+    static QMetaMethod notifierOf(const SettingsManager &sm, const QVariantMap &r)
+    {
+        const QString key = r.value("key").toString();
+        const QByteArray name = r.value("shape").toString() == "part" ? QByteArray("sensorCards") : key.toLatin1();
+        return sm.metaObject()->property(sm.metaObject()->indexOfProperty(name.constData())).notifySignal();
+    }
+
+    // The review's bug: save_setting("uiScale", 2.0) wrote the file and left
+    // the property and its signal behind. For EVERY row: the generic path
+    // and the typed path read and write one value.
+    void genericAndTypedPathsAgreeForEveryRow()
+    {
+        SettingsManager sm;
+        const QVariantList table = SettingsManager::describeTable();
+        for (const QVariant &rv : table) {
+            const QVariantMap r = rv.toMap();
+            const QString key = r.value("key").toString();
+            const QByteArray k = key.toLatin1();
+            const bool plain = r.value("shape").toString() == "plain";
+            QSignalSpy notify(&sm, notifierOf(sm, r));
+            QSignalSpy generic(&sm, &SettingsManager::genericSettingChanged);
+            QVERIFY2(notify.isValid(), k.constData());
+
+            const QVariant original = sm.get_setting(key);
+            if (plain)
+                QVERIFY2(same(sm.property(k.constData()), original), k.constData());
+
+            // In through the generic path, out through the typed one
+            const QVariant value = another(r, original);
+            sm.save_setting(key, value);
+            QVERIFY2(same(sm.get_setting(key), value), k.constData());
+            if (plain)
+                QVERIFY2(same(sm.property(k.constData()), value), k.constData());
+            QVERIFY2(same(sm.m_settings.value(key).toVariant(), value), k.constData());
+            QVERIFY2(notify.count() == 1, k.constData());
+            QVERIFY2(generic.count() == 1 && generic.first().at(0).toString() == key, k.constData());
+
+            // The same value again: nothing to say, nothing to write
+            sm.flushPendingSave();
+            sm.save_setting(key, value);
+            QVERIFY2(notify.count() == 1 && generic.count() == 1, k.constData());
+            QVERIFY2(!sm.m_savePending, k.constData());
+
+            // In through the typed path (the writable property), out through the generic one
+            if (plain) {
+                QVERIFY2(sm.setProperty(k.constData(), original), k.constData());
+                QVERIFY2(same(sm.get_setting(key), original), k.constData());
+                QVERIFY2(same(sm.m_settings.value(key).toVariant(), original), k.constData());
+                QVERIFY2(notify.count() == 2, k.constData());
+                QVERIFY2(generic.count() == 1, k.constData());   // the property write is not a generic save
+                sm.setProperty(k.constData(), original);
+                QVERIFY2(notify.count() == 2, k.constData());   // unchanged
+            }
+        }
+    }
+
+    void saveSettingMovesTheLiveValueAndItsSignal()
+    {
+        SettingsManager sm;
+        QSignalSpy scale(&sm, &SettingsManager::uiScaleChanged);
+        sm.save_setting("uiScale", 1.5);
+        QCOMPARE(sm.uiScale(), 1.5f);
+        QCOMPARE(scale.count(), 1);
+        QCOMPARE(scale.first().at(0).toFloat(), 1.5f);
+        // ...and the typed setter is what get_setting reads
+        sm.save_ui_scale(0.75f);
+        QCOMPARE(sm.get_setting("uiScale").toDouble(), 0.75);
+        // A list kept in a member follows a generic save too
+        QSignalSpy pinned(&sm, &SettingsManager::pinnedSettingsChanged);
+        sm.save_setting("pinnedSettings", QVariantList{QStringLiteral("ui_scale")});
+        QCOMPARE(sm.pinnedSettings(), QVariantList{QStringLiteral("ui_scale")});
+        QCOMPARE(pinned.count(), 1);
+        QVERIFY(sm.is_setting_pinned("ui_scale"));
+    }
+
+    void everyRowSurvivesARestart()
+    {
+        const QVariantList table = SettingsManager::describeTable();
+        QVariantMap wanted;
+        {
+            SettingsManager first;
+            for (const QVariant &rv : table) {
+                const QVariantMap r = rv.toMap();
+                const QString key = r.value("key").toString();
+                wanted.insert(key, another(r, first.get_setting(key)));
+                first.save_setting(key, wanted.value(key));
+            }
+            first.flushPendingSave();
+        }
+        SettingsManager second;
+        for (auto it = wanted.constBegin(); it != wanted.constEnd(); ++it)
+            QVERIFY2(same(second.get_setting(it.key()), it.value()), qPrintable(it.key()));
+    }
+
+    void valuesARowDoesNotTakeAreRefused()
+    {
+        SettingsManager sm;
+        QSignalSpy scale(&sm, &SettingsManager::uiScaleChanged);
+        QSignalSpy clock(&sm, &SettingsManager::clockSizeChanged);
+        QSignalSpy show(&sm, &SettingsManager::showClockChanged);
+        QSignalSpy window(&sm, &SettingsManager::windowStateChanged);
+        // Outside the slider's range, by the slot, the property and the generic path
+        sm.save_ui_scale(5.0f);
+        sm.setProperty("uiScale", 0.1);
+        sm.save_setting("uiScale", 9);
+        QCOMPARE(sm.uiScale(), 1.0f);
+        sm.save_clock_size(500);
+        sm.save_setting("clockSize", 2);
+        QCOMPARE(sm.clockSize(), 18);
+        sm.save_start_volume(1.5f);
+        QCOMPARE(sm.startUpVolume(), 0.1f);
+        // The limits themselves are values
+        sm.save_ui_scale(2.0f);
+        QCOMPARE(sm.uiScale(), 2.0f);
+        sm.save_ui_scale(0.5f);
+        QCOMPARE(scale.count(), 2);
+        // Another type, from outside
+        sm.save_setting("uiScale", QStringLiteral("big"));
+        sm.save_setting("showClock", 1);
+        sm.save_setting("showClock", QStringLiteral("false"));
+        sm.save_setting("clockSize", QStringLiteral("40"));
+        sm.save_setting("windowState", 3);
+        sm.save_setting("windowState", QStringLiteral("sideways"));
+        QCOMPARE(sm.uiScale(), 0.5f);
+        QCOMPARE(sm.showClock(), true);
+        QCOMPARE(sm.windowState(), QStringLiteral("windowed"));
+        QCOMPARE(clock.count(), 0);
+        QCOMPARE(show.count(), 0);
+        QCOMPARE(window.count(), 0);
+        QCOMPARE(sm.m_settings.value("clockSize").toInt(), 18);
+        // A number for an int row is rounded; a clamped row clamps, as its slot always did
+        sm.save_setting("clockSize", 39.6);
+        QCOMPARE(sm.clockSize(), 40);
+        sm.save_setting("sideCardAngle", 999);
+        QCOMPARE(sm.sideCardAngle(), 60);
+        sm.save_side_card_angle(-3);
+        QCOMPARE(sm.sideCardAngle(), 5);
+    }
+
+    void anUnchangedValueIsNotSavedOrAnnounced()
+    {
+        SettingsManager sm;
+        sm.save_theme_setting(QStringLiteral("Midnight"));
+        sm.flushPendingSave();
+        QSignalSpy theme(&sm, &SettingsManager::themeSettingChanged);
+        sm.save_theme_setting(QStringLiteral("Midnight"));
+        sm.setProperty("themeSetting", QStringLiteral("Midnight"));
+        sm.save_setting("themeSetting", QStringLiteral("Midnight"));
+        sm.save_side_card_angle(999);          // clamped to 60 ...
+        sm.flushPendingSave();
+        QSignalSpy angle(&sm, &SettingsManager::sideCardAngleChanged);
+        sm.save_side_card_angle(61);           // ... and 61 is 60 again
+        QCOMPARE(theme.count(), 0);
+        QCOMPARE(angle.count(), 0);
+        QVERIFY(!sm.m_savePending);
+    }
+
+    void aResetAnnouncesExactlyWhatChanged()
+    {
+        SettingsManager sm;
+        sm.save_show_clock(false);
+        sm.save_ui_scale(1.5f);
+        sm.save_sensor_card_visible(QStringLiteral("Roll"), false);
+        sm.save_sensor_card_visible(QStringLiteral("Pitch"), false);
+        sm.save_home_obd_parameters({QStringLiteral("RPM")});
+        sm.save_setting("airPlayName", QStringLiteral("Jeep"));
+        sm.save_start_volume(0.5f);
+
+        // A spy on every property's signal
+        const QMetaObject *mo = sm.metaObject();
+        QHash<QString, QSignalSpy *> spies;
+        for (int i = mo->propertyOffset(); i < mo->propertyCount(); ++i) {
+            const QMetaProperty p = mo->property(i);
+            const QString signal = QString::fromLatin1(p.notifySignal().name());
+            if (p.hasNotifySignal() && !spies.contains(signal))
+                spies.insert(signal, new QSignalSpy(&sm, p.notifySignal()));
+        }
+        QSignalSpy generic(&sm, &SettingsManager::genericSettingChanged);
+
+        sm.reset_to_defaults();
+        QCOMPARE(sm.showClock(), true);
+        QCOMPARE(sm.uiScale(), 1.0f);
+        QCOMPARE(sm.sensorCards().value("Roll").toBool(), true);
+        QStringList fired;
+        for (auto it = spies.constBegin(); it != spies.constEnd(); ++it) {
+            if (it.value()->count() > 1)
+                fired << it.key() + " x" + QString::number(it.value()->count());
+            else if (it.value()->count() == 1)
+                fired << it.key();
+        }
+        fired.sort();
+        // (not currentVolumeChanged: the live volume was never moved from
+        // where the default start-up volume put it)
+        QCOMPARE(fired, (QStringList{"homeOBDParametersChanged", "sensorCardsChanged", "showClockChanged",
+                                     "startUpVolumeChanged", "uiScaleChanged"}));
+        QStringList genericKeys;
+        for (const QList<QVariant> &call : generic)
+            genericKeys << call.at(0).toString();
+        QCOMPARE(genericKeys, QStringList{"airPlayName"});
+        qDeleteAll(spies);
+
+        // A second reset has nothing to say
+        QSignalSpy clock(&sm, &SettingsManager::showClockChanged);
+        QSignalSpy again(&sm, &SettingsManager::genericSettingChanged);
+        sm.reset_to_defaults();
+        QCOMPARE(clock.count(), 0);
+        QCOMPARE(again.count(), 0);
+    }
+
+    // What the file holds is brought within each row's rule when it loads,
+    // and the file's value and the property are then the same one
+    void aFileOutsideTheRulesLoadsWithinThem()
+    {
+        const QString dir = SettingsManager::getAppDataDir();
+        QVERIFY(QDir().mkpath(dir));
+        const QJsonObject edited{{"blackBoxMaxMB", 99999}, {"sensorEmitRate", 3}, {"windowState", "sideways"},
+                                 {"gaugeSpeedUnit", "knots"}, {"uiScale", 2.5}, {"clockSize", 39.6},
+                                 {"obdBluetoothPort", "/dev/rfcomm0"}, {"lastSettingsSection", "clockSettings"},
+                                 {"obdSavedAdapters", ""}};
+        {
+            QFile f(dir + "/settingsConfigure.json");
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(QJsonDocument(edited).toJson());
+        }
+        SettingsManager sm;
+        QCOMPARE(sm.blackBoxMaxMB(), 5000);
+        QCOMPARE(sm.sensorEmitRate(), 10);
+        QCOMPARE(sm.windowState(), QStringLiteral("windowed"));
+        QCOMPARE(sm.gaugeSpeedUnit(), QStringLiteral("mph"));
+        QCOMPARE(sm.uiScale(), 2.5f);   // a range the UI implies is not forced on a file that has more
+        QCOMPARE(sm.clockSize(), 40);
+        QCOMPARE(sm.obdBluetoothPort(), QString());
+        QCOMPARE(sm.lastSettingsSection(), QStringLiteral("displaySettings"));
+        QCOMPARE(sm.obdSavedAdapters(), QVariantList{});
+        for (const char *key : {"blackBoxMaxMB", "sensorEmitRate", "windowState", "gaugeSpeedUnit", "clockSize"})
+            QVERIFY2(same(sm.get_setting(key), sm.property(key)) && same(sm.m_settings.value(key).toVariant(), sm.property(key)), key);
     }
 
 private:

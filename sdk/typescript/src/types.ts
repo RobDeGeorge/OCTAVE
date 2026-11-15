@@ -1498,119 +1498,119 @@ export interface PhoneMirrorManager {
 /** settingsManager (SettingsManager) */
 export interface SettingsManager {
   properties: {
-    /** QString, notify deviceNameChanged */
+    /** QString, writable, notify deviceNameChanged */
     deviceName: string
-    /** QString, notify fontSettingChanged */
+    /** QString, writable, notify fontSettingChanged */
     fontSetting: string
-    /** QString, notify themeSettingChanged */
+    /** QString, writable, notify themeSettingChanged */
     themeSetting: string
-    /** float, notify uiScaleChanged */
+    /** float, writable, notify uiScaleChanged */
     uiScale: number
-    /** int, notify colorTransitionMsChanged */
+    /** int, writable, notify colorTransitionMsChanged */
     colorTransitionMs: number
-    /** bool, notify songLengthTransitionChanged */
+    /** bool, writable, notify songLengthTransitionChanged */
     songLengthTransition: boolean
-    /** bool, notify showClockChanged */
+    /** bool, writable, notify showClockChanged */
     showClock: boolean
-    /** bool, notify clockFormatChanged */
+    /** bool, writable, notify clockFormatChanged */
     clockFormat24Hour: boolean
-    /** bool, notify clockShowSecondsChanged */
+    /** bool, writable, notify clockShowSecondsChanged */
     clockShowSeconds: boolean
-    /** int, notify clockSizeChanged */
+    /** int, writable, notify clockSizeChanged */
     clockSize: number
-    /** bool, notify clockSizeAutoChanged */
+    /** bool, writable, notify clockSizeAutoChanged */
     clockSizeAuto: boolean
-    /** QString, notify backgroundGridChanged */
+    /** QString, writable, notify backgroundGridChanged */
     backgroundGrid: string
-    /** int, notify screenWidthChanged */
+    /** int, writable, notify screenWidthChanged */
     screenWidth: number
-    /** int, notify screenHeightChanged */
+    /** int, writable, notify screenHeightChanged */
     screenHeight: number
-    /** int, notify backgroundBlurRadiusChanged */
+    /** int, writable, notify backgroundBlurRadiusChanged */
     backgroundBlurRadius: number
-    /** QString, notify bottomBarOrientationChanged */
+    /** QString, writable, notify bottomBarOrientationChanged */
     bottomBarOrientation: string
-    /** bool, notify showBottomBarMediaControlsChanged */
+    /** bool, writable, notify showBottomBarMediaControlsChanged */
     showBottomBarMediaControls: boolean
-    /** QString, notify settingsLayoutStyleChanged */
+    /** QString, writable, notify settingsLayoutStyleChanged */
     settingsLayoutStyle: string
     /** QVariantMap, notify albumArtColorsChanged */
     albumArtColors: Record<string, unknown>
     /** QString, notify settingsMenuVisibilityChanged */
     settingsMenuVisibility: string
-    /** float, notify startUpVolumeChanged */
+    /** float, writable, notify startUpVolumeChanged */
     startUpVolume: number
     /** int, notify currentVolumeChanged */
     currentVolume: number
-    /** QString, notify mediaFolderChanged */
+    /** QString, writable, notify mediaFolderChanged */
     mediaFolder: string
-    /** bool, notify autoPlayOnStartupChanged */
+    /** bool, writable, notify autoPlayOnStartupChanged */
     autoPlayOnStartup: boolean
-    /** bool, notify persistShuffleStateChanged */
+    /** bool, writable, notify persistShuffleStateChanged */
     persistShuffleState: boolean
-    /** bool, notify lastShuffleStateChanged */
+    /** bool, writable, notify lastShuffleStateChanged */
     lastShuffleState: boolean
-    /** QString, notify lastPlayedSongChanged */
+    /** QString, writable, notify lastPlayedSongChanged */
     lastPlayedSong: string
-    /** int, notify lastPlayedPositionChanged */
+    /** int, writable, notify lastPlayedPositionChanged */
     lastPlayedPosition: number
-    /** QString, notify lastPlayedPlaylistChanged */
+    /** QString, writable, notify lastPlayedPlaylistChanged */
     lastPlayedPlaylist: string
-    /** QString, notify musicButtonDefaultPageChanged */
+    /** QString, writable, notify musicButtonDefaultPageChanged */
     musicButtonDefaultPage: string
-    /** bool, notify returnToLibraryAfterSelectionChanged */
+    /** bool, writable, notify returnToLibraryAfterSelectionChanged */
     returnToLibraryAfterSelection: boolean
-    /** bool, notify showWaveformVisualizerChanged */
+    /** bool, writable, notify showWaveformVisualizerChanged */
     showWaveformVisualizer: boolean
-    /** bool, notify show3DButtonTiltChanged */
+    /** bool, writable, notify show3DButtonTiltChanged */
     show3DButtonTilt: boolean
-    /** bool, notify show3DAlbumPreviewChanged */
+    /** bool, writable, notify show3DAlbumPreviewChanged */
     show3DAlbumPreview: boolean
-    /** bool, notify roundedAlbumArtChanged */
+    /** bool, writable, notify roundedAlbumArtChanged */
     roundedAlbumArt: boolean
-    /** int, notify albumArtCornerRadiusChanged */
+    /** int, writable, notify albumArtCornerRadiusChanged */
     albumArtCornerRadius: number
-    /** bool, notify showAlbumArtShadowChanged */
+    /** bool, writable, notify showAlbumArtShadowChanged */
     showAlbumArtShadow: boolean
-    /** bool, notify vinylRecordModeChanged */
+    /** bool, writable, notify vinylRecordModeChanged */
     vinylRecordMode: boolean
-    /** QString, notify albumArtTransitionChanged */
+    /** QString, writable, notify albumArtTransitionChanged */
     albumArtTransition: string
-    /** QString, notify audioOutputDeviceChanged */
+    /** QString, writable, notify audioOutputDeviceChanged */
     audioOutputDevice: string
-    /** int, notify backgroundOverlayOpacityChanged */
+    /** int, writable, notify backgroundOverlayOpacityChanged */
     backgroundOverlayOpacity: number
-    /** double, notify sideCardOpacityChanged */
+    /** double, writable, notify sideCardOpacityChanged */
     sideCardOpacity: number
-    /** int, notify sideCardAngleChanged */
+    /** int, writable, notify sideCardAngleChanged */
     sideCardAngle: number
-    /** int, notify buttonTiltDurationChanged */
+    /** int, writable, notify buttonTiltDurationChanged */
     buttonTiltDuration: number
-    /** int, notify textScrollSpeedChanged */
+    /** int, writable, notify textScrollSpeedChanged */
     textScrollSpeed: number
-    /** QString, notify obdBluetoothPortChanged */
+    /** QString, writable, notify obdBluetoothPortChanged */
     obdBluetoothPort: string
     /** QVariantList, notify obdSavedAdaptersChanged */
     obdSavedAdapters: unknown[]
-    /** bool, notify obdFastModeChanged */
+    /** bool, writable, notify obdFastModeChanged */
     obdFastMode: boolean
-    /** bool, notify obdCardStyleCircularChanged */
+    /** bool, writable, notify obdCardStyleCircularChanged */
     obdCardStyleCircular: boolean
-    /** QString, notify gaugeTempUnitChanged */
+    /** QString, writable, notify gaugeTempUnitChanged */
     gaugeTempUnit: string
-    /** QString, notify gaugeSpeedUnitChanged */
+    /** QString, writable, notify gaugeSpeedUnitChanged */
     gaugeSpeedUnit: string
-    /** int, notify obdAutoReconnectAttemptsChanged */
+    /** int, writable, notify obdAutoReconnectAttemptsChanged */
     obdAutoReconnectAttempts: number
-    /** float, notify fuelTankCapacityChanged */
+    /** float, writable, notify fuelTankCapacityChanged */
     fuelTankCapacity: number
-    /** bool, notify blackBoxEnabledChanged */
+    /** bool, writable, notify blackBoxEnabledChanged */
     blackBoxEnabled: boolean
-    /** bool, notify blackBoxSweepAllChanged */
+    /** bool, writable, notify blackBoxSweepAllChanged */
     blackBoxSweepAll: boolean
-    /** int, notify blackBoxMaxMBChanged */
+    /** int, writable, notify blackBoxMaxMBChanged */
     blackBoxMaxMB: number
-    /** QVariantList, notify homeOBDParametersChanged */
+    /** QVariantList, writable, notify homeOBDParametersChanged */
     homeOBDParameters: unknown[]
     /** int, constant */
     maxHomeObdParameters: number
@@ -1622,136 +1622,189 @@ export interface SettingsManager {
     nowPlayingPresets: unknown[]
     /** QVariantList, notify directoryHistoryChanged */
     directoryHistory: unknown[]
-    /** QString, notify windowStateChanged */
+    /** QString, writable, notify windowStateChanged */
     windowState: string
-    /** QString, notify lastSettingsSectionChanged */
+    /** QString, writable, notify lastSettingsSectionChanged */
     lastSettingsSection: string
-    /** bool, notify androidAutoEnabledChanged */
+    /** bool, writable, notify androidAutoEnabledChanged */
     androidAutoEnabled: boolean
-    /** bool, notify phoneMirrorEnabledChanged */
+    /** bool, writable, notify phoneMirrorEnabledChanged */
     phoneMirrorEnabled: boolean
-    /** QString, notify scrcpyDisplaySizeChanged */
+    /** QString, writable, notify scrcpyDisplaySizeChanged */
     scrcpyDisplaySize: string
-    /** double, notify scrcpyAudioGainChanged */
+    /** double, writable, notify scrcpyAudioGainChanged */
     scrcpyAudioGain: number
-    /** double, notify scrcpyAudioGainChanged */
+    /** double, writable, notify scrcpyAudioGainChanged */
     scrcpyAudioGainDb: number
-    /** double, notify scrcpyAudioDuckLevelChanged */
+    /** double, writable, notify scrcpyAudioDuckLevelChanged */
     scrcpyAudioDuckLevelDb: number
-    /** bool, notify scrcpyAudioDuckEnabledChanged */
+    /** bool, writable, notify scrcpyAudioDuckEnabledChanged */
     scrcpyAudioDuckEnabled: boolean
-    /** double, notify scrcpyAudioDuckLevelChanged */
+    /** double, writable, notify scrcpyAudioDuckLevelChanged */
     scrcpyAudioDuckLevel: number
-    /** bool, notify scrcpyPhoneScreenOffChanged */
+    /** bool, writable, notify scrcpyPhoneScreenOffChanged */
     scrcpyPhoneScreenOff: boolean
-    /** int, notify scrcpyDisplayDpiChanged */
+    /** int, writable, notify scrcpyDisplayDpiChanged */
     scrcpyDisplayDpi: number
-    /** int, notify scrcpyBitRateUsbChanged */
+    /** int, writable, notify scrcpyBitRateUsbChanged */
     scrcpyBitRateUsb: number
-    /** int, notify scrcpyBitRateWifiChanged */
+    /** int, writable, notify scrcpyBitRateWifiChanged */
     scrcpyBitRateWifi: number
-    /** bool, notify scrcpyAutoWifiChanged */
+    /** bool, writable, notify scrcpyAutoWifiChanged */
     scrcpyAutoWifi: boolean
-    /** bool, notify scrcpyBitRateAutoChanged */
+    /** bool, writable, notify scrcpyBitRateAutoChanged */
     scrcpyBitRateAuto: boolean
-    /** QString, notify scrcpyWirelessAddressChanged */
+    /** QString, writable, notify scrcpyWirelessAddressChanged */
     scrcpyWirelessAddress: string
-    /** bool, notify esp32VolumeEnabledChanged */
+    /** bool, writable, notify esp32VolumeEnabledChanged */
     esp32VolumeEnabled: boolean
-    /** QString, notify esp32VolumePortChanged */
+    /** QString, writable, notify esp32VolumePortChanged */
     esp32VolumePort: string
-    /** double, notify esp32VolumeStepSizeChanged */
+    /** double, writable, notify esp32VolumeStepSizeChanged */
     esp32VolumeStepSize: number
-    /** bool, notify esp32AutoReconnectChanged */
+    /** bool, writable, notify esp32AutoReconnectChanged */
     esp32AutoReconnect: boolean
-    /** bool, notify esp32LedSleepEnabledChanged */
+    /** bool, writable, notify esp32LedSleepEnabledChanged */
     esp32LedSleepEnabled: boolean
-    /** QString, notify esp32LedColorModeChanged */
+    /** QString, writable, notify esp32LedColorModeChanged */
     esp32LedColorMode: string
-    /** QString, notify esp32LedStaticColorChanged */
+    /** QString, writable, notify esp32LedStaticColorChanged */
     esp32LedStaticColor: string
-    /** bool, notify imuEnabledChanged */
+    /** bool, writable, notify imuEnabledChanged */
     imuEnabled: boolean
-    /** int, notify sensorEmitRateChanged */
+    /** int, writable, notify sensorEmitRateChanged */
     sensorEmitRate: number
-    /** int, notify sensorDecimalPlacesChanged */
+    /** int, writable, notify sensorDecimalPlacesChanged */
     sensorDecimalPlaces: number
-    /** QString, notify sensorTempUnitChanged */
+    /** QString, writable, notify sensorTempUnitChanged */
     sensorTempUnit: string
-    /** QString, notify sensorAltitudeUnitChanged */
+    /** QString, writable, notify sensorAltitudeUnitChanged */
     sensorAltitudeUnit: string
     /** QVariantMap, notify sensorCardsChanged */
     sensorCards: Record<string, unknown>
-    /** bool, notify gestureSensorEnabledChanged */
+    /** bool, writable, notify gestureSensorEnabledChanged */
     gestureSensorEnabled: boolean
-    /** int, notify gestureVolumeStepChanged */
+    /** int, writable, notify gestureVolumeStepChanged */
     gestureVolumeStep: number
-    /** int, notify gestureCooldownChanged */
+    /** int, writable, notify gestureCooldownChanged */
     gestureCooldown: number
     /** QVariantList, notify pinnedSettingsChanged */
     pinnedSettings: unknown[]
   }
   methods: {
+    /** @deprecated use the deviceName property; goes in protocol 5 */
     save_device_name: { args: [name: string]; returns: void }
+    /** @deprecated use the fontSetting property; goes in protocol 5 */
     save_font_setting: { args: [font: string]; returns: void }
+    /** @deprecated use the themeSetting property; goes in protocol 5 */
     save_theme_setting: { args: [theme: string]; returns: void }
+    /** @deprecated use the uiScale property; goes in protocol 5 */
     save_ui_scale: { args: [scale: number]; returns: void }
+    /** @deprecated use the colorTransitionMs property; goes in protocol 5 */
     save_color_transition_ms: { args: [ms: number]; returns: void }
+    /** @deprecated use the songLengthTransition property; goes in protocol 5 */
     save_song_length_transition: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use the showClock property; goes in protocol 5 */
     save_show_clock: { args: [show: boolean]; returns: void }
+    /** @deprecated use the clockFormat24Hour property; goes in protocol 5 */
     save_clock_format: { args: [is24hour: boolean]; returns: void }
+    /** @deprecated use the clockShowSeconds property; goes in protocol 5 */
     save_clock_show_seconds: { args: [show: boolean]; returns: void }
+    /** @deprecated use the clockSize property; goes in protocol 5 */
     save_clock_size: { args: [size: number]; returns: void }
+    /** @deprecated use the clockSizeAuto property; goes in protocol 5 */
     save_clock_size_auto: { args: [autoSize: boolean]; returns: void }
+    /** @deprecated use the backgroundGrid property; goes in protocol 5 */
     save_background_grid: { args: [grid: string]; returns: void }
+    /** @deprecated use the screenWidth property; goes in protocol 5 */
     save_screen_width: { args: [width: number]; returns: void }
+    /** @deprecated use the screenHeight property; goes in protocol 5 */
     save_screen_height: { args: [height: number]; returns: void }
+    /** @deprecated use the backgroundBlurRadius property; goes in protocol 5 */
     save_background_blur_radius: { args: [radius: number]; returns: void }
+    /** @deprecated use the bottomBarOrientation property; goes in protocol 5 */
     save_bottom_bar_orientation: { args: [orientation: string]; returns: void }
+    /** @deprecated use the showBottomBarMediaControls property; goes in protocol 5 */
     save_show_bottom_bar_media_controls: { args: [show: boolean]; returns: void }
+    /** @deprecated use the settingsLayoutStyle property; goes in protocol 5 */
     save_settings_layout_style: { args: [style: string]; returns: void }
     set_album_art_colors: { args: [colorsJson: string]; returns: void }
+    /** @deprecated use the startUpVolume property; goes in protocol 5 */
     save_start_volume: { args: [volume: number]; returns: void }
     setCurrentVolume: { args: [volume: number]; returns: void }
+    /** @deprecated use the mediaFolder property; goes in protocol 5 */
     save_media_folder: { args: [folderPath: string]; returns: boolean }
     save_media_folder_url: { args: [url: string]; returns: boolean }
+    /** @deprecated use the autoPlayOnStartup property; goes in protocol 5 */
     save_auto_play_on_startup: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use the persistShuffleState property; goes in protocol 5 */
     save_persist_shuffle_state: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use the lastShuffleState property; goes in protocol 5 */
     save_last_shuffle_state: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use the lastPlayedSong property; goes in protocol 5 */
     save_last_played_song: { args: [filename: string]; returns: void }
+    /** @deprecated use the lastPlayedPosition property; goes in protocol 5 */
     save_last_played_position: { args: [positionMs: number]; returns: void }
+    /** @deprecated use the lastPlayedPlaylist property; goes in protocol 5 */
     save_last_played_playlist: { args: [playlistName: string]; returns: void }
     save_playback_state: { args: [song: string, positionMs: number, playlist: string]; returns: void }
+    /** @deprecated use the musicButtonDefaultPage property; goes in protocol 5 */
     save_music_button_default_page: { args: [page: string]; returns: void }
+    /** @deprecated use the returnToLibraryAfterSelection property; goes in protocol 5 */
     save_return_to_library_after_selection: { args: [returnToLibrary: boolean]; returns: void }
+    /** @deprecated use the showWaveformVisualizer property; goes in protocol 5 */
     save_show_waveform_visualizer: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use the show3DButtonTilt property; goes in protocol 5 */
     save_show_3d_button_tilt: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use the show3DAlbumPreview property; goes in protocol 5 */
     save_show_3d_album_preview: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use the roundedAlbumArt property; goes in protocol 5 */
     save_rounded_album_art: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use the albumArtCornerRadius property; goes in protocol 5 */
     save_album_art_corner_radius: { args: [radius: number]; returns: void }
+    /** @deprecated use the showAlbumArtShadow property; goes in protocol 5 */
     save_show_album_art_shadow: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use the vinylRecordMode property; goes in protocol 5 */
     save_vinyl_record_mode: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use the albumArtTransition property; goes in protocol 5 */
     save_album_art_transition: { args: [transition: string]; returns: void }
+    /** @deprecated use the audioOutputDevice property; goes in protocol 5 */
     save_audio_output_device: { args: [id: string]; returns: void }
+    /** @deprecated use the backgroundOverlayOpacity property; goes in protocol 5 */
     save_background_overlay_opacity: { args: [opacity: number]; returns: void }
+    /** @deprecated use the sideCardOpacity property; goes in protocol 5 */
     save_side_card_opacity: { args: [opacity: number]; returns: void }
+    /** @deprecated use the sideCardAngle property; goes in protocol 5 */
     save_side_card_angle: { args: [angle: number]; returns: void }
+    /** @deprecated use the buttonTiltDuration property; goes in protocol 5 */
     save_button_tilt_duration: { args: [duration: number]; returns: void }
+    /** @deprecated use the textScrollSpeed property; goes in protocol 5 */
     save_text_scroll_speed: { args: [speed: number]; returns: void }
+    /** @deprecated use the obdBluetoothPort property; goes in protocol 5 */
     save_obd_bluetooth_port: { args: [port: string]; returns: void }
     add_obd_saved_adapter: { args: [name: string, mac: string]; returns: void }
     remove_obd_saved_adapter: { args: [mac: string]; returns: void }
+    /** @deprecated use the obdFastMode property; goes in protocol 5 */
     save_obd_fast_mode: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use the obdCardStyleCircular property; goes in protocol 5 */
     save_obd_card_style_circular: { args: [circular: boolean]; returns: void }
+    /** @deprecated use the gaugeTempUnit property; goes in protocol 5 */
     save_gauge_temp_unit: { args: [unit: string]; returns: void }
+    /** @deprecated use the gaugeSpeedUnit property; goes in protocol 5 */
     save_gauge_speed_unit: { args: [unit: string]; returns: void }
+    /** @deprecated use the obdAutoReconnectAttempts property; goes in protocol 5 */
     save_obd_auto_reconnect_attempts: { args: [attempts: number]; returns: void }
+    /** @deprecated use the fuelTankCapacity property; goes in protocol 5 */
     save_fuel_tank_capacity: { args: [capacity: number]; returns: void }
+    /** @deprecated use the blackBoxEnabled property; goes in protocol 5 */
     save_black_box_enabled: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use the blackBoxSweepAll property; goes in protocol 5 */
     save_black_box_sweep_all: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use the blackBoxMaxMB property; goes in protocol 5 */
     save_black_box_max_mb: { args: [megabytes: number]; returns: void }
     save_obd_parameter_enabled: { args: [parameter: string, enabled: boolean]; returns: void }
     save_supported_obd_parameters: { args: [parameters: unknown[]]; returns: void }
+    /** @deprecated use the homeOBDParameters property; goes in protocol 5 */
     save_home_obd_parameters: { args: [parameters: unknown[]]; returns: void }
     add_home_obd_parameter: { args: [id: string, index: number] | [id: string]; returns: boolean }
     remove_home_obd_parameter: { args: [id: string]; returns: boolean }
@@ -1760,42 +1813,74 @@ export interface SettingsManager {
     remove_from_directory_history: { args: [folderPath: string]; returns: void }
     save_custom_theme: { args: [name: string, theme: Record<string, unknown>, albumArtSource: string] | [name: string, theme: Record<string, unknown>]; returns: void }
     delete_custom_theme: { args: [name: string]; returns: void }
+    /** @deprecated use the windowState property; goes in protocol 5 */
     save_window_state: { args: [state: string]; returns: void }
+    /** @deprecated use the lastSettingsSection property; goes in protocol 5 */
     set_last_settings_section: { args: [section: string]; returns: void }
     save_settings_section_visibility: { args: [section: string, visible: boolean]; returns: void }
+    /** @deprecated use the androidAutoEnabled property; goes in protocol 5 */
     save_android_auto_enabled: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use the phoneMirrorEnabled property; goes in protocol 5 */
     save_phone_mirror_enabled: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use the scrcpyDisplaySize property; goes in protocol 5 */
     save_scrcpy_display_size: { args: [size: string]; returns: void }
+    /** @deprecated use the scrcpyAudioGain property; goes in protocol 5 */
     save_scrcpy_audio_gain: { args: [gain: number]; returns: void }
+    /** @deprecated use the scrcpyAudioDuckEnabled property; goes in protocol 5 */
     save_scrcpy_audio_duck_enabled: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use the scrcpyAudioDuckLevel property; goes in protocol 5 */
     save_scrcpy_audio_duck_level: { args: [level: number]; returns: void }
+    /** @deprecated use the scrcpyAudioGainDb property; goes in protocol 5 */
     save_scrcpy_audio_gain_db: { args: [db: number]; returns: void }
+    /** @deprecated use the scrcpyAudioDuckLevelDb property; goes in protocol 5 */
     save_scrcpy_audio_duck_level_db: { args: [db: number]; returns: void }
+    /** @deprecated use the scrcpyPhoneScreenOff property; goes in protocol 5 */
     save_scrcpy_phone_screen_off: { args: [off: boolean]; returns: void }
+    /** @deprecated use the scrcpyDisplayDpi property; goes in protocol 5 */
     save_scrcpy_display_dpi: { args: [dpi: number]; returns: void }
+    /** @deprecated use the scrcpyBitRateUsb property; goes in protocol 5 */
     save_scrcpy_bit_rate_usb: { args: [mbps: number]; returns: void }
+    /** @deprecated use the scrcpyBitRateWifi property; goes in protocol 5 */
     save_scrcpy_bit_rate_wifi: { args: [mbps: number]; returns: void }
+    /** @deprecated use the scrcpyAutoWifi property; goes in protocol 5 */
     save_scrcpy_auto_wifi: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use the scrcpyBitRateAuto property; goes in protocol 5 */
     save_scrcpy_bit_rate_auto: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use the scrcpyWirelessAddress property; goes in protocol 5 */
     save_scrcpy_wireless_address: { args: [address: string]; returns: void }
+    /** @deprecated use the esp32VolumeEnabled property; goes in protocol 5 */
     save_esp32_volume_enabled: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use the esp32VolumePort property; goes in protocol 5 */
     save_esp32_volume_port: { args: [port: string]; returns: void }
+    /** @deprecated use the esp32VolumeStepSize property; goes in protocol 5 */
     save_esp32_volume_step_size: { args: [stepSize: number]; returns: void }
+    /** @deprecated use the esp32AutoReconnect property; goes in protocol 5 */
     save_esp32_auto_reconnect: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use the esp32LedSleepEnabled property; goes in protocol 5 */
     save_esp32_led_sleep_enabled: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use the esp32LedColorMode property; goes in protocol 5 */
     save_esp32_led_color_mode: { args: [mode: string]; returns: void }
+    /** @deprecated use the esp32LedStaticColor property; goes in protocol 5 */
     save_esp32_led_static_color: { args: [color: string]; returns: void }
+    /** @deprecated use the imuEnabled property; goes in protocol 5 */
     save_imu_enabled: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use the sensorEmitRate property; goes in protocol 5 */
     save_sensor_emit_rate: { args: [hz: number]; returns: void }
+    /** @deprecated use the sensorDecimalPlaces property; goes in protocol 5 */
     save_sensor_decimal_places: { args: [places: number]; returns: void }
+    /** @deprecated use the sensorTempUnit property; goes in protocol 5 */
     save_sensor_temp_unit: { args: [unit: string]; returns: void }
+    /** @deprecated use the sensorAltitudeUnit property; goes in protocol 5 */
     save_sensor_altitude_unit: { args: [unit: string]; returns: void }
     save_sensor_card_visible: { args: [card: string, visible: boolean]; returns: void }
+    /** @deprecated use the gestureSensorEnabled property; goes in protocol 5 */
     save_gesture_sensor_enabled: { args: [enabled: boolean]; returns: void }
     save_gesture_action: { args: [gesture: string, action: string]; returns: void }
     save_gesture_mapping: { args: [mapping: Record<string, unknown>]; returns: void }
     reset_gesture_mapping: { args: []; returns: void }
+    /** @deprecated use the gestureVolumeStep property; goes in protocol 5 */
     save_gesture_volume_step: { args: [step: number]; returns: void }
+    /** @deprecated use the gestureCooldown property; goes in protocol 5 */
     save_gesture_cooldown: { args: [ms: number]; returns: void }
     toggle_pin_setting: { args: [settingId: string]; returns: void }
     reset_to_defaults: { args: []; returns: void }
@@ -1806,47 +1891,83 @@ export interface SettingsManager {
     get_setting_with_default: { args: [key: string, defaultValue: unknown]; returns: unknown }
     get_obd_parameter_enabled: { args: [parameter: string, defaultVal: boolean] | [parameter: string]; returns: boolean }
     get_supported_obd_parameters: { args: []; returns: unknown[] }
+    /** @deprecated use the directoryHistory property; goes in protocol 5 */
     get_directory_history: { args: []; returns: unknown[] }
+    /** @deprecated use the homeOBDParameters property; goes in protocol 5 */
     get_home_obd_parameters: { args: []; returns: unknown[] }
+    /** @deprecated use the autoPlayOnStartup property; goes in protocol 5 */
     get_auto_play_on_startup: { args: []; returns: boolean }
+    /** @deprecated use the persistShuffleState property; goes in protocol 5 */
     get_persist_shuffle_state: { args: []; returns: boolean }
+    /** @deprecated use the lastShuffleState property; goes in protocol 5 */
     get_last_shuffle_state: { args: []; returns: boolean }
+    /** @deprecated use the lastPlayedSong property; goes in protocol 5 */
     get_last_played_song: { args: []; returns: string }
+    /** @deprecated use the lastPlayedPosition property; goes in protocol 5 */
     get_last_played_position: { args: []; returns: number }
+    /** @deprecated use the lastPlayedPlaylist property; goes in protocol 5 */
     get_last_played_playlist: { args: []; returns: string }
+    /** @deprecated use the lastSettingsSection property; goes in protocol 5 */
     get_last_settings_section: { args: []; returns: string }
+    /** @deprecated use the windowState property; goes in protocol 5 */
     get_window_state: { args: []; returns: string }
+    /** @deprecated use the musicButtonDefaultPage property; goes in protocol 5 */
     get_music_button_default_page: { args: []; returns: string }
+    /** @deprecated use the returnToLibraryAfterSelection property; goes in protocol 5 */
     get_return_to_library_after_selection: { args: []; returns: boolean }
     flushPendingSave: { args: []; returns: void }
+    /** @deprecated use the androidAutoEnabled property; goes in protocol 5 */
     get_android_auto_enabled: { args: []; returns: boolean }
+    /** @deprecated use the phoneMirrorEnabled property; goes in protocol 5 */
     get_phone_mirror_enabled: { args: []; returns: boolean }
+    /** @deprecated use the scrcpyDisplaySize property; goes in protocol 5 */
     get_scrcpy_display_size: { args: []; returns: string }
+    /** @deprecated use the scrcpyAudioGain property; goes in protocol 5 */
     get_scrcpy_audio_gain: { args: []; returns: number }
+    /** @deprecated use the scrcpyAudioDuckEnabled property; goes in protocol 5 */
     get_scrcpy_audio_duck_enabled: { args: []; returns: boolean }
+    /** @deprecated use the scrcpyAudioDuckLevel property; goes in protocol 5 */
     get_scrcpy_audio_duck_level: { args: []; returns: number }
+    /** @deprecated use the scrcpyPhoneScreenOff property; goes in protocol 5 */
     get_scrcpy_phone_screen_off: { args: []; returns: boolean }
+    /** @deprecated use the scrcpyDisplayDpi property; goes in protocol 5 */
     get_scrcpy_display_dpi: { args: []; returns: number }
+    /** @deprecated use the scrcpyBitRateUsb property; goes in protocol 5 */
     get_scrcpy_bit_rate_usb: { args: []; returns: number }
+    /** @deprecated use the scrcpyBitRateWifi property; goes in protocol 5 */
     get_scrcpy_bit_rate_wifi: { args: []; returns: number }
+    /** @deprecated use the scrcpyAutoWifi property; goes in protocol 5 */
     get_scrcpy_auto_wifi: { args: []; returns: boolean }
+    /** @deprecated use the scrcpyBitRateAuto property; goes in protocol 5 */
     get_scrcpy_bit_rate_auto: { args: []; returns: boolean }
+    /** @deprecated use the scrcpyWirelessAddress property; goes in protocol 5 */
     get_scrcpy_wireless_address: { args: []; returns: string }
+    /** @deprecated use the esp32VolumeEnabled property; goes in protocol 5 */
     get_esp32_volume_enabled: { args: []; returns: boolean }
+    /** @deprecated use the esp32VolumePort property; goes in protocol 5 */
     get_esp32_volume_port: { args: []; returns: string }
+    /** @deprecated use the esp32VolumeStepSize property; goes in protocol 5 */
     get_esp32_volume_step_size: { args: []; returns: number }
+    /** @deprecated use the esp32AutoReconnect property; goes in protocol 5 */
     get_esp32_auto_reconnect: { args: []; returns: boolean }
+    /** @deprecated use the esp32LedSleepEnabled property; goes in protocol 5 */
     get_esp32_led_sleep_enabled: { args: []; returns: boolean }
+    /** @deprecated use the esp32LedColorMode property; goes in protocol 5 */
     get_esp32_led_color_mode: { args: []; returns: string }
+    /** @deprecated use the esp32LedStaticColor property; goes in protocol 5 */
     get_esp32_led_static_color: { args: []; returns: string }
+    /** @deprecated use the showWaveformVisualizer property; goes in protocol 5 */
     get_show_waveform_visualizer: { args: []; returns: boolean }
+    /** @deprecated use the imuEnabled property; goes in protocol 5 */
     get_imu_enabled: { args: []; returns: boolean }
+    /** @deprecated use the gestureSensorEnabled property; goes in protocol 5 */
     get_gesture_sensor_enabled: { args: []; returns: boolean }
     get_gesture_mapping: { args: []; returns: string }
     get_gesture_mapping_dict: { args: []; returns: Record<string, unknown> }
     is_setting_pinned: { args: [settingId: string]; returns: boolean }
     get_settings_registry: { args: []; returns: string }
     get_pinned_settings_metadata: { args: []; returns: string }
+    /** @deprecated use the settingsMenuVisibility property; goes in protocol 5 */
     get_settings_menu_visibility: { args: []; returns: string }
     is_settings_section_visible: { args: [section: string]; returns: boolean }
     get_git_commit_hash: { args: []; returns: string }

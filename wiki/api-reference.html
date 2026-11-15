@@ -956,168 +956,168 @@
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
-            <tr><td><code>deviceName</code></td><td>QString</td><td>read</td><td><code>deviceNameChanged</code></td></tr>
-            <tr><td><code>fontSetting</code></td><td>QString</td><td>read</td><td><code>fontSettingChanged</code></td></tr>
-            <tr><td><code>themeSetting</code></td><td>QString</td><td>read</td><td><code>themeSettingChanged</code></td></tr>
-            <tr><td><code>uiScale</code></td><td>float</td><td>read</td><td><code>uiScaleChanged</code></td></tr>
-            <tr><td><code>colorTransitionMs</code></td><td>int</td><td>read</td><td><code>colorTransitionMsChanged</code></td></tr>
-            <tr><td><code>songLengthTransition</code></td><td>bool</td><td>read</td><td><code>songLengthTransitionChanged</code></td></tr>
-            <tr><td><code>showClock</code></td><td>bool</td><td>read</td><td><code>showClockChanged</code></td></tr>
-            <tr><td><code>clockFormat24Hour</code></td><td>bool</td><td>read</td><td><code>clockFormatChanged</code></td></tr>
-            <tr><td><code>clockShowSeconds</code></td><td>bool</td><td>read</td><td><code>clockShowSecondsChanged</code></td></tr>
-            <tr><td><code>clockSize</code></td><td>int</td><td>read</td><td><code>clockSizeChanged</code></td></tr>
-            <tr><td><code>clockSizeAuto</code></td><td>bool</td><td>read</td><td><code>clockSizeAutoChanged</code></td></tr>
-            <tr><td><code>backgroundGrid</code></td><td>QString</td><td>read</td><td><code>backgroundGridChanged</code></td></tr>
-            <tr><td><code>screenWidth</code></td><td>int</td><td>read</td><td><code>screenWidthChanged</code></td></tr>
-            <tr><td><code>screenHeight</code></td><td>int</td><td>read</td><td><code>screenHeightChanged</code></td></tr>
-            <tr><td><code>backgroundBlurRadius</code></td><td>int</td><td>read</td><td><code>backgroundBlurRadiusChanged</code></td></tr>
-            <tr><td><code>bottomBarOrientation</code></td><td>QString</td><td>read</td><td><code>bottomBarOrientationChanged</code></td></tr>
-            <tr><td><code>showBottomBarMediaControls</code></td><td>bool</td><td>read</td><td><code>showBottomBarMediaControlsChanged</code></td></tr>
-            <tr><td><code>settingsLayoutStyle</code></td><td>QString</td><td>read</td><td><code>settingsLayoutStyleChanged</code></td></tr>
+            <tr><td><code>deviceName</code></td><td>QString</td><td>read / write (settings)</td><td><code>deviceNameChanged</code></td></tr>
+            <tr><td><code>fontSetting</code></td><td>QString</td><td>read / write (settings)</td><td><code>fontSettingChanged</code></td></tr>
+            <tr><td><code>themeSetting</code></td><td>QString</td><td>read / write (settings)</td><td><code>themeSettingChanged</code></td></tr>
+            <tr><td><code>uiScale</code></td><td>float</td><td>read / write (settings)</td><td><code>uiScaleChanged</code></td></tr>
+            <tr><td><code>colorTransitionMs</code></td><td>int</td><td>read / write (settings)</td><td><code>colorTransitionMsChanged</code></td></tr>
+            <tr><td><code>songLengthTransition</code></td><td>bool</td><td>read / write (settings)</td><td><code>songLengthTransitionChanged</code></td></tr>
+            <tr><td><code>showClock</code></td><td>bool</td><td>read / write (settings)</td><td><code>showClockChanged</code></td></tr>
+            <tr><td><code>clockFormat24Hour</code></td><td>bool</td><td>read / write (settings)</td><td><code>clockFormatChanged</code></td></tr>
+            <tr><td><code>clockShowSeconds</code></td><td>bool</td><td>read / write (settings)</td><td><code>clockShowSecondsChanged</code></td></tr>
+            <tr><td><code>clockSize</code></td><td>int</td><td>read / write (settings)</td><td><code>clockSizeChanged</code></td></tr>
+            <tr><td><code>clockSizeAuto</code></td><td>bool</td><td>read / write (settings)</td><td><code>clockSizeAutoChanged</code></td></tr>
+            <tr><td><code>backgroundGrid</code></td><td>QString</td><td>read / write (settings)</td><td><code>backgroundGridChanged</code></td></tr>
+            <tr><td><code>screenWidth</code></td><td>int</td><td>read / write (settings)</td><td><code>screenWidthChanged</code></td></tr>
+            <tr><td><code>screenHeight</code></td><td>int</td><td>read / write (settings)</td><td><code>screenHeightChanged</code></td></tr>
+            <tr><td><code>backgroundBlurRadius</code></td><td>int</td><td>read / write (settings)</td><td><code>backgroundBlurRadiusChanged</code></td></tr>
+            <tr><td><code>bottomBarOrientation</code></td><td>QString</td><td>read / write (settings)</td><td><code>bottomBarOrientationChanged</code></td></tr>
+            <tr><td><code>showBottomBarMediaControls</code></td><td>bool</td><td>read / write (settings)</td><td><code>showBottomBarMediaControlsChanged</code></td></tr>
+            <tr><td><code>settingsLayoutStyle</code></td><td>QString</td><td>read / write (settings)</td><td><code>settingsLayoutStyleChanged</code></td></tr>
             <tr><td><code>albumArtColors</code></td><td>QVariantMap</td><td>read</td><td><code>albumArtColorsChanged</code></td></tr>
             <tr><td><code>settingsMenuVisibility</code></td><td>QString</td><td>read</td><td><code>settingsMenuVisibilityChanged</code></td></tr>
-            <tr><td><code>startUpVolume</code></td><td>float</td><td>read</td><td><code>startUpVolumeChanged</code></td></tr>
+            <tr><td><code>startUpVolume</code></td><td>float</td><td>read / write (settings)</td><td><code>startUpVolumeChanged</code></td></tr>
             <tr><td><code>currentVolume</code></td><td>int</td><td>read</td><td><code>currentVolumeChanged</code></td></tr>
-            <tr><td><code>mediaFolder</code></td><td>QString</td><td>read</td><td><code>mediaFolderChanged</code></td></tr>
-            <tr><td><code>autoPlayOnStartup</code></td><td>bool</td><td>read</td><td><code>autoPlayOnStartupChanged</code></td></tr>
-            <tr><td><code>persistShuffleState</code></td><td>bool</td><td>read</td><td><code>persistShuffleStateChanged</code></td></tr>
-            <tr><td><code>lastShuffleState</code></td><td>bool</td><td>read</td><td><code>lastShuffleStateChanged</code></td></tr>
-            <tr><td><code>lastPlayedSong</code></td><td>QString</td><td>read</td><td><code>lastPlayedSongChanged</code></td></tr>
-            <tr><td><code>lastPlayedPosition</code></td><td>int</td><td>read</td><td><code>lastPlayedPositionChanged</code></td></tr>
-            <tr><td><code>lastPlayedPlaylist</code></td><td>QString</td><td>read</td><td><code>lastPlayedPlaylistChanged</code></td></tr>
-            <tr><td><code>musicButtonDefaultPage</code></td><td>QString</td><td>read</td><td><code>musicButtonDefaultPageChanged</code></td></tr>
-            <tr><td><code>returnToLibraryAfterSelection</code></td><td>bool</td><td>read</td><td><code>returnToLibraryAfterSelectionChanged</code></td></tr>
-            <tr><td><code>showWaveformVisualizer</code></td><td>bool</td><td>read</td><td><code>showWaveformVisualizerChanged</code></td></tr>
-            <tr><td><code>show3DButtonTilt</code></td><td>bool</td><td>read</td><td><code>show3DButtonTiltChanged</code></td></tr>
-            <tr><td><code>show3DAlbumPreview</code></td><td>bool</td><td>read</td><td><code>show3DAlbumPreviewChanged</code></td></tr>
-            <tr><td><code>roundedAlbumArt</code></td><td>bool</td><td>read</td><td><code>roundedAlbumArtChanged</code></td></tr>
-            <tr><td><code>albumArtCornerRadius</code></td><td>int</td><td>read</td><td><code>albumArtCornerRadiusChanged</code></td></tr>
-            <tr><td><code>showAlbumArtShadow</code></td><td>bool</td><td>read</td><td><code>showAlbumArtShadowChanged</code></td></tr>
-            <tr><td><code>vinylRecordMode</code></td><td>bool</td><td>read</td><td><code>vinylRecordModeChanged</code></td></tr>
-            <tr><td><code>albumArtTransition</code></td><td>QString</td><td>read</td><td><code>albumArtTransitionChanged</code></td></tr>
-            <tr><td><code>audioOutputDevice</code></td><td>QString</td><td>read</td><td><code>audioOutputDeviceChanged</code></td></tr>
-            <tr><td><code>backgroundOverlayOpacity</code></td><td>int</td><td>read</td><td><code>backgroundOverlayOpacityChanged</code></td></tr>
-            <tr><td><code>sideCardOpacity</code></td><td>double</td><td>read</td><td><code>sideCardOpacityChanged</code></td></tr>
-            <tr><td><code>sideCardAngle</code></td><td>int</td><td>read</td><td><code>sideCardAngleChanged</code></td></tr>
-            <tr><td><code>buttonTiltDuration</code></td><td>int</td><td>read</td><td><code>buttonTiltDurationChanged</code></td></tr>
-            <tr><td><code>textScrollSpeed</code></td><td>int</td><td>read</td><td><code>textScrollSpeedChanged</code></td></tr>
-            <tr><td><code>obdBluetoothPort</code></td><td>QString</td><td>read</td><td><code>obdBluetoothPortChanged</code></td></tr>
+            <tr><td><code>mediaFolder</code></td><td>QString</td><td>read / write (settings)</td><td><code>mediaFolderChanged</code></td></tr>
+            <tr><td><code>autoPlayOnStartup</code></td><td>bool</td><td>read / write (settings)</td><td><code>autoPlayOnStartupChanged</code></td></tr>
+            <tr><td><code>persistShuffleState</code></td><td>bool</td><td>read / write (settings)</td><td><code>persistShuffleStateChanged</code></td></tr>
+            <tr><td><code>lastShuffleState</code></td><td>bool</td><td>read / write (settings)</td><td><code>lastShuffleStateChanged</code></td></tr>
+            <tr><td><code>lastPlayedSong</code></td><td>QString</td><td>read / write (settings)</td><td><code>lastPlayedSongChanged</code></td></tr>
+            <tr><td><code>lastPlayedPosition</code></td><td>int</td><td>read / write (settings)</td><td><code>lastPlayedPositionChanged</code></td></tr>
+            <tr><td><code>lastPlayedPlaylist</code></td><td>QString</td><td>read / write (settings)</td><td><code>lastPlayedPlaylistChanged</code></td></tr>
+            <tr><td><code>musicButtonDefaultPage</code></td><td>QString</td><td>read / write (settings)</td><td><code>musicButtonDefaultPageChanged</code></td></tr>
+            <tr><td><code>returnToLibraryAfterSelection</code></td><td>bool</td><td>read / write (settings)</td><td><code>returnToLibraryAfterSelectionChanged</code></td></tr>
+            <tr><td><code>showWaveformVisualizer</code></td><td>bool</td><td>read / write (settings)</td><td><code>showWaveformVisualizerChanged</code></td></tr>
+            <tr><td><code>show3DButtonTilt</code></td><td>bool</td><td>read / write (settings)</td><td><code>show3DButtonTiltChanged</code></td></tr>
+            <tr><td><code>show3DAlbumPreview</code></td><td>bool</td><td>read / write (settings)</td><td><code>show3DAlbumPreviewChanged</code></td></tr>
+            <tr><td><code>roundedAlbumArt</code></td><td>bool</td><td>read / write (settings)</td><td><code>roundedAlbumArtChanged</code></td></tr>
+            <tr><td><code>albumArtCornerRadius</code></td><td>int</td><td>read / write (settings)</td><td><code>albumArtCornerRadiusChanged</code></td></tr>
+            <tr><td><code>showAlbumArtShadow</code></td><td>bool</td><td>read / write (settings)</td><td><code>showAlbumArtShadowChanged</code></td></tr>
+            <tr><td><code>vinylRecordMode</code></td><td>bool</td><td>read / write (settings)</td><td><code>vinylRecordModeChanged</code></td></tr>
+            <tr><td><code>albumArtTransition</code></td><td>QString</td><td>read / write (settings)</td><td><code>albumArtTransitionChanged</code></td></tr>
+            <tr><td><code>audioOutputDevice</code></td><td>QString</td><td>read / write (settings)</td><td><code>audioOutputDeviceChanged</code></td></tr>
+            <tr><td><code>backgroundOverlayOpacity</code></td><td>int</td><td>read / write (settings)</td><td><code>backgroundOverlayOpacityChanged</code></td></tr>
+            <tr><td><code>sideCardOpacity</code></td><td>double</td><td>read / write (settings)</td><td><code>sideCardOpacityChanged</code></td></tr>
+            <tr><td><code>sideCardAngle</code></td><td>int</td><td>read / write (settings)</td><td><code>sideCardAngleChanged</code></td></tr>
+            <tr><td><code>buttonTiltDuration</code></td><td>int</td><td>read / write (settings)</td><td><code>buttonTiltDurationChanged</code></td></tr>
+            <tr><td><code>textScrollSpeed</code></td><td>int</td><td>read / write (settings)</td><td><code>textScrollSpeedChanged</code></td></tr>
+            <tr><td><code>obdBluetoothPort</code></td><td>QString</td><td>read / write (settings)</td><td><code>obdBluetoothPortChanged</code></td></tr>
             <tr><td><code>obdSavedAdapters</code></td><td>QVariantList</td><td>read</td><td><code>obdSavedAdaptersChanged</code></td></tr>
-            <tr><td><code>obdFastMode</code></td><td>bool</td><td>read</td><td><code>obdFastModeChanged</code></td></tr>
-            <tr><td><code>obdCardStyleCircular</code></td><td>bool</td><td>read</td><td><code>obdCardStyleCircularChanged</code></td></tr>
-            <tr><td><code>gaugeTempUnit</code></td><td>QString</td><td>read</td><td><code>gaugeTempUnitChanged</code></td></tr>
-            <tr><td><code>gaugeSpeedUnit</code></td><td>QString</td><td>read</td><td><code>gaugeSpeedUnitChanged</code></td></tr>
-            <tr><td><code>obdAutoReconnectAttempts</code></td><td>int</td><td>read</td><td><code>obdAutoReconnectAttemptsChanged</code></td></tr>
-            <tr><td><code>fuelTankCapacity</code></td><td>float</td><td>read</td><td><code>fuelTankCapacityChanged</code></td></tr>
-            <tr><td><code>blackBoxEnabled</code></td><td>bool</td><td>read</td><td><code>blackBoxEnabledChanged</code></td></tr>
-            <tr><td><code>blackBoxSweepAll</code></td><td>bool</td><td>read</td><td><code>blackBoxSweepAllChanged</code></td></tr>
-            <tr><td><code>blackBoxMaxMB</code></td><td>int</td><td>read</td><td><code>blackBoxMaxMBChanged</code></td></tr>
-            <tr><td><code>homeOBDParameters</code></td><td>QVariantList</td><td>read</td><td><code>homeOBDParametersChanged</code></td></tr>
+            <tr><td><code>obdFastMode</code></td><td>bool</td><td>read / write (settings)</td><td><code>obdFastModeChanged</code></td></tr>
+            <tr><td><code>obdCardStyleCircular</code></td><td>bool</td><td>read / write (settings)</td><td><code>obdCardStyleCircularChanged</code></td></tr>
+            <tr><td><code>gaugeTempUnit</code></td><td>QString</td><td>read / write (settings)</td><td><code>gaugeTempUnitChanged</code></td></tr>
+            <tr><td><code>gaugeSpeedUnit</code></td><td>QString</td><td>read / write (settings)</td><td><code>gaugeSpeedUnitChanged</code></td></tr>
+            <tr><td><code>obdAutoReconnectAttempts</code></td><td>int</td><td>read / write (settings)</td><td><code>obdAutoReconnectAttemptsChanged</code></td></tr>
+            <tr><td><code>fuelTankCapacity</code></td><td>float</td><td>read / write (settings)</td><td><code>fuelTankCapacityChanged</code></td></tr>
+            <tr><td><code>blackBoxEnabled</code></td><td>bool</td><td>read / write (settings)</td><td><code>blackBoxEnabledChanged</code></td></tr>
+            <tr><td><code>blackBoxSweepAll</code></td><td>bool</td><td>read / write (settings)</td><td><code>blackBoxSweepAllChanged</code></td></tr>
+            <tr><td><code>blackBoxMaxMB</code></td><td>int</td><td>read / write (settings)</td><td><code>blackBoxMaxMBChanged</code></td></tr>
+            <tr><td><code>homeOBDParameters</code></td><td>QVariantList</td><td>read / write (settings)</td><td><code>homeOBDParametersChanged</code></td></tr>
             <tr><td><code>maxHomeObdParameters</code></td><td>int</td><td>constant</td><td>&ndash;</td></tr>
             <tr><td><code>customThemes</code></td><td>QVariantList</td><td>read</td><td><code>customThemesChanged</code></td></tr>
             <tr><td><code>customThemeData</code></td><td>QVariantMap</td><td>read</td><td><code>customThemesChanged</code></td></tr>
             <tr><td><code>nowPlayingPresets</code></td><td>QVariantList</td><td>constant</td><td>&ndash;</td></tr>
             <tr><td><code>directoryHistory</code></td><td>QVariantList</td><td>read</td><td><code>directoryHistoryChanged</code></td></tr>
-            <tr><td><code>windowState</code></td><td>QString</td><td>read</td><td><code>windowStateChanged</code></td></tr>
-            <tr><td><code>lastSettingsSection</code></td><td>QString</td><td>read</td><td><code>lastSettingsSectionChanged</code></td></tr>
-            <tr><td><code>androidAutoEnabled</code></td><td>bool</td><td>read</td><td><code>androidAutoEnabledChanged</code></td></tr>
-            <tr><td><code>phoneMirrorEnabled</code></td><td>bool</td><td>read</td><td><code>phoneMirrorEnabledChanged</code></td></tr>
-            <tr><td><code>scrcpyDisplaySize</code></td><td>QString</td><td>read</td><td><code>scrcpyDisplaySizeChanged</code></td></tr>
-            <tr><td><code>scrcpyAudioGain</code></td><td>double</td><td>read</td><td><code>scrcpyAudioGainChanged</code></td></tr>
-            <tr><td><code>scrcpyAudioGainDb</code></td><td>double</td><td>read</td><td><code>scrcpyAudioGainChanged</code></td></tr>
-            <tr><td><code>scrcpyAudioDuckLevelDb</code></td><td>double</td><td>read</td><td><code>scrcpyAudioDuckLevelChanged</code></td></tr>
-            <tr><td><code>scrcpyAudioDuckEnabled</code></td><td>bool</td><td>read</td><td><code>scrcpyAudioDuckEnabledChanged</code></td></tr>
-            <tr><td><code>scrcpyAudioDuckLevel</code></td><td>double</td><td>read</td><td><code>scrcpyAudioDuckLevelChanged</code></td></tr>
-            <tr><td><code>scrcpyPhoneScreenOff</code></td><td>bool</td><td>read</td><td><code>scrcpyPhoneScreenOffChanged</code></td></tr>
-            <tr><td><code>scrcpyDisplayDpi</code></td><td>int</td><td>read</td><td><code>scrcpyDisplayDpiChanged</code></td></tr>
-            <tr><td><code>scrcpyBitRateUsb</code></td><td>int</td><td>read</td><td><code>scrcpyBitRateUsbChanged</code></td></tr>
-            <tr><td><code>scrcpyBitRateWifi</code></td><td>int</td><td>read</td><td><code>scrcpyBitRateWifiChanged</code></td></tr>
-            <tr><td><code>scrcpyAutoWifi</code></td><td>bool</td><td>read</td><td><code>scrcpyAutoWifiChanged</code></td></tr>
-            <tr><td><code>scrcpyBitRateAuto</code></td><td>bool</td><td>read</td><td><code>scrcpyBitRateAutoChanged</code></td></tr>
-            <tr><td><code>scrcpyWirelessAddress</code></td><td>QString</td><td>read</td><td><code>scrcpyWirelessAddressChanged</code></td></tr>
-            <tr><td><code>esp32VolumeEnabled</code></td><td>bool</td><td>read</td><td><code>esp32VolumeEnabledChanged</code></td></tr>
-            <tr><td><code>esp32VolumePort</code></td><td>QString</td><td>read</td><td><code>esp32VolumePortChanged</code></td></tr>
-            <tr><td><code>esp32VolumeStepSize</code></td><td>double</td><td>read</td><td><code>esp32VolumeStepSizeChanged</code></td></tr>
-            <tr><td><code>esp32AutoReconnect</code></td><td>bool</td><td>read</td><td><code>esp32AutoReconnectChanged</code></td></tr>
-            <tr><td><code>esp32LedSleepEnabled</code></td><td>bool</td><td>read</td><td><code>esp32LedSleepEnabledChanged</code></td></tr>
-            <tr><td><code>esp32LedColorMode</code></td><td>QString</td><td>read</td><td><code>esp32LedColorModeChanged</code></td></tr>
-            <tr><td><code>esp32LedStaticColor</code></td><td>QString</td><td>read</td><td><code>esp32LedStaticColorChanged</code></td></tr>
-            <tr><td><code>imuEnabled</code></td><td>bool</td><td>read</td><td><code>imuEnabledChanged</code></td></tr>
-            <tr><td><code>sensorEmitRate</code></td><td>int</td><td>read</td><td><code>sensorEmitRateChanged</code></td></tr>
-            <tr><td><code>sensorDecimalPlaces</code></td><td>int</td><td>read</td><td><code>sensorDecimalPlacesChanged</code></td></tr>
-            <tr><td><code>sensorTempUnit</code></td><td>QString</td><td>read</td><td><code>sensorTempUnitChanged</code></td></tr>
-            <tr><td><code>sensorAltitudeUnit</code></td><td>QString</td><td>read</td><td><code>sensorAltitudeUnitChanged</code></td></tr>
+            <tr><td><code>windowState</code></td><td>QString</td><td>read / write (settings)</td><td><code>windowStateChanged</code></td></tr>
+            <tr><td><code>lastSettingsSection</code></td><td>QString</td><td>read / write (settings)</td><td><code>lastSettingsSectionChanged</code></td></tr>
+            <tr><td><code>androidAutoEnabled</code></td><td>bool</td><td>read / write (settings)</td><td><code>androidAutoEnabledChanged</code></td></tr>
+            <tr><td><code>phoneMirrorEnabled</code></td><td>bool</td><td>read / write (settings)</td><td><code>phoneMirrorEnabledChanged</code></td></tr>
+            <tr><td><code>scrcpyDisplaySize</code></td><td>QString</td><td>read / write (settings)</td><td><code>scrcpyDisplaySizeChanged</code></td></tr>
+            <tr><td><code>scrcpyAudioGain</code></td><td>double</td><td>read / write (settings)</td><td><code>scrcpyAudioGainChanged</code></td></tr>
+            <tr><td><code>scrcpyAudioGainDb</code></td><td>double</td><td>read / write (settings)</td><td><code>scrcpyAudioGainChanged</code></td></tr>
+            <tr><td><code>scrcpyAudioDuckLevelDb</code></td><td>double</td><td>read / write (settings)</td><td><code>scrcpyAudioDuckLevelChanged</code></td></tr>
+            <tr><td><code>scrcpyAudioDuckEnabled</code></td><td>bool</td><td>read / write (settings)</td><td><code>scrcpyAudioDuckEnabledChanged</code></td></tr>
+            <tr><td><code>scrcpyAudioDuckLevel</code></td><td>double</td><td>read / write (settings)</td><td><code>scrcpyAudioDuckLevelChanged</code></td></tr>
+            <tr><td><code>scrcpyPhoneScreenOff</code></td><td>bool</td><td>read / write (settings)</td><td><code>scrcpyPhoneScreenOffChanged</code></td></tr>
+            <tr><td><code>scrcpyDisplayDpi</code></td><td>int</td><td>read / write (settings)</td><td><code>scrcpyDisplayDpiChanged</code></td></tr>
+            <tr><td><code>scrcpyBitRateUsb</code></td><td>int</td><td>read / write (settings)</td><td><code>scrcpyBitRateUsbChanged</code></td></tr>
+            <tr><td><code>scrcpyBitRateWifi</code></td><td>int</td><td>read / write (settings)</td><td><code>scrcpyBitRateWifiChanged</code></td></tr>
+            <tr><td><code>scrcpyAutoWifi</code></td><td>bool</td><td>read / write (settings)</td><td><code>scrcpyAutoWifiChanged</code></td></tr>
+            <tr><td><code>scrcpyBitRateAuto</code></td><td>bool</td><td>read / write (settings)</td><td><code>scrcpyBitRateAutoChanged</code></td></tr>
+            <tr><td><code>scrcpyWirelessAddress</code></td><td>QString</td><td>read / write (settings)</td><td><code>scrcpyWirelessAddressChanged</code></td></tr>
+            <tr><td><code>esp32VolumeEnabled</code></td><td>bool</td><td>read / write (settings)</td><td><code>esp32VolumeEnabledChanged</code></td></tr>
+            <tr><td><code>esp32VolumePort</code></td><td>QString</td><td>read / write (settings)</td><td><code>esp32VolumePortChanged</code></td></tr>
+            <tr><td><code>esp32VolumeStepSize</code></td><td>double</td><td>read / write (settings)</td><td><code>esp32VolumeStepSizeChanged</code></td></tr>
+            <tr><td><code>esp32AutoReconnect</code></td><td>bool</td><td>read / write (settings)</td><td><code>esp32AutoReconnectChanged</code></td></tr>
+            <tr><td><code>esp32LedSleepEnabled</code></td><td>bool</td><td>read / write (settings)</td><td><code>esp32LedSleepEnabledChanged</code></td></tr>
+            <tr><td><code>esp32LedColorMode</code></td><td>QString</td><td>read / write (settings)</td><td><code>esp32LedColorModeChanged</code></td></tr>
+            <tr><td><code>esp32LedStaticColor</code></td><td>QString</td><td>read / write (settings)</td><td><code>esp32LedStaticColorChanged</code></td></tr>
+            <tr><td><code>imuEnabled</code></td><td>bool</td><td>read / write (settings)</td><td><code>imuEnabledChanged</code></td></tr>
+            <tr><td><code>sensorEmitRate</code></td><td>int</td><td>read / write (settings)</td><td><code>sensorEmitRateChanged</code></td></tr>
+            <tr><td><code>sensorDecimalPlaces</code></td><td>int</td><td>read / write (settings)</td><td><code>sensorDecimalPlacesChanged</code></td></tr>
+            <tr><td><code>sensorTempUnit</code></td><td>QString</td><td>read / write (settings)</td><td><code>sensorTempUnitChanged</code></td></tr>
+            <tr><td><code>sensorAltitudeUnit</code></td><td>QString</td><td>read / write (settings)</td><td><code>sensorAltitudeUnitChanged</code></td></tr>
             <tr><td><code>sensorCards</code></td><td>QVariantMap</td><td>read</td><td><code>sensorCardsChanged</code></td></tr>
-            <tr><td><code>gestureSensorEnabled</code></td><td>bool</td><td>read</td><td><code>gestureSensorEnabledChanged</code></td></tr>
-            <tr><td><code>gestureVolumeStep</code></td><td>int</td><td>read</td><td><code>gestureVolumeStepChanged</code></td></tr>
-            <tr><td><code>gestureCooldown</code></td><td>int</td><td>read</td><td><code>gestureCooldownChanged</code></td></tr>
+            <tr><td><code>gestureSensorEnabled</code></td><td>bool</td><td>read / write (settings)</td><td><code>gestureSensorEnabledChanged</code></td></tr>
+            <tr><td><code>gestureVolumeStep</code></td><td>int</td><td>read / write (settings)</td><td><code>gestureVolumeStepChanged</code></td></tr>
+            <tr><td><code>gestureCooldown</code></td><td>int</td><td>read / write (settings)</td><td><code>gestureCooldownChanged</code></td></tr>
             <tr><td><code>pinnedSettings</code></td><td>QVariantList</td><td>read</td><td><code>pinnedSettingsChanged</code></td></tr>
           </tbody>
         </table>
         <table>
           <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>save_device_name(QString name)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_font_setting(QString font)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_theme_setting(QString theme)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_ui_scale(float scale)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_color_transition_ms(int ms)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_song_length_transition(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_show_clock(bool show)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_clock_format(bool is24hour)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_clock_show_seconds(bool show)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_clock_size(int size)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_clock_size_auto(bool autoSize)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_background_grid(QString grid)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_screen_width(int width)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_screen_height(int height)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_background_blur_radius(int radius)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_bottom_bar_orientation(QString orientation)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_show_bottom_bar_media_controls(bool show)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_settings_layout_style(QString style)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_device_name(QString name)</code> <span class="cmt">(deprecated: use the deviceName property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_font_setting(QString font)</code> <span class="cmt">(deprecated: use the fontSetting property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_theme_setting(QString theme)</code> <span class="cmt">(deprecated: use the themeSetting property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_ui_scale(float scale)</code> <span class="cmt">(deprecated: use the uiScale property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_color_transition_ms(int ms)</code> <span class="cmt">(deprecated: use the colorTransitionMs property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_song_length_transition(bool enabled)</code> <span class="cmt">(deprecated: use the songLengthTransition property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_show_clock(bool show)</code> <span class="cmt">(deprecated: use the showClock property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_clock_format(bool is24hour)</code> <span class="cmt">(deprecated: use the clockFormat24Hour property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_clock_show_seconds(bool show)</code> <span class="cmt">(deprecated: use the clockShowSeconds property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_clock_size(int size)</code> <span class="cmt">(deprecated: use the clockSize property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_clock_size_auto(bool autoSize)</code> <span class="cmt">(deprecated: use the clockSizeAuto property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_background_grid(QString grid)</code> <span class="cmt">(deprecated: use the backgroundGrid property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_screen_width(int width)</code> <span class="cmt">(deprecated: use the screenWidth property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_screen_height(int height)</code> <span class="cmt">(deprecated: use the screenHeight property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_background_blur_radius(int radius)</code> <span class="cmt">(deprecated: use the backgroundBlurRadius property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_bottom_bar_orientation(QString orientation)</code> <span class="cmt">(deprecated: use the bottomBarOrientation property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_show_bottom_bar_media_controls(bool show)</code> <span class="cmt">(deprecated: use the showBottomBarMediaControls property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_settings_layout_style(QString style)</code> <span class="cmt">(deprecated: use the settingsLayoutStyle property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
             <tr><td><code>set_album_art_colors(QString colorsJson)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
-            <tr><td><code>save_start_volume(float volume)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_start_volume(float volume)</code> <span class="cmt">(deprecated: use the startUpVolume property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
             <tr><td><code>setCurrentVolume(int volume)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
-            <tr><td><code>save_media_folder(QString folderPath)</code></td><td><code>bool</code></td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_media_folder(QString folderPath)</code> <span class="cmt">(deprecated: use the mediaFolder property; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>settings</code></td></tr>
             <tr><td><code>save_media_folder_url(QUrl url)</code></td><td><code>bool</code></td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_auto_play_on_startup(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_persist_shuffle_state(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_last_shuffle_state(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_last_played_song(QString filename)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_last_played_position(int positionMs)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_last_played_playlist(QString playlistName)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_auto_play_on_startup(bool enabled)</code> <span class="cmt">(deprecated: use the autoPlayOnStartup property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_persist_shuffle_state(bool enabled)</code> <span class="cmt">(deprecated: use the persistShuffleState property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_last_shuffle_state(bool enabled)</code> <span class="cmt">(deprecated: use the lastShuffleState property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_last_played_song(QString filename)</code> <span class="cmt">(deprecated: use the lastPlayedSong property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_last_played_position(int positionMs)</code> <span class="cmt">(deprecated: use the lastPlayedPosition property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_last_played_playlist(QString playlistName)</code> <span class="cmt">(deprecated: use the lastPlayedPlaylist property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
             <tr><td><code>save_playback_state(QString song, int positionMs, QString playlist)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_music_button_default_page(QString page)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_return_to_library_after_selection(bool returnToLibrary)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_show_waveform_visualizer(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_show_3d_button_tilt(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_show_3d_album_preview(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_rounded_album_art(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_album_art_corner_radius(int radius)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_show_album_art_shadow(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_vinyl_record_mode(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_album_art_transition(QString transition)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_audio_output_device(QString id)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_background_overlay_opacity(int opacity)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_side_card_opacity(double opacity)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_side_card_angle(int angle)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_button_tilt_duration(int duration)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_text_scroll_speed(int speed)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_obd_bluetooth_port(QString port)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_music_button_default_page(QString page)</code> <span class="cmt">(deprecated: use the musicButtonDefaultPage property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_return_to_library_after_selection(bool returnToLibrary)</code> <span class="cmt">(deprecated: use the returnToLibraryAfterSelection property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_show_waveform_visualizer(bool enabled)</code> <span class="cmt">(deprecated: use the showWaveformVisualizer property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_show_3d_button_tilt(bool enabled)</code> <span class="cmt">(deprecated: use the show3DButtonTilt property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_show_3d_album_preview(bool enabled)</code> <span class="cmt">(deprecated: use the show3DAlbumPreview property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_rounded_album_art(bool enabled)</code> <span class="cmt">(deprecated: use the roundedAlbumArt property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_album_art_corner_radius(int radius)</code> <span class="cmt">(deprecated: use the albumArtCornerRadius property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_show_album_art_shadow(bool enabled)</code> <span class="cmt">(deprecated: use the showAlbumArtShadow property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_vinyl_record_mode(bool enabled)</code> <span class="cmt">(deprecated: use the vinylRecordMode property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_album_art_transition(QString transition)</code> <span class="cmt">(deprecated: use the albumArtTransition property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_audio_output_device(QString id)</code> <span class="cmt">(deprecated: use the audioOutputDevice property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_background_overlay_opacity(int opacity)</code> <span class="cmt">(deprecated: use the backgroundOverlayOpacity property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_side_card_opacity(double opacity)</code> <span class="cmt">(deprecated: use the sideCardOpacity property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_side_card_angle(int angle)</code> <span class="cmt">(deprecated: use the sideCardAngle property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_button_tilt_duration(int duration)</code> <span class="cmt">(deprecated: use the buttonTiltDuration property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_text_scroll_speed(int speed)</code> <span class="cmt">(deprecated: use the textScrollSpeed property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_obd_bluetooth_port(QString port)</code> <span class="cmt">(deprecated: use the obdBluetoothPort property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
             <tr><td><code>add_obd_saved_adapter(QString name, QString mac)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
             <tr><td><code>remove_obd_saved_adapter(QString mac)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_obd_fast_mode(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_obd_card_style_circular(bool circular)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_gauge_temp_unit(QString unit)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_gauge_speed_unit(QString unit)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_obd_auto_reconnect_attempts(int attempts)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_fuel_tank_capacity(float capacity)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_black_box_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_black_box_sweep_all(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_black_box_max_mb(int megabytes)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_obd_fast_mode(bool enabled)</code> <span class="cmt">(deprecated: use the obdFastMode property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_obd_card_style_circular(bool circular)</code> <span class="cmt">(deprecated: use the obdCardStyleCircular property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_gauge_temp_unit(QString unit)</code> <span class="cmt">(deprecated: use the gaugeTempUnit property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_gauge_speed_unit(QString unit)</code> <span class="cmt">(deprecated: use the gaugeSpeedUnit property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_obd_auto_reconnect_attempts(int attempts)</code> <span class="cmt">(deprecated: use the obdAutoReconnectAttempts property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_fuel_tank_capacity(float capacity)</code> <span class="cmt">(deprecated: use the fuelTankCapacity property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_black_box_enabled(bool enabled)</code> <span class="cmt">(deprecated: use the blackBoxEnabled property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_black_box_sweep_all(bool enabled)</code> <span class="cmt">(deprecated: use the blackBoxSweepAll property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_black_box_max_mb(int megabytes)</code> <span class="cmt">(deprecated: use the blackBoxMaxMB property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
             <tr><td><code>save_obd_parameter_enabled(QString parameter, bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
             <tr><td><code>save_supported_obd_parameters(QVariantList parameters)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_home_obd_parameters(QVariantList parameters)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_home_obd_parameters(QVariantList parameters)</code> <span class="cmt">(deprecated: use the homeOBDParameters property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
             <tr><td><code>add_home_obd_parameter(QString id, int index)</code></td><td><code>bool</code></td><td>slot</td><td><code>settings</code></td></tr>
             <tr><td><code>add_home_obd_parameter(QString id)</code></td><td><code>bool</code></td><td>slot</td><td><code>settings</code></td></tr>
             <tr><td><code>remove_home_obd_parameter(QString id)</code></td><td><code>bool</code></td><td>slot</td><td><code>settings</code></td></tr>
@@ -1127,43 +1127,43 @@
             <tr><td><code>save_custom_theme(QString name, QVariantMap theme, QString albumArtSource)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
             <tr><td><code>save_custom_theme(QString name, QVariantMap theme)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
             <tr><td><code>delete_custom_theme(QString name)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_window_state(QString state)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>set_last_settings_section(QString section)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_window_state(QString state)</code> <span class="cmt">(deprecated: use the windowState property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>set_last_settings_section(QString section)</code> <span class="cmt">(deprecated: use the lastSettingsSection property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
             <tr><td><code>save_settings_section_visibility(QString section, bool visible)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_android_auto_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_phone_mirror_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_scrcpy_display_size(QString size)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_scrcpy_audio_gain(double gain)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_scrcpy_audio_duck_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_scrcpy_audio_duck_level(double level)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_scrcpy_audio_gain_db(double db)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_scrcpy_audio_duck_level_db(double db)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_scrcpy_phone_screen_off(bool off)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_scrcpy_display_dpi(int dpi)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_scrcpy_bit_rate_usb(int mbps)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_scrcpy_bit_rate_wifi(int mbps)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_scrcpy_auto_wifi(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_scrcpy_bit_rate_auto(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_scrcpy_wireless_address(QString address)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_esp32_volume_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_esp32_volume_port(QString port)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_esp32_volume_step_size(double stepSize)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_esp32_auto_reconnect(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_esp32_led_sleep_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_esp32_led_color_mode(QString mode)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_esp32_led_static_color(QString color)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_imu_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_sensor_emit_rate(int hz)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_sensor_decimal_places(int places)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_sensor_temp_unit(QString unit)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_sensor_altitude_unit(QString unit)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_android_auto_enabled(bool enabled)</code> <span class="cmt">(deprecated: use the androidAutoEnabled property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_phone_mirror_enabled(bool enabled)</code> <span class="cmt">(deprecated: use the phoneMirrorEnabled property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_display_size(QString size)</code> <span class="cmt">(deprecated: use the scrcpyDisplaySize property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_audio_gain(double gain)</code> <span class="cmt">(deprecated: use the scrcpyAudioGain property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_audio_duck_enabled(bool enabled)</code> <span class="cmt">(deprecated: use the scrcpyAudioDuckEnabled property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_audio_duck_level(double level)</code> <span class="cmt">(deprecated: use the scrcpyAudioDuckLevel property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_audio_gain_db(double db)</code> <span class="cmt">(deprecated: use the scrcpyAudioGainDb property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_audio_duck_level_db(double db)</code> <span class="cmt">(deprecated: use the scrcpyAudioDuckLevelDb property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_phone_screen_off(bool off)</code> <span class="cmt">(deprecated: use the scrcpyPhoneScreenOff property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_display_dpi(int dpi)</code> <span class="cmt">(deprecated: use the scrcpyDisplayDpi property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_bit_rate_usb(int mbps)</code> <span class="cmt">(deprecated: use the scrcpyBitRateUsb property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_bit_rate_wifi(int mbps)</code> <span class="cmt">(deprecated: use the scrcpyBitRateWifi property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_auto_wifi(bool enabled)</code> <span class="cmt">(deprecated: use the scrcpyAutoWifi property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_bit_rate_auto(bool enabled)</code> <span class="cmt">(deprecated: use the scrcpyBitRateAuto property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_scrcpy_wireless_address(QString address)</code> <span class="cmt">(deprecated: use the scrcpyWirelessAddress property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_esp32_volume_enabled(bool enabled)</code> <span class="cmt">(deprecated: use the esp32VolumeEnabled property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_esp32_volume_port(QString port)</code> <span class="cmt">(deprecated: use the esp32VolumePort property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_esp32_volume_step_size(double stepSize)</code> <span class="cmt">(deprecated: use the esp32VolumeStepSize property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_esp32_auto_reconnect(bool enabled)</code> <span class="cmt">(deprecated: use the esp32AutoReconnect property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_esp32_led_sleep_enabled(bool enabled)</code> <span class="cmt">(deprecated: use the esp32LedSleepEnabled property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_esp32_led_color_mode(QString mode)</code> <span class="cmt">(deprecated: use the esp32LedColorMode property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_esp32_led_static_color(QString color)</code> <span class="cmt">(deprecated: use the esp32LedStaticColor property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_imu_enabled(bool enabled)</code> <span class="cmt">(deprecated: use the imuEnabled property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_sensor_emit_rate(int hz)</code> <span class="cmt">(deprecated: use the sensorEmitRate property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_sensor_decimal_places(int places)</code> <span class="cmt">(deprecated: use the sensorDecimalPlaces property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_sensor_temp_unit(QString unit)</code> <span class="cmt">(deprecated: use the sensorTempUnit property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_sensor_altitude_unit(QString unit)</code> <span class="cmt">(deprecated: use the sensorAltitudeUnit property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
             <tr><td><code>save_sensor_card_visible(QString card, bool visible)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_gesture_sensor_enabled(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_gesture_sensor_enabled(bool enabled)</code> <span class="cmt">(deprecated: use the gestureSensorEnabled property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
             <tr><td><code>save_gesture_action(QString gesture, QString action)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
             <tr><td><code>save_gesture_mapping(QVariantMap mapping)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
             <tr><td><code>reset_gesture_mapping()</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_gesture_volume_step(int step)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>save_gesture_cooldown(int ms)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_gesture_volume_step(int step)</code> <span class="cmt">(deprecated: use the gestureVolumeStep property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
+            <tr><td><code>save_gesture_cooldown(int ms)</code> <span class="cmt">(deprecated: use the gestureCooldown property; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
             <tr><td><code>toggle_pin_setting(QString settingId)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
             <tr><td><code>reset_to_defaults()</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
             <tr><td><code>save_setting(QString key, QVariant value)</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
@@ -1174,48 +1174,48 @@
             <tr><td><code>get_obd_parameter_enabled(QString parameter, bool defaultVal)</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>get_obd_parameter_enabled(QString parameter)</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>get_supported_obd_parameters()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_directory_history()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_home_obd_parameters()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_auto_play_on_startup()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_persist_shuffle_state()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_last_shuffle_state()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_last_played_song()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_last_played_position()</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_last_played_playlist()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_last_settings_section()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_window_state()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_music_button_default_page()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_return_to_library_after_selection()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_directory_history()</code> <span class="cmt">(deprecated: use the directoryHistory property; goes in protocol 5)</span></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_home_obd_parameters()</code> <span class="cmt">(deprecated: use the homeOBDParameters property; goes in protocol 5)</span></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_auto_play_on_startup()</code> <span class="cmt">(deprecated: use the autoPlayOnStartup property; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_persist_shuffle_state()</code> <span class="cmt">(deprecated: use the persistShuffleState property; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_last_shuffle_state()</code> <span class="cmt">(deprecated: use the lastShuffleState property; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_last_played_song()</code> <span class="cmt">(deprecated: use the lastPlayedSong property; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_last_played_position()</code> <span class="cmt">(deprecated: use the lastPlayedPosition property; goes in protocol 5)</span></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_last_played_playlist()</code> <span class="cmt">(deprecated: use the lastPlayedPlaylist property; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_last_settings_section()</code> <span class="cmt">(deprecated: use the lastSettingsSection property; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_window_state()</code> <span class="cmt">(deprecated: use the windowState property; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_music_button_default_page()</code> <span class="cmt">(deprecated: use the musicButtonDefaultPage property; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_return_to_library_after_selection()</code> <span class="cmt">(deprecated: use the returnToLibraryAfterSelection property; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>flushPendingSave()</code></td><td>&ndash;</td><td>slot</td><td><code>settings</code></td></tr>
-            <tr><td><code>get_android_auto_enabled()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_phone_mirror_enabled()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_scrcpy_display_size()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_scrcpy_audio_gain()</code></td><td><code>double</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_scrcpy_audio_duck_enabled()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_scrcpy_audio_duck_level()</code></td><td><code>double</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_scrcpy_phone_screen_off()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_scrcpy_display_dpi()</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_scrcpy_bit_rate_usb()</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_scrcpy_bit_rate_wifi()</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_scrcpy_auto_wifi()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_scrcpy_bit_rate_auto()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_scrcpy_wireless_address()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_esp32_volume_enabled()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_esp32_volume_port()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_esp32_volume_step_size()</code></td><td><code>double</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_esp32_auto_reconnect()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_esp32_led_sleep_enabled()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_esp32_led_color_mode()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_esp32_led_static_color()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_show_waveform_visualizer()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_imu_enabled()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_gesture_sensor_enabled()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_android_auto_enabled()</code> <span class="cmt">(deprecated: use the androidAutoEnabled property; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_phone_mirror_enabled()</code> <span class="cmt">(deprecated: use the phoneMirrorEnabled property; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_scrcpy_display_size()</code> <span class="cmt">(deprecated: use the scrcpyDisplaySize property; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_scrcpy_audio_gain()</code> <span class="cmt">(deprecated: use the scrcpyAudioGain property; goes in protocol 5)</span></td><td><code>double</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_scrcpy_audio_duck_enabled()</code> <span class="cmt">(deprecated: use the scrcpyAudioDuckEnabled property; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_scrcpy_audio_duck_level()</code> <span class="cmt">(deprecated: use the scrcpyAudioDuckLevel property; goes in protocol 5)</span></td><td><code>double</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_scrcpy_phone_screen_off()</code> <span class="cmt">(deprecated: use the scrcpyPhoneScreenOff property; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_scrcpy_display_dpi()</code> <span class="cmt">(deprecated: use the scrcpyDisplayDpi property; goes in protocol 5)</span></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_scrcpy_bit_rate_usb()</code> <span class="cmt">(deprecated: use the scrcpyBitRateUsb property; goes in protocol 5)</span></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_scrcpy_bit_rate_wifi()</code> <span class="cmt">(deprecated: use the scrcpyBitRateWifi property; goes in protocol 5)</span></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_scrcpy_auto_wifi()</code> <span class="cmt">(deprecated: use the scrcpyAutoWifi property; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_scrcpy_bit_rate_auto()</code> <span class="cmt">(deprecated: use the scrcpyBitRateAuto property; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_scrcpy_wireless_address()</code> <span class="cmt">(deprecated: use the scrcpyWirelessAddress property; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_esp32_volume_enabled()</code> <span class="cmt">(deprecated: use the esp32VolumeEnabled property; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_esp32_volume_port()</code> <span class="cmt">(deprecated: use the esp32VolumePort property; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_esp32_volume_step_size()</code> <span class="cmt">(deprecated: use the esp32VolumeStepSize property; goes in protocol 5)</span></td><td><code>double</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_esp32_auto_reconnect()</code> <span class="cmt">(deprecated: use the esp32AutoReconnect property; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_esp32_led_sleep_enabled()</code> <span class="cmt">(deprecated: use the esp32LedSleepEnabled property; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_esp32_led_color_mode()</code> <span class="cmt">(deprecated: use the esp32LedColorMode property; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_esp32_led_static_color()</code> <span class="cmt">(deprecated: use the esp32LedStaticColor property; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_show_waveform_visualizer()</code> <span class="cmt">(deprecated: use the showWaveformVisualizer property; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_imu_enabled()</code> <span class="cmt">(deprecated: use the imuEnabled property; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_gesture_sensor_enabled()</code> <span class="cmt">(deprecated: use the gestureSensorEnabled property; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>get_gesture_mapping()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>get_gesture_mapping_dict()</code></td><td><code>QVariantMap</code></td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>is_setting_pinned(QString settingId)</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>get_settings_registry()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>get_pinned_settings_metadata()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_settings_menu_visibility()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_settings_menu_visibility()</code> <span class="cmt">(deprecated: use the settingsMenuVisibility property; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>is_settings_section_visible(QString section)</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>get_git_commit_hash()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>get_git_commit_date()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>

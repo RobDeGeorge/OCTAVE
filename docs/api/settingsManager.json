@@ -2,6 +2,7 @@
     "class": "SettingsManager",
     "methods": [
         {
+            "deprecated": "use the deviceName property; goes in protocol 5",
             "kind": "slot",
             "name": "save_device_name",
             "params": [
@@ -14,6 +15,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the fontSetting property; goes in protocol 5",
             "kind": "slot",
             "name": "save_font_setting",
             "params": [
@@ -26,6 +28,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the themeSetting property; goes in protocol 5",
             "kind": "slot",
             "name": "save_theme_setting",
             "params": [
@@ -38,6 +41,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the uiScale property; goes in protocol 5",
             "kind": "slot",
             "name": "save_ui_scale",
             "params": [
@@ -50,6 +54,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the colorTransitionMs property; goes in protocol 5",
             "kind": "slot",
             "name": "save_color_transition_ms",
             "params": [
@@ -62,6 +67,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the songLengthTransition property; goes in protocol 5",
             "kind": "slot",
             "name": "save_song_length_transition",
             "params": [
@@ -74,6 +80,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the showClock property; goes in protocol 5",
             "kind": "slot",
             "name": "save_show_clock",
             "params": [
@@ -86,6 +93,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the clockFormat24Hour property; goes in protocol 5",
             "kind": "slot",
             "name": "save_clock_format",
             "params": [
@@ -98,6 +106,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the clockShowSeconds property; goes in protocol 5",
             "kind": "slot",
             "name": "save_clock_show_seconds",
             "params": [
@@ -110,6 +119,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the clockSize property; goes in protocol 5",
             "kind": "slot",
             "name": "save_clock_size",
             "params": [
@@ -122,6 +132,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the clockSizeAuto property; goes in protocol 5",
             "kind": "slot",
             "name": "save_clock_size_auto",
             "params": [
@@ -134,6 +145,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the backgroundGrid property; goes in protocol 5",
             "kind": "slot",
             "name": "save_background_grid",
             "params": [
@@ -146,6 +158,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the screenWidth property; goes in protocol 5",
             "kind": "slot",
             "name": "save_screen_width",
             "params": [
@@ -158,6 +171,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the screenHeight property; goes in protocol 5",
             "kind": "slot",
             "name": "save_screen_height",
             "params": [
@@ -170,6 +184,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the backgroundBlurRadius property; goes in protocol 5",
             "kind": "slot",
             "name": "save_background_blur_radius",
             "params": [
@@ -182,6 +197,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the bottomBarOrientation property; goes in protocol 5",
             "kind": "slot",
             "name": "save_bottom_bar_orientation",
             "params": [
@@ -194,6 +210,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the showBottomBarMediaControls property; goes in protocol 5",
             "kind": "slot",
             "name": "save_show_bottom_bar_media_controls",
             "params": [
@@ -206,6 +223,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the settingsLayoutStyle property; goes in protocol 5",
             "kind": "slot",
             "name": "save_settings_layout_style",
             "params": [
@@ -230,6 +248,7 @@
             "scope": "full"
         },
         {
+            "deprecated": "use the startUpVolume property; goes in protocol 5",
             "kind": "slot",
             "name": "save_start_volume",
             "params": [
@@ -254,6 +273,7 @@
             "scope": "full"
         },
         {
+            "deprecated": "use the mediaFolder property; goes in protocol 5",
             "kind": "slot",
             "name": "save_media_folder",
             "params": [
@@ -278,6 +298,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the autoPlayOnStartup property; goes in protocol 5",
             "kind": "slot",
             "name": "save_auto_play_on_startup",
             "params": [
@@ -290,6 +311,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the persistShuffleState property; goes in protocol 5",
             "kind": "slot",
             "name": "save_persist_shuffle_state",
             "params": [
@@ -302,6 +324,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the lastShuffleState property; goes in protocol 5",
             "kind": "slot",
             "name": "save_last_shuffle_state",
             "params": [
@@ -314,6 +337,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the lastPlayedSong property; goes in protocol 5",
             "kind": "slot",
             "name": "save_last_played_song",
             "params": [
@@ -326,6 +350,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the lastPlayedPosition property; goes in protocol 5",
             "kind": "slot",
             "name": "save_last_played_position",
             "params": [
@@ -338,6 +363,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the lastPlayedPlaylist property; goes in protocol 5",
             "kind": "slot",
             "name": "save_last_played_playlist",
             "params": [
@@ -370,6 +396,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the musicButtonDefaultPage property; goes in protocol 5",
             "kind": "slot",
             "name": "save_music_button_default_page",
             "params": [
@@ -382,6 +409,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the returnToLibraryAfterSelection property; goes in protocol 5",
             "kind": "slot",
             "name": "save_return_to_library_after_selection",
             "params": [
@@ -394,6 +422,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the showWaveformVisualizer property; goes in protocol 5",
             "kind": "slot",
             "name": "save_show_waveform_visualizer",
             "params": [
@@ -406,6 +435,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the show3DButtonTilt property; goes in protocol 5",
             "kind": "slot",
             "name": "save_show_3d_button_tilt",
             "params": [
@@ -418,6 +448,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the show3DAlbumPreview property; goes in protocol 5",
             "kind": "slot",
             "name": "save_show_3d_album_preview",
             "params": [
@@ -430,6 +461,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the roundedAlbumArt property; goes in protocol 5",
             "kind": "slot",
             "name": "save_rounded_album_art",
             "params": [
@@ -442,6 +474,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the albumArtCornerRadius property; goes in protocol 5",
             "kind": "slot",
             "name": "save_album_art_corner_radius",
             "params": [
@@ -454,6 +487,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the showAlbumArtShadow property; goes in protocol 5",
             "kind": "slot",
             "name": "save_show_album_art_shadow",
             "params": [
@@ -466,6 +500,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the vinylRecordMode property; goes in protocol 5",
             "kind": "slot",
             "name": "save_vinyl_record_mode",
             "params": [
@@ -478,6 +513,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the albumArtTransition property; goes in protocol 5",
             "kind": "slot",
             "name": "save_album_art_transition",
             "params": [
@@ -490,6 +526,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the audioOutputDevice property; goes in protocol 5",
             "kind": "slot",
             "name": "save_audio_output_device",
             "params": [
@@ -502,6 +539,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the backgroundOverlayOpacity property; goes in protocol 5",
             "kind": "slot",
             "name": "save_background_overlay_opacity",
             "params": [
@@ -514,6 +552,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the sideCardOpacity property; goes in protocol 5",
             "kind": "slot",
             "name": "save_side_card_opacity",
             "params": [
@@ -526,6 +565,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the sideCardAngle property; goes in protocol 5",
             "kind": "slot",
             "name": "save_side_card_angle",
             "params": [
@@ -538,6 +578,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the buttonTiltDuration property; goes in protocol 5",
             "kind": "slot",
             "name": "save_button_tilt_duration",
             "params": [
@@ -550,6 +591,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the textScrollSpeed property; goes in protocol 5",
             "kind": "slot",
             "name": "save_text_scroll_speed",
             "params": [
@@ -562,6 +604,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the obdBluetoothPort property; goes in protocol 5",
             "kind": "slot",
             "name": "save_obd_bluetooth_port",
             "params": [
@@ -602,6 +645,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the obdFastMode property; goes in protocol 5",
             "kind": "slot",
             "name": "save_obd_fast_mode",
             "params": [
@@ -614,6 +658,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the obdCardStyleCircular property; goes in protocol 5",
             "kind": "slot",
             "name": "save_obd_card_style_circular",
             "params": [
@@ -626,6 +671,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the gaugeTempUnit property; goes in protocol 5",
             "kind": "slot",
             "name": "save_gauge_temp_unit",
             "params": [
@@ -638,6 +684,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the gaugeSpeedUnit property; goes in protocol 5",
             "kind": "slot",
             "name": "save_gauge_speed_unit",
             "params": [
@@ -650,6 +697,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the obdAutoReconnectAttempts property; goes in protocol 5",
             "kind": "slot",
             "name": "save_obd_auto_reconnect_attempts",
             "params": [
@@ -662,6 +710,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the fuelTankCapacity property; goes in protocol 5",
             "kind": "slot",
             "name": "save_fuel_tank_capacity",
             "params": [
@@ -674,6 +723,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the blackBoxEnabled property; goes in protocol 5",
             "kind": "slot",
             "name": "save_black_box_enabled",
             "params": [
@@ -686,6 +736,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the blackBoxSweepAll property; goes in protocol 5",
             "kind": "slot",
             "name": "save_black_box_sweep_all",
             "params": [
@@ -698,6 +749,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the blackBoxMaxMB property; goes in protocol 5",
             "kind": "slot",
             "name": "save_black_box_max_mb",
             "params": [
@@ -738,6 +790,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the homeOBDParameters property; goes in protocol 5",
             "kind": "slot",
             "name": "save_home_obd_parameters",
             "params": [
@@ -878,6 +931,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the windowState property; goes in protocol 5",
             "kind": "slot",
             "name": "save_window_state",
             "params": [
@@ -890,6 +944,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the lastSettingsSection property; goes in protocol 5",
             "kind": "slot",
             "name": "set_last_settings_section",
             "params": [
@@ -918,6 +973,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the androidAutoEnabled property; goes in protocol 5",
             "kind": "slot",
             "name": "save_android_auto_enabled",
             "params": [
@@ -930,6 +986,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the phoneMirrorEnabled property; goes in protocol 5",
             "kind": "slot",
             "name": "save_phone_mirror_enabled",
             "params": [
@@ -942,6 +999,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the scrcpyDisplaySize property; goes in protocol 5",
             "kind": "slot",
             "name": "save_scrcpy_display_size",
             "params": [
@@ -954,6 +1012,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the scrcpyAudioGain property; goes in protocol 5",
             "kind": "slot",
             "name": "save_scrcpy_audio_gain",
             "params": [
@@ -966,6 +1025,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the scrcpyAudioDuckEnabled property; goes in protocol 5",
             "kind": "slot",
             "name": "save_scrcpy_audio_duck_enabled",
             "params": [
@@ -978,6 +1038,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the scrcpyAudioDuckLevel property; goes in protocol 5",
             "kind": "slot",
             "name": "save_scrcpy_audio_duck_level",
             "params": [
@@ -990,6 +1051,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the scrcpyAudioGainDb property; goes in protocol 5",
             "kind": "slot",
             "name": "save_scrcpy_audio_gain_db",
             "params": [
@@ -1002,6 +1064,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the scrcpyAudioDuckLevelDb property; goes in protocol 5",
             "kind": "slot",
             "name": "save_scrcpy_audio_duck_level_db",
             "params": [
@@ -1014,6 +1077,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the scrcpyPhoneScreenOff property; goes in protocol 5",
             "kind": "slot",
             "name": "save_scrcpy_phone_screen_off",
             "params": [
@@ -1026,6 +1090,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the scrcpyDisplayDpi property; goes in protocol 5",
             "kind": "slot",
             "name": "save_scrcpy_display_dpi",
             "params": [
@@ -1038,6 +1103,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the scrcpyBitRateUsb property; goes in protocol 5",
             "kind": "slot",
             "name": "save_scrcpy_bit_rate_usb",
             "params": [
@@ -1050,6 +1116,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the scrcpyBitRateWifi property; goes in protocol 5",
             "kind": "slot",
             "name": "save_scrcpy_bit_rate_wifi",
             "params": [
@@ -1062,6 +1129,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the scrcpyAutoWifi property; goes in protocol 5",
             "kind": "slot",
             "name": "save_scrcpy_auto_wifi",
             "params": [
@@ -1074,6 +1142,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the scrcpyBitRateAuto property; goes in protocol 5",
             "kind": "slot",
             "name": "save_scrcpy_bit_rate_auto",
             "params": [
@@ -1086,6 +1155,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the scrcpyWirelessAddress property; goes in protocol 5",
             "kind": "slot",
             "name": "save_scrcpy_wireless_address",
             "params": [
@@ -1098,6 +1168,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the esp32VolumeEnabled property; goes in protocol 5",
             "kind": "slot",
             "name": "save_esp32_volume_enabled",
             "params": [
@@ -1110,6 +1181,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the esp32VolumePort property; goes in protocol 5",
             "kind": "slot",
             "name": "save_esp32_volume_port",
             "params": [
@@ -1122,6 +1194,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the esp32VolumeStepSize property; goes in protocol 5",
             "kind": "slot",
             "name": "save_esp32_volume_step_size",
             "params": [
@@ -1134,6 +1207,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the esp32AutoReconnect property; goes in protocol 5",
             "kind": "slot",
             "name": "save_esp32_auto_reconnect",
             "params": [
@@ -1146,6 +1220,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the esp32LedSleepEnabled property; goes in protocol 5",
             "kind": "slot",
             "name": "save_esp32_led_sleep_enabled",
             "params": [
@@ -1158,6 +1233,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the esp32LedColorMode property; goes in protocol 5",
             "kind": "slot",
             "name": "save_esp32_led_color_mode",
             "params": [
@@ -1170,6 +1246,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the esp32LedStaticColor property; goes in protocol 5",
             "kind": "slot",
             "name": "save_esp32_led_static_color",
             "params": [
@@ -1182,6 +1259,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the imuEnabled property; goes in protocol 5",
             "kind": "slot",
             "name": "save_imu_enabled",
             "params": [
@@ -1194,6 +1272,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the sensorEmitRate property; goes in protocol 5",
             "kind": "slot",
             "name": "save_sensor_emit_rate",
             "params": [
@@ -1206,6 +1285,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the sensorDecimalPlaces property; goes in protocol 5",
             "kind": "slot",
             "name": "save_sensor_decimal_places",
             "params": [
@@ -1218,6 +1298,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the sensorTempUnit property; goes in protocol 5",
             "kind": "slot",
             "name": "save_sensor_temp_unit",
             "params": [
@@ -1230,6 +1311,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the sensorAltitudeUnit property; goes in protocol 5",
             "kind": "slot",
             "name": "save_sensor_altitude_unit",
             "params": [
@@ -1258,6 +1340,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the gestureSensorEnabled property; goes in protocol 5",
             "kind": "slot",
             "name": "save_gesture_sensor_enabled",
             "params": [
@@ -1306,6 +1389,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the gestureVolumeStep property; goes in protocol 5",
             "kind": "slot",
             "name": "save_gesture_volume_step",
             "params": [
@@ -1318,6 +1402,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the gestureCooldown property; goes in protocol 5",
             "kind": "slot",
             "name": "save_gesture_cooldown",
             "params": [
@@ -1454,6 +1539,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the directoryHistory property; goes in protocol 5",
             "kind": "slot",
             "name": "get_directory_history",
             "params": [
@@ -1462,6 +1548,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the homeOBDParameters property; goes in protocol 5",
             "kind": "slot",
             "name": "get_home_obd_parameters",
             "params": [
@@ -1470,6 +1557,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the autoPlayOnStartup property; goes in protocol 5",
             "kind": "slot",
             "name": "get_auto_play_on_startup",
             "params": [
@@ -1478,6 +1566,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the persistShuffleState property; goes in protocol 5",
             "kind": "slot",
             "name": "get_persist_shuffle_state",
             "params": [
@@ -1486,6 +1575,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the lastShuffleState property; goes in protocol 5",
             "kind": "slot",
             "name": "get_last_shuffle_state",
             "params": [
@@ -1494,6 +1584,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the lastPlayedSong property; goes in protocol 5",
             "kind": "slot",
             "name": "get_last_played_song",
             "params": [
@@ -1502,6 +1593,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the lastPlayedPosition property; goes in protocol 5",
             "kind": "slot",
             "name": "get_last_played_position",
             "params": [
@@ -1510,6 +1602,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the lastPlayedPlaylist property; goes in protocol 5",
             "kind": "slot",
             "name": "get_last_played_playlist",
             "params": [
@@ -1518,6 +1611,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the lastSettingsSection property; goes in protocol 5",
             "kind": "slot",
             "name": "get_last_settings_section",
             "params": [
@@ -1526,6 +1620,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the windowState property; goes in protocol 5",
             "kind": "slot",
             "name": "get_window_state",
             "params": [
@@ -1534,6 +1629,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the musicButtonDefaultPage property; goes in protocol 5",
             "kind": "slot",
             "name": "get_music_button_default_page",
             "params": [
@@ -1542,6 +1638,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the returnToLibraryAfterSelection property; goes in protocol 5",
             "kind": "slot",
             "name": "get_return_to_library_after_selection",
             "params": [
@@ -1558,6 +1655,7 @@
             "scope": "settings"
         },
         {
+            "deprecated": "use the androidAutoEnabled property; goes in protocol 5",
             "kind": "slot",
             "name": "get_android_auto_enabled",
             "params": [
@@ -1566,6 +1664,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the phoneMirrorEnabled property; goes in protocol 5",
             "kind": "slot",
             "name": "get_phone_mirror_enabled",
             "params": [
@@ -1574,6 +1673,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the scrcpyDisplaySize property; goes in protocol 5",
             "kind": "slot",
             "name": "get_scrcpy_display_size",
             "params": [
@@ -1582,6 +1682,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the scrcpyAudioGain property; goes in protocol 5",
             "kind": "slot",
             "name": "get_scrcpy_audio_gain",
             "params": [
@@ -1590,6 +1691,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the scrcpyAudioDuckEnabled property; goes in protocol 5",
             "kind": "slot",
             "name": "get_scrcpy_audio_duck_enabled",
             "params": [
@@ -1598,6 +1700,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the scrcpyAudioDuckLevel property; goes in protocol 5",
             "kind": "slot",
             "name": "get_scrcpy_audio_duck_level",
             "params": [
@@ -1606,6 +1709,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the scrcpyPhoneScreenOff property; goes in protocol 5",
             "kind": "slot",
             "name": "get_scrcpy_phone_screen_off",
             "params": [
@@ -1614,6 +1718,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the scrcpyDisplayDpi property; goes in protocol 5",
             "kind": "slot",
             "name": "get_scrcpy_display_dpi",
             "params": [
@@ -1622,6 +1727,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the scrcpyBitRateUsb property; goes in protocol 5",
             "kind": "slot",
             "name": "get_scrcpy_bit_rate_usb",
             "params": [
@@ -1630,6 +1736,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the scrcpyBitRateWifi property; goes in protocol 5",
             "kind": "slot",
             "name": "get_scrcpy_bit_rate_wifi",
             "params": [
@@ -1638,6 +1745,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the scrcpyAutoWifi property; goes in protocol 5",
             "kind": "slot",
             "name": "get_scrcpy_auto_wifi",
             "params": [
@@ -1646,6 +1754,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the scrcpyBitRateAuto property; goes in protocol 5",
             "kind": "slot",
             "name": "get_scrcpy_bit_rate_auto",
             "params": [
@@ -1654,6 +1763,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the scrcpyWirelessAddress property; goes in protocol 5",
             "kind": "slot",
             "name": "get_scrcpy_wireless_address",
             "params": [
@@ -1662,6 +1772,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the esp32VolumeEnabled property; goes in protocol 5",
             "kind": "slot",
             "name": "get_esp32_volume_enabled",
             "params": [
@@ -1670,6 +1781,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the esp32VolumePort property; goes in protocol 5",
             "kind": "slot",
             "name": "get_esp32_volume_port",
             "params": [
@@ -1678,6 +1790,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the esp32VolumeStepSize property; goes in protocol 5",
             "kind": "slot",
             "name": "get_esp32_volume_step_size",
             "params": [
@@ -1686,6 +1799,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the esp32AutoReconnect property; goes in protocol 5",
             "kind": "slot",
             "name": "get_esp32_auto_reconnect",
             "params": [
@@ -1694,6 +1808,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the esp32LedSleepEnabled property; goes in protocol 5",
             "kind": "slot",
             "name": "get_esp32_led_sleep_enabled",
             "params": [
@@ -1702,6 +1817,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the esp32LedColorMode property; goes in protocol 5",
             "kind": "slot",
             "name": "get_esp32_led_color_mode",
             "params": [
@@ -1710,6 +1826,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the esp32LedStaticColor property; goes in protocol 5",
             "kind": "slot",
             "name": "get_esp32_led_static_color",
             "params": [
@@ -1718,6 +1835,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the showWaveformVisualizer property; goes in protocol 5",
             "kind": "slot",
             "name": "get_show_waveform_visualizer",
             "params": [
@@ -1726,6 +1844,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the imuEnabled property; goes in protocol 5",
             "kind": "slot",
             "name": "get_imu_enabled",
             "params": [
@@ -1734,6 +1853,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the gestureSensorEnabled property; goes in protocol 5",
             "kind": "slot",
             "name": "get_gesture_sensor_enabled",
             "params": [
@@ -1786,6 +1906,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use the settingsMenuVisibility property; goes in protocol 5",
             "kind": "slot",
             "name": "get_settings_menu_visibility",
             "params": [
@@ -1837,144 +1958,162 @@
             "name": "deviceName",
             "notify": "deviceNameChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "fontSetting",
             "notify": "fontSettingChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "themeSetting",
             "notify": "themeSettingChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "uiScale",
             "notify": "uiScaleChanged",
             "readable": true,
+            "scope": "settings",
             "type": "float",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "colorTransitionMs",
             "notify": "colorTransitionMsChanged",
             "readable": true,
+            "scope": "settings",
             "type": "int",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "songLengthTransition",
             "notify": "songLengthTransitionChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "showClock",
             "notify": "showClockChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "clockFormat24Hour",
             "notify": "clockFormatChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "clockShowSeconds",
             "notify": "clockShowSecondsChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "clockSize",
             "notify": "clockSizeChanged",
             "readable": true,
+            "scope": "settings",
             "type": "int",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "clockSizeAuto",
             "notify": "clockSizeAutoChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "backgroundGrid",
             "notify": "backgroundGridChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "screenWidth",
             "notify": "screenWidthChanged",
             "readable": true,
+            "scope": "settings",
             "type": "int",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "screenHeight",
             "notify": "screenHeightChanged",
             "readable": true,
+            "scope": "settings",
             "type": "int",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "backgroundBlurRadius",
             "notify": "backgroundBlurRadiusChanged",
             "readable": true,
+            "scope": "settings",
             "type": "int",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "bottomBarOrientation",
             "notify": "bottomBarOrientationChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "showBottomBarMediaControls",
             "notify": "showBottomBarMediaControlsChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "settingsLayoutStyle",
             "notify": "settingsLayoutStyleChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
@@ -1997,8 +2136,9 @@
             "name": "startUpVolume",
             "notify": "startUpVolumeChanged",
             "readable": true,
+            "scope": "settings",
             "type": "float",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
@@ -2013,192 +2153,216 @@
             "name": "mediaFolder",
             "notify": "mediaFolderChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "autoPlayOnStartup",
             "notify": "autoPlayOnStartupChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "persistShuffleState",
             "notify": "persistShuffleStateChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "lastShuffleState",
             "notify": "lastShuffleStateChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "lastPlayedSong",
             "notify": "lastPlayedSongChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "lastPlayedPosition",
             "notify": "lastPlayedPositionChanged",
             "readable": true,
+            "scope": "settings",
             "type": "int",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "lastPlayedPlaylist",
             "notify": "lastPlayedPlaylistChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "musicButtonDefaultPage",
             "notify": "musicButtonDefaultPageChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "returnToLibraryAfterSelection",
             "notify": "returnToLibraryAfterSelectionChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "showWaveformVisualizer",
             "notify": "showWaveformVisualizerChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "show3DButtonTilt",
             "notify": "show3DButtonTiltChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "show3DAlbumPreview",
             "notify": "show3DAlbumPreviewChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "roundedAlbumArt",
             "notify": "roundedAlbumArtChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "albumArtCornerRadius",
             "notify": "albumArtCornerRadiusChanged",
             "readable": true,
+            "scope": "settings",
             "type": "int",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "showAlbumArtShadow",
             "notify": "showAlbumArtShadowChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "vinylRecordMode",
             "notify": "vinylRecordModeChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "albumArtTransition",
             "notify": "albumArtTransitionChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "audioOutputDevice",
             "notify": "audioOutputDeviceChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "backgroundOverlayOpacity",
             "notify": "backgroundOverlayOpacityChanged",
             "readable": true,
+            "scope": "settings",
             "type": "int",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "sideCardOpacity",
             "notify": "sideCardOpacityChanged",
             "readable": true,
+            "scope": "settings",
             "type": "double",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "sideCardAngle",
             "notify": "sideCardAngleChanged",
             "readable": true,
+            "scope": "settings",
             "type": "int",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "buttonTiltDuration",
             "notify": "buttonTiltDurationChanged",
             "readable": true,
+            "scope": "settings",
             "type": "int",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "textScrollSpeed",
             "notify": "textScrollSpeedChanged",
             "readable": true,
+            "scope": "settings",
             "type": "int",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "obdBluetoothPort",
             "notify": "obdBluetoothPortChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
@@ -2213,80 +2377,90 @@
             "name": "obdFastMode",
             "notify": "obdFastModeChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "obdCardStyleCircular",
             "notify": "obdCardStyleCircularChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "gaugeTempUnit",
             "notify": "gaugeTempUnitChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "gaugeSpeedUnit",
             "notify": "gaugeSpeedUnitChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "obdAutoReconnectAttempts",
             "notify": "obdAutoReconnectAttemptsChanged",
             "readable": true,
+            "scope": "settings",
             "type": "int",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "fuelTankCapacity",
             "notify": "fuelTankCapacityChanged",
             "readable": true,
+            "scope": "settings",
             "type": "float",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "blackBoxEnabled",
             "notify": "blackBoxEnabledChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "blackBoxSweepAll",
             "notify": "blackBoxSweepAllChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "blackBoxMaxMB",
             "notify": "blackBoxMaxMBChanged",
             "readable": true,
+            "scope": "settings",
             "type": "int",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "homeOBDParameters",
             "notify": "homeOBDParametersChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QVariantList",
-            "writable": false
+            "writable": true
         },
         {
             "constant": true,
@@ -2331,232 +2505,261 @@
             "name": "windowState",
             "notify": "windowStateChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "lastSettingsSection",
             "notify": "lastSettingsSectionChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "androidAutoEnabled",
             "notify": "androidAutoEnabledChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "phoneMirrorEnabled",
             "notify": "phoneMirrorEnabledChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "scrcpyDisplaySize",
             "notify": "scrcpyDisplaySizeChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "scrcpyAudioGain",
             "notify": "scrcpyAudioGainChanged",
             "readable": true,
+            "scope": "settings",
             "type": "double",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "scrcpyAudioGainDb",
             "notify": "scrcpyAudioGainChanged",
             "readable": true,
+            "scope": "settings",
             "type": "double",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "scrcpyAudioDuckLevelDb",
             "notify": "scrcpyAudioDuckLevelChanged",
             "readable": true,
+            "scope": "settings",
             "type": "double",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "scrcpyAudioDuckEnabled",
             "notify": "scrcpyAudioDuckEnabledChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "scrcpyAudioDuckLevel",
             "notify": "scrcpyAudioDuckLevelChanged",
             "readable": true,
+            "scope": "settings",
             "type": "double",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "scrcpyPhoneScreenOff",
             "notify": "scrcpyPhoneScreenOffChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "scrcpyDisplayDpi",
             "notify": "scrcpyDisplayDpiChanged",
             "readable": true,
+            "scope": "settings",
             "type": "int",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "scrcpyBitRateUsb",
             "notify": "scrcpyBitRateUsbChanged",
             "readable": true,
+            "scope": "settings",
             "type": "int",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "scrcpyBitRateWifi",
             "notify": "scrcpyBitRateWifiChanged",
             "readable": true,
+            "scope": "settings",
             "type": "int",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "scrcpyAutoWifi",
             "notify": "scrcpyAutoWifiChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "scrcpyBitRateAuto",
             "notify": "scrcpyBitRateAutoChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "scrcpyWirelessAddress",
             "notify": "scrcpyWirelessAddressChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "esp32VolumeEnabled",
             "notify": "esp32VolumeEnabledChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "esp32VolumePort",
             "notify": "esp32VolumePortChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "esp32VolumeStepSize",
             "notify": "esp32VolumeStepSizeChanged",
             "readable": true,
+            "scope": "settings",
             "type": "double",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "esp32AutoReconnect",
             "notify": "esp32AutoReconnectChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "esp32LedSleepEnabled",
             "notify": "esp32LedSleepEnabledChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "esp32LedColorMode",
             "notify": "esp32LedColorModeChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "esp32LedStaticColor",
             "notify": "esp32LedStaticColorChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "imuEnabled",
             "notify": "imuEnabledChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "sensorEmitRate",
             "notify": "sensorEmitRateChanged",
             "readable": true,
+            "scope": "settings",
             "type": "int",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "sensorDecimalPlaces",
             "notify": "sensorDecimalPlacesChanged",
             "readable": true,
+            "scope": "settings",
             "type": "int",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "sensorTempUnit",
             "notify": "sensorTempUnitChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "sensorAltitudeUnit",
             "notify": "sensorAltitudeUnitChanged",
             "readable": true,
+            "scope": "settings",
             "type": "QString",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
@@ -2571,24 +2774,27 @@
             "name": "gestureSensorEnabled",
             "notify": "gestureSensorEnabledChanged",
             "readable": true,
+            "scope": "settings",
             "type": "bool",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "gestureVolumeStep",
             "notify": "gestureVolumeStepChanged",
             "readable": true,
+            "scope": "settings",
             "type": "int",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,
             "name": "gestureCooldown",
             "notify": "gestureCooldownChanged",
             "readable": true,
+            "scope": "settings",
             "type": "int",
-            "writable": false
+            "writable": true
         },
         {
             "constant": false,

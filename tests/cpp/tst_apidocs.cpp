@@ -142,6 +142,69 @@ private slots:
         QVERIFY2(deprecated > 100, qPrintable(QString::number(deprecated)));   // the scan still finds them
     }
 
+    // settingsManager is the exception above because its plain settings are
+    // writable properties: a save_* / get_* method that only repeats one is
+    // deprecated and names it. What is left in snake_case does more than
+    // read or write one setting, and is listed here, so a new one is a
+    // decision and not an accident.
+    void settingsMethodsPointAtWritableProperties()
+    {
+        QFile f(kDocs + "/settingsManager.json");
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QJsonObject d = QJsonDocument::fromJson(f.readAll()).object();
+        QHash<QString, bool> writable;
+        for (const QJsonValue &p : d.value("properties").toArray())
+            writable.insert(p.toObject().value("name").toString(), p.toObject().value("writable").toBool());
+        const QSet<QString> kept = {
+            "add_home_obd_parameter", "add_obd_saved_adapter", "apply_settings", "delete_custom_theme",
+            "get_gesture_mapping", "get_gesture_mapping_dict", "get_git_commit_date", "get_git_commit_hash",
+            "get_git_commit_message", "get_obd_parameter_enabled", "get_pinned_settings_metadata", "get_setting",
+            "get_setting_with_default", "get_settings_registry", "get_supported_obd_parameters", "is_setting_pinned",
+            "is_settings_section_visible", "move_home_obd_parameter", "remove_from_directory_history",
+            "remove_home_obd_parameter", "remove_obd_saved_adapter", "reset_gesture_mapping", "reset_to_defaults",
+            "save_custom_theme", "save_gesture_action", "save_gesture_mapping", "save_media_folder_url",
+            "save_obd_parameter_enabled", "save_playback_state", "save_sensor_card_visible", "save_setting",
+            "save_settings_section_visibility", "save_supported_obd_parameters", "save_to_directory_history",
+            "set_album_art_colors", "toggle_pin_setting"};
+        static const QRegularExpression note("^use the (\\w+) property; goes in protocol 5$");
+        QStringList offenders;
+        QSet<QString> seen;   // a method with a default argument is listed once per overload
+        int deprecated = 0;
+        for (const QJsonValue &v : d.value("methods").toArray()) {
+            const QJsonObject m = v.toObject();
+            const QString name = m.value("name").toString();
+            if (!name.contains('_'))
+                continue;
+            if (!m.contains("deprecated")) {
+                if (!kept.contains(name))
+                    offenders << name + " is snake_case, not deprecated and not in the list of those that stay";
+                seen.insert(name);
+                continue;
+            }
+            ++deprecated;
+            const QRegularExpressionMatch match = note.match(m.value("deprecated").toString());
+            if (!match.hasMatch()) {
+                offenders << name + ": \"" + m.value("deprecated").toString() + "\" names no property";
+                continue;
+            }
+            const QString property = match.captured(1);
+            if (!writable.contains(property))
+                offenders << name + " points at " + property + ", which is not a property";
+            else if (!name.startsWith("get_") && !writable.value(property))
+                offenders << name + " points at " + property + ", which cannot be written";
+        }
+        for (const QString &name : std::as_const(kept))
+            if (!seen.contains(name))
+                offenders << name + " is in the list and is not a method that stays";
+        QVERIFY2(offenders.isEmpty(), qPrintable(offenders.join("; ")));
+        QVERIFY2(deprecated > 100, qPrintable(QString::number(deprecated)));
+        // A client can write a plain setting with `set`, with the settings permission
+        int settable = 0;
+        for (const QJsonValue &p : d.value("properties").toArray())
+            settable += p.toObject().value("writable").toBool() && p.toObject().value("scope").toString() == "settings";
+        QVERIFY2(settable > 80, qPrintable(QString::number(settable)));
+    }
+
     // The note a client sees
     void aDeprecatedMethodSaysWhatToUse()
     {

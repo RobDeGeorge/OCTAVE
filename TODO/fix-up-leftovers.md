@@ -64,7 +64,7 @@
 
 ## 6. Refactors, one at a time, after the above
 
-1. `SettingsManager` table-driven: one row per setting instead of up to nine places; ends the double storage (`save_setting("uiScale", …)` writes the file and not the live value). **Effort:** L.
+1. Done 2026-11-15: `SettingsManager` is table-driven (one row per setting, one store of truth, writable properties). Left from it: derive the pinned-settings registry's slot names from the table; compile it on Windows and wasm (the dead file locking and its includes were removed).
 2. `OBDManager` split (connection lifecycle, scheduling, diagnostics) and the removal of the dead state and the cargo-cult locks. **Effort:** L.
 3. `MediaPlayer.qml` on a real C++ list model (today a JS array, five invokable calls per row, a 300 ms refresh timer). **Effort:** L.
 4. `OBDMenu.qml`: the 1,870-line shift-light popup into its own file, on `SettingsSlider` and the gauge library. **Effort:** M.
@@ -77,7 +77,7 @@ Done 2026-11-15: mediaManager, obdManager, audioAnalyzer, esp32VolumeManager, cl
 
 Left:
 - Move the QML (about 259 call sites), the SDK examples and the templates to the new names. **Effort:** M, desktop.
-- `settingsManager`'s 160 `save_*` / `get_*` methods: no aliases on purpose. The table-driven refactor (section 6.1) makes the properties writable; deprecate the methods then.
+- `settingsManager`: done with the table-driven refactor. 85 properties are writable and 121 `save_*` / `get_*` methods are deprecated in their favour; the QML still calls the methods and moves with the sweep above.
 - Deprecate, with the same notice: the per-parameter OBD signals nothing listens to, `settingsLayoutStyle` (its layouts are gone), and announce that a `pair` request with no scope list will get `read`, not `full`.
 - Protocol 5: remove everything deprecated above. **Effort:** M, desktop.
 

@@ -87,7 +87,7 @@ Every member is **stable** unless marked: covered by the version, so it changes 
 
 ### Names
 
-Method names are camelCase. The snake_case methods that came from the Python backend (`mediaManager.next_track`, `obdManager.read_dtc`, ...) are deprecated in protocol 3, each beside a camelCase method of the same signature and scope (`nextTrack`, `readDtc`); `tst_apidocs` fails a snake_case method that is not marked, on any object but `settingsManager` (whose `save_*` / `get_*` are to be replaced by writable properties).
+Method names are camelCase. The snake_case methods that came from the Python backend (`mediaManager.next_track`, `obdManager.read_dtc`, ...) are deprecated in protocol 3, each beside a camelCase method of the same signature and scope (`nextTrack`, `readDtc`); `tst_apidocs` fails a snake_case method that is not marked, on any object. `settingsManager` is the one exception in kind: its plain settings are writable properties, so a `save_*` / `get_*` method that only sets or repeats one is deprecated in favour of the property (`save_show_clock` → set `showClock`), and the methods that do more keep their names for now.
 
 ### Enforced
 
