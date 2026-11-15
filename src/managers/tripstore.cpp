@@ -257,31 +257,90 @@ bool TripStore::open(const QString &dir)
         emit storeOpened(false, msg);
         return false;
     }
-    sqlite3 *db = nullptr;
-    const int rc = sqlite3_open_v2(databasePath().toUtf8().constData(), &db,
-                                   SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
-    if (rc != SQLITE_OK) {
-        const QString msg = QStringLiteral("Cannot open %1: %2")
-                                .arg(databasePath(), db ? QString::fromUtf8(sqlite3_errmsg(db)) : QString::fromUtf8(sqlite3_errstr(rc)));
-        qCWarning(lcTripStore) << msg;
-        if (db)
-            sqlite3_close(db);
-        emit error(msg);
+    // Twice at most: a database that is damaged (a power cut at the wrong
+    // moment, a bad SD card block) is set aside and a new one started. It
+    // used to fail here on every boot, and the black box stayed off until
+    // someone deleted the file by hand. The per-trip CSV / JSON files are
+    // untouched either way.
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        sqlite3 *db = nullptr;
+        const int rc = sqlite3_open_v2(databasePath().toUtf8().constData(), &db,
+                                       SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
+        bool damaged = rc == SQLITE_CORRUPT || rc == SQLITE_NOTADB;
+        QString msg;
+        if (rc != SQLITE_OK) {
+            msg = QStringLiteral("Cannot open %1: %2")
+                      .arg(databasePath(), db ? QString::fromUtf8(sqlite3_errmsg(db)) : QString::fromUtf8(sqlite3_errstr(rc)));
+            qCWarning(lcTripStore) << msg;
+            if (db)
+                sqlite3_close(db);
+            emit error(msg);
+        } else {
+            m_db = db;
+            sqlite3_busy_timeout(m_db, 2000);
+            if (createSchema()) {
+                checkSchemaVersion();
+                qCInfo(lcTripStore).noquote() << "Black box open at" << databasePath()
+                                              << QStringLiteral("(SQLite %1)").arg(QLatin1String(SQLITE_VERSION));
+                emit storeOpened(true, QString());
+                return true;
+            }
+            const int code = sqlite3_errcode(m_db);
+            damaged = code == SQLITE_CORRUPT || code == SQLITE_NOTADB;
+            msg = QStringLiteral("Cannot initialise %1").arg(databasePath());
+            sqlite3_close(m_db);   // no checkpoint: nothing here is worth writing back
+            m_db = nullptr;
+            m_paramIds.clear();
+        }
+        if (attempt == 0 && damaged && setDamagedDatabaseAside())
+            continue;
         emit storeOpened(false, msg);
         return false;
     }
-    m_db = db;
-    sqlite3_busy_timeout(m_db, 2000);
-    if (!createSchema()) {
-        const QString msg = QStringLiteral("Cannot initialise %1").arg(databasePath());
-        close();
-        emit storeOpened(false, msg);
+    return false;
+}
+
+// blackbox.sqlite (and its -wal / -shm) renamed to blackbox.sqlite.damaged-<time>
+bool TripStore::setDamagedDatabaseAside()
+{
+    const QString stamp = QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss"));
+    const QString aside = databasePath() + QStringLiteral(".damaged-") + stamp;
+    if (!QFile::rename(databasePath(), aside)) {
+        qCWarning(lcTripStore) << "The trip database is damaged and could not be set aside:" << databasePath();
         return false;
     }
-    qCInfo(lcTripStore).noquote() << "Black box open at" << databasePath()
-                                  << QStringLiteral("(SQLite %1)").arg(QLatin1String(SQLITE_VERSION));
-    emit storeOpened(true, QString());
+    for (const char *suffix : {"-wal", "-shm"})
+        QFile::rename(databasePath() + QLatin1String(suffix), aside + QLatin1String(suffix));
+    const QString msg = QStringLiteral("The trip database was damaged. It was kept as %1 and a new one started; "
+                                       "the trip files in history/trips are untouched.").arg(QFileInfo(aside).fileName());
+    qCWarning(lcTripStore).noquote() << msg;
+    emit error(msg);
     return true;
+}
+
+// The schema number was written and never read. Read it: an older database
+// is brought up to date here (nothing to do yet at version 1), a newer one
+// is used as far as this build understands it, and said so in the log.
+void TripStore::checkSchemaVersion()
+{
+    int stored = kSchemaVersion;
+    {
+        Query q(m_db);
+        if (q.prepare("SELECT value FROM meta WHERE key = 'schema'") && q.step())
+            stored = q.text(0).toInt();
+    }
+    if (stored > kSchemaVersion) {
+        qCWarning(lcTripStore) << "The trip database is schema" << stored << "and this build writes schema"
+                               << kSchemaVersion << "(made by a newer OCTAVE): using what this build knows";
+        return;
+    }
+    if (stored < kSchemaVersion) {
+        // Migrations go here, oldest first, each in a transaction:
+        //   if (stored < 2) { ...ALTER TABLE...; stored = 2; }
+        Query q(m_db);
+        if (q.prepare("UPDATE meta SET value = ? WHERE key = 'schema'"))
+            q.bind(1, QString::number(kSchemaVersion)).exec();
+    }
 }
 
 void TripStore::close()

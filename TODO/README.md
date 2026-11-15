@@ -1,6 +1,6 @@
 # TODO index — easiest to hardest
 
-**Last updated:** 2026-11-15 (licensing-review.md added, parked by the owner after the codebase review)
+**Last updated:** 2026-11-15 (licensing-review.md and fix-up-leftovers.md added after the codebase review and fixing session)
 
 One file per deferred plan. Each file opens with a one-line **Goal**, lists only the work that is left, and gives every step an **Effort** (S under an hour, M one session, L several sessions, XL a new subsystem) and the device it needs. When a plan is finished, delete its file and its row here.
 
@@ -16,6 +16,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | [sensorhome-3d-first-visit.md](sensorhome-3d-first-visit.md) | Check on the phone that the first 3D View tap no longer freezes (code done) | S | S22, Pi |
 | [error-notification-ui.md](error-notification-ui.md) | Notice for phone-mirror failures off-page; check the OBD notice on the Pi | S | desktop, Pi |
 | [licensing-review.md](licensing-review.md) | Notices match what ships: UxPlay wording, BSD-3 text, Google Sans and STEP model checks, then the AirPlay / `playfair` license decision | S, plus two owner decisions | desktop, the owner |
+| [fix-up-leftovers.md](fix-up-leftovers.md) | Finish the 2026-11-15 review's fix list: what needs a phone, the car, a browser build or a release run, then the refactors and protocol 4 | S … L | S22, Pi, wasm kit, CI |
 | [sensor-driven-ui-cost.md](sensor-driven-ui-cost.md) | Measure on the phone: idle sensors stopped, the grid fix, the Full Grid warnings (code done) | S | S22, Pi |
 
 ## 2. One session each (M)

@@ -265,6 +265,25 @@ private slots:
         QVERIFY(QFile::exists(t.value("file").toString()));
     }
 
+    // A database that is not one any more (a power cut, a bad block): set
+    // aside, a new one started, and the black box records again
+    void aDamagedDatabaseIsSetAsideNotFatal()
+    {
+        const QString dir = m_tmp->path() + "/damaged";
+        QVERIFY(QDir().mkpath(dir));
+        {
+            QFile f(dir + "/blackbox.sqlite");
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(QByteArray(8192, 'x'));
+        }
+        auto r = makeRecorder(QStringLiteral("damaged"));
+        QVERIFY(r->storeReady());
+        const QStringList aside = QDir(dir).entryList({"blackbox.sqlite.damaged-*"}, QDir::Files);
+        QCOMPARE(aside.size(), 1);
+        QCOMPARE(QFileInfo(dir + "/" + aside.first()).size(), qint64(8192));
+        QVERIFY(QFile::exists(dir + "/blackbox.sqlite"));
+    }
+
     void storePrunesOldestFirst()
     {
         TripStore store;
