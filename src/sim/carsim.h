@@ -29,6 +29,7 @@ struct CarValues {
     double throttle = 0.0;      // pedal, 0-100
     double brake = 0.0;         // 0-100
     int gear = 1;
+    qint64 gearHeldUntilMs = 0; // a gear chosen by hand stays this long (msecs since epoch)
     double engineLoad = 15.0;
     double maf = 8.0;           // g/s
     double map = 35.0;          // kPa

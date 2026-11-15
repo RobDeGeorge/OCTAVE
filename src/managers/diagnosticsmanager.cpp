@@ -50,7 +50,11 @@ bool DiagnosticsManager::canOpenFolder() const
 QStringList DiagnosticsManager::logFiles() const
 {
     QDir dir(logDir());
-    QStringList files = dir.entryList({QStringLiteral("octave*.log*")}, QDir::Files, QDir::Name);
+    // This app's logs and the watchdog's stack dumps (uiwatchdog.cpp).
+    // "octave*.log*" missed the dumps and still took octave.log, which the
+    // Python backend wrote until 2026-10 and nothing has since.
+    QStringList files = dir.entryList({QStringLiteral("octave-cpp*.log*"), QStringLiteral("hang-*.txt")},
+                                      QDir::Files, QDir::Name);
     for (QString &f : files)
         f = dir.absoluteFilePath(f);
     return files;

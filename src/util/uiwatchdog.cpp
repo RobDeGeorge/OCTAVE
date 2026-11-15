@@ -173,6 +173,13 @@ QString UiWatchdog::dumpStacks()
         qCWarning(lcWatchdog) << "gdb not installed; no stack dump for this hang";
         return {};
     }
+    // Keep the newest few: nothing else ever removed these
+    {
+        QDir logs(OctaveLog::logDir());
+        const QStringList old = logs.entryList({QStringLiteral("hang-*.txt")}, QDir::Files, QDir::Name);
+        for (int i = 0; i < old.size() - 9; ++i)   // names sort by time; this dump makes ten
+            logs.remove(old.at(i));
+    }
     const QString path = OctaveLog::logDir() + QStringLiteral("/hang-")
         + QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss")) + QStringLiteral(".txt");
 

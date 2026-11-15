@@ -42,6 +42,9 @@ CarSim::CarSim(QObject *parent)
     connect(&m_dropout, &QTimer::timeout, this, &CarSim::triggerDropoutNow);
 }
 
+// How long a gear chosen by hand is left alone by the automatic
+static constexpr qint64 kManualGearHoldMs = 10000;
+
 void CarSim::step()
 {
     constexpr double dt = 0.016;
@@ -69,7 +72,11 @@ void CarSim::step()
                 v.rpm += (800 - v.rpm) * 0.1;
         }
 
-        if (v.speedMph < 15) v.gear = 1;
+        // The automatic picks the gear from the road speed, unless one was
+        // just chosen by hand (setGear / upshift / downshift, the dev
+        // keys): that used to be overwritten within one 16 ms step
+        if (QDateTime::currentMSecsSinceEpoch() < v.gearHeldUntilMs) { /* hand-held */ }
+        else if (v.speedMph < 15) v.gear = 1;
         else if (v.speedMph < 30) v.gear = 2;
         else if (v.speedMph < 45) v.gear = 3;
         else if (v.speedMph < 65) v.gear = 4;
@@ -128,17 +135,26 @@ void CarSim::setEngineOn(bool on)
 
 void CarSim::setGear(int gear)
 {
-    m_state->updateValues([gear](CarValues &v) { v.gear = std::clamp(gear, 1, 6); });
+    m_state->updateValues([gear](CarValues &v) {
+        v.gear = std::clamp(gear, 1, 6);
+        v.gearHeldUntilMs = QDateTime::currentMSecsSinceEpoch() + kManualGearHoldMs;
+    });
 }
 
 void CarSim::upshift()
 {
-    m_state->updateValues([](CarValues &v) { v.gear = std::min(6, v.gear + 1); });
+    m_state->updateValues([](CarValues &v) {
+        v.gear = std::min(6, v.gear + 1);
+        v.gearHeldUntilMs = QDateTime::currentMSecsSinceEpoch() + kManualGearHoldMs;
+    });
 }
 
 void CarSim::downshift()
 {
-    m_state->updateValues([](CarValues &v) { v.gear = std::max(1, v.gear - 1); });
+    m_state->updateValues([](CarValues &v) {
+        v.gear = std::max(1, v.gear - 1);
+        v.gearHeldUntilMs = QDateTime::currentMSecsSinceEpoch() + kManualGearHoldMs;
+    });
 }
 
 void CarSim::setSpeed(double mph)

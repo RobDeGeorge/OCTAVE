@@ -333,6 +333,18 @@ private slots:
         QCOMPARE(m_obd->connectionState(), OBDManager::ConnectionState::Connected);
     }
 
+    // A gear chosen by hand stays chosen (the model used to put its own
+    // back within one 16 ms step)
+    void aGearChosenByHandStays()
+    {
+        m_sim->setGear(5);
+        QTest::qWait(300);
+        QCOMPARE(m_sim->state()->values().gear, 5);
+        m_sim->downshift();
+        QTest::qWait(100);
+        QCOMPARE(m_sim->state()->values().gear, 4);
+    }
+
     // A connect that arrives while connected (a retry timer that outlived
     // its reason, a second tap) must not rebuild the working link
     void aLateConnectLeavesALiveLinkAlone()
