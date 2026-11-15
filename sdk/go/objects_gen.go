@@ -492,33 +492,45 @@ func (o AudioAnalyzer) SetPosition(positionMs int64) error {
 }
 
 // AnalyzeFile calls analyze_file(QString).
+//
+// Deprecated: use analyzeFile; goes in protocol 5
 func (o AudioAnalyzer) AnalyzeFile(filePath string) error {
 	return o.c.Call("audioAnalyzer", "analyze_file", nil, filePath)
 }
 
 // UpdatePosition calls update_position(float).
+//
+// Deprecated: use updatePosition; goes in protocol 5
 func (o AudioAnalyzer) UpdatePosition(positionSeconds float64) error {
 	return o.c.Call("audioAnalyzer", "update_position", nil, positionSeconds)
 }
 
 // SetActive calls set_active(bool).
+//
+// Deprecated: use setActive; goes in protocol 5
 func (o AudioAnalyzer) SetActive(active bool) error {
 	return o.c.Call("audioAnalyzer", "set_active", nil, active)
 }
 
 // GetCurrentLevels calls get_current_levels() -> QVariantList.
+//
+// Deprecated: use getCurrentLevels; goes in protocol 5
 func (o AudioAnalyzer) GetCurrentLevels() (v []any, err error) {
 	err = o.c.Call("audioAnalyzer", "get_current_levels", &v)
 	return
 }
 
 // GetNumBarsCall calls get_num_bars() -> int.
+//
+// Deprecated: use getNumBars; goes in protocol 5
 func (o AudioAnalyzer) GetNumBarsCall() (v int, err error) {
 	err = o.c.Call("audioAnalyzer", "get_num_bars", &v)
 	return
 }
 
 // IsAnalyzed calls is_analyzed() -> bool.
+//
+// Deprecated: use isAnalyzed; goes in protocol 5
 func (o AudioAnalyzer) IsAnalyzed() (v bool, err error) {
 	err = o.c.Call("audioAnalyzer", "is_analyzed", &v)
 	return
@@ -530,18 +542,72 @@ func (o AudioAnalyzer) Clear() error {
 }
 
 // SetLive calls set_live(bool).
+//
+// Deprecated: use setLive; goes in protocol 5
 func (o AudioAnalyzer) SetLive(live bool) error {
 	return o.c.Call("audioAnalyzer", "set_live", nil, live)
 }
 
 // UpdateLive calls update_live().
+//
+// Deprecated: use updateLive; goes in protocol 5
 func (o AudioAnalyzer) UpdateLive() error {
 	return o.c.Call("audioAnalyzer", "update_live", nil)
 }
 
 // FeedLivePcm calls feed_live_pcm(QByteArray, int).
+//
+// Deprecated: use feedLivePcm; goes in protocol 5
 func (o AudioAnalyzer) FeedLivePcm(pcm string, bufferedMs int) error {
 	return o.c.Call("audioAnalyzer", "feed_live_pcm", nil, pcm, bufferedMs)
+}
+
+// AnalyzeFileCall calls analyzeFile(QString).
+func (o AudioAnalyzer) AnalyzeFileCall(filePath string) error {
+	return o.c.Call("audioAnalyzer", "analyzeFile", nil, filePath)
+}
+
+// UpdatePositionCall calls updatePosition(float).
+func (o AudioAnalyzer) UpdatePositionCall(positionSeconds float64) error {
+	return o.c.Call("audioAnalyzer", "updatePosition", nil, positionSeconds)
+}
+
+// SetActiveCall calls setActive(bool).
+func (o AudioAnalyzer) SetActiveCall(active bool) error {
+	return o.c.Call("audioAnalyzer", "setActive", nil, active)
+}
+
+// GetCurrentLevelsCall calls getCurrentLevels() -> QVariantList.
+func (o AudioAnalyzer) GetCurrentLevelsCall() (v []any, err error) {
+	err = o.c.Call("audioAnalyzer", "getCurrentLevels", &v)
+	return
+}
+
+// GetNumBarsCallCall calls getNumBars() -> int.
+func (o AudioAnalyzer) GetNumBarsCallCall() (v int, err error) {
+	err = o.c.Call("audioAnalyzer", "getNumBars", &v)
+	return
+}
+
+// IsAnalyzedCall calls isAnalyzed() -> bool.
+func (o AudioAnalyzer) IsAnalyzedCall() (v bool, err error) {
+	err = o.c.Call("audioAnalyzer", "isAnalyzed", &v)
+	return
+}
+
+// SetLiveCall calls setLive(bool).
+func (o AudioAnalyzer) SetLiveCall(live bool) error {
+	return o.c.Call("audioAnalyzer", "setLive", nil, live)
+}
+
+// UpdateLiveCall calls updateLive().
+func (o AudioAnalyzer) UpdateLiveCall() error {
+	return o.c.Call("audioAnalyzer", "updateLive", nil)
+}
+
+// FeedLivePcmCall calls feedLivePcm(QByteArray, int).
+func (o AudioAnalyzer) FeedLivePcmCall(pcm string, bufferedMs int) error {
+	return o.c.Call("audioAnalyzer", "feedLivePcm", nil, pcm, bufferedMs)
 }
 
 // BerryIMU is the service object "berryIMU" (C++ BerryIMUManager); NewBerryIMU(c) binds it to a client.
@@ -744,8 +810,15 @@ func (o Clock) GetTime() (v string, err error) {
 }
 
 // UpdateTime calls update_time().
+//
+// Deprecated: use updateTime; goes in protocol 5
 func (o Clock) UpdateTime() error {
 	return o.c.Call("clock", "update_time", nil)
+}
+
+// UpdateTimeCall calls updateTime().
+func (o Clock) UpdateTimeCall() error {
+	return o.c.Call("clock", "updateTime", nil)
 }
 
 // CustomPids is the service object "customPids" (C++ CustomPids); NewCustomPids(c) binds it to a client.
@@ -1223,45 +1296,61 @@ func (o Esp32VolumeManager) GetAvailablePorts() (v []any, err error) {
 }
 
 // ConnectDevice calls connect_device().
+//
+// Deprecated: use connectDevice; goes in protocol 5
 func (o Esp32VolumeManager) ConnectDevice() error {
 	return o.c.Call("esp32VolumeManager", "connect_device", nil)
 }
 
 // DisconnectDevice calls disconnect_device().
+//
+// Deprecated: use disconnectDevice; goes in protocol 5
 func (o Esp32VolumeManager) DisconnectDevice() error {
 	return o.c.Call("esp32VolumeManager", "disconnect_device", nil)
 }
 
 // GetAvailablePortsCall calls get_available_ports() -> QVariantList.
+//
+// Deprecated: use getAvailablePorts; goes in protocol 5
 func (o Esp32VolumeManager) GetAvailablePortsCall() (v []any, err error) {
 	err = o.c.Call("esp32VolumeManager", "get_available_ports", &v)
 	return
 }
 
 // IsConnected calls is_connected() -> bool.
+//
+// Deprecated: use isConnected; goes in protocol 5
 func (o Esp32VolumeManager) IsConnected() (v bool, err error) {
 	err = o.c.Call("esp32VolumeManager", "is_connected", &v)
 	return
 }
 
 // GetConnectionStatusCall calls get_connection_status() -> QString.
+//
+// Deprecated: use getConnectionStatus; goes in protocol 5
 func (o Esp32VolumeManager) GetConnectionStatusCall() (v string, err error) {
 	err = o.c.Call("esp32VolumeManager", "get_connection_status", &v)
 	return
 }
 
 // GetConnectionDetailCall calls get_connection_detail() -> QString.
+//
+// Deprecated: use getConnectionDetail; goes in protocol 5
 func (o Esp32VolumeManager) GetConnectionDetailCall() (v string, err error) {
 	err = o.c.Call("esp32VolumeManager", "get_connection_detail", &v)
 	return
 }
 
 // RefreshPorts calls refresh_ports().
+//
+// Deprecated: use refreshPorts; goes in protocol 5
 func (o Esp32VolumeManager) RefreshPorts() error {
 	return o.c.Call("esp32VolumeManager", "refresh_ports", nil)
 }
 
 // ResetReconnectAttempts calls reset_reconnect_attempts().
+//
+// Deprecated: use resetReconnectAttempts; goes in protocol 5
 func (o Esp32VolumeManager) ResetReconnectAttempts() error {
 	return o.c.Call("esp32VolumeManager", "reset_reconnect_attempts", nil)
 }
@@ -1269,6 +1358,50 @@ func (o Esp32VolumeManager) ResetReconnectAttempts() error {
 // Cleanup calls cleanup().
 func (o Esp32VolumeManager) Cleanup() error {
 	return o.c.Call("esp32VolumeManager", "cleanup", nil)
+}
+
+// ConnectDeviceCall calls connectDevice().
+func (o Esp32VolumeManager) ConnectDeviceCall() error {
+	return o.c.Call("esp32VolumeManager", "connectDevice", nil)
+}
+
+// DisconnectDeviceCall calls disconnectDevice().
+func (o Esp32VolumeManager) DisconnectDeviceCall() error {
+	return o.c.Call("esp32VolumeManager", "disconnectDevice", nil)
+}
+
+// GetAvailablePortsCallCall calls getAvailablePorts() -> QVariantList.
+func (o Esp32VolumeManager) GetAvailablePortsCallCall() (v []any, err error) {
+	err = o.c.Call("esp32VolumeManager", "getAvailablePorts", &v)
+	return
+}
+
+// IsConnectedCall calls isConnected() -> bool.
+func (o Esp32VolumeManager) IsConnectedCall() (v bool, err error) {
+	err = o.c.Call("esp32VolumeManager", "isConnected", &v)
+	return
+}
+
+// GetConnectionStatusCallCall calls getConnectionStatus() -> QString.
+func (o Esp32VolumeManager) GetConnectionStatusCallCall() (v string, err error) {
+	err = o.c.Call("esp32VolumeManager", "getConnectionStatus", &v)
+	return
+}
+
+// GetConnectionDetailCallCall calls getConnectionDetail() -> QString.
+func (o Esp32VolumeManager) GetConnectionDetailCallCall() (v string, err error) {
+	err = o.c.Call("esp32VolumeManager", "getConnectionDetail", &v)
+	return
+}
+
+// RefreshPortsCall calls refreshPorts().
+func (o Esp32VolumeManager) RefreshPortsCall() error {
+	return o.c.Call("esp32VolumeManager", "refreshPorts", nil)
+}
+
+// ResetReconnectAttemptsCall calls resetReconnectAttempts().
+func (o Esp32VolumeManager) ResetReconnectAttemptsCall() error {
+	return o.c.Call("esp32VolumeManager", "resetReconnectAttempts", nil)
 }
 
 // FontCatalog is the service object "fontCatalog" (C++ FontCatalog); NewFontCatalog(c) binds it to a client.
@@ -1492,36 +1625,50 @@ func (o MediaManager) GetCurrentAudioOutput() (v string, err error) {
 }
 
 // ConnectSettingsManager calls connect_settings_manager(QObject*).
+//
+// Deprecated: does nothing; goes in protocol 5
 func (o MediaManager) ConnectSettingsManager(arg0 any) error {
 	return o.c.Call("mediaManager", "connect_settings_manager", nil, arg0)
 }
 
 // SavePlaybackState calls _save_playback_state().
+//
+// Deprecated: internal; goes in protocol 5
 func (o MediaManager) SavePlaybackState() error {
 	return o.c.Call("mediaManager", "_save_playback_state", nil)
 }
 
 // ClearTempFiles calls _clear_temp_files().
+//
+// Deprecated: internal; goes in protocol 5
 func (o MediaManager) ClearTempFiles() error {
 	return o.c.Call("mediaManager", "_clear_temp_files", nil)
 }
 
 // FlushMetadataStore calls flush_metadata_store().
+//
+// Deprecated: use flushMetadataStore; goes in protocol 5
 func (o MediaManager) FlushMetadataStore() error {
 	return o.c.Call("mediaManager", "flush_metadata_store", nil)
 }
 
 // PlayFile calls play_file(QString).
+//
+// Deprecated: use playFile; goes in protocol 5
 func (o MediaManager) PlayFile(filename string) error {
 	return o.c.Call("mediaManager", "play_file", nil, filename)
 }
 
 // NextTrack calls next_track().
+//
+// Deprecated: use nextTrack; goes in protocol 5
 func (o MediaManager) NextTrack() error {
 	return o.c.Call("mediaManager", "next_track", nil)
 }
 
 // PreviousTrack calls previous_track().
+//
+// Deprecated: use previousTrack; goes in protocol 5
 func (o MediaManager) PreviousTrack() error {
 	return o.c.Call("mediaManager", "previous_track", nil)
 }
@@ -1532,6 +1679,8 @@ func (o MediaManager) Pause() error {
 }
 
 // TogglePlay calls toggle_play().
+//
+// Deprecated: use togglePlay; goes in protocol 5
 func (o MediaManager) TogglePlay() error {
 	return o.c.Call("mediaManager", "toggle_play", nil)
 }
@@ -1542,6 +1691,8 @@ func (o MediaManager) SetMuted(muted bool) error {
 }
 
 // ToggleShuffle calls toggle_shuffle().
+//
+// Deprecated: use toggleShuffle; goes in protocol 5
 func (o MediaManager) ToggleShuffle() error {
 	return o.c.Call("mediaManager", "toggle_shuffle", nil)
 }
@@ -1557,177 +1708,239 @@ func (o MediaManager) SetDucking(factor float64) error {
 }
 
 // SetPosition calls set_position(int).
+//
+// Deprecated: use setPosition; goes in protocol 5
 func (o MediaManager) SetPosition(positionMs int) error {
 	return o.c.Call("mediaManager", "set_position", nil, positionMs)
 }
 
 // ExtractColorsFromAlbumArt calls extract_colors_from_album_art(QString).
+//
+// Deprecated: use extractColorsFromAlbumArt; goes in protocol 5
 func (o MediaManager) ExtractColorsFromAlbumArt(filename string) error {
 	return o.c.Call("mediaManager", "extract_colors_from_album_art", nil, filename)
 }
 
 // ExtractColorsFromImage calls extract_colors_from_image(QString).
+//
+// Deprecated: use extractColorsFromImage; goes in protocol 5
 func (o MediaManager) ExtractColorsFromImage(imagePath string) error {
 	return o.c.Call("mediaManager", "extract_colors_from_image", nil, imagePath)
 }
 
 // ScanLibrary1 calls scan_library(bool).
+//
+// Deprecated: use scanLibrary; goes in protocol 5
 func (o MediaManager) ScanLibrary1(resetDisplayNames bool) error {
 	return o.c.Call("mediaManager", "scan_library", nil, resetDisplayNames)
 }
 
 // ScanLibrary0 calls scan_library().
+//
+// Deprecated: use scanLibrary; goes in protocol 5
 func (o MediaManager) ScanLibrary0() error {
 	return o.c.Call("mediaManager", "scan_library", nil)
 }
 
 // SetLibraryRoot calls set_library_root(QString).
+//
+// Deprecated: use setLibraryRoot; goes in protocol 5
 func (o MediaManager) SetLibraryRoot(path string) error {
 	return o.c.Call("mediaManager", "set_library_root", nil, path)
 }
 
 // StripFilenames calls strip_filenames().
+//
+// Deprecated: use stripFilenames; goes in protocol 5
 func (o MediaManager) StripFilenames() error {
 	return o.c.Call("mediaManager", "strip_filenames", nil)
 }
 
 // SelectPlaylist calls select_playlist(QString).
+//
+// Deprecated: use selectPlaylist; goes in protocol 5
 func (o MediaManager) SelectPlaylist(name string) error {
 	return o.c.Call("mediaManager", "select_playlist", nil, name)
 }
 
 // CreatePlaylist calls create_playlist(QString) -> bool.
+//
+// Deprecated: use createPlaylist; goes in protocol 5
 func (o MediaManager) CreatePlaylist(name string) (v bool, err error) {
 	err = o.c.Call("mediaManager", "create_playlist", &v, name)
 	return
 }
 
 // DeletePlaylist calls delete_playlist(QString) -> bool.
+//
+// Deprecated: use deletePlaylist; goes in protocol 5
 func (o MediaManager) DeletePlaylist(name string) (v bool, err error) {
 	err = o.c.Call("mediaManager", "delete_playlist", &v, name)
 	return
 }
 
 // MoveSongToPlaylist calls move_song_to_playlist(QString, QString) -> bool.
+//
+// Deprecated: use moveSongToPlaylist; goes in protocol 5
 func (o MediaManager) MoveSongToPlaylist(filename string, targetPlaylist string) (v bool, err error) {
 	err = o.c.Call("mediaManager", "move_song_to_playlist", &v, filename, targetPlaylist)
 	return
 }
 
 // DeleteSong calls delete_song(QString) -> bool.
+//
+// Deprecated: use deleteSong; goes in protocol 5
 func (o MediaManager) DeleteSong(filename string) (v bool, err error) {
 	err = o.c.Call("mediaManager", "delete_song", &v, filename)
 	return
 }
 
 // PlayFileAtPath calls play_file_at_path(QString) -> bool.
+//
+// Deprecated: use playFileAtPath; goes in protocol 5
 func (o MediaManager) PlayFileAtPath(filePath string) (v bool, err error) {
 	err = o.c.Call("mediaManager", "play_file_at_path", &v, filePath)
 	return
 }
 
 // InvalidateStatsCache calls invalidate_stats_cache().
+//
+// Deprecated: use invalidateStatsCache; goes in protocol 5
 func (o MediaManager) InvalidateStatsCache() error {
 	return o.c.Call("mediaManager", "invalidate_stats_cache", nil)
 }
 
 // GetMediaFiles1 calls get_media_files(bool) -> QStringList.
+//
+// Deprecated: use getMediaFiles; goes in protocol 5
 func (o MediaManager) GetMediaFiles1(emitSignal bool) (v []string, err error) {
 	err = o.c.Call("mediaManager", "get_media_files", &v, emitSignal)
 	return
 }
 
 // GetMediaFiles0 calls get_media_files() -> QStringList.
+//
+// Deprecated: use getMediaFiles; goes in protocol 5
 func (o MediaManager) GetMediaFiles0() (v []string, err error) {
 	err = o.c.Call("mediaManager", "get_media_files", &v)
 	return
 }
 
 // GetFormattedDuration calls get_formatted_duration(QString) -> QString.
+//
+// Deprecated: use getFormattedDuration; goes in protocol 5
 func (o MediaManager) GetFormattedDuration(filename string) (v string, err error) {
 	err = o.c.Call("mediaManager", "get_formatted_duration", &v, filename)
 	return
 }
 
 // GetBand calls get_band(QString) -> QString.
+//
+// Deprecated: use getBand; goes in protocol 5
 func (o MediaManager) GetBand(filename string) (v string, err error) {
 	err = o.c.Call("mediaManager", "get_band", &v, filename)
 	return
 }
 
 // GetAlbum calls get_album(QString) -> QString.
+//
+// Deprecated: use getAlbum; goes in protocol 5
 func (o MediaManager) GetAlbum(filename string) (v string, err error) {
 	err = o.c.Call("mediaManager", "get_album", &v, filename)
 	return
 }
 
 // GetAlbumArt calls get_album_art(QString) -> QString.
+//
+// Deprecated: use getAlbumArt; goes in protocol 5
 func (o MediaManager) GetAlbumArt(filename string) (v string, err error) {
 	err = o.c.Call("mediaManager", "get_album_art", &v, filename)
 	return
 }
 
 // GetCurrentFile calls get_current_file() -> QString.
+//
+// Deprecated: use getCurrentFile; goes in protocol 5
 func (o MediaManager) GetCurrentFile() (v string, err error) {
 	err = o.c.Call("mediaManager", "get_current_file", &v)
 	return
 }
 
 // GetNextTrackName calls get_next_track_name() -> QString.
+//
+// Deprecated: use getNextTrackName; goes in protocol 5
 func (o MediaManager) GetNextTrackName() (v string, err error) {
 	err = o.c.Call("mediaManager", "get_next_track_name", &v)
 	return
 }
 
 // GetPreviousTrackName calls get_previous_track_name() -> QString.
+//
+// Deprecated: use getPreviousTrackName; goes in protocol 5
 func (o MediaManager) GetPreviousTrackName() (v string, err error) {
 	err = o.c.Call("mediaManager", "get_previous_track_name", &v)
 	return
 }
 
 // GetNextTrackAlbumArt calls get_next_track_album_art() -> QString.
+//
+// Deprecated: use getNextTrackAlbumArt; goes in protocol 5
 func (o MediaManager) GetNextTrackAlbumArt() (v string, err error) {
 	err = o.c.Call("mediaManager", "get_next_track_album_art", &v)
 	return
 }
 
 // GetPreviousTrackAlbumArt calls get_previous_track_album_art() -> QString.
+//
+// Deprecated: use getPreviousTrackAlbumArt; goes in protocol 5
 func (o MediaManager) GetPreviousTrackAlbumArt() (v string, err error) {
 	err = o.c.Call("mediaManager", "get_previous_track_album_art", &v)
 	return
 }
 
 // GetNeighborAlbumArts calls get_neighbor_album_arts() -> QStringList.
+//
+// Deprecated: use getNeighborAlbumArts; goes in protocol 5
 func (o MediaManager) GetNeighborAlbumArts() (v []string, err error) {
 	err = o.c.Call("mediaManager", "get_neighbor_album_arts", &v)
 	return
 }
 
 // IsPlaying calls is_playing() -> bool.
+//
+// Deprecated: use isPlaying; goes in protocol 5
 func (o MediaManager) IsPlaying() (v bool, err error) {
 	err = o.c.Call("mediaManager", "is_playing", &v)
 	return
 }
 
 // IsPaused calls is_paused() -> bool.
+//
+// Deprecated: use isPaused; goes in protocol 5
 func (o MediaManager) IsPaused() (v bool, err error) {
 	err = o.c.Call("mediaManager", "is_paused", &v)
 	return
 }
 
 // GetDuration calls get_duration() -> float.
+//
+// Deprecated: use getDuration; goes in protocol 5
 func (o MediaManager) GetDuration() (v float64, err error) {
 	err = o.c.Call("mediaManager", "get_duration", &v)
 	return
 }
 
 // GetPosition calls get_position() -> float.
+//
+// Deprecated: use getPosition; goes in protocol 5
 func (o MediaManager) GetPosition() (v float64, err error) {
 	err = o.c.Call("mediaManager", "get_position", &v)
 	return
 }
 
 // IsMuted calls is_muted() -> bool.
+//
+// Deprecated: use isMuted; goes in protocol 5
 func (o MediaManager) IsMuted() (v bool, err error) {
 	err = o.c.Call("mediaManager", "is_muted", &v)
 	return
@@ -1740,110 +1953,461 @@ func (o MediaManager) GetVolume() (v float64, err error) {
 }
 
 // IsShuffled calls is_shuffled() -> bool.
+//
+// Deprecated: use isShuffled; goes in protocol 5
 func (o MediaManager) IsShuffled() (v bool, err error) {
 	err = o.c.Call("mediaManager", "is_shuffled", &v)
 	return
 }
 
 // GetPlaylistNames calls get_playlist_names() -> QStringList.
+//
+// Deprecated: use getPlaylistNames; goes in protocol 5
 func (o MediaManager) GetPlaylistNames() (v []string, err error) {
 	err = o.c.Call("mediaManager", "get_playlist_names", &v)
 	return
 }
 
 // GetCurrentPlaylistName calls get_current_playlist_name() -> QString.
+//
+// Deprecated: use getCurrentPlaylistName; goes in protocol 5
 func (o MediaManager) GetCurrentPlaylistName() (v string, err error) {
 	err = o.c.Call("mediaManager", "get_current_playlist_name", &v)
 	return
 }
 
 // GetCurrentSongList calls get_current_song_list() -> QStringList.
+//
+// Deprecated: use getCurrentSongList; goes in protocol 5
 func (o MediaManager) GetCurrentSongList() (v []string, err error) {
 	err = o.c.Call("mediaManager", "get_current_song_list", &v)
 	return
 }
 
 // GetMovablePlaylistNames calls get_movable_playlist_names() -> QStringList.
+//
+// Deprecated: use getMovablePlaylistNames; goes in protocol 5
 func (o MediaManager) GetMovablePlaylistNames() (v []string, err error) {
 	err = o.c.Call("mediaManager", "get_movable_playlist_names", &v)
 	return
 }
 
 // GetSongPlaylistName calls get_song_playlist_name(QString) -> QString.
+//
+// Deprecated: use getSongPlaylistName; goes in protocol 5
 func (o MediaManager) GetSongPlaylistName(filename string) (v string, err error) {
 	err = o.c.Call("mediaManager", "get_song_playlist_name", &v, filename)
 	return
 }
 
 // GetSongFilePath calls get_song_file_path(QString) -> QString.
+//
+// Deprecated: use getSongFilePath; goes in protocol 5
 func (o MediaManager) GetSongFilePath(filename string) (v string, err error) {
 	err = o.c.Call("mediaManager", "get_song_file_path", &v, filename)
 	return
 }
 
 // GetFullFilePath calls get_full_file_path(QString) -> QString.
+//
+// Deprecated: use getFullFilePath; goes in protocol 5
 func (o MediaManager) GetFullFilePath(filename string) (v string, err error) {
 	err = o.c.Call("mediaManager", "get_full_file_path", &v, filename)
 	return
 }
 
 // GetDisplayName calls get_display_name(QString) -> QString.
+//
+// Deprecated: use getDisplayName; goes in protocol 5
 func (o MediaManager) GetDisplayName(filename string) (v string, err error) {
 	err = o.c.Call("mediaManager", "get_display_name", &v, filename)
 	return
 }
 
 // GetDefaultMediaDir calls get_default_media_dir() -> QString.
+//
+// Deprecated: use getDefaultMediaDir; goes in protocol 5
 func (o MediaManager) GetDefaultMediaDir() (v string, err error) {
 	err = o.c.Call("mediaManager", "get_default_media_dir", &v)
 	return
 }
 
 // GetMediaFolderName calls get_media_folder_name() -> QString.
+//
+// Deprecated: use getMediaFolderName; goes in protocol 5
 func (o MediaManager) GetMediaFolderName() (v string, err error) {
 	err = o.c.Call("mediaManager", "get_media_folder_name", &v)
 	return
 }
 
 // BrowseMusicFolders calls browse_music_folders(QString) -> QVariantMap.
+//
+// Deprecated: use browseMusicFolders; goes in protocol 5
 func (o MediaManager) BrowseMusicFolders(path string) (v map[string]any, err error) {
 	err = o.c.Call("mediaManager", "browse_music_folders", &v, path)
 	return
 }
 
 // PickBrowserLibrary calls pick_browser_library() -> bool.
+//
+// Deprecated: use pickBrowserLibrary; goes in protocol 5
 func (o MediaManager) PickBrowserLibrary() (v bool, err error) {
 	err = o.c.Call("mediaManager", "pick_browser_library", &v)
 	return
 }
 
 // GetTotalDuration calls get_total_duration() -> QString.
+//
+// Deprecated: use getTotalDuration; goes in protocol 5
 func (o MediaManager) GetTotalDuration() (v string, err error) {
 	err = o.c.Call("mediaManager", "get_total_duration", &v)
 	return
 }
 
 // GetAlbumCount calls get_album_count() -> int.
+//
+// Deprecated: use getAlbumCount; goes in protocol 5
 func (o MediaManager) GetAlbumCount() (v int, err error) {
 	err = o.c.Call("mediaManager", "get_album_count", &v)
 	return
 }
 
 // GetArtistCount calls get_artist_count() -> int.
+//
+// Deprecated: use getArtistCount; goes in protocol 5
 func (o MediaManager) GetArtistCount() (v int, err error) {
 	err = o.c.Call("mediaManager", "get_artist_count", &v)
 	return
 }
 
 // SortMediaFiles2 calls sort_media_files(QString, bool) -> QStringList.
+//
+// Deprecated: use sortMediaFiles; goes in protocol 5
 func (o MediaManager) SortMediaFiles2(sortColumn string, ascending bool) (v []string, err error) {
 	err = o.c.Call("mediaManager", "sort_media_files", &v, sortColumn, ascending)
 	return
 }
 
 // SortMediaFiles1 calls sort_media_files(QString) -> QStringList.
+//
+// Deprecated: use sortMediaFiles; goes in protocol 5
 func (o MediaManager) SortMediaFiles1(sortColumn string) (v []string, err error) {
 	err = o.c.Call("mediaManager", "sort_media_files", &v, sortColumn)
+	return
+}
+
+// FlushMetadataStoreCall calls flushMetadataStore().
+func (o MediaManager) FlushMetadataStoreCall() error {
+	return o.c.Call("mediaManager", "flushMetadataStore", nil)
+}
+
+// PlayFileCall calls playFile(QString).
+func (o MediaManager) PlayFileCall(filename string) error {
+	return o.c.Call("mediaManager", "playFile", nil, filename)
+}
+
+// NextTrackCall calls nextTrack().
+func (o MediaManager) NextTrackCall() error {
+	return o.c.Call("mediaManager", "nextTrack", nil)
+}
+
+// PreviousTrackCall calls previousTrack().
+func (o MediaManager) PreviousTrackCall() error {
+	return o.c.Call("mediaManager", "previousTrack", nil)
+}
+
+// TogglePlayCall calls togglePlay().
+func (o MediaManager) TogglePlayCall() error {
+	return o.c.Call("mediaManager", "togglePlay", nil)
+}
+
+// ToggleShuffleCall calls toggleShuffle().
+func (o MediaManager) ToggleShuffleCall() error {
+	return o.c.Call("mediaManager", "toggleShuffle", nil)
+}
+
+// SetPositionCall calls setPosition(int).
+func (o MediaManager) SetPositionCall(positionMs int) error {
+	return o.c.Call("mediaManager", "setPosition", nil, positionMs)
+}
+
+// ExtractColorsFromAlbumArtCall calls extractColorsFromAlbumArt(QString).
+func (o MediaManager) ExtractColorsFromAlbumArtCall(filename string) error {
+	return o.c.Call("mediaManager", "extractColorsFromAlbumArt", nil, filename)
+}
+
+// ExtractColorsFromImageCall calls extractColorsFromImage(QString).
+func (o MediaManager) ExtractColorsFromImageCall(imagePath string) error {
+	return o.c.Call("mediaManager", "extractColorsFromImage", nil, imagePath)
+}
+
+// ScanLibrary1Call calls scanLibrary(bool).
+func (o MediaManager) ScanLibrary1Call(resetDisplayNames bool) error {
+	return o.c.Call("mediaManager", "scanLibrary", nil, resetDisplayNames)
+}
+
+// ScanLibrary0Call calls scanLibrary().
+func (o MediaManager) ScanLibrary0Call() error {
+	return o.c.Call("mediaManager", "scanLibrary", nil)
+}
+
+// SetLibraryRootCall calls setLibraryRoot(QString).
+func (o MediaManager) SetLibraryRootCall(path string) error {
+	return o.c.Call("mediaManager", "setLibraryRoot", nil, path)
+}
+
+// StripFilenamesCall calls stripFilenames().
+func (o MediaManager) StripFilenamesCall() error {
+	return o.c.Call("mediaManager", "stripFilenames", nil)
+}
+
+// SelectPlaylistCall calls selectPlaylist(QString).
+func (o MediaManager) SelectPlaylistCall(name string) error {
+	return o.c.Call("mediaManager", "selectPlaylist", nil, name)
+}
+
+// CreatePlaylistCall calls createPlaylist(QString) -> bool.
+func (o MediaManager) CreatePlaylistCall(name string) (v bool, err error) {
+	err = o.c.Call("mediaManager", "createPlaylist", &v, name)
+	return
+}
+
+// DeletePlaylistCall calls deletePlaylist(QString) -> bool.
+func (o MediaManager) DeletePlaylistCall(name string) (v bool, err error) {
+	err = o.c.Call("mediaManager", "deletePlaylist", &v, name)
+	return
+}
+
+// MoveSongToPlaylistCall calls moveSongToPlaylist(QString, QString) -> bool.
+func (o MediaManager) MoveSongToPlaylistCall(filename string, targetPlaylist string) (v bool, err error) {
+	err = o.c.Call("mediaManager", "moveSongToPlaylist", &v, filename, targetPlaylist)
+	return
+}
+
+// DeleteSongCall calls deleteSong(QString) -> bool.
+func (o MediaManager) DeleteSongCall(filename string) (v bool, err error) {
+	err = o.c.Call("mediaManager", "deleteSong", &v, filename)
+	return
+}
+
+// PlayFileAtPathCall calls playFileAtPath(QString) -> bool.
+func (o MediaManager) PlayFileAtPathCall(filePath string) (v bool, err error) {
+	err = o.c.Call("mediaManager", "playFileAtPath", &v, filePath)
+	return
+}
+
+// InvalidateStatsCacheCall calls invalidateStatsCache().
+func (o MediaManager) InvalidateStatsCacheCall() error {
+	return o.c.Call("mediaManager", "invalidateStatsCache", nil)
+}
+
+// GetMediaFiles1Call calls getMediaFiles(bool) -> QStringList.
+func (o MediaManager) GetMediaFiles1Call(emitSignal bool) (v []string, err error) {
+	err = o.c.Call("mediaManager", "getMediaFiles", &v, emitSignal)
+	return
+}
+
+// GetMediaFiles0Call calls getMediaFiles() -> QStringList.
+func (o MediaManager) GetMediaFiles0Call() (v []string, err error) {
+	err = o.c.Call("mediaManager", "getMediaFiles", &v)
+	return
+}
+
+// GetFormattedDurationCall calls getFormattedDuration(QString) -> QString.
+func (o MediaManager) GetFormattedDurationCall(filename string) (v string, err error) {
+	err = o.c.Call("mediaManager", "getFormattedDuration", &v, filename)
+	return
+}
+
+// GetBandCall calls getBand(QString) -> QString.
+func (o MediaManager) GetBandCall(filename string) (v string, err error) {
+	err = o.c.Call("mediaManager", "getBand", &v, filename)
+	return
+}
+
+// GetAlbumCall calls getAlbum(QString) -> QString.
+func (o MediaManager) GetAlbumCall(filename string) (v string, err error) {
+	err = o.c.Call("mediaManager", "getAlbum", &v, filename)
+	return
+}
+
+// GetAlbumArtCall calls getAlbumArt(QString) -> QString.
+func (o MediaManager) GetAlbumArtCall(filename string) (v string, err error) {
+	err = o.c.Call("mediaManager", "getAlbumArt", &v, filename)
+	return
+}
+
+// GetCurrentFileCall calls getCurrentFile() -> QString.
+func (o MediaManager) GetCurrentFileCall() (v string, err error) {
+	err = o.c.Call("mediaManager", "getCurrentFile", &v)
+	return
+}
+
+// GetNextTrackNameCall calls getNextTrackName() -> QString.
+func (o MediaManager) GetNextTrackNameCall() (v string, err error) {
+	err = o.c.Call("mediaManager", "getNextTrackName", &v)
+	return
+}
+
+// GetPreviousTrackNameCall calls getPreviousTrackName() -> QString.
+func (o MediaManager) GetPreviousTrackNameCall() (v string, err error) {
+	err = o.c.Call("mediaManager", "getPreviousTrackName", &v)
+	return
+}
+
+// GetNextTrackAlbumArtCall calls getNextTrackAlbumArt() -> QString.
+func (o MediaManager) GetNextTrackAlbumArtCall() (v string, err error) {
+	err = o.c.Call("mediaManager", "getNextTrackAlbumArt", &v)
+	return
+}
+
+// GetPreviousTrackAlbumArtCall calls getPreviousTrackAlbumArt() -> QString.
+func (o MediaManager) GetPreviousTrackAlbumArtCall() (v string, err error) {
+	err = o.c.Call("mediaManager", "getPreviousTrackAlbumArt", &v)
+	return
+}
+
+// GetNeighborAlbumArtsCall calls getNeighborAlbumArts() -> QStringList.
+func (o MediaManager) GetNeighborAlbumArtsCall() (v []string, err error) {
+	err = o.c.Call("mediaManager", "getNeighborAlbumArts", &v)
+	return
+}
+
+// IsPlayingCall calls isPlaying() -> bool.
+func (o MediaManager) IsPlayingCall() (v bool, err error) {
+	err = o.c.Call("mediaManager", "isPlaying", &v)
+	return
+}
+
+// IsPausedCall calls isPaused() -> bool.
+func (o MediaManager) IsPausedCall() (v bool, err error) {
+	err = o.c.Call("mediaManager", "isPaused", &v)
+	return
+}
+
+// GetDurationCall calls getDuration() -> float.
+func (o MediaManager) GetDurationCall() (v float64, err error) {
+	err = o.c.Call("mediaManager", "getDuration", &v)
+	return
+}
+
+// GetPositionCall calls getPosition() -> float.
+func (o MediaManager) GetPositionCall() (v float64, err error) {
+	err = o.c.Call("mediaManager", "getPosition", &v)
+	return
+}
+
+// IsMutedCall calls isMuted() -> bool.
+func (o MediaManager) IsMutedCall() (v bool, err error) {
+	err = o.c.Call("mediaManager", "isMuted", &v)
+	return
+}
+
+// IsShuffledCall calls isShuffled() -> bool.
+func (o MediaManager) IsShuffledCall() (v bool, err error) {
+	err = o.c.Call("mediaManager", "isShuffled", &v)
+	return
+}
+
+// GetPlaylistNamesCall calls getPlaylistNames() -> QStringList.
+func (o MediaManager) GetPlaylistNamesCall() (v []string, err error) {
+	err = o.c.Call("mediaManager", "getPlaylistNames", &v)
+	return
+}
+
+// GetCurrentPlaylistNameCall calls getCurrentPlaylistName() -> QString.
+func (o MediaManager) GetCurrentPlaylistNameCall() (v string, err error) {
+	err = o.c.Call("mediaManager", "getCurrentPlaylistName", &v)
+	return
+}
+
+// GetCurrentSongListCall calls getCurrentSongList() -> QStringList.
+func (o MediaManager) GetCurrentSongListCall() (v []string, err error) {
+	err = o.c.Call("mediaManager", "getCurrentSongList", &v)
+	return
+}
+
+// GetMovablePlaylistNamesCall calls getMovablePlaylistNames() -> QStringList.
+func (o MediaManager) GetMovablePlaylistNamesCall() (v []string, err error) {
+	err = o.c.Call("mediaManager", "getMovablePlaylistNames", &v)
+	return
+}
+
+// GetSongPlaylistNameCall calls getSongPlaylistName(QString) -> QString.
+func (o MediaManager) GetSongPlaylistNameCall(filename string) (v string, err error) {
+	err = o.c.Call("mediaManager", "getSongPlaylistName", &v, filename)
+	return
+}
+
+// GetSongFilePathCall calls getSongFilePath(QString) -> QString.
+func (o MediaManager) GetSongFilePathCall(filename string) (v string, err error) {
+	err = o.c.Call("mediaManager", "getSongFilePath", &v, filename)
+	return
+}
+
+// GetFullFilePathCall calls getFullFilePath(QString) -> QString.
+func (o MediaManager) GetFullFilePathCall(filename string) (v string, err error) {
+	err = o.c.Call("mediaManager", "getFullFilePath", &v, filename)
+	return
+}
+
+// GetDisplayNameCall calls getDisplayName(QString) -> QString.
+func (o MediaManager) GetDisplayNameCall(filename string) (v string, err error) {
+	err = o.c.Call("mediaManager", "getDisplayName", &v, filename)
+	return
+}
+
+// GetDefaultMediaDirCall calls getDefaultMediaDir() -> QString.
+func (o MediaManager) GetDefaultMediaDirCall() (v string, err error) {
+	err = o.c.Call("mediaManager", "getDefaultMediaDir", &v)
+	return
+}
+
+// GetMediaFolderNameCall calls getMediaFolderName() -> QString.
+func (o MediaManager) GetMediaFolderNameCall() (v string, err error) {
+	err = o.c.Call("mediaManager", "getMediaFolderName", &v)
+	return
+}
+
+// BrowseMusicFoldersCall calls browseMusicFolders(QString) -> QVariantMap.
+func (o MediaManager) BrowseMusicFoldersCall(path string) (v map[string]any, err error) {
+	err = o.c.Call("mediaManager", "browseMusicFolders", &v, path)
+	return
+}
+
+// PickBrowserLibraryCall calls pickBrowserLibrary() -> bool.
+func (o MediaManager) PickBrowserLibraryCall() (v bool, err error) {
+	err = o.c.Call("mediaManager", "pickBrowserLibrary", &v)
+	return
+}
+
+// GetTotalDurationCall calls getTotalDuration() -> QString.
+func (o MediaManager) GetTotalDurationCall() (v string, err error) {
+	err = o.c.Call("mediaManager", "getTotalDuration", &v)
+	return
+}
+
+// GetAlbumCountCall calls getAlbumCount() -> int.
+func (o MediaManager) GetAlbumCountCall() (v int, err error) {
+	err = o.c.Call("mediaManager", "getAlbumCount", &v)
+	return
+}
+
+// GetArtistCountCall calls getArtistCount() -> int.
+func (o MediaManager) GetArtistCountCall() (v int, err error) {
+	err = o.c.Call("mediaManager", "getArtistCount", &v)
+	return
+}
+
+// SortMediaFiles2Call calls sortMediaFiles(QString, bool) -> QStringList.
+func (o MediaManager) SortMediaFiles2Call(sortColumn string, ascending bool) (v []string, err error) {
+	err = o.c.Call("mediaManager", "sortMediaFiles", &v, sortColumn, ascending)
+	return
+}
+
+// SortMediaFiles1Call calls sortMediaFiles(QString) -> QStringList.
+func (o MediaManager) SortMediaFiles1Call(sortColumn string) (v []string, err error) {
+	err = o.c.Call("mediaManager", "sortMediaFiles", &v, sortColumn)
 	return
 }
 
@@ -1943,6 +2507,8 @@ func (o NetworkManager) RestartApp() error {
 }
 
 // ShutdownDevice calls shutdown_device().
+//
+// Deprecated: use shutdownDevice; goes in protocol 5
 func (o NetworkManager) ShutdownDevice() error {
 	return o.c.Call("networkManager", "shutdown_device", nil)
 }
@@ -1950,6 +2516,11 @@ func (o NetworkManager) ShutdownDevice() error {
 // Cleanup calls cleanup().
 func (o NetworkManager) Cleanup() error {
 	return o.c.Call("networkManager", "cleanup", nil)
+}
+
+// ShutdownDeviceCall calls shutdownDevice().
+func (o NetworkManager) ShutdownDeviceCall() error {
+	return o.c.Call("networkManager", "shutdownDevice", nil)
 }
 
 // NowPlaying is the service object "nowPlaying" (C++ NowPlaying); NewNowPlaying(c) binds it to a client.
@@ -2264,6 +2835,8 @@ func (o ObdManager) GetVehicleScanComplete() (v bool, err error) {
 }
 
 // ConnectObd calls connect_obd().
+//
+// Deprecated: use connectObd; goes in protocol 5
 func (o ObdManager) ConnectObd() error {
 	return o.c.Call("obdManager", "connect_obd", nil)
 }
@@ -2274,6 +2847,8 @@ func (o ObdManager) Reconnect() error {
 }
 
 // ForceConnect calls force_connect().
+//
+// Deprecated: use forceConnect; goes in protocol 5
 func (o ObdManager) ForceConnect() error {
 	return o.c.Call("obdManager", "force_connect", nil)
 }
@@ -2284,11 +2859,15 @@ func (o ObdManager) Close() error {
 }
 
 // ResetConnection calls reset_connection().
+//
+// Deprecated: use resetConnection; goes in protocol 5
 func (o ObdManager) ResetConnection() error {
 	return o.c.Call("obdManager", "reset_connection", nil)
 }
 
 // GetConnectionStatusCall calls get_connection_status() -> QString.
+//
+// Deprecated: use getConnectionStatus (or the connectionStatus property); goes in protocol 5
 func (o ObdManager) GetConnectionStatusCall() (v string, err error) {
 	err = o.c.Call("obdManager", "get_connection_status", &v)
 	return
@@ -2301,11 +2880,15 @@ func (o ObdManager) GetConnectionStatusCallCall() (v string, err error) {
 }
 
 // RefreshPorts calls refresh_ports().
+//
+// Deprecated: use refreshPorts; goes in protocol 5
 func (o ObdManager) RefreshPorts() error {
 	return o.c.Call("obdManager", "refresh_ports", nil)
 }
 
 // GetAvailablePorts calls get_available_ports() -> QVariantList.
+//
+// Deprecated: use getAvailablePorts; goes in protocol 5
 func (o ObdManager) GetAvailablePorts() (v []any, err error) {
 	err = o.c.Call("obdManager", "get_available_ports", &v)
 	return
@@ -2323,114 +2906,156 @@ func (o ObdManager) AvailableAdapters() (v []any, err error) {
 }
 
 // ConnectToAdapter calls connect_to_adapter(QString).
+//
+// Deprecated: use connectToAdapter; goes in protocol 5
 func (o ObdManager) ConnectToAdapter(identifier string) error {
 	return o.c.Call("obdManager", "connect_to_adapter", nil, identifier)
 }
 
 // PlatformHint calls platform_hint() -> QString.
+//
+// Deprecated: use platformHint; goes in protocol 5
 func (o ObdManager) PlatformHint() (v string, err error) {
 	err = o.c.Call("obdManager", "platform_hint", &v)
 	return
 }
 
 // ScanVehicle calls scan_vehicle().
+//
+// Deprecated: use scanVehicle; goes in protocol 5
 func (o ObdManager) ScanVehicle() error {
 	return o.c.Call("obdManager", "scan_vehicle", nil)
 }
 
 // IsScanning calls is_scanning() -> bool.
+//
+// Deprecated: use isScanning; goes in protocol 5
 func (o ObdManager) IsScanning() (v bool, err error) {
 	err = o.c.Call("obdManager", "is_scanning", &v)
 	return
 }
 
 // GetAllParameterNames calls get_all_parameter_names() -> QStringList.
+//
+// Deprecated: use getAllParameterNames; goes in protocol 5
 func (o ObdManager) GetAllParameterNames() (v []string, err error) {
 	err = o.c.Call("obdManager", "get_all_parameter_names", &v)
 	return
 }
 
 // GetSupportedCommands calls get_supported_commands() -> QVariantList.
+//
+// Deprecated: use getSupportedCommands; goes in protocol 5
 func (o ObdManager) GetSupportedCommands() (v []any, err error) {
 	err = o.c.Call("obdManager", "get_supported_commands", &v)
 	return
 }
 
 // EnableScannedParameters calls enable_scanned_parameters(QVariantList).
+//
+// Deprecated: use enableScannedParameters; goes in protocol 5
 func (o ObdManager) EnableScannedParameters(paramNames []any) error {
 	return o.c.Call("obdManager", "enable_scanned_parameters", nil, paramNames)
 }
 
 // EnableAllSupported calls enable_all_supported().
+//
+// Deprecated: use enableAllSupported; goes in protocol 5
 func (o ObdManager) EnableAllSupported() error {
 	return o.c.Call("obdManager", "enable_all_supported", nil)
 }
 
 // EnterDiagnosticMode calls enter_diagnostic_mode().
+//
+// Deprecated: use enterDiagnosticMode; goes in protocol 5
 func (o ObdManager) EnterDiagnosticMode() error {
 	return o.c.Call("obdManager", "enter_diagnostic_mode", nil)
 }
 
 // ExitDiagnosticMode calls exit_diagnostic_mode().
+//
+// Deprecated: use exitDiagnosticMode; goes in protocol 5
 func (o ObdManager) ExitDiagnosticMode() error {
 	return o.c.Call("obdManager", "exit_diagnostic_mode", nil)
 }
 
 // IsDiagnosticMode calls is_diagnostic_mode() -> bool.
+//
+// Deprecated: use isDiagnosticMode; goes in protocol 5
 func (o ObdManager) IsDiagnosticMode() (v bool, err error) {
 	err = o.c.Call("obdManager", "is_diagnostic_mode", &v)
 	return
 }
 
 // ReadDtc calls read_dtc().
+//
+// Deprecated: use readDtc; goes in protocol 5
 func (o ObdManager) ReadDtc() error {
 	return o.c.Call("obdManager", "read_dtc", nil)
 }
 
 // ReadCurrentDtc calls read_current_dtc().
+//
+// Deprecated: use readCurrentDtc; goes in protocol 5
 func (o ObdManager) ReadCurrentDtc() error {
 	return o.c.Call("obdManager", "read_current_dtc", nil)
 }
 
 // ReadStatus calls read_status().
+//
+// Deprecated: use readStatus; goes in protocol 5
 func (o ObdManager) ReadStatus() error {
 	return o.c.Call("obdManager", "read_status", nil)
 }
 
 // ClearDtc calls clear_dtc().
+//
+// Deprecated: use clearDtc; goes in protocol 5
 func (o ObdManager) ClearDtc() error {
 	return o.c.Call("obdManager", "clear_dtc", nil)
 }
 
 // ReadFreezeFrame calls read_freeze_frame().
+//
+// Deprecated: use readFreezeFrame; goes in protocol 5
 func (o ObdManager) ReadFreezeFrame() error {
 	return o.c.Call("obdManager", "read_freeze_frame", nil)
 }
 
 // ReadVin calls read_vin().
+//
+// Deprecated: use readVin; goes in protocol 5
 func (o ObdManager) ReadVin() error {
 	return o.c.Call("obdManager", "read_vin", nil)
 }
 
 // GetDtcCodes calls get_dtc_codes() -> QVariantList.
+//
+// Deprecated: use getDtcCodes; goes in protocol 5
 func (o ObdManager) GetDtcCodes() (v []any, err error) {
 	err = o.c.Call("obdManager", "get_dtc_codes", &v)
 	return
 }
 
 // GetDtcCount calls get_dtc_count() -> int.
+//
+// Deprecated: use getDtcCount; goes in protocol 5
 func (o ObdManager) GetDtcCount() (v int, err error) {
 	err = o.c.Call("obdManager", "get_dtc_count", &v)
 	return
 }
 
 // GetMilStatus calls get_mil_status() -> bool.
+//
+// Deprecated: use getMilStatus; goes in protocol 5
 func (o ObdManager) GetMilStatus() (v bool, err error) {
 	err = o.c.Call("obdManager", "get_mil_status", &v)
 	return
 }
 
 // GetFreezeFrame calls get_freeze_frame() -> QVariantList.
+//
+// Deprecated: use getFreezeFrame; goes in protocol 5
 func (o ObdManager) GetFreezeFrame() (v []any, err error) {
 	err = o.c.Call("obdManager", "get_freeze_frame", &v)
 	return
@@ -2545,43 +3170,240 @@ func (o ObdManager) IgnitionTiming() (v float64, err error) {
 }
 
 // RefreshValues calls refresh_values().
+//
+// Deprecated: use refreshValues; goes in protocol 5
 func (o ObdManager) RefreshValues() error {
 	return o.c.Call("obdManager", "refresh_values", nil)
 }
 
 // OpenBluetoothSettings calls open_bluetooth_settings().
+//
+// Deprecated: use openBluetoothSettings; goes in protocol 5
 func (o ObdManager) OpenBluetoothSettings() error {
 	return o.c.Call("obdManager", "open_bluetooth_settings", nil)
 }
 
 // SetTargetAddress calls set_target_address(QString).
+//
+// Deprecated: use setTargetAddress; goes in protocol 5
 func (o ObdManager) SetTargetAddress(address string) error {
 	return o.c.Call("obdManager", "set_target_address", nil, address)
 }
 
 // ConnectDirect2 calls connect_direct(QString, int).
+//
+// Deprecated: use connectDirect; goes in protocol 5
 func (o ObdManager) ConnectDirect2(mac string, channel int) error {
 	return o.c.Call("obdManager", "connect_direct", nil, mac, channel)
 }
 
 // ConnectDirect1 calls connect_direct(QString).
+//
+// Deprecated: use connectDirect; goes in protocol 5
 func (o ObdManager) ConnectDirect1(mac string) error {
 	return o.c.Call("obdManager", "connect_direct", nil, mac)
 }
 
 // SetAutoReconnect calls set_auto_reconnect(bool).
+//
+// Deprecated: use setAutoReconnect; goes in protocol 5
 func (o ObdManager) SetAutoReconnect(enabled bool) error {
 	return o.c.Call("obdManager", "set_auto_reconnect", nil, enabled)
 }
 
 // SetConnectionTimeout calls set_connection_timeout(int).
+//
+// Deprecated: use setConnectionTimeout; goes in protocol 5
 func (o ObdManager) SetConnectionTimeout(timeoutSeconds int) error {
 	return o.c.Call("obdManager", "set_connection_timeout", nil, timeoutSeconds)
 }
 
 // CheckDevicePresence calls check_device_presence() -> bool.
+//
+// Deprecated: use checkDevicePresence; goes in protocol 5
 func (o ObdManager) CheckDevicePresence() (v bool, err error) {
 	err = o.c.Call("obdManager", "check_device_presence", &v)
+	return
+}
+
+// ConnectObdCall calls connectObd().
+func (o ObdManager) ConnectObdCall() error {
+	return o.c.Call("obdManager", "connectObd", nil)
+}
+
+// ForceConnectCall calls forceConnect().
+func (o ObdManager) ForceConnectCall() error {
+	return o.c.Call("obdManager", "forceConnect", nil)
+}
+
+// ResetConnectionCall calls resetConnection().
+func (o ObdManager) ResetConnectionCall() error {
+	return o.c.Call("obdManager", "resetConnection", nil)
+}
+
+// RefreshPortsCall calls refreshPorts().
+func (o ObdManager) RefreshPortsCall() error {
+	return o.c.Call("obdManager", "refreshPorts", nil)
+}
+
+// GetAvailablePortsCall calls getAvailablePorts() -> QVariantList.
+func (o ObdManager) GetAvailablePortsCall() (v []any, err error) {
+	err = o.c.Call("obdManager", "getAvailablePorts", &v)
+	return
+}
+
+// ConnectToAdapterCall calls connectToAdapter(QString).
+func (o ObdManager) ConnectToAdapterCall(identifier string) error {
+	return o.c.Call("obdManager", "connectToAdapter", nil, identifier)
+}
+
+// PlatformHintCall calls platformHint() -> QString.
+func (o ObdManager) PlatformHintCall() (v string, err error) {
+	err = o.c.Call("obdManager", "platformHint", &v)
+	return
+}
+
+// ScanVehicleCall calls scanVehicle().
+func (o ObdManager) ScanVehicleCall() error {
+	return o.c.Call("obdManager", "scanVehicle", nil)
+}
+
+// IsScanningCall calls isScanning() -> bool.
+func (o ObdManager) IsScanningCall() (v bool, err error) {
+	err = o.c.Call("obdManager", "isScanning", &v)
+	return
+}
+
+// GetAllParameterNamesCall calls getAllParameterNames() -> QStringList.
+func (o ObdManager) GetAllParameterNamesCall() (v []string, err error) {
+	err = o.c.Call("obdManager", "getAllParameterNames", &v)
+	return
+}
+
+// GetSupportedCommandsCall calls getSupportedCommands() -> QVariantList.
+func (o ObdManager) GetSupportedCommandsCall() (v []any, err error) {
+	err = o.c.Call("obdManager", "getSupportedCommands", &v)
+	return
+}
+
+// EnableScannedParametersCall calls enableScannedParameters(QVariantList).
+func (o ObdManager) EnableScannedParametersCall(paramNames []any) error {
+	return o.c.Call("obdManager", "enableScannedParameters", nil, paramNames)
+}
+
+// EnableAllSupportedCall calls enableAllSupported().
+func (o ObdManager) EnableAllSupportedCall() error {
+	return o.c.Call("obdManager", "enableAllSupported", nil)
+}
+
+// EnterDiagnosticModeCall calls enterDiagnosticMode().
+func (o ObdManager) EnterDiagnosticModeCall() error {
+	return o.c.Call("obdManager", "enterDiagnosticMode", nil)
+}
+
+// ExitDiagnosticModeCall calls exitDiagnosticMode().
+func (o ObdManager) ExitDiagnosticModeCall() error {
+	return o.c.Call("obdManager", "exitDiagnosticMode", nil)
+}
+
+// IsDiagnosticModeCall calls isDiagnosticMode() -> bool.
+func (o ObdManager) IsDiagnosticModeCall() (v bool, err error) {
+	err = o.c.Call("obdManager", "isDiagnosticMode", &v)
+	return
+}
+
+// ReadDtcCall calls readDtc().
+func (o ObdManager) ReadDtcCall() error {
+	return o.c.Call("obdManager", "readDtc", nil)
+}
+
+// ReadCurrentDtcCall calls readCurrentDtc().
+func (o ObdManager) ReadCurrentDtcCall() error {
+	return o.c.Call("obdManager", "readCurrentDtc", nil)
+}
+
+// ReadStatusCall calls readStatus().
+func (o ObdManager) ReadStatusCall() error {
+	return o.c.Call("obdManager", "readStatus", nil)
+}
+
+// ClearDtcCall calls clearDtc().
+func (o ObdManager) ClearDtcCall() error {
+	return o.c.Call("obdManager", "clearDtc", nil)
+}
+
+// ReadFreezeFrameCall calls readFreezeFrame().
+func (o ObdManager) ReadFreezeFrameCall() error {
+	return o.c.Call("obdManager", "readFreezeFrame", nil)
+}
+
+// ReadVinCall calls readVin().
+func (o ObdManager) ReadVinCall() error {
+	return o.c.Call("obdManager", "readVin", nil)
+}
+
+// GetDtcCodesCall calls getDtcCodes() -> QVariantList.
+func (o ObdManager) GetDtcCodesCall() (v []any, err error) {
+	err = o.c.Call("obdManager", "getDtcCodes", &v)
+	return
+}
+
+// GetDtcCountCall calls getDtcCount() -> int.
+func (o ObdManager) GetDtcCountCall() (v int, err error) {
+	err = o.c.Call("obdManager", "getDtcCount", &v)
+	return
+}
+
+// GetMilStatusCall calls getMilStatus() -> bool.
+func (o ObdManager) GetMilStatusCall() (v bool, err error) {
+	err = o.c.Call("obdManager", "getMilStatus", &v)
+	return
+}
+
+// GetFreezeFrameCall calls getFreezeFrame() -> QVariantList.
+func (o ObdManager) GetFreezeFrameCall() (v []any, err error) {
+	err = o.c.Call("obdManager", "getFreezeFrame", &v)
+	return
+}
+
+// RefreshValuesCall calls refreshValues().
+func (o ObdManager) RefreshValuesCall() error {
+	return o.c.Call("obdManager", "refreshValues", nil)
+}
+
+// OpenBluetoothSettingsCall calls openBluetoothSettings().
+func (o ObdManager) OpenBluetoothSettingsCall() error {
+	return o.c.Call("obdManager", "openBluetoothSettings", nil)
+}
+
+// SetTargetAddressCall calls setTargetAddress(QString).
+func (o ObdManager) SetTargetAddressCall(address string) error {
+	return o.c.Call("obdManager", "setTargetAddress", nil, address)
+}
+
+// ConnectDirect2Call calls connectDirect(QString, int).
+func (o ObdManager) ConnectDirect2Call(mac string, channel int) error {
+	return o.c.Call("obdManager", "connectDirect", nil, mac, channel)
+}
+
+// ConnectDirect1Call calls connectDirect(QString).
+func (o ObdManager) ConnectDirect1Call(mac string) error {
+	return o.c.Call("obdManager", "connectDirect", nil, mac)
+}
+
+// SetAutoReconnectCall calls setAutoReconnect(bool).
+func (o ObdManager) SetAutoReconnectCall(enabled bool) error {
+	return o.c.Call("obdManager", "setAutoReconnect", nil, enabled)
+}
+
+// SetConnectionTimeoutCall calls setConnectionTimeout(int).
+func (o ObdManager) SetConnectionTimeoutCall(timeoutSeconds int) error {
+	return o.c.Call("obdManager", "setConnectionTimeout", nil, timeoutSeconds)
+}
+
+// CheckDevicePresenceCall calls checkDevicePresence() -> bool.
+func (o ObdManager) CheckDevicePresenceCall() (v bool, err error) {
+	err = o.c.Call("obdManager", "checkDevicePresence", &v)
 	return
 }
 
@@ -2597,6 +3419,8 @@ func (o ObdManager) ClearConnectionLog() error {
 }
 
 // IsConnectedCall calls is_connected() -> bool.
+//
+// Deprecated: use isConnected (or the connected property); goes in protocol 5
 func (o ObdManager) IsConnectedCall() (v bool, err error) {
 	err = o.c.Call("obdManager", "is_connected", &v)
 	return

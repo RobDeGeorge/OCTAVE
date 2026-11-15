@@ -53,20 +53,84 @@ class MediaManager : public QObject
     // Service permissions (src/service/servicescopes.h)
     Q_CLASSINFO("octave.scope", "media")
     Q_CLASSINFO("octave.scope.read",
-                "browse_music_folders getVolume get_album get_album_art get_album_count get_artist_count "
-                "get_band get_current_file get_current_playlist_name get_current_song_list "
-                "get_default_media_dir get_display_name get_duration get_formatted_duration "
-                "get_full_file_path get_media_files get_media_folder_name get_movable_playlist_names "
-                "get_neighbor_album_arts get_next_track_album_art get_next_track_name get_playlist_names "
-                "get_position get_previous_track_album_art get_previous_track_name get_song_file_path "
-                "get_song_playlist_name get_total_duration is_muted is_paused is_playing is_shuffled")
+                "browseMusicFolders browse_music_folders getAlbum getAlbumArt getAlbumCount getArtistCount "
+                "getBand getCurrentFile getCurrentPlaylistName getCurrentSongList getDefaultMediaDir "
+                "getDisplayName getDuration getFormattedDuration getFullFilePath getMediaFiles "
+                "getMediaFolderName getMovablePlaylistNames getNeighborAlbumArts getNextTrackAlbumArt "
+                "getNextTrackName getPlaylistNames getPosition getPreviousTrackAlbumArt getPreviousTrackName "
+                "getSongFilePath getSongPlaylistName getTotalDuration getVolume get_album get_album_art "
+                "get_album_count get_artist_count get_band get_current_file get_current_playlist_name "
+                "get_current_song_list get_default_media_dir get_display_name get_duration "
+                "get_formatted_duration get_full_file_path get_media_files get_media_folder_name "
+                "get_movable_playlist_names get_neighbor_album_arts get_next_track_album_art get_next_track_name "
+                "get_playlist_names get_position get_previous_track_album_art get_previous_track_name "
+                "get_song_file_path get_song_playlist_name get_total_duration isMuted isPaused isPlaying "
+                "isShuffled is_muted is_paused is_playing is_shuffled")
     Q_CLASSINFO("octave.scope.files",
-                "create_playlist delete_playlist delete_song flush_metadata_store move_song_to_playlist "
-                "pick_browser_library set_library_root strip_filenames")
+                "createPlaylist create_playlist deletePlaylist deleteSong delete_playlist delete_song "
+                "flushMetadataStore flush_metadata_store moveSongToPlaylist move_song_to_playlist "
+                "pickBrowserLibrary pick_browser_library setLibraryRoot set_library_root stripFilenames "
+                "strip_filenames")
     Q_CLASSINFO("octave.scope.full",
-                "_clear_temp_files _save_playback_state connect_settings_manager "
-                "extract_colors_from_album_art extract_colors_from_image invalidate_stats_cache setDucking "
-                "setMuted setVolume")
+                "_clear_temp_files _save_playback_state connect_settings_manager extractColorsFromAlbumArt "
+                "extractColorsFromImage extract_colors_from_album_art extract_colors_from_image "
+                "invalidateStatsCache invalidate_stats_cache setDucking setMuted setVolume")
+    // Deprecated names (src/service/metadescribe.h): the camelCase one beside each stays
+    Q_CLASSINFO("octave.deprecated.connect_settings_manager", "does nothing; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated._save_playback_state", "internal; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated._clear_temp_files", "internal; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.flush_metadata_store", "use flushMetadataStore; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.play_file", "use playFile; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.next_track", "use nextTrack; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.previous_track", "use previousTrack; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.toggle_play", "use togglePlay; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.toggle_shuffle", "use toggleShuffle; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.set_position", "use setPosition; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.extract_colors_from_album_art", "use extractColorsFromAlbumArt; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.extract_colors_from_image", "use extractColorsFromImage; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.scan_library", "use scanLibrary; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.set_library_root", "use setLibraryRoot; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.strip_filenames", "use stripFilenames; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.select_playlist", "use selectPlaylist; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.create_playlist", "use createPlaylist; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.delete_playlist", "use deletePlaylist; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.move_song_to_playlist", "use moveSongToPlaylist; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.delete_song", "use deleteSong; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.play_file_at_path", "use playFileAtPath; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.invalidate_stats_cache", "use invalidateStatsCache; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_media_files", "use getMediaFiles; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_formatted_duration", "use getFormattedDuration; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_band", "use getBand; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_album", "use getAlbum; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_album_art", "use getAlbumArt; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_current_file", "use getCurrentFile; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_next_track_name", "use getNextTrackName; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_previous_track_name", "use getPreviousTrackName; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_next_track_album_art", "use getNextTrackAlbumArt; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_previous_track_album_art", "use getPreviousTrackAlbumArt; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_neighbor_album_arts", "use getNeighborAlbumArts; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.is_playing", "use isPlaying; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.is_paused", "use isPaused; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_duration", "use getDuration; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_position", "use getPosition; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.is_muted", "use isMuted; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.is_shuffled", "use isShuffled; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_playlist_names", "use getPlaylistNames; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_current_playlist_name", "use getCurrentPlaylistName; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_current_song_list", "use getCurrentSongList; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_movable_playlist_names", "use getMovablePlaylistNames; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_song_playlist_name", "use getSongPlaylistName; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_song_file_path", "use getSongFilePath; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_full_file_path", "use getFullFilePath; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_display_name", "use getDisplayName; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_default_media_dir", "use getDefaultMediaDir; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_media_folder_name", "use getMediaFolderName; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.browse_music_folders", "use browseMusicFolders; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.pick_browser_library", "use pickBrowserLibrary; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_total_duration", "use getTotalDuration; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_album_count", "use getAlbumCount; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_artist_count", "use getArtistCount; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.sort_media_files", "use sortMediaFiles; goes in protocol 5")
     // Every audio output as {id, name, isDefault}, and the name of the one
     // playing now: the one in settingsManager.audioOutputDevice while it is
     // plugged in, else the system default (src/util/audiooutput.h)
@@ -212,6 +276,61 @@ public slots:
     Q_INVOKABLE int get_album_count();
     Q_INVOKABLE int get_artist_count();
     Q_INVOKABLE QStringList sort_media_files(const QString &sortColumn, bool ascending = true);
+
+    // camelCase names for the snake_case methods above (protocol 3 keeps both;
+    // the old names are marked octave.deprecated and go in protocol 4)
+    Q_INVOKABLE void flushMetadataStore() { flush_metadata_store(); }
+    void playFile(const QString &filename) { play_file(filename); }
+    void nextTrack() { next_track(); }
+    void previousTrack() { previous_track(); }
+    void togglePlay() { toggle_play(); }
+    void toggleShuffle() { toggle_shuffle(); }
+    void setPosition(int positionMs) { set_position(positionMs); }
+    void extractColorsFromAlbumArt(const QString &filename) { extract_colors_from_album_art(filename); }
+    void extractColorsFromImage(const QString &imagePath) { extract_colors_from_image(imagePath); }
+    void scanLibrary(bool resetDisplayNames = true) { scan_library(resetDisplayNames); }
+    void setLibraryRoot(const QString &path) { set_library_root(path); }
+    void stripFilenames() { strip_filenames(); }
+    void selectPlaylist(const QString &name) { select_playlist(name); }
+    bool createPlaylist(const QString &name) { return create_playlist(name); }
+    bool deletePlaylist(const QString &name) { return delete_playlist(name); }
+    bool moveSongToPlaylist(const QString &filename, const QString &targetPlaylist) { return move_song_to_playlist(filename, targetPlaylist); }
+    bool deleteSong(const QString &filename) { return delete_song(filename); }
+    bool playFileAtPath(const QString &filePath) { return play_file_at_path(filePath); }
+    void invalidateStatsCache() { invalidate_stats_cache(); }
+    Q_INVOKABLE QStringList getMediaFiles(bool emitSignal = true) { return get_media_files(emitSignal); }
+    Q_INVOKABLE QString getFormattedDuration(const QString &filename) { return get_formatted_duration(filename); }
+    Q_INVOKABLE QString getBand(const QString &filename) { return get_band(filename); }
+    Q_INVOKABLE QString getAlbum(const QString &filename) { return get_album(filename); }
+    Q_INVOKABLE QString getAlbumArt(const QString &filename) { return get_album_art(filename); }
+    Q_INVOKABLE QString getCurrentFile() { return get_current_file(); }
+    Q_INVOKABLE QString getNextTrackName() { return get_next_track_name(); }
+    Q_INVOKABLE QString getPreviousTrackName() { return get_previous_track_name(); }
+    Q_INVOKABLE QString getNextTrackAlbumArt() { return get_next_track_album_art(); }
+    Q_INVOKABLE QString getPreviousTrackAlbumArt() { return get_previous_track_album_art(); }
+    Q_INVOKABLE QStringList getNeighborAlbumArts() { return get_neighbor_album_arts(); }
+    Q_INVOKABLE bool isPlaying() { return is_playing(); }
+    Q_INVOKABLE bool isPaused() { return is_paused(); }
+    Q_INVOKABLE float getDuration() { return get_duration(); }
+    Q_INVOKABLE float getPosition() { return get_position(); }
+    Q_INVOKABLE bool isMuted() { return is_muted(); }
+    Q_INVOKABLE bool isShuffled() { return is_shuffled(); }
+    Q_INVOKABLE QStringList getPlaylistNames() { return get_playlist_names(); }
+    Q_INVOKABLE QString getCurrentPlaylistName() { return get_current_playlist_name(); }
+    Q_INVOKABLE QStringList getCurrentSongList() { return get_current_song_list(); }
+    Q_INVOKABLE QStringList getMovablePlaylistNames() { return get_movable_playlist_names(); }
+    Q_INVOKABLE QString getSongPlaylistName(const QString &filename) { return get_song_playlist_name(filename); }
+    Q_INVOKABLE QString getSongFilePath(const QString &filename) { return get_song_file_path(filename); }
+    Q_INVOKABLE QString getFullFilePath(const QString &filename) { return get_full_file_path(filename); }
+    Q_INVOKABLE QString getDisplayName(const QString &filename) { return get_display_name(filename); }
+    Q_INVOKABLE QString getDefaultMediaDir() { return get_default_media_dir(); }
+    Q_INVOKABLE QString getMediaFolderName() { return get_media_folder_name(); }
+    Q_INVOKABLE QVariantMap browseMusicFolders(const QString &path) { return browse_music_folders(path); }
+    Q_INVOKABLE bool pickBrowserLibrary() { return pick_browser_library(); }
+    Q_INVOKABLE QString getTotalDuration() { return get_total_duration(); }
+    Q_INVOKABLE int getAlbumCount() { return get_album_count(); }
+    Q_INVOKABLE int getArtistCount() { return get_artist_count(); }
+    Q_INVOKABLE QStringList sortMediaFiles(const QString &sortColumn, bool ascending = true) { return sort_media_files(sortColumn, ascending); }
 
 public:
     // Plain C++, not on the service (no slot, no Q_INVOKABLE)

@@ -22,8 +22,19 @@ class ESP32VolumeManager : public QObject
     Q_OBJECT
     // Service permissions (src/service/servicescopes.h)
     Q_CLASSINFO("octave.scope", "vehicle")
-    Q_CLASSINFO("octave.scope.read", "get_available_ports get_connection_detail get_connection_status is_connected")
+    Q_CLASSINFO("octave.scope.read",
+                "getAvailablePorts getConnectionDetail getConnectionStatus get_available_ports "
+                "get_connection_detail get_connection_status isConnected is_connected")
     Q_CLASSINFO("octave.scope.full", "cleanup")
+    // Deprecated names (src/service/metadescribe.h): the camelCase one beside each stays
+    Q_CLASSINFO("octave.deprecated.connect_device", "use connectDevice; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.disconnect_device", "use disconnectDevice; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_available_ports", "use getAvailablePorts; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.is_connected", "use isConnected; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_connection_status", "use getConnectionStatus; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_connection_detail", "use getConnectionDetail; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.refresh_ports", "use refreshPorts; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.reset_reconnect_attempts", "use resetReconnectAttempts; goes in protocol 5")
     friend class TstEsp32VolumeManager;
 
     Q_PROPERTY(bool connected READ getConnected NOTIFY connectionStatusChanged)
@@ -78,6 +89,17 @@ public slots:
     void refresh_ports();
     void reset_reconnect_attempts();
     void cleanup();
+
+    // camelCase names for the snake_case methods above (protocol 3 keeps both;
+    // the old names are marked octave.deprecated and go in protocol 4)
+    void connectDevice() { connect_device(); }
+    void disconnectDevice() { disconnect_device(); }
+    QVariantList getAvailablePorts() { return get_available_ports(); }
+    bool isConnected() { return is_connected(); }
+    QString getConnectionStatus() { return get_connection_status(); }
+    QString getConnectionDetail() { return get_connection_detail(); }
+    void refreshPorts() { refresh_ports(); }
+    void resetReconnectAttempts() { reset_reconnect_attempts(); }
 
 private slots:
     void onSerialReadyRead();
@@ -171,6 +193,15 @@ class SettingsManager;
 class ESP32VolumeManager : public QObject
 {
     Q_OBJECT
+    // Deprecated names (src/service/metadescribe.h): the camelCase one beside each stays
+    Q_CLASSINFO("octave.deprecated.connect_device", "use connectDevice; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.disconnect_device", "use disconnectDevice; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_available_ports", "use getAvailablePorts; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.is_connected", "use isConnected; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_connection_status", "use getConnectionStatus; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_connection_detail", "use getConnectionDetail; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.refresh_ports", "use refreshPorts; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.reset_reconnect_attempts", "use resetReconnectAttempts; goes in protocol 5")
 
     Q_PROPERTY(bool connected READ is_connected NOTIFY connectionStatusChanged)
     Q_PROPERTY(QString connectionStatus READ get_connection_status NOTIFY connectionStatusChanged)
@@ -203,6 +234,17 @@ public slots:
     void refresh_ports() {}
     void reset_reconnect_attempts() {}
     void cleanup() {}
+
+    // camelCase names for the snake_case methods above (protocol 3 keeps both;
+    // the old names are marked octave.deprecated and go in protocol 4)
+    void connectDevice() { connect_device(); }
+    void disconnectDevice() { disconnect_device(); }
+    QVariantList getAvailablePorts() { return get_available_ports(); }
+    bool isConnected() { return is_connected(); }
+    QString getConnectionStatus() { return get_connection_status(); }
+    QString getConnectionDetail() { return get_connection_detail(); }
+    void refreshPorts() { refresh_ports(); }
+    void resetReconnectAttempts() { reset_reconnect_attempts(); }
 };
 
 #endif // Q_OS_MOBILE

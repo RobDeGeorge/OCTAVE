@@ -264,16 +264,34 @@ export interface AudioAnalyzer {
     setPlaying: { args: [playing: boolean]; returns: void }
     setLocalFile: { args: [filePath: string]; returns: void }
     setPosition: { args: [positionMs: number]; returns: void }
+    /** @deprecated use analyzeFile; goes in protocol 5 */
     analyze_file: { args: [filePath: string]; returns: void }
+    /** @deprecated use updatePosition; goes in protocol 5 */
     update_position: { args: [positionSeconds: number]; returns: void }
+    /** @deprecated use setActive; goes in protocol 5 */
     set_active: { args: [active: boolean]; returns: void }
+    /** @deprecated use getCurrentLevels; goes in protocol 5 */
     get_current_levels: { args: []; returns: unknown[] }
+    /** @deprecated use getNumBars; goes in protocol 5 */
     get_num_bars: { args: []; returns: number }
+    /** @deprecated use isAnalyzed; goes in protocol 5 */
     is_analyzed: { args: []; returns: boolean }
     clear: { args: []; returns: void }
+    /** @deprecated use setLive; goes in protocol 5 */
     set_live: { args: [live: boolean]; returns: void }
+    /** @deprecated use updateLive; goes in protocol 5 */
     update_live: { args: []; returns: void }
+    /** @deprecated use feedLivePcm; goes in protocol 5 */
     feed_live_pcm: { args: [pcm: string, bufferedMs: number]; returns: void }
+    analyzeFile: { args: [filePath: string]; returns: void }
+    updatePosition: { args: [positionSeconds: number]; returns: void }
+    setActive: { args: [active: boolean]; returns: void }
+    getCurrentLevels: { args: []; returns: unknown[] }
+    getNumBars: { args: []; returns: number }
+    isAnalyzed: { args: []; returns: boolean }
+    setLive: { args: [live: boolean]; returns: void }
+    updateLive: { args: []; returns: void }
+    feedLivePcm: { args: [pcm: string, bufferedMs: number]; returns: void }
   }
   signals: {
     fftDataChanged: [levels: unknown[]]
@@ -369,7 +387,9 @@ export interface Clock {
     time: string
   }
   methods: {
+    /** @deprecated use updateTime; goes in protocol 5 */
     update_time: { args: []; returns: void }
+    updateTime: { args: []; returns: void }
   }
   signals: {
     timeChanged: [timeStr: string]
@@ -541,15 +561,31 @@ export interface ESP32VolumeManager {
     availablePorts: unknown[]
   }
   methods: {
+    /** @deprecated use connectDevice; goes in protocol 5 */
     connect_device: { args: []; returns: void }
+    /** @deprecated use disconnectDevice; goes in protocol 5 */
     disconnect_device: { args: []; returns: void }
+    /** @deprecated use getAvailablePorts; goes in protocol 5 */
     get_available_ports: { args: []; returns: unknown[] }
+    /** @deprecated use isConnected; goes in protocol 5 */
     is_connected: { args: []; returns: boolean }
+    /** @deprecated use getConnectionStatus; goes in protocol 5 */
     get_connection_status: { args: []; returns: string }
+    /** @deprecated use getConnectionDetail; goes in protocol 5 */
     get_connection_detail: { args: []; returns: string }
+    /** @deprecated use refreshPorts; goes in protocol 5 */
     refresh_ports: { args: []; returns: void }
+    /** @deprecated use resetReconnectAttempts; goes in protocol 5 */
     reset_reconnect_attempts: { args: []; returns: void }
     cleanup: { args: []; returns: void }
+    connectDevice: { args: []; returns: void }
+    disconnectDevice: { args: []; returns: void }
+    getAvailablePorts: { args: []; returns: unknown[] }
+    isConnected: { args: []; returns: boolean }
+    getConnectionStatus: { args: []; returns: string }
+    getConnectionDetail: { args: []; returns: string }
+    refreshPorts: { args: []; returns: void }
+    resetReconnectAttempts: { args: []; returns: void }
   }
   signals: {
     connectionStatusChanged: [status: string]
@@ -651,66 +687,173 @@ export interface MediaManager {
     currentAudioOutput: string
   }
   methods: {
+    /** @deprecated does nothing; goes in protocol 5 */
     connect_settings_manager: { args: [arg: unknown]; returns: void }
+    /** @deprecated internal; goes in protocol 5 */
     _save_playback_state: { args: []; returns: void }
+    /** @deprecated internal; goes in protocol 5 */
     _clear_temp_files: { args: []; returns: void }
+    /** @deprecated use flushMetadataStore; goes in protocol 5 */
     flush_metadata_store: { args: []; returns: void }
+    /** @deprecated use playFile; goes in protocol 5 */
     play_file: { args: [filename: string]; returns: void }
+    /** @deprecated use nextTrack; goes in protocol 5 */
     next_track: { args: []; returns: void }
+    /** @deprecated use previousTrack; goes in protocol 5 */
     previous_track: { args: []; returns: void }
     pause: { args: []; returns: void }
+    /** @deprecated use togglePlay; goes in protocol 5 */
     toggle_play: { args: []; returns: void }
     setMuted: { args: [muted: boolean]; returns: void }
+    /** @deprecated use toggleShuffle; goes in protocol 5 */
     toggle_shuffle: { args: []; returns: void }
     setVolume: { args: [volume: number]; returns: void }
     setDucking: { args: [factor: number]; returns: void }
+    /** @deprecated use setPosition; goes in protocol 5 */
     set_position: { args: [positionMs: number]; returns: void }
+    /** @deprecated use extractColorsFromAlbumArt; goes in protocol 5 */
     extract_colors_from_album_art: { args: [filename: string]; returns: void }
+    /** @deprecated use extractColorsFromImage; goes in protocol 5 */
     extract_colors_from_image: { args: [imagePath: string]; returns: void }
+    /** @deprecated use scanLibrary; goes in protocol 5 */
     scan_library: { args: [resetDisplayNames: boolean] | []; returns: void }
+    /** @deprecated use setLibraryRoot; goes in protocol 5 */
     set_library_root: { args: [path: string]; returns: void }
+    /** @deprecated use stripFilenames; goes in protocol 5 */
     strip_filenames: { args: []; returns: void }
+    /** @deprecated use selectPlaylist; goes in protocol 5 */
     select_playlist: { args: [name: string]; returns: void }
+    /** @deprecated use createPlaylist; goes in protocol 5 */
     create_playlist: { args: [name: string]; returns: boolean }
+    /** @deprecated use deletePlaylist; goes in protocol 5 */
     delete_playlist: { args: [name: string]; returns: boolean }
+    /** @deprecated use moveSongToPlaylist; goes in protocol 5 */
     move_song_to_playlist: { args: [filename: string, targetPlaylist: string]; returns: boolean }
+    /** @deprecated use deleteSong; goes in protocol 5 */
     delete_song: { args: [filename: string]; returns: boolean }
+    /** @deprecated use playFileAtPath; goes in protocol 5 */
     play_file_at_path: { args: [filePath: string]; returns: boolean }
+    /** @deprecated use invalidateStatsCache; goes in protocol 5 */
     invalidate_stats_cache: { args: []; returns: void }
+    /** @deprecated use getMediaFiles; goes in protocol 5 */
     get_media_files: { args: [emitSignal: boolean] | []; returns: string[] }
+    /** @deprecated use getFormattedDuration; goes in protocol 5 */
     get_formatted_duration: { args: [filename: string]; returns: string }
+    /** @deprecated use getBand; goes in protocol 5 */
     get_band: { args: [filename: string]; returns: string }
+    /** @deprecated use getAlbum; goes in protocol 5 */
     get_album: { args: [filename: string]; returns: string }
+    /** @deprecated use getAlbumArt; goes in protocol 5 */
     get_album_art: { args: [filename: string]; returns: string }
+    /** @deprecated use getCurrentFile; goes in protocol 5 */
     get_current_file: { args: []; returns: string }
+    /** @deprecated use getNextTrackName; goes in protocol 5 */
     get_next_track_name: { args: []; returns: string }
+    /** @deprecated use getPreviousTrackName; goes in protocol 5 */
     get_previous_track_name: { args: []; returns: string }
+    /** @deprecated use getNextTrackAlbumArt; goes in protocol 5 */
     get_next_track_album_art: { args: []; returns: string }
+    /** @deprecated use getPreviousTrackAlbumArt; goes in protocol 5 */
     get_previous_track_album_art: { args: []; returns: string }
+    /** @deprecated use getNeighborAlbumArts; goes in protocol 5 */
     get_neighbor_album_arts: { args: []; returns: string[] }
+    /** @deprecated use isPlaying; goes in protocol 5 */
     is_playing: { args: []; returns: boolean }
+    /** @deprecated use isPaused; goes in protocol 5 */
     is_paused: { args: []; returns: boolean }
+    /** @deprecated use getDuration; goes in protocol 5 */
     get_duration: { args: []; returns: number }
+    /** @deprecated use getPosition; goes in protocol 5 */
     get_position: { args: []; returns: number }
+    /** @deprecated use isMuted; goes in protocol 5 */
     is_muted: { args: []; returns: boolean }
     getVolume: { args: []; returns: number }
+    /** @deprecated use isShuffled; goes in protocol 5 */
     is_shuffled: { args: []; returns: boolean }
+    /** @deprecated use getPlaylistNames; goes in protocol 5 */
     get_playlist_names: { args: []; returns: string[] }
+    /** @deprecated use getCurrentPlaylistName; goes in protocol 5 */
     get_current_playlist_name: { args: []; returns: string }
+    /** @deprecated use getCurrentSongList; goes in protocol 5 */
     get_current_song_list: { args: []; returns: string[] }
+    /** @deprecated use getMovablePlaylistNames; goes in protocol 5 */
     get_movable_playlist_names: { args: []; returns: string[] }
+    /** @deprecated use getSongPlaylistName; goes in protocol 5 */
     get_song_playlist_name: { args: [filename: string]; returns: string }
+    /** @deprecated use getSongFilePath; goes in protocol 5 */
     get_song_file_path: { args: [filename: string]; returns: string }
+    /** @deprecated use getFullFilePath; goes in protocol 5 */
     get_full_file_path: { args: [filename: string]; returns: string }
+    /** @deprecated use getDisplayName; goes in protocol 5 */
     get_display_name: { args: [filename: string]; returns: string }
+    /** @deprecated use getDefaultMediaDir; goes in protocol 5 */
     get_default_media_dir: { args: []; returns: string }
+    /** @deprecated use getMediaFolderName; goes in protocol 5 */
     get_media_folder_name: { args: []; returns: string }
+    /** @deprecated use browseMusicFolders; goes in protocol 5 */
     browse_music_folders: { args: [path: string]; returns: Record<string, unknown> }
+    /** @deprecated use pickBrowserLibrary; goes in protocol 5 */
     pick_browser_library: { args: []; returns: boolean }
+    /** @deprecated use getTotalDuration; goes in protocol 5 */
     get_total_duration: { args: []; returns: string }
+    /** @deprecated use getAlbumCount; goes in protocol 5 */
     get_album_count: { args: []; returns: number }
+    /** @deprecated use getArtistCount; goes in protocol 5 */
     get_artist_count: { args: []; returns: number }
+    /** @deprecated use sortMediaFiles; goes in protocol 5 */
     sort_media_files: { args: [sortColumn: string, ascending: boolean] | [sortColumn: string]; returns: string[] }
+    flushMetadataStore: { args: []; returns: void }
+    playFile: { args: [filename: string]; returns: void }
+    nextTrack: { args: []; returns: void }
+    previousTrack: { args: []; returns: void }
+    togglePlay: { args: []; returns: void }
+    toggleShuffle: { args: []; returns: void }
+    setPosition: { args: [positionMs: number]; returns: void }
+    extractColorsFromAlbumArt: { args: [filename: string]; returns: void }
+    extractColorsFromImage: { args: [imagePath: string]; returns: void }
+    scanLibrary: { args: [resetDisplayNames: boolean] | []; returns: void }
+    setLibraryRoot: { args: [path: string]; returns: void }
+    stripFilenames: { args: []; returns: void }
+    selectPlaylist: { args: [name: string]; returns: void }
+    createPlaylist: { args: [name: string]; returns: boolean }
+    deletePlaylist: { args: [name: string]; returns: boolean }
+    moveSongToPlaylist: { args: [filename: string, targetPlaylist: string]; returns: boolean }
+    deleteSong: { args: [filename: string]; returns: boolean }
+    playFileAtPath: { args: [filePath: string]; returns: boolean }
+    invalidateStatsCache: { args: []; returns: void }
+    getMediaFiles: { args: [emitSignal: boolean] | []; returns: string[] }
+    getFormattedDuration: { args: [filename: string]; returns: string }
+    getBand: { args: [filename: string]; returns: string }
+    getAlbum: { args: [filename: string]; returns: string }
+    getAlbumArt: { args: [filename: string]; returns: string }
+    getCurrentFile: { args: []; returns: string }
+    getNextTrackName: { args: []; returns: string }
+    getPreviousTrackName: { args: []; returns: string }
+    getNextTrackAlbumArt: { args: []; returns: string }
+    getPreviousTrackAlbumArt: { args: []; returns: string }
+    getNeighborAlbumArts: { args: []; returns: string[] }
+    isPlaying: { args: []; returns: boolean }
+    isPaused: { args: []; returns: boolean }
+    getDuration: { args: []; returns: number }
+    getPosition: { args: []; returns: number }
+    isMuted: { args: []; returns: boolean }
+    isShuffled: { args: []; returns: boolean }
+    getPlaylistNames: { args: []; returns: string[] }
+    getCurrentPlaylistName: { args: []; returns: string }
+    getCurrentSongList: { args: []; returns: string[] }
+    getMovablePlaylistNames: { args: []; returns: string[] }
+    getSongPlaylistName: { args: [filename: string]; returns: string }
+    getSongFilePath: { args: [filename: string]; returns: string }
+    getFullFilePath: { args: [filename: string]; returns: string }
+    getDisplayName: { args: [filename: string]; returns: string }
+    getDefaultMediaDir: { args: []; returns: string }
+    getMediaFolderName: { args: []; returns: string }
+    browseMusicFolders: { args: [path: string]; returns: Record<string, unknown> }
+    pickBrowserLibrary: { args: []; returns: boolean }
+    getTotalDuration: { args: []; returns: string }
+    getAlbumCount: { args: []; returns: number }
+    getArtistCount: { args: []; returns: number }
+    sortMediaFiles: { args: [sortColumn: string, ascending: boolean] | [sortColumn: string]; returns: string[] }
   }
   signals: {
     playbackStateChanged: [state: number]
@@ -766,8 +909,10 @@ export interface NetworkManager {
     checkForUpdates: { args: []; returns: void }
     applySelfUpdate: { args: []; returns: void }
     restartApp: { args: []; returns: void }
+    /** @deprecated use shutdownDevice; goes in protocol 5 */
     shutdown_device: { args: []; returns: void }
     cleanup: { args: []; returns: void }
+    shutdownDevice: { args: []; returns: void }
   }
   signals: {
     networkNameChanged: [name: string]
@@ -912,37 +1057,64 @@ export interface OBDManager {
     vehicleScanComplete: boolean
   }
   methods: {
+    /** @deprecated use connectObd; goes in protocol 5 */
     connect_obd: { args: []; returns: void }
     reconnect: { args: []; returns: void }
+    /** @deprecated use forceConnect; goes in protocol 5 */
     force_connect: { args: []; returns: void }
     close: { args: []; returns: void }
+    /** @deprecated use resetConnection; goes in protocol 5 */
     reset_connection: { args: []; returns: void }
+    /** @deprecated use getConnectionStatus (or the connectionStatus property); goes in protocol 5 */
     get_connection_status: { args: []; returns: string }
     getConnectionStatus: { args: []; returns: string }
+    /** @deprecated use refreshPorts; goes in protocol 5 */
     refresh_ports: { args: []; returns: void }
+    /** @deprecated use getAvailablePorts; goes in protocol 5 */
     get_available_ports: { args: []; returns: unknown[] }
     scan: { args: []; returns: void }
     availableAdapters: { args: []; returns: unknown[] }
+    /** @deprecated use connectToAdapter; goes in protocol 5 */
     connect_to_adapter: { args: [identifier: string]; returns: void }
+    /** @deprecated use platformHint; goes in protocol 5 */
     platform_hint: { args: []; returns: string }
+    /** @deprecated use scanVehicle; goes in protocol 5 */
     scan_vehicle: { args: []; returns: void }
+    /** @deprecated use isScanning; goes in protocol 5 */
     is_scanning: { args: []; returns: boolean }
+    /** @deprecated use getAllParameterNames; goes in protocol 5 */
     get_all_parameter_names: { args: []; returns: string[] }
+    /** @deprecated use getSupportedCommands; goes in protocol 5 */
     get_supported_commands: { args: []; returns: unknown[] }
+    /** @deprecated use enableScannedParameters; goes in protocol 5 */
     enable_scanned_parameters: { args: [paramNames: unknown[]]; returns: void }
+    /** @deprecated use enableAllSupported; goes in protocol 5 */
     enable_all_supported: { args: []; returns: void }
+    /** @deprecated use enterDiagnosticMode; goes in protocol 5 */
     enter_diagnostic_mode: { args: []; returns: void }
+    /** @deprecated use exitDiagnosticMode; goes in protocol 5 */
     exit_diagnostic_mode: { args: []; returns: void }
+    /** @deprecated use isDiagnosticMode; goes in protocol 5 */
     is_diagnostic_mode: { args: []; returns: boolean }
+    /** @deprecated use readDtc; goes in protocol 5 */
     read_dtc: { args: []; returns: void }
+    /** @deprecated use readCurrentDtc; goes in protocol 5 */
     read_current_dtc: { args: []; returns: void }
+    /** @deprecated use readStatus; goes in protocol 5 */
     read_status: { args: []; returns: void }
+    /** @deprecated use clearDtc; goes in protocol 5 */
     clear_dtc: { args: []; returns: void }
+    /** @deprecated use readFreezeFrame; goes in protocol 5 */
     read_freeze_frame: { args: []; returns: void }
+    /** @deprecated use readVin; goes in protocol 5 */
     read_vin: { args: []; returns: void }
+    /** @deprecated use getDtcCodes; goes in protocol 5 */
     get_dtc_codes: { args: []; returns: unknown[] }
+    /** @deprecated use getDtcCount; goes in protocol 5 */
     get_dtc_count: { args: []; returns: number }
+    /** @deprecated use getMilStatus; goes in protocol 5 */
     get_mil_status: { args: []; returns: boolean }
+    /** @deprecated use getFreezeFrame; goes in protocol 5 */
     get_freeze_frame: { args: []; returns: unknown[] }
     coolantTemp: { args: []; returns: number }
     voltage: { args: []; returns: number }
@@ -962,15 +1134,56 @@ export interface OBDManager {
     fuelPressure: { args: []; returns: number }
     engineOilTemp: { args: []; returns: number }
     ignitionTiming: { args: []; returns: number }
+    /** @deprecated use refreshValues; goes in protocol 5 */
     refresh_values: { args: []; returns: void }
+    /** @deprecated use openBluetoothSettings; goes in protocol 5 */
     open_bluetooth_settings: { args: []; returns: void }
+    /** @deprecated use setTargetAddress; goes in protocol 5 */
     set_target_address: { args: [address: string]; returns: void }
+    /** @deprecated use connectDirect; goes in protocol 5 */
     connect_direct: { args: [mac: string, channel: number] | [mac: string]; returns: void }
+    /** @deprecated use setAutoReconnect; goes in protocol 5 */
     set_auto_reconnect: { args: [enabled: boolean]; returns: void }
+    /** @deprecated use setConnectionTimeout; goes in protocol 5 */
     set_connection_timeout: { args: [timeoutSeconds: number]; returns: void }
+    /** @deprecated use checkDevicePresence; goes in protocol 5 */
     check_device_presence: { args: []; returns: boolean }
+    connectObd: { args: []; returns: void }
+    forceConnect: { args: []; returns: void }
+    resetConnection: { args: []; returns: void }
+    refreshPorts: { args: []; returns: void }
+    getAvailablePorts: { args: []; returns: unknown[] }
+    connectToAdapter: { args: [identifier: string]; returns: void }
+    platformHint: { args: []; returns: string }
+    scanVehicle: { args: []; returns: void }
+    isScanning: { args: []; returns: boolean }
+    getAllParameterNames: { args: []; returns: string[] }
+    getSupportedCommands: { args: []; returns: unknown[] }
+    enableScannedParameters: { args: [paramNames: unknown[]]; returns: void }
+    enableAllSupported: { args: []; returns: void }
+    enterDiagnosticMode: { args: []; returns: void }
+    exitDiagnosticMode: { args: []; returns: void }
+    isDiagnosticMode: { args: []; returns: boolean }
+    readDtc: { args: []; returns: void }
+    readCurrentDtc: { args: []; returns: void }
+    readStatus: { args: []; returns: void }
+    clearDtc: { args: []; returns: void }
+    readFreezeFrame: { args: []; returns: void }
+    readVin: { args: []; returns: void }
+    getDtcCodes: { args: []; returns: unknown[] }
+    getDtcCount: { args: []; returns: number }
+    getMilStatus: { args: []; returns: boolean }
+    getFreezeFrame: { args: []; returns: unknown[] }
+    refreshValues: { args: []; returns: void }
+    openBluetoothSettings: { args: []; returns: void }
+    setTargetAddress: { args: [address: string]; returns: void }
+    connectDirect: { args: [mac: string, channel: number] | [mac: string]; returns: void }
+    setAutoReconnect: { args: [enabled: boolean]; returns: void }
+    setConnectionTimeout: { args: [timeoutSeconds: number]; returns: void }
+    checkDevicePresence: { args: []; returns: boolean }
     isConnected: { args: []; returns: boolean }
     clearConnectionLog: { args: []; returns: void }
+    /** @deprecated use isConnected (or the connected property); goes in protocol 5 */
     is_connected: { args: []; returns: boolean }
     setParameterDemand: { args: [consumer: string, paramIds: string[]]; returns: void }
     setBackgroundDemand: { args: [consumer: string, paramIds: string[]]; returns: void }

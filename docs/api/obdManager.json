@@ -11,6 +11,7 @@
     },
     "methods": [
         {
+            "deprecated": "use connectObd; goes in protocol 5",
             "kind": "slot",
             "name": "connect_obd",
             "params": [
@@ -27,6 +28,7 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use forceConnect; goes in protocol 5",
             "kind": "slot",
             "name": "force_connect",
             "params": [
@@ -43,6 +45,7 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use resetConnection; goes in protocol 5",
             "kind": "slot",
             "name": "reset_connection",
             "params": [
@@ -51,6 +54,7 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use getConnectionStatus (or the connectionStatus property); goes in protocol 5",
             "kind": "slot",
             "name": "get_connection_status",
             "params": [
@@ -67,6 +71,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use refreshPorts; goes in protocol 5",
             "kind": "slot",
             "name": "refresh_ports",
             "params": [
@@ -75,6 +80,7 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use getAvailablePorts; goes in protocol 5",
             "kind": "slot",
             "name": "get_available_ports",
             "params": [
@@ -99,6 +105,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use connectToAdapter; goes in protocol 5",
             "kind": "slot",
             "name": "connect_to_adapter",
             "params": [
@@ -111,6 +118,7 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use platformHint; goes in protocol 5",
             "kind": "slot",
             "name": "platform_hint",
             "params": [
@@ -119,6 +127,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use scanVehicle; goes in protocol 5",
             "kind": "slot",
             "name": "scan_vehicle",
             "params": [
@@ -127,6 +136,7 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use isScanning; goes in protocol 5",
             "kind": "slot",
             "name": "is_scanning",
             "params": [
@@ -135,6 +145,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getAllParameterNames; goes in protocol 5",
             "kind": "slot",
             "name": "get_all_parameter_names",
             "params": [
@@ -143,6 +154,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getSupportedCommands; goes in protocol 5",
             "kind": "slot",
             "name": "get_supported_commands",
             "params": [
@@ -151,6 +163,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use enableScannedParameters; goes in protocol 5",
             "kind": "slot",
             "name": "enable_scanned_parameters",
             "params": [
@@ -163,6 +176,7 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use enableAllSupported; goes in protocol 5",
             "kind": "slot",
             "name": "enable_all_supported",
             "params": [
@@ -171,6 +185,7 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use enterDiagnosticMode; goes in protocol 5",
             "kind": "slot",
             "name": "enter_diagnostic_mode",
             "params": [
@@ -179,6 +194,7 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use exitDiagnosticMode; goes in protocol 5",
             "kind": "slot",
             "name": "exit_diagnostic_mode",
             "params": [
@@ -187,6 +203,7 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use isDiagnosticMode; goes in protocol 5",
             "kind": "slot",
             "name": "is_diagnostic_mode",
             "params": [
@@ -195,6 +212,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use readDtc; goes in protocol 5",
             "kind": "slot",
             "name": "read_dtc",
             "params": [
@@ -203,6 +221,7 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use readCurrentDtc; goes in protocol 5",
             "kind": "slot",
             "name": "read_current_dtc",
             "params": [
@@ -211,6 +230,7 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use readStatus; goes in protocol 5",
             "kind": "slot",
             "name": "read_status",
             "params": [
@@ -219,6 +239,7 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use clearDtc; goes in protocol 5",
             "kind": "slot",
             "name": "clear_dtc",
             "params": [
@@ -227,6 +248,7 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use readFreezeFrame; goes in protocol 5",
             "kind": "slot",
             "name": "read_freeze_frame",
             "params": [
@@ -235,6 +257,7 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use readVin; goes in protocol 5",
             "kind": "slot",
             "name": "read_vin",
             "params": [
@@ -243,6 +266,7 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use getDtcCodes; goes in protocol 5",
             "kind": "slot",
             "name": "get_dtc_codes",
             "params": [
@@ -251,6 +275,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getDtcCount; goes in protocol 5",
             "kind": "slot",
             "name": "get_dtc_count",
             "params": [
@@ -259,6 +284,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getMilStatus; goes in protocol 5",
             "kind": "slot",
             "name": "get_mil_status",
             "params": [
@@ -267,6 +293,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getFreezeFrame; goes in protocol 5",
             "kind": "slot",
             "name": "get_freeze_frame",
             "params": [
@@ -419,6 +446,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use refreshValues; goes in protocol 5",
             "kind": "slot",
             "name": "refresh_values",
             "params": [
@@ -427,6 +455,7 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use openBluetoothSettings; goes in protocol 5",
             "kind": "slot",
             "name": "open_bluetooth_settings",
             "params": [
@@ -435,6 +464,7 @@
             "scope": "system"
         },
         {
+            "deprecated": "use setTargetAddress; goes in protocol 5",
             "kind": "slot",
             "name": "set_target_address",
             "params": [
@@ -447,6 +477,7 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use connectDirect; goes in protocol 5",
             "kind": "slot",
             "name": "connect_direct",
             "params": [
@@ -463,6 +494,7 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use connectDirect; goes in protocol 5",
             "kind": "slot",
             "name": "connect_direct",
             "params": [
@@ -475,6 +507,7 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use setAutoReconnect; goes in protocol 5",
             "kind": "slot",
             "name": "set_auto_reconnect",
             "params": [
@@ -487,6 +520,7 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use setConnectionTimeout; goes in protocol 5",
             "kind": "slot",
             "name": "set_connection_timeout",
             "params": [
@@ -499,8 +533,313 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use checkDevicePresence; goes in protocol 5",
             "kind": "slot",
             "name": "check_device_presence",
+            "params": [
+            ],
+            "returns": "bool",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "connectObd",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "forceConnect",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "resetConnection",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "refreshPorts",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "getAvailablePorts",
+            "params": [
+            ],
+            "returns": "QVariantList",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "connectToAdapter",
+            "params": [
+                {
+                    "name": "identifier",
+                    "type": "QString"
+                }
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "platformHint",
+            "params": [
+            ],
+            "returns": "QString",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "scanVehicle",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "isScanning",
+            "params": [
+            ],
+            "returns": "bool",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getAllParameterNames",
+            "params": [
+            ],
+            "returns": "QStringList",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getSupportedCommands",
+            "params": [
+            ],
+            "returns": "QVariantList",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "enableScannedParameters",
+            "params": [
+                {
+                    "name": "paramNames",
+                    "type": "QVariantList"
+                }
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "enableAllSupported",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "enterDiagnosticMode",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "exitDiagnosticMode",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "isDiagnosticMode",
+            "params": [
+            ],
+            "returns": "bool",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "readDtc",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "readCurrentDtc",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "readStatus",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "clearDtc",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "readFreezeFrame",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "readVin",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "getDtcCodes",
+            "params": [
+            ],
+            "returns": "QVariantList",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getDtcCount",
+            "params": [
+            ],
+            "returns": "int",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getMilStatus",
+            "params": [
+            ],
+            "returns": "bool",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getFreezeFrame",
+            "params": [
+            ],
+            "returns": "QVariantList",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "refreshValues",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "openBluetoothSettings",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "system"
+        },
+        {
+            "kind": "slot",
+            "name": "setTargetAddress",
+            "params": [
+                {
+                    "name": "address",
+                    "type": "QString"
+                }
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "connectDirect",
+            "params": [
+                {
+                    "name": "mac",
+                    "type": "QString"
+                },
+                {
+                    "name": "channel",
+                    "type": "int"
+                }
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "connectDirect",
+            "params": [
+                {
+                    "name": "mac",
+                    "type": "QString"
+                }
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "setAutoReconnect",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "setConnectionTimeout",
+            "params": [
+                {
+                    "name": "timeoutSeconds",
+                    "type": "int"
+                }
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "slot",
+            "name": "checkDevicePresence",
             "params": [
             ],
             "returns": "bool",
@@ -523,6 +862,7 @@
             "scope": "vehicle"
         },
         {
+            "deprecated": "use isConnected (or the connected property); goes in protocol 5",
             "kind": "invokable",
             "name": "is_connected",
             "params": [

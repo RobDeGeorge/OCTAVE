@@ -58,13 +58,50 @@ class OBDManager : public QObject
     Q_CLASSINFO("octave.scope", "vehicle")
     Q_CLASSINFO("octave.scope.read",
                 "airFuelRatio availableAdapters coolantTemp engineLoad engineOilTemp fuelLevel fuelPressure "
-                "getConnectionStatus get_all_parameter_names get_available_ports get_connection_status "
-                "get_dtc_codes get_dtc_count get_freeze_frame get_mil_status get_supported_commands "
-                "ignitionTiming intakeManifoldPressure intakeTemp isConnected is_connected "
-                "is_diagnostic_mode is_scanning longTermFuelTrim massAirFlow oxygenSensorVoltage "
-                "platform_hint rpm setBackgroundDemand setParameterDemand shortTermFuelTrim speedMPH "
-                "throttlePosition timingAdvance voltage")
-    Q_CLASSINFO("octave.scope.system", "open_bluetooth_settings")
+                "getAllParameterNames getAvailablePorts getConnectionStatus getDtcCodes getDtcCount "
+                "getFreezeFrame getMilStatus getSupportedCommands get_all_parameter_names get_available_ports "
+                "get_connection_status get_dtc_codes get_dtc_count get_freeze_frame get_mil_status "
+                "get_supported_commands ignitionTiming intakeManifoldPressure intakeTemp isConnected "
+                "isDiagnosticMode isScanning is_connected is_diagnostic_mode is_scanning longTermFuelTrim "
+                "massAirFlow oxygenSensorVoltage platformHint platform_hint rpm setBackgroundDemand "
+                "setParameterDemand shortTermFuelTrim speedMPH throttlePosition timingAdvance voltage")
+    Q_CLASSINFO("octave.scope.system", "openBluetoothSettings open_bluetooth_settings")
+    // Deprecated names (src/service/metadescribe.h): the camelCase one beside each stays
+    Q_CLASSINFO("octave.deprecated.connect_obd", "use connectObd; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.force_connect", "use forceConnect; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.reset_connection", "use resetConnection; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_connection_status", "use getConnectionStatus (or the connectionStatus property); goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.refresh_ports", "use refreshPorts; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_available_ports", "use getAvailablePorts; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.connect_to_adapter", "use connectToAdapter; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.platform_hint", "use platformHint; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.scan_vehicle", "use scanVehicle; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.is_scanning", "use isScanning; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_all_parameter_names", "use getAllParameterNames; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_supported_commands", "use getSupportedCommands; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.enable_scanned_parameters", "use enableScannedParameters; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.enable_all_supported", "use enableAllSupported; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.enter_diagnostic_mode", "use enterDiagnosticMode; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.exit_diagnostic_mode", "use exitDiagnosticMode; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.is_diagnostic_mode", "use isDiagnosticMode; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.read_dtc", "use readDtc; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.read_current_dtc", "use readCurrentDtc; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.read_status", "use readStatus; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.clear_dtc", "use clearDtc; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.read_freeze_frame", "use readFreezeFrame; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.read_vin", "use readVin; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_dtc_codes", "use getDtcCodes; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_dtc_count", "use getDtcCount; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_mil_status", "use getMilStatus; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_freeze_frame", "use getFreezeFrame; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.refresh_values", "use refreshValues; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.open_bluetooth_settings", "use openBluetoothSettings; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.set_target_address", "use setTargetAddress; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.connect_direct", "use connectDirect; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.set_auto_reconnect", "use setAutoReconnect; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.set_connection_timeout", "use setConnectionTimeout; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.check_device_presence", "use checkDevicePresence; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.is_connected", "use isConnected (or the connected property); goes in protocol 5")
 
     // Expose connection state as QML-readable properties
     Q_PROPERTY(bool connected READ isConnected NOTIFY connectionStatusChanged)
@@ -447,6 +484,42 @@ public slots:
     void set_auto_reconnect(bool enabled);
     void set_connection_timeout(int timeoutSeconds);
     bool check_device_presence();
+
+    // camelCase names for the snake_case methods above (protocol 3 keeps both;
+    // the old names are marked octave.deprecated and go in protocol 4)
+    void connectObd() { connect_obd(); }
+    void forceConnect() { force_connect(); }
+    void resetConnection() { reset_connection(); }
+    void refreshPorts() { refresh_ports(); }
+    QVariantList getAvailablePorts() { return get_available_ports(); }
+    void connectToAdapter(const QString &identifier) { connect_to_adapter(identifier); }
+    QString platformHint() const { return platform_hint(); }
+    void scanVehicle() { scan_vehicle(); }
+    bool isScanning() const { return is_scanning(); }
+    QStringList getAllParameterNames() const { return get_all_parameter_names(); }
+    QVariantList getSupportedCommands() const { return get_supported_commands(); }
+    void enableScannedParameters(const QVariantList &paramNames) { enable_scanned_parameters(paramNames); }
+    void enableAllSupported() { enable_all_supported(); }
+    void enterDiagnosticMode() { enter_diagnostic_mode(); }
+    void exitDiagnosticMode() { exit_diagnostic_mode(); }
+    bool isDiagnosticMode() const { return is_diagnostic_mode(); }
+    void readDtc() { read_dtc(); }
+    void readCurrentDtc() { read_current_dtc(); }
+    void readStatus() { read_status(); }
+    void clearDtc() { clear_dtc(); }
+    void readFreezeFrame() { read_freeze_frame(); }
+    void readVin() { read_vin(); }
+    QVariantList getDtcCodes() const { return get_dtc_codes(); }
+    int getDtcCount() const { return get_dtc_count(); }
+    bool getMilStatus() const { return get_mil_status(); }
+    QVariantList getFreezeFrame() const { return get_freeze_frame(); }
+    void refreshValues() { refresh_values(); }
+    void openBluetoothSettings() { open_bluetooth_settings(); }
+    void setTargetAddress(const QString &address) { set_target_address(address); }
+    void connectDirect(const QString &mac, int channel = 1) { connect_direct(mac, channel); }
+    void setAutoReconnect(bool enabled) { set_auto_reconnect(enabled); }
+    void setConnectionTimeout(int timeoutSeconds) { set_connection_timeout(timeoutSeconds); }
+    bool checkDevicePresence() { return check_device_presence(); }
 
 private slots:
     // Worker thread callbacks

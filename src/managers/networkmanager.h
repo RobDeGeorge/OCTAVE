@@ -27,6 +27,8 @@ class NetworkManager : public QObject
     Q_CLASSINFO("octave.scope", "system")
     Q_CLASSINFO("octave.scope.read", "refreshNetwork")
     Q_CLASSINFO("octave.scope.full", "cleanup")
+    // Deprecated names (src/service/metadescribe.h): the camelCase one beside each stays
+    Q_CLASSINFO("octave.deprecated.shutdown_device", "use shutdownDevice; goes in protocol 5")
 
     // ======================================================================
     // Q_PROPERTY declarations
@@ -79,6 +81,10 @@ public slots:
     void restartApp();
     void shutdown_device();
     void cleanup();
+
+    // camelCase names for the snake_case methods above (protocol 3 keeps both;
+    // the old names are marked octave.deprecated and go in protocol 4)
+    void shutdownDevice() { shutdown_device(); }
 
 signals:
     // Network status signals

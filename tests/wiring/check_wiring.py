@@ -169,6 +169,32 @@ class WiringTest(unittest.TestCase):
         finally:
             c.call("audioAnalyzer", "setDemand", "wiring-test", False)
 
+    def test_camel_case_names_answer_as_the_old_ones(self):
+        """The snake_case methods (protocol 3, deprecated) and the camelCase
+        ones beside them are the same call: same answer over `call`, and
+        `describe` tells a client which to use."""
+        c = self.c
+        for obj, old, new in [("mediaManager", "get_playlist_names", "getPlaylistNames"),
+                              ("mediaManager", "get_current_playlist_name", "getCurrentPlaylistName"),
+                              ("mediaManager", "is_shuffled", "isShuffled"),
+                              ("obdManager", "is_diagnostic_mode", "isDiagnosticMode"),
+                              ("obdManager", "get_all_parameter_names", "getAllParameterNames"),
+                              ("audioAnalyzer", "get_num_bars", "getNumBars"),
+                              ("esp32VolumeManager", "get_connection_status", "getConnectionStatus")]:
+            self.assertEqual(c.call(obj, old), c.call(obj, new), f"{obj}.{old} / {new}")
+        # One that acts: shuffle flips under either name
+        before = c.call("mediaManager", "isShuffled")
+        c.call("mediaManager", "toggleShuffle")
+        self.assertEqual(c.call("mediaManager", "is_shuffled"), not before)
+        c.call("mediaManager", "toggle_shuffle")
+        self.assertEqual(c.call("mediaManager", "isShuffled"), before)
+        methods = {}
+        for m in c.describe("mediaManager")["methods"]:
+            methods.setdefault(m["name"], m)
+        self.assertEqual(methods["toggle_shuffle"].get("deprecated"), "use toggleShuffle; goes in protocol 5")
+        self.assertNotIn("deprecated", methods["toggleShuffle"])
+        self.assertEqual(methods["toggle_shuffle"]["scope"], methods["toggleShuffle"]["scope"])
+
 
 if __name__ == "__main__":
     unittest.main()

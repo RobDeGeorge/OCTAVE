@@ -2,8 +2,17 @@
     "class": "Clock",
     "methods": [
         {
+            "deprecated": "use updateTime; goes in protocol 5",
             "kind": "slot",
             "name": "update_time",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "updateTime",
             "params": [
             ],
             "returns": "",

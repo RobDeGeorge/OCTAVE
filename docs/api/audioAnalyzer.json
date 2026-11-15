@@ -66,6 +66,7 @@
             "scope": "media"
         },
         {
+            "deprecated": "use analyzeFile; goes in protocol 5",
             "kind": "slot",
             "name": "analyze_file",
             "params": [
@@ -78,6 +79,7 @@
             "scope": "full"
         },
         {
+            "deprecated": "use updatePosition; goes in protocol 5",
             "kind": "slot",
             "name": "update_position",
             "params": [
@@ -90,6 +92,7 @@
             "scope": "full"
         },
         {
+            "deprecated": "use setActive; goes in protocol 5",
             "kind": "slot",
             "name": "set_active",
             "params": [
@@ -102,6 +105,7 @@
             "scope": "media"
         },
         {
+            "deprecated": "use getCurrentLevels; goes in protocol 5",
             "kind": "slot",
             "name": "get_current_levels",
             "params": [
@@ -110,6 +114,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getNumBars; goes in protocol 5",
             "kind": "slot",
             "name": "get_num_bars",
             "params": [
@@ -118,6 +123,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use isAnalyzed; goes in protocol 5",
             "kind": "slot",
             "name": "is_analyzed",
             "params": [
@@ -134,6 +140,7 @@
             "scope": "media"
         },
         {
+            "deprecated": "use setLive; goes in protocol 5",
             "kind": "slot",
             "name": "set_live",
             "params": [
@@ -146,6 +153,7 @@
             "scope": "media"
         },
         {
+            "deprecated": "use updateLive; goes in protocol 5",
             "kind": "slot",
             "name": "update_live",
             "params": [
@@ -154,8 +162,105 @@
             "scope": "full"
         },
         {
+            "deprecated": "use feedLivePcm; goes in protocol 5",
             "kind": "slot",
             "name": "feed_live_pcm",
+            "params": [
+                {
+                    "name": "pcm",
+                    "type": "QByteArray"
+                },
+                {
+                    "name": "bufferedMs",
+                    "type": "int"
+                }
+            ],
+            "returns": "",
+            "scope": "full"
+        },
+        {
+            "kind": "slot",
+            "name": "analyzeFile",
+            "params": [
+                {
+                    "name": "filePath",
+                    "type": "QString"
+                }
+            ],
+            "returns": "",
+            "scope": "full"
+        },
+        {
+            "kind": "slot",
+            "name": "updatePosition",
+            "params": [
+                {
+                    "name": "positionSeconds",
+                    "type": "float"
+                }
+            ],
+            "returns": "",
+            "scope": "full"
+        },
+        {
+            "kind": "slot",
+            "name": "setActive",
+            "params": [
+                {
+                    "name": "active",
+                    "type": "bool"
+                }
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "getCurrentLevels",
+            "params": [
+            ],
+            "returns": "QVariantList",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getNumBars",
+            "params": [
+            ],
+            "returns": "int",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "isAnalyzed",
+            "params": [
+            ],
+            "returns": "bool",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "setLive",
+            "params": [
+                {
+                    "name": "live",
+                    "type": "bool"
+                }
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "updateLive",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "full"
+        },
+        {
+            "kind": "slot",
+            "name": "feedLivePcm",
             "params": [
                 {
                     "name": "pcm",

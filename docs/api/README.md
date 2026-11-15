@@ -85,6 +85,10 @@ Compatibility so far:
 
 Every member is **stable** unless marked: covered by the version, so it changes only with a bump. A member (or a whole object) marked `"stability": "experimental"` in its file here and in `describe` may change or go in any release; build on it knowing that. A member marked `"deprecated": "<what to use instead, and when it goes>"` still works; it is kept for at least one protocol version after the one that deprecates it, and its removal is a breaking change like any other. Both are declared in the C++ class next to the members (`Q_CLASSINFO("octave.experimental", "...")`, `Q_CLASSINFO("octave.deprecated.<member>", "...")`, see `src/service/metadescribe.h`); `--dump-api` refuses an annotation that names a member the class doesn't have.
 
+### Names
+
+Method names are camelCase. The snake_case methods that came from the Python backend (`mediaManager.next_track`, `obdManager.read_dtc`, ...) are deprecated in protocol 3, each beside a camelCase method of the same signature and scope (`nextTrack`, `readDtc`); `tst_apidocs` fails a snake_case method that is not marked, on any object but `settingsManager` (whose `save_*` / `get_*` are to be replaced by writable properties).
+
 ### Enforced
 
 `tools/api/check_compat.py` compares this directory with the base of a change (CI's `lint` job: the PR's base branch, or the commit before a push) and fails when a stable member, a parameter id or a parameter's unit is removed or changed without `kProtocolVersion` going up, or when the new version's section in [CHANGELOG.md](CHANGELOG.md) does not name each break as `object.member`. `python tools/api/check_compat.py --draft` lists every change, breaking and additive, for the changelog. What it does not see: the meaning of a value, and the envelope (the ops and their arguments, the events, the stream record, the HTTP routes), which `protocol.json` describes and `test_protocol_spec.py` checks against the server; a change there still needs a reviewer and a changelog line. `check_compat` does check that `protocol.json` and `index.json` agree on the version.

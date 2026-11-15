@@ -37,6 +37,11 @@ Changed (dashboard files, not the protocol): `warnAbove` on Bar and Segmented ga
 - `networkManager.releaseUrl` / `releaseUrlChanged`: a packaged build (no git checkout) now compares its version with the latest GitHub release instead of failing with "Could not determine local version"; while `updateStatus` is `"update-available"` this is the release's page on github.com, `remoteCommit` its tag and `remoteCommitMsg` its title.
 - The audio output picker: `settingsManager.audioOutputDevice` / `audioOutputDeviceChanged` / `save_audio_output_device` (a QAudioDevice id, empty = the system default), `mediaManager.audioOutputs` / `currentAudioOutput` / `audioOutputsChanged`, `phoneMirrorManager.setAudioOutputDevice`.
 
+- camelCase method names (2026-11-15): every snake_case method of `mediaManager`, `obdManager`, `audioAnalyzer`, `esp32VolumeManager`, `clock` and `networkManager` has a camelCase twin with the same parameters, result and permission scope (`mediaManager.nextTrack`, `getAlbum`, `sortMediaFiles`; `obdManager.connectObd`, `readDtc`, `clearDtc`, `connectToAdapter`; `audioAnalyzer.getCurrentLevels`; `esp32VolumeManager.connectDevice`; `clock.updateTime`; `networkManager.shutdownDevice`; 104 names in all, the full list in each object's file). New code calls these.
+
+Deprecated (still work in protocol 3; each carries `"deprecated"` in its file and in `describe`):
+- The 113 snake_case methods of those six objects: use the camelCase name beside each (`next_track` → `nextTrack`); they go in protocol 5 (kept through protocol 4, as the README promises). Without a twin: `mediaManager.connect_settings_manager` (does nothing), `mediaManager._save_playback_state` and `_clear_temp_files` (internal), and `obdManager.is_connected` / `get_connection_status`, for which `isConnected` / `getConnectionStatus` (and the `connected` / `connectionStatus` properties) already existed. `settingsManager`'s `save_*` / `get_*` members are not deprecated here.
+
 ## Protocol 2
 
 2026-10-23. Pairing.

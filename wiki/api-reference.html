@@ -162,16 +162,25 @@
             <tr><td><code>setPlaying(bool playing)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
             <tr><td><code>setLocalFile(QString filePath)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
             <tr><td><code>setPosition(qlonglong positionMs)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
-            <tr><td><code>analyze_file(QString filePath)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
-            <tr><td><code>update_position(float positionSeconds)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
-            <tr><td><code>set_active(bool active)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
-            <tr><td><code>get_current_levels()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_num_bars()</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>is_analyzed()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>analyze_file(QString filePath)</code> <span class="cmt">(deprecated: use analyzeFile; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>update_position(float positionSeconds)</code> <span class="cmt">(deprecated: use updatePosition; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>set_active(bool active)</code> <span class="cmt">(deprecated: use setActive; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>get_current_levels()</code> <span class="cmt">(deprecated: use getCurrentLevels; goes in protocol 5)</span></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_num_bars()</code> <span class="cmt">(deprecated: use getNumBars; goes in protocol 5)</span></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>is_analyzed()</code> <span class="cmt">(deprecated: use isAnalyzed; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>clear()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
-            <tr><td><code>set_live(bool live)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
-            <tr><td><code>update_live()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
-            <tr><td><code>feed_live_pcm(QByteArray pcm, int bufferedMs)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>set_live(bool live)</code> <span class="cmt">(deprecated: use setLive; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>update_live()</code> <span class="cmt">(deprecated: use updateLive; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>feed_live_pcm(QByteArray pcm, int bufferedMs)</code> <span class="cmt">(deprecated: use feedLivePcm; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>analyzeFile(QString filePath)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>updatePosition(float positionSeconds)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>setActive(bool active)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>getCurrentLevels()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getNumBars()</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>isAnalyzed()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>setLive(bool live)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>updateLive()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>feedLivePcm(QByteArray pcm, int bufferedMs)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>fftDataChanged(QVariantList levels)</code>, <code>analysisComplete()</code>, <code>analysisStarted()</code>.</p>
@@ -245,7 +254,8 @@
         <table>
           <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>update_time()</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>update_time()</code> <span class="cmt">(deprecated: use updateTime; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>updateTime()</code></td><td>&ndash;</td><td>slot</td><td><code>read</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>timeChanged(QString timeStr)</code>.</p>
@@ -369,15 +379,23 @@
         <table>
           <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>connect_device()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>disconnect_device()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>get_available_ports()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>is_connected()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_connection_status()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_connection_detail()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>refresh_ports()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>reset_reconnect_attempts()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>connect_device()</code> <span class="cmt">(deprecated: use connectDevice; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>disconnect_device()</code> <span class="cmt">(deprecated: use disconnectDevice; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>get_available_ports()</code> <span class="cmt">(deprecated: use getAvailablePorts; goes in protocol 5)</span></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>is_connected()</code> <span class="cmt">(deprecated: use isConnected; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_connection_status()</code> <span class="cmt">(deprecated: use getConnectionStatus; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_connection_detail()</code> <span class="cmt">(deprecated: use getConnectionDetail; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>refresh_ports()</code> <span class="cmt">(deprecated: use refreshPorts; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>reset_reconnect_attempts()</code> <span class="cmt">(deprecated: use resetReconnectAttempts; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
             <tr><td><code>cleanup()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>connectDevice()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>disconnectDevice()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>getAvailablePorts()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>isConnected()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getConnectionStatus()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getConnectionDetail()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>refreshPorts()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>resetReconnectAttempts()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>connectionStatusChanged(QString status)</code>, <code>connectionDetailChanged(QString detail)</code>, <code>availablePortsChanged(QVariantList ports)</code>, <code>volumeChangeRequested(float delta)</code>, <code>muteToggleRequested()</code>.</p>
@@ -460,69 +478,124 @@
         <table>
           <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>connect_settings_manager(QObject*)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
-            <tr><td><code>_save_playback_state()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
-            <tr><td><code>_clear_temp_files()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
-            <tr><td><code>flush_metadata_store()</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
-            <tr><td><code>play_file(QString filename)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
-            <tr><td><code>next_track()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
-            <tr><td><code>previous_track()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>connect_settings_manager(QObject*)</code> <span class="cmt">(deprecated: does nothing; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>_save_playback_state()</code> <span class="cmt">(deprecated: internal; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>_clear_temp_files()</code> <span class="cmt">(deprecated: internal; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>flush_metadata_store()</code> <span class="cmt">(deprecated: use flushMetadataStore; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>play_file(QString filename)</code> <span class="cmt">(deprecated: use playFile; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>next_track()</code> <span class="cmt">(deprecated: use nextTrack; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>previous_track()</code> <span class="cmt">(deprecated: use previousTrack; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
             <tr><td><code>pause()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
-            <tr><td><code>toggle_play()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>toggle_play()</code> <span class="cmt">(deprecated: use togglePlay; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
             <tr><td><code>setMuted(bool muted)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
-            <tr><td><code>toggle_shuffle()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>toggle_shuffle()</code> <span class="cmt">(deprecated: use toggleShuffle; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
             <tr><td><code>setVolume(float volume)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
             <tr><td><code>setDucking(float factor)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
-            <tr><td><code>set_position(int positionMs)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
-            <tr><td><code>extract_colors_from_album_art(QString filename)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
-            <tr><td><code>extract_colors_from_image(QString imagePath)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
-            <tr><td><code>scan_library(bool resetDisplayNames)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
-            <tr><td><code>scan_library()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
-            <tr><td><code>set_library_root(QString path)</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
-            <tr><td><code>strip_filenames()</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
-            <tr><td><code>select_playlist(QString name)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
-            <tr><td><code>create_playlist(QString name)</code></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
-            <tr><td><code>delete_playlist(QString name)</code></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
-            <tr><td><code>move_song_to_playlist(QString filename, QString targetPlaylist)</code></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
-            <tr><td><code>delete_song(QString filename)</code></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
-            <tr><td><code>play_file_at_path(QString filePath)</code></td><td><code>bool</code></td><td>slot</td><td><code>media</code></td></tr>
-            <tr><td><code>invalidate_stats_cache()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
-            <tr><td><code>get_media_files(bool emitSignal)</code></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_media_files()</code></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_formatted_duration(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_band(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_album(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_album_art(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_current_file()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_next_track_name()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_previous_track_name()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_next_track_album_art()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_previous_track_album_art()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_neighbor_album_arts()</code></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>is_playing()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>is_paused()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_duration()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_position()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>is_muted()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>set_position(int positionMs)</code> <span class="cmt">(deprecated: use setPosition; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>extract_colors_from_album_art(QString filename)</code> <span class="cmt">(deprecated: use extractColorsFromAlbumArt; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>extract_colors_from_image(QString imagePath)</code> <span class="cmt">(deprecated: use extractColorsFromImage; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>scan_library(bool resetDisplayNames)</code> <span class="cmt">(deprecated: use scanLibrary; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>scan_library()</code> <span class="cmt">(deprecated: use scanLibrary; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>set_library_root(QString path)</code> <span class="cmt">(deprecated: use setLibraryRoot; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>strip_filenames()</code> <span class="cmt">(deprecated: use stripFilenames; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>select_playlist(QString name)</code> <span class="cmt">(deprecated: use selectPlaylist; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>create_playlist(QString name)</code> <span class="cmt">(deprecated: use createPlaylist; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>delete_playlist(QString name)</code> <span class="cmt">(deprecated: use deletePlaylist; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>move_song_to_playlist(QString filename, QString targetPlaylist)</code> <span class="cmt">(deprecated: use moveSongToPlaylist; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>delete_song(QString filename)</code> <span class="cmt">(deprecated: use deleteSong; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>play_file_at_path(QString filePath)</code> <span class="cmt">(deprecated: use playFileAtPath; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>invalidate_stats_cache()</code> <span class="cmt">(deprecated: use invalidateStatsCache; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>get_media_files(bool emitSignal)</code> <span class="cmt">(deprecated: use getMediaFiles; goes in protocol 5)</span></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_media_files()</code> <span class="cmt">(deprecated: use getMediaFiles; goes in protocol 5)</span></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_formatted_duration(QString filename)</code> <span class="cmt">(deprecated: use getFormattedDuration; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_band(QString filename)</code> <span class="cmt">(deprecated: use getBand; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_album(QString filename)</code> <span class="cmt">(deprecated: use getAlbum; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_album_art(QString filename)</code> <span class="cmt">(deprecated: use getAlbumArt; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_current_file()</code> <span class="cmt">(deprecated: use getCurrentFile; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_next_track_name()</code> <span class="cmt">(deprecated: use getNextTrackName; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_previous_track_name()</code> <span class="cmt">(deprecated: use getPreviousTrackName; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_next_track_album_art()</code> <span class="cmt">(deprecated: use getNextTrackAlbumArt; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_previous_track_album_art()</code> <span class="cmt">(deprecated: use getPreviousTrackAlbumArt; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_neighbor_album_arts()</code> <span class="cmt">(deprecated: use getNeighborAlbumArts; goes in protocol 5)</span></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>is_playing()</code> <span class="cmt">(deprecated: use isPlaying; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>is_paused()</code> <span class="cmt">(deprecated: use isPaused; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_duration()</code> <span class="cmt">(deprecated: use getDuration; goes in protocol 5)</span></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_position()</code> <span class="cmt">(deprecated: use getPosition; goes in protocol 5)</span></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>is_muted()</code> <span class="cmt">(deprecated: use isMuted; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>getVolume()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>is_shuffled()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_playlist_names()</code></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_current_playlist_name()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_current_song_list()</code></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_movable_playlist_names()</code></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_song_playlist_name(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_song_file_path(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_full_file_path(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_display_name(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_default_media_dir()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_media_folder_name()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>browse_music_folders(QString path)</code></td><td><code>QVariantMap</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>pick_browser_library()</code></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
-            <tr><td><code>get_total_duration()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_album_count()</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_artist_count()</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>sort_media_files(QString sortColumn, bool ascending)</code></td><td><code>QStringList</code></td><td>slot</td><td><code>media</code></td></tr>
-            <tr><td><code>sort_media_files(QString sortColumn)</code></td><td><code>QStringList</code></td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>is_shuffled()</code> <span class="cmt">(deprecated: use isShuffled; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_playlist_names()</code> <span class="cmt">(deprecated: use getPlaylistNames; goes in protocol 5)</span></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_current_playlist_name()</code> <span class="cmt">(deprecated: use getCurrentPlaylistName; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_current_song_list()</code> <span class="cmt">(deprecated: use getCurrentSongList; goes in protocol 5)</span></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_movable_playlist_names()</code> <span class="cmt">(deprecated: use getMovablePlaylistNames; goes in protocol 5)</span></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_song_playlist_name(QString filename)</code> <span class="cmt">(deprecated: use getSongPlaylistName; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_song_file_path(QString filename)</code> <span class="cmt">(deprecated: use getSongFilePath; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_full_file_path(QString filename)</code> <span class="cmt">(deprecated: use getFullFilePath; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_display_name(QString filename)</code> <span class="cmt">(deprecated: use getDisplayName; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_default_media_dir()</code> <span class="cmt">(deprecated: use getDefaultMediaDir; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_media_folder_name()</code> <span class="cmt">(deprecated: use getMediaFolderName; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>browse_music_folders(QString path)</code> <span class="cmt">(deprecated: use browseMusicFolders; goes in protocol 5)</span></td><td><code>QVariantMap</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>pick_browser_library()</code> <span class="cmt">(deprecated: use pickBrowserLibrary; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>get_total_duration()</code> <span class="cmt">(deprecated: use getTotalDuration; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_album_count()</code> <span class="cmt">(deprecated: use getAlbumCount; goes in protocol 5)</span></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_artist_count()</code> <span class="cmt">(deprecated: use getArtistCount; goes in protocol 5)</span></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>sort_media_files(QString sortColumn, bool ascending)</code> <span class="cmt">(deprecated: use sortMediaFiles; goes in protocol 5)</span></td><td><code>QStringList</code></td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>sort_media_files(QString sortColumn)</code> <span class="cmt">(deprecated: use sortMediaFiles; goes in protocol 5)</span></td><td><code>QStringList</code></td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>flushMetadataStore()</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>playFile(QString filename)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>nextTrack()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>previousTrack()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>togglePlay()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>toggleShuffle()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>setPosition(int positionMs)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>extractColorsFromAlbumArt(QString filename)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>extractColorsFromImage(QString imagePath)</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>scanLibrary(bool resetDisplayNames)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>scanLibrary()</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>setLibraryRoot(QString path)</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>stripFilenames()</code></td><td>&ndash;</td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>selectPlaylist(QString name)</code></td><td>&ndash;</td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>createPlaylist(QString name)</code></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>deletePlaylist(QString name)</code></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>moveSongToPlaylist(QString filename, QString targetPlaylist)</code></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>deleteSong(QString filename)</code></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>playFileAtPath(QString filePath)</code></td><td><code>bool</code></td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>invalidateStatsCache()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>getMediaFiles(bool emitSignal)</code></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getMediaFiles()</code></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getFormattedDuration(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getBand(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getAlbum(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getAlbumArt(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getCurrentFile()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getNextTrackName()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getPreviousTrackName()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getNextTrackAlbumArt()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getPreviousTrackAlbumArt()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getNeighborAlbumArts()</code></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>isPlaying()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>isPaused()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getDuration()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getPosition()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>isMuted()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>isShuffled()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getPlaylistNames()</code></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getCurrentPlaylistName()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getCurrentSongList()</code></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getMovablePlaylistNames()</code></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getSongPlaylistName(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getSongFilePath(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getFullFilePath(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getDisplayName(QString filename)</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getDefaultMediaDir()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getMediaFolderName()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>browseMusicFolders(QString path)</code></td><td><code>QVariantMap</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>pickBrowserLibrary()</code></td><td><code>bool</code></td><td>slot</td><td><code>files</code></td></tr>
+            <tr><td><code>getTotalDuration()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getAlbumCount()</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getArtistCount()</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>sortMediaFiles(QString sortColumn, bool ascending)</code></td><td><code>QStringList</code></td><td>slot</td><td><code>media</code></td></tr>
+            <tr><td><code>sortMediaFiles(QString sortColumn)</code></td><td><code>QStringList</code></td><td>slot</td><td><code>media</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>playbackStateChanged(int state)</code>, <code>playStateChanged(bool playing)</code>, <code>currentMediaChanged(QString filename)</code>, <code>mediaListChanged(QStringList files)</code>, <code>durationChanged(qlonglong durationMs)</code>, <code>positionChanged(qlonglong positionMs)</code>, <code>metadataChanged(QString title, QString artist, QString album)</code>, <code>durationFormatChanged(QString formatted)</code>, <code>volumeChanged(float volume)</code>, <code>shuffleStateChanged(bool shuffled)</code>, <code>totalDurationChanged(QString formatted)</code>, <code>albumCountChanged(int count)</code>, <code>artistCountChanged(int count)</code>, <code>playlistsChanged()</code>, <code>currentPlaylistChanged(QString name)</code>, <code>scanProgress(QString message)</code>, <code>albumColorsExtracted(QString jsonColors)</code>, <code>songDeleted(QString filename)</code>, <code>audioOutputsChanged()</code>.</p>
@@ -552,8 +625,9 @@
             <tr><td><code>checkForUpdates()</code></td><td>&ndash;</td><td>slot</td><td><code>system</code></td></tr>
             <tr><td><code>applySelfUpdate()</code></td><td>&ndash;</td><td>slot</td><td><code>system</code></td></tr>
             <tr><td><code>restartApp()</code></td><td>&ndash;</td><td>slot</td><td><code>system</code></td></tr>
-            <tr><td><code>shutdown_device()</code></td><td>&ndash;</td><td>slot</td><td><code>system</code></td></tr>
+            <tr><td><code>shutdown_device()</code> <span class="cmt">(deprecated: use shutdownDevice; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>system</code></td></tr>
             <tr><td><code>cleanup()</code></td><td>&ndash;</td><td>slot</td><td><code>full</code></td></tr>
+            <tr><td><code>shutdownDevice()</code></td><td>&ndash;</td><td>slot</td><td><code>system</code></td></tr>
           </tbody>
         </table>
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>networkNameChanged(QString name)</code>, <code>isConnectedChanged(bool connected)</code>, <code>updateStatusChanged(QString status)</code>, <code>updateMessageChanged(QString message)</code>, <code>remoteCommitChanged(QString commit)</code>, <code>remoteCommitMsgChanged(QString msg)</code>, <code>releaseUrlChanged(QString url)</code>, <code>workingTreeDirtyChanged(bool dirty)</code>, <code>selfUpdateStatusChanged(QString status)</code>, <code>selfUpdateMessageChanged(QString message)</code>, <code>canSelfUpdateChanged(bool canUpdate)</code>.</p>
@@ -645,38 +719,38 @@
         <table>
           <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
-            <tr><td><code>connect_obd()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>connect_obd()</code> <span class="cmt">(deprecated: use connectObd; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
             <tr><td><code>reconnect()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>force_connect()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>force_connect()</code> <span class="cmt">(deprecated: use forceConnect; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
             <tr><td><code>close()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>reset_connection()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>get_connection_status()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>reset_connection()</code> <span class="cmt">(deprecated: use resetConnection; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>get_connection_status()</code> <span class="cmt">(deprecated: use getConnectionStatus (or the connectionStatus property); goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>getConnectionStatus()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>refresh_ports()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>get_available_ports()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>refresh_ports()</code> <span class="cmt">(deprecated: use refreshPorts; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>get_available_ports()</code> <span class="cmt">(deprecated: use getAvailablePorts; goes in protocol 5)</span></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>scan()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
             <tr><td><code>availableAdapters()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>connect_to_adapter(QString identifier)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>platform_hint()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>scan_vehicle()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>is_scanning()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_all_parameter_names()</code></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_supported_commands()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>enable_scanned_parameters(QVariantList paramNames)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>enable_all_supported()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>enter_diagnostic_mode()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>exit_diagnostic_mode()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>is_diagnostic_mode()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>read_dtc()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>read_current_dtc()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>read_status()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>clear_dtc()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>read_freeze_frame()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>read_vin()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>get_dtc_codes()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_dtc_count()</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_mil_status()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>get_freeze_frame()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>connect_to_adapter(QString identifier)</code> <span class="cmt">(deprecated: use connectToAdapter; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>platform_hint()</code> <span class="cmt">(deprecated: use platformHint; goes in protocol 5)</span></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>scan_vehicle()</code> <span class="cmt">(deprecated: use scanVehicle; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>is_scanning()</code> <span class="cmt">(deprecated: use isScanning; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_all_parameter_names()</code> <span class="cmt">(deprecated: use getAllParameterNames; goes in protocol 5)</span></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_supported_commands()</code> <span class="cmt">(deprecated: use getSupportedCommands; goes in protocol 5)</span></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>enable_scanned_parameters(QVariantList paramNames)</code> <span class="cmt">(deprecated: use enableScannedParameters; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>enable_all_supported()</code> <span class="cmt">(deprecated: use enableAllSupported; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>enter_diagnostic_mode()</code> <span class="cmt">(deprecated: use enterDiagnosticMode; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>exit_diagnostic_mode()</code> <span class="cmt">(deprecated: use exitDiagnosticMode; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>is_diagnostic_mode()</code> <span class="cmt">(deprecated: use isDiagnosticMode; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>read_dtc()</code> <span class="cmt">(deprecated: use readDtc; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>read_current_dtc()</code> <span class="cmt">(deprecated: use readCurrentDtc; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>read_status()</code> <span class="cmt">(deprecated: use readStatus; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>clear_dtc()</code> <span class="cmt">(deprecated: use clearDtc; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>read_freeze_frame()</code> <span class="cmt">(deprecated: use readFreezeFrame; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>read_vin()</code> <span class="cmt">(deprecated: use readVin; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>get_dtc_codes()</code> <span class="cmt">(deprecated: use getDtcCodes; goes in protocol 5)</span></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_dtc_count()</code> <span class="cmt">(deprecated: use getDtcCount; goes in protocol 5)</span></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_mil_status()</code> <span class="cmt">(deprecated: use getMilStatus; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>get_freeze_frame()</code> <span class="cmt">(deprecated: use getFreezeFrame; goes in protocol 5)</span></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>coolantTemp()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>voltage()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>engineLoad()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
@@ -695,17 +769,51 @@
             <tr><td><code>fuelPressure()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>engineOilTemp()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
             <tr><td><code>ignitionTiming()</code></td><td><code>float</code></td><td>slot</td><td><code>read</code></td></tr>
-            <tr><td><code>refresh_values()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>open_bluetooth_settings()</code></td><td>&ndash;</td><td>slot</td><td><code>system</code></td></tr>
-            <tr><td><code>set_target_address(QString address)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>connect_direct(QString mac, int channel)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>connect_direct(QString mac)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>set_auto_reconnect(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>set_connection_timeout(int timeoutSeconds)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>check_device_presence()</code></td><td><code>bool</code></td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>refresh_values()</code> <span class="cmt">(deprecated: use refreshValues; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>open_bluetooth_settings()</code> <span class="cmt">(deprecated: use openBluetoothSettings; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>system</code></td></tr>
+            <tr><td><code>set_target_address(QString address)</code> <span class="cmt">(deprecated: use setTargetAddress; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>connect_direct(QString mac, int channel)</code> <span class="cmt">(deprecated: use connectDirect; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>connect_direct(QString mac)</code> <span class="cmt">(deprecated: use connectDirect; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>set_auto_reconnect(bool enabled)</code> <span class="cmt">(deprecated: use setAutoReconnect; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>set_connection_timeout(int timeoutSeconds)</code> <span class="cmt">(deprecated: use setConnectionTimeout; goes in protocol 5)</span></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>check_device_presence()</code> <span class="cmt">(deprecated: use checkDevicePresence; goes in protocol 5)</span></td><td><code>bool</code></td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>connectObd()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>forceConnect()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>resetConnection()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>refreshPorts()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>getAvailablePorts()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>connectToAdapter(QString identifier)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>platformHint()</code></td><td><code>QString</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>scanVehicle()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>isScanning()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getAllParameterNames()</code></td><td><code>QStringList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getSupportedCommands()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>enableScannedParameters(QVariantList paramNames)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>enableAllSupported()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>enterDiagnosticMode()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>exitDiagnosticMode()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>isDiagnosticMode()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>readDtc()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>readCurrentDtc()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>readStatus()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>clearDtc()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>readFreezeFrame()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>readVin()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>getDtcCodes()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getDtcCount()</code></td><td><code>int</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getMilStatus()</code></td><td><code>bool</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>getFreezeFrame()</code></td><td><code>QVariantList</code></td><td>slot</td><td><code>read</code></td></tr>
+            <tr><td><code>refreshValues()</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>openBluetoothSettings()</code></td><td>&ndash;</td><td>slot</td><td><code>system</code></td></tr>
+            <tr><td><code>setTargetAddress(QString address)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>connectDirect(QString mac, int channel)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>connectDirect(QString mac)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>setAutoReconnect(bool enabled)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>setConnectionTimeout(int timeoutSeconds)</code></td><td>&ndash;</td><td>slot</td><td><code>vehicle</code></td></tr>
+            <tr><td><code>checkDevicePresence()</code></td><td><code>bool</code></td><td>slot</td><td><code>vehicle</code></td></tr>
             <tr><td><code>isConnected()</code></td><td><code>bool</code></td><td>invokable</td><td><code>read</code></td></tr>
             <tr><td><code>clearConnectionLog()</code></td><td>&ndash;</td><td>invokable</td><td><code>vehicle</code></td></tr>
-            <tr><td><code>is_connected()</code></td><td><code>bool</code></td><td>invokable</td><td><code>read</code></td></tr>
+            <tr><td><code>is_connected()</code> <span class="cmt">(deprecated: use isConnected (or the connected property); goes in protocol 5)</span></td><td><code>bool</code></td><td>invokable</td><td><code>read</code></td></tr>
             <tr><td><code>setParameterDemand(QString consumer, QStringList paramIds)</code></td><td>&ndash;</td><td>invokable</td><td><code>read</code></td></tr>
             <tr><td><code>setBackgroundDemand(QString consumer, QStringList paramIds)</code></td><td>&ndash;</td><td>invokable</td><td><code>read</code></td></tr>
           </tbody>

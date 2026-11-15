@@ -71,9 +71,15 @@
 5. The dashboard editor's document model and undo out of QML JavaScript into C++ where QtTest reaches it. **Effort:** L.
 6. Mechanical QML sweep: the always-true `typeof` / `settingsManager ?` guards, `EnvironmentTheme`'s dead flags, the unused `Spacing` tokens. The pasted `dp()` helpers wait on [dp-helper-consolidation.md](dp-helper-consolidation.md). **Effort:** M.
 
-## 7. Protocol 4 (one breaking release)
+## 7. Finishing the API rename (protocols 4 and 5)
 
-Decided 2026-11-15: add camelCase names beside the 80 snake_case invokables and mark the old ones `octave.deprecated`, deprecate the per-parameter OBD signals nothing listens to, then remove them all in a single protocol 4 together with `settingsLayoutStyle` (its layouts are gone) and the change that a `pair` request with no scope list gets `read`, not `full`. The owner does not know of an outside frontend yet and wants them possible: ship the deprecations first, give at least one release of notice, then remove. **Effort:** L, desktop.
+Done 2026-11-15: mediaManager, obdManager, audioAnalyzer, esp32VolumeManager, clock and networkManager have a camelCase method beside each snake_case one, and the 113 old ones are marked deprecated ("goes in protocol 5"). `docs/api/README.md` promises a deprecated member one full protocol version, so they stay through protocol 4.
+
+Left:
+- Move the QML (about 259 call sites), the SDK examples and the templates to the new names. **Effort:** M, desktop.
+- `settingsManager`'s 160 `save_*` / `get_*` methods: no aliases on purpose. The table-driven refactor (section 6.1) makes the properties writable; deprecate the methods then.
+- Deprecate, with the same notice: the per-parameter OBD signals nothing listens to, `settingsLayoutStyle` (its layouts are gone), and announce that a `pair` request with no scope list will get `read`, not `full`.
+- Protocol 5: remove everything deprecated above. **Effort:** M, desktop.
 
 ## Decided 2026-11-15
 
@@ -88,6 +94,6 @@ Decided 2026-11-15: add camelCase names beside the 80 snake_case invokables and 
 
 ## Order
 
-Sections 1 and 2 as devices are at hand; section 4 with the next release; section 5 any desktop day; section 6 only after 5; section 7 last, since its rename sweep touches nearly every QML file.
+Sections 1 and 2 as devices are at hand; section 4 with the next release; section 5 any desktop day; section 6 only after 5; section 7's QML sweep last, since it touches nearly every QML file.
 
 Delete this file when the tables are empty.
