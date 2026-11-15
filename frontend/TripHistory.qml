@@ -692,6 +692,7 @@ Item {
                                     var parts = []
                                     if (selectedTrip.modelYear > 0 || selectedTrip.make)
                                         parts.push([selectedTrip.modelYear > 0 ? selectedTrip.modelYear : "", selectedTrip.make].join(" ").trim())
+                                    if (selectedTrip.simulated) parts.push("simulated car")
                                     if (selectedTrip.vin) parts.push("VIN " + selectedTrip.vin)
                                     // an open trip is the one being recorded: not clean yet, not recovered either
                                     if (selectedTrip.clean === false && !selectedTrip.open) parts.push("recovered after a power cut")
@@ -705,10 +706,22 @@ Item {
                                 Layout.fillWidth: true
                             }
                         }
+                        // Ends the recording for good: asks first (tap, then
+                        // "Confirm end" within 4 s), like settings/ConfirmButton
                         TripActionButton {
-                            text: "End trip"
+                            id: endTripButton
+                            property bool armed: false
+                            text: armed ? "Confirm end" : "End trip"
+                            danger: armed
                             visible: selectedTrip !== null && selectedTrip.open === true
-                            onClicked: tripRecorder.endTripNow()
+                            onVisibleChanged: if (!visible) armed = false
+                            Timer { id: endTripArmTimer; interval: 4000; onTriggered: endTripButton.armed = false }
+                            onClicked: {
+                                if (!armed) { armed = true; endTripArmTimer.restart(); return }
+                                armed = false
+                                endTripArmTimer.stop()
+                                tripRecorder.endTripNow()
+                            }
                         }
                     }
 
@@ -1344,18 +1357,20 @@ Item {
     component TripActionButton: Rectangle {
         id: btn
         property string text: ""
+        property bool danger: false   // armed for something that cannot be undone
+        readonly property color tint: danger ? App.Style.statusDanger : accentColor
         signal clicked()
         implicitWidth: Math.max(btnText.implicitWidth + dp(20), dp(44))
         implicitHeight: Math.max(btnText.implicitHeight + dp(10), dp(40))
         radius: dpMin(6, 2)
-        color: btnMouse.pressed ? Qt.rgba(accentColor.r, accentColor.g, accentColor.b, 0.3) : "transparent"
-        border.color: accentColor
+        color: btnMouse.pressed ? Qt.rgba(btn.tint.r, btn.tint.g, btn.tint.b, 0.3) : "transparent"
+        border.color: btn.tint
         border.width: 1
         Text {
             id: btnText
             anchors.centerIn: parent
             text: btn.text
-            color: accentColor
+            color: btn.tint
             font.pixelSize: App.Spacing.overallText * 0.75
             font.bold: true
             font.family: tripHistoryPage.globalFont

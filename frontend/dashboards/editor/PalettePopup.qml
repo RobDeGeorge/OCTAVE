@@ -77,11 +77,13 @@ Popup {
         id: chip
         property string text: ""
         property bool checked: false
+        property bool danger: false   // an armed delete: the theme's danger colour
         signal clicked()
         implicitHeight: gallery.dp(44)
         implicitWidth: chipText.implicitWidth + gallery.dp(28)
         radius: height / 2
-        color: checked ? App.Style.accent
+        color: danger ? App.Style.statusDanger
+               : checked ? App.Style.accent
                : chipMouse.pressed ? Qt.lighter(App.Style.obdBoxBackground, 1.3)
                : Qt.darker(App.Style.obdBoxBackground, 1.25)
         border.width: checked ? 0 : 1
@@ -90,9 +92,9 @@ Popup {
             id: chipText
             anchors.centerIn: parent
             text: chip.text
-            color: chip.checked ? App.Style.obdBoxBackground : App.Style.primaryTextColor
+            color: chip.danger ? "white" : chip.checked ? App.Style.obdBoxBackground : App.Style.primaryTextColor
             font.family: App.Style.fontFamily
-            font.bold: chip.checked
+            font.bold: chip.checked || chip.danger
             font.pixelSize: App.Spacing.overallText * 0.9
         }
         MouseArea { id: chipMouse; anchors.fill: parent; onClicked: chip.clicked() }
@@ -311,11 +313,26 @@ Popup {
                                 }
                             }
                             Chip {
+                                id: presetDelete
                                 objectName: "palettePresetDelete"
-                                text: "×"
+                                // A saved widget is gone for good: two taps
+                                property bool armed: false
+                                onVisibleChanged: if (!visible) armed = false
+                                Timer { id: presetDeleteTimer; interval: 4000; onTriggered: presetDelete.armed = false }
+                                text: armed ? "Delete?" : "×"
+                                danger: armed
                                 implicitHeight: gallery.dp(36)
-                                implicitWidth: gallery.dp(36)
-                                onClicked: dashboardManager.deleteWidgetPreset(modelData.preset.id)
+                                implicitWidth: armed ? Math.max(gallery.dp(36), implicitHeight * 2.2) : gallery.dp(36)
+                                onClicked: {
+                                    if (!armed) {
+                                        armed = true
+                                        presetDeleteTimer.restart()
+                                        return
+                                    }
+                                    armed = false
+                                    presetDeleteTimer.stop()
+                                    dashboardManager.deleteWidgetPreset(modelData.preset.id)
+                                }
                             }
                         }
                     }

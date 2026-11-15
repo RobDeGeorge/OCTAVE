@@ -939,9 +939,19 @@ Flickable {
                             // SettingsButton has no height of its own
                             Layout.preferredHeight: App.Spacing.formElementHeight
                         }
+                        // Signing out drops the saved session: two taps.
+                        // Cancelling a sign-in that has not finished loses
+                        // nothing and stays one.
+                        ConfirmButton {
+                            visible: spotifyCard.signedIn
+                            label: "Sign Out"
+                            confirmLabel: "Confirm sign out"
+                            onConfirmed: spotifyManager.signOut()
+                            Layout.preferredHeight: App.Spacing.formElementHeight
+                        }
                         SettingsButton {
-                            visible: spotifyCard.signedIn || spotifyCard.signingIn
-                            text: spotifyCard.signedIn ? "Sign Out" : "Cancel"
+                            visible: !spotifyCard.signedIn && spotifyCard.signingIn
+                            text: "Cancel"
                             onClicked: spotifyManager.signOut()
                             Layout.preferredHeight: App.Spacing.formElementHeight
                         }

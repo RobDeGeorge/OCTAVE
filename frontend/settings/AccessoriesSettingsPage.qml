@@ -1494,8 +1494,8 @@ Flickable {
                         spacing: pageRoot.dp(6)
 
                         Text {
-                            text: "Reset to Defaults"
-                            color: App.Style.primaryTextColor
+                            text: resetArea.armed ? "Tap again to reset" : "Reset to Defaults"
+                            color: resetArea.armed ? App.Style.statusDanger : App.Style.primaryTextColor
                             font.pixelSize: App.Spacing.overallText
                             font.family: App.Style.fontFamily
                             anchors.verticalCenter: parent.verticalCenter
@@ -1506,7 +1506,19 @@ Flickable {
                         id: resetArea
                         anchors.fill: parent
                         hoverEnabled: true
+                        // Every gesture's assignment goes: two taps, as
+                        // ConfirmButton does it
+                        property bool armed: false
+                        onVisibleChanged: if (!visible) armed = false
+                        Timer { id: resetArmTimer; interval: 4000; onTriggered: resetArea.armed = false }
                         onClicked: {
+                            if (!armed) {
+                                armed = true
+                                resetArmTimer.restart()
+                                return
+                            }
+                            armed = false
+                            resetArmTimer.stop()
                             if (typeof gestureSensor !== "undefined" && gestureSensor) {
                                 gestureSensor.resetMappingToDefaults()
                             }
@@ -1620,12 +1632,13 @@ Flickable {
 
                         Item { Layout.fillWidth: true }
 
-                        SettingsButton {
-                            text: "Forget"
-                            buttonColor: App.Style.statusError
+                        ConfirmButton {
+                            label: "Forget"
+                            confirmLabel: "Confirm forget"
+                            idleColor: App.Style.statusError
                             Layout.preferredHeight: pageRoot.dp(56)
                             visible: wirelessSection.remembered !== ""
-                            onClicked: {
+                            onConfirmed: {
                                 wirelessSection.resultOk = true
                                 wirelessSection.resultText = "Forgot " + wirelessSection.remembered
                                     + ". To revoke it completely, remove OCTAVE from the phone's paired devices."
@@ -2290,10 +2303,11 @@ Flickable {
                             Layout.preferredHeight: pageRoot.dp(48)
                             onClicked: airPlayCategory.ap.pairTouch(!airPlayCategory.ap.touchPairing)
                         }
-                        SettingsButton {
-                            text: "Forget paired iPhones"
+                        ConfirmButton {
+                            label: "Forget paired iPhones"
+                            confirmLabel: "Confirm: forget all"
                             Layout.preferredHeight: pageRoot.dp(48)
-                            onClicked: if (airPlayCategory.ap) airPlayCategory.ap.forgetDevices()
+                            onConfirmed: if (airPlayCategory.ap) airPlayCategory.ap.forgetDevices()
                         }
                     }
                 }

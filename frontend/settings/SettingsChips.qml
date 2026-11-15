@@ -305,8 +305,8 @@ Flow {
                     Rectangle {
                         id: textDeleteBtn
                         visible: chipWrapper.isDeletable && !chipWrapper.hasImage && !chipWrapper.hasPalette && !chipWrapper.hasFont
-                        // Wide enough to hit on purpose and miss on purpose:
-                        // it deletes at one tap
+                        // Wide enough to hit on purpose; it asks first,
+                        // with the same popup as the picture chips
                         width: Math.max(textDeleteBtnText.width + dp(8), dp(36))
                         height: parent.height
                         color: "transparent"
@@ -329,7 +329,10 @@ Flow {
                             anchors.fill: parent
                             hoverEnabled: true
                             z: 10
-                            onClicked: control.onItemDeleted(modelData)
+                            onClicked: {
+                                deletePopup.targetItem = modelData
+                                deletePopup.open()
+                            }
                         }
                     }
                 }

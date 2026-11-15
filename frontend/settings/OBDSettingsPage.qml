@@ -1094,6 +1094,11 @@ Item {
                     model: settingsManager ? settingsManager.obdSavedAdapters : []
 
                     delegate: Rectangle {
+                        id: savedChip
+                        // Removing a saved adapter takes two taps on the X
+                        property bool removeArmed: false
+                        onVisibleChanged: if (!visible) removeArmed = false
+                        Timer { id: savedChipArmTimer; interval: 4000; onTriggered: savedChip.removeArmed = false }
                         height: dp(32)
                         width: chipLayout.implicitWidth + dp(20)
                         radius: dpMin(16, 2)
@@ -1118,9 +1123,10 @@ Item {
                             }
 
                             Text {
-                                text: "✕"
-                                color: App.Style.secondaryTextColor
+                                text: savedChip.removeArmed ? "Remove?" : "✕"
+                                color: savedChip.removeArmed ? App.Style.statusDanger : App.Style.secondaryTextColor
                                 font.pixelSize: App.Spacing.overallText * 0.8
+                                font.bold: savedChip.removeArmed
                                 font.family: App.Style.fontFamily
 
                                 MouseArea {
@@ -1128,6 +1134,13 @@ Item {
                                     anchors.fill: parent
                                     anchors.margins: -Math.max(dp(4), (dp(40) - parent.height) / 2)
                                     onClicked: {
+                                        if (!savedChip.removeArmed) {
+                                            savedChip.removeArmed = true
+                                            savedChipArmTimer.restart()
+                                            return
+                                        }
+                                        savedChip.removeArmed = false
+                                        savedChipArmTimer.stop()
                                         if (settingsManager && modelData.mac) {
                                             settingsManager.remove_obd_saved_adapter(modelData.mac)
                                         }
