@@ -231,9 +231,18 @@ const DENSITIES = { coarse: [4, 3], normal: [6, 4], fine: [12, 8] };
 // The car screen the sizes are worked out for (dp, as the in-app editor's
 // canvas): 1280 x 720 with the renderer's 20 dp margins and 16 dp gaps
 const STAGE = { w: 1280, h: 680, margin: 20, spacing: 16 };
+// One cell of a cols x rows grid on that screen, upright or not: what the
+// app's own size rules (minSpan, sizeOptions) are asked about
+function stageCell(cols, rows, upright) {
+  const w = upright ? STAGE.h : STAGE.w, h = upright ? STAGE.w : STAGE.h;
+  return { cw: (w - 2 * STAGE.margin - STAGE.spacing * (cols - 1)) / cols,
+           ch: (h - 2 * STAGE.margin - STAGE.spacing * (rows - 1)) / rows };
+}
+const MAX_UNDO = 50;   // as the in-app editor (DashboardEditor.maxUndo)
 
 let octave;
-const S = { catalog: { widgets: [] }, types: {}, params: {}, groups: [], supported: null, dashboards: [], templates: [] };
+const S = { catalog: { widgets: [] }, types: {}, params: {}, groups: [], supported: null, dashboards: [], templates: [],
+            schema: 2 };   // schema: the newest spec this car can read (dashboardManager.supportedSchema)
 let E = null;   // the dashboard being edited
 
 // ── values ─────────────────────────────────────────────────────────────────
@@ -252,19 +261,45 @@ function fmt(id, v) {
   const p = S.params[id];
   return v.toFixed(p ? p.decimals : 1);
 }
-function limit(v) { const n = v === undefined || v === null || v === "" ? NaN : Number(v); return isFinite(n) ? n : NaN; }
-function alertLevel(v, p) {
+// A limit from a spec: a number, or unset. JSON has no NaN, so a spec says
+// "NaN" (the string) for unset, as the app's renderer reads it.
+function limit(v) {
+  if (v === undefined || v === null || v === "" || v === "NaN") return NaN;
+  const n = Number(v);
+  return isFinite(n) ? n : NaN;
+}
+// The gauges' alert rule (frontend/gauges/AlertLevel.js: level, margin,
+// levelHeld), kept in step by hand: a level is entered at its limit and left
+// once the value is back inside it by the hold, so a reading at a limit
+// does not flicker here either. `prev` is the level the cell showed last.
+function plainLevel(v, wa, wb, ca, cb) {
   if (typeof v !== "number" || !isFinite(v)) return 0;
-  const ca = limit(p.critAbove), cb = limit(p.critBelow), wa = limit(p.warnAbove), wb = limit(p.warnBelow);
   if ((isFinite(ca) && v >= ca) || (isFinite(cb) && v <= cb)) return 2;
   if ((isFinite(wa) && v >= wa) || (isFinite(wb) && v <= wb)) return 1;
   return 0;
+}
+function alertLevel(v, p, param, prev) {
+  const ca = limit(p.critAbove), cb = limit(p.critBelow), wa = limit(p.warnAbove), wb = limit(p.warnBelow);
+  const now = plainLevel(v, wa, wb, ca, cb);
+  if (!(prev > now) || typeof v !== "number" || !isFinite(v)) return now;
+  const min = isFinite(limit(p.min)) ? limit(p.min) : (param ? param.min : NaN);
+  const max = isFinite(limit(p.max)) ? limit(p.max) : (param ? param.max : NaN);
+  const decimals = Math.max(0, Math.min(4, p.decimals !== undefined ? Number(p.decimals) || 0 : 0));
+  const own = limit(p.alertHysteresis);
+  const hold = isFinite(own) && own >= 0 ? own
+             : Math.max(Math.pow(10, -decimals), isFinite(min) && isFinite(max) && max > min ? (max - min) * 0.01 : 0);
+  if (!(hold > 0)) return now;
+  return Math.max(now, Math.min(prev, plainLevel(v, wa - hold, wb + hold, ca - hold, cb + hold)));
 }
 
 // ── list ───────────────────────────────────────────────────────────────────
 function miniature(spec) {
   const box = el("div", { class: "thumb" });
-  if (spec && spec.thumbnail) { box.append(el("img", { src: spec.thumbnail, alt: "" })); return box; }
+  // Only a picture carried in the spec itself: never an address to fetch
+  if (spec && typeof spec.thumbnail === "string" && /^data:image\/(png|jpeg|webp);base64,/.test(spec.thumbnail)) {
+    box.append(el("img", { src: spec.thumbnail, alt: "" }));
+    return box;
+  }
   const cols = (spec && spec.gridColumns) || 12, rows = (spec && spec.gridRows) || 6;
   for (const c of (spec && spec.cells) || []) {
     const m = el("div", { class: "mini" });
@@ -288,7 +323,12 @@ async function showList() {
     const spec = await octave.call(DM, "loadDashboard", [d.id]);
     const name = el("div", { class: "name" }, d.label, d.builtIn ? el("span", { class: "badge" }, "built-in") : null);
     const actions = el("div", { class: "row" });
-    if (d.builtIn) {
+    // A newer version's file: saving it from here would strip what this
+    // version does not know (the in-app editor refuses it the same way)
+    const tooNew = spec && Number(spec.schema) > S.schema;
+    if (tooNew) {
+      actions.append(el("span", { class: "note" }, "Needs a newer version of OCTAVE to edit"));
+    } else if (d.builtIn) {
       actions.append(el("button", { onclick: () => openEditor(spec, { customize: true }) }, "Customize"));
     } else {
       actions.append(el("button", { class: "primary", onclick: () => openEditor(spec, { id: d.id }) }, "Edit"));
@@ -360,13 +400,14 @@ function snapshot() { return JSON.stringify({ cols: E.cols, rows: E.rows, cells:
 function record() {
   E.history = E.history.slice(0, E.at + 1);
   E.history.push(snapshot());
-  if (E.history.length > 60) E.history.shift();
+  while (E.history.length > MAX_UNDO + 1) E.history.shift();
   E.at = E.history.length - 1;
   E.dirty = true;
   changed();
 }
 function restore(i) {
   const s = JSON.parse(E.history[i]);
+  levels.length = 0;
   Object.assign(E, s);
   E.at = i;
   E.sel = Math.min(E.sel, E.cells.length - 1);
@@ -387,6 +428,7 @@ function openEditor(spec, how = {}) {
     cells: (spec.cells || []).map((c) => Object.assign({}, c, { props: Object.assign({}, c.props || {}) })),
     portrait: null, mode: "landscape", sel: -1, history: [], at: -1, dirty: !!how.customize || !how.id,
   };
+  levels.length = 0;
   E.when = Object.assign({ paramId: "" }, spec.showWhen || {});
   const p = spec.layouts && spec.layouts.portrait;
   if (p) E.portrait = { cols: p.gridColumns, rows: p.gridRows, cells: p.cells.map((c) => Object.assign({}, c)) };
@@ -466,7 +508,7 @@ function changed(first) {
   $("ed-layout").setAttribute("aria-pressed", String(E.mode === "portrait"));
   $("ed-density").disabled = E.mode === "portrait";
   drawCanvas();
-  drawPanel();
+  schedulePanel();
   followParams([...new Set(E.cells.map((c) => c.paramId).filter(Boolean)).values()]);
   if (!first || E.dirty) schedulePreview();
 }
@@ -488,6 +530,25 @@ async function endPreview() {
   try { await octave.call(DM, "endPreview"); } catch {}
 }
 
+// The panel is built again after an edit, but not inside the edit's own
+// event: a field's "change" arrives while focus is still moving to the next
+// field, and rebuilding there threw that field away, so every Tab landed
+// nowhere. After the event the field that has focus is found again by its
+// data-k and focused in the new panel.
+let panelTimer = null;
+function schedulePanel() {
+  clearTimeout(panelTimer);
+  panelTimer = setTimeout(() => {
+    if (!E) return;
+    const at = document.activeElement;
+    const k = at && $("panel").contains(at) ? at.dataset.k : undefined;
+    drawPanel();
+    if (k === undefined) return;
+    const again = [...$("panel").querySelectorAll("[data-k]")].find((n) => n.dataset.k === k);
+    if (again) { again.focus(); if (again.select && again.type !== "checkbox") again.select(); }
+  }, 0);
+}
+
 function say(text, bad) { $("msg").textContent = text || ""; $("msg").className = bad ? "note err" : "note"; }
 
 // ── canvas ─────────────────────────────────────────────────────────────────
@@ -502,6 +563,7 @@ function place(node, c, g) {
   Object.assign(node.style, { left: (c.col * g.cw + pad) + "px", top: (c.row * g.ch + pad) + "px",
     width: (c.colSpan * g.cw - 2 * pad) + "px", height: (c.rowSpan * g.ch - 2 * pad) + "px" });
 }
+const levels = [];   // the alert level each cell showed last, by index
 function drawCanvas() {
   canvas.classList.toggle("portrait", E.mode === "portrait");
   const g = geometry();
@@ -523,7 +585,8 @@ function drawCanvas() {
                                                + (c.paramId && S.params[c.paramId] && S.params[c.paramId].unit
                                                   ? " · " + S.params[c.paramId].unit : "")),
                     el("div", { class: "grip", "data-grip": i }));
-    const lvl = alertLevel(live[c.paramId], props);
+    const lvl = alertLevel(live[c.paramId], props, S.params[c.paramId], levels[i] || 0);
+    levels[i] = lvl;
     if (lvl) node.classList.add(lvl === 2 ? "crit" : "warn");
     place(node, c, g);
     canvas.append(node);
@@ -532,10 +595,12 @@ function drawCanvas() {
 function refreshValues() {
   if (!E) return;
   for (const node of canvas.querySelectorAll(".cell")) {
-    const c = E.cells[Number(node.dataset.i)];
+    const i = Number(node.dataset.i);
+    const c = E.cells[i];
     if (!c || !c.paramId) continue;
     node.querySelector(".v").textContent = fmt(c.paramId, live[c.paramId]);
-    const lvl = alertLevel(live[c.paramId], c.props || {});
+    const lvl = alertLevel(live[c.paramId], c.props || {}, S.params[c.paramId], levels[i] || 0);
+    levels[i] = lvl;
     node.classList.toggle("warn", lvl === 1);
     node.classList.toggle("crit", lvl === 2);
   }
@@ -548,11 +613,22 @@ canvas.addEventListener("pointerdown", (ev) => {
   const node = ev.target.closest(".cell");
   if (!node) { E.sel = -1; changed(true); return; }
   const i = Number(node.dataset.i);
-  if (E.sel !== i) { E.sel = i; drawCanvas(); drawPanel(); }
+  if (E.sel !== i) { E.sel = i; drawCanvas(); schedulePanel(); }
   const g = geometry();
   const c = g.L.cells[i];
-  drag = { i, resize: !!ev.target.dataset.grip, x0: ev.clientX, y0: ev.clientY, c, g, to: null, moved: false };
+  const resize = !!ev.target.dataset.grip;
+  const mine = drag = { i, resize, x0: ev.clientX, y0: ev.clientY, c, g, to: null, moved: false,
+                        floor: { colSpan: 1, rowSpan: 1 } };
   canvas.setPointerCapture(ev.pointerId);
+  // A resize stops at the smallest size the widget is still readable at
+  // (the app's rule, as its own editor), never above the size it has
+  if (resize) {
+    const cell = stageCell(g.L.cols, g.L.rows, E.mode === "portrait");
+    octave.call(DM, "minSpan", [c.type, g.L.cols, g.L.rows, cell.cw, cell.ch, STAGE.spacing]).then((least) => {
+      if (drag !== mine || !least) return;
+      mine.floor = { colSpan: Math.min(least.colSpan || 1, c.colSpan), rowSpan: Math.min(least.rowSpan || 1, c.rowSpan) };
+    }).catch(() => {});
+  }
 });
 canvas.addEventListener("pointermove", (ev) => {
   if (!drag) return;
@@ -563,8 +639,8 @@ canvas.addEventListener("pointermove", (ev) => {
   let to;
   if (drag.resize) {
     to = { col: c.col, row: c.row,
-           colSpan: Math.max(1, Math.min(g.L.cols - c.col, Math.round(c.colSpan + dx / g.cw))),
-           rowSpan: Math.max(1, Math.min(g.L.rows - c.row, Math.round(c.rowSpan + dy / g.ch))) };
+           colSpan: Math.max(drag.floor.colSpan, Math.min(g.L.cols - c.col, Math.round(c.colSpan + dx / g.cw))),
+           rowSpan: Math.max(drag.floor.rowSpan, Math.min(g.L.rows - c.row, Math.round(c.rowSpan + dy / g.ch))) };
   } else {
     to = { col: Math.max(0, Math.min(g.L.cols - c.colSpan, Math.round(c.col + dx / g.cw))),
            row: Math.max(0, Math.min(g.L.rows - c.rowSpan, Math.round(c.row + dy / g.ch))),
@@ -600,8 +676,7 @@ window.addEventListener("resize", () => { if (E) drawCanvas(); });
 
 // ── edits ──────────────────────────────────────────────────────────────────
 async function newSpans(type, cols, rows) {
-  const cw = (STAGE.w - 2 * STAGE.margin - STAGE.spacing * (cols - 1)) / cols;
-  const ch = (STAGE.h - 2 * STAGE.margin - STAGE.spacing * (rows - 1)) / rows;
+  const { cw, ch } = stageCell(cols, rows, false);
   const opts = await octave.call(DM, "sizeOptions", [type, cols, rows, cw, ch, STAGE.spacing]);
   const least = await octave.call(DM, "minSpan", [type, cols, rows, cw, ch, STAGE.spacing]);
   const out = [];
@@ -649,6 +724,7 @@ async function duplicate(i) {
 }
 function remove(i) {
   E.cells.splice(i, 1);
+  levels.splice(i, 1);
   if (E.portrait) E.portrait.cells.splice(i, 1);
   E.sel = -1;
   record();
@@ -667,11 +743,9 @@ async function setDensity(name) {
   E.cells = r.cells;
   E.cols = cols;
   E.rows = rows;
-  if (E.portrait) {
-    const d = await octave.call(DM, "derivePortrait", [E.cells, cols, rows]);
-    E.portrait = { cols: d.gridColumns, rows: d.gridRows, cells: d.cells };
-    say("The portrait layout was worked out again for the new grid");
-  }
+  // The portrait layout has its own grid and is the user's arrangement: a
+  // new landscape grid leaves it alone, as in the in-app editor. (It used
+  // to be worked out again here, discarding a hand-arranged layout.)
   record();
 }
 async function toggleLayout() {
@@ -696,7 +770,23 @@ async function save() {
   if (!id) { say(await octave.get(DM, "lastError") || "Save failed", true); return; }
   E.id = id;
   E.base.id = id;
+  // Carry on from what the car stored (values it clamped, options it
+  // dropped), not from what was sent
+  const stored = await octave.call(DM, "loadDashboard", [id]);
+  if (stored && stored.cells) {
+    E.base = Object.assign({}, stored);
+    E.cols = stored.gridColumns || E.cols;
+    E.rows = stored.gridRows || E.rows;
+    E.cells = stored.cells.map((c) => Object.assign({}, c, { props: Object.assign({}, c.props || {}) }));
+    const sp = stored.layouts && stored.layouts.portrait;
+    E.portrait = sp ? { cols: sp.gridColumns, rows: sp.gridRows, cells: sp.cells.map((c) => Object.assign({}, c)) } : null;
+    if (!E.portrait) E.mode = "landscape";
+    E.sel = Math.min(E.sel, E.cells.length - 1);
+    E.history = [snapshot()];
+    E.at = 0;
+  }
   E.dirty = false;
+  changed(true);
   await endPreview();
   $("ed-preview").checked = false;
   say(`Saved "${spec.label}". On the car it is in the dashboards list.`);
@@ -704,10 +794,21 @@ async function save() {
 
 // ── panel ──────────────────────────────────────────────────────────────────
 function field(label, input) { return el("div", { class: "field" }, el("label", {}, label), input); }
+// A number field. `attrs.min` / `attrs.max` (an option's range from the
+// catalog) are enforced here, not left to the browser's hint: a value typed
+// outside them is brought to the nearest end before it reaches the spec.
 function numberInput(value, onset, attrs = {}) {
-  const n = el("input", Object.assign({ type: "number", step: "any", value: value === undefined ? "" : value,
-                                        placeholder: "default" }, attrs));
-  n.addEventListener("change", () => onset(n.value.trim() === "" ? undefined : Number(n.value)));
+  const shown = value === undefined || value === "NaN" ? "" : value;
+  const n = el("input", Object.assign({ type: "number", step: "any", value: shown, placeholder: "default" }, attrs));
+  n.addEventListener("change", () => {
+    if (n.value.trim() === "") { onset(undefined); return; }
+    let v = Number(n.value);
+    if (!isFinite(v)) { n.value = shown; return; }
+    if (typeof attrs.min === "number" && v < attrs.min) v = attrs.min;
+    if (typeof attrs.max === "number" && v > attrs.max) v = attrs.max;
+    if (String(v) !== n.value) n.value = v;
+    onset(v);
+  });
   return n;
 }
 function pidSelect(current, kinds, onset, placeholder) {
@@ -743,8 +844,11 @@ function drawPanel() {
     if (!id) return;
     const p = S.params[id];
     const sug = S.catalog.suggestions || {};
-    let type = (sug.byId || {})[id] || (sug.byKind || {})[p.kind] || "DigitalReadout";
-    if (!S.types[type]) type = "DigitalReadout";
+    // As WidgetCatalog.suggestFor: the catalog's pick by id, else by kind
+    // when that widget can show the kind, else a plain readout
+    const shows = (t, kind) => !!S.types[t] && (S.types[t].supportedKinds || []).some((k) => k === "*" || k === kind);
+    const byId = (sug.byId || {})[id], byKind = (sug.byKind || {})[p.kind];
+    const type = byId && S.types[byId] ? byId : (byKind && shows(byKind, p.kind) ? byKind : "DigitalReadout");
     addWidget(type, id);
   }, "…or pick a value to show");
   panel.append(el("div", { style: "margin-top:8px" }, byData));
@@ -755,22 +859,25 @@ function drawPanel() {
   const meta = S.types[c.type] || { displayName: c.type, editableProps: [], supportedKinds: [] };
   const props = c.props || {};
   panel.append(el("h3", {}, meta.displayName));
-  if ((meta.supportedKinds || []).length)
-    panel.append(field("Data", pidSelect(c.paramId, meta.supportedKinds, (id) => {
+  if ((meta.supportedKinds || []).length) {
+    const data = pidSelect(c.paramId, meta.supportedKinds, (id) => {
       E.cells[i] = Object.assign({}, E.cells[i], { paramId: id });
       record();
-    })));
+    });
+    data.dataset.k = "data";
+    panel.append(field("Data", data));
+  }
   if (meta.labelProps) {
     for (const [k, label] of [["title", "Title"], ["unit", "Unit"]]) {
-      const t = el("input", { type: "text", value: props[k] || "", placeholder: "from the value" });
+      const t = el("input", { type: "text", value: props[k] || "", placeholder: "from the value", "data-k": "label:" + k });
       t.addEventListener("change", () => setProp(i, k, t.value.trim() || undefined));
       panel.append(field(label, t));
     }
   }
   if (meta.rangeProps) {
     const unit = c.paramId && S.params[c.paramId] ? ` (${S.params[c.paramId].unit})` : "";
-    panel.append(field("Min" + unit, numberInput(props.min, (v) => setProp(i, "min", v))));
-    panel.append(field("Max" + unit, numberInput(props.max, (v) => setProp(i, "max", v))));
+    panel.append(field("Min" + unit, numberInput(props.min, (v) => setProp(i, "min", v), { "data-k": "range:min" })));
+    panel.append(field("Max" + unit, numberInput(props.max, (v) => setProp(i, "max", v), { "data-k": "range:max" })));
   }
   if ((meta.colorProps || []).length) {
     const sw = el("div", { class: "swatches" });
@@ -814,6 +921,7 @@ function drawPanel() {
         input = el("input", { type: "text", value: v === undefined ? "" : v, placeholder: p.def || "" });
         input.addEventListener("change", () => setProp(i, p.key, input.value === "" ? undefined : input.value));
       }
+      input.dataset.k = "prop:" + p.key;
       const unit = p.paramUnit && c.paramId && S.params[c.paramId] ? ` (${S.params[c.paramId].unit})` : "";
       panel.append(field(p.label + unit, input));
     }
@@ -839,11 +947,13 @@ function drawOptions(panel) {
   panel.append(el("p", { class: "note" }, "Show this dashboard by itself when a value passes a limit (on the car's "
                                          + "dashboards page, with the car connected). The one before comes back after."));
   const edited = () => { E.dirty = true; schedulePreview(); };
-  panel.append(field("When", pidSelect(w.paramId, null, (id) => { w.paramId = id; edited(); drawPanel(); }, "Off")));
+  const when = pidSelect(w.paramId, null, (id) => { w.paramId = id; edited(); schedulePanel(); }, "Off");
+  when.dataset.k = "when:pid";
+  panel.append(field("When", when));
   if (w.paramId) {
     const unit = S.params[w.paramId] ? ` (${S.params[w.paramId].unit})` : "";
-    panel.append(field("At or above" + unit, numberInput(w.above, (v) => { w.above = v; edited(); })));
-    panel.append(field("At or below" + unit, numberInput(w.below, (v) => { w.below = v; edited(); })));
+    panel.append(field("At or above" + unit, numberInput(w.above, (v) => { w.above = v; edited(); }, { "data-k": "when:above" })));
+    panel.append(field("At or below" + unit, numberInput(w.below, (v) => { w.below = v; edited(); }, { "data-k": "when:below" })));
   }
 }
 
@@ -877,6 +987,7 @@ async function main() {
   $("status").className = "up";
 
   S.catalog = await octave.get(DM, "widgetCatalog");
+  try { S.schema = Number(await octave.get(DM, "supportedSchema")) || S.schema; } catch {}
   for (const w of S.catalog.widgets || []) S.types[w.type] = w;
   for (const p of await octave.get("parameterCatalog", "parameters")) S.params[p.id] = p;
   S.groups = await octave.get("parameterCatalog", "groups");

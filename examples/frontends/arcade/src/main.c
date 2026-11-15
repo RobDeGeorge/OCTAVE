@@ -108,8 +108,10 @@ static void keep_token(App *a)
             snprintf(a->ui.token_note, sizeof a->ui.token_note, "PAIRED, CANNOT SAVE TOKEN");
         }
     } else {
-        printf("paired; token: %s\n", link_token(a->link));
-        snprintf(a->ui.token_note, sizeof a->ui.token_note, "PAIRED, TOKEN ON STDOUT");
+        /* The token is a credential: it is never printed (stdout ends up in logs).
+         * Without a file to keep it in, the pairing lasts for this run. */
+        fprintf(stderr, "paired for this run only: pass --token-file PATH to keep the pairing\n");
+        snprintf(a->ui.token_note, sizeof a->ui.token_note, "PAIRED FOR THIS RUN, NO --TOKEN-FILE");
     }
 #endif
 }

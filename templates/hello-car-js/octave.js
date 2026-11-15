@@ -1,4 +1,4 @@
-// The whole protocol in 60 lines (docs/api/protocol.json): one WebSocket,
+// The whole protocol in 70 lines (docs/api/protocol.json): one WebSocket,
 // JSON text frames, replies matched to requests by id, events to a handler.
 // Works in a browser and in Node 22+ (both have WebSocket). Copy it as is.
 export class Octave {
@@ -15,26 +15,35 @@ export class Octave {
     return new Promise((resolve, reject) => {
       this.ws = new WebSocket(this.url)
       this.ws.onerror = () => reject(new Error(`cannot reach ${this.url}`))
-      this.ws.onclose = () => { for (const p of this.pending.values()) p.reject(new Error('connection closed')); this.pending.clear(); this.onclose() }
+      this.ws.onclose = () => { this.failAll(new Error('connection closed')); this.onclose() }
       this.ws.onmessage = (m) => {
         if (typeof m.data !== 'string') return   // a media record: not used here
         const msg = JSON.parse(m.data)
         if ('event' in msg) { for (const h of this.handlers) h(msg); return }
+        const failure = () => Object.assign(new Error(msg.error), { code: msg.code, retryAfterMs: msg.retryAfterMs })
+        // A refusal with no id answers a line OCTAVE could not read: every waiting request fails
+        if (msg.ok === false && msg.id === undefined) { this.failAll(failure()); return }
         const p = this.pending.get(msg.id)
         if (!p) return
         this.pending.delete(msg.id)
+        clearTimeout(p.timer)
         if (msg.ok) p.resolve(msg.result)
-        else { const e = new Error(msg.error); e.code = msg.code; p.reject(e) }
+        else p.reject(failure())
       }
       this.ws.onopen = () => this.request('hello', token ? { token } : {}).then(resolve, reject)
     })
   }
 
-  /** Any op: the reply's result, or a rejection with the server's error. */
-  request(op, args = {}) {
+  failAll(error) { for (const p of this.pending.values()) { clearTimeout(p.timer); p.reject(error) } this.pending.clear() }
+
+  /** Any op: the reply's result, or a rejection with the server's error (`code`, and
+   *  `retryAfterMs` with "rateLimited"), "not connected", or no answer in 30 s. */
+  request(op, args = {}, timeoutMs = 30000) {
     const id = this.nextId++
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject })
+      if (this.ws?.readyState !== WebSocket.OPEN) { reject(new Error('not connected')); return }
+      const timer = setTimeout(() => { if (this.pending.delete(id)) reject(new Error(`${op} was not answered`)) }, timeoutMs)
+      this.pending.set(id, { resolve, reject, timer })
       this.ws.send(JSON.stringify({ op, id, ...args }))
     })
   }

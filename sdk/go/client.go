@@ -18,6 +18,7 @@ package octave
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -25,19 +26,30 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
-// ProtocolVersions are the versions this client can talk to: 1 (no pairing),
-// 2, which only adds to it, and 3, which drops downloadManager.
-var ProtocolVersions = []int{1, 2, 3}
+// ProtocolVersions are the versions this client can talk to: every one up
+// to the generated ProtocolVersion (1 no pairing, 2 which only adds to it,
+// 3 which drops downloadManager). Derived from the generated constant, so
+// regenerating protocol_gen.go moves both.
+var ProtocolVersions = func() []int {
+	v := make([]int, ProtocolVersion)
+	for i := range v {
+		v[i] = i + 1
+	}
+	return v
+}()
 
 // Error is a failure reply: Message is the server's `error`, Code its stable
-// code when it has one (CodeUnauthorised), else "".
+// code when it has one (CodeUnauthorised), else "". RetryAfterMs comes with
+// CodeRateLimited: when the next op would pass (0 otherwise).
 type Error struct {
-	Op      string
-	Message string
-	Code    string
+	Op           string
+	Message      string
+	Code         string
+	RetryAfterMs int
 }
 
 func (e *Error) Error() string {
@@ -104,8 +116,14 @@ func WithoutVersionCheck() Option { return func(c *Client) { c.anyVersion = true
 
 // Client is one connection. Requests may come from any goroutine; replies
 // are matched by id, so events (on Events) and records (on Records) can
-// arrive in between. Read Events and Records, or they fill up and the
-// reader blocks.
+// arrive in between.
+//
+// Events and Records are bounded (256 and 64). The reader never waits for
+// them: when one is full the OLDEST entry is dropped to make room, so a
+// program that stops reading keeps the newest state and its requests still
+// get their replies. DroppedEvents and DroppedRecords count what was lost.
+// After a dropped record a video decoder should wait for the next keyframe
+// (Record.Key).
 type Client struct {
 	conn       net.Conn
 	timeout    time.Duration
@@ -116,7 +134,9 @@ type Client struct {
 	// media record. Both close when the connection does.
 	Events  chan Event
 	Records chan Record
-	// Hello is the server's hello reply, from Dial.
+	// Hello is the server's hello reply, from Dial; Pair and Unpair update
+	// it. Read it through Trusted and Scopes when another goroutine may be
+	// pairing.
 	Hello HelloReply
 
 	mu      sync.Mutex
@@ -124,21 +144,32 @@ type Client struct {
 	nextID  int
 	pending map[int]chan rawReply
 	closed  bool
+	done    chan struct{} // closed when the reader has finished
+
+	droppedEvents  atomic.Uint64
+	droppedRecords atomic.Uint64
 }
 
 type rawReply struct {
-	ID     json.RawMessage `json:"id"`
-	OK     bool            `json:"ok"`
-	Result json.RawMessage `json:"result"`
-	Error  string          `json:"error"`
-	Code   string          `json:"code"`
-	Event  string          `json:"event"`
+	ID           json.RawMessage `json:"id"`
+	OK           bool            `json:"ok"`
+	Result       json.RawMessage `json:"result"`
+	Error        string          `json:"error"`
+	Code         string          `json:"code"`
+	RetryAfterMs int             `json:"retryAfterMs"`
+	Event        string          `json:"event"`
 }
+
+// DroppedEvents is how many events were dropped because Events was full.
+func (c *Client) DroppedEvents() uint64 { return c.droppedEvents.Load() }
+
+// DroppedRecords is how many media records were dropped because Records was full.
+func (c *Client) DroppedRecords() uint64 { return c.droppedRecords.Load() }
 
 // Dial connects to addr ("127.0.0.1:9876"), says hello, and checks the
 // protocol version unless WithoutVersionCheck.
 func Dial(addr string, opts ...Option) (*Client, error) {
-	c := &Client{timeout: 30 * time.Second, Events: make(chan Event, 256), Records: make(chan Record, 64), pending: map[int]chan rawReply{}}
+	c := &Client{timeout: 30 * time.Second, Events: make(chan Event, 256), Records: make(chan Record, 64), pending: map[int]chan rawReply{}, done: make(chan struct{})}
 	for _, o := range opts {
 		o(c)
 	}
@@ -152,10 +183,14 @@ func Dial(addr string, opts ...Option) (*Client, error) {
 	if c.token != "" {
 		args.Token = c.token
 	}
-	if err := c.Request("hello", args, &c.Hello); err != nil {
+	var hello HelloReply
+	if err := c.Request("hello", args, &hello); err != nil {
 		c.Close()
 		return nil, err
 	}
+	c.mu.Lock()
+	c.Hello = hello
+	c.mu.Unlock()
 	if !c.anyVersion {
 		known := false
 		for _, v := range ProtocolVersions {
@@ -172,24 +207,42 @@ func Dial(addr string, opts ...Option) (*Client, error) {
 // Trusted says whether ops will be accepted (protocol 1: always; protocol
 // 2: on this device with loopback open, or with a valid token). If not,
 // Pair.
-func (c *Client) Trusted() bool { return c.Hello.Auth == "" || c.Hello.Auth == "trusted" }
+func (c *Client) Trusted() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.Hello.Auth == "" || c.Hello.Auth == "trusted"
+}
 
-// Close ends the connection; Events and Records close, pending requests fail.
+// Close ends the connection and returns once the reader has stopped:
+// Events and Records are closed, pending requests have failed with
+// ErrClosed. Safe to call more than once and from any goroutine.
 func (c *Client) Close() error {
 	c.mu.Lock()
-	if c.closed {
-		c.mu.Unlock()
-		return nil
-	}
+	already := c.closed
 	c.closed = true
 	c.mu.Unlock()
-	return c.conn.Close()
+	var err error
+	if !already {
+		err = c.conn.Close()
+	}
+	<-c.done
+	return err
 }
 
 // Request sends any op with args (a generated <Op>Args, or a map) and
 // unmarshals the result into out (nil to ignore it). A failure reply is a
-// *Error.
+// *Error. It waits at most the client's timeout (WithTimeout).
 func (c *Client) Request(op string, args any, out any) error {
+	return c.RequestContext(context.Background(), op, args, out)
+}
+
+// RequestContext is Request that also ends when ctx does (with ctx.Err()).
+// The client's timeout still applies; a reply that arrives after either is
+// discarded.
+func (c *Client) RequestContext(ctx context.Context, op string, args any, out any) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	body := map[string]any{}
 	if args != nil {
 		b, err := json.Marshal(args)
@@ -222,25 +275,37 @@ func (c *Client) Request(op string, args any, out any) error {
 	if err != nil {
 		c.mu.Lock()
 		delete(c.pending, id)
+		closed := c.closed
 		c.mu.Unlock()
+		if closed {
+			return ErrClosed
+		}
 		return err
 	}
+	forget := func() {
+		c.mu.Lock()
+		delete(c.pending, id)
+		c.mu.Unlock()
+	}
+	timer := time.NewTimer(c.timeout)
+	defer timer.Stop()
 	select {
 	case r, ok := <-ch:
 		if !ok {
 			return ErrClosed
 		}
 		if !r.OK {
-			return &Error{Op: op, Message: r.Error, Code: r.Code}
+			return &Error{Op: op, Message: r.Error, Code: r.Code, RetryAfterMs: r.RetryAfterMs}
 		}
 		if out == nil || len(r.Result) == 0 || string(r.Result) == "null" {
 			return nil
 		}
 		return json.Unmarshal(r.Result, out)
-	case <-time.After(c.timeout):
-		c.mu.Lock()
-		delete(c.pending, id)
-		c.mu.Unlock()
+	case <-ctx.Done():
+		forget()
+		return ctx.Err()
+	case <-timer.C:
+		forget()
 		return fmt.Errorf("octave: %s: no reply within %s", op, c.timeout)
 	}
 }
@@ -339,8 +404,19 @@ func (c *Client) Pair(code, name string, scopes ...string) (string, error) {
 	if err := c.Request("pair", PairArgs{Code: code, Name: name, Scopes: scopes}, &r); err != nil {
 		return "", err
 	}
+	c.mu.Lock()
+	c.token = r.Token
 	c.Hello.Auth = "trusted"
 	c.Hello.Scopes = r.Scopes
+	c.mu.Unlock()
+	// An untrusted hello carries no App or Objects: ask again now that the
+	// connection is trusted. The pairing stands if this fails.
+	var hello HelloReply
+	if err := c.Request("hello", HelloArgs{Token: r.Token}, &hello); err == nil {
+		c.mu.Lock()
+		c.Hello = hello
+		c.mu.Unlock()
+	}
 	return r.Token, nil
 }
 
@@ -348,14 +424,27 @@ func (c *Client) Pair(code, name string, scopes ...string) (string, error) {
 // reported, or ["full"] on a protocol 1 server (which has no scopes), or
 // nothing while untrusted.
 func (c *Client) Scopes() []string {
-	if len(c.Hello.Scopes) > 0 || !c.Trusted() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.Hello.Scopes) > 0 || !(c.Hello.Auth == "" || c.Hello.Auth == "trusted") {
 		return c.Hello.Scopes
 	}
 	return []string{"full"}
 }
 
-// Unpair forgets this connection's own device.
-func (c *Client) Unpair() error { return c.Request("unpair", nil, nil) }
+// Unpair forgets this connection's own device; the connection is untrusted
+// afterwards (the app closes it).
+func (c *Client) Unpair() error {
+	if err := c.Request("unpair", nil, nil); err != nil {
+		return err
+	}
+	c.mu.Lock()
+	c.token = ""
+	c.Hello.Auth = "untrusted"
+	c.Hello.Scopes = nil
+	c.mu.Unlock()
+	return nil
+}
 
 // MediaTicket is a short-lived ticket for /art and /export URLs.
 func (c *Client) MediaTicket() (MediaTicketReply, error) {
@@ -389,7 +478,7 @@ func (c *Client) read() {
 				return
 			}
 			if rec, err := ParseRecord(buf); err == nil {
-				c.Records <- rec
+				c.pushRecord(rec)
 			}
 			continue
 		}
@@ -402,11 +491,24 @@ func (c *Client) read() {
 			return // not the protocol
 		}
 		if reply.Event != "" {
-			c.Events <- Event{Kind: reply.Event, Raw: json.RawMessage(append([]byte(nil), line...))}
+			c.pushEvent(Event{Kind: reply.Event, Raw: json.RawMessage(append([]byte(nil), line...))})
 			continue
 		}
 		var id int
-		if json.Unmarshal(reply.ID, &id) != nil {
+		if len(reply.ID) == 0 || json.Unmarshal(reply.ID, &id) != nil {
+			// A refusal with no id ("Invalid JSON", "request too long")
+			// answers a line the app could not read, so it cannot say which
+			// request that was: every waiting one gets it, rather than one
+			// of them waiting out its timeout
+			if !reply.OK && reply.Error != "" {
+				c.mu.Lock()
+				waiting := c.pending
+				c.pending = map[int]chan rawReply{}
+				c.mu.Unlock()
+				for _, ch := range waiting {
+					ch <- reply
+				}
+			}
 			continue
 		}
 		c.mu.Lock()
@@ -415,6 +517,39 @@ func (c *Client) read() {
 		c.mu.Unlock()
 		if ch != nil {
 			ch <- reply
+		}
+	}
+}
+
+// pushEvent and pushRecord never block: when the channel is full the oldest
+// entry goes (see Client). Only the reader goroutine sends, so after taking
+// one out there is room unless the consumer was faster, which is fine too.
+func (c *Client) pushEvent(ev Event) {
+	for {
+		select {
+		case c.Events <- ev:
+			return
+		default:
+		}
+		select {
+		case <-c.Events:
+			c.droppedEvents.Add(1)
+		default:
+		}
+	}
+}
+
+func (c *Client) pushRecord(rec Record) {
+	for {
+		select {
+		case c.Records <- rec:
+			return
+		default:
+		}
+		select {
+		case <-c.Records:
+			c.droppedRecords.Add(1)
+		default:
 		}
 	}
 }
@@ -431,4 +566,5 @@ func (c *Client) finish() {
 	}
 	close(c.Events)
 	close(c.Records)
+	close(c.done)
 }

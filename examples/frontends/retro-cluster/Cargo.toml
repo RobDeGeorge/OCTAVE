@@ -3,7 +3,7 @@ name = "retro-cluster"
 version = "0.1.0"
 edition = "2024"
 description = "An experimental OCTAVE frontend: a retro VFD instrument cluster in Rust + egui, over the service API"
-license = "GPL-3.0-or-later"
+license = "MIT"
 
 [dependencies]
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }

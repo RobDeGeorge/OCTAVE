@@ -46,17 +46,43 @@ def connect(host, port):
         os.remove(TOKEN_FILE)              # revoked or unknown: pair again
     while not octave.trusted:
         print("This machine is not the head unit. On OCTAVE open Settings > Service > Pair a device.")
-        code = input("The 6-digit code: ").strip().replace(" ", "")
         try:
-            token = octave.pair(code, NAME, scopes=["media"])   # play / pause only; readings are always allowed
+            code = input("The 6-digit code: ").strip().replace(" ", "")
+        except EOFError:
+            octave.close()
+            sys.exit("Not paired: the input ended before a pairing code was given.")
+        token = None
+        try:
+            for attempt in (1, 2):
+                if octave.closed:
+                    # OCTAVE closes a connection that has not paired after a minute without a word
+                    # from it, and fetching the code can take longer than that: connect again and
+                    # use the code just typed
+                    octave = Client(host, port)
+                    if octave.trusted:
+                        break
+                try:
+                    token = octave.pair(code, NAME, scopes=["media"])   # play / pause only; readings are always allowed
+                    break
+                except OctaveError:
+                    if attempt == 2 or not octave.closed:   # a refusal (wrong code, too fast), not a lost connection
+                        raise
         except OctaveError as e:
             print(f"  {e}")
             continue
-        with open(TOKEN_FILE, "w") as fh:
-            fh.write(token)
-        os.chmod(TOKEN_FILE, 0o600)
+        if token is None:
+            break                                # trusted without pairing after the reconnect
+        save_token(token)
         print(f"Paired with {octave.scopes}; the token is in {TOKEN_FILE}")
     return octave
+
+
+def save_token(token):
+    """Write the token readable by this user only, from the first byte on."""
+    if os.path.exists(TOKEN_FILE):
+        os.chmod(TOKEN_FILE, 0o600)
+    with os.fdopen(os.open(TOKEN_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as fh:
+        fh.write(token)
 
 
 def fetch_cover(octave, host, port, revision):
@@ -116,8 +142,8 @@ def main():
 
     deadline = time.monotonic() + (args.check or float("inf"))
     try:
-        while time.monotonic() < deadline and not quit_asked.is_set():
-            for event in octave.events(timeout=0.5):   # events() returns after half a second of quiet
+        while time.monotonic() < deadline and not quit_asked.is_set() and not octave.closed:
+            for event in octave.events(timeout=0.5):   # events() returns after half a second of quiet, or when OCTAVE goes
                 if event["event"] == "params":
                     values.update(event["values"])
                 elif event["event"] == "property" and event["object"] == "nowPlaying":
@@ -136,7 +162,13 @@ def main():
         pass
     finally:
         print()
-        octave.call("obdManager", "setParameterDemand", NAME, [])   # done showing them (a closed connection does this too)
+        if octave.closed:
+            print("OCTAVE closed the connection.")
+        else:
+            try:
+                octave.call("obdManager", "setParameterDemand", NAME, [])   # done showing them (a closed connection does this too)
+            except OctaveError:
+                pass
         octave.close()
 
     if args.check is not None:

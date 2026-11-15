@@ -136,26 +136,38 @@ class Octave {
       this.ws.onopen = () => resolve();
       this.ws.onerror = () => reject(new Error("cannot reach " + this.url));
       this.ws.onclose = () => {
-        for (const p of this.pending.values()) p.reject(new Error("connection closed"));
+        for (const p of this.pending.values()) { clearTimeout(p.timer); p.reject(new Error("connection closed")); }
         this.pending.clear();
         if (this.onclose) this.onclose();
       };
       this.ws.onmessage = (m) => {
+        if (typeof m.data !== "string") return;   // a media record: not used here
         const msg = JSON.parse(m.data);
+        const failure = () => Object.assign(new Error(msg.error), { code: msg.code, retryAfterMs: msg.retryAfterMs });
         if ("event" in msg) {
           for (const h of this.handlers) h(msg);
         } else if (this.pending.has(msg.id)) {
           const p = this.pending.get(msg.id);
           this.pending.delete(msg.id);
-          msg.ok ? p.resolve(msg.result) : p.reject(new Error(msg.error));
+          clearTimeout(p.timer);
+          msg.ok ? p.resolve(msg.result) : p.reject(failure());
+        } else if (msg.ok === false && msg.id === undefined) {
+          // A refusal with no id answers a line the service could not read:
+          // it cannot say which request that was, so every waiting one fails
+          for (const p of this.pending.values()) { clearTimeout(p.timer); p.reject(failure()); }
+          this.pending.clear();
         }
       };
     });
   }
-  request(op, args = {}) {
+  request(op, args = {}, timeoutMs = 30000) {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) { reject(new Error("not connected")); return; }
+      const timer = setTimeout(() => {
+        if (this.pending.delete(id)) reject(new Error(`${op} was not answered in ${timeoutMs / 1000} s`));
+      }, timeoutMs);
+      this.pending.set(id, { resolve, reject, timer });
       this.ws.send(JSON.stringify({ op, id, ...args }));
     });
   }
@@ -167,7 +179,9 @@ class Octave {
 
 // ── page ───────────────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
-const PROTOCOLS = [1, 2, 3];   // the versions this page knows
+const PROTOCOL = 3;   // the newest version this page knows (docs/api/protocol.json); it talks to every one up to it
+const PROTOCOLS = Array.from({ length: PROTOCOL }, (_, i) => i + 1);
+const NAME = "octave-web-client";   // this page's parameter-demand consumer
 const TOKEN_KEY = "octave.token";
 const store = {   // a token per page origin; private windows may refuse storage
   get() { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } },
@@ -200,11 +214,30 @@ function buildGauge(info) {
   };
 }
 
-async function main() {
+// One connection after another: when the socket closes (OCTAVE restarted, or
+// it closed a connection that had not paired after a minute) the page dials
+// again by itself, with a growing pause, and sets itself up again.
+let retryMs = 1000;
+let retryTimer = null;
+function start() {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   const octave = new Octave(`${proto}//${location.host || "127.0.0.1:9876"}/`);
-  octave.onclose = () => { $("status").textContent = "disconnected"; $("status").className = ""; };
+  octave.onclose = () => {
+    $("status").textContent = "disconnected: reconnecting…";
+    $("status").className = "";
+    if (octave.onlost) octave.onlost();
+    if (retryTimer) return;
+    retryTimer = setTimeout(() => { retryTimer = null; start(); }, retryMs * (0.5 + Math.random() * 0.5));
+    retryMs = Math.min(retryMs * 2, 8000);
+  };
+  session(octave).catch((err) => {
+    if (octave.ws && octave.ws.readyState === WebSocket.OPEN) { $("status").textContent = err.message; $("status").className = ""; }
+  });
+}
+
+async function session(octave) {
   await octave.connect();
+  ticket = null;   // a media ticket belongs to the connection that asked for it
 
   // Protocol 2: a browser on the network pairs once (docs/api/README.md, "Pairing")
   let hello = await octave.request("hello");
@@ -215,18 +248,29 @@ async function main() {
   if (hello.auth === "untrusted") {
     $("status").textContent = "not paired";
     $("pairing").hidden = false;
-    await new Promise((resolve) => {
+    hello = await new Promise((resolve, reject) => {
+      // The connection can go while the code is being fetched (OCTAVE closes an
+      // unpaired one after a minute): start() dials again and this screen comes
+      // back on the new connection, with what was typed still in the field
+      octave.onlost = () => reject(new Error("connection closed"));
       $("pair-go").onclick = async () => {
         $("pair-msg").textContent = "";
         try {
           const r = await octave.request("pair", { code: $("pair-code").value.replace(/\D/g, ""), name: "Browser" });
           store.set(r.token);
           $("pairing").hidden = true;
-          resolve();
-        } catch (err) { $("pair-msg").textContent = err.message; }
+          // The untrusted hello had no app and no objects: ask again, now trusted
+          resolve(await octave.request("hello", { token: r.token }));
+        } catch (err) {
+          $("pair-msg").textContent = err.message === "not connected" || err.message === "connection closed"
+            ? "Reconnecting to OCTAVE: press Pair again in a moment." : err.message;
+        }
       };
     });
+    octave.onlost = null;
   }
+  $("pairing").hidden = true;
+  retryMs = 1000;   // a connection that got this far is a good one
   $("status").textContent = "connected";
   $("status").className = "up";
   $("app").textContent = `v${hello.app.version}${hello.app.headless ? ", headless" : ""}`;
@@ -234,6 +278,7 @@ async function main() {
     $("app").textContent += ` (protocol ${hello.protocolVersion}, this page knows ${PROTOCOLS.join(", ")})`;
 
   // Gauges: catalog metadata once, then the paramStore stream
+  $("gauges").replaceChildren();   // a reconnect builds them again
   const gauges = {};
   for (const id of GAUGES) gauges[id] = buildGauge(await octave.call("parameterCatalog", "info", [id]));
   const np = {};
@@ -249,6 +294,10 @@ async function main() {
       if (e.name === "muted") $("mute").textContent = e.value ? "Unmute" : "Mute";
     }
   });
+  // OCTAVE polls the car only for what someone shows: ask for these, by this page's own
+  // consumer name (released when the connection closes). Without it the gauges stay
+  // empty unless another screen happens to show the same readings.
+  await octave.call("obdManager", "setParameterDemand", [NAME, GAUGES]);
   await octave.subscribe("paramStore", { properties: GAUGES, throttleMs: 100 });
   await octave.subscribe("nowPlaying", {
     properties: ["hasTrack", "title", "artist", "album", "playing", "positionMs", "durationMs", "source", "canSeek",
@@ -263,6 +312,7 @@ async function main() {
   $("mute").onclick = () => octave.call("volumeController", "toggleMute");
 
   // Explorer: every object hello names, described on demand
+  $("ex-object").replaceChildren();
   for (const name of hello.objects) $("ex-object").add(new Option(name, name));
   const show = (v) => { $("ex-out").textContent = JSON.stringify(v, null, 2); };
   const fail = (err) => { $("ex-out").textContent = String(err.message || err); };
@@ -304,10 +354,7 @@ function renderNowPlaying(np) {
   $("np-bar").style.width = np.durationMs ? Math.min(100, 100 * (np.positionMs || 0) / np.durationMs) + "%" : "0";
 }
 
-main().catch((err) => {
-  $("status").textContent = err.message;
-  $("status").className = "";
-});
+start();
 </script>
 </body>
 </html>

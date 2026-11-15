@@ -29,6 +29,73 @@ class HelloCarPythonTest(unittest.TestCase):
                                         os.path.join(REPO, "sdk", "python", "octave_client", name), shallow=False),
                             f"templates/hello-car-python/octave_client/{name} differs from sdk/python/octave_client/{name}: copy it again")
 
+    def test_pairing_connects_again_when_the_connection_went_while_waiting(self):
+        """OCTAVE closes an unpaired connection after a minute of silence; the
+        pairing prompt must connect again with the code just typed. Against a
+        scripted server in this process: no OCTAVE needed."""
+        import builtins
+        import importlib
+        import json
+        import threading
+
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        self.addCleanup(listener.close)
+        connections = []
+
+        def serve(conn, first):
+            trusted = False
+            try:
+                for line in conn.makefile("rb"):
+                    req = json.loads(line)
+                    if req["op"] == "hello":
+                        result = ({"protocolVersion": 3, "auth": "trusted", "scopes": ["read", "media"], "app": {"version": "fake"}}
+                                  if trusted else {"protocolVersion": 3, "auth": "untrusted", "loopbackOpen": False})
+                    elif req["op"] == "pair":
+                        trusted = True
+                        result = {"token": "t" * 64, "scopes": ["read", "media"]}
+                    else:
+                        result = True
+                    conn.sendall((json.dumps({"id": req["id"], "ok": True, "result": result}) + "\n").encode())
+                    if first and req["op"] == "hello":
+                        conn.shutdown(socket.SHUT_RDWR)   # the idle close
+                        return
+            except (OSError, ValueError):
+                pass
+
+        def accept():
+            while True:
+                try:
+                    conn, _ = listener.accept()
+                except OSError:
+                    return
+                connections.append(conn)
+                threading.Thread(target=serve, args=(conn, len(connections) == 1), daemon=True).start()
+
+        threading.Thread(target=accept, daemon=True).start()
+        sys.path.insert(0, TEMPLATE)
+        hello_car = importlib.import_module("hello_car")
+        with tempfile.TemporaryDirectory(prefix="hello-car-") as work:
+            hello_car.TOKEN_FILE = os.path.join(work, ".token")
+            asked = []
+            real_input, builtins.input = builtins.input, lambda prompt="": asked.append(prompt) or "123 456"
+            saved_env = os.environ.pop("OCTAVE_TOKEN", None)
+            try:
+                octave = hello_car.connect("127.0.0.1", listener.getsockname()[1])
+            finally:
+                builtins.input = real_input
+                if saved_env is not None:
+                    os.environ["OCTAVE_TOKEN"] = saved_env
+            self.addCleanup(octave.close)
+            self.assertTrue(octave.trusted)
+            self.assertEqual(len(connections), 2, "it connected again")
+            self.assertEqual(len(asked), 1, "with the code already typed, not a second prompt")
+            self.assertEqual(octave.server["app"]["version"], "fake")
+            with open(hello_car.TOKEN_FILE) as fh:
+                self.assertEqual(fh.read(), "t" * 64)
+            self.assertEqual(os.stat(hello_car.TOKEN_FILE).st_mode & 0o777, 0o600)
+
     def test_runs_against_the_simulator(self):
         binary = os.environ.get("OCTAVE_BIN", os.path.join(REPO, "build", "octave"))
         if not os.path.exists(binary):
