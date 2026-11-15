@@ -11,63 +11,15 @@
 
 import QtQuick 2.15
 import ".." as App
-import "AlertLevel.js" as Alerts
 
-Item {
+ValueGaugeBase {
     id: root
 
-    // ── Widget manifest (consumed by the dashboard editor) ──────────
     // LinearGauge is specifically for signed ranges; it renders the fill
     // outward from zero. Unidirectional PIDs should use BarGauge.
     readonly property var octaveSupportedKinds: ["bidirectional"]
-    readonly property var octaveEditableProps: [
-        { name: "majorTickCount",     type: "int",  label: "Major ticks",     default: 5, min: 2, max: 20 },
-        { name: "minorTicksPerMajor", type: "int",  label: "Minor per major", default: 4, min: 0, max: 10 },
-        { name: "showTicks",          type: "bool", label: "Show ticks",      default: true },
-        { name: "decimals",           type: "int",  label: "Decimals",        default: 0, min: 0, max: 4 }
-    ]
-
-    // ── Data binding ────────────────────────────────────────────────
-    property string paramId: ""
-
-    readonly property var _pInfo: {
-        if (!paramId) return null
-        var all = App.OBDParameterModel.displayParameters   // in the gauges' units
-        for (var i = 0; i < all.length; i++) {
-            if (all[i].id === paramId) return all[i]
-        }
-        return null
-    }
-
-    property string title: _pInfo ? _pInfo.title : ""
-    property string unit: _pInfo ? _pInfo.unit : ""
-    property real min: _pInfo ? _pInfo.min : 0
-    property real max: _pInfo ? _pInfo.max : 100
-    // NaN = no reading yet: "--", no fill or marker
-    property real value: App.OBDParameterModel.sample(paramId)
-    readonly property bool hasValue: isFinite(value)
-
-    // ── Alerts (gauges/AlertLevel.js) ───────────────────────────────
-    // Limits in the display unit, NaN = unset. Level 1 colours the value
-    // warnColor, level 2 critColor; alertFlash blinks it while critical.
-    property real warnAbove: NaN
-    property real warnBelow: NaN
-    property real critAbove: NaN
-    property real critBelow: NaN
-    property bool alertFlash: false
-    property color warnColor: App.Style.statusWarning
-    property color critColor: App.Style.statusDanger
-    readonly property int alertLevel: Alerts.level(value, warnAbove, warnBelow, critAbove, critBelow)
-    readonly property color _alertColor: alertLevel === 2 ? critColor : warnColor
-    property bool _flashOn: true
-    readonly property real _alertOpacity: (alertFlash && alertLevel === 2 && !_flashOn) ? 0.3 : 1.0
-    Timer {
-        running: root.alertFlash && root.alertLevel === 2
-        interval: 400
-        repeat: true
-        onTriggered: root._flashOn = !root._flashOn
-        onRunningChanged: if (!running) root._flashOn = true
-    }
+    // paramId, title, unit, min, max, value, hasValue, decimals and the alert
+    // properties (warnAbove ... alertLevel) are ValueGaugeBase's
 
     // ── Style ───────────────────────────────────────────────────────
     property color trackColor: Qt.darker(App.Style.obdBoxBackground, 1.15)
@@ -82,7 +34,6 @@ Item {
     readonly property int _tickSteps: Math.max(1, minorTicksPerMajor)
     property bool showTicks: true
     property bool centerOriginAtZero: min < 0 && max > 0   // bidirectional fill from 0
-    property int decimals: 0
 
     // ── Computed ────────────────────────────────────────────────────
     readonly property real _normalized: {
@@ -178,8 +129,10 @@ Item {
                 height: parent.height
                 x: {
                     if (!root.centerOriginAtZero) return 0
-                    var zeroX = parent.width * root._zeroT
-                    return root.value >= 0 ? zeroX : parent.width * root._animNorm
+                    // From the nearer of zero and the animated position: with
+                    // the raw value's sign here the fill sat on the wrong
+                    // side of zero for the 120 ms of each crossing
+                    return Math.min(parent.width * root._zeroT, parent.width * root._animNorm)
                 }
                 width: {
                     if (!root.centerOriginAtZero) return parent.width * root._animNorm

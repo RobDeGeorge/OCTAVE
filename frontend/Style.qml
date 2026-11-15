@@ -100,41 +100,28 @@ QtObject {
     // Function to update the Album Art Capture theme with new colors
     // (settingsManager.albumArtColors, a theme object)
     function updateAlbumArtTheme(newTheme) {
-        console.log("[AlbumArtCapture QML] updateAlbumArtTheme called")
-        try {
-            console.log("[AlbumArtCapture QML] Parsed theme, base color:", newTheme.base, "accent:", newTheme.accent)
+        if (!newTheme)
+            return
+        var live = currentTheme === "Album Art Capture"
+        // First paint after entering Album Art mode is instant; only later
+        // song changes fade with the configured speed. Set before the
+        // palette changes, so the colour animations it starts see it.
+        var instantFirst = live && _firstAlbumArtUpdate
+        var savedDuration = colorTransitionMs
+        if (instantFirst) colorTransitionMs = 0
 
-            // Store the new theme - this should trigger activeTheme to re-evaluate
-            albumArtTheme = newTheme
+        // activeTheme reads albumArtTheme, so this alone re-evaluates it.
+        // (This used to set currentTheme to "" and back as well, which ran
+        // every themed colour through the fallback palette and back: two
+        // extra evaluations of each, on every track change.)
+        albumArtTheme = newTheme
 
-            // If Album Art Capture is currently active, trigger a visual refresh
-            if (currentTheme === "Album Art Capture") {
-                console.log("[AlbumArtCapture QML] Theme is active, forcing refresh...")
-
-                // First paint after entering Album Art mode is instant — only
-                // subsequent song changes fade with the configured speed.
-                var instantFirst = _firstAlbumArtUpdate
-                var savedDuration = colorTransitionMs
-                if (instantFirst) colorTransitionMs = 0
-
-                // Force activeTheme binding to re-evaluate by toggling currentTheme
-                let savedTheme = currentTheme
-                currentTheme = ""
-                currentTheme = savedTheme
-
-                if (instantFirst) {
-                    _firstAlbumArtUpdate = false
-                    Qt.callLater(function() { colorTransitionMs = savedDuration })
-                }
-
-                // Emit signal for any listeners
-                albumArtThemeUpdated()
-
-                console.log("[AlbumArtCapture QML] UI refresh complete")
-            }
-        } catch (e) {
-            console.log("[AlbumArtCapture QML] Error applying album art theme:", e)
+        if (instantFirst) {
+            _firstAlbumArtUpdate = false
+            Qt.callLater(function() { colorTransitionMs = savedDuration })
         }
+        if (live)
+            albumArtThemeUpdated()
     }
 
     // Signal emitted when album art theme colors are updated

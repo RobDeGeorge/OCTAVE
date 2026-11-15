@@ -262,13 +262,6 @@ Flickable {
                     onToggled: function(checked) {
                         if (settingsManager) settingsManager.save_auto_play_on_startup(checked)
                     }
-
-                    Connections {
-                        target: settingsManager
-                        function onAutoPlayOnStartupChanged() {
-                            autoPlayToggle.checked = settingsManager.autoPlayOnStartup
-                        }
-                    }
                 }
             }
 
@@ -288,13 +281,6 @@ Flickable {
 
                     onToggled: function(checked) {
                         if (settingsManager) settingsManager.save_persist_shuffle_state(checked)
-                    }
-
-                    Connections {
-                        target: settingsManager
-                        function onPersistShuffleStateChanged() {
-                            persistShuffleToggle.checked = settingsManager.persistShuffleState
-                        }
                     }
                 }
             }
@@ -318,13 +304,6 @@ Flickable {
                             settingsManager.save_music_button_default_page(checked ? "mediaPlayer" : "mediaRoom")
                         }
                     }
-
-                    Connections {
-                        target: settingsManager
-                        function onMusicButtonDefaultPageChanged() {
-                            musicButtonDefaultPageToggle.checked = settingsManager.musicButtonDefaultPage === "mediaPlayer"
-                        }
-                    }
                 }
             }
 
@@ -344,13 +323,6 @@ Flickable {
 
                     onToggled: function(checked) {
                         if (settingsManager) settingsManager.save_return_to_library_after_selection(checked)
-                    }
-
-                    Connections {
-                        target: settingsManager
-                        function onReturnToLibraryAfterSelectionChanged() {
-                            returnToLibraryToggle.checked = settingsManager.returnToLibraryAfterSelection
-                        }
                     }
                 }
             }
@@ -531,10 +503,6 @@ Flickable {
                             activeColor: App.Style.accent
                             inactiveColor: App.Style.hoverColor
                             onToggled: function(c) { if (settingsManager) settingsManager.save_rounded_album_art(c) }
-                            Connections {
-                                target: settingsManager
-                                function onRoundedAlbumArtChanged() { roundedToggle.checked = settingsManager.roundedAlbumArt }
-                            }
                         }
 
                         SettingSubcategory {
@@ -581,10 +549,6 @@ Flickable {
                             activeColor: App.Style.accent
                             inactiveColor: App.Style.hoverColor
                             onToggled: function(c) { if (settingsManager) settingsManager.save_show_album_art_shadow(c) }
-                            Connections {
-                                target: settingsManager
-                                function onShowAlbumArtShadowChanged() { shadowToggle.checked = settingsManager.showAlbumArtShadow }
-                            }
                         }
                     }
 
@@ -617,10 +581,6 @@ Flickable {
                             activeColor: App.Style.accent
                             inactiveColor: App.Style.hoverColor
                             onToggled: function(c) { if (settingsManager) settingsManager.save_vinyl_record_mode(c) }
-                            Connections {
-                                target: settingsManager
-                                function onVinylRecordModeChanged() { vinylToggle.checked = settingsManager.vinylRecordMode }
-                            }
                         }
                     }
 
@@ -638,10 +598,6 @@ Flickable {
                             activeColor: App.Style.accent
                             inactiveColor: App.Style.hoverColor
                             onToggled: function(c) { if (settingsManager) settingsManager.save_show_waveform_visualizer(c) }
-                            Connections {
-                                target: settingsManager
-                                function onShowWaveformVisualizerChanged() { waveformToggle.checked = settingsManager.showWaveformVisualizer }
-                            }
                         }
                     }
 
@@ -659,10 +615,6 @@ Flickable {
                             activeColor: App.Style.accent
                             inactiveColor: App.Style.hoverColor
                             onToggled: function(c) { if (settingsManager) settingsManager.save_show_3d_album_preview(c) }
-                            Connections {
-                                target: settingsManager
-                                function onShow3DAlbumPreviewChanged() { preview3dToggle.checked = settingsManager.show3DAlbumPreview }
-                            }
                         }
 
                         SettingSubcategory {
@@ -765,10 +717,6 @@ Flickable {
                             activeColor: App.Style.accent
                             inactiveColor: App.Style.hoverColor
                             onToggled: function(c) { if (settingsManager) settingsManager.save_show_3d_button_tilt(c) }
-                            Connections {
-                                target: settingsManager
-                                function onShow3DButtonTiltChanged() { tiltToggle.checked = settingsManager.show3DButtonTilt }
-                            }
                         }
 
                         SettingSubcategory {
@@ -1018,7 +966,7 @@ Flickable {
         }
     }
 
-    // ── Default rendering: stacked SettingsCards (Carousel/Hub/Dashboard layouts).
+    // ── Stacked SettingsCards, for a host that leaves renderCards on (none does now).
     //    Sidebar layout sets pageRoot.visible = false and renders the tile grid + popup instead.
     ColumnLayout {
         id: settingsContent

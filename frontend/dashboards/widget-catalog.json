@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "_comment": "The dashboard widget catalog: the widget types a dashboard spec can use. Read by DashboardManager (dashboardManager.widgetCatalog, normalizeSpec) and by frontend/dashboards/WidgetCatalog.qml, which adds only each type's QML url. docs/GAUGE_AUTHORING.md documents the fields.",
+  "_comment": "The dashboard widget catalog: the widget types a dashboard spec can use. Read by DashboardManager (dashboardManager.widgetCatalog, normalizeSpec) and by frontend/dashboards/WidgetCatalog.qml, which adds only each type's QML url. docs/GAUGE_AUTHORING.md documents the fields. A spec's props reach a widget only when the catalog names them for its type: editableProps, colorProps, specProps (set in a spec by hand, not offered by the editors), title / unit with labelProps and min / max with rangeProps.",
   "widgets": [
     {
       "type": "CircularGauge",
@@ -29,6 +29,15 @@
       "colorProps": [
         "fillColor",
         "needleColor"
+      ],
+      "specProps": [
+        "warnColor",
+        "critColor",
+        "alertHysteresis",
+        "trackColor",
+        "redlineColor",
+        "labelColor",
+        "valueColor"
       ],
       "editableProps": [
         {
@@ -171,6 +180,17 @@
         "fillColor",
         "needleColor"
       ],
+      "specProps": [
+        "warnColor",
+        "critColor",
+        "alertHysteresis",
+        "startAngle",
+        "sweepAngle",
+        "trackColor",
+        "redlineColor",
+        "labelColor",
+        "valueColor"
+      ],
       "editableProps": [
         {
           "key": "showNeedle",
@@ -297,6 +317,14 @@
       "colorProps": [
         "fillColor"
       ],
+      "specProps": [
+        "warnColor",
+        "critColor",
+        "alertHysteresis",
+        "trackColor",
+        "labelColor",
+        "valueColor"
+      ],
       "editableProps": [
         {
           "key": "orientation",
@@ -406,6 +434,14 @@
       "colorProps": [
         "fillColor"
       ],
+      "specProps": [
+        "warnColor",
+        "critColor",
+        "alertHysteresis",
+        "trackColor",
+        "labelColor",
+        "valueColor"
+      ],
       "editableProps": [
         {
           "key": "segmentCount",
@@ -503,6 +539,15 @@
       "rangeProps": true,
       "colorProps": [
         "fillColor"
+      ],
+      "specProps": [
+        "warnColor",
+        "critColor",
+        "alertHysteresis",
+        "centerOriginAtZero",
+        "trackColor",
+        "labelColor",
+        "valueColor"
       ],
       "editableProps": [
         {
@@ -603,6 +648,14 @@
       "rangeProps": false,
       "colorProps": [
         "valueColor"
+      ],
+      "specProps": [
+        "warnColor",
+        "critColor",
+        "alertHysteresis",
+        "alignment",
+        "labelColor",
+        "unitColor"
       ],
       "editableProps": [
         {
@@ -710,6 +763,15 @@
       "rangeProps": true,
       "colorProps": [
         "lineColor"
+      ],
+      "specProps": [
+        "warnColor",
+        "critColor",
+        "alertHysteresis",
+        "fillColor",
+        "labelColor",
+        "valueColor",
+        "backgroundColor"
       ],
       "editableProps": [
         {
@@ -828,6 +890,12 @@
       "colorProps": [
         "activeColor"
       ],
+      "specProps": [
+        "alertHysteresis",
+        "inactiveColor",
+        "labelColor",
+        "activeLabelColor"
+      ],
       "editableProps": [
         {
           "key": "label",
@@ -890,6 +958,11 @@
       "colorProps": [
         "dotColor"
       ],
+      "specProps": [
+        "ringColor",
+        "labelColor",
+        "valueColor"
+      ],
       "editableProps": [
         {
           "key": "maxG",
@@ -936,6 +1009,12 @@
       "colorProps": [
         "northColor"
       ],
+      "specProps": [
+        "ringColor",
+        "cardinalColor",
+        "labelColor",
+        "valueColor"
+      ],
       "editableProps": [
         {
           "key": "showDegrees",
@@ -965,6 +1044,10 @@
       "rangeProps": false,
       "colorProps": [
         "progressColor"
+      ],
+      "specProps": [
+        "titleColor",
+        "artistColor"
       ],
       "editableProps": [
         {
@@ -1010,6 +1093,10 @@
       "colorProps": [
         "accentColor"
       ],
+      "specProps": [
+        "buttonColor",
+        "glyphColor"
+      ],
       "editableProps": []
     },
     {
@@ -1031,6 +1118,9 @@
       "rangeProps": false,
       "colorProps": [
         "valueColor"
+      ],
+      "specProps": [
+        "labelColor"
       ],
       "editableProps": [
         {

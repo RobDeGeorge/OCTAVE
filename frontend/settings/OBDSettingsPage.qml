@@ -91,8 +91,226 @@ Item {
                   return { state: "Recording", active: true, status: App.Style.statusConnected }
               var n = tripRecorder.trips.length
               return { state: n + (n === 1 ? " drive" : " drives") }
+          } },
+        { cardId: "obd_custom_pids", title: "Custom PIDs", component: customPidsContent,
+          summary: function() {
+              if (typeof customPids === "undefined" || !customPids) return {}
+              var n = customPids.pids.length
+              if (customPids.errors.length > 0)
+                  return { state: n + " loaded, " + customPids.errors.length + " skipped", status: App.Style.statusWarning }
+              return { state: n === 0 ? "None" : n + (n === 1 ? " reading" : " readings") }
+          } },
+        { cardId: "obd_bus_monitor", title: "Bus Monitor", component: busMonitorContent,
+          summary: function() {
+              if (typeof busMonitor === "undefined" || !busMonitor) return {}
+              if (busMonitor.active)
+                  return { state: "Listening", active: true, status: App.Style.statusConnected }
+              return { state: "Off" }
           } }
     ]
+
+    // ── Bus monitor card ──────────────────────────────────────────────
+    // What the adapter hears on the vehicle bus while it only listens
+    // (busMonitor): one row per message id with its latest bytes, the ones
+    // that just changed in the accent colour. Nothing here sends anything.
+    Component {
+        id: busMonitorContent
+        ColumnLayout {
+            id: busColumn
+            width: parent ? parent.width : 0
+            spacing: App.Spacing.rowSpacing
+
+            readonly property bool ready: typeof busMonitor !== "undefined" && busMonitor !== null
+            readonly property var rows: ready ? busMonitor.ids : []
+            readonly property real cell: App.Spacing.overallText * 1.7
+
+            SettingDescription {
+                text: "Shows the raw messages on the car's network as they go by. OCTAVE only listens here and never sends anything. Live gauges and drive recording pause while it listens."
+                wrapMode: Text.WordWrap
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: dp(8)
+                SettingsTextField {
+                    id: busFilterField
+                    Layout.fillWidth: true
+                    enabled: busColumn.ready && !busMonitor.active
+                    placeholderText: "Only this message id (7E8, 0CX); empty for all"
+                }
+                SettingsButton {
+                    Layout.preferredHeight: dp(44)
+                    text: busColumn.ready && busMonitor.active ? "Stop" : "Listen"
+                    enabled: busColumn.ready && (busMonitor.active || busMonitor.available)
+                    opacity: enabled ? 1.0 : 0.5
+                    onClicked: {
+                        if (!enabled) return
+                        if (busMonitor.active) busMonitor.stop()
+                        else busMonitor.start(busFilterField.text)
+                    }
+                }
+            }
+
+            SettingDescription {
+                visible: busColumn.ready && !busMonitor.available && !busMonitor.active && busMonitor.note === ""
+                text: "Connect to a vehicle to listen."
+            }
+            SettingDescription {
+                visible: busColumn.ready && busMonitor.note !== ""
+                text: busColumn.ready ? busMonitor.note : ""
+                color: App.Style.statusWarning
+                wrapMode: Text.WordWrap
+            }
+            SettingDescription {
+                visible: busColumn.ready && (busMonitor.active || busMonitor.frameCount > 0)
+                text: !busColumn.ready ? ""
+                      : busColumn.rows.length + (busColumn.rows.length === 1 ? " id · " : " ids · ")
+                        + busMonitor.frameCount + " messages"
+                        + (busMonitor.active ? " · " + busMonitor.framesPerSecond + " per second" : "")
+                        + (busMonitor.filter !== "" ? " · only " + busMonitor.filter : "")
+            }
+            SettingDescription {
+                visible: busColumn.ready && busMonitor.overruns > 0
+                text: busColumn.ready
+                      ? "The adapter could not keep up " + busMonitor.overruns + (busMonitor.overruns === 1 ? " time" : " times")
+                        + " and lost messages. Give a message id above to follow just that one."
+                      : ""
+                color: App.Style.statusWarning
+                wrapMode: Text.WordWrap
+            }
+            SettingDescription {
+                visible: busColumn.ready && busMonitor.active && busMonitor.frameCount === 0
+                text: "Nothing heard yet. Many newer cars keep their internal traffic off the OBD port."
+                wrapMode: Text.WordWrap
+            }
+
+            // Delegates are kept across refreshes: the model is the row count
+            ListView {
+                id: busList
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(contentHeight, dp(360))
+                visible: count > 0
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                model: busColumn.rows.length
+                delegate: Row {
+                    id: busRow
+                    readonly property var entry: busColumn.rows[index] || ({ id: "", count: 0, periodMs: 0, bytes: [], changed: [] })
+                    height: App.Spacing.overallText * 1.8
+                    spacing: dp(6)
+                    Text {
+                        width: busColumn.cell * 3.2
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: busRow.entry.id
+                        color: App.Style.primaryTextColor
+                        font.pixelSize: App.Spacing.overallText
+                        font.family: App.Style.fontFamily
+                        font.bold: true
+                    }
+                    Text {
+                        width: busColumn.cell * 2.6
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: busRow.entry.periodMs > 0 ? busRow.entry.periodMs + " ms" : ""
+                        color: App.Style.secondaryTextColor
+                        font.pixelSize: App.Spacing.overallText * 0.8
+                        font.family: App.Style.fontFamily
+                    }
+                    Repeater {
+                        model: busRow.entry.bytes.length
+                        delegate: Text {
+                            width: busColumn.cell
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: busRow.entry.bytes[index] || ""
+                            color: busRow.entry.changed[index] ? App.Style.accent : App.Style.primaryTextColor
+                            font.pixelSize: App.Spacing.overallText
+                            font.family: App.Style.fontFamily
+                            font.bold: busRow.entry.changed[index] === true
+                        }
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                visible: busColumn.ready && busMonitor.canRecord && (busMonitor.active || busMonitor.logFile !== "")
+                spacing: dp(8)
+                SettingsButton {
+                    Layout.preferredHeight: dp(44)
+                    visible: busColumn.ready && busMonitor.active
+                    text: busColumn.ready && busMonitor.recording ? "Stop recording" : "Record to file"
+                    onClicked: {
+                        if (busMonitor.recording) busMonitor.stopRecording()
+                        else busMonitor.startRecording()
+                    }
+                }
+                SettingDescription {
+                    Layout.fillWidth: true
+                    visible: busColumn.ready && busMonitor.logFile !== ""
+                    text: !busColumn.ready ? "" : (busMonitor.recording ? "Recording to " : "Saved: ") + busMonitor.logFile
+                    wrapMode: Text.WrapAnywhere
+                }
+            }
+        }
+    }
+
+    // ── Custom PIDs card ──────────────────────────────────────────────
+    // What <config>/custom-pids.json gave at startup (customPids): the
+    // manufacturer-specific readings, what was wrong with the file, where
+    // it is. Editing is done in the file; a restart reads it again.
+    Component {
+        id: customPidsContent
+        ColumnLayout {
+            width: parent ? parent.width : 0
+            spacing: App.Spacing.rowSpacing
+
+            readonly property bool ready: typeof customPids !== "undefined" && customPids !== null
+            property bool created: false
+
+            SettingDescription {
+                text: "Readings your car has beyond standard OBD2, such as transmission temperature, from a file you edit. OCTAVE only ever asks the car to read them. They appear under Custom when you pick what a gauge shows, and are recorded with every drive."
+                wrapMode: Text.WordWrap
+            }
+
+            Repeater {
+                model: parent.ready ? customPids.pids : []
+                delegate: ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+                    SettingLabel { text: modelData.title + (modelData.unit ? " (" + modelData.unit + ")" : "") }
+                    SettingDescription {
+                        text: modelData.id + " · mode " + modelData.mode + " id " + modelData.pid
+                              + (modelData.header ? " · ECU " + modelData.header : "") + " · " + modelData.formula
+                        wrapMode: Text.WrapAnywhere
+                    }
+                }
+            }
+
+            Repeater {
+                model: parent.ready ? customPids.errors : []
+                delegate: SettingDescription {
+                    text: "Skipped: " + modelData
+                    color: App.Style.statusWarning
+                    wrapMode: Text.WordWrap
+                }
+            }
+
+            SettingsDivider {}
+
+            SettingDescription {
+                visible: parent.ready
+                text: (parent.created ? "Starter file written. Restart OCTAVE to load it: "
+                       : parent.ready && customPids.fileExists ? "Edit this file, then restart OCTAVE: "
+                       : "No file yet. It goes here: ") + (parent.ready ? customPids.file : "")
+                wrapMode: Text.WrapAnywhere
+            }
+            SettingsButton {
+                Layout.preferredHeight: dp(44)
+                text: "Create starter file"
+                visible: parent.ready && !customPids.fileExists
+                onClicked: parent.created = customPids.createExample()
+            }
+        }
+    }
 
     // ── Black box (TripRecorder) card ─────────────────────────────────
     // Recording on/off, the background PID sweep, the on-disk cap, what is
@@ -219,6 +437,7 @@ Item {
                 Layout.fillWidth: true
                 spacing: App.Spacing.overallSpacing
                 SettingsButton {
+                    Layout.preferredHeight: dp(44)
                     text: "Trip history"
                     enabled: parent.parent.recorderReady
                     onClicked: {
@@ -227,11 +446,13 @@ Item {
                     }
                 }
                 SettingsButton {
+                    Layout.preferredHeight: dp(44)
                     text: "Open folder"
                     visible: parent.parent.recorderReady && tripRecorder.canOpenFolder
                     onClicked: tripRecorder.openHistoryFolder()
                 }
                 SettingsButton {
+                    Layout.preferredHeight: dp(44)
                     text: parent.parent.clearArmed ? "Tap again to clear" : "Clear history"
                     buttonColor: parent.parent.clearArmed ? App.Style.statusDisconnected : App.Style.accent
                     enabled: parent.parent.recorderReady && tripRecorder.trips.length > 0
@@ -778,6 +999,17 @@ Item {
                     Layout.fillWidth: true
                     placeholderText: "MAC address, rfcomm://MAC, /dev path, or COM port"
                     text: settingsManager ? settingsManager.obdBluetoothPort : ""
+
+                    // Typing (and the taps above) replace the binding; keep
+                    // following the saved port whenever the field is not
+                    // being edited, so Go never sends a stale address
+                    Connections {
+                        target: settingsManager
+                        function onObdBluetoothPortChanged() {
+                            if (!manualMacField.activeFocus)
+                                manualMacField.text = settingsManager.obdBluetoothPort
+                        }
+                    }
                 }
 
                 Rectangle {
@@ -892,8 +1124,9 @@ Item {
                                 font.family: App.Style.fontFamily
 
                                 MouseArea {
+                                    // Reaches past the glyph to a dp(40) target
                                     anchors.fill: parent
-                                    anchors.margins: -dp(4)
+                                    anchors.margins: -Math.max(dp(4), (dp(40) - parent.height) / 2)
                                     onClicked: {
                                         if (settingsManager && modelData.mac) {
                                             settingsManager.remove_obd_saved_adapter(modelData.mac)
@@ -906,6 +1139,10 @@ Item {
                         MouseArea {
                             id: chipMouse
                             anchors.fill: parent
+                            // Under the row: declared after it, this area sat
+                            // on top of the X and a tap there connected
+                            // instead of removing
+                            z: -1
                             onClicked: {
                                 if (!adaptersColumn.tapsAllowed()) return
                                 var mac = modelData.mac || ""
@@ -1348,7 +1585,7 @@ Item {
                                             onPositionChanged: function(mouse) {
                                                 if (dragging) {
                                                     // Already dragging — update proxy position
-                                                    var globalPos = leftCardMouse.mapToItem(pageRoot, mouse.x, mouse.y);
+                                                    var globalPos = leftCardMouse.mapToItem(dragProxy.parent, mouse.x, mouse.y);
                                                     dragProxy.x = globalPos.x - dragProxy.width / 2;
                                                     dragProxy.y = globalPos.y - dragProxy.height / 2;
                                                 } else if (scrolling) {
@@ -1376,7 +1613,7 @@ Item {
                                                             pageRoot.dragSource = "left";
                                                             pageRoot.dragSourceIndex = -1;
 
-                                                            var globalPos2 = leftCard.mapToItem(pageRoot, 0, 0);
+                                                            var globalPos2 = leftCard.mapToItem(dragProxy.parent, 0, 0);
                                                             dragProxy.x = globalPos2.x;
                                                             dragProxy.y = globalPos2.y;
                                                             dragProxy.width = leftCard.width;
@@ -1393,7 +1630,7 @@ Item {
 
                                             onReleased: {
                                                 rootFlickable.interactive = true;
-                                                if (dragging && dragProxy.visible) {
+                                                if (dragging && dragProxy.Drag.active) {
                                                     dragProxy.Drag.drop();
                                                     dragProxy.visible = false;
                                                     dragProxy.Drag.active = false;
@@ -1408,7 +1645,7 @@ Item {
 
                                             onCanceled: {
                                                 rootFlickable.interactive = true;
-                                                if (dragProxy.visible) {
+                                                if (dragProxy.Drag.active) {
                                                     dragProxy.visible = false;
                                                     dragProxy.Drag.active = false;
                                                 }
@@ -1507,7 +1744,10 @@ Item {
                                         // Swap positions within grid
                                         // Move within the grid: the cards in between shift
                                         var fromIdx = pageRoot.dragSourceIndex;
-                                        var toIdx = calculateDropIndex(drop.x, drop.y);
+                                        // A move lands on a card: the empty cell after
+                                        // the last one (odd count) is the last card
+                                        var toIdx = Math.min(calculateDropIndex(drop.x, drop.y),
+                                                             parametersCard.homeParams.length - 1);
                                         Qt.callLater(function() { settingsManager.move_home_obd_parameter(fromIdx, toIdx) });
                                     }
                                 }
@@ -1685,7 +1925,7 @@ Item {
 
                                             onPositionChanged: function(mouse) {
                                                 if (dragging) {
-                                                    var globalPos = homeCardMouse.mapToItem(pageRoot, mouse.x, mouse.y);
+                                                    var globalPos = homeCardMouse.mapToItem(dragProxy.parent, mouse.x, mouse.y);
                                                     dragProxy.x = globalPos.x - dragProxy.width / 2;
                                                     dragProxy.y = globalPos.y - dragProxy.height / 2;
                                                 } else {
@@ -1697,7 +1937,7 @@ Item {
                                                         pageRoot.dragSource = "right";
                                                         pageRoot.dragSourceIndex = homeCard.cardIndex;
 
-                                                        var globalPos2 = homeCard.mapToItem(pageRoot, 0, 0);
+                                                        var globalPos2 = homeCard.mapToItem(dragProxy.parent, 0, 0);
                                                         dragProxy.x = globalPos2.x;
                                                         dragProxy.y = globalPos2.y;
                                                         dragProxy.width = homeCard.width;
@@ -1713,7 +1953,7 @@ Item {
 
                                             onReleased: {
                                                 rootFlickable.interactive = true;
-                                                if (dragging && dragProxy.visible) {
+                                                if (dragging && dragProxy.Drag.active) {
                                                     dragProxy.Drag.drop();
                                                     dragProxy.visible = false;
                                                     dragProxy.Drag.active = false;
@@ -1727,7 +1967,7 @@ Item {
 
                                             onCanceled: {
                                                 rootFlickable.interactive = true;
-                                                if (dragProxy.visible) {
+                                                if (dragProxy.Drag.active) {
                                                     dragProxy.visible = false;
                                                     dragProxy.Drag.active = false;
                                                 }
@@ -1897,6 +2137,11 @@ Item {
     // ── Floating drag proxy (viewport space, outside Flickable) ─────
     Rectangle {
         id: dragProxy
+        // In the window's overlay, not the page: the grid layout keeps the
+        // page itself in a hidden Loader and shows its cards in a popup, so
+        // a proxy parented to the page was never visible and the drop
+        // (gated on that) never happened
+        parent: Overlay.overlay
         visible: false
         z: 100
         color: App.Style.backgroundColor

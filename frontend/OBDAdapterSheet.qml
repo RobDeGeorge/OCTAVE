@@ -300,9 +300,11 @@ Popup {
                             text: {
                                 if (modelData.kind === "sim") return modelData.note
                                 if (!row.finderRow) return (modelData.kind || "").toUpperCase() + " · " + row.address
-                                var parts = [row.address]
-                                parts.push(modelData.kind === "ble" ? "Bluetooth LE"
-                                           : modelData.kind === "dual" ? "Classic + LE" : "Classic")
+                                // A browser serial port has no address worth showing
+                                var parts = modelData.kind === "serial" ? ["Serial port"] : [row.address]
+                                if (modelData.kind !== "serial")
+                                    parts.push(modelData.kind === "ble" ? "Bluetooth LE"
+                                               : modelData.kind === "dual" ? "Classic + LE" : "Classic")
                                 if (modelData.paired) parts.push("Paired")
                                 if (modelData.note) parts.push(modelData.note)
                                 return parts.join(" · ")
@@ -378,6 +380,13 @@ Popup {
                     if (sheet.finderSupported) obdAdapterFinder.startScan()
                     else obdManager.scan()
                 }
+            }
+            SheetButton {
+                // Browser with Web Serial: an adapter on a USB cable
+                visible: sheet.finderSupported && obdAdapterFinder.canPickSerial
+                label: "Pick USB Adapter"
+                active: !obdAdapterFinder.scanning && obdAdapterFinder.busyAddress === ""
+                onClicked: obdAdapterFinder.pickSerialPort()
             }
             SheetButton {
                 visible: sheet.finderSupported && sheet.allDevices.length > sheet.obdDevices.length

@@ -357,7 +357,7 @@ Flickable {
                     SettingsButton {
                         text: shutdownRow.confirmingShutdown ? "Confirm Shutdown" : "Shut Down"
                         buttonColor: shutdownRow.confirmingShutdown ? "#F44336" : App.Style.accent
-                        height: pageRoot.dp(34)
+                        height: pageRoot.dp(44)
                         onClicked: {
                             if (shutdownRow.confirmingShutdown) {
                                 if (networkManager)
@@ -510,7 +510,7 @@ Flickable {
                             objectName: "revoke_" + modelData.id
                             text: "Revoke"
                             tooltipText: "Forget this device; it is disconnected at once"
-                            height: pageRoot.dp(28)
+                            height: pageRoot.dp(44)
                             onClicked: pageRoot._pairing.revoke(modelData.id)
                         }
                     }
@@ -804,7 +804,7 @@ Flickable {
         }
     }
 
-    // ── Default rendering: stacked SettingsCards (Carousel/Hub/Dashboard layouts).
+    // ── Stacked SettingsCards, for a host that leaves renderCards on (none does now).
     //    Sidebar layout sets pageRoot.visible = false and renders the tile grid + popup instead.
     ColumnLayout {
         id: settingsContent

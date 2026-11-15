@@ -411,7 +411,6 @@ Item {
                 } else {
                     mediaListView.contentY = targetY
                 }
-                console.log("Scrolled to track at index: " + i)
                 break
             }
         }
@@ -1824,12 +1823,10 @@ Item {
 
         // Playlist updates
         function onPlaylistsChanged() {
-            console.log("Playlists changed")
             playlistNames = mediaManager.get_playlist_names()
         }
 
         function onCurrentPlaylistChanged(name) {
-            console.log("Current playlist changed to: " + name)
             currentPlaylistName = name
         }
     }

@@ -177,6 +177,15 @@
                 "w": 110
             },
             "rangeProps": true,
+            "specProps": [
+                "warnColor",
+                "critColor",
+                "alertHysteresis",
+                "trackColor",
+                "redlineColor",
+                "labelColor",
+                "valueColor"
+            ],
             "supportedKinds": [
                 "*"
             ],
@@ -300,6 +309,17 @@
                 "w": 130
             },
             "rangeProps": true,
+            "specProps": [
+                "warnColor",
+                "critColor",
+                "alertHysteresis",
+                "startAngle",
+                "sweepAngle",
+                "trackColor",
+                "redlineColor",
+                "labelColor",
+                "valueColor"
+            ],
             "supportedKinds": [
                 "*"
             ],
@@ -409,6 +429,14 @@
                 "w": 120
             },
             "rangeProps": true,
+            "specProps": [
+                "warnColor",
+                "critColor",
+                "alertHysteresis",
+                "trackColor",
+                "labelColor",
+                "valueColor"
+            ],
             "supportedKinds": [
                 "percentage",
                 "temperature",
@@ -511,6 +539,14 @@
                 "w": 130
             },
             "rangeProps": true,
+            "specProps": [
+                "warnColor",
+                "critColor",
+                "alertHysteresis",
+                "trackColor",
+                "labelColor",
+                "valueColor"
+            ],
             "supportedKinds": [
                 "*"
             ],
@@ -611,6 +647,15 @@
                 "w": 130
             },
             "rangeProps": true,
+            "specProps": [
+                "warnColor",
+                "critColor",
+                "alertHysteresis",
+                "centerOriginAtZero",
+                "trackColor",
+                "labelColor",
+                "valueColor"
+            ],
             "supportedKinds": [
                 "bidirectional"
             ],
@@ -718,6 +763,14 @@
                 "w": 90
             },
             "rangeProps": false,
+            "specProps": [
+                "warnColor",
+                "critColor",
+                "alertHysteresis",
+                "alignment",
+                "labelColor",
+                "unitColor"
+            ],
             "supportedKinds": [
                 "*"
             ],
@@ -832,6 +885,15 @@
                 "w": 150
             },
             "rangeProps": true,
+            "specProps": [
+                "warnColor",
+                "critColor",
+                "alertHysteresis",
+                "fillColor",
+                "labelColor",
+                "valueColor",
+                "backgroundColor"
+            ],
             "supportedKinds": [
                 "*"
             ],
@@ -901,6 +963,12 @@
                 "w": 44
             },
             "rangeProps": false,
+            "specProps": [
+                "alertHysteresis",
+                "inactiveColor",
+                "labelColor",
+                "activeLabelColor"
+            ],
             "supportedKinds": [
                 "*"
             ],
@@ -950,6 +1018,11 @@
                 "w": 110
             },
             "rangeProps": false,
+            "specProps": [
+                "ringColor",
+                "labelColor",
+                "valueColor"
+            ],
             "supportedKinds": [
             ],
             "type": "GForceGauge"
@@ -982,6 +1055,12 @@
                 "w": 110
             },
             "rangeProps": false,
+            "specProps": [
+                "ringColor",
+                "cardinalColor",
+                "labelColor",
+                "valueColor"
+            ],
             "supportedKinds": [
             ],
             "type": "CompassGauge"
@@ -1028,6 +1107,10 @@
                 "w": 220
             },
             "rangeProps": false,
+            "specProps": [
+                "titleColor",
+                "artistColor"
+            ],
             "supportedKinds": [
             ],
             "type": "NowPlayingWidget"
@@ -1053,6 +1136,10 @@
                 "w": 150
             },
             "rangeProps": false,
+            "specProps": [
+                "buttonColor",
+                "glyphColor"
+            ],
             "supportedKinds": [
             ],
             "type": "MediaControlsWidget"
@@ -1092,6 +1179,9 @@
                 "w": 100
             },
             "rangeProps": false,
+            "specProps": [
+                "labelColor"
+            ],
             "supportedKinds": [
             ],
             "type": "ClockWidget"

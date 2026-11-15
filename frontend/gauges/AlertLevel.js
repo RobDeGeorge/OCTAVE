@@ -16,6 +16,42 @@ function level(v, warnAbove, warnBelow, critAbove, critBelow) {
     return 0
 }
 
+// The default hold margin of a gauge: 1 % of its range, and never less
+// than one step of what it shows (10^-decimals), so a level cannot change
+// on a difference the readout does not even display. `override` (the
+// gauge's alertHysteresis, display unit) wins when it is a number >= 0.
+function margin(min, max, decimals, override) {
+    if (isFinite(override) && override >= 0) return override
+    var d = Math.max(0, Math.min(4, isFinite(decimals) ? decimals : 0))
+    var step = Math.pow(10, -d)
+    var range = (isFinite(min) && isFinite(max) && max > min) ? (max - min) * 0.01 : 0
+    return Math.max(step, range)
+}
+
+// level() with a hold: a level is entered at its limit, as above, and left
+// only once the value is back inside that limit by `hold`. `prev` is the
+// level this gauge showed last. Without it a reading hovering at a limit
+// changed level on every sample (33 ms): the colour flickered, the flash
+// restarted and the dashboard's red banner popped in and out.
+function levelHeld(prev, v, warnAbove, warnBelow, critAbove, critBelow, hold) {
+    var now = level(v, warnAbove, warnBelow, critAbove, critBelow)
+    if (!isFinite(v) || !(prev > now) || !(hold > 0)) return now
+    var kept = level(v, warnAbove - hold, warnBelow + hold, critAbove - hold, critBelow + hold)
+    return Math.max(now, Math.min(prev, kept))
+}
+
+// The same for a gauge, which keeps `memo` (a plain object, its own) between
+// readings. New limits or a new margin start again from the plain rule, so
+// an edit in the editor shows at once.
+function track(memo, v, warnAbove, warnBelow, critAbove, critBelow, hold) {
+    var key = warnAbove + "|" + warnBelow + "|" + critAbove + "|" + critBelow + "|" + hold
+    var prev = memo.key === key ? memo.level : 0
+    var now = levelHeld(prev, v, warnAbove, warnBelow, critAbove, critBelow, hold)
+    memo.key = key
+    memo.level = now
+    return now
+}
+
 // The bands to draw on a scale from min to max, as fractions of it:
 // [{from, to, level}], warning bands stopping where the critical ones start.
 // Empty for an unusable range.

@@ -66,6 +66,7 @@
 import QtQuick 2.15
 import ".." as App
 import "../gauges/AlertLevel.js" as AlertLevel
+import "CellProps.js" as CellProps
 
 Item {
     id: root
@@ -104,15 +105,6 @@ Item {
         return App.WidgetCatalog.urlFor(typeName)
     }
 
-    function _unitBinding(paramId, v) {
-        return Qt.binding(function() { return App.OBDParameterModel.toDisplay(paramId, v) })
-    }
-
-    function _coerce(v) {
-        if (v === "NaN") return NaN
-        return v
-    }
-
     // Grid geometry (derived from spec, with sensible defaults).
     // `margins` = outer padding around the whole grid.
     // `spacing` = gap between adjacent cells. Kept separate so callers can
@@ -148,10 +140,19 @@ Item {
             if (!c.paramId) continue
             var above = _limit(p.critAbove), below = _limit(p.critBelow)
             if (!isFinite(above) && !isFinite(below)) continue
-            out.push({ "paramId": c.paramId, "critAbove": above, "critBelow": below, "title": p.title || "" })
+            out.push({ "paramId": c.paramId, "critAbove": above, "critBelow": below, "title": p.title || "",
+                       "decimals": p.decimals, "min": _limit(p.min), "max": _limit(p.max),
+                       "hold": _limit(p.alertHysteresis) })
         }
         return out
     }
+    // paramId -> the level its banner showed last, for the same hold the
+    // gauges use (AlertLevel.levelHeld). A plain object written inside the
+    // activeAlerts binding: no notification, so no loop. Without it a
+    // reading hovering at its critical limit popped the banner in and out
+    // on every sample.
+    property var _alertMemo: ({})
+    on_AlertCellsChanged: _alertMemo = ({})
 
     // [{paramId, text}] of the cells at their critical level now, one per PID
     readonly property var activeAlerts: {
@@ -160,8 +161,16 @@ Item {
             var a = _alertCells[i]
             if (seen[a.paramId]) continue
             var v = App.OBDParameterModel.rawValue(a.paramId)
-            if (typeof v !== "number") continue
-            if (AlertLevel.level(v, NaN, NaN, a.critAbove, a.critBelow) !== 2) continue
+            var memo = _alertMemo[a.paramId] || (_alertMemo[a.paramId] = { "level": 0, "key": "" })
+            if (typeof v !== "number") { memo.level = 0; continue }
+            // Limits and value are in the PID's own unit here, so is the hold
+            var native = App.OBDParameterModel.nativeInfo(a.paramId)
+            var hold = AlertLevel.margin(isFinite(a.min) ? a.min : (native ? native.min : NaN),
+                                         isFinite(a.max) ? a.max : (native ? native.max : NaN),
+                                         a.decimals !== undefined ? Number(a.decimals)
+                                                                  : App.OBDParameterModel.decimalsFor(a.paramId),
+                                         a.hold)
+            if (AlertLevel.track(memo, v, NaN, NaN, a.critAbove, a.critBelow, hold) !== 2) continue
             seen[a.paramId] = true
             var info = App.OBDParameterModel.getParamInfo(a.paramId)
             var shown = App.OBDParameterModel.toDisplay(a.paramId, v)
@@ -184,7 +193,8 @@ Item {
         radius: height / 2
         color: App.Style.statusDanger
         SequentialAnimation on opacity {
-            running: root.activeAlerts.length > 0
+            // Not while the dashboard is off screen (another page, swiped away)
+            running: root.activeAlerts.length > 0 && root.visible
             loops: Animation.Infinite
             NumberAnimation { to: 0.7; duration: 600; easing.type: Easing.InOutQuad }
             NumberAnimation { to: 1.0; duration: 600; easing.type: Easing.InOutQuad }
@@ -263,8 +273,9 @@ Item {
                 id: widgetLoader
                 anchors.fill: parent
                 asynchronous: true
-                visible: !cell._unsupported
-                active: cell._knownType
+                // A cell the vehicle does not report shows the placeholder
+                // below and loads no widget behind it
+                active: cell._knownType && !cell._unsupported
                 source: cell._knownType ? root.sourceForType(modelData.type) : ""
 
                 onLoaded: {
@@ -289,21 +300,10 @@ Item {
                         item.paramId = modelData.paramId
                     }
 
-                    // Apply per-cell props. Silently skip unknown keys.
-                    // Range props (min, max, thresholds) are in the PID's own
-                    // unit in the spec: bound through the gauges' unit, so
-                    // they follow a unit setting change too
-                    var props = modelData.props || {}
-                    var unitKeys = modelData.paramId ? App.WidgetCatalog.paramUnitProps(modelData.type) : []
-                    for (var key in props) {
-                        if (!props.hasOwnProperty(key)) continue
-                        if (item[key] === undefined) continue
-                        var v = root._coerce(props[key])
-                        if (unitKeys.indexOf(key) !== -1)
-                            item[key] = root._unitBinding(modelData.paramId, v)
-                        else
-                            item[key] = v
-                    }
+                    // The cell's props: only the ones the catalog names for
+                    // this type, each on its own (dashboards/CellProps.js)
+                    CellProps.apply(item, modelData.type, modelData.paramId || "", modelData.props || {},
+                                    App.WidgetCatalog, App.OBDParameterModel, "DashboardRenderer")
                 }
 
                 onStatusChanged: {

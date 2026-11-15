@@ -582,18 +582,23 @@ Flickable {
                                          && networkManager.selfUpdateStatus !== "restart-required"
                                          && networkManager.selfUpdateStatus !== "error"
 
+                                id: updateRow
                                 property bool confirming: false
 
+                                // A Timer is not an Item and has no `parent`:
+                                // written as parent.confirming this never
+                                // disarmed, and a stray tap minutes later
+                                // started the update
                                 Timer {
                                     id: updateConfirmResetTimer
                                     interval: 5000
-                                    onTriggered: parent.confirming = false
+                                    onTriggered: updateRow.confirming = false
                                 }
 
                                 SettingsButton {
                                     text: parent.confirming ? "Confirm Update" : "Update Now"
                                     buttonColor: parent.confirming ? "#FF9800" : App.Style.accent
-                                    height: dp(30)
+                                    height: dp(44)
                                     onClicked: {
                                         if (parent.confirming) {
                                             parent.confirming = false

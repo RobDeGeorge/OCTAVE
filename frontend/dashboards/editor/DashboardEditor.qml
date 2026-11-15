@@ -601,10 +601,13 @@ Item {
 
     // Every edit lands here: show it (on a new grid size when given), mark
     // the work unsaved, record it
+    // false when the driving lock refused it: nothing changed, the reason is
+    // on screen, and the caller must not go on as if it had (select the new
+    // widget, open the PID picker, offer "Undo")
     function _apply(next, cols, rows) {
         if (drivingLocked) {
             _showError("Editing is paused while the car is moving")
-            return
+            return false
         }
         if (cols !== undefined) {
             gridColumns = cols
@@ -617,6 +620,7 @@ Item {
         while (h.length > maxUndo + 1) h.shift()
         _history = h
         _historyIndex = h.length - 1
+        return true
     }
 
     function _restore(index) {
@@ -753,7 +757,8 @@ Item {
             "colSpan": place.colSpan, "rowSpan": place.rowSpan,
             "props": props ? Object.assign({}, props) : {}
         })
-        _apply(next)
+        if (!_apply(next))
+            return false
         selectedIndex = next.length - 1
         // A gauge without a PID is useless — pick one now. Self-binding
         // widgets (supportedKinds: []) skip this.
@@ -858,7 +863,8 @@ Item {
         copy.row = nf.row
         var next = cells.slice()
         next.push(copy)
-        _apply(next)
+        if (!_apply(next))
+            return false
         selectedIndex = next.length - 1
         return true
     }
@@ -866,8 +872,10 @@ Item {
     function removeCell(index) {
         var next = cells.slice()
         next.splice(index, 1)
-        _apply(next)
+        if (!_apply(next))
+            return false
         clearSelection()
+        return true
     }
 
     // Delete from the toolbar / sheet / keyboard: undoable from the snackbar
@@ -875,7 +883,8 @@ Item {
         var c = cells[index]
         if (!c) return
         var meta = App.WidgetCatalog.metaFor(c.type)
-        removeCell(index)
+        if (!removeCell(index))
+            return   // refused (driving lock): nothing was removed, nothing to undo
         _notify((meta ? meta.displayName : "Widget") + " removed", "Undo", editor.undo)
     }
 
@@ -1184,7 +1193,10 @@ Item {
                 callerPage.setActiveDashboard(savedId)
             if (stackView) stackView.pop()
         } else {
-            _showError("Save failed (the id is a built-in's or has unusual characters)")
+            // The manager's own reason (a built-in's id, an id that is not
+            // file-safe, a full disk ...), not a guess
+            var why = dashboardManager.lastError
+            _showError(why && why.length > 0 ? "Save failed: " + why : "Save failed")
         }
     }
 

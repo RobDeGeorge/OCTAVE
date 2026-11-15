@@ -114,6 +114,29 @@ QtObject {
         return keys
     }
 
+    // type -> { key: true } of the props a spec may set on that type: the
+    // catalog's editableProps, colorProps and specProps, title / unit with
+    // labelProps, min / max with rangeProps. Nothing else in a cell's
+    // `props` reaches the widget (dashboards/CellProps.js).
+    readonly property var _specKeys: {
+        var out = {}
+        for (var i = 0; i < widgets.length; i++) {
+            var m = widgets[i], keys = {}
+            var ed = m.editableProps || []
+            for (var e = 0; e < ed.length; e++) keys[ed[e].key] = true
+            var lists = [m.colorProps || [], m.specProps || []]
+            for (var l = 0; l < lists.length; l++)
+                for (var k = 0; k < lists[l].length; k++) keys[lists[l][k]] = true
+            if (m.labelProps === true) { keys["title"] = true; keys["unit"] = true }
+            if (m.rangeProps === true) { keys["min"] = true; keys["max"] = true }
+            out[m.type] = keys
+        }
+        return out
+    }
+    function specKeys(typeName) {
+        return _specKeys[typeName] || ({})
+    }
+
     // Props of `typeName` that are its look rather than its data: the
     // editableProps in the look / advanced sections (not a WarningLight's
     // label, not one in the PID's unit). Copy / paste style and "apply to

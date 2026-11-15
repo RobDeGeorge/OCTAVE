@@ -37,15 +37,15 @@ Rectangle {
     border.color: Qt.rgba(App.Style.primaryTextColor.r,
                           App.Style.primaryTextColor.g,
                           App.Style.primaryTextColor.b, 0.07)
-    implicitHeight: mainLayout.implicitHeight + dp(App.Spacing.overallSpacing) * 1.5
+    implicitHeight: mainLayout.implicitHeight + App.Spacing.overallSpacing * 1.5
 
     ColumnLayout {
         id: mainLayout
         anchors {
             fill: parent
-            margins: dp(App.Spacing.overallSpacing * 0.75)
+            margins: Math.round(App.Spacing.overallSpacing * 0.75)
         }
-        spacing: dp(App.Spacing.rowSpacing)
+        spacing: App.Spacing.rowSpacing
 
         // Header — title and (optional) description stacked
         SettingLabel {
@@ -71,14 +71,6 @@ Rectangle {
             activeColor: App.Style.accent
             inactiveColor: App.Style.hoverColor
             onToggled: function(c) { sub.toggled(c) }
-
-            // Click mutates `checked` directly, severing the binding to
-            // sub.checked — re-assert when the parent's truth source
-            // updates (e.g. settings reload, programmatic change).
-            Connections {
-                target: sub
-                function onCheckedChanged() { enableToggle.checked = sub.checked }
-            }
         }
 
         // Body — the gated content. Animates open/closed via clipped height
@@ -105,7 +97,7 @@ Rectangle {
             ColumnLayout {
                 id: contentLayout
                 width: parent.width
-                spacing: dp(App.Spacing.rowSpacing * 0.5)
+                spacing: Math.round(App.Spacing.rowSpacing * 0.5)
             }
         }
     }

@@ -503,13 +503,6 @@ Flickable {
                             settingsManager.save_esp32_led_sleep_enabled(!checked)
                         }
                     }
-
-                    Connections {
-                        target: settingsManager
-                        function onEsp32LedSleepEnabledChanged(enabled) {
-                            ledSleepToggle.checked = !enabled
-                        }
-                    }
                 }
 
                 SettingDescription {
@@ -923,13 +916,6 @@ Flickable {
                             settingsManager.save_imu_enabled(checked)
                         }
                     }
-
-                    Connections {
-                        target: settingsManager
-                        function onImuEnabledChanged(enabled) {
-                            imuEnabledToggle.checked = enabled
-                        }
-                    }
                 }
             }
 
@@ -1141,13 +1127,6 @@ Flickable {
                     onToggled: function(checked) {
                         if (settingsManager) {
                             settingsManager.save_gesture_sensor_enabled(checked)
-                        }
-                    }
-
-                    Connections {
-                        target: settingsManager
-                        function onGestureSensorEnabledChanged(enabled) {
-                            gestureEnabledToggle.checked = enabled
                         }
                     }
                 }
@@ -1568,13 +1547,6 @@ Flickable {
                             settingsManager.save_phone_mirror_enabled(checked)
                         }
                     }
-
-                    Connections {
-                        target: settingsManager
-                        function onPhoneMirrorEnabledChanged() {
-                            phoneMirrorEnabledToggle.checked = settingsManager.phoneMirrorEnabled
-                        }
-                    }
                 }
 
                 // Wi-Fi: QR pairing (Android 11+ Wireless debugging). The manager
@@ -1751,13 +1723,6 @@ Flickable {
                             settingsManager.save_scrcpy_display_size(size)
                             if (phoneMirrorManager) phoneMirrorManager.setDisplaySize(size)
                         }
-
-                        Connections {
-                            target: settingsManager
-                            function onScrcpyDisplaySizeChanged() {
-                                scrcpyFitToggle.checked = settingsManager.scrcpyDisplaySize === "auto"
-                            }
-                        }
                     }
 
                     SettingsTextField {
@@ -1862,13 +1827,6 @@ Flickable {
                         onToggled: function(checked) {
                             if (settingsManager)
                                 settingsManager.save_scrcpy_bit_rate_auto(checked)
-                        }
-
-                        Connections {
-                            target: settingsManager
-                            function onScrcpyBitRateAutoChanged() {
-                                scrcpyBitRateAutoToggle.checked = settingsManager.scrcpyBitRateAuto
-                            }
                         }
                     }
 
@@ -1977,13 +1935,6 @@ Flickable {
                             if (settingsManager)
                                 settingsManager.save_scrcpy_auto_wifi(checked)
                         }
-
-                        Connections {
-                            target: settingsManager
-                            function onScrcpyAutoWifiChanged() {
-                                scrcpyAutoWifiToggle.checked = settingsManager.scrcpyAutoWifi
-                            }
-                        }
                     }
                 }
 
@@ -2012,13 +1963,6 @@ Flickable {
                         onToggled: function(checked) {
                             if (settingsManager) {
                                 settingsManager.save_scrcpy_phone_screen_off(checked)
-                            }
-                        }
-
-                        Connections {
-                            target: settingsManager
-                            function onScrcpyPhoneScreenOffChanged() {
-                                scrcpyPhoneScreenOffToggle.checked = settingsManager.scrcpyPhoneScreenOff
                             }
                         }
                     }
@@ -2092,13 +2036,6 @@ Flickable {
                         onToggled: function(checked) {
                             if (settingsManager) {
                                 settingsManager.save_scrcpy_audio_duck_enabled(checked)
-                            }
-                        }
-
-                        Connections {
-                            target: settingsManager
-                            function onScrcpyAudioDuckEnabledChanged() {
-                                scrcpyAudioDuckEnabledToggle.checked = settingsManager.scrcpyAudioDuckEnabled
                             }
                         }
                     }
@@ -2176,13 +2113,6 @@ Flickable {
 
                     onToggled: function(checked) {
                         if (settingsManager) settingsManager.save_android_auto_enabled(checked)
-                    }
-
-                    Connections {
-                        target: settingsManager
-                        function onAndroidAutoEnabledChanged() {
-                            androidAutoEnabledToggle.checked = settingsManager.androidAutoEnabled
-                        }
                     }
                 }
 
@@ -2371,7 +2301,7 @@ Flickable {
         }
     }
 
-    // ── Default rendering: stacked SettingsCards (Carousel/Hub/Dashboard layouts).
+    // ── Stacked SettingsCards, for a host that leaves renderCards on (none does now).
     //    Sidebar layout sets pageRoot.visible = false and renders the tile grid + popup instead.
     ColumnLayout {
         id: settingsContent

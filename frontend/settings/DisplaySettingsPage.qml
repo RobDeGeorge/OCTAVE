@@ -30,17 +30,16 @@ Flickable {
 
     // Drives the Clock tile's time.
     property date _now: new Date()
+    // Only while Settings is the page on screen: this page lives on, hidden,
+    // in the page cache, and the timer ticked for the life of the app
     Timer {
         interval: 1000
         repeat: true
-        running: true
+        running: !pageRoot.stackView
+                 || (pageRoot.stackView.currentItem && pageRoot.stackView.currentItem.objectName === "settingsMenu")
+        onRunningChanged: if (running) pageRoot._now = new Date()
         onTriggered: pageRoot._now = new Date()
     }
-
-    // The grid settings layout is still stored as "Sidebar" (the layout it
-    // replaced) so existing settings files keep working.
-    function layoutLabel(style) { return style === "Sidebar" ? "Grid" : style }
-    function layoutStyleFor(label) { return label === "Grid" ? "Sidebar" : label }
 
     property var tileModel: [
         { cardId: "display_layout", title: "Layout", component: layoutContent,
@@ -49,7 +48,7 @@ Flickable {
               var win = settingsManager.windowState === "windowed"
                       ? settingsManager.screenWidth + "×" + settingsManager.screenHeight
                       : pageRoot._cap(settingsManager.windowState)
-              return { state: pageRoot.layoutLabel(settingsManager.settingsLayoutStyle) + " · " + win }
+              return { state: win }
           } },
         { cardId: "display_appearance", title: "Appearance", component: appearanceContent,
           summary: function() {
@@ -324,60 +323,6 @@ Flickable {
                             settingsManager.save_show_bottom_bar_media_controls(checked)
                         }
                     }
-
-                    Connections {
-                        target: settingsManager
-                        function onShowBottomBarMediaControlsChanged() {
-                            bottomBarMediaControlsToggle.checked = settingsManager.showBottomBarMediaControls
-                        }
-                    }
-                }
-            }
-
-            SettingCategory {
-                id: layoutCategory
-                title: "Settings Layout"
-                description: "Grid is the default. The other layouts are experimental."
-
-                readonly property var experimentalLayouts: ["Carousel", "Hub", "Dashboard"]
-
-                // Reveal the experimental layouts if the user is already on one,
-                // or opts in via the toggle below. Derived from the active layout
-                // so the picker is always consistent — no extra persisted setting.
-                property bool showExperimental: settingsManager
-                    ? experimentalLayouts.indexOf(settingsManager.settingsLayoutStyle) !== -1
-                    : false
-
-                SettingsChips {
-                    Layout.fillWidth: true
-                    options: layoutCategory.showExperimental
-                             ? ["Grid", "Carousel", "Hub", "Dashboard"]
-                             : ["Grid"]
-                    currentValue: pageRoot.layoutLabel(settingsManager ? settingsManager.settingsLayoutStyle : "Sidebar")
-                    onSelected: function(value) {
-                        if (settingsManager)
-                            settingsManager.save_settings_layout_style(pageRoot.layoutStyleFor(value))
-                    }
-                }
-
-                SettingsToggle {
-                    compact: true
-                    Layout.alignment: Qt.AlignLeft
-                    Layout.topMargin: App.Spacing.rowSpacing
-                    text: "Show experimental layouts"
-                    checked: layoutCategory.showExperimental
-                    activeColor: App.Style.accent
-                    inactiveColor: App.Style.hoverColor
-
-                    onToggled: function(checked) {
-                        layoutCategory.showExperimental = checked
-                        // Hiding them while one is active would strand the user on
-                        // a now-invisible choice — fall back to the default.
-                        if (!checked && settingsManager
-                            && layoutCategory.experimentalLayouts.indexOf(settingsManager.settingsLayoutStyle) !== -1) {
-                            settingsManager.save_settings_layout_style("Sidebar")
-                        }
-                    }
                 }
             }
         }
@@ -578,13 +523,6 @@ Flickable {
                                 settingsManager.save_song_length_transition(checked)
                             }
                         }
-
-                        Connections {
-                            target: settingsManager
-                            function onSongLengthTransitionChanged() {
-                                songLengthTransitionToggle.checked = settingsManager.songLengthTransition
-                            }
-                        }
                     }
                 }
             }
@@ -662,13 +600,6 @@ Flickable {
                             settingsManager.save_clock_show_seconds(checked)
                         }
                     }
-
-                    Connections {
-                        target: settingsManager
-                        function onClockShowSecondsChanged() {
-                            clockShowSecondsToggle.checked = settingsManager.clockShowSeconds
-                        }
-                    }
                 }
             }
 
@@ -708,13 +639,6 @@ Flickable {
                             settingsManager.save_clock_size_auto(checked)
                         }
                     }
-
-                    Connections {
-                        target: settingsManager
-                        function onClockSizeAutoChanged() {
-                            clockSizeAutoToggle.checked = settingsManager.clockSizeAuto
-                        }
-                    }
                 }
 
                 RowLayout {
@@ -750,7 +674,7 @@ Flickable {
         }
     }
 
-    // ── Default rendering: stacked SettingsCards (Carousel/Hub/Dashboard layouts).
+    // ── Stacked SettingsCards, for a host that leaves renderCards on (none does now).
     //    Sidebar layout sets pageRoot.visible = false and renders the tile grid + popup instead.
     ColumnLayout {
         id: settingsContent

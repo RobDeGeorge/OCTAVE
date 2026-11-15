@@ -1345,8 +1345,8 @@ Item {
         id: btn
         property string text: ""
         signal clicked()
-        implicitWidth: btnText.implicitWidth + dp(20)
-        implicitHeight: btnText.implicitHeight + dp(10)
+        implicitWidth: Math.max(btnText.implicitWidth + dp(20), dp(44))
+        implicitHeight: Math.max(btnText.implicitHeight + dp(10), dp(40))
         radius: dpMin(6, 2)
         color: btnMouse.pressed ? Qt.rgba(accentColor.r, accentColor.g, accentColor.b, 0.3) : "transparent"
         border.color: accentColor

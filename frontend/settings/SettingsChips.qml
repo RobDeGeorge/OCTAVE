@@ -305,7 +305,9 @@ Flow {
                     Rectangle {
                         id: textDeleteBtn
                         visible: chipWrapper.isDeletable && !chipWrapper.hasImage && !chipWrapper.hasPalette && !chipWrapper.hasFont
-                        width: textDeleteBtnText.width + dp(8)
+                        // Wide enough to hit on purpose and miss on purpose:
+                        // it deletes at one tap
+                        width: Math.max(textDeleteBtnText.width + dp(8), dp(36))
                         height: parent.height
                         color: "transparent"
                         anchors.verticalCenter: parent.verticalCenter

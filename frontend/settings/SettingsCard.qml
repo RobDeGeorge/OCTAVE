@@ -139,7 +139,7 @@ Rectangle {
                     }
                     spacing: App.Spacing.overallSpacing
 
-                    // Title with HUD accent line (matching SettingsSectionHeader style)
+                    // Title with HUD accent line
                     SettingLabel {
                         text: card.title
                         font.pixelSize: App.Spacing.overallText * 1.5

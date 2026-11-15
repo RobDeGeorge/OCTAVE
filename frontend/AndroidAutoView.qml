@@ -197,17 +197,11 @@ Item {
                 }
             }
 
-            onStreamStarted: {
-                console.log("DHU stream started - embedded seamlessly")
-            }
-
             onStreamStopped: {
-                console.log("DHU stream stopped")
                 androidAutoView.dhuEmbedded = false
             }
 
             onErrorOccurred: function(error) {
-                console.log("DHU error:", error)
                 androidAutoView.launchFailed = true
                 androidAutoView.errorMessage = error
             }
@@ -521,7 +515,6 @@ Item {
         }
 
         function onDhuWindowReady(hwnd) {
-            console.log("DHU window ready:", hwnd)
             androidAutoView.dhuEmbedded = true
             androidAutoView.launchFailed = false
         }
@@ -545,11 +538,6 @@ Item {
         }
     }
 
-    Component.onCompleted: {
-        console.log("AndroidAutoView loaded")
-        console.log("androidAutoManager available:", androidAutoManager ? "yes" : "no")
-    }
-
     // Runs on the first push and on every later visit — this view is built
     // once and re-pushed by the StackView page cache (see Main.qml), so a
     // revisit after the DHU exited relaunches it just like a fresh view did.
@@ -562,7 +550,6 @@ Item {
         if (androidAutoManager) {
             // Check if DHU is already running (user navigated back)
             if (androidAutoManager.isDhuEmbedded) {
-                console.log("DHU already running, resuming display")
                 dhuEmbedded = true
                 launchFailed = false
                 // Reattach the embedded window

@@ -21,7 +21,6 @@ Item {
 
     // Central page model — single source of truth for all pages
     // NOTE: `source` paths are relative to frontend/ (consumed by layout Loaders in frontend/)
-    //       `widget` paths are relative to frontend/settings/ (consumed by SettingsDashboardCard Loader)
     // `subSections` entries must match the corresponding page's tileModel
     // titles exactly \u2014 SettingsMenu.findChildByObjectName() looks cards up by
     // objectName, which the pages set from modelData.title.
@@ -29,23 +28,23 @@ Item {
     // `icon` is the legacy Unicode glyph, kept only as a fallback; `iconSource`
     // is the theme-tinted SVG that actually renders.
     readonly property var pageModel: [
-        { name: "Display",     section: "displaySettings",     source: "settings/DisplaySettingsPage.qml",     widget: "widgets/DisplayWidget.qml",     icon: "\u263C", iconSource: Style.assetBase + "cat_display.svg",
+        { name: "Display",     section: "displaySettings",     source: "settings/DisplaySettingsPage.qml", icon: "\u263C", iconSource: Style.assetBase + "cat_display.svg",
           group: "Appearance",
           subSections: ["Layout", "Appearance", "Clock"] },
-        { name: "Media",       section: "mediaSettings",       source: "settings/MediaSettingsPage.qml",       widget: "widgets/MediaWidget.qml",       icon: "\u266B", iconSource: Style.assetBase + "cat_media.svg",
+        { name: "Media",       section: "mediaSettings",       source: "settings/MediaSettingsPage.qml", icon: "\u266B", iconSource: Style.assetBase + "cat_media.svg",
           group: "Appearance",
           subSections: ["Library & Playback", "Now Playing", "Spotify"] },
-        { name: "OBD",         section: "obdSettings",         source: "settings/OBDSettingsPage.qml",         widget: "widgets/OBDWidget.qml",         icon: "\u26A1", iconSource: Style.assetBase + "cat_obd.svg",
+        { name: "OBD",         section: "obdSettings",         source: "settings/OBDSettingsPage.qml", icon: "\u26A1", iconSource: Style.assetBase + "cat_obd.svg",
           group: "Connectivity",
           subSections: ["Connection", "Adapters", "Parameters"] },
-        { name: "Accessories", section: "accessoriesSettings", source: "settings/AccessoriesSettingsPage.qml", widget: "widgets/AccessoriesWidget.qml", icon: "\u2388", iconSource: Style.assetBase + "cat_accessories.svg",
+        { name: "Accessories", section: "accessoriesSettings", source: "settings/AccessoriesSettingsPage.qml", icon: "\u2388", iconSource: Style.assetBase + "cat_accessories.svg",
           group: "Connectivity",
           desktopOnly: true,
           subSections: ["Volume Knob", "IMU Sensor", "Gesture Sensor", "Phone Dock"] },
-        { name: "Device",      section: "deviceSettings",      source: "settings/DeviceSettingsPage.qml",      widget: "widgets/DeviceWidget.qml",      icon: "\u2699", iconSource: Style.assetBase + "cat_device.svg",
+        { name: "Device",      section: "deviceSettings",      source: "settings/DeviceSettingsPage.qml", icon: "\u2699", iconSource: Style.assetBase + "cat_device.svg",
           group: "System",
           subSections: ["Device", "Diagnostics"] },
-        { name: "About",       section: "about",               source: "settings/AboutPage.qml",               widget: "widgets/AboutWidget.qml",       icon: "\u2139", iconSource: Style.assetBase + "cat_about.svg",
+        { name: "About",       section: "about",               source: "settings/AboutPage.qml", icon: "\u2139", iconSource: Style.assetBase + "cat_about.svg",
           group: "System",
           subSections: [] }
     ]
@@ -60,12 +59,6 @@ Item {
 
     // Visible pages model
     property var hubModel: []
-
-    // Current layout style
-    property string layoutStyle: settingsManager ? settingsManager.settingsLayoutStyle : "Sidebar"
-
-    // True only on the very first layout load (app launch); false after a mid-session switch
-    property bool isInitialLoad: true
 
     Component.onCompleted: {
         // Pre-load expanded card states cache before any cards are created
@@ -123,8 +116,7 @@ Item {
                 source: page.source,
                 icon: page.icon,
                 iconSource: page.iconSource || "",
-                group: page.group || "",
-                widget: page.widget || ""
+                group: page.group || ""
             })
         }
         hubModel = model
@@ -172,14 +164,8 @@ Item {
             settingsManager.set_last_settings_section(section)
 
         // Delegate to layout
-        if (layoutLoader.item) {
-            if (layoutStyle === "Carousel" && typeof layoutLoader.item.currentIndex !== "undefined") {
-                var idx = indexForSection(section)
-                if (idx >= 0) layoutLoader.item.currentIndex = idx
-            } else if (typeof layoutLoader.item.navigateToCategory === "function") {
-                layoutLoader.item.navigateToCategory(section)
-            }
-        }
+        if (layoutLoader.item && typeof layoutLoader.item.navigateToCategory === "function")
+            layoutLoader.item.navigateToCategory(section)
     }
 
     function navigateToSubSection(section, subSection) {
@@ -190,33 +176,11 @@ Item {
         }
     }
 
-    property string pendingScrollTarget: ""
-
     // When visibility changes, rebuild
     Connections {
         target: settingsManager
         function onSettingsMenuVisibilityChanged() {
             buildHubModel()
-        }
-    }
-
-    // When layout style changes, update and reload
-    Connections {
-        target: settingsManager
-        function onSettingsLayoutStyleChanged(style) {
-            isInitialLoad = false
-            layoutStyle = style
-        }
-    }
-
-    // Layout source mapping
-    function layoutSourceForStyle(style) {
-        switch (style) {
-            case "Carousel":  return "SettingsCarouselLayout.qml"
-            case "Sidebar":   return "SettingsSidebarLayout.qml"
-            case "Hub":       return "SettingsHubLayout.qml"
-            case "Dashboard": return "SettingsDashboardLayout.qml"
-            default:          return "SettingsSidebarLayout.qml"
         }
     }
 
@@ -228,86 +192,15 @@ Item {
         Loader {
             id: layoutLoader
             anchors.fill: parent
-            source: layoutSourceForStyle(layoutStyle)
+            source: "SettingsSidebarLayout.qml"
 
             onLoaded: {
                 if (item) {
                     item.settingsMenu = settingsMenu
                     item.hubModel = Qt.binding(function() { return settingsMenu.hubModel })
 
-                    // For Carousel, set initial index
-                    if (layoutStyle === "Carousel" && initialSection && initialSection !== "") {
-                        var idx = indexForSection(initialSection)
-                        if (idx >= 0 && typeof item.currentIndex !== "undefined") {
-                            item.currentIndex = idx
-                            currentSection = initialSection
-                        }
-                    }
                 }
             }
-        }
-    }
-
-    // ─── Sub-section scroll targeting (for Carousel layout) ───
-    Timer {
-        id: scrollToSectionTimer
-        interval: 16
-        repeat: true
-        onTriggered: {
-            if (pendingScrollTarget === "") { stop(); return }
-
-            // Only applies to Carousel layout's SwipeView
-            if (layoutStyle !== "Carousel" || !layoutLoader.item) return
-
-            // Find the SwipeView's current item
-            var swipeView = null
-            for (var i = 0; i < layoutLoader.item.children.length; i++) {
-                var child = layoutLoader.item.children[i]
-                if (child.toString().indexOf("SwipeView") !== -1) {
-                    swipeView = child
-                    break
-                }
-            }
-            if (!swipeView) return
-
-            var card = swipeView.currentItem
-            if (!card) return
-            var loader = findLoader(card)
-            if (!loader || !loader.item) return
-
-            var fl = loader.item
-            if (fl.contentHeight <= 0 || fl.height <= 0) return
-
-            var content = fl.contentItem ? fl.contentItem : fl
-            var targetCard = findChildByObjectName(content, pendingScrollTarget)
-            if (targetCard) {
-                var pos = targetCard.mapToItem(fl.contentItem, 0, 0)
-                var scrollMax = Math.max(0, fl.contentHeight - fl.height)
-                fl.contentY = Math.min(pos.y, scrollMax)
-                pendingScrollTarget = ""
-                stop()
-            }
-        }
-
-        function findLoader(item) {
-            for (var i = 0; i < item.children.length; i++) {
-                var child = item.children[i]
-                if (child.toString().indexOf("QQuickLoader") !== -1 && child.item)
-                    return child
-                var found = findLoader(child)
-                if (found) return found
-            }
-            return null
-        }
-
-        function findChildByObjectName(parent, name) {
-            for (var i = 0; i < parent.children.length; i++) {
-                var child = parent.children[i]
-                if (child.objectName === name) return child
-                var found = findChildByObjectName(child, name)
-                if (found) return found
-            }
-            return null
         }
     }
 }

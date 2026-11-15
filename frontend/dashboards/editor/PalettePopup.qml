@@ -16,6 +16,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "../.." as App
+import "../CellProps.js" as CellProps
 
 Popup {
     id: gallery
@@ -243,9 +244,10 @@ Popup {
                                 onLoaded: {
                                     var d = modelData.demo || {}
                                     if (d.paramId && item.paramId !== undefined) item.paramId = d.paramId
-                                    var props = d.props || {}
-                                    for (var k in props)
-                                        if (item[k] !== undefined) item[k] = props[k]
+                                    // As a cell's props on a dashboard: the catalog's keys
+                                    // only (a "Mine" preset is the user's file)
+                                    CellProps.apply(item, modelData.type, d.paramId || "", d.props || {},
+                                                    App.WidgetCatalog, App.OBDParameterModel, "PalettePopup")
                                 }
                             }
                         }

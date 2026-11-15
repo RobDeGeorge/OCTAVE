@@ -139,16 +139,31 @@ Item {
         case "Flip":        _startFlip(); break
         case "Crossfade":   _startCrossfade(); break
 
-        // 3D-flavored — animates side cards when previewEnabled, otherwise
-        // the side-card portion fades against hidden cards (cfOpacity=0) and
-        // is invisible. The center/exit-snapshot motion still plays.
-        case "Coverflow":   _start3DCommon(); _startCoverflow(direction); break
-        case "Conveyor":    _start3DCommon(); _startConveyor(direction); break
-        case "Stack":       _start3DCommon(); _startStack(direction); break
-        case "Depth":       _start3DCommon(); _startDepth(direction); break
-        case "Swing":       _start3DCommon(); _startSwing(direction); break
+        // 3D-flavored: they move the side cards, which exist only with the
+        // preview on. Without it (always, in portrait) they hid the centre
+        // card for the length of the animation against cards that are not
+        // there, so the art blanked on every track change: crossfade instead.
+        case "Coverflow":
+        case "Conveyor":
+        case "Stack":
+        case "Depth":
+        case "Swing":
+            if (!previewEnabled) { _startCrossfade(); break }
+            _start3D(direction); break
+
 
         default:            _startCrossfade(); break
+        }
+    }
+
+    function _start3D(dir) {
+        _start3DCommon()
+        switch (transitionStyle) {
+        case "Coverflow":   _startCoverflow(dir); break
+        case "Conveyor":    _startConveyor(dir); break
+        case "Stack":       _startStack(dir); break
+        case "Depth":       _startDepth(dir); break
+        case "Swing":       _startSwing(dir); break
         }
     }
 
@@ -167,6 +182,9 @@ Item {
     }
 
     function _stopAll() {
+        // The previous animation's pending "settled" would clear animBusy in
+        // the middle of the one about to start (which settles itself)
+        settleTimer.stop()
         // Stop all single-card animations
         if (crossfadeAnim.running)  crossfadeAnim.stop()
         if (slideAnim.running)      slideAnim.stop()

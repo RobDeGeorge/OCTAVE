@@ -95,7 +95,6 @@ Item {
     // startMirror() only syncs the flag when the stream is already up and
     // starts it otherwise, so a revisit behaves like a fresh view used to.
     StackView.onActivated: {
-        console.log("PhoneMirrorView activated")
         reportViewSize()
         startMirror()
     }
@@ -737,7 +736,6 @@ Item {
         target: phoneMirrorManager
 
         function onScrcpyStarted(handle) {
-            console.log("Phone Mirror: stream started" + (reconnecting ? " (reconnected)" : ""))
             mirrorRunning = true
             launchFailed = false
         }
@@ -754,7 +752,6 @@ Item {
             } else if (st === "waitingForPhone" && !launchFailed && mirrorRunning) {
                 // The quiet reconnect ran out of time: show the error page
                 // (a first start without a phone gets there via onScrcpyError)
-                console.log("Phone Mirror: reconnect timed out")
                 mirrorRunning = false
                 launchFailed = true
                 deviceError = true
@@ -766,19 +763,16 @@ Item {
         }
 
         function onScrcpyStopped() {
-            console.log("Phone Mirror: stopped")
             mirrorRunning = false
             frameCounter = 0
         }
 
         function onScrcpyError(error) {
-            console.log("Phone Mirror: error -", error)
             // lastErrorKind and sessionState are set before the signal
             var isDeviceError = _isDeviceError()
             if (reconnecting) {
                 // Link dropped mid-stream (or a quiet retry failed): the
                 // manager keeps trying; hold the picture
-                console.log("Phone Mirror: holding the last frame while the manager reconnects")
                 errorMessage = error
                 deviceError = true
                 return
@@ -791,17 +785,9 @@ Item {
     }
 
     Component.onCompleted: {
-        console.log("PhoneMirrorView loaded")
-        if (phoneMirrorManager) {
-            console.log("phone mirror client available:", phoneMirrorManager.nativeAvailable,
-                        "server", phoneMirrorManager.serverVersion, "adb:", phoneMirrorManager.adbPath)
-        } else {
+        if (!phoneMirrorManager) {
             launchFailed = true
             errorMessage = "Phone Mirror manager not available"
         }
-    }
-
-    Component.onDestruction: {
-        console.log("PhoneMirrorView destroyed")
     }
 }

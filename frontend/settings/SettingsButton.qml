@@ -16,6 +16,8 @@ Rectangle {
     property bool bold: true
     signal clicked()
 
+    // No height of its own (a layout would then ignore every caller's
+    // `height:`): each use sets `height` or `Layout.preferredHeight`.
     Layout.preferredWidth: buttonLabel.implicitWidth + App.Spacing.overallSpacing * 1.5
     Layout.minimumWidth: dp(70)
 

@@ -29,13 +29,62 @@ Item {
     property bool isLoading: false
     property string statusMessage: ""
 
+    // One request to the car. Not connected: say so and ask nothing (the
+    // manager answers an unconnected read with an empty list, which read
+    // here as "No trouble codes found", and other requests returned without
+    // a word, leaving the spinner on).
+    function request(status, line, send) {
+        if (!obdManager || !obdManager.is_connected()) {
+            isLoading = false
+            statusMessage = "Not connected"
+            terminalOutput.appendLine("[WARN] OBD not connected - nothing was read")
+            return
+        }
+        isLoading = true
+        statusMessage = status
+        terminalOutput.appendLine(line)
+        send()
+    }
+
+    // No answer at all (link lost mid-request): the spinner does not turn forever
+    Timer {
+        interval: 20000
+        running: obdDiagnosticsPage.isLoading
+        onTriggered: {
+            obdDiagnosticsPage.isLoading = false
+            obdDiagnosticsPage.statusMessage = "No answer"
+            terminalOutput.appendLine("[WARN] No answer from the vehicle")
+        }
+    }
+
+    // Diagnostic mode pauses live polling, so it is entered only with the
+    // page on screen: the page is also built ahead of time, hidden (prewarm),
+    // and entering there stopped the gauges behind the user's back.
+    property bool _statusRead: false
+    function enterDiagnostics() {
+        if (!obdManager)
+            return
+        if (!obdManager.is_connected()) {
+            terminalOutput.appendLine("[WARN] OBD not connected - diagnostic commands unavailable")
+            terminalOutput.appendLine("[INFO] Connect to vehicle first, then return to this menu")
+            return
+        }
+        if (!obdManager.is_diagnostic_mode()) {
+            terminalOutput.appendLine("[INFO] Entering diagnostic mode...")
+            obdManager.enter_diagnostic_mode()
+        }
+        if (!_statusRead) {
+            _statusRead = true
+            request("Reading vehicle status...", "[SCAN] Reading vehicle status...", function() { obdManager.read_status() })
+        }
+    }
+
     // OBD Diagnostic Connections
     Connections {
         target: obdManager
         enabled: obdManager !== null
 
         function onDtcCodesChanged(codes) {
-            console.log("[OBDDiagnostics] onDtcCodesChanged SIGNAL RECEIVED, count:", codes ? codes.length : "null")
             dtcCodes = codes
             isLoading = false
             statusMessage = codes.length > 0 ? "Found " + codes.length + " DTC(s)" : "No DTCs found"
@@ -45,23 +94,22 @@ Item {
                 terminalOutput.appendLine("[FOUND] " + codes.length + " DTC(s) detected:")
                 for (var i = 0; i < codes.length; i++) {
                     var dtc = codes[i]
-                    console.log("[OBDDiagnostics] DTC:", dtc.code, "-", dtc.description)
                     terminalOutput.appendLine("[DTC] " + dtc.code + " - " + dtc.description)
                 }
-            } else {
+            } else if (obdManager && obdManager.is_connected()) {
                 terminalOutput.appendLine("[DONE] No trouble codes found")
+            } else {
+                statusMessage = "Not connected"
+                terminalOutput.appendLine("[WARN] OBD not connected - no codes were read")
             }
-            console.log("[OBDDiagnostics] Terminal lines count:", terminalOutput.lines.length)
         }
 
         function onDtcCountChanged(count) {
-            console.log("[OBDDiagnostics] onDtcCountChanged SIGNAL RECEIVED:", count)
             dtcCount = count
             terminalOutput.appendLine("[INFO] DTC count: " + count)
         }
 
         function onMilStatusChanged(status) {
-            console.log("[OBDDiagnostics] onMilStatusChanged SIGNAL RECEIVED:", status)
             milStatus = status
             isLoading = false
             if (status) {
@@ -72,7 +120,6 @@ Item {
         }
 
         function onDtcClearResult(success, message) {
-            console.log("[OBDDiagnostics] onDtcClearResult SIGNAL RECEIVED:", success, message)
             isLoading = false
             statusMessage = message
             if (success) {
@@ -86,7 +133,6 @@ Item {
         }
 
         function onFreezeFrameChanged(data) {
-            console.log("[OBDDiagnostics] onFreezeFrameChanged SIGNAL RECEIVED, count:", data ? data.length : "null")
             freezeFrameData = data
             isLoading = false
 
@@ -116,20 +162,10 @@ Item {
     // so Component.onDestruction won't be called when navigating away
     onVisibleChanged: {
         if (visible) {
-            console.log("[OBDDiagnostics] Page became visible, obdManager exists:", obdManager !== null)
-            // Re-enter diagnostic mode if we're becoming visible again
-            if (obdManager && obdManager.is_connected() && !obdManager.is_diagnostic_mode()) {
-                console.log("[OBDDiagnostics] Re-entering diagnostic mode on visibility")
-                terminalOutput.appendLine("[INFO] Re-entering diagnostic mode...")
-                obdManager.enter_diagnostic_mode()
-            }
-        } else {
-            console.log("[OBDDiagnostics] Page became hidden")
-            // Exit diagnostic mode when page becomes hidden (navigating away)
-            if (obdManager && obdManager.is_diagnostic_mode()) {
-                console.log("[OBDDiagnostics] Exiting diagnostic mode on hide")
-                obdManager.exit_diagnostic_mode()
-            }
+            enterDiagnostics()
+        } else if (obdManager && obdManager.is_diagnostic_mode()) {
+            // Leaving the page (it stays alive in the page cache)
+            obdManager.exit_diagnostic_mode()
         }
     }
 
@@ -172,13 +208,13 @@ Item {
                     Column {
                         anchors.centerIn: parent
                         width: parent.width - dp(16)
-                        spacing: dp(8)
+                        spacing: Math.min(dp(8), parent.height * 0.06)
 
                         Text {
                             width: parent.width
                             horizontalAlignment: Text.AlignHCenter
                             text: "Read DTCs"
-                            font.pixelSize: Math.min(dp(32), parent.width * 0.16)
+                            font.pixelSize: Math.min(dp(32), parent.width * 0.16, parent.parent.height * 0.34)
                             font.bold: true
                             font.family: obdDiagnosticsPage.globalFont
                             color: "white"
@@ -189,7 +225,7 @@ Item {
                             width: parent.width
                             horizontalAlignment: Text.AlignHCenter
                             text: "Stored trouble codes"
-                            font.pixelSize: Math.min(dp(18), parent.width * 0.09)
+                            font.pixelSize: Math.min(dp(18), parent.width * 0.09, parent.parent.height * 0.19)
                             font.family: obdDiagnosticsPage.globalFont
                             color: "white"
                             opacity: 0.8
@@ -201,10 +237,7 @@ Item {
                         id: mouseAreaReadDTC
                         anchors.fill: parent
                         onClicked: {
-                            isLoading = true
-                            statusMessage = "Reading DTCs..."
-                            terminalOutput.appendLine("[SCAN] Reading stored DTCs...")
-                            obdManager.read_dtc()
+                            obdDiagnosticsPage.request("Reading DTCs...", "[SCAN] Reading stored DTCs...", function() { obdManager.read_dtc() })
                         }
                     }
                 }
@@ -222,13 +255,13 @@ Item {
                     Column {
                         anchors.centerIn: parent
                         width: parent.width - dp(16)
-                        spacing: dp(8)
+                        spacing: Math.min(dp(8), parent.height * 0.06)
 
                         Text {
                             width: parent.width
                             horizontalAlignment: Text.AlignHCenter
                             text: "Current DTCs"
-                            font.pixelSize: Math.min(dp(32), parent.width * 0.16)
+                            font.pixelSize: Math.min(dp(32), parent.width * 0.16, parent.parent.height * 0.34)
                             font.bold: true
                             font.family: obdDiagnosticsPage.globalFont
                             color: "white"
@@ -239,7 +272,7 @@ Item {
                             width: parent.width
                             horizontalAlignment: Text.AlignHCenter
                             text: "Active this drive cycle"
-                            font.pixelSize: Math.min(dp(18), parent.width * 0.09)
+                            font.pixelSize: Math.min(dp(18), parent.width * 0.09, parent.parent.height * 0.19)
                             font.family: obdDiagnosticsPage.globalFont
                             color: "white"
                             opacity: 0.8
@@ -251,10 +284,7 @@ Item {
                         id: mouseAreaReadCurrentDTC
                         anchors.fill: parent
                         onClicked: {
-                            isLoading = true
-                            statusMessage = "Reading current DTCs..."
-                            terminalOutput.appendLine("[SCAN] Reading current drive cycle DTCs...")
-                            obdManager.read_current_dtc()
+                            obdDiagnosticsPage.request("Reading current DTCs...", "[SCAN] Reading current drive cycle DTCs...", function() { obdManager.read_current_dtc() })
                         }
                     }
                 }
@@ -272,13 +302,13 @@ Item {
                     Column {
                         anchors.centerIn: parent
                         width: parent.width - dp(16)
-                        spacing: dp(8)
+                        spacing: Math.min(dp(8), parent.height * 0.06)
 
                         Text {
                             width: parent.width
                             horizontalAlignment: Text.AlignHCenter
                             text: "Read Status"
-                            font.pixelSize: Math.min(dp(32), parent.width * 0.16)
+                            font.pixelSize: Math.min(dp(32), parent.width * 0.16, parent.parent.height * 0.34)
                             font.bold: true
                             font.family: obdDiagnosticsPage.globalFont
                             color: "white"
@@ -289,7 +319,7 @@ Item {
                             width: parent.width
                             horizontalAlignment: Text.AlignHCenter
                             text: "CEL & DTC count"
-                            font.pixelSize: Math.min(dp(18), parent.width * 0.09)
+                            font.pixelSize: Math.min(dp(18), parent.width * 0.09, parent.parent.height * 0.19)
                             font.family: obdDiagnosticsPage.globalFont
                             color: "white"
                             opacity: 0.8
@@ -301,10 +331,7 @@ Item {
                         id: mouseAreaReadStatus
                         anchors.fill: parent
                         onClicked: {
-                            isLoading = true
-                            statusMessage = "Reading vehicle status..."
-                            terminalOutput.appendLine("[SCAN] Reading vehicle status...")
-                            obdManager.read_status()
+                            obdDiagnosticsPage.request("Reading vehicle status...", "[SCAN] Reading vehicle status...", function() { obdManager.read_status() })
                         }
                     }
                 }
@@ -322,13 +349,13 @@ Item {
                     Column {
                         anchors.centerIn: parent
                         width: parent.width - dp(16)
-                        spacing: dp(8)
+                        spacing: Math.min(dp(8), parent.height * 0.06)
 
                         Text {
                             width: parent.width
                             horizontalAlignment: Text.AlignHCenter
                             text: "Freeze Frame"
-                            font.pixelSize: Math.min(dp(32), parent.width * 0.16)
+                            font.pixelSize: Math.min(dp(32), parent.width * 0.16, parent.parent.height * 0.34)
                             font.bold: true
                             font.family: obdDiagnosticsPage.globalFont
                             color: "white"
@@ -339,7 +366,7 @@ Item {
                             width: parent.width
                             horizontalAlignment: Text.AlignHCenter
                             text: "Snapshot at fault"
-                            font.pixelSize: Math.min(dp(18), parent.width * 0.09)
+                            font.pixelSize: Math.min(dp(18), parent.width * 0.09, parent.parent.height * 0.19)
                             font.family: obdDiagnosticsPage.globalFont
                             color: "white"
                             opacity: 0.8
@@ -351,10 +378,7 @@ Item {
                         id: mouseAreaFreezeFrame
                         anchors.fill: parent
                         onClicked: {
-                            isLoading = true
-                            statusMessage = "Reading freeze frame..."
-                            terminalOutput.appendLine("[SCAN] Reading freeze frame data...")
-                            obdManager.read_freeze_frame()
+                            obdDiagnosticsPage.request("Reading freeze frame...", "[SCAN] Reading freeze frame data...", function() { obdManager.read_freeze_frame() })
                         }
                     }
                 }
@@ -529,7 +553,6 @@ Item {
                         property int maxLines: 50
 
                         function appendLine(text) {
-                            console.log("[Terminal] appendLine called with:", text)
                             var lineColor = "#00ff00"  // Default green
 
                             if (text.indexOf("[ERROR]") === 0) {
@@ -560,7 +583,6 @@ Item {
                             }
 
                             lines = newLines
-                            console.log("[Terminal] lines now has", lines.length, "items")
                         }
 
                         function clear() {
@@ -573,7 +595,7 @@ Item {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: !diagGrid.portrait
-                    Layout.preferredHeight: diagGrid.portrait ? diagGrid.buttonRowHeight * 0.7 : -1
+                    Layout.preferredHeight: diagGrid.portrait ? diagGrid.buttonRowHeight : -1
                     Layout.row: diagGrid.portrait ? 2 : 1
                     Layout.column: diagGrid.portrait ? 0 : 3
                     Layout.columnSpan: diagGrid.portrait ? 2 : 1
@@ -583,13 +605,13 @@ Item {
                     Column {
                         anchors.centerIn: parent
                         width: parent.width - dp(16)
-                        spacing: dp(8)
+                        spacing: Math.min(dp(8), parent.height * 0.06)
 
                         Text {
                             width: parent.width
                             horizontalAlignment: Text.AlignHCenter
                             text: "Clear DTCs"
-                            font.pixelSize: Math.min(dp(32), parent.width * 0.16)
+                            font.pixelSize: Math.min(dp(32), parent.width * 0.16, parent.parent.height * 0.34)
                             font.bold: true
                             font.family: obdDiagnosticsPage.globalFont
                             color: "white"
@@ -600,7 +622,7 @@ Item {
                             width: parent.width
                             horizontalAlignment: Text.AlignHCenter
                             text: "Reset CEL & codes"
-                            font.pixelSize: Math.min(dp(18), parent.width * 0.09)
+                            font.pixelSize: Math.min(dp(18), parent.width * 0.09, parent.parent.height * 0.19)
                             font.family: obdDiagnosticsPage.globalFont
                             color: "white"
                             opacity: 0.8
@@ -670,35 +692,18 @@ Item {
         }
 
         onAccepted: {
-            isLoading = true
-            statusMessage = "Clearing DTCs..."
-            terminalOutput.appendLine("[CLEAR] Clearing all DTCs and resetting CEL...")
-            obdManager.clear_dtc()
+            obdDiagnosticsPage.request("Clearing DTCs...", "[CLEAR] Clearing all DTCs and resetting CEL...", function() { obdManager.clear_dtc() })
         }
     }
 
-    // Enter diagnostic mode on component creation (pauses async polling)
-    Component.onCompleted: {
-        if (obdManager) {
-            if (obdManager.is_connected()) {
-                terminalOutput.appendLine("[INFO] Entering diagnostic mode...")
-                obdManager.enter_diagnostic_mode()
-                terminalOutput.appendLine("[INFO] Diagnostic mode initialized")
-                terminalOutput.appendLine("[SCAN] Reading vehicle status...")
-                obdManager.read_status()
-            } else {
-                terminalOutput.appendLine("[WARN] OBD not connected - diagnostic commands unavailable")
-                terminalOutput.appendLine("[INFO] Connect to vehicle first, then return to this menu")
-            }
-        }
-    }
+    // Shown as soon as it is built (not prewarmed): onVisibleChanged does not fire
+    Component.onCompleted: if (visible) enterDiagnostics()
 
     // Fallback: Exit diagnostic mode when component is destroyed
     // Note: onVisibleChanged handles the normal StackView navigation case,
     // but this catches the case when the component is actually destroyed
     Component.onDestruction: {
         if (obdManager && obdManager.is_diagnostic_mode()) {
-            console.log("[OBD] OBDDiagnostics component being destroyed, exiting diagnostic mode")
             obdManager.exit_diagnostic_mode()
         }
     }
