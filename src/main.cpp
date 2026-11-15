@@ -71,6 +71,7 @@ extern "C" {
 #endif
 #ifdef OCTAVE_WASM
 #include "platform/wasm/webbluetooth.h"
+#include "platform/wasm/webserial.h"
 #include "platform/wasm/webservice.h"
 #include "platform/wasm/webfrontends.h"
 #endif
@@ -664,8 +665,12 @@ int main(int argc, char *argv[])
             headless = true;
         else if (std::strcmp(argv[i], "--dump-api") == 0 && i + 1 < argc)
             dumpApiDir = QString::fromLocal8Bit(argv[++i]);
+        else if (std::strncmp(argv[i], "--dump-api=", 11) == 0)
+            dumpApiDir = QString::fromLocal8Bit(argv[i] + 11);
         else if (std::strcmp(argv[i], "--config") == 0 && i + 1 < argc)
             configDir = QString::fromLocal8Bit(argv[++i]);
+        else if (std::strncmp(argv[i], "--config=", 9) == 0)
+            configDir = QString::fromLocal8Bit(argv[i] + 9);
         else if (std::strcmp(argv[i], "--sim") == 0)
             sim = true;
     }
@@ -913,9 +918,12 @@ int main(int argc, char *argv[])
 
 #ifdef OCTAVE_WASM
     WebBluetoothLink::registerTransport();
+    WebSerialLink::registerTransport();
     QObject::connect(&core.obdManager, &OBDManager::simulatedChanged, &core.obdManager, [&core] {
-        if (core.obdManager.isSimulated())
+        if (core.obdManager.isSimulated()) {
             WebBluetoothLink::instance()->disconnectDevice();
+            WebSerialLink::instance()->disconnectPort();
+        }
     });
 #endif
 

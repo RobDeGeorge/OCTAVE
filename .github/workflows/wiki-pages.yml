@@ -137,6 +137,18 @@ jobs:
           status=$?
           kill $server
           exit $status
+      # The Web Serial OBD transport against a fake ELM327 on a fake
+      # navigator.serial: connect, replug, hand-over to the simulated car
+      - name: Check the Web Serial adapter path
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          python3 packaging/wasm/serve.py wasm-site 8092 &
+          server=$!
+          CHROME=google-chrome node packaging/wasm/check_webserial.mjs http://127.0.0.1:8092/
+          status=$?
+          kill $server
+          exit $status
       - uses: actions/upload-artifact@v4
         with:
           name: octave-wasm

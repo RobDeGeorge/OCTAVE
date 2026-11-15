@@ -4,7 +4,7 @@
 package octave
 
 // ObjectNames is every service object, as hello lists them.
-var ObjectNames = []string{"airPlayManager", "androidAutoManager", "audioAnalyzer", "berryIMU", "clock", "dashboardManager", "diagnosticsManager", "esp32VolumeManager", "fontCatalog", "frontendManager", "gestureSensor", "mediaManager", "networkManager", "nowPlaying", "obdAdapterFinder", "obdManager", "paramStore", "parameterCatalog", "phoneMirrorManager", "settingsManager", "shiftLightManager", "sim", "spotifyManager", "themeCatalog", "tripRecorder", "units", "volumeController"}
+var ObjectNames = []string{"airPlayManager", "androidAutoManager", "audioAnalyzer", "berryIMU", "busMonitor", "clock", "customPids", "dashboardManager", "diagnosticsManager", "esp32VolumeManager", "fontCatalog", "frontendManager", "gestureSensor", "mediaManager", "networkManager", "nowPlaying", "obdAdapterFinder", "obdManager", "paramStore", "parameterCatalog", "phoneMirrorManager", "settingsManager", "shiftLightManager", "sim", "spotifyManager", "themeCatalog", "tripRecorder", "units", "volumeController"}
 
 // AirPlayManager is the service object "airPlayManager" (C++ AirPlayManager); NewAirPlayManager(c) binds it to a client.
 type AirPlayManager struct{ c *Client }
@@ -618,6 +618,116 @@ func (o BerryIMU) Cleanup() error {
 	return o.c.Call("berryIMU", "cleanup", nil)
 }
 
+// BusMonitor is the service object "busMonitor" (C++ BusMonitor); NewBusMonitor(c) binds it to a client.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+type BusMonitor struct{ c *Client }
+
+// NewBusMonitor binds "busMonitor" to c.
+func NewBusMonitor(c *Client) BusMonitor { return BusMonitor{c} }
+
+// Name is the object's name on the wire.
+func (BusMonitor) Name() string { return "busMonitor" }
+
+// GetAvailable reads the property "available" (bool).
+func (o BusMonitor) GetAvailable() (v bool, err error) {
+	err = o.c.Get("busMonitor", "available", &v)
+	return
+}
+
+// GetActive reads the property "active" (bool).
+func (o BusMonitor) GetActive() (v bool, err error) {
+	err = o.c.Get("busMonitor", "active", &v)
+	return
+}
+
+// GetFilter reads the property "filter" (QString).
+func (o BusMonitor) GetFilter() (v string, err error) {
+	err = o.c.Get("busMonitor", "filter", &v)
+	return
+}
+
+// GetNote reads the property "note" (QString).
+func (o BusMonitor) GetNote() (v string, err error) {
+	err = o.c.Get("busMonitor", "note", &v)
+	return
+}
+
+// GetIds reads the property "ids" (QVariantList).
+func (o BusMonitor) GetIds() (v []any, err error) {
+	err = o.c.Get("busMonitor", "ids", &v)
+	return
+}
+
+// GetFrameCount reads the property "frameCount" (int).
+func (o BusMonitor) GetFrameCount() (v int, err error) {
+	err = o.c.Get("busMonitor", "frameCount", &v)
+	return
+}
+
+// GetFramesPerSecond reads the property "framesPerSecond" (int).
+func (o BusMonitor) GetFramesPerSecond() (v int, err error) {
+	err = o.c.Get("busMonitor", "framesPerSecond", &v)
+	return
+}
+
+// GetOverruns reads the property "overruns" (int).
+func (o BusMonitor) GetOverruns() (v int, err error) {
+	err = o.c.Get("busMonitor", "overruns", &v)
+	return
+}
+
+// GetCanRecord reads the property "canRecord" (bool).
+func (o BusMonitor) GetCanRecord() (v bool, err error) {
+	err = o.c.Get("busMonitor", "canRecord", &v)
+	return
+}
+
+// GetRecording reads the property "recording" (bool).
+func (o BusMonitor) GetRecording() (v bool, err error) {
+	err = o.c.Get("busMonitor", "recording", &v)
+	return
+}
+
+// GetLogFile reads the property "logFile" (QString).
+func (o BusMonitor) GetLogFile() (v string, err error) {
+	err = o.c.Get("busMonitor", "logFile", &v)
+	return
+}
+
+// Start1 calls start(QString) -> bool.
+func (o BusMonitor) Start1(filter string) (v bool, err error) {
+	err = o.c.Call("busMonitor", "start", &v, filter)
+	return
+}
+
+// Start0 calls start() -> bool.
+func (o BusMonitor) Start0() (v bool, err error) {
+	err = o.c.Call("busMonitor", "start", &v)
+	return
+}
+
+// Stop calls stop().
+func (o BusMonitor) Stop() error {
+	return o.c.Call("busMonitor", "stop", nil)
+}
+
+// Clear calls clear().
+func (o BusMonitor) Clear() error {
+	return o.c.Call("busMonitor", "clear", nil)
+}
+
+// StartRecording calls startRecording() -> bool.
+func (o BusMonitor) StartRecording() (v bool, err error) {
+	err = o.c.Call("busMonitor", "startRecording", &v)
+	return
+}
+
+// StopRecording calls stopRecording().
+func (o BusMonitor) StopRecording() error {
+	return o.c.Call("busMonitor", "stopRecording", nil)
+}
+
 // Clock is the service object "clock" (C++ Clock); NewClock(c) binds it to a client.
 type Clock struct{ c *Client }
 
@@ -636,6 +746,47 @@ func (o Clock) GetTime() (v string, err error) {
 // UpdateTime calls update_time().
 func (o Clock) UpdateTime() error {
 	return o.c.Call("clock", "update_time", nil)
+}
+
+// CustomPids is the service object "customPids" (C++ CustomPids); NewCustomPids(c) binds it to a client.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+type CustomPids struct{ c *Client }
+
+// NewCustomPids binds "customPids" to c.
+func NewCustomPids(c *Client) CustomPids { return CustomPids{c} }
+
+// Name is the object's name on the wire.
+func (CustomPids) Name() string { return "customPids" }
+
+// GetFile reads the property "file" (QString).
+func (o CustomPids) GetFile() (v string, err error) {
+	err = o.c.Get("customPids", "file", &v)
+	return
+}
+
+// GetFileExists reads the property "fileExists" (bool).
+func (o CustomPids) GetFileExists() (v bool, err error) {
+	err = o.c.Get("customPids", "fileExists", &v)
+	return
+}
+
+// GetPids reads the property "pids" (QVariantList).
+func (o CustomPids) GetPids() (v []any, err error) {
+	err = o.c.Get("customPids", "pids", &v)
+	return
+}
+
+// GetErrors reads the property "errors" (QStringList).
+func (o CustomPids) GetErrors() (v []string, err error) {
+	err = o.c.Get("customPids", "errors", &v)
+	return
+}
+
+// CreateExample calls createExample() -> bool.
+func (o CustomPids) CreateExample() (v bool, err error) {
+	err = o.c.Call("customPids", "createExample", &v)
+	return
 }
 
 // DashboardManager is the service object "dashboardManager" (C++ DashboardManager); NewDashboardManager(c) binds it to a client.
@@ -1949,6 +2100,14 @@ func (o ObdAdapterFinder) GetCanScan() (v bool, err error) {
 	return
 }
 
+// GetCanPickSerial reads the property "canPickSerial" (bool).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o ObdAdapterFinder) GetCanPickSerial() (v bool, err error) {
+	err = o.c.Get("obdAdapterFinder", "canPickSerial", &v)
+	return
+}
+
 // GetBluetoothOn reads the property "bluetoothOn" (bool).
 func (o ObdAdapterFinder) GetBluetoothOn() (v bool, err error) {
 	err = o.c.Get("obdAdapterFinder", "bluetoothOn", &v)
@@ -1988,6 +2147,13 @@ func (o ObdAdapterFinder) GetStatusIsError() (v bool, err error) {
 // StartScan calls startScan().
 func (o ObdAdapterFinder) StartScan() error {
 	return o.c.Call("obdAdapterFinder", "startScan", nil)
+}
+
+// PickSerialPort calls pickSerialPort().
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o ObdAdapterFinder) PickSerialPort() error {
+	return o.c.Call("obdAdapterFinder", "pickSerialPort", nil)
 }
 
 // StopScan calls stopScan().

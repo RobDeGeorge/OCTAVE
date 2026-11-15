@@ -6,6 +6,7 @@
 #include <QList>
 #include <QPair>
 #include <QSet>
+#include <QMetaType>
 #include <QString>
 #include <QVector>
 
@@ -74,6 +75,33 @@ struct VinInfo {
 // ELM327Protocol::parseElmVoltage().
 inline const PidKey kElmVoltageKey{0, 0};
 
+// A manufacturer-specific reading from the user's custom PID file
+// (custompids.h): a read-by-identifier request (mode 0x22 with a two-byte
+// id, mode 0x21 with one byte), to the ECU `header` addresses or, with none,
+// to whoever answers the standard request address. Polled like a PID under
+// the key {kCustomPidMode, index in the list OBDManager was given}; its
+// value flows as OBDManager::obdParameterChanged(paramId, value).
+struct CustomPidRequest {
+    QString paramId;
+    int mode = 0x22;
+    int pid = 0;
+    QString header;        // hex for "ATSH" ("7E1", "DA10F1"), "" for the default
+    PidDecoder decoder;    // NaN when the reply can't be decoded
+};
+inline constexpr int kCustomPidMode = 0x10000;
+
+// One message heard on the vehicle bus while the adapter only listens
+// ("ATMA", busmonitor.h). On CAN `id` is the frame's identifier (idDigits 3
+// for 11-bit, 8 for 29-bit) and `data` its 0-8 bytes; on the older buses
+// (J1850, ISO 9141-2, KWP2000) `id` is the three header bytes (idDigits 6)
+// and `data` what follows them, checksum included.
+struct BusFrame {
+    quint32 id = 0;
+    quint8 idDigits = 3;
+    QByteArray data;
+    qint64 ms = 0;         // since monitoring started
+};
+
 // Parsed response from ELM327: (mode, pid, data_bytes)
 struct ParsedResponse {
     int mode;
@@ -129,6 +157,31 @@ public:
     static QSet<int> supportedPidsFromLines(const QStringList &lines, int base, bool *nextRange = nullptr);
     // ATDPN's answer ("A6", "6") names a CAN protocol (ISO 15765, 6-C)
     static bool isCanProtocol(const QString &dpn);
+
+    // Read-by-identifier, the only services custom PIDs may use: mode 0x22
+    // ("221940\r", a two-byte id) and mode 0x21 ("2101\r", one byte)
+    static bool isReadDataMode(int mode) { return mode == 0x21 || mode == 0x22; }
+    static QByteArray formatDataRequest(int mode, int id);
+    // The data bytes after the echoed id of the positive reply ("621940" +
+    // data, CAN multi-frame joined); nullopt for a refusal ("7F2231"), NO
+    // DATA or another id
+    static std::optional<QVector<uint8_t>> parseDataResponse(const QStringList &lines, int mode, int id);
+    // What "ATSH" must be given to address requests as the adapter does by
+    // itself on the protocol ATDPN names: "7DF" (11-bit CAN), "DB33F1"
+    // (29-bit CAN), "686AF1" (J1850 VPW, ISO 9141-2), "616AF1" (J1850 PWM).
+    // Empty where OCTAVE doesn't know it (KWP2000, J1939, user CAN): a
+    // custom PID with a header is not polled there, as the header could
+    // not be put back.
+    static QByteArray defaultHeader(const QString &dpn);
+
+    // One line the adapter prints while monitoring (headers on), as a bus
+    // message. nullopt for anything else: "BUFFER FULL", "<RX ERROR", a
+    // remote frame, a line cut short.
+    static std::optional<BusFrame> parseMonitorLine(const QByteArray &line, bool can);
+    // What "ATCRA" takes as a receive filter: 3 (11-bit) or 8 (29-bit) hex
+    // digits, X for a digit that may be anything ("7E8", "0CX", "18DAF1XX").
+    // Returned upper-cased; empty when `text` isn't one.
+    static QByteArray busFilter(const QString &text);
 
     // Parse raw ELM327 response string.
     // Returns std::nullopt on error/invalid.
@@ -241,5 +294,7 @@ private:
     QByteArray m_buffer;
     QStringList m_lastLines;
 };
+
+Q_DECLARE_METATYPE(BusFrame)
 
 #endif // ELM327PROTOCOL_H

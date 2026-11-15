@@ -87,7 +87,7 @@ private slots:
         QVERIFY(root->property("alertLevel").toInt() > 0);
         root->setProperty("value", qQNaN());
         QVERIFY(!root->property("hasValue").toBool());
-        QVERIFY(!root->property("alertLevel").toInt() > 0);
+        QCOMPARE(root->property("alertLevel").toInt(), 0);
         QCOMPARE(root->property("_litSegments").toInt(), 0);
         root->setProperty("value", qInf());
         QVERIFY(!root->property("hasValue").toBool());

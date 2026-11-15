@@ -33,6 +33,19 @@ class OBDConnectionWorker;
 class RfcommSocket;
 class QProcess;
 
+// Where the messages of the listen-only bus monitor go (busmonitor.h).
+// Called on the manager's thread.
+class BusSink
+{
+public:
+    virtual ~BusSink() = default;
+    // `overruns`: times the adapter's buffer filled since the last call
+    // (messages were lost each time)
+    virtual void busFrames(const QList<BusFrame> &frames, int overruns) = 0;
+    // `note` says why monitoring ended when it wasn't asked to
+    virtual void busMonitorChanged(bool active, const QString &note) = 0;
+};
+
 // ===========================================================================
 // OBDManager -- desktop (USB/serial) OBD-II manager using QSerialPort.
 //
@@ -289,6 +302,22 @@ public:
     // setParameterDemand(); ids already in the foreground are polled there.
     Q_INVOKABLE void setBackgroundDemand(const QString &consumer, const QStringList &paramIds);
 
+    // The manufacturer-specific readings of the user's custom PID file
+    // (custompids.h). Once, before the first connection. Each is polled
+    // while its paramId is demanded, whatever the vehicle scan found (the
+    // scan can't see them), and counts as supported by the vehicle.
+    void setCustomPids(const QList<CustomPidRequest> &pids);
+
+    // The bus monitor (busmonitor.h): the adapter only listens ("ATMA") and
+    // every message it hears goes to the sink. Polling pauses meanwhile and
+    // resumes when it stops; any other request (trouble codes, a scan) ends
+    // it. `filter` is ELM327Protocol::busFilter() text or empty. False when
+    // there is no connection that can do it (none, or the Android BLE path).
+    void setBusSink(BusSink *sink) { m_busSink = sink; }
+    bool canMonitorBus() const;
+    bool startBusMonitor(const QString &filter);
+    void stopBusMonitor();
+
     // The poll list for a demand set (consumer -> parameter ids) and this
     // session's scan result: what buildPidsToWatch() uses. Static so the
     // rules can be tested without a connection.
@@ -433,6 +462,8 @@ private slots:
     void onWorkerScanProgress(int progress, const QString &message);
     void onWorkerScanComplete(const QStringList &supported);
     void onWorkerScanOutput(const QString &line);
+    void onWorkerBusFrames(const QList<BusFrame> &frames, int overruns);
+    void onWorkerBusMonitor(bool active, const QString &note);
 
     // Internal timers
     void onStartupTimer();
@@ -506,6 +537,11 @@ private:
     // from applyPollList().
     QList<PidKey> buildPidsToWatch() const;
     QList<PidKey> buildBackgroundPids(const QList<PidKey> &foreground) const;
+    // {kCustomPidMode, index} of every custom PID `demand` asks for
+    QList<PidKey> customKeys(const QHash<QString, QSet<QString>> &demand) const;
+    QList<CustomPidRequest> m_customPids;
+    BusSink *m_busSink = nullptr;
+    bool m_busMonitoring = false;   // the data watchdog is off meanwhile
 
     QHash<QString, QSet<QString>> m_paramDemand;
     QHash<QString, QSet<QString>> m_backgroundDemand;
@@ -672,6 +708,13 @@ private:
     // Timers
     QTimer m_startupTimer;
     QTimer m_dataWatchdogTimer;
+    // The one pending "try again later" (auto-reconnect, post-diagnostic,
+    // stale link). A member, so a connection made meanwhile cancels it: as
+    // QTimer::singleShot calls these fired into a live link and rebuilt it.
+    QTimer m_retryTimer;
+    // The last attempt reached the adapter and no vehicle answered: the
+    // passive scan keeps trying, as the ignition is probably just off
+    bool m_waitingForVehicle = false;
     QTimer m_deviceScannerTimer;
     QTimer m_portChangeTimer;
 
@@ -755,6 +798,8 @@ public:
     void setFastMode(bool fast);
     void setTimeout(int seconds);
     void setPidsToWatch(const QList<PidKey> &pids, const QList<PidKey> &background = {});
+    // What the keys {kCustomPidMode, index} stand for. Before the thread starts.
+    void setCustomPids(const QList<CustomPidRequest> &pids);
 
     // Extra transport for ports the serial / RFCOMM paths don't handle:
     // `claims` says whether it serves a port, `create` returns an unopened
@@ -795,6 +840,11 @@ signals:
     // One line for the settings page's connection log
     void logLine(const QString &line);
 
+    // Bus monitor: what was heard since the last emission, and how often
+    // the adapter's buffer filled meanwhile
+    void busFrames(const QList<BusFrame> &frames, int overruns);
+    void busMonitorChanged(bool active, const QString &note);
+
 public slots:
     // Called from OBDManager (via queued connection)
     void doConnect();
@@ -811,9 +861,14 @@ public slots:
     void doReadFreezeFrame();
     void doReadVin();
     void doScanVehicle();
+    // Listen only: "ATMA" with headers on, until doStopBusMonitor() or any
+    // other request. `filter`: ELM327Protocol::busFilter() text or empty.
+    void doStartBusMonitor(const QString &filter);
+    void doStopBusMonitor();
 
 private slots:
     void onPollTimer();
+    void onMonitorTimer();
     void onSerialReadyRead();
     void onSerialError(QSerialPort::SerialPortError error);
 
@@ -869,6 +924,45 @@ private:
     int m_batchMisses = 0;
     QList<PidKey> m_deferred;   // drawn by a batch they couldn't join; polled next, in order
     void pollBatch(const QList<int> &pids);
+
+    // Custom PIDs (CustomPidRequest). One that keeps going unanswered is
+    // left alone for kCustomRetryMs between tries, so a file of readings
+    // this car doesn't have costs the live gauges next to nothing.
+    static constexpr int kCustomMissLimit = 3;
+    static constexpr qint64 kCustomRetryMs = 30000;
+    struct CustomState {
+        int misses = 0;
+        qint64 retryAt = 0;      // m_customClock time, 0 = poll freely
+        bool unusable = false;   // needs a header this protocol can't restore
+    };
+    QList<CustomPidRequest> m_customPids;
+    QVector<CustomState> m_customState;
+    QElapsedTimer m_customClock;
+    QString m_protocol;          // ATDPN's answer
+    void pollCustom(int index);
+    // "ATSH": true when the adapter said OK
+    bool setHeader(const QByteArray &header);
+
+    // Bus monitor. While m_monitoring the adapter prints messages unasked
+    // and nothing may be written to it: a byte ends its monitor mode.
+    // sendCommand() therefore ends monitoring first (endMonitor()).
+    QTimer m_monitorTimer;
+    bool m_monitoring = false;
+    bool m_monitorResume = false;    // polling was on, or was asked for meanwhile
+    QByteArray m_monitorFilter;
+    QByteArray m_monitorLine;        // bytes of a line not yet ended
+    QString m_monitorNote;           // the last line that wasn't a message
+    QList<BusFrame> m_monitorBatch;
+    int m_monitorOverruns = 0;
+    int m_monitorRestarts = 0;       // "ATMA" sent again with nothing heard since
+    int m_monitorEmptyReads = 0;
+    QElapsedTimer m_monitorClock;
+    qint64 m_monitorEmitAt = 0;
+    void writeMonitorCommand();
+    void flushMonitorBatch();
+    void endMonitor(const QString &note);
+    void monitorLinkLost(const QString &reason);
+
     // Poll round trips, logged at info level ("OBD polling: ...") 10 s
     // into the connection and every 30 s after
     QElapsedTimer m_statsWindow;

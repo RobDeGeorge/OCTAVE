@@ -56,6 +56,14 @@ struct LinkSettings {
     bool realistic = true;      // Bluetooth-ish latency + 2 % NO DATA
     double failureRate = 0.02;
     qint64 downUntilMs = 0;     // simulated Bluetooth dropout ends at (msecs since epoch)
+
+    // What a real car and adapter refuse or get wrong. All off unless a
+    // test turns them on: the OBD stack has to cope with each.
+    bool ignitionOff = false;   // no ECU answers: "SEARCHING...", then "UNABLE TO CONNECT"
+    bool refuseClear = false;   // mode 04 is refused: 7F 04 22 (conditions not correct)
+    bool silent = false;        // the port opens, takes bytes and never answers (not an ELM327)
+    int chunkBytes = 0;         // > 0: a reply arrives this many bytes at a time
+    bool noRpm = false;         // the car has no PID 0C (some EVs)
 };
 
 class CarState

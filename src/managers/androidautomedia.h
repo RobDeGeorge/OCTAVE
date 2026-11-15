@@ -96,7 +96,7 @@ private:
     bool m_pendingGain = false;
     bool m_playing = false;
     QString m_title, m_artist, m_album, m_app, m_artUrl;
-    int m_artSeq = 0;
+    quint32 m_artSeq = 0;   // number of the art file: a new name per cover (util/artfile.h)
     int m_durationMs = 0;
     int m_reportedPositionMs = 0;
     QElapsedTimer m_sinceReport;

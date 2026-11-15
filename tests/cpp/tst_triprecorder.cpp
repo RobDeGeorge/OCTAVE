@@ -39,7 +39,8 @@ class TstTripRecorder : public QObject
         r->setHeartbeatMs(2000);
         r->start();
         // The store opens on its own thread; nothing is recorded until it reports ready
-        QTest::qWaitFor([&r]() { return r->storeReady(); }, 5000);
+        if (!QTest::qWaitFor([&r]() { return r->storeReady(); }, 5000))
+            qWarning("the trip store did not report ready within 5 s");
         r->setConnected(true);
         r->setVehicleParameters({QStringLiteral("RPM"), QStringLiteral("SPEED"), QStringLiteral("COOLANT_TEMP")});
         return r;

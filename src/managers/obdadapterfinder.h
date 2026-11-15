@@ -17,7 +17,8 @@
 //
 // Phase 1 of TODO/obd-adapter-discovery.md: the full flow runs on desktop
 // Linux (Pi / Orange Pi included). The browser build has its own over Web
-// Bluetooth (src/platform/wasm/obdadapterfinder_wasm.cpp). Elsewhere
+// Bluetooth and Web Serial (src/platform/wasm/obdadapterfinder_wasm.cpp),
+// where pickSerialPort() adds an adapter on a USB cable. Elsewhere
 // `supported` is false and the QML sheet falls back to
 // obdManager.availableAdapters.
 // QML context property "obdAdapterFinder".
@@ -41,15 +42,20 @@ class OBDAdapterFinder : public QObject
     Q_OBJECT
     // Service permissions (src/service/servicescopes.h)
     Q_CLASSINFO("octave.scope", "vehicle")
+    Q_CLASSINFO("octave.experimental", "canPickSerial pickSerialPort")
     // Discovery + pairing + connect work on this platform
     Q_PROPERTY(bool supported READ supported CONSTANT)
     // startScan() can look for adapters (false in a browser without Web
     // Bluetooth, where the sheet offers only the simulated car)
     Q_PROPERTY(bool canScan READ canScan CONSTANT)
+    // pickSerialPort() can open a list of serial ports: the browser build in
+    // a browser with Web Serial (Chrome / Edge on a computer). False in the
+    // app, where a cable adapter is a port in obdManager.availableAdapters.
+    Q_PROPERTY(bool canPickSerial READ canPickSerial CONSTANT)
     // A Bluetooth controller exists and is powered
     Q_PROPERTY(bool bluetoothOn READ bluetoothOn NOTIFY bluetoothOnChanged)
     Q_PROPERTY(bool scanning READ scanning NOTIFY scanningChanged)
-    // [{address, name, rssi, kind: "classic"|"ble"|"dual", likelyObd,
+    // [{address, name, rssi, kind: "classic"|"ble"|"dual"|"serial"|"sim", likelyObd,
     //   paired, connectable, note}] -- likely adapters first, then by signal
     Q_PROPERTY(QVariantList devices READ devices NOTIFY devicesChanged)
     // Address being paired / connected, "" when idle
@@ -63,6 +69,7 @@ public:
 
     bool supported() const;
     bool canScan() const;
+    bool canPickSerial() const;
     bool bluetoothOn() const;
     bool scanning() const { return m_scanning; }
     QVariantList devices() const { return m_deviceList; }
@@ -75,6 +82,10 @@ public:
 
 public slots:
     void startScan();
+    // Browser build: the browser's serial port list (a USB adapter, or a
+    // Bluetooth Classic one paired in the system); the port picked is listed
+    // and connected. Needs a tap, like startScan() there. Nothing elsewhere.
+    void pickSerialPort();
     void stopScan();
     void connectAdapter(const QString &address);
     void cancel();

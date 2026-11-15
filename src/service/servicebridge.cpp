@@ -268,7 +268,7 @@ void ServiceBridge::install(CommandServer &server)
             const std::shared_ptr<Connection> c = CommandServer::currentConnection();
             if (!c)
                 throw CommandError(QStringLiteral("mediaTicket needs a connection"));
-            return QVariantMap{{QStringLiteral("ticket"), m_pairing->mintTicket(c->tokenId())},
+            return QVariantMap{{QStringLiteral("ticket"), m_pairing->mintTicket(c->tokenId(), connectionScopes(*c))},
                                {QStringLiteral("expiresIn"), int(ServicePairing::kTicketLifetimeMs / 1000)}};
         });
         server.setTrust([this](const Connection &c) { return trusted(c); },

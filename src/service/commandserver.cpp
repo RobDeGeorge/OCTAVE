@@ -440,7 +440,7 @@ private:
                 try {
                     r = route(request.path);
                 } catch (const CommandError &e) {
-                    r = StaticFiles::Reply{503, "Service Unavailable", "text/plain", QByteArray(e.what()) + '\n'};
+                    r = StaticFiles::Reply{503, "Service Unavailable", "text/plain", QByteArray(e.what()) + '\n', {}};
                 }
                 sock.write(Ws::httpResponse(r.status, r.reason, r.contentType, r.body,
                                             Ws::webRootCsp(request.headers.value("host")), r.headers));
@@ -452,7 +452,7 @@ private:
             // A frontend's own files (--web-root), same-origin with the socket
             const StaticFiles::Reply r = request.method == "GET"
                 ? StaticFiles::serve(m_owner->webRoot(), request.path)
-                : StaticFiles::Reply{405, "Method Not Allowed", "text/plain", "GET only\n"};
+                : StaticFiles::Reply{405, "Method Not Allowed", "text/plain", "GET only\n", {}};
             sock.write(Ws::httpResponse(r.status, r.reason, r.contentType, r.body,
                                         Ws::webRootCsp(request.headers.value("host"))));
             flush(sock);

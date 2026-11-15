@@ -5,6 +5,9 @@
 // reports and the real MediaManager through its signals.
 
 #include <QBuffer>
+#include <QDir>
+#include <QFileInfo>
+#include <QSet>
 #include <QElapsedTimer>
 #include <QImage>
 #include <QSignalSpy>
@@ -428,6 +431,31 @@ private slots:
         QTRY_COMPARE(colors.count(), 2);
         QTest::qWait(100);
         QCOMPARE(colors.count(), 2);   // once per art change
+    }
+
+    // QML caches a picture by its URL: a cover must never get the URL an
+    // earlier cover had (two alternating files showed the art of two tracks ago)
+    void everyPhoneCoverHasItsOwnUrl()
+    {
+        MediaManager media;
+        PhoneMirrorManager phone;
+        NowPlaying np(&media, &phone, nullptr);
+        phone.onMediaState(phoneState(true));
+        QSet<QString> urls;
+        QString previous;
+        for (int i = 0; i < 5; ++i) {
+            phone.onMediaArt(redJpeg());
+            const QString url = np.artUrl();
+            QVERIFY(!urls.contains(url));
+            urls.insert(url);
+            QVERIFY(QFile::exists(QUrl(url).toLocalFile()));
+            if (!previous.isEmpty())
+                QVERIFY(QFile::exists(QUrl(previous).toLocalFile()));   // a cross-fade may still load it
+            previous = url;
+        }
+        // Older ones are removed
+        const QDir dir = QFileInfo(QUrl(previous).toLocalFile()).dir();
+        QCOMPARE(dir.entryList({QStringLiteral("phone_media_art_*")}, QDir::Files).size(), 2);
     }
 
     void noExtractionForOtherThemes()

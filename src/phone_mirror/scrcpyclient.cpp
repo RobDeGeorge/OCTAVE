@@ -359,10 +359,12 @@ void ScrcpyClient::fail(const QString &reason)
 
 void ScrcpyClient::sendControl(const QByteArray &msg)
 {
+    // Read under the lock the teardown takes before it closes the socket:
+    // a send could otherwise go to a closed, or reused, descriptor
+    std::lock_guard<std::mutex> lock(m_sendMutex);
     const qintptr fd = m_controlFd.load();
     if (fd < 0)
         return;
-    std::lock_guard<std::mutex> lock(m_sendMutex);
 #ifdef Q_OS_WIN
     ::send(static_cast<SOCKET>(fd), msg.constData(), msg.size(), 0);
 #else
@@ -718,7 +720,7 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
         m_control->setSocketOption(QAbstractSocket::LowDelayOption, 1);
         m_controlFd = m_control->socketDescriptor();
 
-        char name[64] = {0};
+        char name[65] = {0};   // 64 from the wire and a terminator the phone cannot overwrite
         char meta[12] = {0};
         if (!recvExact(video, name, 64, m_stopping) || !recvExact(video, meta, 12, m_stopping)) {
             fail(QStringLiteral("handshake failed"));
@@ -750,7 +752,10 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
 
     // teardown (worker owns everything)
     qCInfo(lcScrcpyClient) << "session ending (stopping =" << m_stopping.load() << ")";
-    m_controlFd = -1;
+    {
+        std::lock_guard<std::mutex> lock(m_sendMutex);   // no sendControl() mid-close
+        m_controlFd = -1;
+    }
     for (QTcpSocket **s : {&m_video, &m_control}) {
         if (*s) { (*s)->abort(); delete *s; *s = nullptr; }
     }

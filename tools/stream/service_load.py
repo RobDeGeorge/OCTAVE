@@ -585,7 +585,8 @@ try:
     ids = [p["id"] for p in ctl.rpc({"op": "get", "object": "parameterCatalog", "property": "parameters"})["result"]]
     log = open(f"{WORK}/app.log").read()
     if "Using adb" in log:
-        raise SystemExit("the app found an adb: stopping before it talks to a device")
+        print("the app found an adb: stopping before it talks to a device (skipped)")
+        raise SystemExit(77)
     for _ in range(60):   # the simulated car connects
         try:
             if sim_status(ctl)["polls"] > 0:

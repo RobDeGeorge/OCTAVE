@@ -19,6 +19,7 @@ function(octave_add_test name)
         list(APPEND srcs "${OCTAVE_SRC}/${s}")
     endforeach()
     add_executable(${name} ${srcs})
+    octave_own_code(${name})
     target_include_directories(${name} PRIVATE "${OCTAVE_SRC}" "${CMAKE_BINARY_DIR}/generated")
     target_link_libraries(${name} PRIVATE Qt6::Test Qt6::Core ${T_LIBS})
     target_compile_definitions(${name} PRIVATE
@@ -42,6 +43,10 @@ octave_add_test(tst_volumecontroller SOURCES managers/volumecontroller.h manager
 octave_add_test(tst_shiftlightmanager SOURCES managers/shiftlightmanager.h managers/shiftlightmanager.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
 octave_add_test(tst_parametercatalog
     SOURCES managers/parametercatalog.h managers/parametercatalog.cpp managers/elm327protocol.cpp
+    LIBS Qt6::Gui Qt6::Qml)
+octave_add_test(tst_custompids
+    SOURCES managers/custompids.h managers/custompids.cpp managers/parametercatalog.h managers/parametercatalog.cpp
+            managers/elm327protocol.cpp managers/settingsmanager.h managers/settingsmanager.cpp
     LIBS Qt6::Gui Qt6::Qml)
 octave_add_test(tst_parameterstore
     SOURCES managers/parameterstore.h managers/parameterstore.cpp managers/parametercatalog.h managers/parametercatalog.cpp
@@ -84,6 +89,7 @@ octave_add_test(tst_obdsim
     SOURCES managers/obdmanager.h managers/obdmanager.cpp managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
             managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
+            managers/busmonitor.h managers/busmonitor.cpp
             sim/carsim.h sim/carsim.cpp sim/simelm327.h sim/simelm327.cpp
     LIBS Qt6::Gui Qt6::SerialPort)
 
@@ -304,7 +310,8 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME service_load_check
         COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/tools/stream/service_load.py"
                 $<TARGET_FILE:octave> 0 "${CMAKE_CURRENT_BINARY_DIR}/service_load_check" --check)
-    set_tests_properties(service_load_check PROPERTIES TIMEOUT 60)
+    # exit 77: an adb is installed here, and the check will not run beside one
+    set_tests_properties(service_load_check PROPERTIES TIMEOUT 60 SKIP_RETURN_CODE 77)
     # AppCore's cross-manager wiring on the real binary (`octave --headless
     # --sim`): volume / mute to the outputs, RPM to the shift light, readings to
     # paramStore and the black box, gauge units to the catalog, a track change

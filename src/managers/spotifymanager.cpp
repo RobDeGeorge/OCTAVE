@@ -442,6 +442,9 @@ void SpotifyManager::tokenRequest(const QList<QPair<QString, QString>> &form, bo
         body += QUrl::toPercentEncoding(kv.first) + '=' + QUrl::toPercentEncoding(kv.second);
     }
     QNetworkRequest req{QUrl(kTokenUrl)};
+    // A connection that dies mid-request must end: without a timeout the
+    // "refreshing" flag stayed set until TCP gave up, minutes later
+    req.setTransferTimeout(15000);
     req.setHeader(QNetworkRequest::ContentTypeHeader, QByteArrayLiteral("application/x-www-form-urlencoded"));
     QNetworkReply *reply = m_net.post(req, body);
     connect(reply, &QNetworkReply::finished, this, [this, reply, isRefresh] {
@@ -588,6 +591,7 @@ void SpotifyManager::api(const QByteArray &verb, const QString &path, const QJso
     }
     withToken([this, verb, path, body, done, retried] {
         QNetworkRequest req{QUrl(path.startsWith(QLatin1String("https://")) ? path : m_apiBase + path)};
+        req.setTransferTimeout(15000);
         req.setRawHeader("Authorization", "Bearer " + m_accessToken.toLatin1());
         QByteArray data;
         if (!body.isNull()) {

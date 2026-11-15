@@ -158,8 +158,8 @@ private:
 
 #else // Q_OS_MOBILE — mobile stub
 // Every slot/signal/property below must keep the exact desktop signature:
-// QML binds the same names on both builds (SettingsHubLayout,
-// AccessoriesSettingsPage's port list).
+// QML binds the same names on both builds (AccessoriesSettingsPage's
+// port list).
 
 #include <QObject>
 #include <QString>

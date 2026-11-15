@@ -6,15 +6,19 @@
 //
 // The slots share one manager and run in declaration order.
 
+#include <QFile>
+#include <QRegularExpression>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
 
 #include <algorithm>
+#include <limits>
 #include <memory>
 
 #include "sim/carsim.h"
 #include "sim/simelm327.h"
+#include "managers/busmonitor.h"
 #include "managers/obdmanager.h"
 #include "managers/settingsmanager.h"
 
@@ -40,6 +44,15 @@ private slots:
             [](const QString &port) { return port == QLatin1String(kSimPort); },
             [state](const QString &, QObject *parent) -> QIODevice * { return new SimElm327Device(state, parent); });
         m_obd = std::make_unique<OBDManager>(m_settings.get());
+        // Custom PIDs (custompids.h builds these from the user's file): the
+        // simulated transmission ECU's fluid temperature, the engine ECU's
+        // battery millivolts, and an id nobody answers
+        const double nan = std::numeric_limits<double>::quiet_NaN();
+        m_obd->setCustomPids({
+            {"SIM_TRANS_TEMP", 0x22, 0x1940, "7E1", [nan](const QVector<uint8_t> &b) { return b.size() >= 1 ? b[0] - 40.0 : nan; }},
+            {"SIM_BATT_MV", 0x22, 0x2000, "", [nan](const QVector<uint8_t> &b) { return b.size() >= 2 ? b[0] * 256.0 + b[1] : nan; }},
+            {"SIM_MISSING", 0x22, 0x9999, "7E1", [nan](const QVector<uint8_t> &b) { return b.size() >= 1 ? double(b[0]) : nan; }},
+        });
         m_obd->setPortOverride(QString::fromLatin1(kSimPort));
     }
 
@@ -88,6 +101,126 @@ private slots:
         m_sim->resetToNormal();
     }
 
+    void customPidsAreReadFromTheirEcuAndTheHeaderPutBack()
+    {
+        // The scan can't see them; the file says the car has them
+        QVERIFY(m_obd->vehicleSupportedParameters().contains(QStringLiteral("SIM_TRANS_TEMP")));
+
+        QSignalSpy values(m_obd.get(), &OBDManager::obdParameterChanged);
+        QSignalSpy sampled(m_obd.get(), &OBDManager::parameterSampled);
+        QSignalSpy coolant(m_obd.get(), &OBDManager::coolantTempChanged);
+        auto readings = [&values](const char *id) {
+            QList<float> out;
+            for (const QList<QVariant> &a : values) {
+                if (a.at(0).toString() == QLatin1String(id))
+                    out.append(a.at(1).toFloat());
+            }
+            return out;
+        };
+        m_obd->setParameterDemand("test", {"SIM_TRANS_TEMP", "SIM_BATT_MV", "SIM_MISSING", "COOLANT_TEMP"});
+
+        QTRY_VERIFY_WITH_TIMEOUT(!readings("SIM_TRANS_TEMP").isEmpty() && !readings("SIM_BATT_MV").isEmpty(), 10000);
+        const CarValues car = m_sim->state()->values();
+        QVERIFY(qAbs(readings("SIM_TRANS_TEMP").last() - (car.oil - 8.0)) <= 3.0);
+        QVERIFY(qAbs(readings("SIM_BATT_MV").last() - car.voltage * 1000.0) <= 500.0);
+        // They reach the parameter store and the black box like any reading
+        QVERIFY(std::any_of(sampled.cbegin(), sampled.cend(), [](const QList<QVariant> &a) {
+            return a.at(0).toString() == QLatin1String("SIM_TRANS_TEMP");
+        }));
+
+        // The simulated engine ECU is deaf while the adapter addresses the
+        // transmission's: coolant only keeps arriving between transmission
+        // readings if the default header went back after each one
+        coolant.clear();
+        values.clear();
+        QTRY_VERIFY_WITH_TIMEOUT(coolant.size() >= 3 && readings("SIM_TRANS_TEMP").size() >= 3, 10000);
+        QVERIFY(readings("SIM_MISSING").isEmpty());
+        QVERIFY(m_obd->isConnected());
+
+        m_obd->setParameterDemand("test", {"COOLANT_TEMP", "SPEED", "BOOST_PRESSURE_A"});
+    }
+
+    void busMonitorListensAndPutsTheAdapterBack()
+    {
+        QTemporaryDir logs;
+        BusMonitor bus(m_obd.get(), logs.path());
+        QSignalSpy coolant(m_obd.get(), &OBDManager::coolantTempChanged);
+        auto row = [&bus](const char *id) {
+            bus.refresh();
+            for (const QVariant &v : bus.ids()) {
+                if (v.toMap().value("id").toString() == QLatin1String(id))
+                    return v.toMap();
+            }
+            return QVariantMap();
+        };
+
+        QVERIFY(bus.available());
+        QVERIFY(!bus.start("7E"));          // not a message id
+        QVERIFY(!bus.note().isEmpty());
+        QVERIFY(!bus.active());
+
+        // Everything: the simulated bus's six broadcast messages
+        QVERIFY(bus.start());
+        QTRY_VERIFY_WITH_TIMEOUT(bus.active(), 5000);
+        QVERIFY(bus.note().isEmpty());
+        QVERIFY(bus.startRecording());
+        QTRY_VERIFY_WITH_TIMEOUT(row("0C9").value("count").toInt() >= 20 && !row("120").isEmpty(), 8000);
+        const QVariantMap engine = row("0C9");
+        QCOMPARE(engine.value("bytes").toStringList().size(), 8);
+        QVERIFY(qAbs(engine.value("periodMs").toInt() - 20) <= 10);
+        // Its rolling counter (the last byte) changes with every message
+        QCOMPARE(engine.value("changed").toList().last().toBool(), true);
+        // Engine speed is in bytes 1-2, as the simulated car has it
+        const QStringList bytes = engine.value("bytes").toStringList();
+        const int rpm = (bytes.at(1) + bytes.at(2)).toInt(nullptr, 16) / 4;
+        QVERIFY(qAbs(rpm - m_sim->state()->values().rpm) <= 1500);
+        // The adapter is listening, not answering: no readings meanwhile
+        coolant.clear();
+        QTest::qWait(600);
+        QCOMPARE(coolant.size(), 0);
+        // Its buffer fills on an unfiltered bus; listening carries on
+        QTRY_VERIFY_WITH_TIMEOUT(bus.overruns() >= 1, 15000);
+        const int heard = bus.frameCount();
+        QTRY_VERIFY_WITH_TIMEOUT(bus.frameCount() > heard + 50, 5000);
+        QVERIFY(bus.active());
+
+        const QString file = bus.logFile();
+        bus.stop();
+        QTRY_VERIFY_WITH_TIMEOUT(!bus.active(), 5000);
+        QVERIFY(!bus.recording());
+        QFile log(file);
+        QVERIFY(log.open(QIODevice::ReadOnly));
+        const QByteArray first = log.readLine().trimmed();
+        QVERIFY2(QRegularExpression(QStringLiteral("^\\(\\d+\\.\\d{6}\\) can0 [0-9A-F]{3}#[0-9A-F]{16}$"))
+                     .match(QString::fromLatin1(first)).hasMatch(), first.constData());
+
+        // Polling resumes: the simulated adapter puts an id in front of
+        // every reply until message ids are turned off again
+        coolant.clear();
+        QTRY_VERIFY_WITH_TIMEOUT(coolant.size() >= 3, 10000);
+        QVERIFY(m_obd->isConnected());
+
+        // One id: nothing else comes through, and the buffer never fills
+        QVERIFY(bus.start("4c1"));
+        QTRY_VERIFY_WITH_TIMEOUT(bus.active(), 5000);
+        QCOMPARE(bus.filter(), QStringLiteral("4C1"));
+        QTRY_VERIFY_WITH_TIMEOUT(row("4C1").value("count").toInt() >= 10, 8000);
+        bus.refresh();
+        QCOMPARE(bus.ids().size(), 1);
+        QCOMPARE(bus.overruns(), 0);
+
+        // Any other request ends it: here, reading the trouble codes
+        QSignalSpy codes(m_obd.get(), &OBDManager::dtcCodesChanged);
+        m_obd->read_dtc();
+        QTRY_VERIFY_WITH_TIMEOUT(!bus.active(), 5000);
+        QVERIFY(!bus.note().isEmpty());
+        QTRY_VERIFY_WITH_TIMEOUT(!codes.isEmpty(), 5000);
+        // The filter is gone too: replies reach us again
+        coolant.clear();
+        QTRY_VERIFY_WITH_TIMEOUT(coolant.size() >= 3, 10000);
+        QVERIFY(m_obd->isConnected());
+    }
+
     void troubleCodesReadAndClear()
     {
         QSignalSpy codes(m_obd.get(), &OBDManager::dtcCodesChanged);
@@ -113,6 +246,31 @@ private slots:
         m_obd->read_dtc();
         QTRY_VERIFY_WITH_TIMEOUT(!codes.isEmpty(), 10000);
         QVERIFY(codes.last().at(0).toList().isEmpty());
+    }
+
+    // The ECU refuses (7F 04 22, usual with the engine running): that is
+    // not "cleared", and the codes on screen stay
+    void aRefusedClearKeepsTheCodes()
+    {
+        m_sim->state()->updateValues([](CarValues &c) { c.storedDtcs = {QStringLiteral("P0171")}; });
+        m_sim->state()->updateLink([](LinkSettings &l) { l.refuseClear = true; });
+        QSignalSpy codes(m_obd.get(), &OBDManager::dtcCodesChanged);
+        QSignalSpy cleared(m_obd.get(), &OBDManager::dtcClearResult);
+        m_obd->read_dtc();
+        QTRY_VERIFY_WITH_TIMEOUT(!codes.isEmpty(), 10000);
+        QCOMPARE(codes.last().at(0).toList().size(), 1);
+        codes.clear();
+
+        m_obd->clear_dtc();
+        QTRY_VERIFY_WITH_TIMEOUT(!cleared.isEmpty(), 10000);
+        QCOMPARE(cleared.last().at(0).toBool(), false);
+        QVERIFY2(cleared.last().at(1).toString().contains("refused"), qPrintable(cleared.last().at(1).toString()));
+        QVERIFY(codes.isEmpty());   // the list was not wiped
+
+        m_sim->state()->updateLink([](LinkSettings &l) { l.refuseClear = false; });
+        m_obd->clear_dtc();
+        QTRY_COMPARE_WITH_TIMEOUT(cleared.size(), 2, 10000);
+        QCOMPARE(cleared.last().at(0).toBool(), true);
     }
 
     void freezeFrameCarriesItsValues()
@@ -173,6 +331,82 @@ private slots:
         m_obd->reset_connection();
         QTRY_VERIFY_WITH_TIMEOUT(m_obd->isConnected(), 15000);
         QCOMPARE(m_obd->connectionState(), OBDManager::ConnectionState::Connected);
+    }
+
+    // A connect that arrives while connected (a retry timer that outlived
+    // its reason, a second tap) must not rebuild the working link
+    void aLateConnectLeavesALiveLinkAlone()
+    {
+        QTRY_VERIFY_WITH_TIMEOUT(m_obd->isConnected(), 15000);
+        QSignalSpy status(m_obd.get(), &OBDManager::connectionStatusChanged);
+        m_obd->connect_obd();
+        QTest::qWait(1500);
+        QVERIFY(m_obd->isConnected());
+        QCOMPARE(status.size(), 0);
+    }
+
+    // A reconnect in the middle of the vehicle scan: the next scan still runs
+    void aScanCutShortDoesNotBlockTheNext()
+    {
+        QTRY_VERIFY_WITH_TIMEOUT(m_obd->vehicleScanComplete(), 15000);
+        m_obd->scan_vehicle();
+        QVERIFY(m_obd->is_scanning());
+        m_obd->reconnect();
+        QVERIFY(!m_obd->is_scanning());
+        QTRY_VERIFY_WITH_TIMEOUT(m_obd->isConnected(), 15000);
+        QTRY_VERIFY_WITH_TIMEOUT(m_obd->vehicleScanComplete(), 15000);
+    }
+
+    // Ignition off: the adapter answers and no ECU does. That is "No
+    // Vehicle", and the car is found once it is switched on.
+    void ignitionOffIsNoVehicleUntilTheCarWakes()
+    {
+        m_sim->state()->updateLink([](LinkSettings &l) { l.ignitionOff = true; });
+        m_obd->reconnect();
+        QTRY_COMPARE_WITH_TIMEOUT(m_obd->getConnectionStatus(), QStringLiteral("No Vehicle"), 30000);
+        QVERIFY(!m_obd->isConnected());
+        m_sim->state()->updateLink([](LinkSettings &l) { l.ignitionOff = false; });
+        QTRY_VERIFY_WITH_TIMEOUT(m_obd->isConnected(), 30000);
+    }
+
+    // Something on the port that never answers is a failed adapter, not a
+    // silent car
+    void aSilentPortIsAFailedAdapter()
+    {
+        m_sim->state()->updateLink([](LinkSettings &l) { l.silent = true; });
+        m_obd->reconnect();
+        QTRY_COMPARE_WITH_TIMEOUT(m_obd->getConnectionStatus(), QStringLiteral("Connection Failed"), 45000);
+        m_sim->state()->updateLink([](LinkSettings &l) { l.silent = false; });
+        m_obd->reconnect();
+        QTRY_VERIFY_WITH_TIMEOUT(m_obd->isConnected(), 20000);
+    }
+
+    // A car with no engine speed PID (some EVs) is still a car
+    void aCarWithoutRpmConnects()
+    {
+        m_sim->state()->updateLink([](LinkSettings &l) { l.noRpm = true; });
+        m_obd->reconnect();
+        QTRY_VERIFY_WITH_TIMEOUT(m_obd->isConnected(), 30000);
+        QTRY_VERIFY_WITH_TIMEOUT(m_obd->vehicleScanComplete(), 15000);
+        QVERIFY(!m_obd->vehicleSupportedParameters().contains(QStringLiteral("RPM")));
+        QVERIFY(m_obd->vehicleSupportedParameters().contains(QStringLiteral("SPEED")));
+        m_sim->state()->updateLink([](LinkSettings &l) { l.noRpm = false; });
+    }
+
+    // Replies that trickle in a few bytes at a time (a slow serial link)
+    // are put back together
+    void repliesInPiecesStillDecode()
+    {
+        m_sim->state()->updateLink([](LinkSettings &l) { l.chunkBytes = 3; });
+        m_obd->reconnect();
+        QTRY_VERIFY_WITH_TIMEOUT(m_obd->isConnected(), 30000);
+        QSignalSpy coolant(m_obd.get(), &OBDManager::coolantTempChanged);
+        m_obd->setParameterDemand("pieces", {"COOLANT_TEMP"});
+        QTRY_VERIFY_WITH_TIMEOUT(!coolant.isEmpty(), 10000);
+        const float c = coolant.last().at(0).toFloat();
+        QVERIFY2(c > 40.0f && c < 130.0f, qPrintable(QString::number(c)));
+        m_obd->setParameterDemand("pieces", {});
+        m_sim->state()->updateLink([](LinkSettings &l) { l.chunkBytes = 0; });
     }
 
 private:

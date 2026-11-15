@@ -16,7 +16,10 @@
 #include <QTemporaryDir>
 #include <QRegularExpression>
 #include <QRandomGenerator>
+#include <QElapsedTimer>
+#include <limits>
 #include <QTest>
+#include <limits>
 
 #include <memory>
 
@@ -154,6 +157,65 @@ private slots:
         QCOMPARE(m_dm->uniqueIdForLabel("Minimal"), QStringLiteral("minimal-2"));   // built-in taken
         QVERIFY(!m_dm->saveDashboard({{"id", "minimal-2"}, {"label", "Minimal"}}).isEmpty());
         QCOMPARE(m_dm->uniqueIdForLabel("Minimal"), QStringLiteral("minimal-3"));
+    }
+
+    // A label may be 80 characters, an id 64: the slug is cut to fit
+    void aLongNameStillSaves()
+    {
+        const QString label = QString(80, QLatin1Char('x'));
+        const QString id = m_dm->uniqueIdForLabel(label);
+        QVERIFY2(id.size() <= 64, qPrintable(id));
+        const QString saved = m_dm->saveDashboard({{"schema", 1}, {"label", label}, {"gridColumns", 4}, {"gridRows", 2},
+                                                   {"cells", QVariantList{}}});
+        QVERIFY2(!saved.isEmpty(), qPrintable(m_dm->lastError()));
+    }
+
+    // A file the user dropped in keeps its name: the id inside need not
+    // match it, nor be a plain file name
+    void aSaveGoesBackToTheFileItCameFrom()
+    {
+        const QString dir = m_tmp->path() + "/dashboards";
+        QDir().mkpath(dir);
+        auto write = [&dir](const QString &name, const QString &id) {
+            QFile f(dir + "/" + name);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(QStringLiteral(R"({"schema": 1, "id": "%1", "label": "Mine", "gridColumns": 4, "gridRows": 2, "cells": []})")
+                        .arg(id).toUtf8());
+        };
+        write("shared.json", "track");
+        write("spaced.json", "my dash");
+        m_dm->refresh();
+        for (const char *id : {"track", "my dash"}) {
+            QVariantMap spec = m_dm->loadDashboard(id).toMap();
+            QVERIFY2(!spec.isEmpty(), id);
+            spec.insert("label", QStringLiteral("Edited"));
+            QCOMPARE(m_dm->saveDashboard(spec), QString::fromLatin1(id));
+            QCOMPARE(m_dm->loadDashboard(id).toMap().value("label").toString(), QStringLiteral("Edited"));
+        }
+        QVERIFY(!QFile::exists(dir + "/track.json"));
+        QCOMPARE(QDir(dir).entryList({"*.json"}, QDir::Files).size(), 2);
+    }
+
+    // The grid helpers are open to any paired client: absurd numbers come
+    // back at once instead of scanning a 2-billion-square grid
+    void gridHelpersBoundTheirInput()
+    {
+        const int huge = std::numeric_limits<int>::max();
+        QElapsedTimer t;
+        t.start();
+        m_dm->nearestFree({}, huge, huge, 0, 0, 1, 1, -1);
+        m_dm->fitAt({}, huge, huge, huge, huge, huge, huge);
+        m_dm->arrange({}, huge, huge, 0, huge, huge, huge, huge);
+        m_dm->rescale({}, huge, huge, huge, huge);
+        m_dm->derivePortrait({}, huge, huge);
+        m_dm->minSpan("circular", huge, huge, 1, 1, 0);
+        m_dm->sizeOptions("circular", huge, huge, 1, 1, 0);
+        m_dm->nearestFree({}, -huge, -huge, -huge, -huge, -huge, -huge, -1);
+        QVariantList many;
+        for (int i = 0; i < 5000; ++i)
+            many.append(QVariantMap{{"col", 0}, {"row", 0}, {"colSpan", 1}, {"rowSpan", 1}});
+        QCOMPARE(m_dm->arrange(many, 4, 4, 0, 1, 1, 1, 1).value("ok").toBool(), false);
+        QVERIFY2(t.elapsed() < 2000, qPrintable(QString::number(t.elapsed())));
     }
 
     void uniqueIdSkipsHiddenBuiltIns()

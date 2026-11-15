@@ -600,9 +600,9 @@ QVariantMap TripStore::summarise(qint64 id, qint64 startMs, qint64 endMs, bool c
                 p[QStringLiteral("min")] = q.dbl(2);
                 p[QStringLiteral("max")] = q.dbl(3);
                 p[QStringLiteral("avg")] = q.dbl(4);
-                if (const ParameterCatalog::Parameter *meta = ParameterCatalog::find(q.text(0))) {
-                    p[QStringLiteral("title")] = meta->title;
-                    p[QStringLiteral("unit")] = meta->unit;
+                if (const ParameterCatalog::Parameter *param = ParameterCatalog::find(q.text(0))) {
+                    p[QStringLiteral("title")] = param->title;
+                    p[QStringLiteral("unit")] = param->unit;
                 }
                 byName.insert(p.value(QStringLiteral("id")).toString(), p);
             }
@@ -1205,8 +1205,12 @@ bool TripStore::deleteTrip(qint64 id)
             q.bind(1, id).exec();
     }
     const bool ok = exec(QStringLiteral("COMMIT"));
-    if (!ok)
+    if (!ok) {
+        // The trip is still in the database: keep its files too
         exec(QStringLiteral("ROLLBACK"));
+        qCWarning(lcTripStore) << "Trip" << id << "not deleted: the database refused";
+        return false;
+    }
     removeTripFiles(base);
     exec(QStringLiteral("PRAGMA incremental_vacuum"));
     qCInfo(lcTripStore) << "Trip" << id << "deleted";

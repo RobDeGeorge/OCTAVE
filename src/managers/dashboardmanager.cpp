@@ -413,8 +413,22 @@ QString DashboardManager::saveDashboard(const QVariantMap &rawIn)
         if (!label.isEmpty())
             raw.insert(QStringLiteral("id"), uniqueIdForLabel(label));
     }
+    // A dashboard that is already on disk keeps its file, whatever that is
+    // called: shared.json holding "id": "track" used to be saved as
+    // track.json, the rescan kept shared.json (name order) and the edits
+    // never showed; "id": "my dash" loaded and then could never be saved.
+    // Only a new file is named after its id, so only then must the id be a
+    // plain file name.
+    const QVariantMap onDisk = findEntry(raw.value(QStringLiteral("id")).toString());
+    const QString ownPath = onDisk.value(QStringLiteral("builtIn")).toBool()
+                                ? QString() : onDisk.value(QStringLiteral("path")).toString();
+    const QString ownId = raw.value(QStringLiteral("id")).toString();
+    if (!ownPath.isEmpty())
+        raw.insert(QStringLiteral("id"), QStringLiteral("on-disk"));   // any plain name: the file exists
     QString error;
-    const QVariantMap spec = normalizeSpec(raw, SpecUse::Save, &error, m_widgetCatalog);
+    QVariantMap spec = normalizeSpec(raw, SpecUse::Save, &error, m_widgetCatalog);
+    if (!spec.isEmpty() && !ownPath.isEmpty())
+        spec.insert(QStringLiteral("id"), ownId);
     if (spec.isEmpty()) {
         qCWarning(lcDashboards) << "saveDashboard:" << error;
         setError(error);
@@ -440,7 +454,7 @@ QString DashboardManager::saveDashboard(const QVariantMap &rawIn)
         return {};
     }
 
-    const QString path = m_userDir + QDir::separator() + id + QStringLiteral(".json");
+    const QString path = ownPath.isEmpty() ? m_userDir + QDir::separator() + id + QStringLiteral(".json") : ownPath;
     if (!writeSpec(path, spec)) {
         setError(QStringLiteral("Could not write %1").arg(path));
         return {};
@@ -510,6 +524,9 @@ QString DashboardManager::slugify(const QString &label)
     QString s = label.toLower();
     s.replace(QRegularExpression(QStringLiteral("[^a-z0-9]+")), QStringLiteral("-"));
     while (s.startsWith('-')) s.remove(0, 1);
+    while (s.endsWith('-'))   s.chop(1);
+    // A label may be 80 characters, an id 64: leave room for a "-999" suffix
+    s.truncate(56);
     while (s.endsWith('-'))   s.chop(1);
     if (s.isEmpty()) s = QStringLiteral("dashboard");
     return s;
@@ -900,7 +917,7 @@ QVariantMap DashboardManager::normalizeSpec(const QVariantMap &raw, SpecUse use,
     if (rows < 1) rows = 6;
     out.insert(QStringLiteral("gridColumns"), cols);
     out.insert(QStringLiteral("gridRows"), rows);
-    for (const QString key : {QStringLiteral("margins"), QStringLiteral("spacing")}) {
+    for (const QString &key : {QStringLiteral("margins"), QStringLiteral("spacing")}) {
         // Absent (or null / undefined from QML) = the renderer's default
         if (!raw.value(key).isNull())
             out.insert(key, intIn(raw.value(key), 0, 200, 0));
@@ -921,7 +938,7 @@ QVariantMap DashboardManager::normalizeSpec(const QVariantMap &raw, SpecUse use,
     const QString whenId = when.value(QStringLiteral("paramId")).toString();
     if (!whenId.isEmpty() && whenId.size() <= 64) {
         QVariantMap w{{QStringLiteral("paramId"), whenId}};
-        for (const QString key : {QStringLiteral("above"), QStringLiteral("below")}) {
+        for (const QString &key : {QStringLiteral("above"), QStringLiteral("below")}) {
             const QVariant v = when.value(key);
             if (v.typeId() == QMetaType::Int || v.typeId() == QMetaType::LongLong || v.typeId() == QMetaType::Double)
                 w.insert(key, qBound(-1e9, v.toDouble(), 1e9));
@@ -1085,9 +1102,21 @@ bool DashboardManager::canPlace(const QVariantList &cells, int gridColumns, int 
     return DashboardGrid::canPlace(cells, gridColumns, gridRows, {col, row, colSpan, rowSpan}, exceptIndex);
 }
 
-QVariantMap DashboardManager::fitAt(const QVariantList &cells, int gridColumns, int gridRows, int col, int row,
+// The grid helpers below are open to any paired client (read scope) and
+// scan rows x columns: every number is brought into the range a dashboard
+// can have first, and a cell list no dashboard could hold is refused.
+namespace {
+int gridSize(int v) { return qBound(1, v, kMaxGrid); }
+int gridPos(int v) { return qBound(0, v, kMaxGrid - 1); }
+bool tooManyCells(const QVariantList &cells) { return cells.size() > kMaxCells; }
+} // namespace
+
+QVariantMap DashboardManager::fitAt(const QVariantList &cellsIn, int gridColumns, int gridRows, int col, int row,
                                     int colSpan, int rowSpan) const
 {
+    const QVariantList cells = tooManyCells(cellsIn) ? QVariantList() : cellsIn;
+    gridColumns = gridSize(gridColumns); gridRows = gridSize(gridRows);
+    col = gridPos(col); row = gridPos(row); colSpan = gridSize(colSpan); rowSpan = gridSize(rowSpan);
     const DashboardGrid::Rect r = DashboardGrid::fitAt(cells, gridColumns, gridRows, col, row, colSpan, rowSpan);
     return {{QStringLiteral("col"), r.col}, {QStringLiteral("row"), r.row},
             {QStringLiteral("colSpan"), r.colSpan}, {QStringLiteral("rowSpan"), r.rowSpan}};
@@ -1096,6 +1125,12 @@ QVariantMap DashboardManager::fitAt(const QVariantList &cells, int gridColumns, 
 QVariantMap DashboardManager::arrange(const QVariantList &cells, int gridColumns, int gridRows, int index,
                                       int col, int row, int colSpan, int rowSpan) const
 {
+    if (tooManyCells(cells))
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("cells"), QVariantList()},
+                {QStringLiteral("moved"), QVariantList()}, {QStringLiteral("swapped"), false},
+                {QStringLiteral("reason"), QStringLiteral("too many cells")}};
+    gridColumns = gridSize(gridColumns); gridRows = gridSize(gridRows);
+    col = gridPos(col); row = gridPos(row); colSpan = gridSize(colSpan); rowSpan = gridSize(rowSpan);
     const DashboardGrid::Arrangement a =
         DashboardGrid::arrange(cells, gridColumns, gridRows, index, {col, row, colSpan, rowSpan});
     QVariantList moved;
@@ -1108,15 +1143,18 @@ QVariantMap DashboardManager::arrange(const QVariantList &cells, int gridColumns
 QVariantMap DashboardManager::nearestFree(const QVariantList &cells, int gridColumns, int gridRows, int col, int row,
                                           int colSpan, int rowSpan, int exceptIndex) const
 {
-    DashboardGrid::Rect r{col, row, colSpan, rowSpan};
-    const bool ok = DashboardGrid::nearestFree(cells, gridColumns, gridRows, r, exceptIndex);
+    gridColumns = gridSize(gridColumns); gridRows = gridSize(gridRows);
+    DashboardGrid::Rect r{gridPos(col), gridPos(row), gridSize(colSpan), gridSize(rowSpan)};
+    const bool ok = !tooManyCells(cells) && DashboardGrid::nearestFree(cells, gridColumns, gridRows, r, exceptIndex);
     return {{QStringLiteral("ok"), ok}, {QStringLiteral("col"), r.col}, {QStringLiteral("row"), r.row},
             {QStringLiteral("colSpan"), r.colSpan}, {QStringLiteral("rowSpan"), r.rowSpan}};
 }
 
 QVariantMap DashboardManager::derivePortrait(const QVariantList &cells, int gridColumns, int gridRows) const
 {
-    const DashboardGrid::Portrait p = DashboardGrid::derivePortrait(cells, gridColumns, gridRows);
+    gridColumns = gridSize(gridColumns); gridRows = gridSize(gridRows);
+    const DashboardGrid::Portrait p =
+        DashboardGrid::derivePortrait(tooManyCells(cells) ? QVariantList() : cells, gridColumns, gridRows);
     QVariantList places;
     for (const DashboardGrid::Rect &r : p.cells)
         places.append(QVariantMap{{QStringLiteral("col"), r.col}, {QStringLiteral("row"), r.row},
@@ -1154,6 +1192,11 @@ QVariantMap DashboardManager::orientedSpec(const QVariantMap &spec, bool portrai
 QVariantMap DashboardManager::rescale(const QVariantList &cells, int fromColumns, int fromRows, int toColumns,
                                       int toRows) const
 {
+    if (tooManyCells(cells))
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("cells"), QVariantList()},
+                {QStringLiteral("reason"), QStringLiteral("too many cells")}};
+    fromColumns = gridSize(fromColumns); fromRows = gridSize(fromRows);
+    toColumns = gridSize(toColumns); toRows = gridSize(toRows);
     const DashboardGrid::Rescaled r = DashboardGrid::rescale(cells, fromColumns, fromRows, toColumns, toRows);
     return {{QStringLiteral("ok"), r.ok}, {QStringLiteral("cells"), r.cells}, {QStringLiteral("reason"), r.reason}};
 }
@@ -1190,6 +1233,7 @@ SizeHints sizeHints(const QVariantMap &catalog, const QString &type)
 QVariantMap DashboardManager::minSpan(const QString &type, int gridColumns, int gridRows, double cellWidth,
                                       double cellHeight, double spacing) const
 {
+    gridColumns = gridSize(gridColumns); gridRows = gridSize(gridRows);
     const SizeHints h = sizeHints(m_widgetCatalog, type);
     const DashboardGrid::Rect r =
         DashboardGrid::minSpan(gridColumns, gridRows, cellWidth, cellHeight, spacing, h.minW, h.minH);
@@ -1199,6 +1243,7 @@ QVariantMap DashboardManager::minSpan(const QString &type, int gridColumns, int 
 QVariantList DashboardManager::sizeOptions(const QString &type, int gridColumns, int gridRows, double cellWidth,
                                            double cellHeight, double spacing) const
 {
+    gridColumns = gridSize(gridColumns); gridRows = gridSize(gridRows);
     const SizeHints h = sizeHints(m_widgetCatalog, type);
     QVariantList out;
     for (const DashboardGrid::SizeOption &o : DashboardGrid::sizeOptions(gridColumns, gridRows, cellWidth, cellHeight,

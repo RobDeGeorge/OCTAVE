@@ -545,7 +545,7 @@ private slots:
         ServiceBridge bridge(&registry, AppInfo{"9", false, true});
         bridge.setPairing(&pairing);
         bridge.install(server);
-        server.addRoute("/art", [](const QByteArray &) { return StaticFiles::Reply{200, "OK", "image/png", "img"}; });
+        server.addRoute("/art", [](const QByteArray &) { return StaticFiles::Reply{200, "OK", "image/png", "img", {}}; });
         QObject::connect(&pairing, &ServicePairing::revoked, &server,
                          [&server](const QString &id) { server.closeConnectionsOf(id); });
         QVERIFY(server.start());
@@ -639,8 +639,8 @@ private slots:
         ServiceBridge bridge(&registry, AppInfo{"9", false, true});
         bridge.setPairing(&pairing);
         bridge.install(server);
-        server.addRoute("/art", [](const QByteArray &) { return StaticFiles::Reply{200, "OK", "image/png", "img"}; });
-        server.addRoute("/export/logs", [](const QByteArray &) { return StaticFiles::Reply{200, "OK", "text/plain", "log"}; });
+        server.addRoute("/art", [](const QByteArray &) { return StaticFiles::Reply{200, "OK", "image/png", "img", {}}; });
+        server.addRoute("/export/logs", [](const QByteArray &) { return StaticFiles::Reply{200, "OK", "text/plain", "log", {}}; });
         QVERIFY(server.start());
 
         // describe says what each member needs

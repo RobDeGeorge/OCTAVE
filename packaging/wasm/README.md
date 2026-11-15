@@ -128,3 +128,11 @@ simulated car itself (`obdManager.connect_to_adapter("sim://elm327")`).
   on top with live values, and that the OCTAVE button brings the screen
   back. The Pages workflow runs it after the
   build (advisory for now).
+- **The Web Serial check**: `node packaging/wasm/check_webserial.mjs
+  http://127.0.0.1:8080/` replaces the page's `navigator.serial` with a fake
+  ELM327 and passes when `obdAdapterFinder.pickSerialPort()` gets the real
+  `OBDManager` connected and polling at 38400 baud, when it reconnects by
+  itself after the port object is replaced (the cable pulled and plugged
+  back in), and when the simulated car closes the port. Both checks share
+  `headless.mjs` (Chromium over the DevTools protocol). Also run by the
+  Pages workflow, advisory.

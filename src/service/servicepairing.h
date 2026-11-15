@@ -131,7 +131,10 @@ public:
     void unpair(const QString &id);
     // A media ticket for a trusted connection (`tokenId` "" = trusted as a
     // local process: then only good from this device)
-    QString mintTicket(const QString &tokenId);
+    // `localScopes`: what the minting connection itself may do, for a local
+    // one (no token). A page limited to an installed web frontend's scopes
+    // gets a ticket that is good for those and no more.
+    QString mintTicket(const QString &tokenId, const QStringList &localScopes = {QStringLiteral("full")});
     bool checkTicket(const QString &ticket, bool peerLoopback) const { return ticketAllows(ticket, peerLoopback, QStringLiteral("read")); }
     // A valid ticket whose device may do what needs `scope`
     bool ticketAllows(const QString &ticket, bool peerLoopback, const QString &scope) const;
@@ -175,6 +178,7 @@ private:
     int m_windowAttempts = 0;
     struct Ticket {
         QString tokenId;
+        QStringList localScopes;   // tokenId empty: the minter's own scopes
         qint64 expires = 0;
         quint64 seq = 0;   // minting order: the oldest goes first when full
     };

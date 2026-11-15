@@ -64,6 +64,8 @@ private slots:
     void decodeVin_data();
     void decodeVin();
     void everyExtendedParameterIsWired();
+    void monitorLines();
+    void busFilters();
 };
 
 void TstElm327Protocol::formatPidRequest()
@@ -316,6 +318,54 @@ void TstElm327Protocol::everyExtendedParameterIsWired()
         QVERIFY2(settings.contains(QLatin1Char('"') + id + QLatin1Char('"')), qPrintable(id + " has no settings default"));
         QVERIFY2(ParameterCatalog::find(id), qPrintable(id + " has no ParameterCatalog entry"));
     }
+}
+
+// What the adapter prints in monitor mode ("ATMA", headers on)
+void TstElm327Protocol::monitorLines()
+{
+    // 11-bit CAN: three id digits, then the data
+    auto f = ELM327Protocol::parseMonitorLine("0C9" "001F400000000007", true);
+    QVERIFY(f.has_value());
+    QCOMPARE(f->id, 0x0C9u);
+    QCOMPARE(int(f->idDigits), 3);
+    QCOMPARE(f->data, QByteArray::fromHex("001F400000000007"));
+    // With spaces, and no data at all
+    f = ELM327Protocol::parseMonitorLine("7E8 03 41 0C 1F", true);
+    QVERIFY(f.has_value());
+    QCOMPARE(f->id, 0x7E8u);
+    QCOMPARE(f->data, QByteArray::fromHex("03410C1F"));
+    f = ELM327Protocol::parseMonitorLine("123", true);
+    QVERIFY(f.has_value());
+    QVERIFY(f->data.isEmpty());
+    // 29-bit CAN
+    f = ELM327Protocol::parseMonitorLine("18DAF110 02 01 0C", true);
+    QVERIFY(f.has_value());
+    QCOMPARE(f->id, 0x18DAF110u);
+    QCOMPARE(int(f->idDigits), 8);
+    QCOMPARE(f->data.size(), 3);
+    // J1850 / ISO: three header bytes, then data and checksum
+    f = ELM327Protocol::parseMonitorLine("48 6B 10 41 0C 1F 40 2A", false);
+    QVERIFY(f.has_value());
+    QCOMPARE(f->id, 0x486B10u);
+    QCOMPARE(int(f->idDigits), 6);
+    QCOMPARE(f->data, QByteArray::fromHex("410C1F402A"));
+
+    // Not messages: adapter notices, a remote frame, an id past 11 bits,
+    // nine data bytes
+    for (const char *line : {"BUFFER FULL", "STOPPED", "<RX ERROR", "0C9 RTR", "", "?", "CAN ERROR",
+                             "FFF0011", "0C9000102030405060708"})
+        QVERIFY2(!ELM327Protocol::parseMonitorLine(line, true), line);
+    QVERIFY(!ELM327Protocol::parseMonitorLine("486B1", false));
+}
+
+// Only hex digits and X ever reach "ATCRA"
+void TstElm327Protocol::busFilters()
+{
+    QCOMPARE(ELM327Protocol::busFilter("7e8"), QByteArray("7E8"));
+    QCOMPARE(ELM327Protocol::busFilter(" 0cx "), QByteArray("0CX"));
+    QCOMPARE(ELM327Protocol::busFilter("18DAF1XX"), QByteArray("18DAF1XX"));
+    for (const char *bad : {"", "7E", "7E88", "7G8", "7E8\rATZ", "7E 8", "AT Z", "18DAF1XX0"})
+        QVERIFY2(ELM327Protocol::busFilter(bad).isEmpty(), bad);
 }
 
 QTEST_GUILESS_MAIN(TstElm327Protocol)

@@ -18,6 +18,9 @@
 #include <QElapsedTimer>
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
+#include <optional>
 
 #ifdef Q_OS_ANDROID
 #include <QJniEnvironment>
@@ -62,6 +65,12 @@ OBDManager::OBDManager(SettingsManager *settingsManager, QObject *parent)
     // --- Timers ---
 
     // Startup timer -- defer initial connection from constructor
+    m_retryTimer.setSingleShot(true);
+    QObject::connect(&m_retryTimer, &QTimer::timeout, this, [this] {
+        if (!m_connected)
+            startConnection();
+    });
+
     m_startupTimer.setSingleShot(true);
     m_startupTimer.setInterval(50);
     QObject::connect(&m_startupTimer, &QTimer::timeout, this, &OBDManager::onStartupTimer);
@@ -621,7 +630,11 @@ void OBDManager::scanForDevices()
     // usually only powered with the ignition on, and connectTo() fails
     // fast with "Host is down" while it is off
     const QString configured = getConfiguredPort();
-    if ((RfcommSocket::isUrl(configured) || OBDConnectionWorker::transportClaims(configured))
+    // The same for any adapter that answered while the car did not (ignition
+    // off at boot, key off and on again): its /dev node never changes, so
+    // without this it sat at "waiting for vehicle" until someone tapped Connect
+    if ((RfcommSocket::isUrl(configured) || OBDConnectionWorker::transportClaims(configured)
+         || (m_waitingForVehicle && checkPortExists(configured)))
         && !m_connected && !m_isConnecting
         && !m_forceStopReconnect && !m_diagnosticMode) {
         qDebug() << "[OBD] Retrying direct Bluetooth adapter" << configured;
@@ -645,6 +658,14 @@ void OBDManager::startConnection()
 {
     if (m_forceStopReconnect)
         return;
+    // Callers that mean "again" (reconnect(), force_connect(), a port
+    // change) clean the old connection up first; anything else arriving
+    // while connected is late, and must not rebuild a working link
+    if (m_connected) {
+        qDebug() << "[OBD] Already connected -- skipping";
+        return;
+    }
+    m_retryTimer.stop();
     {
         QMutexLocker locker(&m_lock);
         if (m_isConnecting) {
@@ -703,6 +724,7 @@ void OBDManager::startConnection()
     m_worker->setPort(port);
     m_worker->setFastMode(fastMode);
     m_worker->setTimeout(m_connectionTimeout);
+    m_worker->setCustomPids(m_customPids);
 
     const QList<PidKey> pidsToWatch = buildPidsToWatch();
     const QList<PidKey> backgroundPids = buildBackgroundPids(pidsToWatch);
@@ -742,6 +764,10 @@ void OBDManager::startConnection()
                      this, &OBDManager::onWorkerScanOutput, Qt::QueuedConnection);
     QObject::connect(m_worker, &OBDConnectionWorker::logLine,
                      this, &OBDManager::connectionLogLineAppended, Qt::QueuedConnection);
+    QObject::connect(m_worker, &OBDConnectionWorker::busFrames,
+                     this, &OBDManager::onWorkerBusFrames, Qt::QueuedConnection);
+    QObject::connect(m_worker, &OBDConnectionWorker::busMonitorChanged,
+                     this, &OBDManager::onWorkerBusMonitor, Qt::QueuedConnection);
 
     // Start connection on worker thread
     QObject::connect(m_workerThread, &QThread::started,
@@ -752,6 +778,9 @@ void OBDManager::startConnection()
 
 void OBDManager::cleanupConnection()
 {
+    // The worker's own "monitor ended" is disconnected below
+    if (m_busMonitoring)
+        onWorkerBusMonitor(false, QString());
     m_dataWatchdogTimer.stop();
     m_lastDataReceived = 0;
     setVehicleSupport({}, false);  // the next car may support a different set
@@ -768,6 +797,10 @@ void OBDManager::cleanupConnection()
 
     cleanupWorkerThread();
     m_connected = false;
+    // A vehicle scan in flight died with the worker and its scanComplete is
+    // disconnected: left set, every later scan_vehicle() said "already in
+    // progress" until restart
+    m_isScanning = false;
     // Any attempt in flight was just abandoned, and its initComplete is
     // disconnected, so nothing else would clear this. Left set, the
     // startConnection() that usually follows (reconnect(), the port-change
@@ -843,9 +876,25 @@ QStringList OBDManager::withAliases(const QStringList &names)
 
 static const PidKey kRpmKey{1, 0x0C};
 
+void OBDManager::setCustomPids(const QList<CustomPidRequest> &pids)
+{
+    m_customPids = pids;
+}
+
+QList<PidKey> OBDManager::customKeys(const QHash<QString, QSet<QString>> &demand) const
+{
+    QList<PidKey> keys;
+    for (int i = 0; i < m_customPids.size(); ++i) {
+        const QString &id = m_customPids.at(i).paramId;
+        if (std::any_of(demand.cbegin(), demand.cend(), [&id](const QSet<QString> &ids) { return ids.contains(id); }))
+            keys.append({kCustomPidMode, i});
+    }
+    return keys;
+}
+
 QList<PidKey> OBDManager::buildPidsToWatch() const
 {
-    return pidsToWatch(m_paramDemand, m_vehicleSupportedParameters);
+    return pidsToWatch(m_paramDemand, m_vehicleSupportedParameters) + customKeys(m_paramDemand);
 }
 
 QList<PidKey> OBDManager::pidsToWatch(const QHash<QString, QSet<QString>> &demand,
@@ -950,12 +999,24 @@ QList<PidKey> OBDManager::backgroundPidsToWatch(const QHash<QString, QSet<QStrin
 
 QList<PidKey> OBDManager::buildBackgroundPids(const QList<PidKey> &foreground) const
 {
-    return backgroundPidsToWatch(m_backgroundDemand, foreground, m_vehicleSupportedParameters);
+    QList<PidKey> pids = backgroundPidsToWatch(m_backgroundDemand, foreground, m_vehicleSupportedParameters);
+    for (const PidKey &key : customKeys(m_backgroundDemand)) {
+        if (!foreground.contains(key))
+            pids.append(key);
+    }
+    return pids;
 }
 
 void OBDManager::setVehicleSupport(const QStringList &names, bool complete)
 {
     QStringList sorted = withAliases(names);
+    // The scan can't see custom PIDs: the user's file says this car has them
+    if (!sorted.isEmpty()) {
+        for (const CustomPidRequest &p : m_customPids) {
+            if (!sorted.contains(p.paramId))
+                sorted.append(p.paramId);
+        }
+    }
     sorted.sort();
     if (sorted == m_vehicleSupportedParameters && complete == m_vehicleScanComplete)
         return;
@@ -1003,7 +1064,7 @@ void OBDManager::scheduleAutoReconnect()
             .arg(delay).arg(m_connectionAttempts).arg(maxAttempts));
     qDebug() << "[OBD] Auto-reconnect in" << delay << "s";
 
-    QTimer::singleShot(delay * 1000, this, &OBDManager::startConnection);
+    m_retryTimer.start(delay * 1000);
 }
 
 // ---------------------------------------------------------------------------
@@ -1018,6 +1079,8 @@ void OBDManager::onWorkerInitComplete(bool success, const QString &message)
         m_connected = true;
         m_connectionAttempts = 0;
         m_reconnectingAfterDiagnostic = false;
+        m_waitingForVehicle = false;
+        m_retryTimer.stop();
 
         setConnectionStatus(QStringLiteral("Connected"));
         setConnectionDetail(QStringLiteral("OBD interface connected successfully"));
@@ -1040,8 +1103,11 @@ void OBDManager::onWorkerInitComplete(bool success, const QString &message)
     } else {
         m_connected = false;
 
-        // Check for partial connection (adapter found but no vehicle)
-        if (message.contains(QStringLiteral("adapter"))) {
+        // Partial connection: the adapter answered and no vehicle did. Only
+        // the worker's own message says so; "adapter" alone also matched
+        // "adapter not responding" and any port error naming one.
+        m_waitingForVehicle = message.contains(QStringLiteral("no vehicle response"));
+        if (m_waitingForVehicle) {
             setConnectionStatus(QStringLiteral("No Vehicle"));
             setConnectionDetail(
                 QStringLiteral("Connected to adapter, waiting for vehicle..."));
@@ -1059,7 +1125,7 @@ void OBDManager::onWorkerInitComplete(bool success, const QString &message)
             setConnectionDetail(
                 QStringLiteral("Reconnecting after diagnostic mode... (%1/3)")
                     .arg(m_connectionAttempts + 1));
-            QTimer::singleShot(2000, this, &OBDManager::startConnection);
+            m_retryTimer.start(2000);
         } else {
             m_reconnectingAfterDiagnostic = false;
             scheduleAutoReconnect();
@@ -1207,6 +1273,54 @@ void OBDManager::onWorkerScanOutput(const QString &line)
 }
 
 // ---------------------------------------------------------------------------
+// Bus monitor
+// ---------------------------------------------------------------------------
+
+bool OBDManager::canMonitorBus() const
+{
+    return m_connected && m_worker;
+}
+
+bool OBDManager::startBusMonitor(const QString &filter)
+{
+    if (!canMonitorBus())
+        return false;
+    OBDConnectionWorker *worker = m_worker;
+    QMetaObject::invokeMethod(worker, [worker, filter]() { worker->doStartBusMonitor(filter); },
+                              Qt::QueuedConnection);
+    return true;
+}
+
+void OBDManager::stopBusMonitor()
+{
+    if (m_worker)
+        QMetaObject::invokeMethod(m_worker, "doStopBusMonitor", Qt::QueuedConnection);
+}
+
+void OBDManager::onWorkerBusFrames(const QList<BusFrame> &frames, int overruns)
+{
+    if (m_busSink)
+        m_busSink->busFrames(frames, overruns);
+}
+
+void OBDManager::onWorkerBusMonitor(bool active, const QString &note)
+{
+    if (active != m_busMonitoring) {
+        m_busMonitoring = active;
+        // No readings arrive while the adapter listens: that is not a stale
+        // connection
+        if (active) {
+            m_dataWatchdogTimer.stop();
+        } else if (m_connected && !m_diagnosticMode) {
+            m_lastDataReceived = QDateTime::currentMSecsSinceEpoch();
+            m_dataWatchdogTimer.start();
+        }
+    }
+    if (m_busSink)
+        m_busSink->busMonitorChanged(active, note);
+}
+
+// ---------------------------------------------------------------------------
 // Data watchdog
 // ---------------------------------------------------------------------------
 
@@ -1228,7 +1342,7 @@ void OBDManager::onDataWatchdog()
         m_dataWatchdogTimer.stop();
         cleanupConnection();
         m_connectionAttempts = 0;
-        QTimer::singleShot(100, this, &OBDManager::startConnection);
+        m_retryTimer.start(100);
     }
 }
 
@@ -1342,6 +1456,8 @@ void OBDManager::close()
     m_forceStopReconnect = true;
     m_deviceScannerTimer.stop();
     m_dataWatchdogTimer.stop();
+    m_retryTimer.stop();
+    m_waitingForVehicle = false;
     cleanupConnection();
     if (isSimulated())
         setPortOverride(QString());
@@ -2067,9 +2183,13 @@ bool OBDManager::check_device_presence()
 OBDConnectionWorker::OBDConnectionWorker(QObject *parent)
     : QObject(parent)
     , m_pollTimer(this)  // a child, so moveToThread() takes it to the worker thread
+    , m_monitorTimer(this)
 {
     m_pollTimer.setInterval(0);  // Poll as fast as possible (like delay_cmds=0)
     QObject::connect(&m_pollTimer, &QTimer::timeout, this, &OBDConnectionWorker::onPollTimer);
+    qRegisterMetaType<QList<BusFrame>>("QList<BusFrame>");
+    m_monitorTimer.setInterval(0);
+    QObject::connect(&m_monitorTimer, &QTimer::timeout, this, &OBDConnectionWorker::onMonitorTimer);
 }
 
 OBDConnectionWorker::~OBDConnectionWorker()
@@ -2080,6 +2200,12 @@ OBDConnectionWorker::~OBDConnectionWorker()
 void OBDConnectionWorker::setPort(const QString &portName) { m_portName = portName; }
 void OBDConnectionWorker::setFastMode(bool fast) { m_fastMode = fast; }
 void OBDConnectionWorker::setTimeout(int seconds) { m_timeout = seconds; }
+void OBDConnectionWorker::setCustomPids(const QList<CustomPidRequest> &pids)
+{
+    m_customPids = pids;
+    m_customState = QVector<CustomState>(pids.size());
+}
+
 void OBDConnectionWorker::setPidsToWatch(const QList<PidKey> &pids, const QList<PidKey> &background)
 {
     m_pidsToWatch = pids;
@@ -2248,8 +2374,19 @@ void OBDConnectionWorker::doConnect()
     // Only an RPM reply ("410C...") is a vehicle answering: after a
     // reconnect with the ignition off, "STOPPED" and a search's leftovers
     // passed for one and left a connection that never had data
-    const bool answered = !response.isEmpty()
-                          && ELM327Protocol::parseResponseLines(m_responseBuffer.lastLines(), 1, 0x0C).has_value();
+    bool answered = !response.isEmpty()
+                    && ELM327Protocol::parseResponseLines(m_responseBuffer.lastLines(), 1, 0x0C).has_value();
+    // A car with no engine speed (some EVs) says NO DATA to 010C and is
+    // still a car: every OBD-II vehicle answers the supported-PID bitmap.
+    // Only asked when 010C got a reply at all, so a silent bus is not
+    // searched twice.
+    if (!answered && response.contains(QLatin1String("NO DATA"), Qt::CaseInsensitive)) {
+        response = sendCommand(ELM327Protocol::formatPidRequest(1, 0x00), qMax(m_timeout, 20) * 1000);
+        answered = !response.isEmpty()
+                   && !ELM327Protocol::supportedPidsFromLines(m_responseBuffer.lastLines(), 0x00).isEmpty();
+        emit logLine(QStringLiteral("Vehicle check (0100, no RPM on this car): %1")
+                         .arg(answered ? QStringLiteral("answered") : QStringLiteral("no answer")));
+    }
     if (!answered) {
         // Adapter is connected but no vehicle. Release the port: an open
         // QSerialPort keeps a read notifier in this thread's event loop, and
@@ -2268,6 +2405,9 @@ void OBDConnectionWorker::doConnect()
     if (dpn.size() > 2)   // not a protocol number: a late reply to something else
         dpn = sendCommand(QByteArrayLiteral("ATDPN\r"), 500).simplified().section(QLatin1Char(' '), -1);
     m_isCan = ELM327Protocol::isCanProtocol(dpn);
+    m_protocol = dpn;
+    m_customState = QVector<CustomState>(m_customPids.size());
+    m_customClock.start();
 
     m_initialized = true;
     qCInfo(lcElm327) << "ELM327 initialised, vehicle answered on" << m_portName << "protocol" << dpn
@@ -2343,6 +2483,13 @@ void OBDConnectionWorker::releasePort()
 
 void OBDConnectionWorker::doDisconnect()
 {
+    if (m_monitoring) {
+        // The port is about to close: nothing to put back in the adapter
+        m_monitoring = false;
+        m_monitorTimer.stop();
+        m_monitorBatch.clear();
+        emit busMonitorChanged(false, QString());
+    }
     stopPolling();
     releasePort();
     m_initialized = false;
@@ -2386,7 +2533,9 @@ bool OBDConnectionWorker::sendInitSequence()
                      .arg(answered)
                      .arg(cmds.size())
                      .arg(resetAnswer.isEmpty() ? QStringLiteral("no answer") : resetAnswer));
-    return true;  // Init commands sent; adapter at least responded to serial
+    // Nothing answered a single setup command: whatever is on this port is
+    // not an ELM327 (or is switched off), which is not "no vehicle"
+    return answered > 0;
 }
 
 QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
@@ -2397,6 +2546,12 @@ QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
     // fail fast so a blocking doConnect() unwinds and the thread can finish
     if (QThread::currentThread()->isInterruptionRequested())
         return QString();
+    // The adapter is in monitor mode: this request ends it
+    if (m_monitoring) {
+        endMonitor(QStringLiteral("Stopped for another request"));
+        if (!m_io || !m_io->isOpen())
+            return QString();
+    }
 
     // QSerialPort errors are sticky until cleared: without this, one
     // transient error (e.g. during rfcomm link-up) failed every later
@@ -2512,6 +2667,10 @@ QString OBDConnectionWorker::sendCommand(const QByteArray &cmd, int timeoutMs)
 
 void OBDConnectionWorker::startPolling()
 {
+    if (m_monitoring) {
+        m_monitorResume = true;   // when monitoring ends
+        return;
+    }
     if (m_pidsToWatch.isEmpty() && m_backgroundPids.isEmpty()) {
         qDebug() << "[OBD Worker] No PIDs to watch";
         return;
@@ -2533,6 +2692,7 @@ void OBDConnectionWorker::startPolling()
 
 void OBDConnectionWorker::stopPolling()
 {
+    m_monitorResume = false;
     m_polling = false;
     m_pollTimer.stop();
 }
@@ -2569,6 +2729,11 @@ void OBDConnectionWorker::onPollTimer()
             pollBatch(batch);
             return;
         }
+    }
+
+    if (pid.first == kCustomPidMode) {
+        pollCustom(pid.second);
+        return;
     }
 
     if (pid == kElmVoltageKey) {
@@ -2626,6 +2791,348 @@ void OBDConnectionWorker::onPollTimer()
 
     // Emit the data
     emit dataReceived(decoded->signalName, static_cast<float>(decoded->value));
+}
+
+// ---------------------------------------------------------------------------
+// Bus monitor: listen only
+// ---------------------------------------------------------------------------
+//
+// "ATMA" makes the adapter print every message on the bus and transmit
+// nothing; on CAN it does not even acknowledge frames ("ATCSM1", the
+// adapter's default, sent again here). Headers go on so each line starts
+// with the message's id, and CAN formatting off so the data bytes are shown
+// as they are. All three are put back when monitoring ends.
+
+void OBDConnectionWorker::doStartBusMonitor(const QString &filter)
+{
+    if (!m_initialized || !m_io || !m_io->isOpen()) {
+        emit busMonitorChanged(false, QStringLiteral("Not connected"));
+        return;
+    }
+    if (m_monitoring)
+        endMonitor(QString());
+    if (!m_io)
+        return;
+
+    const bool resume = m_polling || m_monitorResume;
+    stopPolling();
+    m_monitorResume = resume;
+    m_monitorFilter = m_isCan ? ELM327Protocol::busFilter(filter) : QByteArray();
+
+    auto ok = [this](const QByteArray &cmd) {
+        return sendCommand(cmd, 500).contains(QLatin1String("OK"), Qt::CaseInsensitive);
+    };
+    QString refused;
+    if (!ok("ATH1\r") && !ok("ATH1\r"))
+        refused = QStringLiteral("The adapter did not turn message ids on");
+    if (refused.isEmpty() && m_isCan) {
+        ok("ATCSM1\r");   // silent: older chips have no such command and are silent anyway
+        if (!ok("ATCAF0\r"))
+            refused = QStringLiteral("The adapter can't show raw CAN data");
+        else if (!m_monitorFilter.isEmpty() && !ok("ATCRA" + m_monitorFilter + "\r"))
+            refused = QStringLiteral("The adapter did not take the filter %1").arg(QString::fromLatin1(m_monitorFilter));
+    }
+    if (!m_io || QThread::currentThread()->isInterruptionRequested())
+        return;
+
+    // From here endMonitor() undoes the settings above
+    m_monitoring = true;
+    m_monitorLine.clear();
+    m_monitorNote.clear();
+    m_monitorBatch.clear();
+    m_monitorOverruns = 0;
+    m_monitorRestarts = 0;
+    m_monitorEmptyReads = 0;
+    m_monitorClock.start();
+    m_monitorEmitAt = 0;
+    if (!refused.isEmpty()) {
+        endMonitor(refused);
+        return;
+    }
+    qCInfo(lcElm327) << "bus monitor on" << (m_monitorFilter.isEmpty() ? QByteArray("(everything)") : m_monitorFilter);
+    emit logLine(QStringLiteral("Listening to the bus; live readings pause meanwhile"));
+    emit busMonitorChanged(true, QString());
+    writeMonitorCommand();
+    m_monitorTimer.start();
+}
+
+void OBDConnectionWorker::doStopBusMonitor()
+{
+    endMonitor(QString());
+}
+
+void OBDConnectionWorker::writeMonitorCommand()
+{
+    if (!m_io)
+        return;
+    if (m_serial)
+        m_serial->clearError();
+    qCDebug(lcElm327) << "TX ATMA";
+    m_io->write(QByteArrayLiteral("ATMA\r"));
+    if (m_serial)
+        m_serial->flush();
+}
+
+void OBDConnectionWorker::flushMonitorBatch()
+{
+    if (m_monitorBatch.isEmpty() && m_monitorOverruns == 0)
+        return;
+    emit busFrames(m_monitorBatch, m_monitorOverruns);
+    m_monitorBatch.clear();
+    m_monitorOverruns = 0;
+    m_monitorEmitAt = m_monitorClock.elapsed() + 50;
+}
+
+void OBDConnectionWorker::monitorLinkLost(const QString &reason)
+{
+    m_monitoring = false;
+    m_monitorTimer.stop();
+    flushMonitorBatch();
+    emit busMonitorChanged(false, reason);
+    qCWarning(lcElm327) << reason << "on" << m_portName << "(bus monitor)";
+    emit logLine(reason);
+    stopPolling();
+    releasePort();
+    m_initialized = false;
+    emit connectionLost(reason);
+}
+
+void OBDConnectionWorker::onMonitorTimer()
+{
+    if (!m_monitoring)
+        return;
+    if (!m_io || !m_io->isOpen()) {
+        monitorLinkLost(m_custom ? m_custom->errorString() : QStringLiteral("Adapter disconnected"));
+        return;
+    }
+
+    QElapsedTimer wait;
+    wait.start();
+    QByteArray chunk;
+    if (m_io->waitForReadyRead(50)) {
+        chunk = m_io->readAll();
+        // Readable with nothing to read, over and over: a link whose other
+        // end went away (see sendCommand())
+        if (!chunk.isEmpty()) {
+            m_monitorEmptyReads = 0;
+        } else if (++m_monitorEmptyReads >= 50) {
+            monitorLinkLost(QStringLiteral("Adapter stopped responding"));
+            return;
+        }
+    } else if (m_rfcomm && m_rfcomm->isBroken()) {
+        monitorLinkLost(m_rfcomm->errorString());
+        return;
+    } else if (m_custom && !m_custom->isOpen()) {
+        monitorLinkLost(m_custom->errorString());
+        return;
+    } else if (m_serial) {
+        const auto err = m_serial->error();
+        if (err == QSerialPort::ResourceError || err == QSerialPort::DeviceNotFoundError ||
+            err == QSerialPort::PermissionError || err == QSerialPort::NotOpenError) {
+            // onSerialError reports the port; monitoring is over either way
+            m_monitoring = false;
+            m_monitorTimer.stop();
+            flushMonitorBatch();
+            emit busMonitorChanged(false, QStringLiteral("Adapter disconnected"));
+            return;
+        }
+        if (err != QSerialPort::NoError)
+            m_serial->clearError();
+    }
+    if (chunk.isEmpty()) {
+        // Never spin: a wait that returns at once with nothing is paced
+        if (wait.elapsed() < 20)
+            QThread::msleep(static_cast<unsigned long>(20 - wait.elapsed()));
+        if (m_monitorClock.elapsed() >= m_monitorEmitAt)
+            flushMonitorBatch();
+        return;
+    }
+
+    bool prompt = false;
+    auto endLine = [this] {
+        const QByteArray line = m_monitorLine.trimmed();
+        m_monitorLine.clear();
+        if (line.isEmpty())
+            return;
+        if (auto frame = ELM327Protocol::parseMonitorLine(line, m_isCan)) {
+            frame->ms = m_monitorClock.elapsed();
+            m_monitorBatch.append(*frame);
+            m_monitorRestarts = 0;
+            return;
+        }
+        if (line.contains("BUFFER FULL"))
+            ++m_monitorOverruns;
+        if (line != "STOPPED" && !line.startsWith("ATMA"))
+            m_monitorNote = QString::fromLatin1(line.left(40));
+    };
+    for (const char c : std::as_const(chunk)) {
+        if (c == '\r' || c == '\n') {
+            endLine();
+        } else if (c == '>') {
+            endLine();
+            prompt = true;
+        } else if (m_monitorLine.size() < 256) {
+            m_monitorLine.append(c);
+        }
+    }
+
+    if (prompt) {
+        // The adapter left monitor mode by itself: its buffer filled (the
+        // bus is faster than the link to us) or the bus had an error. Carry
+        // on, unless it keeps coming back with nothing heard.
+        if (m_monitorNote == QLatin1String("?")) {
+            endMonitor(QStringLiteral("The adapter has no monitor mode"));
+            return;
+        }
+        if (++m_monitorRestarts > 3) {
+            endMonitor(m_monitorNote.isEmpty() ? QStringLiteral("The adapter stopped listening")
+                                               : QStringLiteral("The adapter stopped listening: %1").arg(m_monitorNote));
+            return;
+        }
+        writeMonitorCommand();
+    }
+    if (m_monitorBatch.size() >= 400 || m_monitorClock.elapsed() >= m_monitorEmitAt)
+        flushMonitorBatch();
+}
+
+void OBDConnectionWorker::endMonitor(const QString &note)
+{
+    if (!m_monitoring)
+        return;
+    m_monitoring = false;
+    m_monitorTimer.stop();
+    flushMonitorBatch();
+    const bool resume = m_monitorResume;
+    m_monitorResume = false;
+
+    bool restored = false;
+    if (m_io && m_io->isOpen()) {
+        // Any byte ends monitor mode; the adapter answers STOPPED and its
+        // prompt. A space, because a bare carriage return at the prompt
+        // (had it stopped already) would repeat the last command: ATMA.
+        m_io->write(QByteArrayLiteral(" "));
+        if (m_serial)
+            m_serial->flush();
+        QElapsedTimer t;
+        t.start();
+        bool prompt = false;
+        while (!prompt && t.elapsed() < 600 && m_io && m_io->isOpen()) {
+            if (m_io->waitForReadyRead(50))
+                prompt = m_io->readAll().contains('>');
+            else
+                QThread::msleep(10);
+        }
+        auto ok = [this](const QByteArray &cmd) {
+            for (int attempt = 0; attempt < 2 && m_io; ++attempt) {
+                if (sendCommand(cmd, 500).contains(QLatin1String("OK"), Qt::CaseInsensitive))
+                    return true;
+            }
+            return false;
+        };
+        restored = ok("ATH0\r");
+        if (restored && m_isCan) {
+            restored = ok("ATCAF1\r");
+            // "ATAR": receive what answers our requests again (undoes ATCRA)
+            if (restored && !m_monitorFilter.isEmpty())
+                restored = ok("ATAR\r");
+        }
+    }
+    emit busMonitorChanged(false, note);
+    if (!m_io || QThread::currentThread()->isInterruptionRequested())
+        return;
+    if (!restored) {
+        // Polling on with message ids in every reply would read nothing:
+        // start over from ATZ, which resets all of it
+        qCWarning(lcElm327) << "could not restore the adapter after the bus monitor; reconnecting";
+        emit logLine(QStringLiteral("The adapter did not leave monitor mode cleanly; reconnecting"));
+        stopPolling();
+        releasePort();
+        m_initialized = false;
+        emit connectionLost(QStringLiteral("Adapter stayed in monitor mode"));
+        return;
+    }
+    qCInfo(lcElm327) << "bus monitor off" << note;
+    emit logLine(QStringLiteral("Stopped listening to the bus"));
+    if (resume)
+        startPolling();
+}
+
+bool OBDConnectionWorker::setHeader(const QByteArray &header)
+{
+    return sendCommand("ATSH" + header + "\r", 500).contains(QLatin1String("OK"), Qt::CaseInsensitive);
+}
+
+void OBDConnectionWorker::pollCustom(int index)
+{
+    if (index < 0 || index >= m_customPids.size() || index >= m_customState.size())
+        return;
+    const CustomPidRequest &pid = m_customPids.at(index);
+    CustomState &state = m_customState[index];
+    if (state.unusable || (state.retryAt && m_customClock.elapsed() < state.retryAt))
+        return;
+
+    // A header addresses one ECU, and stays set in the adapter: every other
+    // request (the standard PIDs, trouble codes, the scan) needs the
+    // protocol's own back, so it is restored before this returns. Where
+    // OCTAVE doesn't know that header, the PID is not polled at all.
+    const QByteArray restore = ELM327Protocol::defaultHeader(m_protocol);
+    if (!pid.header.isEmpty() && restore.isEmpty()) {
+        state.unusable = true;
+        qCInfo(lcElm327) << "custom PID" << pid.paramId << "needs header" << pid.header
+                         << "which can't be restored on protocol" << m_protocol << "; not polled";
+        emit logLine(QStringLiteral("%1 needs an ECU header, which this vehicle's protocol doesn't allow yet")
+                         .arg(pid.paramId));
+        return;
+    }
+
+    std::optional<QVector<uint8_t>> data;
+    QElapsedTimer roundTrip;
+    roundTrip.start();
+    const bool addressed = pid.header.isEmpty() || setHeader(pid.header.toLatin1());
+    if (addressed) {
+        // No response count: the reply is often several CAN frames
+        const QString response = sendCommand(ELM327Protocol::formatDataRequest(pid.mode, pid.pid), 1000);
+        notePoll(roundTrip.elapsed(), response, 1);
+        if (!response.isEmpty())
+            data = ELM327Protocol::parseDataResponse(m_responseBuffer.lastLines(), pid.mode, pid.pid);
+    }
+    if (!pid.header.isEmpty()) {
+        bool restored = false;
+        for (int attempt = 0; attempt < 2 && m_io && !restored; ++attempt)
+            restored = setHeader(restore);
+        // The link went (sendCommand() reported it) or this connection is
+        // being replaced: nothing left to restore
+        if (!m_io || QThread::currentThread()->isInterruptionRequested())
+            return;
+        if (!restored) {
+            // Polling on with another ECU's header would turn every reading
+            // into NO DATA: start over from ATZ, which resets it
+            qCWarning(lcElm327) << "could not restore the default header after" << pid.paramId << "; reconnecting";
+            emit logLine(QStringLiteral("The adapter kept a custom PID's header; reconnecting"));
+            stopPolling();
+            releasePort();
+            m_initialized = false;
+            emit connectionLost(QStringLiteral("Adapter kept a custom header"));
+            return;
+        }
+    }
+    if (!m_io)
+        return;
+
+    const double value = data && pid.decoder ? pid.decoder(*data) : std::numeric_limits<double>::quiet_NaN();
+    if (std::isnan(value)) {
+        if (++state.misses == kCustomMissLimit) {
+            qCInfo(lcElm327) << "custom PID" << pid.paramId << "unanswered" << kCustomMissLimit
+                             << "times; trying every" << kCustomRetryMs / 1000 << "s";
+            emit logLine(QStringLiteral("%1 isn't answering; trying it now and then").arg(pid.paramId));
+        }
+        if (state.misses >= kCustomMissLimit)
+            state.retryAt = m_customClock.elapsed() + kCustomRetryMs;
+        return;
+    }
+    state.misses = 0;
+    state.retryAt = 0;
+    emit extendedDataReceived(pid.paramId, static_cast<float>(value));
 }
 
 void OBDConnectionWorker::pollBatch(const QList<int> &pids)
@@ -2754,11 +3261,31 @@ void OBDConnectionWorker::doClearDtc()
     if (wasPolling) stopPolling();
 
     // Send Mode 04 request (clear DTCs)
-    QString response = sendCommand(QByteArrayLiteral("04\r"), 5000);
-    bool success = !response.isEmpty() && !response.toUpper().contains(QStringLiteral("ERROR"));
-    emit dtcCleared(success,
-                    success ? QStringLiteral("DTCs cleared successfully")
-                            : QStringLiteral("Clear command failed"));
+    // Only the positive response (44) means the ECU cleared anything.
+    // "NO DATA", "?" and a refusal (7F 04 xx, usual with the engine
+    // running) used to pass as success and wiped the list on screen while
+    // the car kept its codes.
+    sendCommand(QByteArrayLiteral("04\r"), 5000);
+    bool success = false;
+    QString refusal;
+    for (const QString &raw : m_responseBuffer.lastLines()) {
+        QString line = raw.toUpper();
+        line.remove(QLatin1Char(' '));
+        if (line.startsWith(QLatin1String("44")))
+            success = true;
+        else if (line.startsWith(QLatin1String("7F04")))
+            refusal = line.mid(4, 2);
+    }
+    QString message = QStringLiteral("DTCs cleared successfully");
+    if (!success) {
+        if (refusal == QLatin1String("22"))
+            message = QStringLiteral("The vehicle refused to clear codes (conditions not correct: try ignition on, engine off)");
+        else if (!refusal.isEmpty())
+            message = QStringLiteral("The vehicle refused to clear codes (code %1)").arg(refusal);
+        else
+            message = QStringLiteral("Clear command failed: no confirmation from the vehicle");
+    }
+    emit dtcCleared(success, message);
 
     if (wasPolling) startPolling();
 }
@@ -3266,6 +3793,12 @@ void OBDManager::rebuildAndroidPollList()
 {
     QList<PidKey> pids = buildPidsToWatch();
     QList<PidKey> background = buildBackgroundPids(pids);
+    // Custom PIDs are polled by the worker only; this path has none
+    auto standard = [](QList<PidKey> &keys) {
+        keys.removeIf([](const PidKey &k) { return k.first == kCustomPidMode; });
+    };
+    standard(pids);
+    standard(background);
     // If the vehicle reported a supported set, filter to only those PIDs
     // (mode-1 PID number is the second of the pair; ELM_VOLTAGE is the
     // adapter's own ATRV and always available).

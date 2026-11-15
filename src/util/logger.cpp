@@ -28,6 +28,10 @@
 
 namespace {
 
+// The crash handler's own descriptor follows the error log through a
+// rotation (defined with the handlers below)
+void reopenCrashFd(const QString &rotatedPath);
+
 // One log file, rotated at maxBytes into `backups` numbered copies
 struct RotatingFile {
     QString path;
@@ -63,6 +67,7 @@ struct RotatingFile {
         else
             QFile::remove(path);
         open();
+        reopenCrashFd(path);
     }
 };
 
@@ -181,9 +186,24 @@ void crashHandler(int sig)
     ::raise(sig);
 }
 
+// After the error log rotates, the descriptor opened at start-up points at
+// octave-cpp-error.log.1 (later .2 ... then a deleted file): a crash's
+// backtrace went where nobody looks. Open the new file, swap, close the old.
+void reopenCrashFd(const QString &rotatedPath)
+{
+    if (g_crashFd < 0 || !rotatedPath.endsWith(QLatin1String("/octave-cpp-error.log")))
+        return;
+    const int fresh = ::open(rotatedPath.toLocal8Bit().constData(), O_WRONLY | O_APPEND | O_CREAT, 0644);
+    if (fresh < 0)
+        return;
+    const int old = g_crashFd;
+    g_crashFd = fresh;
+    ::close(old);
+}
+
 void installCrashHandlers()
 {
-    // A separate descriptor, opened once, so the signal path never touches Qt
+    // A separate descriptor so the signal path never touches Qt
     g_crashFd = ::open((g_logDir + QStringLiteral("/octave-cpp-error.log")).toLocal8Bit().constData(),
                        O_WRONLY | O_APPEND | O_CREAT, 0644);
     for (int sig : {SIGSEGV, SIGABRT, SIGFPE, SIGILL, SIGBUS})
@@ -210,6 +230,18 @@ LONG WINAPI crashFilter(EXCEPTION_POINTERS *info)
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
+void reopenCrashFd(const QString &rotatedPath)
+{
+    if (g_crashFd < 0 || !rotatedPath.endsWith(QLatin1String("/octave-cpp-error.log")))
+        return;
+    const int fresh = _open(rotatedPath.toLocal8Bit().constData(), _O_WRONLY | _O_APPEND | _O_CREAT, 0644);
+    if (fresh < 0)
+        return;
+    const int old = g_crashFd;
+    g_crashFd = fresh;
+    _close(old);
+}
+
 void installCrashHandlers()
 {
     g_crashFd = _open((g_logDir + QStringLiteral("/octave-cpp-error.log")).toLocal8Bit().constData(),
@@ -217,6 +249,7 @@ void installCrashHandlers()
     SetUnhandledExceptionFilter(crashFilter);
 }
 #else
+void reopenCrashFd(const QString &) {}
 void installCrashHandlers() {}
 #endif
 

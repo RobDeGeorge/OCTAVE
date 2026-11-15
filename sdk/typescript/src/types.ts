@@ -317,6 +317,51 @@ export interface BerryIMUManager {
   }
 }
 
+/**
+ * busMonitor (BusMonitor)
+ * @experimental not covered by the protocol version; may change or go in any release
+ */
+export interface BusMonitor {
+  properties: {
+    /** bool, notify availableChanged */
+    available: boolean
+    /** bool, notify activeChanged */
+    active: boolean
+    /** QString, notify activeChanged */
+    filter: string
+    /** QString, notify noteChanged */
+    note: string
+    /** QVariantList, notify idsChanged */
+    ids: unknown[]
+    /** int, notify idsChanged */
+    frameCount: number
+    /** int, notify idsChanged */
+    framesPerSecond: number
+    /** int, notify idsChanged */
+    overruns: number
+    /** bool, constant */
+    canRecord: boolean
+    /** bool, notify recordingChanged */
+    recording: boolean
+    /** QString, notify recordingChanged */
+    logFile: string
+  }
+  methods: {
+    start: { args: [filter: string] | []; returns: boolean }
+    stop: { args: []; returns: void }
+    clear: { args: []; returns: void }
+    startRecording: { args: []; returns: boolean }
+    stopRecording: { args: []; returns: void }
+  }
+  signals: {
+    availableChanged: []
+    activeChanged: []
+    noteChanged: []
+    idsChanged: []
+    recordingChanged: []
+  }
+}
+
 /** clock (Clock) */
 export interface Clock {
   properties: {
@@ -328,6 +373,29 @@ export interface Clock {
   }
   signals: {
     timeChanged: [timeStr: string]
+  }
+}
+
+/**
+ * customPids (CustomPids)
+ * @experimental not covered by the protocol version; may change or go in any release
+ */
+export interface CustomPids {
+  properties: {
+    /** QString, constant */
+    file: string
+    /** bool, notify fileExistsChanged */
+    fileExists: boolean
+    /** QVariantList, constant */
+    pids: unknown[]
+    /** QStringList, constant */
+    errors: string[]
+  }
+  methods: {
+    createExample: { args: []; returns: boolean }
+  }
+  signals: {
+    fileExistsChanged: []
   }
 }
 
@@ -776,6 +844,11 @@ export interface OBDAdapterFinder {
     supported: boolean
     /** bool, constant */
     canScan: boolean
+    /**
+     * bool, constant
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    canPickSerial: boolean
     /** bool, notify bluetoothOnChanged */
     bluetoothOn: boolean
     /** bool, notify scanningChanged */
@@ -791,6 +864,8 @@ export interface OBDAdapterFinder {
   }
   methods: {
     startScan: { args: []; returns: void }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    pickSerialPort: { args: []; returns: void }
     stopScan: { args: []; returns: void }
     connectAdapter: { args: [address: string]; returns: void }
     cancel: { args: []; returns: void }
@@ -2004,7 +2079,9 @@ export interface Objects {
   androidAutoManager: AndroidAutoManager
   audioAnalyzer: AudioAnalyzer
   berryIMU: BerryIMUManager
+  busMonitor: BusMonitor
   clock: Clock
+  customPids: CustomPids
   dashboardManager: DashboardManager
   diagnosticsManager: DiagnosticsManager
   esp32VolumeManager: ESP32VolumeManager

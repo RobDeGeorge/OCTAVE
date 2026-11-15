@@ -258,6 +258,15 @@ private slots:
         const QString local = p.mintTicket(QString());
         QVERIFY(p.checkTicket(local, true));
         QVERIFY(!p.checkTicket(local, false));
+        QVERIFY(p.ticketAllows(local, true, QStringLiteral("files")));   // a local program: everything
+
+        // A local page held to a web frontend's scopes: its ticket carries
+        // those and no more (it used to open /export, which needs files)
+        const QString limited = p.mintTicket(QString(), {QStringLiteral("read"), QStringLiteral("media")});
+        QVERIFY(p.ticketAllows(limited, true, QStringLiteral("read")));
+        QVERIFY(p.ticketAllows(limited, true, QStringLiteral("media")));
+        QVERIFY(!p.ticketAllows(limited, true, QStringLiteral("files")));
+        QVERIFY(!p.ticketAllows(limited, false, QStringLiteral("read")));
     }
 
     // An exec frontend's token (frontendsupervisor.h): its scopes only,
