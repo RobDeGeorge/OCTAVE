@@ -25,7 +25,7 @@ These are stubs (no-ops) on Android today: `gesturemanager`, `androidautomanager
    **Effort:** S. **Needs:** S22.
 3. **On-device observability check.** Code is in place but never run on a phone:
    - Settings → About → Diagnostics: `DiagnosticsManager::exportLogs()` (`src/managers/diagnosticsmanager.cpp:97`) should create `/storage/emulated/0/Download/OCTAVE-logs-<timestamp>/`, visible in Files and attachable from a mail app.
-   - Connect the ELM327 and check `octave-cpp.log` for `[BLE]` lines (`OBDManager::onAndroidBlePoll()`, `src/managers/obdmanager.cpp:2688`); pull the dongle and look for a `[BLE]` warning.
+   - Connect the ELM327 and check `octave-cpp.log` for `[BLE]` lines (`OBDManager::onAndroidBlePoll()`, `src/managers/obdmanager_android.cpp`); pull the dongle and look for a `[BLE]` warning.
    - Confirm `octave-cpp.log` exists at all, and that `kill -SEGV` leaves a `==== FATAL SIGSEGV ====` block with the "no backtrace support" line (bionic has no `execinfo`).
    **Effort:** S. **Needs:** S22 + the BLE ELM327 dongle.
 4. **Just-in-time permissions with denial handling.** Today `AppCore` (`src/appcore.cpp`, the `Q_OS_ANDROID` block after `mediaManager`) asks for audio and Bluetooth permissions all at once on launch, and `OctaveOBDBridge.java` re-asks on connect. Steps: drop the startup loop; ask for `READ_MEDIA_AUDIO` when the media library is first opened and Bluetooth when OBD connect is first tapped; on denial, show a short explainer with "Try again" and "Open app settings" (`Settings.ACTION_APPLICATION_DETAILS_SETTINGS` via JNI); re-scan the library once audio is granted.

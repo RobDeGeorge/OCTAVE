@@ -18,7 +18,7 @@
 | udev: match the adb interface (`ENV{ID_USB_INTERFACES}=="*:ff4201:*"`) instead of whole vendors, then confirm a fresh install still mirrors | `packaging/linux/51-android.rules` | S |
 | Stopping the mirror joins the worker on the GUI thread (up to seconds with a hung adb): make the stop asynchronous | `src/managers/phonemirrormanager.cpp:1257`, `src/phone_mirror/scrcpyclient.cpp:319-336, 772-777` | M |
 | Tell the manager when the mirror / AirPlay view is hidden so frames stop (Android Auto has `setViewVisible`) | `frontend/PhoneMirrorView.qml`, `AirPlayView.qml`, managers | M |
-| Fold Android's own ELM327 path into the shared worker (it declares "Connected" 2 s after `0100` whatever answers; no DTC reads, batching or custom PIDs) | `src/managers/obdmanager.cpp` (the `Q_OS_ANDROID` block near the end) | L |
+| Fold Android's own ELM327 path into the shared worker (it declares "Connected" 2 s after `0100` whatever answers; no DTC reads, batching or custom PIDs) | `src/managers/obdmanager_android.cpp` | L |
 | Update the prebuilt Android OpenSSL off the end-of-life 3.1 line and record its hash | `android/openssl/` | S–M |
 | The legacy DHU launch blocks the GUI thread for up to a minute. Native Android Auto ([android-auto-native-receiver.md](android-auto-native-receiver.md)) replaces the DHU, so fix this only if the DHU path stays | `src/managers/androidautomanager.cpp:463-520` | M |
 
@@ -66,7 +66,7 @@ The branch compiles for the browser (2026-11-15, `packaging/wasm/build.sh` with 
 ## 6. Refactors, one at a time, after the above
 
 1. Done 2026-11-15: `SettingsManager` is table-driven (one row per setting, one store of truth, writable properties). Left from it: derive the pinned-settings registry's slot names from the table; compile it on Windows (the dead file locking and its includes were removed; the browser build compiles).
-2. `OBDManager` split (connection lifecycle, scheduling, diagnostics) and the removal of the dead state and the cargo-cult locks. **Effort:** L.
+2. Done 2026-11-15: `OBDManager` is split by responsibility (`obdmanager.cpp`, `obdmanager_connection.cpp`, `_polling.cpp`, `_diagnostics.cpp`, `_android.cpp`, and `obdconnectionworker.{h,cpp}`); the write-only members and the locks on GUI-thread-only state are gone. Left from it: `m_lock` on the Android path (goes when that path folds into the worker, section 1), `m_hasActiveWatchers` (always true), the published no-op `set_auto_reconnect()`; Windows, macOS and Android were not compiled.
 3. `MediaPlayer.qml` on a real C++ list model (today a JS array, five invokable calls per row, a 300 ms refresh timer). **Effort:** L.
 4. `OBDMenu.qml`: the 1,870-line shift-light popup into its own file, on `SettingsSlider` and the gauge library. **Effort:** M.
 5. The dashboard editor's document model and undo out of QML JavaScript into C++ where QtTest reaches it. **Effort:** L.

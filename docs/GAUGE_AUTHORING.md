@@ -17,7 +17,7 @@ OBDManager ─ parameterSampled ─▶ paramStore (C++) ─▶ OBDParameterModel
 berryIMU ─ 8 signals ─────────▶   33 ms fold)          gate, demo mode)
 ```
 
-`OBDManager` is the C++ manager in `src/managers/obdmanager.cpp`, built in
+`OBDManager` is the C++ manager in `src/managers/obdmanager*.cpp`, built in
 `src/appcore.cpp` and exposed as the `obdManager` context property.
 
 You do **not** wire signals yourself. `src/appcore.cpp` feeds every decoded value

@@ -32,6 +32,13 @@ function(octave_add_test name)
         TIMEOUT 120)
 endfunction()
 
+# OBDManager is one class in several files, and its worker
+set(OCTAVE_OBD_MANAGER_SOURCES
+    managers/obdmanager.h managers/obdmanager.cpp
+    managers/obdmanager_connection.cpp managers/obdmanager_polling.cpp
+    managers/obdmanager_diagnostics.cpp managers/obdmanager_android.cpp
+    managers/obdconnectionworker.h managers/obdconnectionworker.cpp)
+
 octave_add_test(tst_elm327protocol SOURCES managers/elm327protocol.cpp managers/parametercatalog.h managers/parametercatalog.cpp)
 octave_add_test(tst_dtcdescriptions SOURCES managers/dtcdescriptions.h managers/dtcdescriptions.cpp)
 # The license texts of Settings > About: same resource as the app's
@@ -61,7 +68,7 @@ octave_add_test(tst_dashboardwidgets
     LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
 octave_add_test(tst_triprecorder
     SOURCES managers/tripstore.h managers/tripstore.cpp managers/triprecorder.h managers/triprecorder.cpp
-            managers/obdmanager.h managers/obdmanager.cpp managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
+            ${OCTAVE_OBD_MANAGER_SOURCES} managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
             managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
     LIBS Qt6::Gui Qt6::SerialPort octave_sqlite)
@@ -79,14 +86,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         LIBS Qt6::Gui)
 endif()
 octave_add_test(tst_obdmanager
-    SOURCES managers/obdmanager.h managers/obdmanager.cpp managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
+    SOURCES ${OCTAVE_OBD_MANAGER_SOURCES} managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
             managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
     LIBS Qt6::Gui Qt6::SerialPort)
 
 # Integration: the real OBD stack against the simulated adapter (src/sim/)
 octave_add_test(tst_obdsim
-    SOURCES managers/obdmanager.h managers/obdmanager.cpp managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
+    SOURCES ${OCTAVE_OBD_MANAGER_SOURCES} managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
             managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
             managers/busmonitor.h managers/busmonitor.cpp
@@ -110,7 +117,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET Qt6::DBus)
 endif()
 octave_add_test(tst_obdadapterfinder
     SOURCES ${_finder_sources}
-            managers/obdmanager.h managers/obdmanager.cpp managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
+            ${OCTAVE_OBD_MANAGER_SOURCES} managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
             managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
             sim/carsim.h sim/carsim.cpp sim/simelm327.h sim/simelm327.cpp

@@ -58,7 +58,8 @@
         <h2 id="overview">Overview</h2>
         <p>
           <code>OBDManager</code> provides real-time vehicle data over the OBD-II port through an ELM327-compatible
-          adapter. It lives in <span class="file-path">src/managers/obdmanager.{h,cpp}</span>, talks ELM327 directly,
+          adapter. It lives in <span class="file-path">src/managers/obdmanager.h</span> and the
+          <span class="file-path">obdmanager*.cpp</span> files beside it (see the table below), talks ELM327 directly,
           and is registered as the QML context property <code>obdManager</code>. On desktop an
           <code>OBDConnectionWorker</code> owns a serial port or direct RFCOMM transport on its own thread; on Android the
           same class switches (behind <code>#ifdef Q_OS_ANDROID</code>) to a BLE GATT link provided by the Java helper
@@ -80,7 +81,12 @@
             <tr><th>File</th><th>Platform</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><span class="file-path">src/managers/obdmanager.{h,cpp}</span></td><td><span class="platform-badge all">All</span></td><td><code>OBDManager</code> (main thread: timers, settings, signal dispatch table) and <code>OBDConnectionWorker</code> (worker thread: <code>QSerialPort</code>, init, polling, DTC, scan). The Android BLE state machine lives at the bottom of the .cpp under <code>#ifdef Q_OS_ANDROID</code>.</td></tr>
+            <tr><td><span class="file-path">src/managers/obdmanager.{h,cpp}</span></td><td><span class="platform-badge all">All</span></td><td><code>OBDManager</code>, one class in several files, all on the main thread. This one: construction, the signal dispatch table, the status properties and the small getters.</td></tr>
+            <tr><td><span class="file-path">src/managers/obdmanager_connection.cpp</span></td><td><span class="platform-badge all">All</span></td><td>Finding the adapter and holding the link: port discovery, the connection attempt and its teardown, retries, the stale-data watchdog, the unified adapter API, the Linux <code>rfcomm bind</code>.</td></tr>
+            <tr><td><span class="file-path">src/managers/obdmanager_polling.cpp</span></td><td><span class="platform-badge all">All</span></td><td>What is polled: demand, the poll list built from it, the readings coming back, the vehicle scan.</td></tr>
+            <tr><td><span class="file-path">src/managers/obdmanager_diagnostics.cpp</span></td><td><span class="platform-badge all">All</span></td><td>Diagnostic mode, trouble codes, the MIL, freeze frame, the VIN, the bus monitor's manager side.</td></tr>
+            <tr><td><span class="file-path">src/managers/obdmanager_android.cpp</span></td><td><span class="platform-badge android">Android</span></td><td>The Android BLE state machine (<code>#ifdef Q_OS_ANDROID</code>; empty elsewhere).</td></tr>
+            <tr><td><span class="file-path">src/managers/obdconnectionworker.{h,cpp}</span></td><td><span class="platform-badge all">All</span></td><td><code>OBDConnectionWorker</code> (worker thread: <code>QSerialPort</code> or another transport, init, polling, DTC, scan, bus monitor). <span class="file-path">obdmanager.h</span> includes it.</td></tr>
             <tr><td><span class="file-path">src/managers/elm327protocol.{h,cpp}</span></td><td><span class="platform-badge all">All</span></td><td>Static <code>ELM327Protocol</code> class (init commands, PID table with a <code>commandName</code> column, parsers, <code>elmVoltageRequest()</code> / <code>parseElmVoltage()</code>, <code>supportedCommandNames()</code>, <code>defaultPids()</code>), <code>ResponseBuffer</code>, and the <code>octave.elm327</code> logging category.</td></tr>
             <tr><td><span class="file-path">android/src/org/octave/app/OctaveOBDBridge.java</span></td><td><span class="platform-badge android">Android</span></td><td>Static Java class wrapping <code>BluetoothGatt</code>. Called from C++ via <code>QJniObject</code>: <code>connect</code>, <code>disconnect</code>, <code>write</code>, <code>stateCode</code>, <code>pollResponse</code>, <code>pollLog</code>, <code>lastError</code>, <code>lastEvent</code>, <code>bondedDevices</code> (paired adapters as <code>"MAC|name"</code>).</td></tr>
             <tr><td><span class="file-path">src/managers/obdadapterfinder.{h,cpp}</span>, <span class="file-path">src/platform/bluezpairer.{h,cpp}</span></td><td><span class="platform-badge all">All; full flow on Linux</span></td><td><code>OBDAdapterFinder</code> (QML <code>obdAdapterFinder</code>): Bluetooth discovery, PIN pairing through BlueZ, trust, SPP channel lookup, then hand-off to <code>connectDirect()</code>. See <a href="#adapter-finder">Adapter Finder</a>.</td></tr>
@@ -152,7 +158,7 @@ Desktop                                   Android
 
         <ol class="steps">
           <li><strong>Startup</strong>: the 50 ms timer fires <code>onStartupTimer()</code>: scan for ports, start the 10 s scanner, call <code>startConnection()</code>.</li>
-          <li><strong>Guard</strong>: a mutex-protected <code>m_isConnecting</code> flag drops re-entrant attempts ("Already connecting -- skipping"). <code>cleanupConnection()</code> clears the flag, because the attempt it abandons has its <code>initComplete</code> disconnected and would never clear it. Before 2026-10-03 a <code>reconnect()</code> during an attempt left OBD stuck in "Connecting" with no worker. The abandoned worker logs <em>connect to X abandoned (superseded by a newer connect)</em> on <code>octave.elm327</code>. The attempt counter increments and the UI gets <code>connectionStatusChanged("Connecting")</code>, <code>connectionStatusDetailChanged("Attempt N...")</code>, <code>connectionProgressChanged(10)</code>.</li>
+          <li><strong>Guard</strong>: the <code>m_isConnecting</code> flag (main thread only, like all of the manager's state) drops re-entrant attempts ("Already connecting -- skipping"). <code>cleanupConnection()</code> clears the flag, because the attempt it abandons has its <code>initComplete</code> disconnected and would never clear it. Before 2026-10-03 a <code>reconnect()</code> during an attempt left OBD stuck in "Connecting" with no worker. The abandoned worker logs <em>connect to X abandoned (superseded by a newer connect)</em> on <code>octave.elm327</code>. The attempt counter increments and the UI gets <code>connectionStatusChanged("Connecting")</code>, <code>connectionStatusDetailChanged("Attempt N...")</code>, <code>connectionProgressChanged(10)</code>.</li>
           <li><strong>Port check</strong>: <code>checkPortExists()</code>. Unix: the device file exists; Windows: the port is listed by <code>QSerialPortInfo::availablePorts()</code>; Android: the configured string matches the MAC regex <code>^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$</code>. A missing port emits <code>"Device Not Found"</code>, <code>devicePresenceChanged(false)</code>, and schedules auto-reconnect.</li>
           <li><strong>Worker</strong>: progress 15, <code>"Found &lt;port&gt;, connecting..."</code>, then a fresh <code>OBDConnectionWorker</code> is moved to a new <code>QThread</code> and its <code>started</code> signal invokes the blocking connect (<a href="#threaded-worker">next section</a>). On Android the manager skips this and calls <code>startAndroidConnection()</code> instead.</li>
           <li><strong>Result</strong> (delivered to the main thread by queued signals):
@@ -879,12 +885,10 @@ QTimer::singleShot(delay * <span class="num">1000</span>, <span class="kw">this<
           </tbody>
         </table>
         <p>
-          <strong>Transition guard</strong>: <code>enterDiagnosticMode</code> sets
-          <code>m_diagnosticModeTransitioning</code> under <code>m_diagnosticModeLock</code>, stops the watchdog and
-          polling, then sets <code>m_diagnosticMode</code> and clears the flag. A second enter while a transition is in
-          progress is ignored, and an <code>exitDiagnosticMode</code> that finds an entry still transitioning cancels it
-          ("Cancelling diagnostic mode entry") instead of reconnecting, so rapid menu switches cannot race each other.
-          The entry path does no blocking I/O, so the window is short.
+          <strong>No transition state</strong>: <code>enterDiagnosticMode</code> stops the watchdog and polling and
+          sets <code>m_diagnosticMode</code> in one call on the main thread, with no blocking I/O, so there is no
+          "entering" state for a second call to meet. A second enter is ignored ("Already in diagnostic mode"), and
+          an exit outside diagnostic mode does nothing.
         </p>
 
         <!-- Android -->

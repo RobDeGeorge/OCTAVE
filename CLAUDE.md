@@ -58,7 +58,7 @@ Every feature is a C++ **manager class** inheriting from `QObject`. Managers exp
 Key managers (`src/managers/*.{h,cpp}`):
 - `settingsmanager` — Central settings store, persists JSON to OS-specific config dirs
 - `mediamanager` — Local audio playback via QMediaPlayer
-- `obdmanager` + `elm327protocol` — OBD-II diagnostics
+- `obdmanager` (one class in `obdmanager.cpp` and `obdmanager_connection` / `_polling` / `_diagnostics` / `_android.cpp`) + `obdconnectionworker` (its worker thread) + `elm327protocol` — OBD-II diagnostics
 - `nowplaying` — what is playing and its controls whichever source has them (phone while mirroring, else `mediamanager`); owns the phone-position clock and the phone/local hand-off (context property `nowPlaying`)
 - `spotifymanager` (+ `spotifyapi`) — Spotify over its Web API (experimental): PKCE sign-in (desktop: browser + loopback `127.0.0.1:43821/callback`; browser build: the page's own address), the library as entries of the music menu's playlist dropdown (Spotify heading) shown in the same song table as local music, remote control of the Spotify app on the phone (Premium); `nowPlaying` source `"spotify"`. Client ID: `-DOCTAVE_SPOTIFY_CLIENT_ID` or Settings > Media > Spotify; refresh token in `<config>/spotify.json`
 - `parameterstore` — the latest value of every PID / IMU reading as a `QQmlPropertyMap` (context property `paramStore`, one notifying key per id, 33 ms coalescing), fed from `OBDManager::parameterSampled` and the IMU signals in `src/appcore.cpp`
