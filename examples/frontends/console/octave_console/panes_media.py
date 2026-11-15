@@ -122,24 +122,24 @@ class LibraryPane(Pane):
         column, ascending = SORTS[self.sort], not self.reverse
 
         def fetch(link):
-            files = link.call("mediaManager", "sort_media_files", column, ascending) or []
+            files = link.call("mediaManager", "sortMediaFiles", column, ascending) or []
             songs = []
             for f in files:
                 songs.append({
                     "file": f,
-                    "title": link.call("mediaManager", "get_display_name", f) or f,
-                    "artist": link.call("mediaManager", "get_band", f) or "",
-                    "album": link.call("mediaManager", "get_album", f) or "",
-                    "length": link.call("mediaManager", "get_formatted_duration", f) or "",
+                    "title": link.call("mediaManager", "getDisplayName", f) or f,
+                    "artist": link.call("mediaManager", "getBand", f) or "",
+                    "album": link.call("mediaManager", "getAlbum", f) or "",
+                    "length": link.call("mediaManager", "getFormattedDuration", f) or "",
                 })
             return {
                 "songs": songs,
-                "playlists": link.call("mediaManager", "get_playlist_names") or [],
-                "current": link.call("mediaManager", "get_current_playlist_name") or "",
-                "file": link.call("mediaManager", "get_current_file") or "",
-                "summary": (link.call("mediaManager", "get_total_duration") or "",
-                            link.call("mediaManager", "get_artist_count") or 0,
-                            link.call("mediaManager", "get_album_count") or 0),
+                "playlists": link.call("mediaManager", "getPlaylistNames") or [],
+                "current": link.call("mediaManager", "getCurrentPlaylistName") or "",
+                "file": link.call("mediaManager", "getCurrentFile") or "",
+                "summary": (link.call("mediaManager", "getTotalDuration") or "",
+                            link.call("mediaManager", "getArtistCount") or 0,
+                            link.call("mediaManager", "getAlbumCount") or 0),
             }
         self.app.blocking(fetch, self.show)
 
@@ -237,10 +237,10 @@ class LibraryPane(Pane):
     def on_data_table_row_selected(self, event):
         tid = event.data_table.id
         if tid == "lib-songs" and (f := self.selected_song()):
-            self.app.invoke("mediaManager", "play_file", f, note=f"playing {f}")
+            self.app.invoke("mediaManager", "playFile", f, note=f"playing {f}")
         elif tid == "lib-playlists" and event.cursor_row < len(self.playlists):
             name = self.playlists[event.cursor_row]
-            self.app.invoke("mediaManager", "select_playlist", name, note=f"playlist {name}", done=lambda _: self.reload())
+            self.app.invoke("mediaManager", "selectPlaylist", name, note=f"playlist {name}", done=lambda _: self.reload())
         elif tid == "lib-queue" and event.cursor_row < len(self.queue):
             self.app.invoke("phoneMirrorManager", "mediaSkipToQueueItem", self.queue[event.cursor_row].get("id"))
 
@@ -253,7 +253,7 @@ class LibraryPane(Pane):
     def action_new_playlist(self):
         def answered(name):
             if name and name.strip():
-                self.app.invoke("mediaManager", "create_playlist", name.strip(), note=f"created {name.strip()}",
+                self.app.invoke("mediaManager", "createPlaylist", name.strip(), note=f"created {name.strip()}",
                                 done=lambda _: self.reload())
         self.app.push_screen(EditValue("New playlist", ""), answered)
 
@@ -265,7 +265,7 @@ class LibraryPane(Pane):
 
         def answered(yes):
             if yes:
-                self.app.invoke("mediaManager", "delete_playlist", name, note=f"deleted playlist {name}",
+                self.app.invoke("mediaManager", "deletePlaylist", name, note=f"deleted playlist {name}",
                                 done=lambda _: self.reload())
         self.app.push_screen(Confirm(f"Delete the playlist {name}?\n\nIts songs move back to the library."), answered)
 
@@ -277,10 +277,10 @@ class LibraryPane(Pane):
         def got(names):
             def picked(target):
                 if target:
-                    self.app.invoke("mediaManager", "move_song_to_playlist", f, target, note=f"moved to {target}",
+                    self.app.invoke("mediaManager", "moveSongToPlaylist", f, target, note=f"moved to {target}",
                                     done=lambda _: self.reload())
             self.app.push_screen(Pick(f"Move {f} to", [(n, n) for n in names or []]), picked)
-        self.app.invoke("mediaManager", "get_movable_playlist_names", done=got)
+        self.app.invoke("mediaManager", "getMovablePlaylistNames", done=got)
 
     def action_delete_song(self):
         f = self.selected_song()
@@ -289,14 +289,14 @@ class LibraryPane(Pane):
 
         def answered(yes):
             if yes:
-                self.app.invoke("mediaManager", "delete_song", f, note=f"deleted {f}", done=lambda _: self.reload())
+                self.app.invoke("mediaManager", "deleteSong", f, note=f"deleted {f}", done=lambda _: self.reload())
         self.app.push_screen(Confirm(f"Delete {f} from the head unit?\n\nThe file is removed for good."), answered)
 
     def action_rescan(self):
-        self.app.invoke("mediaManager", "scan_library", note="rescanning the library", done=lambda _: self.reload())
+        self.app.invoke("mediaManager", "scanLibrary", note="rescanning the library", done=lambda _: self.reload())
 
     def action_strip(self):
         def answered(yes):
             if yes:
-                self.app.invoke("mediaManager", "strip_filenames", note="stripping file names", done=lambda _: self.reload())
+                self.app.invoke("mediaManager", "stripFilenames", note="stripping file names", done=lambda _: self.reload())
         self.app.push_screen(Confirm("Strip junk from every file name in the library?\n\nThis renames files."), answered)

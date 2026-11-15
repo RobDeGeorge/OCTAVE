@@ -23,7 +23,7 @@ Flickable {
 
     function refreshPorts() {
         if (typeof esp32VolumeManager !== "undefined" && esp32VolumeManager)
-            esp32VolumeManager.refresh_ports()
+            esp32VolumeManager.refreshPorts()
     }
 
     Component.onCompleted: refreshPorts()
@@ -120,19 +120,19 @@ Flickable {
                         width: pageRoot.dp(14)
                         height: pageRoot.dp(14)
                         radius: pageRoot.dpMin(7, 2)
-                        color: (typeof esp32VolumeManager !== "undefined" && esp32VolumeManager && esp32VolumeManager.is_connected()) ? App.Style.statusConnected : App.Style.statusDisconnected
+                        color: (typeof esp32VolumeManager !== "undefined" && esp32VolumeManager && esp32VolumeManager.isConnected()) ? App.Style.statusConnected : App.Style.statusDisconnected
 
                         Connections {
                             target: typeof esp32VolumeManager !== "undefined" ? esp32VolumeManager : null
                             function onConnectionStatusChanged(status) {
-                                esp32StatusDot.color = esp32VolumeManager.is_connected() ? App.Style.statusConnected : App.Style.statusDisconnected
+                                esp32StatusDot.color = esp32VolumeManager.isConnected() ? App.Style.statusConnected : App.Style.statusDisconnected
                             }
                         }
                     }
 
                     Text {
                         id: esp32StatusText
-                        text: (typeof esp32VolumeManager !== "undefined" && esp32VolumeManager) ? esp32VolumeManager.get_connection_detail() : "Not initialized"
+                        text: (typeof esp32VolumeManager !== "undefined" && esp32VolumeManager) ? esp32VolumeManager.getConnectionDetail() : "Not initialized"
                         color: App.Style.primaryTextColor
                         font.pixelSize: App.Spacing.overallText
                         font.family: App.Style.fontFamily
@@ -141,7 +141,7 @@ Flickable {
                         Connections {
                             target: typeof esp32VolumeManager !== "undefined" ? esp32VolumeManager : null
                             function onConnectionDetailChanged(detail) {
-                                esp32StatusText.text = esp32VolumeManager.get_connection_detail()
+                                esp32StatusText.text = esp32VolumeManager.getConnectionDetail()
                             }
                         }
                     }
@@ -272,8 +272,8 @@ Flickable {
                                                     settingsManager.save_esp32_volume_enabled(true)
                                                 }
                                                 if (esp32VolumeManager) {
-                                                    esp32VolumeManager.reset_reconnect_attempts()
-                                                    esp32VolumeManager.connect_device()
+                                                    esp32VolumeManager.resetReconnectAttempts()
+                                                    esp32VolumeManager.connectDevice()
                                                 }
                                             }
                                         }

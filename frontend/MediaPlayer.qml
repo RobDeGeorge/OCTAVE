@@ -191,7 +191,7 @@ Item {
     // than an empty page. Also when the library lands after the page opened.
     function _showSpotifyIfNoLocal() {
         if (spotifySignedIn && spotifyUri === "" && !showingPhoneQueue && spotifyManager.playlists.length > 0
-                && mediaManager && mediaManager.get_current_song_list().length === 0)
+                && mediaManager && mediaManager.getCurrentSongList().length === 0)
             showSpotify(spotifyManager.playlists[0].uri)
     }
     Connections {
@@ -307,7 +307,7 @@ Item {
                             currentSortColumn === "album" ? sortByAlbumAscending :
                             sortByArtistAscending
 
-            mediaFiles = mediaManager.sort_media_files(currentSortColumn, ascending)
+            mediaFiles = mediaManager.sortMediaFiles(currentSortColumn, ascending)
         }
     }
 
@@ -335,18 +335,18 @@ Item {
         _pickQueue()
         if (mediaManager) {
             // Load playlist names
-            playlistNames = mediaManager.get_playlist_names()
-            currentPlaylistName = mediaManager.get_current_playlist_name()
+            playlistNames = mediaManager.getPlaylistNames()
+            currentPlaylistName = mediaManager.getCurrentPlaylistName()
 
             // The loaded playlist, as every other list emitter sends it.
-            // get_media_files() would emit only the files directly in the
+            // getMediaFiles() would emit only the files directly in the
             // media folder: none for "All Music" over a library of subfolders,
             // which emptied this list and put Home back to "No music yet".
-            mediaListConnections.onMediaListChanged(mediaManager.get_current_song_list())
-            var currentFile = mediaManager.get_current_file()
+            mediaListConnections.onMediaListChanged(mediaManager.getCurrentSongList())
+            var currentFile = mediaManager.getCurrentFile()
             if (currentFile) {
                 lastPlayedSong = currentFile
-                isPaused = !mediaManager.is_playing()
+                isPaused = !mediaManager.isPlaying()
                 // Pre-calculate scroll position for local files
                 initialScrollPosition = calculateScrollPosition(currentFile, mediaFiles)
             }
@@ -486,7 +486,7 @@ Item {
 
                 Text {
                     id: albumCountText
-                    text: (mediaManager ? mediaManager.get_album_count() : "-") + " albums"
+                    text: (mediaManager ? mediaManager.getAlbumCount() : "-") + " albums"
                     color: App.Style.secondaryTextColor
                     font.pixelSize: App.Spacing.mediaPlayerStatsTextSize * 1.2
                     font.family: mediaPlayer.globalFont
@@ -503,7 +503,7 @@ Item {
 
                 Text {
                     id: artistCountText
-                    text: (mediaManager ? mediaManager.get_artist_count() : "-") + " artists"
+                    text: (mediaManager ? mediaManager.getArtistCount() : "-") + " artists"
                     color: App.Style.secondaryTextColor
                     font.pixelSize: App.Spacing.mediaPlayerStatsTextSize * 1.2
                     font.family: mediaPlayer.globalFont
@@ -520,7 +520,7 @@ Item {
 
                 Text {
                     id: totalDurationText
-                    text: mediaManager ? mediaManager.get_total_duration() : "--:--:--"
+                    text: mediaManager ? mediaManager.getTotalDuration() : "--:--:--"
                     color: App.Style.secondaryTextColor
                     font.pixelSize: App.Spacing.mediaPlayerStatsTextSize * 1.2
                     font.family: mediaPlayer.globalFont
@@ -915,7 +915,7 @@ Item {
                                                 mediaPlayer.spotifyUri = ""
                                                 mediaPlayer.showingPhoneQueue = false
                                                 if (mediaManager && modelData.name)
-                                                    mediaManager.select_playlist(modelData.name)
+                                                    mediaManager.selectPlaylist(modelData.name)
                                             }
                                             playlistPopup.close()
                                         }
@@ -1113,7 +1113,7 @@ Item {
                             // Reference playlistRefreshCounter to force rebinding
                             var _ = mediaPlayer.playlistRefreshCounter
                             if (!visible) return ""
-                            return mediaManager ? (mediaManager.get_album_art(modelData) || "./assets/missing_art.png") : "./assets/missing_art.png"
+                            return mediaManager ? (mediaManager.getAlbumArt(modelData) || "./assets/missing_art.png") : "./assets/missing_art.png"
                         }
                         
                         // Title, artist and album share one text size on one centered line;
@@ -1288,7 +1288,7 @@ Item {
                                             // Reference playlistRefreshCounter to force rebinding
                                             text: {
                                                 var _ = mediaPlayer.playlistRefreshCounter
-                                                return mediaManager ? mediaManager.get_display_name(modelData) : modelData.replace('.mp3', '')
+                                                return mediaManager ? mediaManager.getDisplayName(modelData) : modelData.replace('.mp3', '')
                                             }
                                             color: delegate.isCurrentSong ? App.Style.accent : App.Style.primaryTextColor
                                             font.pixelSize: delegate.lineTextSize
@@ -1309,7 +1309,7 @@ Item {
                                             text: {
                                                 // Reference playlistRefreshCounter to force rebinding
                                                 var _ = mediaPlayer.playlistRefreshCounter
-                                                return mediaManager ? mediaManager.get_formatted_duration(modelData) : "0:00"
+                                                return mediaManager ? mediaManager.getFormattedDuration(modelData) : "0:00"
                                             }
                                             color: App.Style.secondaryTextColor
                                             font.pixelSize: App.Spacing.mediaPlayerSecondaryTextSize * 1.1
@@ -1333,7 +1333,7 @@ Item {
                                         text: {
                                             // Reference playlistRefreshCounter to force rebinding
                                             var _ = mediaPlayer.playlistRefreshCounter
-                                            return mediaManager ? mediaManager.get_band(modelData) : "Unknown Artist"
+                                            return mediaManager ? mediaManager.getBand(modelData) : "Unknown Artist"
                                         }
                                         color: App.Style.secondaryTextColor
                                         font.pixelSize: delegate.lineTextSize
@@ -1359,7 +1359,7 @@ Item {
                                         text: {
                                             // Reference playlistRefreshCounter to force rebinding
                                             var _ = mediaPlayer.playlistRefreshCounter
-                                            return mediaManager ? mediaManager.get_album(modelData) : "Unknown Album"
+                                            return mediaManager ? mediaManager.getAlbum(modelData) : "Unknown Album"
                                         }
                                         color: App.Style.secondaryTextColor
                                         font.pixelSize: delegate.lineTextSize
@@ -1379,7 +1379,7 @@ Item {
                                     var returnToLibrary = settingsManager ? settingsManager.returnToLibraryAfterSelection : false
 
                                     if (mediaManager) {
-                                        mediaManager.play_file(modelData)
+                                        mediaManager.playFile(modelData)
                                         lastPlayedSong = modelData
                                         if (!returnToLibrary) {
                                             stackView.openPage("MediaRoom.qml")
@@ -1801,7 +1801,7 @@ Item {
         function onPlayStateChanged(isPlaying) {
             isPaused = !isPlaying
             if (mediaManager) {
-                var currentFile = mediaManager.get_current_file()
+                var currentFile = mediaManager.getCurrentFile()
                 if (currentFile) {
                     lastPlayedSong = currentFile
                 }
@@ -1828,7 +1828,7 @@ Item {
 
         // Playlist updates
         function onPlaylistsChanged() {
-            playlistNames = mediaManager.get_playlist_names()
+            playlistNames = mediaManager.getPlaylistNames()
         }
 
         function onCurrentPlaylistChanged(name) {
@@ -1868,18 +1868,18 @@ Item {
 
         function openFor(filename) {
             songFilename = filename
-            songTitle = mediaManager ? (mediaManager.get_display_name(filename) || filename) : filename
-            songArtist = mediaManager ? mediaManager.get_band(filename) : ""
-            songAlbum = mediaManager ? mediaManager.get_album(filename) : ""
-            songArt = mediaManager ? (mediaManager.get_album_art(filename) || "./assets/missing_art.png") : "./assets/missing_art.png"
-            homePlaylist = mediaManager ? mediaManager.get_song_playlist_name(filename) : ""
+            songTitle = mediaManager ? (mediaManager.getDisplayName(filename) || filename) : filename
+            songArtist = mediaManager ? mediaManager.getBand(filename) : ""
+            songAlbum = mediaManager ? mediaManager.getAlbum(filename) : ""
+            songArt = mediaManager ? (mediaManager.getAlbumArt(filename) || "./assets/missing_art.png") : "./assets/missing_art.png"
+            homePlaylist = mediaManager ? mediaManager.getSongPlaylistName(filename) : ""
             page = "actions"
             errorText = ""
             open()
         }
 
         function showMove() {
-            var all = mediaManager ? mediaManager.get_movable_playlist_names() : []
+            var all = mediaManager ? mediaManager.getMovablePlaylistNames() : []
             var targets = []
             for (var i = 0; i < all.length; i++) {
                 if (all[i] !== homePlaylist) targets.push(all[i])
@@ -1890,7 +1890,7 @@ Item {
         }
 
         function moveTo(playlist) {
-            if (mediaManager && mediaManager.move_song_to_playlist(songFilename, playlist)) {
+            if (mediaManager && mediaManager.moveSongToPlaylist(songFilename, playlist)) {
                 close()
             } else {
                 errorText = "Couldn't move the song to " + playlist + "."
@@ -1898,7 +1898,7 @@ Item {
         }
 
         function deleteSong() {
-            if (mediaManager && mediaManager.delete_song(songFilename)) {
+            if (mediaManager && mediaManager.deleteSong(songFilename)) {
                 close()
             } else {
                 errorText = "Couldn't delete the song."
@@ -2235,7 +2235,7 @@ Item {
                         anchors.fill: parent
                         onClicked: {
                             if (deletePlaylistDialog.playlistToDelete) {
-                                mediaManager.delete_playlist(deletePlaylistDialog.playlistToDelete)
+                                mediaManager.deletePlaylist(deletePlaylistDialog.playlistToDelete)
                             }
                             deletePlaylistDialog.close()
                         }
@@ -2271,8 +2271,8 @@ Item {
         function createPlaylist() {
             var pName = newPlaylistInput.text.trim()
             if (pName.length === 0) return
-            mediaManager.create_playlist(pName)
-            mediaManager.select_playlist(pName)
+            mediaManager.createPlaylist(pName)
+            mediaManager.selectPlaylist(pName)
             close()
         }
 

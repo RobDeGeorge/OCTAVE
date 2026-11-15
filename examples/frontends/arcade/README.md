@@ -75,7 +75,7 @@ Pressing mute five times within four seconds always ends it and brings back OCTA
 | Object | For |
 |---|---|
 | `paramStore` | SPEED, RPM, COOLANT_TEMP, FUEL_LEVEL, CONTROL_MODULE_VOLTAGE, LATERAL_G (one `subscribe`, 50 ms batches) |
-| `obdManager` | `setParameterDemand("arcade", ids)`, `connected`, `connectionState`, `connect_obd`, `get_dtc_codes`, `read_dtc`, `clear_dtc`, the DTC signals |
+| `obdManager` | `setParameterDemand("arcade", ids)`, `connected`, `connectionState`, `connectObd`, `getDtcCodes`, `readDtc`, `clearDtc`, the DTC signals |
 | `nowPlaying` | track, position, `artRevision`, `togglePlay` / `next` / `previous` / `toggleShuffle` |
 | `volumeController` | `percent`, `muted` (set directly for a definite state), `applyVolume` |
 | `shiftLightManager`, `clock`, `berryIMU` | the SHIFT flash, the clock text, whether an IMU is there |

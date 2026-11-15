@@ -335,7 +335,7 @@ class ObdPane(Pane):
             elif name == "dtcClearResult":
                 ok, msg = (args + [False, ""])[:2]
                 self.app.notify(msg or ("Codes cleared" if ok else "Clear failed"), severity="information" if ok else "error")
-                self.app.invoke("obdManager", "read_dtc", quiet=True)
+                self.app.invoke("obdManager", "readDtc", quiet=True)
             elif name == "connectionLogLineAppended":
                 self.query_one("#obd-log", RichLog).write(args[0] if args else "")
             elif name in ("scanOutputChanged", "dtcCountChanged"):
@@ -427,22 +427,22 @@ class ObdPane(Pane):
     def linked(self):
         def got(codes):
             self.show_dtcs(codes)
-        self.app.invoke("obdManager", "get_dtc_codes", done=got, quiet=True)
-        self.app.invoke("obdManager", "get_freeze_frame", done=self.show_freeze, quiet=True)
+        self.app.invoke("obdManager", "getDtcCodes", done=got, quiet=True)
+        self.app.invoke("obdManager", "getFreezeFrame", done=self.show_freeze, quiet=True)
 
         def mode(m):
             self.diag_mode = bool(m)
             self.render_status()
-        self.app.invoke("obdManager", "is_diagnostic_mode", done=mode, quiet=True)
+        self.app.invoke("obdManager", "isDiagnosticMode", done=mode, quiet=True)
 
     def on_data_table_row_selected(self, event):
         if event.data_table.id != "adapters" or event.cursor_row >= len(self.adapters):
             return
         via, address = self.adapters[event.cursor_row]
         if via == "obd":
-            self.app.invoke("obdManager", "connect_to_adapter", address, note=f"connecting to {address}")
+            self.app.invoke("obdManager", "connectToAdapter", address, note=f"connecting to {address}")
         elif via == "saved":
-            self.app.invoke("obdManager", "connect_direct", address, note=f"connecting to {address}")
+            self.app.invoke("obdManager", "connectDirect", address, note=f"connecting to {address}")
         else:
             self.app.invoke("obdAdapterFinder", "connectAdapter", address, note=f"pairing {address}")
 
@@ -450,17 +450,17 @@ class ObdPane(Pane):
         actions = {
             "obd-connect": self.action_connect, "obd-reconnect": self.action_reconnect,
             "obd-close": lambda: self.app.invoke("obdManager", "close", note="disconnecting"),
-            "obd-scan": lambda: self.app.invoke("obdManager", "scan_vehicle", note="scanning the vehicle"),
-            "obd-ports": lambda: self.app.invoke("obdManager", "refresh_ports", note="refreshing ports"),
+            "obd-scan": lambda: self.app.invoke("obdManager", "scanVehicle", note="scanning the vehicle"),
+            "obd-ports": lambda: self.app.invoke("obdManager", "refreshPorts", note="refreshing ports"),
             "bt-scan": lambda: self.app.invoke("obdAdapterFinder", "startScan", note="Bluetooth scan"),
             "bt-stop": lambda: self.app.invoke("obdAdapterFinder", "stopScan"),
             "bt-power": lambda: self.app.invoke("obdAdapterFinder", "powerOn", note="Bluetooth on"),
             "bt-cancel": lambda: self.app.invoke("obdAdapterFinder", "cancel"),
-            "obd-force": lambda: self.app.invoke("obdManager", "force_connect", note="force connecting"),
-            "obd-reset": lambda: self.app.invoke("obdManager", "reset_connection", note="connection reset"),
+            "obd-force": lambda: self.app.invoke("obdManager", "forceConnect", note="force connecting"),
+            "obd-reset": lambda: self.app.invoke("obdManager", "resetConnection", note="connection reset"),
             "obd-direct": self.action_direct,
-            "dtc-current": lambda: self.app.invoke("obdManager", "read_current_dtc", note="reading pending codes"),
-            "dtc-status": lambda: self.app.invoke("obdManager", "read_status", note="reading status"),
+            "dtc-current": lambda: self.app.invoke("obdManager", "readCurrentDtc", note="reading pending codes"),
+            "dtc-status": lambda: self.app.invoke("obdManager", "readStatus", note="reading status"),
             "dtc-diag": self.action_diag,
             "dtc-read": self.action_read_dtc, "dtc-clear": self.action_clear_dtc, "dtc-freeze": self.action_freeze,
         }
@@ -470,21 +470,22 @@ class ObdPane(Pane):
     diag_mode = False
 
     def action_connect(self):
-        self.app.invoke("obdManager", "connect_obd", note="connecting")
+        self.app.invoke("obdManager", "connectObd", note="connecting")
 
     def action_diag(self):
         """Enter or leave diagnostic mode (polling pauses while in it)."""
         def now(mode):
             self.diag_mode = bool(mode)
             self.render_status()
-        method = "exit_diagnostic_mode" if self.diag_mode else "enter_diagnostic_mode"
-        self.app.invoke("obdManager", method, note=method.replace("_", " "),
-                        done=lambda _: self.app.invoke("obdManager", "is_diagnostic_mode", done=now))
+        method = "exitDiagnosticMode" if self.diag_mode else "enterDiagnosticMode"
+        self.app.invoke("obdManager", method,
+                        note="exit diagnostic mode" if self.diag_mode else "enter diagnostic mode",
+                        done=lambda _: self.app.invoke("obdManager", "isDiagnosticMode", done=now))
 
     def action_direct(self):
         def answered(mac):
             if mac and mac.strip():
-                self.app.invoke("obdManager", "connect_direct", mac.strip(), note=f"connecting to {mac.strip()}")
+                self.app.invoke("obdManager", "connectDirect", mac.strip(), note=f"connecting to {mac.strip()}")
         self.app.push_screen(EditValue("Connect straight to a Bluetooth adapter (MAC)", "", "AA:BB:CC:DD:EE:FF"), answered)
 
     def action_forget_adapter(self):
@@ -502,15 +503,15 @@ class ObdPane(Pane):
         self.app.invoke("obdManager", "reconnect", note="reconnecting")
 
     def action_read_dtc(self):
-        self.app.invoke("obdManager", "read_dtc", note="reading trouble codes")
+        self.app.invoke("obdManager", "readDtc", note="reading trouble codes")
 
     def action_freeze(self):
-        self.app.invoke("obdManager", "read_freeze_frame", note="reading freeze frame")
+        self.app.invoke("obdManager", "readFreezeFrame", note="reading freeze frame")
 
     def action_clear_dtc(self):
         def answered(yes):
             if yes:
-                self.app.invoke("obdManager", "clear_dtc", note="clearing trouble codes")
+                self.app.invoke("obdManager", "clearDtc", note="clearing trouble codes")
         self.app.push_screen(Confirm("Clear all trouble codes?\n\nThis also turns off the check-engine light and "
                                      "resets the car's readiness monitors."), answered)
 

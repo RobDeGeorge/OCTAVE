@@ -551,7 +551,7 @@ Item {
                         text: "Browse Music"
                         // the browser demo opens the browser's own folder picker instead
                         onClicked: if (typeof mediaManager === "undefined" || !mediaManager
-                                       || !mediaManager.pick_browser_library()) homeFolderDialog.open()
+                                       || !mediaManager.pickBrowserLibrary()) homeFolderDialog.open()
                     }
                     PromptButton {
                         id: homeMusicSpotify
@@ -647,17 +647,17 @@ Item {
 
     Component.onCompleted: {
         if (typeof mediaManager !== "undefined" && mediaManager)
-            localSongCount = mediaManager.get_current_song_list().length
-        if (obdManager && obdManager.refresh_values) {
-            obdManager.refresh_values()
+            localSongCount = mediaManager.getCurrentSongList().length
+        if (obdManager && obdManager.refreshValues) {
+            obdManager.refreshValues()
         }
     }
 
     Connections {
         target: settingsManager
         function onHomeOBDParametersChanged() {
-            if (obdManager && obdManager.refresh_values) {
-                obdManager.refresh_values()
+            if (obdManager && obdManager.refreshValues) {
+                obdManager.refreshValues()
             }
         }
     }

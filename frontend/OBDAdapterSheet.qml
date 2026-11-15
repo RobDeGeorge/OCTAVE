@@ -215,7 +215,7 @@ Popup {
                         id: chipMouse
                         anchors.fill: parent
                         onClicked: if (modelData.mac && typeof obdManager !== "undefined" && obdManager)
-                                       obdManager.connect_to_adapter(modelData.mac)
+                                       obdManager.connectToAdapter(modelData.mac)
                     }
                 }
             }
@@ -335,7 +335,7 @@ Popup {
                         if (row.finderRow)
                             obdAdapterFinder.connectAdapter(row.address)
                         else if (row.address)
-                            obdManager.connect_to_adapter(row.address)
+                            obdManager.connectToAdapter(row.address)
                     }
                 }
             }

@@ -123,14 +123,14 @@ Flickable {
                             text: "Browse"
                             Layout.preferredHeight: mediaFolderField.height
                             // the browser demo opens the browser's own folder picker instead
-                            onClicked: if (!mediaManager || !mediaManager.pick_browser_library()) folderDialog.open()
+                            onClicked: if (!mediaManager || !mediaManager.pickBrowserLibrary()) folderDialog.open()
                         }
 
                         SettingsButton {
                             text: "Scan"
                             Layout.preferredHeight: mediaFolderField.height
                             onClicked: {
-                                if (mediaManager) mediaManager.scan_library()
+                                if (mediaManager) mediaManager.scanLibrary()
                             }
                         }
 
@@ -138,7 +138,7 @@ Flickable {
                             text: "Strip"
                             Layout.preferredHeight: mediaFolderField.height
                             onClicked: {
-                                if (mediaManager) mediaManager.strip_filenames()
+                                if (mediaManager) mediaManager.stripFilenames()
                             }
                         }
                     }

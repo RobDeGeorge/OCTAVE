@@ -98,7 +98,7 @@
               </tr>
               <tr>
                 <td><span class="platform-badge android">Android</span></td>
-                <td>Stub: never emits, <code>is_connected()</code> is <code>false</code>, detail "Not available on mobile"</td>
+                <td>Stub: never emits, <code>isConnected()</code> is <code>false</code>, detail "Not available on mobile"</td>
                 <td>Replaced by a QtSensors implementation (<a href="#imu-android">below</a>)</td>
                 <td>Stub: <code>connectionStatus</code> = "Disabled on mobile", never emits</td>
               </tr>
@@ -213,7 +213,7 @@
             <li><code>connect_settings_manager()</code> wires the five <code>esp32*Changed</code> settings signals, reads <code>esp32VolumeStepSize</code>, and starts a <strong>3 s one-shot startup timer</strong>.</li>
             <li><code>initialConnect()</code> runs a scan. If <code>esp32VolumeEnabled</code> is false it stops here.</li>
             <li>The port comes from <code>esp32VolumePort</code>. <strong>Only if that setting is empty</strong> does auto-selection happen: the detected ESP32-S3 port is saved via <code>save_esp32_volume_port()</code>. No other port is ever auto-selected: an earlier "first non-OBD port" fallback sent the knob's LED commands to a VM's COM1 / <code>ttyS0</code> and reported "Connected" with no knob attached.</li>
-            <li>With a port, <code>connect_device()</code> is called; without one the detail becomes "No port configured - select one above".</li>
+            <li>With a port, <code>connectDevice()</code> is called; without one the detail becomes "No port configured - select one above".</li>
           </ol>
           <div class="info-box info">
             <div class="info-box-title">Default port is empty = auto-select</div>
@@ -224,13 +224,13 @@
             <code>save_esp32_volume_port()</code> and triggers a reconnect 500 ms later.
           </div>
 
-          <h4><code>connect_device()</code></h4>
+          <h4><code>connectDevice()</code></h4>
           <ol class="steps">
             <li>Returns early if already connected, if there is no settings manager, or if <code>esp32VolumeEnabled</code> is false.</li>
             <li>Empty port &rarr; status <strong>"Not Configured"</strong>, detail "No port configured", and the 10 s background scan timer starts.</li>
             <li>Otherwise status <strong>"Connecting"</strong> ("Connecting to &lt;port&gt;...") and the port is opened.</li>
             <li>Success, port is an ESP32-S3 (<code>looksLikeEsp32S3()</code>: VID 0x303A or a JTAG / ESP32-S3 description) &rarr; <strong>"Connected"</strong> ("Connected to ESP32 on &lt;port&gt;"), reconnect counter reset, read buffer cleared, keepalive timer started <em>only if</em> <code>esp32LedSleepEnabled</code> is false, background scan stopped.</li>
-            <li>Success, any other port (picked by hand) &rarr; <strong>"Waiting"</strong> ("Port &lt;port&gt; open: turn the knob to confirm"). The port is read but <code>is_connected()</code> stays false, so <code>send_volume_update</code> / <code>send_mute_state</code> / <code>send_theme_color</code> write nothing. The first recognised knob command (<code>+</code>, <code>-</code>, <code>+N</code>, <code>-N</code>, <code>M</code>, <code>P</code>) is acted on and switches it to "Connected", which makes <span class="file-path">src/main.cpp</span> push volume, mute and colour. The protocol has no reply command, so a knob turn is the only proof the port is the knob. Tested with a pty in <span class="file-path">tests/cpp/tst_esp32volumemanager.cpp</span>.</li>
+            <li>Success, any other port (picked by hand) &rarr; <strong>"Waiting"</strong> ("Port &lt;port&gt; open: turn the knob to confirm"). The port is read but <code>isConnected()</code> stays false, so <code>send_volume_update</code> / <code>send_mute_state</code> / <code>send_theme_color</code> write nothing. The first recognised knob command (<code>+</code>, <code>-</code>, <code>+N</code>, <code>-N</code>, <code>M</code>, <code>P</code>) is acted on and switches it to "Connected", which makes <span class="file-path">src/main.cpp</span> push volume, mute and colour. The protocol has no reply command, so a knob turn is the only proof the port is the knob. Tested with a pty in <span class="file-path">tests/cpp/tst_esp32volumemanager.cpp</span>.</li>
             <li>Failure &rarr; <strong>"Error"</strong> ("Connection failed: &hellip;") and <code>scheduleReconnect()</code>.</li>
           </ol>
           <p>
@@ -350,14 +350,14 @@ m_reconnectAttempts++;
 <span class="cmt">// detail: "Reconnecting in &lt;delay/1000&gt;s... (&lt;attempts&gt;/5)"</span></code></pre>
           <p>
             The counter resets on a successful open, when the port setting changes, or via the
-            <code>reset_reconnect_attempts()</code> slot (the settings page calls it before a manual
-            <code>connect_device()</code>). Turning <code>esp32AutoReconnect</code> off stops a pending reconnect timer.
+            <code>resetReconnectAttempts()</code> slot (the settings page calls it before a manual
+            <code>connectDevice()</code>). Turning <code>esp32AutoReconnect</code> off stops a pending reconnect timer.
           </p>
         </section>
 
         <section id="esp32-api">
           <h3>ESP32 Signals, Properties &amp; Slots</h3>
-        <p><strong>Names:</strong> the camelCase name is the one to use (<code>next_track</code> is <code>nextTrack</code>, <code>get_album</code> is <code>getAlbum</code>, <code>is_scanning</code> is <code>isScanning</code>): same parameters, same result, same permission. The snake_case names in the tables below still work through protocol&nbsp;3, are marked <code>deprecated</code> in <code>describe</code> and <span class="file-path">docs/api/</span>, and go in protocol&nbsp;4. The full list with each note is in the <a href="api-reference.html">API reference</a>.</p>
+        <p><strong>Names:</strong> the camelCase name is the one to use (<code>next_track</code> is <code>nextTrack</code>, <code>get_album</code> is <code>getAlbum</code>, <code>is_scanning</code> is <code>isScanning</code>): same parameters, same result, same permission. The tables below show the camelCase names. The older snake_case name of each still works through protocol&nbsp;4, is marked <code>deprecated</code> in <code>describe</code> and <span class="file-path">docs/api/</span>, and goes in protocol&nbsp;5. The full list with each note is in the <a href="api-reference.html">API reference</a>.</p>
           <h4>Signals</h4>
           <table>
             <thead><tr><th>Signal</th><th>Parameters</th><th>Description</th></tr></thead>
@@ -383,15 +383,15 @@ m_reconnectAttempts++;
           <table>
             <thead><tr><th>Slot</th><th>Returns</th><th>Description</th></tr></thead>
             <tbody>
-              <tr><td><code>connect_device()</code></td><td>&mdash;</td><td>Open the configured port (see sequence above)</td></tr>
-              <tr><td><code>disconnect_device()</code></td><td>&mdash;</td><td>Stop reconnect + keepalive timers, close the port, emit "Disconnected"</td></tr>
-              <tr><td><code>get_available_ports()</code></td><td><code>QVariantList</code></td><td>Scan now and return <code>availablePorts</code></td></tr>
-              <tr><td><code>is_connected()</code></td><td><code>bool</code></td><td>Read by <span class="file-path">AccessoriesWidget.qml</span> and the settings page status dot</td></tr>
-              <tr><td><code>get_connection_status()</code></td><td><code>QString</code></td><td>Same as <code>connectionStatus</code></td></tr>
-              <tr><td><code>get_connection_detail()</code></td><td><code>QString</code></td><td>Same as <code>connectionDetail</code></td></tr>
-              <tr><td><code>refresh_ports()</code></td><td>&mdash;</td><td>Scan now (no return value)</td></tr>
-              <tr><td><code>reset_reconnect_attempts()</code></td><td>&mdash;</td><td>Zero the retry counter</td></tr>
-              <tr><td><code>cleanup()</code></td><td>&mdash;</td><td>Stop all five timers, then <code>disconnect_device()</code>; called from the app's quit handler</td></tr>
+              <tr><td><code>connectDevice()</code></td><td>&mdash;</td><td>Open the configured port (see sequence above)</td></tr>
+              <tr><td><code>disconnectDevice()</code></td><td>&mdash;</td><td>Stop reconnect + keepalive timers, close the port, emit "Disconnected"</td></tr>
+              <tr><td><code>getAvailablePorts()</code></td><td><code>QVariantList</code></td><td>Scan now and return <code>availablePorts</code></td></tr>
+              <tr><td><code>isConnected()</code></td><td><code>bool</code></td><td>Read by <span class="file-path">AccessoriesWidget.qml</span> and the settings page status dot</td></tr>
+              <tr><td><code>getConnectionStatus()</code></td><td><code>QString</code></td><td>Same as <code>connectionStatus</code></td></tr>
+              <tr><td><code>getConnectionDetail()</code></td><td><code>QString</code></td><td>Same as <code>connectionDetail</code></td></tr>
+              <tr><td><code>refreshPorts()</code></td><td>&mdash;</td><td>Scan now (no return value)</td></tr>
+              <tr><td><code>resetReconnectAttempts()</code></td><td>&mdash;</td><td>Zero the retry counter</td></tr>
+              <tr><td><code>cleanup()</code></td><td>&mdash;</td><td>Stop all five timers, then <code>disconnectDevice()</code>; called from the app's quit handler</td></tr>
             </tbody>
           </table>
           <h4>Non-slot methods (called from <span class="file-path">src/main.cpp</span>)</h4>
@@ -935,9 +935,9 @@ tz = yw*qz - yz*qw</code></pre>
           <table>
             <thead><tr><th>Action</th><th>Effect</th></tr></thead>
             <tbody>
-              <tr><td><code>next_track</code></td><td><code>mediaManager.next_track()</code> (phone: <code>phoneMirrorManager.mediaNext()</code>)</td></tr>
-              <tr><td><code>previous_track</code></td><td><code>mediaManager.previous_track()</code> (phone: <code>phoneMirrorManager.mediaPrevious()</code>)</td></tr>
-              <tr><td><code>play_pause</code></td><td><code>mediaManager.toggle_play()</code> (phone: <code>phoneMirrorManager.mediaPlayPause()</code>)</td></tr>
+              <tr><td><code>next_track</code></td><td><code>mediaManager.nextTrack()</code> (phone: <code>phoneMirrorManager.mediaNext()</code>)</td></tr>
+              <tr><td><code>previous_track</code></td><td><code>mediaManager.previousTrack()</code> (phone: <code>phoneMirrorManager.mediaPrevious()</code>)</td></tr>
+              <tr><td><code>play_pause</code></td><td><code>mediaManager.togglePlay()</code> (phone: <code>phoneMirrorManager.mediaPlayPause()</code>)</td></tr>
               <tr><td><code>mute_toggle</code></td><td><code>volumeController.toggleMute()</code></td></tr>
               <tr><td><code>volume_up</code> / <code>volume_down</code></td><td><code>volumeController.applyVolume(currentVolume &plusmn; gestureVolumeStep)</code></td></tr>
               <tr><td><code>none</code></td><td>Gesture disabled (the settings UI labels it "Disabled")</td></tr>

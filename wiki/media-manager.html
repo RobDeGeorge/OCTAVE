@@ -70,7 +70,7 @@
         <table>
           <thead><tr><th>Implementation</th><th>Platforms</th><th>Tag / cover reader</th></tr></thead>
           <tbody>
-            <tr><td><span class="file-path">src/managers/mediamanager.{h,cpp}</span></td><td><span class="platform-badge all">All</span></td><td><strong>TagLib</strong> on desktop (<code>TagLib::FileRef</code> for tags, format-specific readers for pictures). On Android the CMake define <code>Q_OS_MOBILE</code> (set for <code>ANDROID</code> builds in <span class="file-path">CMakeLists.txt</span>) compiles TagLib out; tags and covers come from <code>OctaveAndroid::readMetadata()</code> / <code>extractAlbumArt()</code> in <span class="file-path">src/platform/androidmediabridge.h</span> (JNI). Any other mobile target falls back to the file name with "Unknown Artist" / "Unknown Album". Which reader is used is <code>OCTAVE_TAGLIB</code> (<span class="file-path">mediamanager.h</span>): desktop and the browser demo (WebAssembly), which reads tags and covers with TagLib from the parts of each file read in the browser (<code>openTags()</code> gives TagLib a <code>WebMusicLibrary::tagStream()</code> there) and whose library is a folder picked in the browser and played from <code>blob:</code> URLs (<code>pick_browser_library</code>, <a href="building.html#wasm">Building &gt; WebAssembly</a>).</td></tr>
+            <tr><td><span class="file-path">src/managers/mediamanager.{h,cpp}</span></td><td><span class="platform-badge all">All</span></td><td><strong>TagLib</strong> on desktop (<code>TagLib::FileRef</code> for tags, format-specific readers for pictures). On Android the CMake define <code>Q_OS_MOBILE</code> (set for <code>ANDROID</code> builds in <span class="file-path">CMakeLists.txt</span>) compiles TagLib out; tags and covers come from <code>OctaveAndroid::readMetadata()</code> / <code>extractAlbumArt()</code> in <span class="file-path">src/platform/androidmediabridge.h</span> (JNI). Any other mobile target falls back to the file name with "Unknown Artist" / "Unknown Album". Which reader is used is <code>OCTAVE_TAGLIB</code> (<span class="file-path">mediamanager.h</span>): desktop and the browser demo (WebAssembly), which reads tags and covers with TagLib from the parts of each file read in the browser (<code>openTags()</code> gives TagLib a <code>WebMusicLibrary::tagStream()</code> there) and whose library is a folder picked in the browser and played from <code>blob:</code> URLs (<code>pickBrowserLibrary</code>, <a href="building.html#wasm">Building &gt; WebAssembly</a>).</td></tr>
           </tbody>
         </table>
 
@@ -163,12 +163,12 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           (<code>QStandardPaths::MusicLocation</code>; on Android
           <code>/storage/emulated/0/Music</code>) and is created if missing. The manager's own built-in
           <code>&lt;app dir&gt;/media</code> directory is therefore only the
-          initial value of <code>m_mediaDir</code> before settings are wired, and what <code>get_default_media_dir()</code>
+          initial value of <code>m_mediaDir</code> before settings are wired, and what <code>getDefaultMediaDir()</code>
           reports. Wiring happens in <code>setSettingsManager()</code> (called from <code>appcore.cpp</code>; the
-          <code>connect_settings_manager()</code> slot is a no-op kept for <span class="file-path">Main.qml</span>), which calls <code>set_library_root()</code>,
+          <code>connect_settings_manager()</code> slot is a no-op kept for <span class="file-path">Main.qml</span>), which calls <code>setLibraryRoot()</code>,
           connects <code>mediaFolderChanged</code> to it, and schedules <code>_restore_playback_state()</code> 500&nbsp;ms later.
         </p>
-        <p><code>scan_library(resetDisplayNames)</code> is synchronous on the GUI thread, guarded by a re-entrancy flag, and emits <code>scanProgress</code> lines (<code>[SCAN]</code>, <code>[PATH]</code>, <code>[FOUND]</code>, <code>[DONE]</code>, ...) that the Media settings page shows terminal-style. The algorithm:</p>
+        <p><code>scanLibrary(resetDisplayNames)</code> is synchronous on the GUI thread, guarded by a re-entrancy flag, and emits <code>scanProgress</code> lines (<code>[SCAN]</code>, <code>[PATH]</code>, <code>[FOUND]</code>, <code>[DONE]</code>, ...) that the Media settings page shows terminal-style. The algorithm:</p>
         <ol class="steps">
           <li>Clear the playlists, the in-memory metadata and album-art maps, the All Music path map and the stats cache (and the display names if <code>resetDisplayNames</code> is true; internal callers pass <code>false</code>, while the settings-page "Rescan" button and the Android scan that runs once the <code>READ_MEDIA_AUDIO</code> permission is granted use <code>true</code>)</li>
           <li>Audio files directly in the root become the <strong>"Unsorted"</strong> playlist</li>
@@ -183,14 +183,14 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           Music directory (<code>OctaveAndroid::getAppMusicDir()</code>), the place files can be put under scoped
           storage without extra permissions, and merges each of its sub-folders into the playlist of the same name (or adds it as a new one).
           <code>_get_file_path()</code> accepts that directory as a second valid root, and
-          <code>play_file_at_path()</code> has a filename-only fallback for the same reason.
+          <code>playFileAtPath()</code> has a filename-only fallback for the same reason.
         </p>
         <p>
-          <code>get_media_files(emitSignal)</code> is the older flat listing of the current <code>m_mediaDir</code>, used as a fallback by shuffle and sorting
+          <code>getMediaFiles(emitSignal)</code> is the older flat listing of the current <code>m_mediaDir</code>, used as a fallback by shuffle and sorting
           when no playlist is selected. QML no longer calls it: for "All Music" <code>m_mediaDir</code> is the library
           root, so over a library of subfolders it emitted an empty <code>mediaListChanged</code> that emptied the music
           list and put Home back to "No music yet"; <span class="file-path">MediaPlayer.qml</span> loads
-          <code>get_current_song_list()</code> on each visit instead. Both it and <code>scan_library(resetDisplayNames)</code> can be called from QML
+          <code>getCurrentSongList()</code> on each visit instead. Both it and <code>scanLibrary(resetDisplayNames)</code> can be called from QML
           with or without their boolean: the methods have default arguments.
         </p>
 
@@ -199,28 +199,28 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           <code>_get_file_path()</code> rejects names containing a <code>..</code> path component or starting with a
           separator, resolves All Music names through <code>m_allMusicFilePaths</code>, and then requires the result to
           be inside the library root (<code>_is_safe_path()</code>, which compares canonical
-          paths). <code>create_playlist()</code>, <code>move_song_to_playlist()</code>, <code>delete_song()</code> and
-          <code>delete_playlist()</code> apply the same check to every path they touch, and the two special playlists
+          paths). <code>createPlaylist()</code>, <code>moveSongToPlaylist()</code>, <code>deleteSong()</code> and
+          <code>deletePlaylist()</code> apply the same check to every path they touch, and the two special playlists
           "All Music" and "Unsorted" cannot be deleted.
         </div>
 
         <!-- Metadata Caching -->
         <h2 id="metadata-caching">Metadata Caching and the Tag Store</h2>
         <p>
-          A per-track lookup (<code>get_band</code>, <code>get_album</code>, <code>get_formatted_duration</code>, the
+          A per-track lookup (<code>getBand</code>, <code>getAlbum</code>, <code>getFormattedDuration</code>, the
           "now playing" metadata) goes through <code>_cache_metadata(filename)</code>, which fills an
           in-memory map (<code>m_metadataCache</code>, filename &rarr; title, artist,
           album, duration in seconds). The map holds the whole selected playlist (it is not capped) and is
-          cleared on every <code>select_playlist()</code> and <code>scan_library()</code>.
+          cleared on every <code>selectPlaylist()</code> and <code>scanLibrary()</code>.
         </p>
         <p>
-          The playlist as a whole is read in the <strong>background</strong>: <code>select_playlist()</code> starts a
+          The playlist as a whole is read in the <strong>background</strong>: <code>selectPlaylist()</code> starts a
           tag pass (<code>_warm_metadata()</code>) on a worker thread, which takes each track from the persistent tag
           store when its size and modification time still match and reads the file's tags otherwise. When it is done
           the map has every track and the statistics are computed and sent as <code>totalDurationChanged</code>,
           <code>albumCountChanged</code> and <code>artistCountChanged</code>. Until then
-          <code>get_total_duration()</code> / <code>get_album_count()</code> / <code>get_artist_count()</code> return
-          the previous (or zero) values at once, and <code>sort_media_files()</code> sorts tracks whose tags have
+          <code>getTotalDuration()</code> / <code>getAlbumCount()</code> / <code>getArtistCount()</code> return
+          the previous (or zero) values at once, and <code>sortMediaFiles()</code> sorts tracks whose tags have
           not arrived as "Unknown Album" / "Unknown Artist": neither opens a file on the GUI thread, so a view
           should listen to the three signals and sort again when they come (<span class="file-path">MediaPlayer.qml</span>
           does). A playlist change or a rescan abandons the pass under way. On mobile builds without TagLib the tags
@@ -247,7 +247,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           <li>A stale entry is removed when that filename is looked up and its size/mtime check fails. There is no full-library pruning pass for the tag store, so entries for files no longer requested can remain on disk.</li>
           <li>Only on a miss does <code>_cache_metadata_from_file()</code> read the tags; the result is written back with <code>_meta_to_store()</code>.</li>
           <li>Writes are coalesced: a single-shot 2&nbsp;s timer is restarted on every change and <code>_save_meta_store()</code> writes the compact JSON once, atomically (<code>QSaveFile</code>), so a power cut leaves the old store or the new one. The dirty flag is only cleared when the write succeeded, so a failed write is retried on the next change or at shutdown.</li>
-          <li>Shutdown flushes it explicitly: <code>flush_metadata_store()</code> is called from <code>AppCore::shutdown()</code>, which <code>main.cpp</code>'s <code>aboutToQuit</code> handler runs (the destructor also saves).</li>
+          <li>Shutdown flushes it explicitly: <code>flushMetadataStore()</code> is called from <code>AppCore::shutdown()</code>, which <code>main.cpp</code>'s <code>aboutToQuit</code> handler runs (the destructor also saves).</li>
         </ul>
         <p>
           Tag strings are sanitized (control characters replaced by spaces, whitespace collapsed, truncated to 200
@@ -261,7 +261,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
         <!-- Album Art Extraction -->
         <h2 id="album-art">Album Art Extraction</h2>
         <p>
-          <code>get_album_art(filename)</code> returns a <code>file://</code> URL to a cover image written into the temp
+          <code>getAlbumArt(filename)</code> returns a <code>file://</code> URL to a cover image written into the temp
           directory: <code>&lt;app dir&gt;/temp</code> on desktop,
           the app-data <code>temp/</code> folder on Android. Cover filenames are derived from the album identifier:
           <code>cover_&lt;sha256(albumId + "_0")[:16]&gt;.&lt;jpg|png|gif|img&gt;</code>. The extension follows the
@@ -301,7 +301,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
         <p>
           When <code>_cache_metadata_from_file()</code> has to open a file for its tags it also extracts the cover in
           the same cache-population operation (<code>_extract_art_for()</code> after <code>_read_tags()</code>; these may open the audio file separately, and cover extraction is skipped when
-          the album's cover is already known or found by hash), so the <code>get_album_art()</code> call that follows in
+          the album's cover is already known or found by hash), so the <code>getAlbumArt()</code> call that follows in
           a QML binding is an instant map hit. Entries served from the tag store skip this step on purpose; their cover is found by the hash fast
           path.
         </p>
@@ -312,13 +312,13 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           When the "Album Art Capture" theme is active, MediaManager extracts dominant colors from the current cover
           and generates a complete theme palette. It uses Qt's <code>QImage</code> only. MediaManager does the
           extraction; <a href="signals-slots-reference.html#nowPlaying"><code>NowPlaying</code></a> decides when (the
-          live source's art changed, or the theme was chosen) and calls <code>extract_colors_from_album_art(filename)</code>
-          for a local track or <code>extract_colors_from_image(url)</code> for the phone's art.
+          live source's art changed, or the theme was chosen) and calls <code>extractColorsFromAlbumArt(filename)</code>
+          for a local track or <code>extractColorsFromImage(url)</code> for the phone's art.
         </p>
 
         <h3>Extraction Pipeline</h3>
         <ol class="steps">
-          <li><code>extract_colors_from_album_art()</code> resolves the cover through <code>get_album_art()</code>. A repeat request for the same file within 2&nbsp;s is dropped: restoring playback and the 1&nbsp;s startup timer both ask for the same file and one extraction is enough</li>
+          <li><code>extractColorsFromAlbumArt()</code> resolves the cover through <code>getAlbumArt()</code>. A repeat request for the same file within 2&nbsp;s is dropped: restoring playback and the 1&nbsp;s startup timer both ask for the same file and one extraction is enough</li>
           <li>The image work runs on a worker: <code>QtConcurrent::run()</code> with a <code>QFutureWatcher&lt;QString&gt;</code>. Each request increments a job counter; when a job finishes it is applied only if no newer job was started, so a fast skip through tracks applies only the last theme</li>
           <li><code>_extract_album_colors()</code> converts the cover to RGBA8888 and scales it to 50&times;50 pixels with a smooth transformation (2500 pixels)</li>
           <li><code>_kmeans_colors()</code> finds k=5 centroids with at most 10 iterations, seeded with a fixed generator (<code>std::mt19937(42)</code>) so the same cover always yields the same palette</li>
@@ -355,14 +355,14 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
         <h2 id="playback-control">Playback Control</h2>
 
         <h3>Playing a File</h3>
-        <p><code>play_file(filename)</code> does the following:</p>
+        <p><code>playFile(filename)</code> does the following:</p>
         <ol class="steps">
           <li>If no playlist order exists yet, build one: shuffled when shuffle is on, otherwise alphabetical by the sort key (lower-cased, punctuation and underscores stripped: <code>[^\w\s]|_</code>)</li>
           <li>Locate the file in the playlist and set <code>m_currentIndex</code>; if it is not there and shuffle is off, rebuild the alphabetical list; if it is still missing, play the first entry instead</li>
           <li>Resolve the path with <code>_get_file_path()</code> (All Music aware); a missing file (deleted, moved, unmounted USB stick) is logged and skipped via <code>_skip_bad_track(advance=true)</code>, the same path as an unplayable track</li>
           <li><code>setSource()</code> + <code>play()</code>, set the playing flags, re-apply mute (setting a source can reset the output volume), emit <code>playStateChanged(true)</code></li>
           <li>Pre-populate the metadata and cover caches and emit <code>metadataChanged</code> <em>before</em> <code>currentMediaChanged</code>, so the QML bindings that fire on the latter get instant cache hits instead of doing tag I/O during the render phase</li>
-          <li>Emit <code>durationFormatChanged</code> via <code>get_formatted_duration()</code>, then start the 80&nbsp;ms <a href="#precaching">pre-cache timer</a></li>
+          <li>Emit <code>durationFormatChanged</code> via <code>getFormattedDuration()</code>, then start the 80&nbsp;ms <a href="#precaching">pre-cache timer</a></li>
         </ol>
 
         <h3>Track Navigation</h3>
@@ -371,11 +371,11 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
             <tr><th>Slot</th><th>Behavior</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>next_track()</code></td><td>Advances the index by 1 (wraps around), calls <code>play_file()</code>, restarts the debounced state save. Also called on <code>EndOfMedia</code></td></tr>
-            <tr><td><code>previous_track()</code></td><td>Decrements the index by 1 (wraps around), calls <code>play_file()</code>, restarts the debounced state save</td></tr>
-            <tr><td><code>toggle_play()</code></td><td>If no source is set, plays the current file. If playing, pauses and saves state. If paused, checks for a bad media status (<code>InvalidMedia</code>, <code>NoMedia</code>, <code>StalledMedia</code>) and forces recovery instead of resuming. If the pause lasted at least 30&nbsp;s (<code>kLongPauseMs</code>) and the file exists, it reloads the track at its current position with <code>_reseat_source()</code> before <code>play()</code>, re-applies mute and emits <code>playStateChanged(true)</code> without the state check (the source is still loading). Otherwise, after <code>play()</code> it verifies <code>playbackState()</code> is <code>PlayingState</code> and forces recovery if not</td></tr>
+            <tr><td><code>nextTrack()</code></td><td>Advances the index by 1 (wraps around), calls <code>playFile()</code>, restarts the debounced state save. Also called on <code>EndOfMedia</code></td></tr>
+            <tr><td><code>previousTrack()</code></td><td>Decrements the index by 1 (wraps around), calls <code>playFile()</code>, restarts the debounced state save</td></tr>
+            <tr><td><code>togglePlay()</code></td><td>If no source is set, plays the current file. If playing, pauses and saves state. If paused, checks for a bad media status (<code>InvalidMedia</code>, <code>NoMedia</code>, <code>StalledMedia</code>) and forces recovery instead of resuming. If the pause lasted at least 30&nbsp;s (<code>kLongPauseMs</code>) and the file exists, it reloads the track at its current position with <code>_reseat_source()</code> before <code>play()</code>, re-applies mute and emits <code>playStateChanged(true)</code> without the state check (the source is still loading). Otherwise, after <code>play()</code> it verifies <code>playbackState()</code> is <code>PlayingState</code> and forces recovery if not</td></tr>
             <tr><td><code>pause()</code></td><td>Pauses the player, emits <code>playStateChanged(false)</code>, starts the debounced state save, remembers the volume for unmute</td></tr>
-            <tr><td><code>set_position(ms)</code></td><td>Seeks to a position in milliseconds</td></tr>
+            <tr><td><code>setPosition(ms)</code></td><td>Seeks to a position in milliseconds</td></tr>
           </tbody>
         </table>
 
@@ -385,11 +385,11 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
             <tr><th>Slot</th><th>Returns</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>get_current_file()</code></td><td>Current filename. If no playlist order exists yet it builds the alphabetical one and returns its first entry without playing it</td></tr>
-            <tr><td><code>get_next_track_name()</code> / <code>get_previous_track_name()</code></td><td>Neighbor filenames (wrap around)</td></tr>
-            <tr><td><code>get_next_track_album_art()</code> / <code>get_previous_track_album_art()</code></td><td>Cover URL of a neighbor</td></tr>
-            <tr><td><code>get_neighbor_album_arts()</code></td><td><code>[prevArtUrl, nextArtUrl]</code> in a single call; <span class="file-path">MediaRoom.qml</span> uses it for the side cards of the carousel to halve the QML-bridge crossings</td></tr>
-            <tr><td><code>is_playing()</code>, <code>is_paused()</code>, <code>get_duration()</code>, <code>get_position()</code></td><td>Playback flags and the player's duration / position in ms</td></tr>
+            <tr><td><code>getCurrentFile()</code></td><td>Current filename. If no playlist order exists yet it builds the alphabetical one and returns its first entry without playing it</td></tr>
+            <tr><td><code>getNextTrackName()</code> / <code>getPreviousTrackName()</code></td><td>Neighbor filenames (wrap around)</td></tr>
+            <tr><td><code>getNextTrackAlbumArt()</code> / <code>getPreviousTrackAlbumArt()</code></td><td>Cover URL of a neighbor</td></tr>
+            <tr><td><code>getNeighborAlbumArts()</code></td><td><code>[prevArtUrl, nextArtUrl]</code> in a single call; <span class="file-path">MediaRoom.qml</span> uses it for the side cards of the carousel to halve the QML-bridge crossings</td></tr>
+            <tr><td><code>isPlaying()</code>, <code>isPaused()</code>, <code>getDuration()</code>, <code>getPosition()</code></td><td>Playback flags and the player's duration / position in ms</td></tr>
           </tbody>
         </table>
 
@@ -397,7 +397,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
         <h2 id="shuffle-repeat">Shuffle Logic</h2>
         <p>
           Shuffle is a toggle (<code>m_shuffle</code> / <code>_shuffle</code>); there is no repeat mode, playback simply
-          wraps around the playlist. <code>toggle_shuffle()</code> works on the selected playlist's file list
+          wraps around the playlist. <code>toggleShuffle()</code> works on the selected playlist's file list
           (<code>_get_current_playlist_files()</code>), not on a directory scan, so shuffling "All Music" shuffles
           every folder:
         </p>
@@ -425,7 +425,7 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           <li><code>m_libraryRoot</code> - the resolved <code>mediaFolder</code></li>
         </ul>
         <p>
-          <code>select_playlist(name)</code> switches <code>m_mediaDir</code> to the folder (or the root for All Music),
+          <code>selectPlaylist(name)</code> switches <code>m_mediaDir</code> to the folder (or the root for All Music),
           sorts the files alphabetically (or, when shuffle is on, shuffles them with the current song first, so shuffle
           survives playlist selection and library rescans), resets the index, clears the in-memory metadata map, recalculates the library
           statistics (<code>totalDurationChanged</code>, <code>albumCountChanged</code>, <code>artistCountChanged</code>,
@@ -445,26 +445,26 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
         <table>
           <thead><tr><th>Slot</th><th>What it does</th></tr></thead>
           <tbody>
-            <tr><td><code>create_playlist(name)</code></td><td>Creates <code>&lt;root&gt;/&lt;name&gt;</code> (rejects separators, <code>..</code>, hidden names; reuses an existing <em>empty</em> folder), then rescans</td></tr>
-            <tr><td><code>move_song_to_playlist(file, playlist)</code></td><td>Renames the file into the target folder, appending <code>" (n)"</code> on collision, stops playback if it was the loaded song (playing or paused), then rescans. Returns false if the file already lives in that folder</td></tr>
-            <tr><td><code>delete_song(file)</code></td><td>Stops playback if it was the loaded song (playing or paused), deletes the file and its display name, rescans, emits <code>songDeleted(file)</code></td></tr>
-            <tr><td><code>delete_playlist(name)</code></td><td>Recursively deletes the folder (never "All Music" / "Unsorted"), rescans, and selects the first playlist if the deleted one was active</td></tr>
-            <tr><td><code>get_movable_playlist_names()</code></td><td>All names except "All Music" (valid move targets)</td></tr>
-            <tr><td><code>get_song_playlist_name(file)</code></td><td>The playlist folder the file actually lives in, even when viewed through "All Music"; empty if unknown</td></tr>
-            <tr><td><code>play_file_at_path(path)</code></td><td>Rescan, find the file by directory (or by filename in any playlist), select its playlist and play it. Nothing in the bundled UI calls it; it is there for service clients</td></tr>
+            <tr><td><code>createPlaylist(name)</code></td><td>Creates <code>&lt;root&gt;/&lt;name&gt;</code> (rejects separators, <code>..</code>, hidden names; reuses an existing <em>empty</em> folder), then rescans</td></tr>
+            <tr><td><code>moveSongToPlaylist(file, playlist)</code></td><td>Renames the file into the target folder, appending <code>" (n)"</code> on collision, stops playback if it was the loaded song (playing or paused), then rescans. Returns false if the file already lives in that folder</td></tr>
+            <tr><td><code>deleteSong(file)</code></td><td>Stops playback if it was the loaded song (playing or paused), deletes the file and its display name, rescans, emits <code>songDeleted(file)</code></td></tr>
+            <tr><td><code>deletePlaylist(name)</code></td><td>Recursively deletes the folder (never "All Music" / "Unsorted"), rescans, and selects the first playlist if the deleted one was active</td></tr>
+            <tr><td><code>getMovablePlaylistNames()</code></td><td>All names except "All Music" (valid move targets)</td></tr>
+            <tr><td><code>getSongPlaylistName(file)</code></td><td>The playlist folder the file actually lives in, even when viewed through "All Music"; empty if unknown</td></tr>
+            <tr><td><code>playFileAtPath(path)</code></td><td>Rescan, find the file by directory (or by filename in any playlist), select its playlist and play it. Nothing in the bundled UI calls it; it is there for service clients</td></tr>
           </tbody>
         </table>
 
         <!-- Display names -->
         <h2 id="display-names">Display Names</h2>
         <p>
-          <code>get_display_name(filename)</code> returns a cleaned title for lists and the now-playing views. The map
+          <code>getDisplayName(filename)</code> returns a cleaned title for lists and the now-playing views. The map
           <code>m_displayNames</code> is persisted as <code>&lt;app data&gt;/display_names.json</code> (written atomically
           with <code>QSaveFile</code>) so cleaned names survive restarts. <code>_strip_single_filename()</code> removes the extension, the artist name(s) from the
           tags (split on <code>/</code> and <code>;</code>), leading track numbers (<code>^\d{1,3}\s*[-._)\s]\s*</code>),
           a list of common upload junk such as <code>(Official Audio)</code>, <code>[HD]</code>, <code>(feat. ...)</code>,
           and leftover separators. <code>_auto_strip_display_names()</code> runs at the end of every scan for files that
-          have no entry yet; the settings page's "Strip filenames" button (<code>strip_filenames()</code>) re-strips every
+          have no entry yet; the settings page's "Strip filenames" button (<code>stripFilenames()</code>) re-strips every
           file and reports each change through <code>scanProgress</code>. Without an entry, the fallback strips any recognised audio
           extension.
         </p>
@@ -540,12 +540,12 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           "unmute at 0 restores the startup volume") live in
           <a href="signals-slots-reference.html#volumeController">VolumeController</a>; <span class="file-path">main.cpp</span>
           connects <code>VolumeController::mutedChanged</code> to <code>setMuted(bool)</code>, which only stores the flag
-          and calls <code>applyOutputVolume()</code>. <code>is_muted()</code> reports that mirrored flag. Because mute is
+          and calls <code>applyOutputVolume()</code>. <code>isMuted()</code> reports that mirrored flag. Because mute is
           applied by <code>applyOutputVolume()</code> rather than by overwriting the volume, a volume change while muted
           updates <code>m_volume</code> silently and unmuting plays at exactly the level every slider shows.
         </p>
         <p>
-          <code>play_file()</code>, <code>toggle_play()</code> and recovery re-apply <code>setVolume(0)</code> on the
+          <code>playFile()</code>, <code>togglePlay()</code> and recovery re-apply <code>setVolume(0)</code> on the
           output after <code>setSource()</code>, which can reset the output level.
         </p>
 
@@ -602,7 +602,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
           MediaManager recovers automatically from playback failures:
         </p>
         <ul>
-          <li><strong>EndOfMedia</strong> - calls <code>next_track()</code></li>
+          <li><strong>EndOfMedia</strong> - calls <code>nextTrack()</code></li>
           <li><strong>StalledMedia / InvalidMedia</strong> and <strong>player errors</strong> - call <code>_attempt_playback_recovery()</code>, but only while something is playing; a stopped player keeps reporting its last failure, so those events are ignored (commits <code>2884c65</code>, <code>1e5f585</code>)</li>
           <li><strong>LoadedMedia / BufferedMedia</strong> - the file decodes, which is what "recovered" actually means: any pending seek from <code>_reseat_source()</code> is applied, the attempt counters are reset and, if there were attempts, "Playback recovered" is logged</li>
         </ul>
@@ -633,10 +633,10 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
         <p>
           Recovery is capped (commit <code>2884c65</code>, seen on the Pi with 14 tag-only MP3 stubs). After
           <strong>2 attempts on the same file</strong> the track is skipped (<code>_skip_bad_track()</code> &rarr;
-          <code>next_track()</code>): a tag-only stub or a truncated MP3 never becomes playable. A missing file skips
+          <code>nextTrack()</code>): a tag-only stub or a truncated MP3 never becomes playable. A missing file skips
           immediately and counts toward the same limit. After <strong>10 unplayable tracks in a row</strong> (or the whole playlist, if shorter) playback
           stops, the source is cleared so no further status events arrive, and <code>playStateChanged(false)</code> is
-          emitted instead of looping the library. <code>toggle_play()</code> passes <code>force</code> so a user pressing
+          emitted instead of looping the library. <code>togglePlay()</code> passes <code>force</code> so a user pressing
           play on a bad state still gets a recovery attempt. The limits are the constants
           <code>kMaxRecoveryAttempts</code> / <code>kMaxConsecutiveBadTracks</code> in <span class="file-path">mediamanager.cpp</span>.
         </p>
@@ -653,10 +653,10 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
           position of 0 sets no pending seek.
         </p>
         <p>
-          Both recovery and the long-pause resume in <code>toggle_play()</code> use it. The long-pause path exists
+          Both recovery and the long-pause resume in <code>togglePlay()</code> use it. The long-pause path exists
           because on the Orange Pi, resuming after a long pause sometimes produced no sound while the player reported
           <code>PlayingState</code>; only skipping to another track brought audio back. <code>pause()</code> and
-          <code>toggle_play()</code> record when playback paused (<code>m_pausedSince</code>); a resume after 30&nbsp;s or more reloads the track instead of calling a plain
+          <code>togglePlay()</code> record when playback paused (<code>m_pausedSince</code>); a resume after 30&nbsp;s or more reloads the track instead of calling a plain
           <code>play()</code>.
         </p>
 
@@ -740,7 +740,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
             <tr><td><code>mediaListChanged</code></td><td>list</td><td>New ordered file list after a playlist selection, shuffle toggle, strip or scan</td></tr>
             <tr><td><code>metadataChanged</code></td><td>str, str, str</td><td>Title, artist, album for the current track</td></tr>
             <tr><td><code>durationChanged</code></td><td>int</td><td>Track duration in milliseconds (from QMediaPlayer)</td></tr>
-            <tr><td><code>durationFormatChanged</code></td><td>str</td><td>Duration formatted as "M:SS" (emitted by <code>get_formatted_duration</code>)</td></tr>
+            <tr><td><code>durationFormatChanged</code></td><td>str</td><td>Duration formatted as "M:SS" (emitted by <code>getFormattedDuration</code>)</td></tr>
             <tr><td><code>positionChanged</code></td><td>int</td><td>Playback position in milliseconds (QMediaPlayer plus the 100 ms timer while playing)</td></tr>
             <tr><td><code>volumeChanged</code></td><td>float</td><td>User volume level (0.0-1.0, linear)</td></tr>
             <tr><td><code>shuffleStateChanged</code></td><td>bool</td><td>Shuffle toggled on/off (or restored at startup)</td></tr>
@@ -751,59 +751,59 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
             <tr><td><code>totalDurationChanged</code></td><td>str</td><td>Formatted "H:MM:SS" total duration of the selected playlist</td></tr>
             <tr><td><code>albumCountChanged</code></td><td>int</td><td>Number of unique albums in the selected playlist</td></tr>
             <tr><td><code>artistCountChanged</code></td><td>int</td><td>Number of unique artists in the selected playlist</td></tr>
-            <tr><td><code>songDeleted</code></td><td>str</td><td>A file was removed via <code>delete_song()</code></td></tr>
+            <tr><td><code>songDeleted</code></td><td>str</td><td>A file was removed via <code>deleteSong()</code></td></tr>
             <tr><td><code>audioOutputsChanged</code></td><td>(none)</td><td>The output list or the output in use changed (notify of <code>audioOutputs</code> / <code>currentAudioOutput</code>)</td></tr>
           </tbody>
         </table>
 
         <!-- Slots -->
         <h2 id="slots">Slots</h2>
-        <p><strong>Names:</strong> the camelCase name is the one to use (<code>next_track</code> is <code>nextTrack</code>, <code>get_album</code> is <code>getAlbum</code>, <code>is_scanning</code> is <code>isScanning</code>): same parameters, same result, same permission. The snake_case names in the tables below still work through protocol&nbsp;3, are marked <code>deprecated</code> in <code>describe</code> and <span class="file-path">docs/api/</span>, and go in protocol&nbsp;4. The full list with each note is in the <a href="api-reference.html">API reference</a>.</p>
+        <p><strong>Names:</strong> the camelCase name is the one to use (<code>next_track</code> is <code>nextTrack</code>, <code>get_album</code> is <code>getAlbum</code>, <code>is_scanning</code> is <code>isScanning</code>): same parameters, same result, same permission. The tables below show the camelCase names. The older snake_case name of each still works through protocol&nbsp;4, is marked <code>deprecated</code> in <code>describe</code> and <span class="file-path">docs/api/</span>, and goes in protocol&nbsp;5. The full list with each note is in the <a href="api-reference.html">API reference</a>.</p>
         <table>
           <thead>
             <tr><th>Slot</th><th>Signature</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>play_file</code></td><td>(str)</td><td>Play a specific file by filename</td></tr>
-            <tr><td><code>next_track</code> / <code>previous_track</code></td><td>()</td><td>Skip within the current order (wraps)</td></tr>
-            <tr><td><code>toggle_play</code></td><td>()</td><td>Toggle play/pause with bad-state recovery</td></tr>
+            <tr><td><code>playFile</code></td><td>(str)</td><td>Play a specific file by filename</td></tr>
+            <tr><td><code>nextTrack</code> / <code>previousTrack</code></td><td>()</td><td>Skip within the current order (wraps)</td></tr>
+            <tr><td><code>togglePlay</code></td><td>()</td><td>Toggle play/pause with bad-state recovery</td></tr>
             <tr><td><code>pause</code></td><td>()</td><td>Pause playback</td></tr>
-            <tr><td><code>set_position</code></td><td>(int)</td><td>Seek to position in ms</td></tr>
-            <tr><td><code>get_position</code> / <code>get_duration</code></td><td>() -&gt; float</td><td>Position / duration in ms</td></tr>
-            <tr><td><code>is_playing</code> / <code>is_paused</code> / <code>is_muted</code> / <code>is_shuffled</code></td><td>() -&gt; bool</td><td>State flags</td></tr>
+            <tr><td><code>setPosition</code></td><td>(int)</td><td>Seek to position in ms</td></tr>
+            <tr><td><code>getPosition</code> / <code>getDuration</code></td><td>() -&gt; float</td><td>Position / duration in ms</td></tr>
+            <tr><td><code>isPlaying</code> / <code>isPaused</code> / <code>isMuted</code> / <code>isShuffled</code></td><td>() -&gt; bool</td><td>State flags</td></tr>
             <tr><td><code>setMuted</code></td><td>(bool)</td><td>Follow <code>VolumeController::mutedChanged</code> (wired in <span class="file-path">src/appcore.cpp</span>); call <code>volumeController.toggleMute()</code> instead from QML and handlers</td></tr>
-            <tr><td><code>toggle_shuffle</code></td><td>()</td><td>Toggle shuffle, persist via SettingsManager</td></tr>
+            <tr><td><code>toggleShuffle</code></td><td>()</td><td>Toggle shuffle, persist via SettingsManager</td></tr>
             <tr><td><code>setVolume</code></td><td>(float)</td><td>Set the user volume (0.0-1.0 linear); call <code>volumeController.applyVolume(percent)</code> instead from QML and handlers</td></tr>
             <tr><td><code>getVolume</code></td><td>() -&gt; float</td><td>User's volume (ignores mute and ducking)</td></tr>
-            <tr><td><code>extract_colors_from_image</code></td><td>(str)</td><td>Extract the Album Art Capture palette from an image path or <code>file://</code> URL, used for mirrored-phone artwork</td></tr>
+            <tr><td><code>extractColorsFromImage</code></td><td>(str)</td><td>Extract the Album Art Capture palette from an image path or <code>file://</code> URL, used for mirrored-phone artwork</td></tr>
             <tr><td><code>setDucking</code></td><td>(float)</td><td>Temporarily attenuate output (1.0 = none); ramped 80 ms in / 500 ms out</td></tr>
-            <tr><td><code>get_current_file</code></td><td>() -&gt; str</td><td>Current filename (initializes the order if needed, never plays)</td></tr>
-            <tr><td><code>get_next_track_name</code> / <code>get_previous_track_name</code></td><td>() -&gt; str</td><td>Peek at neighbors</td></tr>
-            <tr><td><code>get_next_track_album_art</code> / <code>get_previous_track_album_art</code> / <code>get_neighbor_album_arts</code></td><td>() -&gt; str / list</td><td>Neighbor cover URLs; the list form returns <code>[prevArt, nextArt]</code></td></tr>
-            <tr><td><code>get_media_files</code></td><td>(bool emitSignal=true) -&gt; list</td><td>Flat listing of the current media directory (emits <code>mediaListChanged</code> by default); callable with or without the bool from QML</td></tr>
-            <tr><td><code>get_album_art</code></td><td>(str) -&gt; str</td><td>Cover <code>file://</code> URL for a filename, or ""</td></tr>
-            <tr><td><code>get_band</code> / <code>get_album</code></td><td>(str) -&gt; str</td><td>Artist / album from metadata</td></tr>
-            <tr><td><code>get_formatted_duration</code></td><td>(str) -&gt; str</td><td>"M:SS" duration string (also emits <code>durationFormatChanged</code>)</td></tr>
-            <tr><td><code>get_display_name</code></td><td>(str) -&gt; str</td><td>Cleaned display name</td></tr>
-            <tr><td><code>get_total_duration</code> / <code>get_album_count</code> / <code>get_artist_count</code></td><td>() -&gt; str / int</td><td>Library statistics for the selected playlist. Returns at once: while the playlist's tags are still being read in the background these are the previous values, and the three <code>*Changed</code> signals carry the result</td></tr>
-            <tr><td><code>invalidate_stats_cache</code></td><td>()</td><td>Force recalculation of library statistics</td></tr>
-            <tr><td><code>sort_media_files</code></td><td>(str column, bool ascending) -&gt; list</td><td>Current list sorted by "title", "album" or "artist". Opens no file: tracks whose tags have not been read yet sort as "Unknown ..."; sort again on <code>totalDurationChanged</code></td></tr>
-            <tr><td><code>extract_colors_from_album_art</code></td><td>(str)</td><td>Run the k-means theme extraction for a file's cover</td></tr>
-            <tr><td><code>scan_library</code></td><td>(bool resetDisplayNames=true)</td><td>Rescan the library root into playlists (emits <code>scanProgress</code>, <code>playlistsChanged</code>); callable with or without the bool from QML</td></tr>
-            <tr><td><code>set_library_root</code></td><td>(str)</td><td>Set and scan a new root, select its first playlist (connected to <code>mediaFolderChanged</code>)</td></tr>
-            <tr><td><code>select_playlist</code></td><td>(str)</td><td>Switch the active playlist ("All Music" spans every folder)</td></tr>
-            <tr><td><code>get_playlist_names</code> / <code>get_current_playlist_name</code> / <code>get_current_song_list</code> / <code>get_movable_playlist_names</code></td><td>() -&gt; list / str</td><td>Playlist queries</td></tr>
-            <tr><td><code>create_playlist</code> / <code>delete_playlist</code></td><td>(str) -&gt; bool</td><td>Create or remove a playlist folder</td></tr>
-            <tr><td><code>move_song_to_playlist</code></td><td>(str, str) -&gt; bool</td><td>Move a file into another playlist folder</td></tr>
-            <tr><td><code>delete_song</code></td><td>(str) -&gt; bool</td><td>Delete a file from disk (emits <code>songDeleted</code>)</td></tr>
-            <tr><td><code>get_song_playlist_name</code></td><td>(str) -&gt; str</td><td>Playlist folder a file lives in</td></tr>
-            <tr><td><code>play_file_at_path</code></td><td>(str) -&gt; bool</td><td>Play a file by absolute path (selects its playlist)</td></tr>
-            <tr><td><code>get_full_file_path</code> / <code>get_song_file_path</code></td><td>(str) -&gt; str</td><td>Absolute path for a filename (the former returns "" for a missing file; used by the audio analyzer)</td></tr>
-            <tr><td><code>get_default_media_dir</code> / <code>get_media_folder_name</code></td><td>() -&gt; str</td><td>Built-in default directory / name of the current media directory</td></tr>
-            <tr><td><code>browse_music_folders</code></td><td>(path) -&gt; map</td><td>Folder picker for remote UIs (<span class="file-path">src/util/folderbrowser.{h,cpp}</span>): <code>""</code> = the browse roots (<code>~/Music</code>, not the home folder, <code>/media</code>, <code>/mnt</code>, <code>/run/media</code>, <code>/storage</code>, the current music folder unless it is <code>/</code>); inside them the sub-folders and audio files by name; anything whose canonical path is outside them an <code>error</code></td></tr>
-            <tr><td><code>pick_browser_library</code></td><td>() -&gt; bool</td><td>Browser demo only: opens the browser's folder picker (call from a tap) and makes the folder picked the library for the visit, then returns true (<span class="file-path">src/platform/wasm/weblibrary.{h,cpp}</span>, <a href="building.html#wasm">Building &gt; WebAssembly</a>). Everywhere else does nothing and returns false, and the QML "Browse" buttons open their <code>FolderDialog</code> instead. Scope <code>files</code></td></tr>
-            <tr><td><code>strip_filenames</code></td><td>()</td><td>Re-clean every display name, reporting via <code>scanProgress</code></td></tr>
-            <tr><td><code>flush_metadata_store</code></td><td>()</td><td>Write the tag store now if dirty (called at shutdown)</td></tr>
+            <tr><td><code>getCurrentFile</code></td><td>() -&gt; str</td><td>Current filename (initializes the order if needed, never plays)</td></tr>
+            <tr><td><code>getNextTrackName</code> / <code>getPreviousTrackName</code></td><td>() -&gt; str</td><td>Peek at neighbors</td></tr>
+            <tr><td><code>getNextTrackAlbumArt</code> / <code>getPreviousTrackAlbumArt</code> / <code>getNeighborAlbumArts</code></td><td>() -&gt; str / list</td><td>Neighbor cover URLs; the list form returns <code>[prevArt, nextArt]</code></td></tr>
+            <tr><td><code>getMediaFiles</code></td><td>(bool emitSignal=true) -&gt; list</td><td>Flat listing of the current media directory (emits <code>mediaListChanged</code> by default); callable with or without the bool from QML</td></tr>
+            <tr><td><code>getAlbumArt</code></td><td>(str) -&gt; str</td><td>Cover <code>file://</code> URL for a filename, or ""</td></tr>
+            <tr><td><code>getBand</code> / <code>getAlbum</code></td><td>(str) -&gt; str</td><td>Artist / album from metadata</td></tr>
+            <tr><td><code>getFormattedDuration</code></td><td>(str) -&gt; str</td><td>"M:SS" duration string (also emits <code>durationFormatChanged</code>)</td></tr>
+            <tr><td><code>getDisplayName</code></td><td>(str) -&gt; str</td><td>Cleaned display name</td></tr>
+            <tr><td><code>getTotalDuration</code> / <code>getAlbumCount</code> / <code>getArtistCount</code></td><td>() -&gt; str / int</td><td>Library statistics for the selected playlist. Returns at once: while the playlist's tags are still being read in the background these are the previous values, and the three <code>*Changed</code> signals carry the result</td></tr>
+            <tr><td><code>invalidateStatsCache</code></td><td>()</td><td>Force recalculation of library statistics</td></tr>
+            <tr><td><code>sortMediaFiles</code></td><td>(str column, bool ascending) -&gt; list</td><td>Current list sorted by "title", "album" or "artist". Opens no file: tracks whose tags have not been read yet sort as "Unknown ..."; sort again on <code>totalDurationChanged</code></td></tr>
+            <tr><td><code>extractColorsFromAlbumArt</code></td><td>(str)</td><td>Run the k-means theme extraction for a file's cover</td></tr>
+            <tr><td><code>scanLibrary</code></td><td>(bool resetDisplayNames=true)</td><td>Rescan the library root into playlists (emits <code>scanProgress</code>, <code>playlistsChanged</code>); callable with or without the bool from QML</td></tr>
+            <tr><td><code>setLibraryRoot</code></td><td>(str)</td><td>Set and scan a new root, select its first playlist (connected to <code>mediaFolderChanged</code>)</td></tr>
+            <tr><td><code>selectPlaylist</code></td><td>(str)</td><td>Switch the active playlist ("All Music" spans every folder)</td></tr>
+            <tr><td><code>getPlaylistNames</code> / <code>getCurrentPlaylistName</code> / <code>getCurrentSongList</code> / <code>getMovablePlaylistNames</code></td><td>() -&gt; list / str</td><td>Playlist queries</td></tr>
+            <tr><td><code>createPlaylist</code> / <code>deletePlaylist</code></td><td>(str) -&gt; bool</td><td>Create or remove a playlist folder</td></tr>
+            <tr><td><code>moveSongToPlaylist</code></td><td>(str, str) -&gt; bool</td><td>Move a file into another playlist folder</td></tr>
+            <tr><td><code>deleteSong</code></td><td>(str) -&gt; bool</td><td>Delete a file from disk (emits <code>songDeleted</code>)</td></tr>
+            <tr><td><code>getSongPlaylistName</code></td><td>(str) -&gt; str</td><td>Playlist folder a file lives in</td></tr>
+            <tr><td><code>playFileAtPath</code></td><td>(str) -&gt; bool</td><td>Play a file by absolute path (selects its playlist)</td></tr>
+            <tr><td><code>getFullFilePath</code> / <code>getSongFilePath</code></td><td>(str) -&gt; str</td><td>Absolute path for a filename (the former returns "" for a missing file; used by the audio analyzer)</td></tr>
+            <tr><td><code>getDefaultMediaDir</code> / <code>getMediaFolderName</code></td><td>() -&gt; str</td><td>Built-in default directory / name of the current media directory</td></tr>
+            <tr><td><code>browseMusicFolders</code></td><td>(path) -&gt; map</td><td>Folder picker for remote UIs (<span class="file-path">src/util/folderbrowser.{h,cpp}</span>): <code>""</code> = the browse roots (<code>~/Music</code>, not the home folder, <code>/media</code>, <code>/mnt</code>, <code>/run/media</code>, <code>/storage</code>, the current music folder unless it is <code>/</code>); inside them the sub-folders and audio files by name; anything whose canonical path is outside them an <code>error</code></td></tr>
+            <tr><td><code>pickBrowserLibrary</code></td><td>() -&gt; bool</td><td>Browser demo only: opens the browser's folder picker (call from a tap) and makes the folder picked the library for the visit, then returns true (<span class="file-path">src/platform/wasm/weblibrary.{h,cpp}</span>, <a href="building.html#wasm">Building &gt; WebAssembly</a>). Everywhere else does nothing and returns false, and the QML "Browse" buttons open their <code>FolderDialog</code> instead. Scope <code>files</code></td></tr>
+            <tr><td><code>stripFilenames</code></td><td>()</td><td>Re-clean every display name, reporting via <code>scanProgress</code></td></tr>
+            <tr><td><code>flushMetadataStore</code></td><td>()</td><td>Write the tag store now if dirty (called at shutdown)</td></tr>
             <tr><td><code>_save_playback_state</code></td><td>()</td><td>Save song / position / playlist immediately; called from <span class="file-path">Main.qml</span> on close</td></tr>
             <tr><td><code>connect_settings_manager</code></td><td>(QObject)</td><td>No-op kept for <span class="file-path">Main.qml</span>; the wiring (library root, restore, theme) is done by <code>setSettingsManager()</code> in <code>appcore.cpp</code></td></tr>
             <tr><td><code>_clear_temp_files</code></td><td>()</td><td>Delete every file in the temp dir; retained for compatibility, no longer called</td></tr>
@@ -831,7 +831,7 @@ m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</sp
           <thead><tr><th>Choice</th><th>Why (from code comments and commit history)</th></tr></thead>
           <tbody>
             <tr><td><strong>QMediaPlayer + QAudioOutput</strong> rather than a custom decoder</td><td>Qt Multimedia provides the playback interface across targets; the selected backend and supported codecs depend on the Qt build and platform. One manager class serves the build targets through the same signals. The manager only adds what Qt lacks: the position timer as a safety net for backends whose <code>positionChanged</code> is coarse, and the recovery logic for files Qt cannot decode.</td></tr>
-            <tr><td><strong>Folders as playlists</strong></td><td>The music folder's sub-folders are the only source of truth: there is no playlist database to keep in sync, every edit (<code>create_playlist</code>, <code>move_song_to_playlist</code>, <code>delete_*</code>) is a plain filesystem operation followed by a rescan, and "All Music" is the union. The scanner keeps empty folders on purpose "so user-created playlists survive a rescan (e.g. after moving the last song out)".</td></tr>
+            <tr><td><strong>Folders as playlists</strong></td><td>The music folder's sub-folders are the only source of truth: there is no playlist database to keep in sync, every edit (<code>createPlaylist</code>, <code>moveSongToPlaylist</code>, <code>delete_*</code>) is a plain filesystem operation followed by a rescan, and "All Music" is the union. The scanner keeps empty folders on purpose "so user-created playlists survive a rescan (e.g. after moving the last song out)".</td></tr>
             <tr><td><strong>Persistent tag store on disk</strong> (<code>metadata_cache.json</code>)</td><td>Reading tags is file I/O per track; on the Pi's SD card, scrolling a list or opening the media page opened every file with TagLib on every run. Tags rarely change, and size + mtime is a cheap, sufficient validity check (commit <code>1232538</code>).</td></tr>
             <tr><td><strong>Content-addressed covers kept across runs</strong></td><td>The cover of an album is the same bytes every time; wiping the temp dir at start and quit made every cover a fresh tag read + JPEG write on each boot. Hashing the album id makes the file name derivable without opening the audio file, and the startup prune bounds the directory once the in-memory LRU can no longer see earlier runs (<code>43432c3</code>).</td></tr>
             <tr><td><strong>Colour extraction off the GUI thread</strong></td><td>k-means over a 50&times;50 cover takes ~0.3&nbsp;s on a desktop and closer to a second on the Pi; doing it in the <code>currentMediaChanged</code> handler froze the track-change animation. A job counter makes a fast skip through tracks apply only the last theme, and the 2&nbsp;s dedupe removes the startup double-fire (restore + the 1&nbsp;s timer).</td></tr>

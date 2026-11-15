@@ -58,7 +58,7 @@
       const c = confirm; confirm = null
       if (c === 'forget') forgetDevice()
       else if (c === 'restart') act(octave.call('networkManager', 'restartApp'))
-      else if (c === 'shutdown') act(octave.call('networkManager', 'shutdown_device'))
+      else if (c === 'shutdown') act(octave.call('networkManager', 'shutdownDevice'))
       else act(octave.call('settingsManager', 'reset_to_defaults'), 'Settings reset')
     }}>{confirm === 'restart' ? 'Restart' : confirm === 'shutdown' ? 'Shut down' : confirm === 'forget' ? 'Forget' : 'Reset'}</button>
   </Modal>

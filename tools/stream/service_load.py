@@ -601,7 +601,7 @@ try:
         ctl.rpc({"op": "call", "object": "sim", "method": "setVideo", "args": [True]})
     files = sorted(f for f in os.listdir(opt.media) if not f.startswith(".")) if opt.media else []
     if files:
-        ctl.rpc({"op": "call", "object": "mediaManager", "method": "play_file", "args": [files[0]]})
+        ctl.rpc({"op": "call", "object": "mediaManager", "method": "playFile", "args": [files[0]]})
     rows = []
     for name in opt.scenario:
         print(f"[{MODE}] {name} ...", file=sys.stderr, flush=True)

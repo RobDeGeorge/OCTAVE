@@ -790,10 +790,10 @@ impl Draw<'_> {
         // Keys on the right; the freeze frame under them (upright: beside them)
         let (kx, ky, fx, fy, fr) = if tall { (56.0, 540.0, 410.0, 540.0, 606.0) } else { (900.0, 100.0, 900.0, 404.0, 1226.0) };
         if self.key("read", kx, ky, 330.0, 64.0, "READ CODES", false) {
-            actions.push(Action::Call("obdManager", "read_dtc", vec![]));
+            actions.push(Action::Call("obdManager", "readDtc", vec![]));
         }
         if self.key("freeze", kx, ky + 80.0, 330.0, 64.0, "FREEZE FRAME", !s.freeze.is_empty()) {
-            actions.push(Action::Call("obdManager", "read_freeze_frame", vec![]));
+            actions.push(Action::Call("obdManager", "readFreezeFrame", vec![]));
         }
         let armed = ps.clear_armed.is_some_and(|at| at.elapsed() < Duration::from_secs(4));
         if !armed {
@@ -802,7 +802,7 @@ impl Draw<'_> {
         let clear_label = if armed { "PRESS AGAIN TO CLEAR" } else { "CLEAR CODES" };
         if self.key("clear", kx, ky + 160.0, 330.0, 64.0, clear_label, armed) {
             if armed {
-                actions.push(Action::Call("obdManager", "clear_dtc", vec![]));
+                actions.push(Action::Call("obdManager", "clearDtc", vec![]));
                 ps.clear_armed = None;
             } else {
                 ps.clear_armed = Some(Instant::now());

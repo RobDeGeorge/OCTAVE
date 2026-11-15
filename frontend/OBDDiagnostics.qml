@@ -34,7 +34,7 @@ Item {
     // here as "No trouble codes found", and other requests returned without
     // a word, leaving the spinner on).
     function request(status, line, send) {
-        if (!obdManager || !obdManager.is_connected()) {
+        if (!obdManager || !obdManager.connected) {
             isLoading = false
             statusMessage = "Not connected"
             terminalOutput.appendLine("[WARN] OBD not connected - nothing was read")
@@ -64,18 +64,18 @@ Item {
     function enterDiagnostics() {
         if (!obdManager)
             return
-        if (!obdManager.is_connected()) {
+        if (!obdManager.connected) {
             terminalOutput.appendLine("[WARN] OBD not connected - diagnostic commands unavailable")
             terminalOutput.appendLine("[INFO] Connect to vehicle first, then return to this menu")
             return
         }
-        if (!obdManager.is_diagnostic_mode()) {
+        if (!obdManager.isDiagnosticMode()) {
             terminalOutput.appendLine("[INFO] Entering diagnostic mode...")
-            obdManager.enter_diagnostic_mode()
+            obdManager.enterDiagnosticMode()
         }
         if (!_statusRead) {
             _statusRead = true
-            request("Reading vehicle status...", "[SCAN] Reading vehicle status...", function() { obdManager.read_status() })
+            request("Reading vehicle status...", "[SCAN] Reading vehicle status...", function() { obdManager.readStatus() })
         }
     }
 
@@ -96,7 +96,7 @@ Item {
                     var dtc = codes[i]
                     terminalOutput.appendLine("[DTC] " + dtc.code + " - " + dtc.description)
                 }
-            } else if (obdManager && obdManager.is_connected()) {
+            } else if (obdManager && obdManager.connected) {
                 terminalOutput.appendLine("[DONE] No trouble codes found")
             } else {
                 statusMessage = "Not connected"
@@ -163,9 +163,9 @@ Item {
     onVisibleChanged: {
         if (visible) {
             enterDiagnostics()
-        } else if (obdManager && obdManager.is_diagnostic_mode()) {
+        } else if (obdManager && obdManager.isDiagnosticMode()) {
             // Leaving the page (it stays alive in the page cache)
-            obdManager.exit_diagnostic_mode()
+            obdManager.exitDiagnosticMode()
         }
     }
 
@@ -237,7 +237,7 @@ Item {
                         id: mouseAreaReadDTC
                         anchors.fill: parent
                         onClicked: {
-                            obdDiagnosticsPage.request("Reading DTCs...", "[SCAN] Reading stored DTCs...", function() { obdManager.read_dtc() })
+                            obdDiagnosticsPage.request("Reading DTCs...", "[SCAN] Reading stored DTCs...", function() { obdManager.readDtc() })
                         }
                     }
                 }
@@ -284,7 +284,7 @@ Item {
                         id: mouseAreaReadCurrentDTC
                         anchors.fill: parent
                         onClicked: {
-                            obdDiagnosticsPage.request("Reading current DTCs...", "[SCAN] Reading current drive cycle DTCs...", function() { obdManager.read_current_dtc() })
+                            obdDiagnosticsPage.request("Reading current DTCs...", "[SCAN] Reading current drive cycle DTCs...", function() { obdManager.readCurrentDtc() })
                         }
                     }
                 }
@@ -331,7 +331,7 @@ Item {
                         id: mouseAreaReadStatus
                         anchors.fill: parent
                         onClicked: {
-                            obdDiagnosticsPage.request("Reading vehicle status...", "[SCAN] Reading vehicle status...", function() { obdManager.read_status() })
+                            obdDiagnosticsPage.request("Reading vehicle status...", "[SCAN] Reading vehicle status...", function() { obdManager.readStatus() })
                         }
                     }
                 }
@@ -378,7 +378,7 @@ Item {
                         id: mouseAreaFreezeFrame
                         anchors.fill: parent
                         onClicked: {
-                            obdDiagnosticsPage.request("Reading freeze frame...", "[SCAN] Reading freeze frame data...", function() { obdManager.read_freeze_frame() })
+                            obdDiagnosticsPage.request("Reading freeze frame...", "[SCAN] Reading freeze frame data...", function() { obdManager.readFreezeFrame() })
                         }
                     }
                 }
@@ -692,7 +692,7 @@ Item {
         }
 
         onAccepted: {
-            obdDiagnosticsPage.request("Clearing DTCs...", "[CLEAR] Clearing all DTCs and resetting CEL...", function() { obdManager.clear_dtc() })
+            obdDiagnosticsPage.request("Clearing DTCs...", "[CLEAR] Clearing all DTCs and resetting CEL...", function() { obdManager.clearDtc() })
         }
     }
 
@@ -703,8 +703,8 @@ Item {
     // Note: onVisibleChanged handles the normal StackView navigation case,
     // but this catches the case when the component is actually destroyed
     Component.onDestruction: {
-        if (obdManager && obdManager.is_diagnostic_mode()) {
-            obdManager.exit_diagnostic_mode()
+        if (obdManager && obdManager.isDiagnosticMode()) {
+            obdManager.exitDiagnosticMode()
         }
     }
 }

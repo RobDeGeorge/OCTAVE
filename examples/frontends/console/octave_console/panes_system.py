@@ -401,7 +401,7 @@ class SystemPane(Pane):
         elif bid == "sys-restart":
             self.confirm("Restart OCTAVE?\n\nThe console reconnects when it is back.", "restartApp", "restarting")
         elif bid == "sys-shutdown":
-            self.confirm("Shut down the head unit?\n\nEverything stops until it is powered on again.", "shutdown_device",
+            self.confirm("Shut down the head unit?\n\nEverything stops until it is powered on again.", "shutdownDevice",
                          "shutting down")
         elif bid == "diag-log":
             self.action_logs()

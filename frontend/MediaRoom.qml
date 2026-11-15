@@ -145,7 +145,7 @@ Item {
     // Side-card art refresh — fires on the next event-loop tick after any
     // track or shuffle change so the backend slot calls never compete with
     // animation frames for frame budget.  Uses a single batched backend
-    // call (get_neighbor_album_arts) to halve QML-to-C++ calls.
+    // call (getNeighborAlbumArts) to halve QML-to-C++ calls.
     // Also feeds hidden preloader Images so the QML cache is warm.
     Timer {
         id: sideCardRefreshTimer
@@ -155,7 +155,7 @@ Item {
             if (mediaRoom.useRemote) {
                 // The phone reports only what is playing now: no side cards
             } else if (mediaManager) {
-                var arts = mediaManager.get_neighbor_album_arts()
+                var arts = mediaManager.getNeighborAlbumArts()
                 prevUrl = arts[0] || ""
                 nextUrl = arts[1] || ""
             }
@@ -299,7 +299,7 @@ Item {
         // The carousel's local bookkeeping; what is playing comes from nowPlaying
         function syncNowPlaying() {
             if (!mediaRoom.useRemote && mediaManager) {
-                var currentFile = mediaManager.get_current_file()
+                var currentFile = mediaManager.getCurrentFile()
                 if (currentFile) {
                     currentSongText.text = currentFile
                 }
@@ -310,7 +310,7 @@ Item {
             // Initialize local song count from the active playlist (not raw
             // directory scan, which misses "All Music" and other combined lists)
             if (mediaManager) {
-                localSongCount = mediaManager.get_current_song_list().length
+                localSongCount = mediaManager.getCurrentSongList().length
             }
         }
 
@@ -1086,7 +1086,7 @@ Item {
                     height: dp(40)
                     text: "Browse"
                     // the browser demo opens the browser's own folder picker instead
-                    onClicked: if (!mediaManager || !mediaManager.pick_browser_library()) emptyFolderDialog.open()
+                    onClicked: if (!mediaManager || !mediaManager.pickBrowserLibrary()) emptyFolderDialog.open()
                 }
 
                 Settings.SettingsButton {
@@ -1503,7 +1503,7 @@ Item {
             var wasEmpty = mediaRoom.localSongCount === 0
             mediaRoom.localSongCount = files.length
             if (wasEmpty && files.length > 0 && !mediaRoom.useRemote) {
-                mediaManager.play_file(files[0])
+                mediaManager.playFile(files[0])
             }
         }
     }

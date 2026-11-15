@@ -660,7 +660,7 @@ Item {
                         onTriggered: {
                             if (obdManager) {
                                 clickAnimation.start()
-                                obdManager.reset_connection()
+                                obdManager.resetConnection()
                             }
                         }
                     }
@@ -973,12 +973,12 @@ Item {
                             if (!ident) return
                             manualMacField.text = ident
                             if (obdManager
-                                && typeof obdManager.connect_to_adapter === "function") {
-                                obdManager.connect_to_adapter(ident)
+                                && typeof obdManager.connectToAdapter === "function") {
+                                obdManager.connectToAdapter(ident)
                             } else if (obdManager) {
-                                if (typeof obdManager.set_target_address === "function")
-                                    obdManager.set_target_address(ident)
-                                obdManager.force_connect()
+                                if (typeof obdManager.setTargetAddress === "function")
+                                    obdManager.setTargetAddress(ident)
+                                obdManager.forceConnect()
                             }
                         }
                     }
@@ -1034,16 +1034,16 @@ Item {
                             var entered = manualMacField.text.trim()
                             if (!entered) return
                             if (obdManager
-                                && typeof obdManager.connect_to_adapter === "function") {
-                                obdManager.connect_to_adapter(entered)
+                                && typeof obdManager.connectToAdapter === "function") {
+                                obdManager.connectToAdapter(entered)
                             } else if (obdManager) {
                                 // Fallback for any backend that hasn't been
                                 // updated yet — keeps the UI working.
                                 if (settingsManager)
                                     settingsManager.save_obd_bluetooth_port(entered)
-                                if (typeof obdManager.set_target_address === "function")
-                                    obdManager.set_target_address(entered)
-                                obdManager.force_connect()
+                                if (typeof obdManager.setTargetAddress === "function")
+                                    obdManager.setTargetAddress(entered)
+                                obdManager.forceConnect()
                             }
                         }
                     }
@@ -1054,9 +1054,9 @@ Item {
                 // rfcomm://<MAC>, so reconnects and restarts reuse it.
                 Rectangle {
                     visible: typeof obdManager !== "undefined" && obdManager
-                             && typeof obdManager.connect_direct === "function"
-                             && typeof obdManager.platform_hint === "function"
-                             && obdManager.platform_hint() === "linux"
+                             && typeof obdManager.connectDirect === "function"
+                             && typeof obdManager.platformHint === "function"
+                             && obdManager.platformHint() === "linux"
                     Layout.preferredWidth: dp(80)
                     Layout.preferredHeight: dp(40)
                     radius: dpMin(6, 2)
@@ -1077,7 +1077,7 @@ Item {
                         onClicked: {
                             var entered = manualMacField.text.trim()
                             if (entered)
-                                obdManager.connect_direct(entered)
+                                obdManager.connectDirect(entered)
                         }
                     }
                 }
@@ -1162,14 +1162,14 @@ Item {
                                 if (!mac) return
                                 manualMacField.text = mac
                                 if (obdManager
-                                    && typeof obdManager.connect_to_adapter === "function") {
-                                    obdManager.connect_to_adapter(mac)
+                                    && typeof obdManager.connectToAdapter === "function") {
+                                    obdManager.connectToAdapter(mac)
                                 } else if (obdManager) {
                                     if (settingsManager)
                                         settingsManager.save_obd_bluetooth_port(mac)
-                                    if (typeof obdManager.set_target_address === "function")
-                                        obdManager.set_target_address(mac)
-                                    obdManager.force_connect()
+                                    if (typeof obdManager.setTargetAddress === "function")
+                                        obdManager.setTargetAddress(mac)
+                                    obdManager.forceConnect()
                                 }
                             }
                         }
@@ -1184,8 +1184,8 @@ Item {
                     if (Qt.platform.os === "wasm")
                         return "In the browser, Find Bluetooth Adapters connects a Bluetooth LE OBD2 adapter "
                                + "(Chrome or Edge) or the simulated car."
-                    var hint = (obdManager && typeof obdManager.platform_hint === "function")
-                        ? obdManager.platform_hint() : ""
+                    var hint = (obdManager && typeof obdManager.platformHint === "function")
+                        ? obdManager.platformHint() : ""
                     if (hint === "android")
                         return "Pair your ELM327 in Android Settings first, then enter its MAC here and press Go."
                     if (hint === "linux")

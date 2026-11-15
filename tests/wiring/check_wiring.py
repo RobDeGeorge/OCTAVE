@@ -81,11 +81,11 @@ class WiringTest(unittest.TestCase):
             c.call("volumeController", "toggleMute")
         c.call("volumeController", "toggleMute")
         self.assertTrue(self.get("volumeController", "muted"))
-        self.assertTrue(wait_for(lambda: c.call("mediaManager", "is_muted"), timeout=5), "mediaManager not muted")
+        self.assertTrue(wait_for(lambda: c.call("mediaManager", "isMuted"), timeout=5), "mediaManager not muted")
         # Raising the volume while muted unmutes, from any input
         c.call("volumeController", "applyVolume", 45)
         self.assertFalse(self.get("volumeController", "muted"))
-        self.assertTrue(wait_for(lambda: not c.call("mediaManager", "is_muted"), timeout=5), "mediaManager still muted")
+        self.assertTrue(wait_for(lambda: not c.call("mediaManager", "isMuted"), timeout=5), "mediaManager still muted")
 
     # -- the car (shift light, value store, black box) -------------------------
 
@@ -151,9 +151,9 @@ class WiringTest(unittest.TestCase):
             c.call("nowPlaying", "togglePlay")
         self.assertTrue(wait_for(lambda: self.get("nowPlaying", "hasTrack"), timeout=30),
                         "the simulator's test tracks never loaded")
-        first = c.call("mediaManager", "get_current_file")
+        first = c.call("mediaManager", "getCurrentFile")
         c.call("nowPlaying", "next")
-        current = wait_for(lambda: (f := c.call("mediaManager", "get_current_file")) != first and f, timeout=10)
+        current = wait_for(lambda: (f := c.call("mediaManager", "getCurrentFile")) != first and f, timeout=10)
         self.assertTrue(current, "next did not change the track")
         self.assertTrue(wait_for(lambda: c.call("settingsManager", "get_last_played_song") == current, timeout=10),
                         f"saved song {c.call('settingsManager', 'get_last_played_song')!r}, playing {current!r}")

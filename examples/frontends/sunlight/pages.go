@@ -66,13 +66,13 @@ func (a *App) dtcPage(p *Painter, r image.Rectangle) {
 	ui := &a.dtc
 	gap := p.Rule() * 2
 	codes, known, mil := st.DTCs()
-	// opening the page reads the car (get_dtc_codes is only a cache, empty until a read)
+	// opening the page reads the car (getDtcCodes is only a cache, empty until a read)
 	if !ui.loaded && a.session.Client() != nil {
 		ui.loaded = true
-		a.session.Go("obdManager", "read_dtc")
+		a.session.Go("obdManager", "readDtc")
 		go func() {
 			var lamp bool
-			if a.session.CallSync(&lamp, "obdManager", "get_mil_status") == nil {
+			if a.session.CallSync(&lamp, "obdManager", "getMilStatus") == nil {
 				st.SetMIL(lamp)
 				a.win.Invalidate()
 			}
@@ -142,8 +142,8 @@ func (a *App) dtcPage(p *Painter, r image.Rectangle) {
 		b = append(split(halves[1], 2, gap, false), halves[0])
 	}
 	if p.Button(b[0], &ui.read, "READ", false) {
-		a.session.Go("obdManager", "read_dtc")
-		a.session.Go("obdManager", "get_mil_status")
+		a.session.Go("obdManager", "readDtc")
+		a.session.Go("obdManager", "getMilStatus")
 	}
 	// CLEAR wants two taps within clearWindow: the first arms it (orange), the second clears
 	now := p.gtx.Now
@@ -159,7 +159,7 @@ func (a *App) dtcPage(p *Painter, r image.Rectangle) {
 	if p.ButtonColors(clearR, &ui.clear, label, armed) {
 		if armed {
 			ui.armedUntil = time.Time{}
-			a.session.Go("obdManager", "clear_dtc")
+			a.session.Go("obdManager", "clearDtc")
 		} else {
 			ui.armedUntil = now.Add(clearWindow)
 		}

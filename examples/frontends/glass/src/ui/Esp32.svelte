@@ -12,11 +12,11 @@
   <div class="label"><span>{$e.connected ? 'Knob connected' : $e.connectionStatus || 'Not connected'}</span><span class="small">{$e.connectionDetail}</span></div>
   <div class="acts">
     {#if $e.connected}
-      <button class="btn" onclick={() => act(octave.call('esp32VolumeManager', 'disconnect_device'))}>Disconnect</button>
+      <button class="btn" onclick={() => act(octave.call('esp32VolumeManager', 'disconnectDevice'))}>Disconnect</button>
     {:else}
-      <button class="btn" onclick={() => act(octave.call('esp32VolumeManager', 'connect_device'))}>Connect</button>
+      <button class="btn" onclick={() => act(octave.call('esp32VolumeManager', 'connectDevice'))}>Connect</button>
     {/if}
-    <button class="btn icon" aria-label="Refresh ports" onclick={() => act(octave.call('esp32VolumeManager', 'refresh_ports'))}><Icon name="refresh" /></button>
+    <button class="btn icon" aria-label="Refresh ports" onclick={() => act(octave.call('esp32VolumeManager', 'refreshPorts'))}><Icon name="refresh" /></button>
   </div>
 </div>
 <div class="row">

@@ -265,7 +265,7 @@ static void subscribe_all(Link *l)
     cJSON *g = cJSON_CreateObject();
     cJSON_AddStringToObject(g, "op", "call");
     cJSON_AddStringToObject(g, "object", "obdManager");
-    cJSON_AddStringToObject(g, "method", "get_dtc_codes");
+    cJSON_AddStringToObject(g, "method", "getDtcCodes");
     l->id_dtcs = link_send(l, g);
 }
 

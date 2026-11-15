@@ -361,7 +361,7 @@ Flickable {
                         onClicked: {
                             if (shutdownRow.confirmingShutdown) {
                                 if (networkManager)
-                                    networkManager.shutdown_device()
+                                    networkManager.shutdownDevice()
                             } else {
                                 shutdownRow.confirmingShutdown = true
                                 shutdownResetTimer.restart()
