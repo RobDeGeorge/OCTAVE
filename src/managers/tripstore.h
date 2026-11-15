@@ -134,7 +134,7 @@ private:
     bool exec(const QString &sql);
     bool createSchema();
     bool setDamagedDatabaseAside();
-    void checkSchemaVersion();
+    bool checkSchemaVersion();
     int paramId(const QString &name);          // interned, created on first use
     QHash<int, QString> paramNames();
     QVariantMap summarise(qint64 id, qint64 startMs, qint64 endMs, bool clean, const QVariantMap &meta);

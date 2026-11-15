@@ -73,14 +73,18 @@
 
 ## 7. Protocol 4 (one breaking release)
 
-Decided 2026-11-15: add camelCase names beside the 80 snake_case invokables and mark the old ones `octave.deprecated`, deprecate the per-parameter OBD signals nothing listens to, then remove them all in a single protocol 4 together with `settingsLayoutStyle` (its layouts are gone) and the change that a `pair` request with no scope list gets `read`, not `full`. Before the removal: ask whether any frontend outside this repository depends on the old names. **Effort:** L, desktop.
+Decided 2026-11-15: add camelCase names beside the 80 snake_case invokables and mark the old ones `octave.deprecated`, deprecate the per-parameter OBD signals nothing listens to, then remove them all in a single protocol 4 together with `settingsLayoutStyle` (its layouts are gone) and the change that a `pair` request with no scope list gets `read`, not `full`. The owner does not know of an outside frontend yet and wants them possible: ship the deprecations first, give at least one release of notice, then remove. **Effort:** L, desktop.
 
-## Owner decisions still open
+## Decided 2026-11-15
 
-- Pairing lockouts last until restart (an existing test asserts a new code does not lift them): keep, or expire after a time?
-- A paired frontend can switch the car to the simulator (`connect_to_adapter("sim://elm327")`, `vehicle` scope) and the drive is recorded: mark such trips as simulated, or leave?
+- Pairing lockouts last until restart: kept as they are.
+- Simulated drives are marked (`trips.simulated`, schema 2) and shown as "simulated car" in Trip History. A paired frontend can still switch the car to the simulator.
+- Destructive one-tap actions ask first (`settings/ConfirmButton.qml`).
+- Frontends outside this repository must stay possible: protocol 4 removes nothing without a deprecation period and a release of notice.
+
+## Owner decision still open
+
 - A failed Spotify re-sign-in clears a working refresh token (`spotifymanager.cpp:459`): what should the state read afterwards?
-- One-tap destructive actions (forget device, End trip, Revoke, chip ✕): add a confirm step?
 
 ## Order
 

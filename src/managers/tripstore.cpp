@@ -21,7 +21,9 @@
 Q_LOGGING_CATEGORY(lcTripStore, "octave.tripstore")
 
 namespace {
-const int kSchemaVersion = 1;
+const int kSchemaVersion = 1;     // of the per-trip JSON files
+// Of the database. 2: trips.simulated (a drive of the simulated car)
+const int kDbSchemaVersion = 2;
 // Gaps longer than this between two speed samples are not integrated into
 // the distance (a dropout, not a 10 s stretch at the last known speed)
 const qint64 kMaxIntegrationGapMs = 10000;
@@ -278,8 +280,7 @@ bool TripStore::open(const QString &dir)
         } else {
             m_db = db;
             sqlite3_busy_timeout(m_db, 2000);
-            if (createSchema()) {
-                checkSchemaVersion();
+            if (createSchema() && checkSchemaVersion()) {
                 qCInfo(lcTripStore).noquote() << "Black box open at" << databasePath()
                                               << QStringLiteral("(SQLite %1)").arg(QLatin1String(SQLITE_VERSION));
                 emit storeOpened(true, QString());
@@ -321,26 +322,33 @@ bool TripStore::setDamagedDatabaseAside()
 // The schema number was written and never read. Read it: an older database
 // is brought up to date here (nothing to do yet at version 1), a newer one
 // is used as far as this build understands it, and said so in the log.
-void TripStore::checkSchemaVersion()
+bool TripStore::checkSchemaVersion()
 {
-    int stored = kSchemaVersion;
+    int stored = kDbSchemaVersion;
     {
         Query q(m_db);
         if (q.prepare("SELECT value FROM meta WHERE key = 'schema'") && q.step())
             stored = q.text(0).toInt();
     }
-    if (stored > kSchemaVersion) {
+    if (stored > kDbSchemaVersion) {
         qCWarning(lcTripStore) << "The trip database is schema" << stored << "and this build writes schema"
-                               << kSchemaVersion << "(made by a newer OCTAVE): using what this build knows";
-        return;
+                               << kDbSchemaVersion << "(made by a newer OCTAVE): using what this build knows";
+        return true;
     }
-    if (stored < kSchemaVersion) {
-        // Migrations go here, oldest first, each in a transaction:
-        //   if (stored < 2) { ...ALTER TABLE...; stored = 2; }
+    if (stored < kDbSchemaVersion) {
+        // Migrations, oldest first. Each is one statement SQLite applies
+        // atomically; the number moves only when its statement worked.
+        if (stored < 2) {
+            if (!exec(QStringLiteral("ALTER TABLE trips ADD COLUMN simulated INTEGER NOT NULL DEFAULT 0")))
+                return false;
+            stored = 2;
+        }
         Query q(m_db);
         if (q.prepare("UPDATE meta SET value = ? WHERE key = 'schema'"))
-            q.bind(1, QString::number(kSchemaVersion)).exec();
+            q.bind(1, QString::number(stored)).exec();
+        qCInfo(lcTripStore) << "Trip database brought up to schema" << stored;
     }
+    return true;
 }
 
 void TripStore::close()
@@ -382,7 +390,8 @@ bool TripStore::createSchema()
         QStringLiteral("CREATE TABLE IF NOT EXISTS trips("
                        "id INTEGER PRIMARY KEY, start_ms INTEGER NOT NULL, end_ms INTEGER, "
                        "clean INTEGER NOT NULL DEFAULT 0, vin TEXT, make TEXT, model_year INTEGER, "
-                       "sample_count INTEGER NOT NULL DEFAULT 0, summary TEXT, file_base TEXT)"),
+                       "sample_count INTEGER NOT NULL DEFAULT 0, summary TEXT, file_base TEXT, "
+                       "simulated INTEGER NOT NULL DEFAULT 0)"),
         QStringLiteral("CREATE TABLE IF NOT EXISTS params(id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE)"),
         QStringLiteral("CREATE TABLE IF NOT EXISTS samples("
                        "trip_id INTEGER NOT NULL, ts_ms INTEGER NOT NULL, param_id INTEGER NOT NULL, value REAL NOT NULL)"),
@@ -395,9 +404,19 @@ bool TripStore::createSchema()
         if (!exec(sql))
             return false;
     }
+    // A database made by an older build already has its tables, and its
+    // schema number says which; checkSchemaVersion() brings it up. Only a
+    // file with no number yet gets one here, by whether the newest column
+    // is present.
+    bool hasSimulated = false;
+    {
+        Query cols(m_db);
+        if (cols.prepare("SELECT 1 FROM pragma_table_info('trips') WHERE name = 'simulated'"))
+            hasSimulated = cols.step();
+    }
     Query q(m_db);
     if (q.prepare("INSERT OR IGNORE INTO meta(key, value) VALUES('schema', ?)"))
-        q.bind(1, QString::number(kSchemaVersion)).exec();
+        q.bind(1, QString::number(hasSimulated ? kDbSchemaVersion : 1)).exec();
     return true;
 }
 
@@ -441,12 +460,13 @@ void TripStore::beginTrip(qint64 id, qint64 startMs, const QVariantMap &meta)
     if (!isOpen())
         return;
     Query q(m_db);
-    if (!q.prepare("INSERT OR REPLACE INTO trips(id, start_ms, vin, make, model_year) VALUES(?, ?, ?, ?, ?)"))
+    if (!q.prepare("INSERT OR REPLACE INTO trips(id, start_ms, vin, make, model_year, simulated) VALUES(?, ?, ?, ?, ?, ?)"))
         return;
     q.bind(1, id).bind(2, startMs)
         .bind(3, meta.value(QStringLiteral("vin")).toString())
         .bind(4, meta.value(QStringLiteral("make")).toString())
-        .bind(5, meta.value(QStringLiteral("modelYear")).toInt());
+        .bind(5, meta.value(QStringLiteral("modelYear")).toInt())
+        .bind(6, meta.value(QStringLiteral("simulated")).toBool() ? 1 : 0);
     if (!q.exec()) {
         emit error(q.error());
         return;
@@ -514,8 +534,8 @@ QVariantMap TripStore::tripRow(qint64 id)
 {
     QVariantMap row;
     Query q(m_db);
-    if (!q.prepare("SELECT id, start_ms, end_ms, clean, vin, make, model_year, sample_count, summary, file_base "
-                   "FROM trips WHERE id = ?"))
+    if (!q.prepare("SELECT id, start_ms, end_ms, clean, vin, make, model_year, sample_count, summary, file_base, "
+                   "simulated FROM trips WHERE id = ?"))
         return row;
     q.bind(1, id);
     if (!q.step())
@@ -530,6 +550,7 @@ QVariantMap TripStore::tripRow(qint64 id)
     row[QStringLiteral("sampleCount")] = q.int64(7);
     row[QStringLiteral("summary")] = q.text(8);
     row[QStringLiteral("fileBase")] = q.text(9);
+    row[QStringLiteral("simulated")] = q.integer(10) != 0;
     return row;
 }
 
@@ -549,6 +570,7 @@ QVariantMap TripStore::endTrip(qint64 id, qint64 endMs, bool clean)
     meta[QStringLiteral("vin")] = row.value(QStringLiteral("vin"));
     meta[QStringLiteral("make")] = row.value(QStringLiteral("make"));
     meta[QStringLiteral("modelYear")] = row.value(QStringLiteral("modelYear"));
+    meta[QStringLiteral("simulated")] = row.value(QStringLiteral("simulated"));
 
     QVariantMap summary = summarise(id, startMs, endMs, clean, meta);
     QString base;
@@ -642,6 +664,9 @@ QVariantMap TripStore::summarise(qint64 id, qint64 startMs, qint64 endMs, bool c
     s[QStringLiteral("vin")] = meta.value(QStringLiteral("vin")).toString();
     s[QStringLiteral("make")] = meta.value(QStringLiteral("make")).toString();
     s[QStringLiteral("modelYear")] = meta.value(QStringLiteral("modelYear")).toInt();
+    // Only when true: a drive of the simulated car, never of a real one
+    if (meta.value(QStringLiteral("simulated")).toBool())
+        s[QStringLiteral("simulated")] = true;
 
     // Per-parameter statistics
     QVariantList params;
@@ -1127,6 +1152,7 @@ QVariantMap TripStore::rowSummary(const QVariantMap &row)
     item[QStringLiteral("vin")] = row.value(QStringLiteral("vin"));
     item[QStringLiteral("make")] = row.value(QStringLiteral("make"));
     item[QStringLiteral("modelYear")] = row.value(QStringLiteral("modelYear"));
+    item[QStringLiteral("simulated")] = row.value(QStringLiteral("simulated")).toBool();
     item[QStringLiteral("sampleCount")] = row.value(QStringLiteral("sampleCount"));
     const QString base = row.value(QStringLiteral("fileBase")).toString();
     item[QStringLiteral("file")] = base.isEmpty() ? QString() : base + QStringLiteral(".csv");
@@ -1175,6 +1201,7 @@ QVariantMap TripStore::tripDetail(qint64 id)
         meta[QStringLiteral("vin")] = row.value(QStringLiteral("vin"));
         meta[QStringLiteral("make")] = row.value(QStringLiteral("make"));
         meta[QStringLiteral("modelYear")] = row.value(QStringLiteral("modelYear"));
+        meta[QStringLiteral("simulated")] = row.value(QStringLiteral("simulated"));
         detail = summarise(id, row.value(QStringLiteral("startMs")).toLongLong(), endMs, true, meta);
         detail[QStringLiteral("open")] = true;
     } else {
