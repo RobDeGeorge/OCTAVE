@@ -111,9 +111,14 @@ int main(int argc, char *argv[])
         ctx->setContextProperty(QStringLiteral("height"), 760);
         ctx->setContextProperty(QStringLiteral("settingsManager"), QVariant::fromValue<QObject *>(nullptr));
         ctx->setContextProperty(QStringLiteral("networkManager"), QVariant::fromValue<QObject *>(nullptr));
-        ctx->setContextProperty(QStringLiteral("wikiViewerAvailable"), argc > 3 && qstrcmp(argv[3], "true") == 0);
+        const bool wikiViewer = argc > 3 && qstrcmp(argv[3], "true") == 0;
+        ctx->setContextProperty(QStringLiteral("wikiViewerAvailable"), wikiViewer);
+        // With no viewer and no address, Open Wiki shows the "not available"
+        // panel, which is what the fixture checks. (With an address it hands
+        // the published wiki to the system's browser: not something to do
+        // from a test.)
         ctx->setContextProperty(QStringLiteral("wikiHomeUrl"),
-                                QUrl::fromLocalFile(kRepo + QStringLiteral("/wiki/index.html")));
+                                wikiViewer ? QUrl::fromLocalFile(kRepo + QStringLiteral("/wiki/index.html")) : QUrl());
     } else if (shiftLight) {
         // The shift light editor against the real settings store and manager
         settings = std::make_unique<SettingsManager>();

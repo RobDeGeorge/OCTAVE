@@ -255,7 +255,15 @@ Flickable {
 
                 Text {
                     Layout.fillWidth: true
-                    text: "Explore the guides, features, and settings without leaving OCTAVE."
+                    // Builds with no web view (the browser demo, a desktop
+                    // build without Qt WebEngine) open the published wiki in
+                    // the browser instead of the reader
+                    readonly property bool external: !(typeof wikiViewerAvailable !== "undefined" && wikiViewerAvailable)
+                                                     && typeof wikiHomeUrl !== "undefined" && String(wikiHomeUrl) !== ""
+                    text: external ? (Qt.platform.os === "wasm"
+                                      ? "Explore the guides, features, and settings. Opens in a new tab."
+                                      : "Explore the guides, features, and settings. Opens in your browser.")
+                                   : "Explore the guides, features, and settings without leaving OCTAVE."
                     color: App.Style.secondaryTextColor
                     font.pixelSize: App.Spacing.overallText * 0.9
                     font.family: App.Style.fontFamily
@@ -267,7 +275,13 @@ Flickable {
                     text: "Open Wiki"
                     Layout.fillWidth: true
                     Layout.preferredHeight: aboutPage.dp(44)
-                    onClicked: wikiPopup.open()
+                    onClicked: {
+                        if (!(typeof wikiViewerAvailable !== "undefined" && wikiViewerAvailable)
+                                && typeof wikiHomeUrl !== "undefined" && String(wikiHomeUrl) !== "")
+                            Qt.openUrlExternally(wikiHomeUrl)
+                        else
+                            wikiPopup.open()
+                    }
                 }
             }
 

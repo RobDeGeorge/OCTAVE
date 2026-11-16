@@ -74,6 +74,7 @@ extern "C" {
 #include "platform/wasm/webserial.h"
 #include "platform/wasm/webservice.h"
 #include "platform/wasm/webfrontends.h"
+#include <emscripten/val.h>
 #endif
 
 namespace {
@@ -904,8 +905,18 @@ int main(int argc, char *argv[])
     ctx->setContextProperty("wikiViewerAvailable", true);
     ctx->setContextProperty("wikiHomeUrl", QUrl(QStringLiteral("file:///android_asset/wiki/index.html")));
 #else
+    // No web view in this build: "Open Wiki" hands the published wiki to the
+    // system's browser (frontend/settings/AboutPage.qml). In the browser demo
+    // that is the wiki published beside the page (.../OCTAVE/ -> .../OCTAVE/wiki/),
+    // wherever the page is served from
     ctx->setContextProperty("wikiViewerAvailable", false);
-    ctx->setContextProperty("wikiHomeUrl", QUrl());
+#ifdef OCTAVE_WASM
+    const QUrl pageUrl(QString::fromStdString(
+        emscripten::val::global("location")["href"].as<std::string>()));
+    ctx->setContextProperty("wikiHomeUrl", pageUrl.resolved(QUrl(QStringLiteral("wiki/index.html"))));
+#else
+    ctx->setContextProperty("wikiHomeUrl", QUrl(QStringLiteral("https://robdegeorge.com/OCTAVE/wiki/")));
+#endif
 #endif
 
     // ---- Developer tooling (inactive unless --dev / --profile) ----

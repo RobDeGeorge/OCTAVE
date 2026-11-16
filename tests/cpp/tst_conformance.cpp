@@ -34,7 +34,7 @@ const QHash<QString, QString> kQmlOnly = {
     {"hasQuick3D", "whether this QML engine has the module"},
     {"hasQuick3DAssetUtils", "whether this QML engine has the module"},
     {"wikiViewerAvailable", "whether this build embeds a web view"},
-    {"wikiHomeUrl", "where the embedded web view finds the wiki"},
+    {"wikiHomeUrl", "where the wiki is: for the embedded web view, or the published one where there is none"},
     {"assetStore", "file:// URLs for QML's own asset loaders"},
     {"servicePairing", "pairing codes, paired devices, the service switch: head-unit only by design"},
     {"devMode", "dev tooling (--dev), not in release builds"},
