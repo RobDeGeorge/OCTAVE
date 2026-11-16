@@ -154,6 +154,7 @@ octave_add_test(tst_themecatalog SOURCES managers/themecatalog.h managers/themec
 # QML fixtures (tests/fixtures/), each run in its own qmlfixturehost process
 add_executable(qmlfixturehost qmlfixturehost.cpp
     "${OCTAVE_SRC}/managers/settingsmanager.h" "${OCTAVE_SRC}/managers/settingsmanager.cpp"
+    "${OCTAVE_SRC}/managers/shiftlightmanager.h" "${OCTAVE_SRC}/managers/shiftlightmanager.cpp"
     "${OCTAVE_SRC}/util/assetstore.h" "${OCTAVE_SRC}/util/assetstore.cpp"
     "${OCTAVE_SRC}/util/units.h" "${OCTAVE_SRC}/util/units.cpp"
     "${OCTAVE_SRC}/managers/themecatalog.h" "${OCTAVE_SRC}/managers/themecatalog.cpp")

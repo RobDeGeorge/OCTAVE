@@ -1,6 +1,6 @@
 // QML fixtures in tests/fixtures/, each run by qmlfixturehost in its own
 // process against the C++ managers: the 3D music device scenes and their
-// shared preference, and the offline wiki viewer.
+// shared preference, the shift light editor, and the offline wiki viewer.
 
 #include <QProcess>
 #include <QTemporaryDir>
@@ -35,6 +35,22 @@ private slots:
         const auto [code, output] = run({kRepo + "/tests/fixtures/" + fixture, tmp.path()}, env, 35000);
         QVERIFY2(code == 0 && output.contains("MUSIC_DEVICES_SMOKE_PASS"), qPrintable(output));
         QVERIFY2(!output.contains("ReferenceError") && !output.contains("Unable to assign"), qPrintable(output));
+    }
+
+    // The shift light editor (frontend/obd/) opened against the real settings
+    // store and ShiftLightManager: it loads, a tap on a row and on Add Flag
+    // lands, and every edit reaches the manager
+    void shiftLightEditor()
+    {
+        QTemporaryDir tmp;
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        env.insert("XDG_CONFIG_HOME", tmp.path());
+        env.insert("HOME", tmp.path());
+        env.insert("QT_QUICK_CONTROLS_STYLE", "Basic");
+        const auto [code, output] = run({kRepo + "/tests/fixtures/ShiftLightEditorSmoke.qml", tmp.path()}, env, 30000);
+        QVERIFY2(code == 0 && output.contains("SHIFT_LIGHT_EDITOR_PASS"), qPrintable(output));
+        for (const char *bad : {"ReferenceError", "TypeError", "Unable to assign", "is not defined", "Cannot read property"})
+            QVERIFY2(!output.contains(QLatin1String(bad)), qPrintable(output));
     }
 
     void offlineWiki_data()

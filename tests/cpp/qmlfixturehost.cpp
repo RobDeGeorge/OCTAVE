@@ -5,6 +5,9 @@
 //
 //   qmlfixturehost <fixture.qml> <scratch dir> [wiki-available: true|false]
 //
+// The fixture's file name picks the managers: Wiki*, ShiftLight*, else the
+// music device set.
+//
 // Exit codes: the fixture's own (0 pass, 1 check failed, 2 timed out),
 // 3 a component failed to compile, 4 the fixture didn't load, 5 a setting
 // didn't survive the disk round trip.
@@ -27,6 +30,7 @@
 #endif
 
 #include "managers/settingsmanager.h"
+#include "managers/shiftlightmanager.h"
 #include "util/assetstore.h"
 #include "util/units.h"
 #include "managers/themecatalog.h"
@@ -85,6 +89,7 @@ int main(int argc, char *argv[])
     const QString fixture = QString::fromLocal8Bit(argv[1]);
     const QDir scratch(QString::fromLocal8Bit(argv[2]));
     const bool wiki = QFileInfo(fixture).fileName().startsWith(QLatin1String("Wiki"));
+    const bool shiftLight = QFileInfo(fixture).fileName().startsWith(QLatin1String("ShiftLight"));
 
     QQmlApplicationEngine engine;
     engine.addImportPath(kRepo + QStringLiteral("/frontend"));
@@ -95,6 +100,7 @@ int main(int argc, char *argv[])
     Units units;
     ctx->setContextProperty(QStringLiteral("units"), &units);
     std::unique_ptr<SettingsManager> settings;
+    std::unique_ptr<ShiftLightManager> shiftLights;
     // Style.qml's palettes (the settings, when there are some, set in either branch below)
     ThemeCatalog themes(kRepo + QStringLiteral("/frontend/themes.json"));
     ctx->setContextProperty(QStringLiteral("themeCatalog"), &themes);
@@ -108,6 +114,13 @@ int main(int argc, char *argv[])
         ctx->setContextProperty(QStringLiteral("wikiViewerAvailable"), argc > 3 && qstrcmp(argv[3], "true") == 0);
         ctx->setContextProperty(QStringLiteral("wikiHomeUrl"),
                                 QUrl::fromLocalFile(kRepo + QStringLiteral("/wiki/index.html")));
+    } else if (shiftLight) {
+        // The shift light editor against the real settings store and manager
+        settings = std::make_unique<SettingsManager>();
+        shiftLights = std::make_unique<ShiftLightManager>(settings.get());
+        ctx->setContextProperty(QStringLiteral("settingsManager"), settings.get());
+        ctx->setContextProperty(QStringLiteral("shiftLightManager"), shiftLights.get());
+        ctx->setContextProperty(QStringLiteral("testProbe"), &probe);
     } else {
         // Music device fixtures: two flat-colour covers and a real settings store
         for (const auto &[name, color] : {std::pair{"cover_a", "#ec6354"}, std::pair{"cover_b", "#43b6cf"}}) {
@@ -138,7 +151,7 @@ int main(int argc, char *argv[])
         return 4;
     const int code = app.exec();
 
-    if (settings) {
+    if (settings && !shiftLight) {
         // The final selection must survive a disk round trip
         settings->save_setting(QStringLiteral("musicDeviceModel"), QStringLiteral("Record player"));
         settings->flushPendingSave();
