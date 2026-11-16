@@ -1,6 +1,6 @@
 # TODO index — easiest to hardest
 
-**Last updated:** 2026-11-15 (licensing-review.md and fix-up-leftovers.md added after the codebase review and fixing session)
+**Last updated:** 2026-11-15 (licensing-review.md and fix-up-leftovers.md added after the codebase review and fixing session; launcher.md, written 2026-10-26, brought in from its branch)
 
 One file per deferred plan. Each file opens with a one-line **Goal**, lists only the work that is left, and gives every step an **Effort** (S under an hour, M one session, L several sessions, XL a new subsystem) and the device it needs. When a plan is finished, delete its file and its row here.
 
@@ -38,6 +38,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | File | Goal | Effort | Needs |
 |---|---|---|---|
 | [media-source-arbiter.md](media-source-arbiter.md) | One music source at a time: done for Android Auto; left: by-ear checks, phone mirror on the same rules, visualizer | S | desktop, AA phone, Pi |
+| [launcher.md](launcher.md) | Discord-style `octave-launcher` on the desktops and the Pi: auto-update in the background, apply on next start, roll back a version that crashes on start | M per step (L overall) | desktop, CI, Pi, Win11 VM, a Mac |
 | [qml-precompile.md](qml-precompile.md) | Ship pre-compiled QML, if a Pi needs it (on Windows it is 0.3 s and not the first-launch stall; measure on a Pi first) | S, then L | Pi, Win11 VM, S22 |
 | [user-primitives.md](user-primitives.md) | Gauge groups that move as one (composites); code widgets only behind an opt-in. Presets are done | L (code widgets XL) | desktop |
 | [open-backend.md](open-backend.md) | The contract is done (2026-10-23); left: two small service follow-ups, the hardware checks noted along the way, and the core library / process split after v1.0 road time | S; library M; split L | desktop, Pi, phone, Android |
