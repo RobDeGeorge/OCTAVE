@@ -190,7 +190,7 @@ async def test_obd_codes_confirm_and_freeze(sdk):
         await pilot.press("t")
         assert await wait_for(pilot, lambda: app.note == "reading trouble codes")
         await pilot.pause(1.0)
-        had_codes = bool(sdk.call("obdManager", "get_dtc_codes"))   # the sim's two codes, until a clear
+        had_codes = bool(sdk.call("obdManager", "getDtcCodes"))   # the sim's two codes, until a clear
         if had_codes:
             assert await wait_for(pilot, lambda: dtcs.row_count > 0)
         await pilot.press("f")
@@ -205,13 +205,13 @@ async def test_obd_codes_confirm_and_freeze(sdk):
         assert await wait_for(pilot, lambda: type(app.screen).__name__ != "Confirm")
         await pilot.pause(0.5)
         assert app.note != "clearing trouble codes"
-        assert bool(sdk.call("obdManager", "get_dtc_codes")) == had_codes
+        assert bool(sdk.call("obdManager", "getDtcCodes")) == had_codes
         # "y" clears them
         await pilot.press("X")
         await wait_for(pilot, lambda: type(app.screen).__name__ == "Confirm")
         await pilot.press("y")
         assert await wait_for(pilot, lambda: app.note == "clearing trouble codes")
-        assert await sdk_wait(lambda: not sdk.call("obdManager", "get_dtc_codes"), timeout=8)
+        assert await sdk_wait(lambda: not sdk.call("obdManager", "getDtcCodes"), timeout=8)
         assert await wait_for(pilot, lambda: dtcs.row_count == 0)
         # the adapters list holds the simulated port
         assert app.query_one("#adapters", DataTable).row_count >= 1

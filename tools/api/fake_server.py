@@ -15,11 +15,26 @@ second), obdManager (connected, setParameterDemand), parameterCatalog
 (phoneMirrorManager.video: synthetic H.264-shaped records, a keyframe with
 the config flag first). Pairing: `pair` with --code (default 123456) gives a
 token and the scopes asked for plus read; a trusted hello with that token
-reports them; every other token is rejected. With --untrusted, connections
-start untrusted (as over the network) and every op but hello and pair
-answers unauthorised until they pair. Permissions are enforced from the
-`scope` each member carries in docs/api/: a device without the scope gets
-forbidden, like the app.
+reports them; every other token is rejected. As in the app the code works
+once and for two minutes from when it is shown (at start; --code-life 0
+keeps it for ever, `fake.showPairingCode(code)` shows a new one). With
+--untrusted, connections start untrusted (as over the network): every op
+but hello and pair answers unauthorised until they pair, pairing is
+throttled per address the way the app throttles a device on the network
+(one attempt a second, ten wrong codes and the address is refused until
+restart, ten attempts a second over all addresses), and a connection that
+has not paired is closed after a minute without a word from it.
+Permissions are enforced from the `scope` each member carries in
+docs/api/: a device without the scope gets forbidden, like the app; both
+streams need the phone permission. Revoking a device (unpair,
+`fake.revokeTokens()`) closes its connections after the reply.
+
+Not here, so check a client against a real `octave --headless` as well
+(sdk/python/tests/test_protocol_spec.py): the WebSocket transport and the
+HTTP routes (/art, /export), so browser clients cannot use this fake;
+`throttleMs`; the limits per connection (line length, connections per
+address, the ops-per-second budget, except through fake.rateLimitNext);
+the `dropped`, `streamConfig` and `streamDropped` events.
 
 A list model to practise on, also on the `fake` object (the app has none
 today): `fake.items`, empty (get, rows, model events).
@@ -28,14 +43,16 @@ Faults on demand, through a `fake` object the real app does not have:
 `fake.rateLimitNext(n)` answers the next n ops on every connection with
 rateLimited (retryAfterMs 50); `fake.setForbidden(true)` makes every set /
 call forbidden; `fake.revokeTokens()` makes every token unknown (the next
-hello with one gets tokenRejected); `fake.setValue(object, property, value)`
-changes a canned property and notifies subscribers; `fake.emitSignal(object,
-name, args)` fires a signal.
+hello with one gets tokenRejected) and closes the connections of paired
+devices; `fake.showPairingCode(code)` shows a pairing code again, as
+Settings > Service > Pair a device does; `fake.setValue(object, property,
+value)` changes a canned property and notifies subscribers;
+`fake.emitSignal(object, name, args)` fires a signal.
 
 Every reply and event is validated against protocol.json on the way out
 (tools/api/jsonschema_lite.py), so the fake cannot drift from the spec; a
 violation is a server error, never a wrong message. Not a security model:
-the pairing code is fixed and tokens live in memory.
+the pairing code is chosen on the command line and tokens live in memory.
 """
 import argparse
 import itertools
@@ -62,6 +79,7 @@ FAKE_OBJECT = {
         {"name": "rateLimitNext", "kind": "invokable", "params": [{"name": "count", "type": "int"}], "returns": "", "scope": "read"},
         {"name": "setForbidden", "kind": "invokable", "params": [{"name": "on", "type": "bool"}], "returns": "", "scope": "read"},
         {"name": "revokeTokens", "kind": "invokable", "params": [], "returns": "", "scope": "read"},
+        {"name": "showPairingCode", "kind": "invokable", "params": [{"name": "code", "type": "QString"}], "returns": "", "scope": "read"},
         {"name": "setValue", "kind": "invokable", "params": [{"name": "object", "type": "QString"}, {"name": "property", "type": "QString"}, {"name": "value", "type": "QVariant"}], "returns": "", "scope": "read"},
         {"name": "emitSignal", "kind": "invokable", "params": [{"name": "object", "type": "QString"}, {"name": "name", "type": "QString"}, {"name": "args", "type": "QVariantList"}], "returns": "", "scope": "read"},
     ],
@@ -79,7 +97,15 @@ class Reject(Exception):
 
 
 class FakeServer:
-    def __init__(self, api_dir=DEFAULT_API, port=9876, host="127.0.0.1", untrusted=False, code="123456"):
+    # The app's rules (src/service/servicepairing.h, commandserver.h)
+    CODE_LIFE = 120.0             # a pairing code is good for two minutes
+    ATTEMPT_INTERVAL = 1.0        # between attempts from one address
+    MAX_FAILURES_PER_PEER = 10    # wrong codes per address, until restart
+    MAX_ATTEMPTS_PER_SECOND = 10  # over every address
+    UNTRUSTED_IDLE = 60.0         # a connection that has not paired, silent this long, is closed
+
+    def __init__(self, api_dir=DEFAULT_API, port=9876, host="127.0.0.1", untrusted=False, code="123456",
+                 code_life=CODE_LIFE, untrusted_idle=UNTRUSTED_IDLE, attempt_interval=ATTEMPT_INTERVAL):
         self.api_dir = api_dir
         with open(os.path.join(api_dir, "protocol.json"), encoding="utf-8") as fh:
             self.spec = json.load(fh)
@@ -96,7 +122,14 @@ class FakeServer:
         self.version = self.spec["protocolVersion"]
         self.host, self.port = host, port
         self.untrusted = untrusted
-        self.code = code
+        self.code = code            # "" once used or expired: single use
+        self.code_life = code_life  # seconds; 0 = never expires
+        self.code_shown = time.monotonic()
+        self.untrusted_idle = untrusted_idle
+        self.attempt_interval = attempt_interval
+        self.last_attempt = {}      # address -> monotonic time of its last pairing attempt
+        self.failures = {}          # address -> wrong codes
+        self.window_start, self.window_attempts = 0.0, 0
         self.lock = threading.RLock()
         self.tokens = {}            # token -> scopes
         self.tickets = set()
@@ -155,8 +188,69 @@ class FakeServer:
                 store["SPEED"] = round(30 + 20 * __import__("math").sin(t / 3), 1)
                 values = dict(store)
                 conns = list(self.connections)
+            now = time.monotonic()
             for c in conns:
+                # An untrusted client gets a minute of silence, then it is closed (commandserver.cpp)
+                if not c.trusted and self.untrusted_idle and now - c.last_heard > self.untrusted_idle:
+                    c.close()
+                    continue
                 c.params_changed(values)
+
+    # ── pairing, by the app's rules (servicepairing.cpp) ──────────────────
+
+    def show_pairing_code(self, code):
+        with self.lock:
+            self.code = str(code)
+            self.code_shown = time.monotonic()
+
+    def pair(self, conn, code, asked):
+        known = self.spec["$defs"]["scope"]["enum"]
+        for s in asked:      # a bad request costs no attempt and doesn't use the code
+            if s not in known:
+                raise Reject(f"unknown permission {s} (known: {', '.join(known)})")
+        with self.lock:
+            now = time.monotonic()
+            # Guesses are limited for connections that are not this device's own; --untrusted
+            # stands for "over the network", so that is when the limits apply
+            limited = self.untrusted
+            if limited:
+                if self.failures.get(conn.peer, 0) >= self.MAX_FAILURES_PER_PEER:
+                    raise Reject("too many wrong codes from this address")
+                last = self.last_attempt.get(conn.peer)
+                if last is not None and now - last < self.attempt_interval:
+                    raise Reject("too fast, try again in a second")
+                if now - self.window_start >= 1.0:
+                    self.window_start, self.window_attempts = now, 0
+                if self.window_attempts >= self.MAX_ATTEMPTS_PER_SECOND:
+                    raise Reject("too many pairing attempts right now, try again in a second")
+                self.window_attempts += 1
+                self.last_attempt[conn.peer] = now
+            if not self.code or (self.code_life and now - self.code_shown >= self.code_life):
+                raise Reject("no pairing code is showing on the head unit")
+            if str(code) != self.code:
+                if limited:
+                    self.failures[conn.peer] = self.failures.get(conn.peer, 0) + 1
+                raise Reject("wrong code")
+            self.code = ""   # single use
+            scopes = ["full"] if not asked or "full" in asked else sorted({"read", *asked})
+            token = secrets.token_hex(32)
+            self.tokens[token] = scopes
+        return token, scopes
+
+    def revoke(self, tokens):
+        """Forget these tokens and, as the app does, close the connections of
+        their devices: a moment later, so the reply to the op that asked goes
+        out first (the app queues the revocation the same way)."""
+        with self.lock:
+            for t in tokens:
+                self.tokens.pop(t, None)
+            self.tickets.clear()
+            doomed = [c for c in self.connections if c.token in tokens]
+
+        def close():
+            for c in doomed:
+                c.close()
+        threading.Timer(0.05, close).start()
 
     def ms(self):
         return int((time.monotonic() - self._t0) * 1000)
@@ -231,7 +325,10 @@ class FakeServer:
             self.forbid_all = bool(args[0])
             return None
         if key == "fake.revokeTokens":
-            self.tokens.clear()
+            self.revoke(list(self.tokens))
+            return None
+        if key == "fake.showPairingCode":
+            self.show_pairing_code(args[0])
             return None
         if key == "fake.setValue":
             self.set_value(str(args[0]), str(args[1]), args[2])
@@ -246,6 +343,11 @@ class Connection:
     def __init__(self, server, sock):
         self.server = server
         self.sock = sock
+        try:
+            self.peer = sock.getpeername()[0]
+        except OSError:
+            self.peer = ""
+        self.last_heard = time.monotonic()
         self.file = sock.makefile("rb")
         self.wlock = threading.Lock()
         self.trusted = not server.untrusted
@@ -301,6 +403,7 @@ class Connection:
                 line = self.file.readline()
                 if not line:
                     break
+                self.last_heard = time.monotonic()
                 if not line.strip():
                     continue
                 self.send(self.handle(line), self.server.spec["reply"]["schema"])
@@ -436,8 +539,9 @@ class Connection:
                 raise Reject("subscribe needs signals or properties")
         sub = next(self.ids)
         self.subs[sub] = {"object": obj_name, "properties": props, "signals": sigs}
-        # The current values follow the reply at once (the reply goes out first: handle() returns it,
-        # then this runs on the same thread before the next line is read)
+        # The current values follow the reply at once. The reply has to go out first and handle()
+        # only returns it, so the values are sent from a timer thread 10 ms later (the app sends
+        # them on the connection's own thread right after the reply)
         threading.Timer(0.01, self._initial, (sub,)).start()
         return {"sub": sub}
 
@@ -466,10 +570,12 @@ class Connection:
     def op_stream(self, args):
         name = f"{args.get('object')}.{args.get('name')}"
         self.server.object(args.get("object", ""))
+        # A stream whose owner is in the phone scope (the phone mirror, Android Auto: a phone's
+        # screen either way) needs that permission, checked before the name as in servicebridge.cpp
+        if args.get("object") in ("phoneMirrorManager", "androidAutoManager"):
+            self.server.check_scope(self, args.get("object", ""), {"name": args.get("name"), "scope": "phone"})
         if name not in self.server.spec["streams"]["names"]:
             raise Reject(f"{args.get('object')} has no stream {args.get('name')}")
-        if name == "phoneMirrorManager.video":
-            self.server.check_scope(self, "phoneMirrorManager", {"name": "video", "scope": "phone"})
         sid = next(self.stream_ids)
         self.streams[sid] = name
         fmt = self.server.spec["streams"]["names"][name]["format"]
@@ -496,24 +602,14 @@ class Connection:
         return True
 
     def op_pair(self, args):
-        if str(args.get("code")) != self.server.code:
-            raise Reject("wrong code")
-        asked = list(args.get("scopes") or [])
-        known = self.server.spec["$defs"]["scope"]["enum"]
-        for s in asked:
-            if s not in known:
-                raise Reject(f"unknown scope {s}")
-        scopes = ["full"] if not asked or "full" in asked else sorted({"read", *asked})
-        token = secrets.token_hex(32)
-        self.server.tokens[token] = scopes
+        token, scopes = self.server.pair(self, args.get("code"), list(args.get("scopes") or []))
         self.token, self.trusted, self.scopes = token, True, scopes
         return {"token": token, "scopes": scopes}
 
     def op_unpair(self, args):
         if not self.token:
             raise Reject("this connection is not a paired device")
-        self.server.tokens.pop(self.token, None)
-        self.token = None
+        self.server.revoke([self.token])   # closes this device's connections, this one too, after the reply
         return True
 
     def op_mediaTicket(self, args):
@@ -549,9 +645,11 @@ def main():
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--api", default=DEFAULT_API, help="the docs/api directory to serve")
     parser.add_argument("--untrusted", action="store_true", help="connections start untrusted, as over the network")
-    parser.add_argument("--code", default="123456", help="the pairing code")
+    parser.add_argument("--code", default="123456", help="the pairing code (single use)")
+    parser.add_argument("--code-life", type=float, default=FakeServer.CODE_LIFE, metavar="SECONDS",
+                        help="how long the code is good for from start, as in the app (default 120; 0 = for ever)")
     args = parser.parse_args()
-    server = FakeServer(args.api, args.port, args.host, args.untrusted, args.code).start()
+    server = FakeServer(args.api, args.port, args.host, args.untrusted, args.code, code_life=args.code_life).start()
     print(f"listening on {server.port}", flush=True)
     try:
         while True:

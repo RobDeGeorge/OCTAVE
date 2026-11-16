@@ -102,22 +102,41 @@ protected:
                 refused.abort();
             return;
         }
+        // Every client is a thread: past the cap, refuse at the door. The
+        // last loopbackReserve slots are this device's own: connections from
+        // the network can fill the rest and no more, so a flood from outside
+        // never locks out the screen's own tools
+        const bool local = m_owner->slotIsLocal(peerOf(fd));
         {
-            // Every client is a thread: past the cap, refuse at the door
             QMutexLocker l(&m_lock);
             int live = 0;
             for (QThread *c : std::as_const(m_clients))
                 live += c->isFinished() ? 0 : 1;
-            if (live >= m_owner->limits().maxConnections) {
+            const CommandServer::Limits &limits = m_owner->limits();
+            const int forNetwork = qMax(0, limits.maxConnections - qMax(0, limits.loopbackReserve));
+            const bool full = live >= limits.maxConnections;
+            if (full || (!local && m_networkLive >= forNetwork)) {
+                const int network = m_networkLive;
                 l.unlock();
                 QTcpSocket refused;
                 if (refused.setSocketDescriptor(fd))
                     refused.abort();
-                qCWarning(lcCommand) << "connection refused: already" << live << "clients";
+                if (full)
+                    qCWarning(lcCommand) << "connection refused: already" << live << "clients";
+                else
+                    qCWarning(lcCommand) << "connection refused: already" << network << "clients from the network";
                 return;
             }
+            if (!local)
+                ++m_networkLive;
         }
-        QThread *t = QThread::create([this, fd] { serve(fd); });
+        QThread *t = QThread::create([this, fd, local] {
+            serve(fd);
+            if (!local) {
+                QMutexLocker l(&m_lock);
+                --m_networkLive;
+            }
+        });
         t->setObjectName(QStringLiteral("cmd-client"));
         {
             QMutexLocker l(&m_lock);
@@ -440,7 +459,7 @@ private:
                 try {
                     r = route(request.path);
                 } catch (const CommandError &e) {
-                    r = StaticFiles::Reply{503, "Service Unavailable", "text/plain", QByteArray(e.what()) + '\n'};
+                    r = StaticFiles::Reply{503, "Service Unavailable", "text/plain", QByteArray(e.what()) + '\n', {}};
                 }
                 sock.write(Ws::httpResponse(r.status, r.reason, r.contentType, r.body,
                                             Ws::webRootCsp(request.headers.value("host")), r.headers));
@@ -452,7 +471,7 @@ private:
             // A frontend's own files (--web-root), same-origin with the socket
             const StaticFiles::Reply r = request.method == "GET"
                 ? StaticFiles::serve(m_owner->webRoot(), request.path)
-                : StaticFiles::Reply{405, "Method Not Allowed", "text/plain", "GET only\n"};
+                : StaticFiles::Reply{405, "Method Not Allowed", "text/plain", "GET only\n", {}};
             sock.write(Ws::httpResponse(r.status, r.reason, r.contentType, r.body,
                                         Ws::webRootCsp(request.headers.value("host"))));
             flush(sock);
@@ -535,6 +554,7 @@ private:
     QMutex m_lock;
     QList<QThread *> m_clients;
     QHash<QString, int> m_perAddress;   // live connections per non-loopback address
+    int m_networkLive = 0;              // live connections that are not this device's (m_lock)
     struct ConnectBucket {
         double tokens;
         qint64 lastNs;

@@ -601,9 +601,12 @@ Rectangle {
                 anchors.topMargin: -width / 8
                 anchors.rightMargin: -width / 8
 
+                // A few pulses to catch the eye, then a steady dot: pulsing
+                // for as long as an update was available (days) kept the
+                // window repainting and the render loop from ever idling
                 SequentialAnimation on opacity {
                     running: navSlot.modelData === "settings" && networkManager && networkManager.updateStatus === "update-available"
-                    loops: Animation.Infinite
+                    loops: 5
                     NumberAnimation { from: 1.0; to: 0.3; duration: 1200 }
                     NumberAnimation { from: 0.3; to: 1.0; duration: 1200 }
                 }
@@ -614,10 +617,18 @@ Rectangle {
             MouseArea {
                 parent: navSlot
                 anchors.fill: parent
+                // Settings has a long-press (its visibility popup), so it
+                // opens on release; opening on press, as the others do for
+                // speed, had already left for Settings when the hold fired
                 onPressAndHold: if (navSlot.modelData === "settings") settingsVisibilityPopup.open()
                 onPressed: {
                     navBounce.restart()
-                    bottomBar.navAfterFrame(bottomBar.navButtons[navSlot.modelData].open)
+                    if (navSlot.modelData !== "settings")
+                        bottomBar.navAfterFrame(bottomBar.navButtons[navSlot.modelData].open)
+                }
+                onClicked: function(mouse) {
+                    if (navSlot.modelData === "settings" && !mouse.wasHeld)
+                        bottomBar.navAfterFrame(bottomBar.navButtons[navSlot.modelData].open)
                 }
             }
         }

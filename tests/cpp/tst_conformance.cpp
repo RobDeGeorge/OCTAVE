@@ -183,7 +183,9 @@ private slots:
                 }
             }
         }
-        QVERIFY2(checked > 130, qPrintable(QString::number(checked)));   // the scan still finds the handlers
+        // The scan still finds the handlers: 122 after SettingsToggle stopped
+        // needing a re-sync Connections per toggle (it was 150-odd before)
+        QVERIFY2(checked > 100, qPrintable(QString::number(checked)));
         QVERIFY2(offenders.isEmpty(), qPrintable("Connections handlers for signals the service doesn't publish: "
                                                  + offenders.join("; ")));
     }

@@ -230,7 +230,7 @@ func (s *State) DTCs() ([]DTC, bool, bool) {
 	return append([]DTC(nil), s.dtcs...), s.dtcKnown, s.mil
 }
 
-// SetMIL records the lamp read with get_mil_status.
+// SetMIL records the lamp read with getMilStatus.
 func (s *State) SetMIL(on bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

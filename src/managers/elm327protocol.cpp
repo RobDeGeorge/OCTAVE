@@ -358,6 +358,94 @@ bool ELM327Protocol::isCanProtocol(const QString &dpn)
     return p.size() == 1 && QStringLiteral("6789ABC").contains(p);
 }
 
+QByteArray ELM327Protocol::formatDataRequest(int mode, int id)
+{
+    return QStringLiteral("%1%2\r")
+        .arg(mode, 2, 16, QLatin1Char('0'))
+        .arg(id, mode == 0x22 ? 4 : 2, 16, QLatin1Char('0'))
+        .toUpper()
+        .toLatin1();
+}
+
+std::optional<QVector<uint8_t>> ELM327Protocol::parseDataResponse(const QStringList &lines, int mode, int id)
+{
+    const QString prefix = QStringLiteral("%1%2")
+                               .arg(mode + 0x40, 2, 16, QLatin1Char('0'))
+                               .arg(id, mode == 0x22 ? 4 : 2, 16, QLatin1Char('0'))
+                               .toUpper();
+    for (const QString &msg : splitMessages(lines)) {
+        if (!msg.startsWith(prefix))
+            continue;
+        QVector<uint8_t> data;
+        for (int i = prefix.size(); i + 1 < msg.size(); i += 2)
+            data.append(static_cast<uint8_t>(msg.mid(i, 2).toUInt(nullptr, 16)));
+        return data;
+    }
+    return std::nullopt;
+}
+
+QByteArray ELM327Protocol::defaultHeader(const QString &dpn)
+{
+    QString p = dpn.trimmed().toUpper();
+    if (p.startsWith(QLatin1Char('A')) && p.size() == 2)
+        p = p.mid(1);   // "A6": chosen by the automatic search
+    if (p.size() != 1)
+        return QByteArray();
+    switch (p.at(0).toLatin1()) {
+    case '1': return QByteArrayLiteral("616AF1");
+    case '2':
+    case '3': return QByteArrayLiteral("686AF1");
+    case '6':
+    case '8': return QByteArrayLiteral("7DF");
+    case '7':
+    case '9': return QByteArrayLiteral("DB33F1");
+    default: return QByteArray();
+    }
+}
+
+std::optional<BusFrame> ELM327Protocol::parseMonitorLine(const QByteArray &line, bool can)
+{
+    QByteArray hex = line.trimmed().toUpper();
+    hex.replace(' ', "");
+    if (hex.isEmpty())
+        return std::nullopt;
+    for (const char c : hex) {
+        if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F')))
+            return std::nullopt;
+    }
+    // An 11-bit id is three digits, so its lines have an odd length; a
+    // 29-bit id is four bytes and every older bus prints whole bytes
+    int idDigits;
+    if (can)
+        idDigits = hex.size() % 2 ? 3 : 8;
+    else if (hex.size() % 2 == 0)
+        idDigits = 6;
+    else
+        return std::nullopt;
+    const int dataBytes = (hex.size() - idDigits) / 2;
+    if (hex.size() < idDigits || (can && dataBytes > 8))
+        return std::nullopt;
+    BusFrame frame;
+    frame.idDigits = static_cast<quint8>(idDigits);
+    frame.id = hex.left(idDigits).toUInt(nullptr, 16);
+    if (can && frame.id > (idDigits == 3 ? 0x7FFu : 0x1FFFFFFFu))
+        return std::nullopt;
+    frame.data = QByteArray::fromHex(hex.mid(idDigits));
+    return frame;
+}
+
+QByteArray ELM327Protocol::busFilter(const QString &text)
+{
+    const QByteArray f = text.trimmed().toUpper().toLatin1();
+    if (f.size() != 3 && f.size() != 8)
+        return QByteArray();
+    for (const char c : f) {
+        if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || c == 'X'))
+            return QByteArray();
+    }
+    return f;
+}
+
 std::optional<ParsedResponse> ELM327Protocol::parseResponse(const QString &raw)
 {
     QString line = raw.trimmed();
@@ -501,15 +589,31 @@ QString ELM327Protocol::decodeDtc(int byte1, int byte2)
 // Split an ELM327 reply (headers off, spaces off) into one hex string per
 // ECU message. CAN multi-frame replies ("00A", "0:4304...", "1:...") are
 // joined into a single message and trimmed to the announced byte count.
+//
+// Two ECUs can answer one request with a multi-frame reply each, and the
+// adapter prints their frames in the order they came off the bus:
+// "00A", "0:...", "00E", "0:...", "1:...", "1:...". With headers off a line
+// does not say whose it is, so each frame goes by its sequence digit to a
+// message that is waiting for that digit: a byte count opens a message, a
+// message that has its bytes is closed, and a frame nobody is waiting for is
+// dropped, never appended to whatever came last. When two messages wait for
+// the same digit the earlier-opened one takes the first frame (ECUs keep
+// their order on the bus far more often than not); that case cannot be told
+// apart without headers.
 QStringList ELM327Protocol::splitMessages(const QStringList &lines, bool *isMultiFrame)
 {
     static const QRegularExpression frameRe(QStringLiteral("^([0-9A-F]):([0-9A-F]*)$"));
     static const QRegularExpression hexRe(QStringLiteral("^[0-9A-F]+$"));
 
-    QStringList messages;
-    QString multi;
-    int multiLen = -1;
+    struct Message {
+        QString hex;
+        int bytes = -1;      // announced length; -1 = a single line, or frames with no byte count
+        int nextFrame = -1;  // the sequence digit it waits for; -1 = not a multi-frame message
+        bool done() const { return nextFrame < 0 || (bytes > 0 && hex.size() >= bytes * 2); }
+    };
+    QList<Message> found;   // in the order each began
     bool sawFrame = false;
+    bool strayFrame = false;
 
     for (QString line : lines) {
         line.remove(QLatin1Char(' '));
@@ -517,26 +621,60 @@ QStringList ELM327Protocol::splitMessages(const QStringList &lines, bool *isMult
         const auto m = frameRe.match(line);
         if (m.hasMatch()) {
             sawFrame = true;
-            multi += m.captured(2);
+            const int digit = m.captured(1).toInt(nullptr, 16);
+            Message *taker = nullptr;
+            for (Message &msg : found) {
+                if (msg.done() || msg.nextFrame % 16 != digit)
+                    continue;
+                // A first frame belongs to a message that has none yet,
+                // before one whose count came round to 0 again
+                if (!taker || (digit == 0 && taker->nextFrame != 0 && msg.nextFrame == 0))
+                    taker = &msg;
+                if (digit != 0 || taker->nextFrame == 0)
+                    break;
+            }
+            if (!taker && digit == 0) {
+                // A first frame with no byte count before it
+                Message opened;
+                opened.nextFrame = 0;
+                found.append(opened);
+                taker = &found.last();
+            }
+            if (!taker) {
+                strayFrame = true;
+                continue;
+            }
+            taker->hex += m.captured(2);
+            ++taker->nextFrame;
             continue;
         }
         if (!hexRe.match(line).hasMatch())
             continue;   // SEARCHING..., NO DATA, echo, OK
+        Message msg;
         if (line.size() == 3) {
             // Byte-count header of a CAN multi-frame reply
-            if (!multi.isEmpty()) {
-                messages.append(multiLen > 0 ? multi.left(multiLen * 2) : multi);
-                multi.clear();
-            }
             bool ok = false;
-            multiLen = line.toInt(&ok, 16);
-            if (!ok) multiLen = -1;
-            continue;
+            msg.bytes = line.toInt(&ok, 16);
+            if (!ok)
+                msg.bytes = -1;
+            msg.nextFrame = 0;
+        } else {
+            msg.hex = line;
         }
-        messages.append(line);
+        found.append(msg);
     }
-    if (!multi.isEmpty())
-        messages.append(multiLen > 0 ? multi.left(multiLen * 2) : multi);
+
+    QStringList messages;
+    for (const Message &msg : std::as_const(found)) {
+        if (msg.hex.isEmpty())
+            continue;
+        // Short of its byte count in a reply that had a frame out of place:
+        // the hole may be in this one. (Short with every frame in order is
+        // a reply cut off by the adapter's timeout: what came is still true)
+        if (strayFrame && msg.nextFrame >= 0 && msg.bytes > 0 && msg.hex.size() < msg.bytes * 2)
+            continue;
+        messages.append(msg.bytes > 0 ? msg.hex.left(msg.bytes * 2) : msg.hex);
+    }
     if (isMultiFrame)
         *isMultiFrame = sawFrame;
     return messages;

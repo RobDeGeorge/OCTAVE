@@ -191,11 +191,11 @@ thickness: isVertical
 }</code></pre>
 
         <h3>Volume Routing: VolumeController</h3>
-        <p>The bar never computes the volume curve and never calls <code>mediaManager.setVolume()</code> directly. Every change goes through <code>volumeController.applyVolume(percent)</code>, a QML context property registered in <span class="file-path">src/main.cpp</span>. The curve is quadratic: <code>linear = (percent / 100)&sup2;</code>.</p>
+        <p>The bar never computes the volume curve and never calls <code>mediaManager.setVolume()</code> directly. Every change goes through <code>volumeController.applyVolume(percent)</code>, a QML context property registered in <span class="file-path">src/appcore.cpp</span>. The curve is quadratic: <code>linear = (percent / 100)&sup2;</code>.</p>
 
         <p><code>VolumeController</code> (<span class="file-path">src/managers/volumecontroller.{h,cpp}</span>) clamps the percent to 0&ndash;100, calls <code>SettingsManager::setCurrentVolume(percent)</code>, then emits <code>volumeApplied(percent, linear)</code>. <code>AppCore::wireVolume</code> (<span class="file-path">src/appcore.cpp</span>) connects that signal to <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code>, Android Auto and AirPlay, <code>spotifyManager.setVolume(percent)</code> while Spotify is the source (the Spotify device's own volume) and (desktop builds) <code>esp32VolumeManager.send_volume_update(percent)</code>, so the ESP32 LED ring gets the raw percent and the audio outputs get the curved value.</p>
 
-        <p><span class="file-path">src/main.cpp</span> applies the startup volume to every output before QML loads. The bar reads the level back from <code>volumeController.percent</code> (<code>bottomBar.volumePercent</code> is a read-only binding to it), and a <code>Connections</code> on <code>volumeController.percentChanged</code> moves the slider to a level set anywhere else (knob, gesture, media room), but only while the slider is not being dragged (<code>!volumeSlider.pressed</code>). No curve math happens in QML.</p>
+        <p><span class="file-path">src/appcore.cpp</span> applies the startup volume to every output before QML loads. The bar reads the level back from <code>volumeController.percent</code> (<code>bottomBar.volumePercent</code> is a read-only binding to it), and a <code>Connections</code> on <code>volumeController.percentChanged</code> moves the slider to a level set anywhere else (knob, gesture, media room), but only while the slider is not being dragged (<code>!volumeSlider.pressed</code>). No curve math happens in QML.</p>
 
         <div class="info-box info">
           <div class="info-box-title">One Curve, One Entry Point</div>
@@ -320,7 +320,7 @@ thickness: isVertical
         <!-- Shuffle -->
         <h2 id="shuffle">Shuffle State</h2>
 
-        <p><code>isShuffleEnabled</code> on the bar root is the single source of truth for the shuffle button. It is initialised from <code>mediaManager.is_shuffled()</code> and kept current by <code>mediaManager.shuffleStateChanged(enabled)</code>. While the phone has the controls the shuffle button does nothing (the phone's shuffle belongs to its app).</p>
+        <p><code>isShuffleEnabled</code> on the bar root is the single source of truth for the shuffle button. It is initialised from <code>mediaManager.isShuffled()</code> and kept current by <code>mediaManager.shuffleStateChanged(enabled)</code>. While the phone has the controls the shuffle button does nothing (the phone's shuffle belongs to its app).</p>
 
         <p>When active, the button background becomes <code>bottomBarToggleShade</code> (corner radius 12&nbsp;% of its width) and the icon is tinted <code>bottomBarActiveToggleButton</code> (the accent). When inactive the icon uses <code>bottomBarShuffleButton</code>, the per-theme <code>bottombar.shuffle</code> colour.</p>
 
@@ -334,7 +334,7 @@ thickness: isVertical
           <tbody>
             <tr><td>ESP32 rotary encoder</td><td><code>esp32VolumeManager.volumeChangeRequested(delta)</code> &rarr; <code>applyVolume(currentVolume + change)</code> (wired in <span class="file-path">src/appcore.cpp</span>). The knob's mute button calls <code>volumeController.toggleMute()</code> and the bar's icon follows <code>effectivelyMutedChanged</code>.</td></tr>
             <tr><td>PAJ7620U2 gesture sensor</td><td>Up/down gestures call <code>applyVolume(currentVolume &plusmn; step)</code> with <code>gestureVolumeStep</code>.</td></tr>
-            <tr><td>Startup</td><td><code>currentVolume</code> (from <code>startUpVolume</code>) is applied once by <span class="file-path">src/main.cpp</span>.</td></tr>
+            <tr><td>Startup</td><td><code>currentVolume</code> (from <code>startUpVolume</code>) is applied once by <span class="file-path">src/appcore.cpp</span>.</td></tr>
           </tbody>
         </table>
 
@@ -455,6 +455,8 @@ thickness: isVertical
             </tr>
           </tbody>
         </table>
+
+        <p><strong>Method names:</strong> this page uses the camelCase names of the manager methods (<code>nextTrack</code>). The older snake_case name of each (<code>next_track</code>) still works through protocol&nbsp;4 and goes in protocol&nbsp;5; the <a href="api-reference.html">API reference</a> lists them.</p>
 
         <div class="related-pages">
           <h3>Related Pages</h3>

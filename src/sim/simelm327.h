@@ -39,8 +39,12 @@ public:
     bool waitForReadyRead(int msecs) override;
 
     // Reply text for one command (no prompt), as the adapter would print it
-    // with echo, spaces and headers off. Public for tests.
+    // with echo off. A reply of several frames comes with its ids when
+    // headers are on (ATH1); writeData() adds the id to a one-line reply.
+    // Public for tests.
     QByteArray respond(const QByteArray &command);
+
+    void close() override;
 
 protected:
     qint64 readData(char *data, qint64 maxSize) override;
@@ -55,6 +59,7 @@ private:
     int latencyMs(const QByteArray &command) const;
     QByteArray mode01(int pid);
     QByteArray formatMessage(const QByteArray &payload) const;
+    QByteArray replyId() const;
     bool dropLink();
 
     std::shared_ptr<CarState> m_state;
@@ -63,7 +68,23 @@ private:
     QList<Pending> m_pending;
     QElapsedTimer m_clock;
     bool m_spaces = true;    // ATS0 turns them off; the worker always sends it
+    bool m_echo = true;      // ATE0 turns it off; until then each command comes back first
     bool m_probed = false;   // a PID has been answered since the last ATZ
+    QByteArray m_header;     // ATSH's, empty for the default (7DF)
+
+    // "ATMA": the bus's broadcast traffic, printed until any byte arrives.
+    // Six made-up messages of an 11-bit, 500 kbit/s CAN bus that follow the
+    // car (0C9 engine speed and pedal every 20 ms ... 120 odometer every
+    // second). Unfiltered, the adapter's buffer fills every kMonitorBuffer
+    // messages, as a real one's does on a busy bus.
+    static constexpr int kMonitorBuffer = 500;
+    void pumpMonitor();
+    bool m_headersOn = false;      // ATH1
+    bool m_monitoring = false;
+    QByteArray m_receiveFilter;    // ATCRA's, X = any digit; empty for all
+    qint64 m_monitorAtMs = 0;      // traffic is generated up to here
+    int m_monitorSent = 0;
+    bool m_unreset = false;        // came up listening (LinkSettings::leftMonitoring) and has had no ATZ since
 };
 
 } // namespace OctaveSim

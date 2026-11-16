@@ -10,7 +10,9 @@
 #include <QProcess>
 #include <QStandardPaths>
 
+#include <cstdio>
 #include <cstdlib>
+#include <ctime>
 
 #ifdef Q_OS_LINUX
 #include <sys/prctl.h>
@@ -92,8 +94,8 @@ void UiWatchdog::stop()
 void UiWatchdog::loop()
 {
     bool stalled = false;
-    bool dumped = false;
-    bool graceLogged = false;
+    [[maybe_unused]] bool dumped = false;        // these two: Linux only
+    [[maybe_unused]] bool graceLogged = false;
     bool browserPaused = false;   // wasm: the stall is a hidden page
     qint64 stallStart = 0;
     while (m_running.load()) {
@@ -154,11 +156,20 @@ void UiWatchdog::loop()
                 }
                 continue;
             }
-            qCCritical(lcWatchdog) << "UI thread blocked for"
-                                   << (m_clock.elapsed() - m_lastPong.load()) / 1000.0
-                                   << "s; aborting so the launcher restarts OCTAVE";
-            // No OctaveLog::flush(): it locks a mutex the hung GUI thread may
-            // hold, and every log line is already flushed as it is written.
+            // Not through Qt's logging: that takes the log lock, which the
+            // hung GUI thread may be holding, and this line must not be
+            // what keeps the restart from happening. (No OctaveLog::flush()
+            // either, for the same reason; every line is flushed as written)
+            char line[200];
+            const std::time_t t = std::time(nullptr);
+            std::tm utc{};
+            gmtime_r(&t, &utc);
+            char stamp[32];
+            std::strftime(stamp, sizeof stamp, "%Y-%m-%d %H:%M:%SZ", &utc);
+            std::snprintf(line, sizeof line,
+                          "%s | ERROR   | octave.ui_watchdog | - | UI thread blocked for %.1f s; aborting so the launcher restarts OCTAVE\n",
+                          stamp, double(m_clock.elapsed() - m_lastPong.load()) / 1000.0);
+            OctaveLog::writeDirect(line);
             std::abort();
         }
 #endif
@@ -172,6 +183,13 @@ QString UiWatchdog::dumpStacks()
     if (gdb.isEmpty()) {
         qCWarning(lcWatchdog) << "gdb not installed; no stack dump for this hang";
         return {};
+    }
+    // Keep the newest few: nothing else ever removed these
+    {
+        QDir logs(OctaveLog::logDir());
+        const QStringList old = logs.entryList({QStringLiteral("hang-*.txt")}, QDir::Files, QDir::Name);
+        for (int i = 0; i < old.size() - 9; ++i)   // names sort by time; this dump makes ten
+            logs.remove(old.at(i));
     }
     const QString path = OctaveLog::logDir() + QStringLiteral("/hang-")
         + QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss")) + QStringLiteral(".txt");

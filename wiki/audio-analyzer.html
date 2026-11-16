@@ -270,20 +270,20 @@ std::vector&lt;<span class="kw">float</span>&gt; allValues;
     }
 }</code></pre>
 
-        <p>The change detection prevents a signal (and 96 QML property writes) when the position is still inside the same chunk. A position past the last analysed chunk (beyond the 3&nbsp;h cap, or the sub-chunk tail of a track) yields 96 zeros rather than holding the last chunk. <code>set_active(false)</code> emits a list of 96 zeros to clear the display; <code>clear()</code> drops the data and remembered file.</p>
+        <p>The change detection prevents a signal (and 96 QML property writes) when the position is still inside the same chunk. A position past the last analysed chunk (beyond the 3&nbsp;h cap, or the sub-chunk tail of a track) yields 96 zeros rather than holding the last chunk. <code>setActive(false)</code> emits a list of 96 zeros to clear the display; <code>clear()</code> drops the data and remembered file.</p>
 
         <!-- Live phone audio -->
         <h2 id="live-audio">Live Phone Audio</h2>
-        <p><span class="file-path">src/main.cpp</span> connects <code>phoneMirrorManager.audioPlayed</code> (forwarded from <code>ScrcpyClient</code>) to <code>feed_live_pcm(pcm, bufferedMs)</code>.
+        <p><span class="file-path">src/appcore.cpp</span> connects <code>phoneMirrorManager.audioPlayed</code> (forwarded from <code>ScrcpyClient</code>) to <code>feedLivePcm(pcm, bufferedMs)</code>.
           The input is signed 16-bit little-endian PCM at 48 kHz, stereo, just written to the phone-audio sink; <code>bufferedMs</code> is how much the sink still holds ahead of it.
-          <code>set_live(true)</code> selects this mode (main.cpp sets it from <code>nowPlaying.source</code>); the analyzer runs <code>update_live()</code> itself every <code>kLiveFrameMs</code> (50&nbsp;ms) while a view is active and the phone plays. The window is 100&nbsp;ms, so faster frames would mostly recompute the same samples; this used to be MediaRoom's 16&nbsp;ms timer (60 FFTs a second on the GUI thread).</p>
+          <code>setLive(true)</code> selects this mode (appcore.cpp sets it from <code>nowPlaying.source</code>); the analyzer runs <code>updateLive()</code> itself every <code>kLiveFrameMs</code> (50&nbsp;ms) while a view is active and the phone plays. The window is 100&nbsp;ms, so faster frames would mostly recompute the same samples; this used to be MediaRoom's 16&nbsp;ms timer (60 FFTs a second on the GUI thread).</p>
         <p>The feed is mixed to mono, decimated to 8 kHz and kept in a one-second ring buffer. Each update analyses a
           100 ms window ending near the sample currently being heard, using the sink backlog and elapsed time since the
           last feed. It uses the same Hann window, frequency-band layout and 0–8 quantization as file analysis, but an
           adaptive reference: the frame's 95th percentile, a one-second exponential release, a 0.85 scale and a floor of
           1.0. These operations run on the GUI thread. No PCM for more than 250 ms, or insufficient samples, produces zeros.</p>
         <p>Only changed levels emit <code>fftDataChanged</code>. Switching live mode clears the displayed levels;
-          <code>set_active(false)</code> also clears them. <code>is_analyzed()</code> reports file-analysis availability,
+          <code>setActive(false)</code> also clears them. <code>isAnalyzed()</code> reports file-analysis availability,
           not whether the live ring has audio.</p>
 
         <!-- Signals and Slots -->
@@ -309,24 +309,25 @@ std::vector&lt;<span class="kw">float</span>&gt; allValues;
         </table>
 
         <h3>Slots</h3>
+        <p><strong>Names:</strong> the camelCase name is the one to use (<code>next_track</code> is <code>nextTrack</code>, <code>get_album</code> is <code>getAlbum</code>, <code>is_scanning</code> is <code>isScanning</code>): same parameters, same result, same permission. The tables below show the camelCase names. The older snake_case name of each still works through protocol&nbsp;4, is marked <code>deprecated</code> in <code>describe</code> and <span class="file-path">docs/api/</span>, and goes in protocol&nbsp;5. The full list with each note is in the <a href="api-reference.html">API reference</a>.</p>
         <table>
           <thead><tr><th>Slot</th><th>Parameters</th><th>Purpose</th></tr></thead>
           <tbody>
             <tr><td><code>setViewActive</code></td><td><code>bool</code></td><td>A view showing the bars is on screen (and not mid-animation): the QML UI's own consumer, the same as <code>setDemand("view", active)</code>. Nothing runs and no file is decoded while no consumer wants the bars; a track that changed meanwhile is analysed when one does</td></tr>
             <tr><td><code>setDemand</code></td><td><code>QString consumer, bool wanted</code></td><td>Another frontend's bars are on screen, under a consumer name of its own; the analysis runs while any consumer (the QML view included) wants it. Over the service a consumer is released when the connection that set it closes. Then subscribe to <code>levels</code> (96 numbers 0&ndash;8, at most 10 changes a second for a local track, 20 for phone audio; add <code>throttleMs</code> to thin them)</td></tr>
-            <tr><td><code>setPlaying</code></td><td><code>bool</code></td><td>Something is playing (main.cpp, from <code>nowPlaying.playing</code>); bars move while a view is active and this is true, else one row of zeros</td></tr>
-            <tr><td><code>setLocalFile</code></td><td><code>QString</code> (absolute path)</td><td>The local track (main.cpp, from <code>MediaManager::currentMediaChanged</code>); analysed on the next event-loop pass if a view is active, so a page holding the view for its own track-change animation delays the decode</td></tr>
-            <tr><td><code>setPosition</code></td><td><code>qint64</code> (ms)</td><td>The local playback position (main.cpp, from <code>MediaManager::positionChanged</code>); calls <code>update_position</code> while active</td></tr>
-            <tr><td><code>analyze_file</code></td><td><code>QString</code> (absolute path)</td><td>Start FFT analysis for a track (called by the above; still public)</td></tr>
-            <tr><td><code>update_position</code></td><td><code>float</code> (seconds)</td><td>Look up and emit the levels for the playback position</td></tr>
-            <tr><td><code>set_active</code></td><td><code>bool</code></td><td>Enable/disable emission (emits zeros when disabled); driven by <code>setViewActive</code> &amp;&amp; <code>setPlaying</code></td></tr>
+            <tr><td><code>setPlaying</code></td><td><code>bool</code></td><td>Something is playing (appcore.cpp, from <code>nowPlaying.playing</code>); bars move while a view is active and this is true, else one row of zeros</td></tr>
+            <tr><td><code>setLocalFile</code></td><td><code>QString</code> (absolute path)</td><td>The local track (appcore.cpp, from <code>MediaManager::currentMediaChanged</code>); analysed on the next event-loop pass if a view is active, so a page holding the view for its own track-change animation delays the decode</td></tr>
+            <tr><td><code>setPosition</code></td><td><code>qint64</code> (ms)</td><td>The local playback position (appcore.cpp, from <code>MediaManager::positionChanged</code>); calls <code>updatePosition</code> while active</td></tr>
+            <tr><td><code>analyzeFile</code></td><td><code>QString</code> (absolute path)</td><td>Start FFT analysis for a track (called by the above; still public)</td></tr>
+            <tr><td><code>updatePosition</code></td><td><code>float</code> (seconds)</td><td>Look up and emit the levels for the playback position</td></tr>
+            <tr><td><code>setActive</code></td><td><code>bool</code></td><td>Enable/disable emission (emits zeros when disabled); driven by <code>setViewActive</code> &amp;&amp; <code>setPlaying</code></td></tr>
             <tr><td><code>clear</code></td><td>None</td><td>Drop all analysis data</td></tr>
-            <tr><td><code>get_current_levels</code></td><td>None &rarr; <code>QVariantList</code></td><td>Current levels synchronously</td></tr>
-            <tr><td><code>get_num_bars</code></td><td>None &rarr; <code>int</code></td><td>Bar count (96)</td></tr>
-            <tr><td><code>set_live</code></td><td><code>bool</code></td><td>Select live PCM analysis</td></tr>
-            <tr><td><code>update_live</code></td><td>None</td><td>Analyse the current live window and emit changed levels (the analyzer's own 50&nbsp;ms timer calls it)</td></tr>
-            <tr><td><code>feed_live_pcm</code></td><td><code>QByteArray</code>, <code>int</code> (buffered ms)</td><td>Append phone PCM to the live ring (ignored unless live mode is on)</td></tr>
-            <tr><td><code>is_analyzed</code></td><td>None &rarr; <code>bool</code></td><td>Whether FFT data is available</td></tr>
+            <tr><td><code>getCurrentLevels</code></td><td>None &rarr; <code>QVariantList</code></td><td>Current levels synchronously</td></tr>
+            <tr><td><code>getNumBars</code></td><td>None &rarr; <code>int</code></td><td>Bar count (96)</td></tr>
+            <tr><td><code>setLive</code></td><td><code>bool</code></td><td>Select live PCM analysis</td></tr>
+            <tr><td><code>updateLive</code></td><td>None</td><td>Analyse the current live window and emit changed levels (the analyzer's own 50&nbsp;ms timer calls it)</td></tr>
+            <tr><td><code>feedLivePcm</code></td><td><code>QByteArray</code>, <code>int</code> (buffered ms)</td><td>Append phone PCM to the live ring (ignored unless live mode is on)</td></tr>
+            <tr><td><code>isAnalyzed</code></td><td>None &rarr; <code>bool</code></td><td>Whether FFT data is available</td></tr>
           </tbody>
         </table>
 
@@ -343,7 +344,7 @@ m_watcher.<span class="fn">setFuture</span>(future);        <span class="cmt">//
         <p><code>analyzeAudio()</code> is a static function that receives everything it needs as arguments; <code>QFutureWatcher::finished</code> delivers the result to <code>onAnalysisDone()</code> on the GUI thread. The destructor cancels and waits for the watcher so the app can quit mid-analysis.</p>
 
         <div class="info-box warning">
-          <strong>Thread Safety:</strong> the file-analysis worker must not write shared state or access Qt GUI objects. It takes the path and analysis settings as arguments and returns computed data; all signal emissions and member writes happen on the GUI thread in <code>onAnalysisDone()</code>. The live path (<code>feed_live_pcm</code>, <code>update_live</code>) runs entirely on the GUI thread.
+          <strong>Thread Safety:</strong> the file-analysis worker must not write shared state or access Qt GUI objects. It takes the path and analysis settings as arguments and returns computed data; all signal emissions and member writes happen on the GUI thread in <code>onAnalysisDone()</code>. The live path (<code>feedLivePcm</code>, <code>updateLive</code>) runs entirely on the GUI thread.
         </div>
 
         <h3>Guard Conditions</h3>
@@ -403,13 +404,13 @@ m_watcher.<span class="fn">setFuture</span>(future);        <span class="cmt">//
         <p>Each of the 96 bars is a separate <code>Rectangle</code> with an animated height, updated about 10 times per second by local-file data (up to the visualizer timer rate for live audio) but re-laid out every animation frame. The <code>Row</code> is rendered through a cached layer (<code>layer.enabled</code>), which is frozen (<code>layer.live: false</code>) during the card animation so the 96 gradient draws collapse into one texture blit. On low-powered devices the remaining cost is the bar animations themselves; disable the visualizer with <code>showWaveformVisualizer</code> if a target cannot keep up.</p>
 
         <h3>Signal Emission Throttling</h3>
-        <p>Local playback is read at each <code>MediaManager::positionChanged</code> (its 100&nbsp;ms position tick, which runs only while playing), which is exactly the chunk rate, and <code>update_position()</code> only emits when the levels differ, so local-file playback produces at most 10 updates per second with no wasted lookups (MediaRoom used to poll 60 times a second, 50 of them for nothing). Seeks select another chunk on the next report; live phone audio is analysed every 50&nbsp;ms (20 per second).</p>
+        <p>Local playback is read at each <code>MediaManager::positionChanged</code> (its 100&nbsp;ms position tick, which runs only while playing), which is exactly the chunk rate, and <code>updatePosition()</code> only emits when the levels differ, so local-file playback produces at most 10 updates per second with no wasted lookups (MediaRoom used to poll 60 times a second, 50 of them for nothing). Seeks select another chunk on the next report; live phone audio is analysed every 50&nbsp;ms (20 per second).</p>
 
         <!-- Dependencies -->
         <h2 id="dependencies">Dependencies and Failure Handling</h2>
 
         <p>The analyzer needs only Qt Multimedia (<code>QAudioDecoder</code>, already linked for <code>QMediaPlayer</code>) and Qt Concurrent; the FFT and window are its own code. Which formats decode depends on the platform's Qt Multimedia backend.</p>
-        <p>A file that cannot be analysed degrades to "no visualizer" rather than an error: a decoder error, the 30&nbsp;s watchdog, no usable audio or a track shorter than one chunk each leave <code>m_fftData</code> empty, log a warning (<code>Analysis failed for &hellip;</code> in the <code>octave.audioanalyzer</code> category) and skip <code>analysisComplete</code>, so <code>is_analyzed()</code> stays false and the bars stay at zero.</p>
+        <p>A file that cannot be analysed degrades to "no visualizer" rather than an error: a decoder error, the 30&nbsp;s watchdog, no usable audio or a track shorter than one chunk each leave <code>m_fftData</code> empty, log a warning (<code>Analysis failed for &hellip;</code> in the <code>octave.audioanalyzer</code> category) and skip <code>analysisComplete</code>, so <code>isAnalyzed()</code> stays false and the bars stay at zero.</p>
 
         <!-- Design decisions -->
         <h2 id="design-decisions">Design Decisions</h2>
@@ -418,7 +419,7 @@ m_watcher.<span class="fn">setFuture</span>(future);        <span class="cmt">//
           <tbody>
             <tr><td><strong>Pre-compute local tracks</strong></td><td>The whole track is analysed once, then playback costs one row lookup per poll regardless of device, while mirrored-phone audio uses the live PCM feed described above.</td></tr>
             <tr><td><strong>Streamed decode, compact storage, 3&nbsp;h cap</strong></td><td>Decoding the whole track before analysing it held the full decoded audio in memory, which could freeze the Orange Pi on a long mix. Mixing and decimating each buffer on arrival and keeping only band magnitudes bounds memory to ~4&nbsp;KB per second of audio; the levels are stored as bytes. The 3&nbsp;h cap bounds the remaining cost for very long files; past it the bars are flat.</td></tr>
-            <tr><td><strong>No animation in the analyzer</strong></td><td>The first version interpolated the bars toward target levels on its own timer inside the analyzer, which was the visualizer "eating CPU" (commit <code>e25ea66</code>). Now <code>update_position()</code> emits only when the chunk's levels differ, and the QML <code>Behavior</code> animations do the easing on the scene graph.</td></tr>
+            <tr><td><strong>No animation in the analyzer</strong></td><td>The first version interpolated the bars toward target levels on its own timer inside the analyzer, which was the visualizer "eating CPU" (commit <code>e25ea66</code>). Now <code>updatePosition()</code> emits only when the chunk's levels differ, and the QML <code>Behavior</code> animations do the easing on the scene graph.</td></tr>
             <tr><td><strong>8&nbsp;kHz, 100&nbsp;ms chunks, 0-8 levels</strong></td><td>Decimating to ~8&nbsp;kHz cuts the FFT work roughly five-fold; the spectrum is analysed up to the effective Nyquist limit (4 or 4.41&nbsp;kHz for common source rates), 100&nbsp;ms chunks give 10 data frames per second, which the 120&nbsp;ms bar animations bridge, and nine discrete integer levels make "did anything change?" a cheap list comparison so unchanged chunks emit nothing.</td></tr>
             <tr><td><strong>Analysis after the card animation</strong></td><td>MediaRoom holds the view inactive (<code>setViewActive(false)</code>) while its carousel animates, and <code>setLocalFile</code> waits one event-loop pass so the page's own reaction to the track change lands first; the decode starts when the animation settles, so decoding and the first FFT do not compete with animation frames. The bars drop to zero and stay visible meanwhile.</td></tr>
             <tr><td><strong>The analyzer drives itself</strong></td><td>The pacing, the play state, the phone/local switch and the track-change analysis used to live in MediaRoom (a 16&nbsp;ms timer, <code>initializeWaveform()</code>, two play-state syncs). They are rules any frontend would have to repeat, so they moved into the analyzer (open-backend #12, <span class="file-path">tests/cpp/tst_audioanalyzer.cpp</span>); a frontend only says whether its bars are visible.</td></tr>

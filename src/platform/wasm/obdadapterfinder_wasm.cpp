@@ -1,18 +1,22 @@
-// WebAssembly build: OBDAdapterFinder over Web Bluetooth (webbluetooth.h),
-// plus the shared "Simulated car" demo drive (src/sim/demodrive.h). The
-// browser does the scanning in its own chooser, so startScan() opens it and
-// the adapter picked there is listed and connected at once; tapping the row
-// later reconnects it. Pairing is the browser's business (BLE ELM327
-// adapters need none). Replaces src/managers/obdadapterfinder.cpp when
-// OCTAVE_WASM. Without Web Bluetooth (Safari, Firefox, Linux Chromium without
-// its flag) the sheet offers only the simulated car (canScan false) and the
-// status says what this browser would need.
+// WebAssembly build: OBDAdapterFinder over Web Bluetooth (webbluetooth.h)
+// and Web Serial (webserial.h), plus the shared "Simulated car" demo drive
+// (src/sim/demodrive.h). The browser does the scanning in its own chooser, so
+// startScan() opens the Bluetooth one and pickSerialPort() the serial one
+// (an adapter on a USB cable); the adapter picked there is listed and
+// connected at once, and tapping the row later reconnects it. Pairing is the
+// browser's business (BLE ELM327 adapters need none). Replaces
+// src/managers/obdadapterfinder.cpp when OCTAVE_WASM. Without Web Bluetooth
+// (Safari, Firefox, Linux Chromium without its flag) canScan is false, without
+// Web Serial (Safari, Firefox, phones) canPickSerial is; with neither the
+// sheet offers only the simulated car and the status says what this browser
+// would need.
 
 #include "../../managers/obdadapterfinder.h"
 
 #include "../../managers/obdmanager.h"
 #include "../../sim/simelm327.h"
 #include "webbluetooth.h"
+#include "webserial.h"
 
 #include <QDebug>
 
@@ -50,10 +54,53 @@ OBDAdapterFinder::OBDAdapterFinder(OBDManager *obd, SettingsManager *settings, Q
     m_devices.insert(simAddress(), OBDManager::simulatedAdapter());
     rebuildList();
     WebBluetoothLink *link = WebBluetoothLink::instance();
-    m_status = link->available()
-                   ? QStringLiteral("Pick your Bluetooth LE OBD2 adapter in the browser's list, or try the "
-                                    "simulated car.")
-                   : noBluetooth();
+    WebSerialLink *serial = WebSerialLink::instance();
+    if (link->available())
+        m_status = serial->available()
+                       ? QStringLiteral("Pick your Bluetooth LE OBD2 adapter, or one on a USB cable, in the browser's "
+                                        "list, or try the simulated car.")
+                       : QStringLiteral("Pick your Bluetooth LE OBD2 adapter in the browser's list, or try the "
+                                        "simulated car.");
+    else
+        m_status = serial->available()
+                       ? QStringLiteral("An OBD2 adapter on a USB cable works here: tap Pick USB Adapter. ")
+                             + noBluetooth()
+                       : noBluetooth();
+    connect(serial, &WebSerialLink::chosen, this, [this](const QString &id, const QString &name) {
+        m_devices.insert(id, QVariantMap{
+                                 {QStringLiteral("address"), id},
+                                 {QStringLiteral("name"), name},
+                                 {QStringLiteral("rssi"), 0},
+                                 {QStringLiteral("kind"), QStringLiteral("serial")},
+                                 {QStringLiteral("likelyObd"), true},
+                                 {QStringLiteral("paired"), false},
+                                 {QStringLiteral("connectable"), true},
+                                 {QStringLiteral("note"), QString()},
+                             });
+        rebuildList();
+        connectAdapter(id);
+    });
+    connect(serial, &WebSerialLink::chooseFailed, this, [this](const QString &message, bool cancelled) {
+        if (cancelled)
+            setStatus(QStringLiteral("No port picked. Plug the adapter's USB cable in and try again."));
+        else
+            setStatus(message, true);
+    });
+    connect(serial, &WebSerialLink::linkUp, this, [this](const QString &id) {
+        if (m_busyAddress != id || m_handedOff || !m_obd)
+            return;
+        m_handedOff = true;
+        m_sawConnecting = false;
+        setStatus(QStringLiteral("Connecting to the vehicle…"));
+        m_obd->setPortOverride(WebSerialLink::portFor(id));
+        m_obd->force_connect();
+    });
+    connect(serial, &WebSerialLink::linkDown, this, [this](const QString &reason) {
+        if (m_busyAddress.isEmpty() || m_handedOff)
+            return;
+        setBusy(QString());
+        setStatus(reason, true);
+    });
     connect(link, &WebBluetoothLink::chosen, this, [this](const QString &id, const QString &name) {
         setScanning(false);
         m_everyDevice = false;
@@ -108,6 +155,7 @@ bool OBDAdapterFinder::supported() const { return true; }
 // The browser can't say until its chooser opens; it explains a radio that's off
 bool OBDAdapterFinder::bluetoothOn() const { return true; }
 bool OBDAdapterFinder::canScan() const { return WebBluetoothLink::instance()->available(); }
+bool OBDAdapterFinder::canPickSerial() const { return WebSerialLink::instance()->available(); }
 bool OBDAdapterFinder::looksLikeObd(const QString &, const QStringList &) { return false; }
 
 void OBDAdapterFinder::startScan()
@@ -125,6 +173,21 @@ void OBDAdapterFinder::startScan()
     WebBluetoothLink::instance()->choose(m_everyDevice);
 }
 
+void OBDAdapterFinder::pickSerialPort()
+{
+    if (!WebSerialLink::instance()->available()) {
+        setStatus(QStringLiteral("This browser can't reach serial ports. Open OCTAVE in Chrome or Edge on a computer "
+                                 "to connect an adapter on a USB cable."),
+                  true);
+        return;
+    }
+    if (!m_busyAddress.isEmpty() && !m_handedOff)
+        return;  // connecting
+    setStatus(QStringLiteral("Pick the adapter's port in the browser's list. Plug its USB cable in and turn the "
+                             "ignition on first."));
+    WebSerialLink::instance()->choose();
+}
+
 // The browser's chooser can't be closed from the page
 void OBDAdapterFinder::stopScan() { setScanning(false); }
 
@@ -138,8 +201,14 @@ void OBDAdapterFinder::connectAdapter(const QString &address)
     if (!m_busyAddress.isEmpty() && !m_handedOff && address != simAddress())
         return;  // the simulated adapter can always take over
     m_busyName = d.value(QStringLiteral("name")).toString();
-    if (address == simAddress()) {
+    const bool serial = d.value(QStringLiteral("kind")).toString() == QLatin1String("serial");
+    // One link at a time. Before the busy state changes: each link reports
+    // "Disconnected", which must not pass for this attempt failing.
+    if (address == simAddress() || !serial)
+        WebSerialLink::instance()->disconnectPort();
+    if (address == simAddress() || serial)
         WebBluetoothLink::instance()->disconnectDevice();
+    if (address == simAddress()) {
         // Straight to OBDManager: judged by onObdStatus() like a handed-off adapter
         m_handedOff = true;
         m_sawConnecting = false;
@@ -150,6 +219,12 @@ void OBDAdapterFinder::connectAdapter(const QString &address)
     }
     m_handedOff = false;
     setBusy(address);
+    if (serial) {
+        qDebug() << "[OBD-BT] Open" << m_busyName << "over Web Serial";
+        setStatus(QStringLiteral("Opening the %1…").arg(m_busyName));
+        WebSerialLink::instance()->connectPort(address);
+        return;
+    }
     qDebug() << "[OBD-BT] Connect" << m_busyName << "over Web Bluetooth";
     setStatus(QStringLiteral("Connecting to %1 over Bluetooth LE…").arg(m_busyName));
     WebBluetoothLink::instance()->connectDevice(address);
@@ -181,8 +256,10 @@ void OBDAdapterFinder::onObdStatus(const QString &status)
 
 void OBDAdapterFinder::cancel()
 {
-    if (!m_busyAddress.isEmpty() && !m_handedOff)
+    if (!m_busyAddress.isEmpty() && !m_handedOff) {
         WebBluetoothLink::instance()->disconnectDevice();
+        WebSerialLink::instance()->disconnectPort();
+    }
     setScanning(false);
     setBusy(QString());
     setStatus(QString());

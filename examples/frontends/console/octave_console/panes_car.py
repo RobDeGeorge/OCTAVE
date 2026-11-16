@@ -292,10 +292,10 @@ class CarPane(Pane):
                                     done=lambda _: self.load_mapping())
             self.app.push_screen(Confirm("Reset every gesture to its default action?"), answered)
         elif bid == "esp-refresh":
-            self.app.invoke("esp32VolumeManager", "refresh_ports", note="ports refreshed")
+            self.app.invoke("esp32VolumeManager", "refreshPorts", note="ports refreshed")
         elif bid == "esp-connect":
-            self.app.invoke("esp32VolumeManager", "connect_device", note="connecting the knob")
+            self.app.invoke("esp32VolumeManager", "connectDevice", note="connecting the knob")
         elif bid == "esp-disconnect":
-            self.app.invoke("esp32VolumeManager", "disconnect_device", note="knob disconnected")
+            self.app.invoke("esp32VolumeManager", "disconnectDevice", note="knob disconnected")
         elif bid == "esp-retry":
-            self.app.invoke("esp32VolumeManager", "reset_reconnect_attempts", note="knob retry")
+            self.app.invoke("esp32VolumeManager", "resetReconnectAttempts", note="knob retry")

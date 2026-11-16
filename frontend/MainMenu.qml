@@ -46,7 +46,17 @@ Item {
     readonly property string currentTitle: !_np ? "" : (_np.hasTrack ? _np.title : (useRemote ? remoteName : ""))
     readonly property string currentArtist: !_np ? "" : (_np.hasTrack ? _np.artist : (useRemote ? "Nothing playing" : ""))
     readonly property string currentAlbum: (_np && _np.hasTrack) ? _np.album : ""
-    readonly property int positionMs: _np ? _np.positionMs : 0
+    // Follows the source only while on screen: home stays alive behind
+    // every other page, and each 10 Hz tick re-laid out the time text and
+    // slider for nothing. Back on screen it catches up at once.
+    property int positionMs: 0
+    Binding {
+        target: mainMenu
+        property: "positionMs"
+        value: mainMenu._np ? mainMenu._np.positionMs : 0
+        when: mainMenu.visible
+        restoreMode: Binding.RestoreNone
+    }
     readonly property int durationMs: _np ? _np.durationMs : 0
 
     function formatTime(ms) { return units.formatDuration(ms) }
@@ -288,7 +298,7 @@ Item {
                             id: songScrollAnimation
                             target: songTitleFlickable
                             property: "contentX"
-                            duration: 5000
+                            duration: settingsManager ? settingsManager.textScrollSpeed : 5000
                             easing.type: Easing.InOutQuad
                             onFinished: if (mainMenu.visible) songScrollTimer.restart()
                         }
@@ -361,7 +371,7 @@ Item {
                             id: metadataScrollAnimation
                             target: metadataFlickable
                             property: "contentX"
-                            duration: 5000
+                            duration: settingsManager ? settingsManager.textScrollSpeed : 5000
                             easing.type: Easing.InOutQuad
                             onFinished: if (mainMenu.visible) metadataScrollTimer.restart()
                         }
@@ -436,6 +446,38 @@ Item {
                                 userSeeking = false
                             }
                         }
+
+                        // The slider is only as tall as its handle: a touch
+                        // just above or below missed it and fell through to
+                        // the card's tap, which opened the music page. This
+                        // takes those touches (to a dp(44) target) and seeks.
+                        MouseArea {
+                            readonly property real reach: Math.max(0, (mainMenu.dp(44) - parent.height) / 2)
+                            anchors.fill: parent
+                            anchors.topMargin: -reach
+                            anchors.bottomMargin: -reach
+                            enabled: progressSlider.enabled
+                            property bool own: false
+                            function valueAt(x) {
+                                var pos = Math.max(0, Math.min(1, (x - progressSlider.leftPadding) / progressSlider.availableWidth))
+                                return progressSlider.from + pos * (progressSlider.to - progressSlider.from)
+                            }
+                            onPressed: function(mouse) {
+                                own = mouse.y < reach || mouse.y > height - reach
+                                if (!own) {
+                                    mouse.accepted = false   // the slider's own
+                                    return
+                                }
+                                progressSlider.pressed = true
+                                progressSlider.value = valueAt(mouse.x)
+                            }
+                            onPositionChanged: function(mouse) {
+                                if (own && pressed)
+                                    progressSlider.value = valueAt(mouse.x)
+                            }
+                            onReleased: { if (own) progressSlider.pressed = false; own = false }
+                            onCanceled: { if (own) progressSlider.pressed = false; own = false }
+                        }
                     }
 
                     Text {
@@ -509,7 +551,7 @@ Item {
                         text: "Browse Music"
                         // the browser demo opens the browser's own folder picker instead
                         onClicked: if (typeof mediaManager === "undefined" || !mediaManager
-                                       || !mediaManager.pick_browser_library()) homeFolderDialog.open()
+                                       || !mediaManager.pickBrowserLibrary()) homeFolderDialog.open()
                     }
                     PromptButton {
                         id: homeMusicSpotify
@@ -605,17 +647,17 @@ Item {
 
     Component.onCompleted: {
         if (typeof mediaManager !== "undefined" && mediaManager)
-            localSongCount = mediaManager.get_current_song_list().length
-        if (obdManager && obdManager.refresh_values) {
-            obdManager.refresh_values()
+            localSongCount = mediaManager.getCurrentSongList().length
+        if (obdManager && obdManager.refreshValues) {
+            obdManager.refreshValues()
         }
     }
 
     Connections {
         target: settingsManager
         function onHomeOBDParametersChanged() {
-            if (obdManager && obdManager.refresh_values) {
-                obdManager.refresh_values()
+            if (obdManager && obdManager.refreshValues) {
+                obdManager.refreshValues()
             }
         }
     }

@@ -716,7 +716,7 @@ private:
     void setDevices(const QString &rows)
     {
         QFile f(m_tmp.filePath("devices"));
-        f.open(QIODevice::WriteOnly | QIODevice::Truncate);
+        QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
         f.write(rows.toUtf8());
     }
 
@@ -724,7 +724,7 @@ private:
     {
         if (closed) {
             QFile f(m_tmp.filePath("gate"));
-            f.open(QIODevice::WriteOnly);
+            QVERIFY(f.open(QIODevice::WriteOnly));
         } else {
             QFile::remove(m_tmp.filePath("gate"));
         }

@@ -12,6 +12,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -146,7 +147,10 @@ loop:
 // connect returns a trusted client: on the head unit at once, elsewhere after
 // pairing with the code the user reads off OCTAVE's screen.
 func connect(addr string) (*octave.Client, error) {
-	tokenFile := ".token"
+	return connectWith(addr, ".token", os.Stdin, os.Stdout)
+}
+
+func connectWith(addr, tokenFile string, stdin io.Reader, out io.Writer) (*octave.Client, error) {
 	token, _ := os.ReadFile(tokenFile)
 	c, err := octave.Dial(addr, octave.WithToken(strings.TrimSpace(string(token))))
 	if err != nil {
@@ -155,18 +159,50 @@ func connect(addr string) (*octave.Client, error) {
 	if c.Hello.TokenRejected {
 		os.Remove(tokenFile) // revoked or unknown: pair again
 	}
-	in := bufio.NewReader(os.Stdin)
+	in := bufio.NewReader(stdin)
 	for !c.Trusted() {
-		fmt.Println("This machine is not the head unit. On OCTAVE open Settings > Service > Pair a device.")
-		fmt.Print("The 6-digit code: ")
-		code, _ := in.ReadString('\n')
-		tok, err := c.Pair(strings.TrimSpace(code), name, "media") // play / pause only; readings are always allowed
+		fmt.Fprintln(out, "This machine is not the head unit. On OCTAVE open Settings > Service > Pair a device.")
+		fmt.Fprint(out, "The 6-digit code: ")
+		line, readErr := in.ReadString('\n')
+		code := strings.ReplaceAll(strings.TrimSpace(line), " ", "")
+		if readErr != nil && code == "" {
+			c.Close()
+			return nil, errors.New("not paired: the input ended before a pairing code was given")
+		}
+		tok, err := c.Pair(code, name, "media") // play / pause only; readings are always allowed
+		var refused *octave.Error
+		if errors.Is(err, octave.ErrTimeout) {
+			// The link is up and OCTAVE was slow. It may have paired all the same,
+			// and the code is spent either way: dialling again to pair with it
+			// would be refused and would hide what happened
+			c.Close()
+			return nil, fmt.Errorf("%w; if %q now shows under Settings > Service on OCTAVE, remove it there, then run this again with a new code", err, name)
+		}
+		if err != nil && !errors.As(err, &refused) {
+			// Not a refusal: the connection is gone. OCTAVE closes one that has not
+			// paired after a minute without a word from it, and fetching the code can
+			// take longer than that. Dial again and use the code just typed.
+			c.Close()
+			if c, err = octave.Dial(addr); err != nil {
+				return nil, err
+			}
+			if c.Trusted() {
+				break
+			}
+			tok, err = c.Pair(code, name, "media")
+		}
 		if err != nil {
-			fmt.Println(" ", err)
+			fmt.Fprintln(out, " ", err)
+			if !errors.As(err, &refused) {
+				c.Close()
+				return nil, err
+			}
 			continue
 		}
+		// 0600 from the first byte; an older file keeps its mode, so set it too
 		os.WriteFile(tokenFile, []byte(tok), 0o600)
-		fmt.Printf("Paired with %v; the token is in %s\n", c.Scopes(), tokenFile)
+		os.Chmod(tokenFile, 0o600)
+		fmt.Fprintf(out, "Paired with %v; the token is in %s\n", c.Scopes(), tokenFile)
 	}
 	return c, nil
 }

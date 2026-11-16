@@ -545,7 +545,7 @@ private slots:
         ServiceBridge bridge(&registry, AppInfo{"9", false, true});
         bridge.setPairing(&pairing);
         bridge.install(server);
-        server.addRoute("/art", [](const QByteArray &) { return StaticFiles::Reply{200, "OK", "image/png", "img"}; });
+        server.addRoute("/art", [](const QByteArray &) { return StaticFiles::Reply{200, "OK", "image/png", "img", {}}; });
         QObject::connect(&pairing, &ServicePairing::revoked, &server,
                          [&server](const QString &id) { server.closeConnectionsOf(id); });
         QVERIFY(server.start());
@@ -639,8 +639,8 @@ private slots:
         ServiceBridge bridge(&registry, AppInfo{"9", false, true});
         bridge.setPairing(&pairing);
         bridge.install(server);
-        server.addRoute("/art", [](const QByteArray &) { return StaticFiles::Reply{200, "OK", "image/png", "img"}; });
-        server.addRoute("/export/logs", [](const QByteArray &) { return StaticFiles::Reply{200, "OK", "text/plain", "log"}; });
+        server.addRoute("/art", [](const QByteArray &) { return StaticFiles::Reply{200, "OK", "image/png", "img", {}}; });
+        server.addRoute("/export/logs", [](const QByteArray &) { return StaticFiles::Reply{200, "OK", "text/plain", "log", {}}; });
         QVERIFY(server.start());
 
         // describe says what each member needs
@@ -1240,6 +1240,88 @@ private slots:
         QCOMPARE(m_registry->object("temp"), nullptr);
     }
 
+    // Loopback is full for a program on this device. While an installed web
+    // frontend is served (setLoopbackBrowserScopes), a browser page on this
+    // device holds that frontend's scopes and no more, unless it pairs
+    void aBrowserOnThisDeviceHoldsTheFrontendsScopes()
+    {
+        QTemporaryDir cfg;
+        qputenv("HOME", cfg.path().toUtf8());
+        qputenv("XDG_CONFIG_HOME", (cfg.path() + "/config").toUtf8());
+        SettingsManager settings;
+        ServicePairing pairing(&settings);
+        QVERIFY(pairing.loopbackOpen());
+
+        Scoped scoped;
+        ServiceRegistry registry;
+        registry.add("scoped", &scoped);
+        registry.add("fixture", &m_fixture);   // no scope declared: full
+        CommandServer server(0);
+        ServiceBridge bridge(&registry, AppInfo{"9", false, true});
+        bridge.setPairing(&pairing);
+        bridge.install(server);
+        QVERIFY(server.start());
+        const QByteArray origin = "http://127.0.0.1:" + QByteArray::number(server.port());
+        const QByteArray hello = R"({"op": "hello"})";
+        const QByteArray play = R"({"op": "call", "object": "scoped", "method": "play"})";
+        const QByteArray internal = R"({"op": "call", "object": "scoped", "method": "internal"})";
+        const auto scopesOf = [](const QJsonObject &reply) {
+            return reply.value("result").toObject().value("scopes").toVariant().toStringList();
+        };
+
+        // No web frontend served: a page on this device is as trusted as a program
+        {
+            WsClient page(server.port(), origin);
+            QVERIFY(page.open);
+            QCOMPARE(scopesOf(page.send(hello)), QStringList{"full"});
+            QCOMPARE(page.send(internal).value("ok").toBool(), true);
+            QCOMPARE(scoped.internals, 1);
+        }
+
+        bridge.setLoopbackBrowserScopes({QStringLiteral("read"), QStringLiteral("media")});
+        WsClient page(server.port(), origin);
+        QVERIFY(page.open);
+        const QJsonObject helloed = page.send(hello);
+        QCOMPARE(helloed.value("result").toObject().value("auth").toString(), QStringLiteral("trusted"));
+        QCOMPARE(scopesOf(helloed), (QStringList{"read", "media"}));
+        QCOMPARE(page.send(R"({"op": "get", "object": "fixture", "property": "level"})").value("ok").toBool(), true);
+        QCOMPARE(page.send(play).value("ok").toBool(), true);
+        QCOMPARE(scoped.plays, 1);
+        const QJsonObject forbidden = page.send(internal);
+        QCOMPARE(forbidden.value("code").toString(), QStringLiteral("forbidden"));
+        QVERIFY2(forbidden.value("error").toString().contains("this device has read, media"),
+                 qPrintable(forbidden.value("error").toString()));
+        QCOMPARE(scoped.internals, 1);
+        QCOMPARE(page.send(R"({"op": "set", "object": "fixture", "property": "level", "value": 9})").value("code").toString(),
+                 QStringLiteral("forbidden"));
+        QCOMPARE(page.send(R"({"action": "ping"})").value("code").toString(), QStringLiteral("forbidden"));
+
+        // A program on this device is still full: over a line, and over a
+        // WebSocket that carries no Origin (no browser omits it)
+        LineClient program(server.port());
+        QCOMPARE(scopesOf(program.send(hello)), QStringList{"full"});
+        QCOMPARE(program.send(internal).value("ok").toBool(), true);
+        WsClient tool(server.port(), {});
+        QVERIFY(tool.open);
+        QCOMPARE(scopesOf(tool.send(hello)), QStringList{"full"});
+        QCOMPARE(tool.send(internal).value("ok").toBool(), true);
+        QCOMPARE(scoped.internals, 3);
+
+        // A page that pairs holds what its token holds instead
+        pairing.startPairing();
+        QTest::qWait(ServicePairing::kAttemptIntervalMs + 10);
+        const QJsonObject paired = page.send(QStringLiteral(R"({"op": "pair", "code": "%1", "name": "page", "scopes": ["full"]})")
+                                                 .arg(pairing.pairingCode()).toUtf8());
+        QCOMPARE(paired.value("ok").toBool(), true);
+        QCOMPARE(page.send(internal).value("ok").toBool(), true);
+        QCOMPARE(scoped.internals, 4);
+
+        // A page from somewhere else never gets as far as a tier
+        WsClient foreign(server.port(), "https://example.com");
+        QVERIFY(!foreign.open);
+        server.stop();
+    }
+
 private:
     // A second client of its own server (pumping this thread's events while
     // it waits, since get / set / call hop to it)
@@ -1266,6 +1348,79 @@ private:
                         if (o.contains("ok"))
                             return o;
                     }
+                }
+            }
+            return {};
+        }
+        QByteArray m_buf;
+    };
+    // A browser's side of a WebSocket, as little of it as these tests need:
+    // the upgrade (with an Origin, as every browser sends, or without one),
+    // masked text frames out, the server's unmasked text frames in
+    struct WsClient {
+        QTcpSocket socket;
+        bool open = false;
+        WsClient(quint16 port, const QByteArray &origin)
+        {
+            socket.connectToHost(QHostAddress::LocalHost, port);
+            if (!socket.waitForConnected(3000))
+                return;
+            socket.write("GET / HTTP/1.1\r\nHost: 127.0.0.1:" + QByteArray::number(port)
+                         + "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                           "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n"
+                         + (origin.isEmpty() ? QByteArray() : "Origin: " + origin + "\r\n") + "\r\n");
+            QElapsedTimer t;
+            t.start();
+            while (!m_buf.contains("\r\n\r\n") && socket.state() == QAbstractSocket::ConnectedState && t.elapsed() < 3000)
+                if (socket.bytesAvailable() > 0 || socket.waitForReadyRead(20))
+                    m_buf += socket.readAll();
+            m_buf += socket.readAll();
+            open = m_buf.startsWith("HTTP/1.1 101") && m_buf.contains("\r\n\r\n");
+            m_buf = open ? m_buf.mid(m_buf.indexOf("\r\n\r\n") + 4) : QByteArray();
+        }
+        QJsonObject send(const QByteArray &json)
+        {
+            static const QByteArray mask = QByteArray::fromHex("37fa213d");
+            QByteArray f;
+            f.append(char(0x81));
+            if (json.size() < 126) {
+                f.append(char(0x80 | json.size()));
+            } else {
+                f.append(char(0x80 | 126));
+                f.append(char(json.size() >> 8));
+                f.append(char(json.size() & 0xFF));
+            }
+            f += mask;
+            for (int i = 0; i < json.size(); ++i)
+                f.append(char(json.at(i) ^ mask.at(i % 4)));
+            socket.write(f);
+            QElapsedTimer t;
+            t.start();
+            while (t.elapsed() < 5000) {
+                QCoreApplication::processEvents();
+                if (socket.bytesAvailable() > 0 || socket.waitForReadyRead(10))
+                    m_buf += socket.readAll();
+                while (m_buf.size() >= 2) {
+                    qint64 n = quint8(m_buf.at(1)) & 0x7F;
+                    int off = 2;
+                    if (n == 126) {
+                        if (m_buf.size() < 4)
+                            break;
+                        n = (quint8(m_buf.at(2)) << 8) | quint8(m_buf.at(3));
+                        off = 4;
+                    } else if (n == 127) {
+                        if (m_buf.size() < 10)
+                            break;
+                        n = qFromBigEndian<quint64>(m_buf.constData() + 2);
+                        off = 10;
+                    }
+                    if (m_buf.size() < off + n)
+                        break;
+                    const bool text = (quint8(m_buf.at(0)) & 0x0F) == 1;
+                    const QJsonObject o = QJsonDocument::fromJson(m_buf.mid(off, int(n))).object();
+                    m_buf.remove(0, off + int(n));
+                    if (text && o.contains("ok"))
+                        return o;
                 }
             }
             return {};

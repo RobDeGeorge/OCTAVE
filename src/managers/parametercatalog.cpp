@@ -2,6 +2,7 @@
 
 #include <QHash>
 
+#include <algorithm>
 #include <iterator>
 
 namespace {
@@ -196,6 +197,18 @@ ParameterCatalog::ParameterCatalog(QObject *parent)
 {
 }
 
+// addCustom()'s rows, and whether all() has built the table from them
+static QList<ParameterCatalog::Parameter> &customRows()
+{
+    static QList<ParameterCatalog::Parameter> rows;
+    return rows;
+}
+static bool &tableFixed()
+{
+    static bool fixed = false;
+    return fixed;
+}
+
 const QList<ParameterCatalog::Parameter> &ParameterCatalog::all()
 {
     static const QList<Parameter> list = [] {
@@ -216,9 +229,31 @@ const QList<ParameterCatalog::Parameter> &ParameterCatalog::all()
             p.group = groupFor(r.id, r.kind, r.source);
             l.append(p);
         }
+        tableFixed() = true;
+        l.append(customRows());
         return l;
     }();
     return list;
+}
+
+bool ParameterCatalog::addCustom(const QList<Parameter> &rows)
+{
+    if (tableFixed())
+        return false;
+    for (Parameter p : rows) {
+        p.custom = true;
+        p.source = Source::Obd;
+        p.aliasOf.clear();
+        p.group = QStringLiteral("Custom");
+        customRows().append(p);
+    }
+    return true;
+}
+
+bool ParameterCatalog::isBuiltinId(const QString &id)
+{
+    const QByteArray latin = id.toLatin1();
+    return std::any_of(std::begin(kRows), std::end(kRows), [&latin](const Row &r) { return latin == r.id; });
 }
 
 const ParameterCatalog::Parameter *ParameterCatalog::find(const QString &id)
@@ -245,9 +280,12 @@ QStringList ParameterCatalog::imuIds()
 
 QStringList ParameterCatalog::groups()
 {
-    return {QStringLiteral("Engine"), QStringLiteral("Fuel & air"), QStringLiteral("Temperatures"),
-            QStringLiteral("Electrical"), QStringLiteral("Speed & motion"), QStringLiteral("Emissions"),
-            QStringLiteral("Diagnostics"), QStringLiteral("Sensors")};
+    QStringList g{QStringLiteral("Engine"), QStringLiteral("Fuel & air"), QStringLiteral("Temperatures"),
+                  QStringLiteral("Electrical"), QStringLiteral("Speed & motion"), QStringLiteral("Emissions"),
+                  QStringLiteral("Diagnostics"), QStringLiteral("Sensors")};
+    if (std::any_of(all().cbegin(), all().cend(), [](const Parameter &p) { return p.custom; }))
+        g.append(QStringLiteral("Custom"));
+    return g;
 }
 
 QStringList ParameterCatalog::obdIds()
@@ -273,6 +311,7 @@ QVariantMap ParameterCatalog::toVariant(const Parameter &p)
         {QStringLiteral("source"), p.source == Source::Imu ? QStringLiteral("imu") : QStringLiteral("obd")},
         {QStringLiteral("aliasOf"), p.aliasOf},
         {QStringLiteral("group"), p.group},
+        {QStringLiteral("custom"), p.custom},
     };
 }
 

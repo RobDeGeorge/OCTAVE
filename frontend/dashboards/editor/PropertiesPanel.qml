@@ -773,7 +773,7 @@ Rectangle {
                 Text {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
-                    text: "This widget's options as JSON. Keys it doesn't know are dropped when you apply."
+                    text: "This widget's options as JSON. Only the options this widget has take effect; anything else is ignored."
                     color: App.Style.obdLabelColor
                     font.family: App.Style.fontFamily
                     font.pixelSize: App.Spacing.overallText * 0.8

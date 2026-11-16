@@ -294,6 +294,24 @@ private slots:
         QVERIFY2(!out.contains("throwaway"), qPrintable(out.right(3000)));
     }
 
+    // --config=DIR is the same flag: it used to pass the flag check and then
+    // be ignored, so the run used the caller's own config
+    void configDirAlsoTakesTheEqualsForm()
+    {
+        QTemporaryDir tmp;
+        const QString config = tmp.filePath("chosen");
+        QProcess app;
+        app.setProcessEnvironment(env(tmp));
+        app.setProcessChannelMode(QProcess::MergedChannels);
+        app.start(kApp, {"--headless", "--sim", "--config=" + config, "--service", QString::number(freePort()), "--smoke"});
+        QVERIFY(app.waitForStarted(10000));
+        QVERIFY2(finished(app), "did not exit within 60 s");
+        const QString out = QString::fromUtf8(app.readAll());
+        QVERIFY2(app.exitCode() == 0, qPrintable(out.right(3000)));
+        QVERIFY2(QFile::exists(config + "/logs/octave-cpp.log"), qPrintable(out.right(3000)));
+        QVERIFY2(!out.contains("throwaway"), qPrintable(out.right(3000)));
+    }
+
     // An installed exec frontend is the screen: a plain start runs headless,
     // starts it with a token that holds only its manifest's scopes, trusts
     // no other local connection, and quits when the frontend exits 0

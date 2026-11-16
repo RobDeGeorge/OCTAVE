@@ -110,8 +110,23 @@ bool SimElm327Device::open(OpenMode mode)
     m_ready.clear();
     m_pending.clear();
     m_spaces = true;
+    m_echo = true;
     m_clock.start();
+    // Closing the port does not reset an adapter that still has power
+    m_monitoring = m_unreset = m_state->link().leftMonitoring;
+    m_headersOn = m_monitoring;
+    m_monitorAtMs = 0;
+    m_monitorSent = 0;
     return QIODevice::open(mode | QIODevice::Unbuffered);
+}
+
+void SimElm327Device::close()
+{
+    if (isOpen()) {
+        const bool listening = m_monitoring;
+        m_state->updateLink([listening](LinkSettings &l) { l.leftMonitoring = listening; });
+    }
+    QIODevice::close();
 }
 
 bool SimElm327Device::dropLink()
@@ -142,6 +157,7 @@ bool SimElm327Device::waitForReadyRead(int msecs)
         while (!m_pending.isEmpty() && m_pending.first().readyAtMs <= now)
             m_ready.append(m_pending.takeFirst().bytes);
     };
+    pumpMonitor();
     promote();
     if (m_ready.isEmpty()) {
         if (m_pending.isEmpty()) {
@@ -163,6 +179,7 @@ bool SimElm327Device::waitForReadyRead(int msecs)
 
 qint64 SimElm327Device::readData(char *data, qint64 maxSize)
 {
+    pumpMonitor();
     const qint64 now = m_clock.elapsed();
     while (!m_pending.isEmpty() && m_pending.first().readyAtMs <= now)
         m_ready.append(m_pending.takeFirst().bytes);
@@ -172,8 +189,94 @@ qint64 SimElm327Device::readData(char *data, qint64 maxSize)
     return n;
 }
 
+void SimElm327Device::pumpMonitor()
+{
+    if (!m_monitoring || m_state->linkDown())
+        return;
+    struct Message {
+        int id;
+        int everyMs;
+    };
+    static constexpr Message kMessages[] = {{0x0C9, 20}, {0x1F5, 50}, {0x3E9, 50},
+                                            {0x4C1, 100}, {0x4D1, 500}, {0x120, 1000}};
+    auto passes = [this](const QByteArray &id) {
+        if (m_receiveFilter.isEmpty())
+            return true;
+        if (m_receiveFilter.size() != id.size())
+            return false;
+        for (int i = 0; i < id.size(); ++i) {
+            if (m_receiveFilter.at(i) != 'X' && m_receiveFilter.at(i) != id.at(i))
+                return false;
+        }
+        return true;
+    };
+    const qint64 now = m_clock.elapsed();
+    const CarValues car = m_state->values();
+    for (qint64 t = m_monitorAtMs + 1; t <= now && m_monitoring; ++t) {
+        for (const Message &m : kMessages) {
+            if (t % m.everyMs)
+                continue;
+            const QByteArray id = QByteArray::number(m.id, 16).toUpper().rightJustified(3, '0');
+            if (!passes(id))
+                continue;
+            QByteArray d(8, '\0');
+            auto put16 = [&d](int at, int v) {
+                d[at] = static_cast<char>((v >> 8) & 0xFF);
+                d[at + 1] = static_cast<char>(v & 0xFF);
+            };
+            switch (m.id) {
+            case 0x0C9:
+                put16(1, qRound(car.rpm * 4.0));
+                d[4] = static_cast<char>(qBound(0, qRound(car.throttle * 2.55), 255));
+                d[7] = static_cast<char>((t / m.everyMs) & 0x0F);   // rolling counter
+                break;
+            case 0x1F5:
+                d[0] = static_cast<char>(car.gear & 0x0F);
+                d[3] = car.brake > 1.0 ? '\x10' : '\0';
+                break;
+            case 0x3E9:
+                put16(0, qRound(car.speedMph * 1.609344 * 100.0));
+                put16(2, qRound(car.speedMph * 1.609344 * 100.0));
+                break;
+            case 0x4C1:
+                d[2] = static_cast<char>(qBound(0, qRound(car.coolant + 40.0), 255));
+                d[3] = static_cast<char>(qBound(0, qRound(car.intakeTemp + 40.0), 255));
+                break;
+            case 0x4D1:
+                d[5] = static_cast<char>(qBound(0, qRound(car.fuelLevel * 2.55), 255));
+                break;
+            default: {
+                const quint32 km = static_cast<quint32>(car.odometerKm);
+                put16(0, static_cast<int>(km >> 16));
+                put16(2, static_cast<int>(km & 0xFFFF));
+                break;
+            }
+            }
+            const char sep = m_spaces ? ' ' : '\0';
+            QByteArray line = d.toHex(sep).toUpper();
+            if (m_headersOn)
+                line.prepend(m_spaces ? id + ' ' : id);
+            m_pending.append({line + "\r", t});
+            if (m_receiveFilter.isEmpty() && ++m_monitorSent >= kMonitorBuffer) {
+                m_pending.append({QByteArrayLiteral("BUFFER FULL\r\r>"), t});
+                m_monitoring = false;
+                break;
+            }
+        }
+    }
+    m_monitorAtMs = now;
+}
+
 qint64 SimElm327Device::writeData(const char *data, qint64 size)
 {
+    if (m_monitoring && size > 0) {
+        // Any byte ends monitor mode, and is not taken as a command
+        m_monitoring = false;
+        m_input.clear();
+        const qint64 base = m_pending.isEmpty() ? m_clock.elapsed() : m_pending.last().readyAtMs;
+        m_pending.append({QByteArrayLiteral("STOPPED\r\r>"), base + 8});
+        return size;
+    }
     m_input.append(data, static_cast<int>(size));
     int cr;
     while ((cr = m_input.indexOf('\r')) >= 0) {
@@ -181,9 +284,42 @@ qint64 SimElm327Device::writeData(const char *data, qint64 size)
         m_input.remove(0, cr + 1);
         if (m_state->linkDown())
             continue;   // the bytes went nowhere
-        const QByteArray reply = respond(command);
+        const LinkSettings faults = m_state->link();
+        if (faults.silent)
+            continue;   // something on the port that is not an ELM327
+        const bool echoed = m_echo;   // as it was when the command arrived
+        // Left listening and not reset since: no request is answered
+        const bool request = !command.trimmed().toUpper().startsWith("AT") && !command.trimmed().isEmpty();
+        QByteArray reply = m_unreset && request ? QByteArrayLiteral("NO DATA") : respond(command);
+        if (m_monitoring)
+            continue;   // "ATMA": messages follow, no prompt
+        // Headers on: each reply line starts with the answering ECU's id
+        // and the frame's length byte
+        const QByteArray asked = command.trimmed().toUpper();
+        QByteArray digits = reply;
+        digits.replace(' ', "");
+        const bool hex = !digits.isEmpty() && digits.size() % 2 == 0
+                         && std::all_of(digits.cbegin(), digits.cend(), [](char c) {
+                                return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F');
+                            });
+        if (m_headersOn && !asked.startsWith("AT") && hex) {
+            const QByteArray length = "0" + QByteArray::number(digits.size() / 2, 16).toUpper();
+            const QByteArray id = replyId();
+            reply.prepend(m_spaces ? id + " " + length + " " : id + length);
+        }
+        if (echoed)
+            reply.prepend(command + "\r");
         const qint64 base = m_pending.isEmpty() ? m_clock.elapsed() : m_pending.last().readyAtMs;
-        m_pending.append({reply + "\r\r>", base + latencyMs(command)});
+        const QByteArray bytes = reply + "\r\r>";
+        const qint64 at = base + latencyMs(command);
+        if (faults.chunkBytes > 0) {
+            // A slow serial link: the reply trickles in, 2 ms a piece
+            int piece = 0;
+            for (int pos = 0; pos < bytes.size(); pos += faults.chunkBytes, ++piece)
+                m_pending.append({bytes.mid(pos, faults.chunkBytes), at + piece * 2});
+        } else {
+            m_pending.append({bytes, at});
+        }
     }
     return size;
 }
@@ -203,12 +339,44 @@ int SimElm327Device::latencyMs(const QByteArray &command) const
     return static_cast<int>(uniform(35, 70));   // a Bluetooth SPP round trip
 }
 
+// The id a reply comes back under with headers on: the engine ECU's, or the
+// one a physical request header (ATSH 7E0 ... 7E7) addressed, plus 8
+QByteArray SimElm327Device::replyId() const
+{
+    bool ok = false;
+    const int asked = m_header.toInt(&ok, 16);
+    if (ok && m_header.size() == 3 && asked >= 0x7E0 && asked <= 0x7E7)
+        return QByteArray::number(asked + 8, 16).toUpper();
+    return QByteArrayLiteral("7E8");
+}
+
 QByteArray SimElm327Device::formatMessage(const QByteArray &payload) const
 {
     const char sep = m_spaces ? ' ' : '\0';   // toHex() leaves '\0' out
     auto hex = [sep](const QByteArray &b) { return b.toHex(sep).toUpper(); };
     if (payload.size() <= 7)
         return hex(payload);
+    if (m_headersOn) {
+        // Headers on: the frames as they are on the bus, each behind the
+        // answering ECU's id. A first frame (1L LL, 6 bytes), then
+        // consecutive frames (21, 22 ... 2F, 20 ..., 7 bytes, the last one
+        // padded)
+        const QByteArray id = replyId();
+        const auto frame = [&](const QByteArray &bytes) {
+            return m_spaces ? id + " " + hex(bytes) : id + hex(bytes);
+        };
+        QByteArray first;
+        first.append(static_cast<char>(0x10 | ((payload.size() >> 8) & 0x0F)));
+        first.append(static_cast<char>(payload.size() & 0xFF));
+        QByteArray out = frame(first + payload.left(6));
+        int index = 1;
+        for (int pos = 6; pos < payload.size(); pos += 7, ++index) {
+            QByteArray next(1, static_cast<char>(0x20 | (index % 16)));
+            next += payload.mid(pos, 7);
+            out += "\r" + frame(next.leftJustified(8, '\0'));
+        }
+        return out;
+    }
     // CAN multi-frame (ISO 15765-4, headers off): byte count, then frames of
     // 6 and 7 bytes numbered 0-F
     QByteArray out = QByteArray::number(payload.size(), 16).toUpper().rightJustified(3, '0');
@@ -231,9 +399,36 @@ QByteArray SimElm327Device::respond(const QByteArray &command)
 
     if (cmd.startsWith("AT")) {
         if (cmd == "ATZ" || cmd == "ATWS") {
+            m_unreset = false;
             m_spaces = true;
+            m_echo = true;
             m_probed = false;
+            m_header.clear();
+            m_headersOn = false;
+            m_receiveFilter.clear();
             return "ELM327 v1.5";
+        }
+        if (cmd == "ATE0" || cmd == "ATE1") {
+            m_echo = cmd == "ATE1";
+            return "OK";
+        }
+        if (cmd == "ATH0" || cmd == "ATH1") {
+            m_headersOn = cmd == "ATH1";
+            return "OK";
+        }
+        if (cmd.startsWith("ATCRA")) {
+            m_receiveFilter = cmd.mid(5);
+            return "OK";
+        }
+        if (cmd == "ATAR") {
+            m_receiveFilter.clear();
+            return "OK";
+        }
+        if (cmd == "ATMA") {
+            m_monitoring = true;
+            m_monitorAtMs = m_clock.elapsed();
+            m_monitorSent = 0;
+            return QByteArray();
         }
         if (cmd == "ATI")
             return "ELM327 v1.5";
@@ -247,8 +442,32 @@ QByteArray SimElm327Device::respond(const QByteArray &command)
             return "AUTO, ISO 15765-4 (CAN 11/500)";
         if (cmd == "ATDPN")
             return "A6";
-        return "OK";
+        if (cmd.startsWith("ATSH")) {
+            // The request address: 7DF (everyone) and 7E0 reach the engine
+            // ECU, 7E1 the transmission's; nobody is at any other
+            m_header = cmd.mid(4);
+            if (m_header == "7DF")
+                m_header.clear();
+            return "OK";
+        }
+        // The other commands an ELM327 knows and this one accepts without
+        // modelling; anything else is "?", as on the real thing, so a typo
+        // in the worker's setup or a new command shows up in the tests
+        static const char *const kAccepted[] = {"ATL0", "ATL1", "ATM0", "ATM1", "ATD", "ATPC", "ATAL", "ATNL",
+                                                "ATAT0", "ATAT1", "ATAT2", "ATCAF0", "ATCAF1",
+                                                "ATCSM0", "ATCSM1", "ATCFC0", "ATCFC1"};
+        for (const char *known : kAccepted)
+            if (cmd == known)
+                return "OK";
+        if (cmd.startsWith("ATSP") || cmd.startsWith("ATTP") || cmd.startsWith("ATST")
+            || cmd.startsWith("ATCF") || cmd.startsWith("ATCM") || cmd.startsWith("ATFC"))
+            return "OK";
+        return "?";
     }
+
+    // Ignition off: the adapter searches every protocol and finds no ECU
+    if (m_state->link().ignitionOff)
+        return "SEARCHING...\rUNABLE TO CONNECT";
 
     bool ok = false;
     const int mode = cmd.left(2).toInt(&ok, 16);
@@ -257,6 +476,33 @@ QByteArray SimElm327Device::respond(const QByteArray &command)
     const int pid = cmd.size() >= 4 ? cmd.mid(2, 2).toInt(&ok, 16) : -1;
     if (!ok)
         return "?";
+
+    // Manufacturer-specific readings (mode 22), for custom PIDs. The
+    // transmission ECU answers 1940, fluid temperature as GM has it (one
+    // byte, C + 40), only when addressed (ATSH7E1); the engine ECU answers
+    // 2000, battery millivolts in two bytes, a made-up id.
+    if (mode == 0x22 && cmd.size() == 6) {
+        const int did = cmd.mid(2, 4).toInt(&ok, 16);
+        const CarValues car = m_state->values();
+        QByteArray data;
+        if (ok && did == 0x1940 && m_header == "7E1")
+            data.append(static_cast<char>(qBound(0, qRound(car.oil - 8.0 + 40.0), 255)));
+        else if (ok && did == 0x2000 && (m_header.isEmpty() || m_header == "7E0")) {
+            const int mv = qBound(0, qRound(car.voltage * 1000.0), 65535);
+            data.append(static_cast<char>(mv >> 8)).append(static_cast<char>(mv & 0xFF));
+        }
+        if (data.isEmpty()) {
+            // The ECU spoken to refuses an id it does not have (7F 22 31,
+            // request out of range); an address nobody is at stays silent
+            if (m_header == "7E1" || m_header == "7E0")
+                return formatMessage(QByteArray::fromHex("7F2231"));
+            return "NO DATA";
+        }
+        return formatMessage(QByteArray::fromHex("62" + cmd.mid(2, 4)) + data);
+    }
+    // Everything below is the engine ECU's
+    if (!m_header.isEmpty() && m_header != "7E0")
+        return "NO DATA";
 
     auto reply = [this](int respMode, int respPid, const QByteArray &data) {
         QByteArray payload;
@@ -322,6 +568,9 @@ QByteArray SimElm327Device::respond(const QByteArray &command)
     case 0x0A:
         return dtcList(0x4A, {});
     case 0x04:
+        // Refused, as many ECUs do with the engine running: 7F 04 22
+        if (m_state->link().refuseClear)
+            return formatMessage(QByteArray::fromHex("7F0422"));
         m_state->updateValues([](CarValues &c) {
             c.storedDtcs.clear();
             c.pendingDtcs.clear();
@@ -363,12 +612,14 @@ QByteArray SimElm327Device::mode01(int pid)
             return QByteArray();
         quint32 bitmap = 0;
         for (int i = 1; i <= 32; ++i) {
+            if (pid + i == 0x0C && m_state->link().noRpm)
+                continue;
             if (supportedPids().contains(pid + i) || (i == 32 && anyAbove(pid + 0x20)))
                 bitmap |= 1u << (32 - i);
         }
         return u32(bitmap);
     }
-    if (!supportedPids().contains(pid))
+    if (!supportedPids().contains(pid) || (pid == 0x0C && m_state->link().noRpm))
         return QByteArray();
 
     const CarValues v = m_state->values();

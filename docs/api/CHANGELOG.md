@@ -37,6 +37,19 @@ Changed (dashboard files, not the protocol): `warnAbove` on Bar and Segmented ga
 - `networkManager.releaseUrl` / `releaseUrlChanged`: a packaged build (no git checkout) now compares its version with the latest GitHub release instead of failing with "Could not determine local version"; while `updateStatus` is `"update-available"` this is the release's page on github.com, `remoteCommit` its tag and `remoteCommitMsg` its title.
 - The audio output picker: `settingsManager.audioOutputDevice` / `audioOutputDeviceChanged` / `save_audio_output_device` (a QAudioDevice id, empty = the system default), `mediaManager.audioOutputs` / `currentAudioOutput` / `audioOutputsChanged`, `phoneMirrorManager.setAudioOutputDevice`.
 
+- camelCase method names (2026-11-15): every snake_case method of `mediaManager`, `obdManager`, `audioAnalyzer`, `esp32VolumeManager`, `clock` and `networkManager` has a camelCase twin with the same parameters, result and permission scope (`mediaManager.nextTrack`, `getAlbum`, `sortMediaFiles`; `obdManager.connectObd`, `readDtc`, `clearDtc`, `connectToAdapter`; `audioAnalyzer.getCurrentLevels`; `esp32VolumeManager.connectDevice`; `clock.updateTime`; `networkManager.shutdownDevice`; 104 names in all, the full list in each object's file). New code calls these.
+- Writable settings (2026-11-15): the 85 plain settings of `settingsManager` (one bool, number or string each: `showClock`, `uiScale`, `themeSetting`, ...) are writable properties, with the `settings` permission, so `set` works on them; so are `mediaFolder`, `homeOBDParameters`, `scrcpyAudioGainDb` and `scrcpyAudioDuckLevelDb`. A write goes through the same checks as the setting's `save_*` slot.
+
+Behaviour (no protocol change), `settingsManager`, 2026-11-15:
+- `save_setting(key, value)` on a plain setting now takes the setting's own path: the property and its notify signal follow at once (it used to write the file only, and the property kept the old value until the next start), a value of another type or outside the setting's limits is refused, and `get_setting(key)` returns the value in the setting's type.
+- A value outside these ranges is refused, where it used to be stored as given: `uiScale` 0.5 to 2.0, `clockSize` 10 to 85, `colorTransitionMs` 0 to 2000, `backgroundBlurRadius` 0 to 100, `startUpVolume` 0 to 1 (the ranges the settings pages offer). The settings that clamped still clamp.
+- Saving the value a setting already has emits nothing and writes nothing (most `save_*` slots used to emit their signal again).
+- `reset_to_defaults()` emits the signal of each setting that changed and `genericSettingChanged(key)` for each changed key without a property, where it used to emit every signal. `save_playback_state` now emits `lastPlayedSongChanged` / `lastPlayedPositionChanged` / `lastPlayedPlaylistChanged` for what it changed.
+
+Deprecated (still work in protocol 3; each carries `"deprecated"` in its file and in `describe`):
+- The 113 snake_case methods of those six objects: use the camelCase name beside each (`next_track` → `nextTrack`); they go in protocol 5 (kept through protocol 4, as the README promises). Without a twin: `mediaManager.connect_settings_manager` (does nothing), `mediaManager._save_playback_state` and `_clear_temp_files` (internal), and `obdManager.is_connected` / `get_connection_status`, for which `isConnected` / `getConnectionStatus` (and the `connected` / `connectionStatus` properties) already existed. `settingsManager`'s `save_*` / `get_*` members are not deprecated here.
+- `settingsManager`: the 85 `save_*` / `set_last_settings_section` slots that set one plain setting, and the 36 `get_*` methods that only repeat a property: use the property (each note names it). They go in protocol 5. The 36 snake_case methods that do more (custom themes, the home cards, gesture mapping, `save_setting` / `get_setting`, `apply_settings`, `reset_to_defaults`, ...) are not deprecated.
+
 ## Protocol 2
 
 2026-10-23. Pairing.

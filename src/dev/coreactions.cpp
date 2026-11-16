@@ -51,6 +51,7 @@ struct NumSetting {
     const char *method;
     bool isFloat;
     double lo, hi;
+    const char *property;
 };
 
 // Lookup tables for the navigate / settings actions
@@ -83,17 +84,20 @@ const QList<std::tuple<QString, const char *, const char *>> kBoolSettings = {
     {"song_length_transition", "save_song_length_transition", "songLengthTransition"},
 };
 
+// key, save slot, float?, range, property. The ranges are the settings
+// table's (settingsmanager.cpp), where it has one: a value outside is
+// refused there, and set_numeric_setting reads the property back to say so
 const QList<NumSetting> kNumSettings = {
-    {"ui_scale", "save_ui_scale", true, 0.5, 2.0},
-    {"blur_radius", "save_background_blur_radius", false, 0, 100},
-    {"color_transition_ms", "save_color_transition_ms", false, 0, 5000},
-    {"album_art_corner_radius", "save_album_art_corner_radius", false, 2, 32},
-    {"bg_overlay_opacity", "save_background_overlay_opacity", false, 0, 100},
-    {"side_card_opacity", "save_side_card_opacity", true, 0.1, 1.0},
-    {"side_card_angle", "save_side_card_angle", false, 5, 60},
-    {"button_tilt_duration", "save_button_tilt_duration", false, 50, 500},
-    {"text_scroll_speed", "save_text_scroll_speed", false, 1000, 10000},
-    {"clock_size", "save_clock_size", false, 8, 72},
+    {"ui_scale", "save_ui_scale", true, 0.5, 2.0, "uiScale"},
+    {"blur_radius", "save_background_blur_radius", false, 0, 100, "backgroundBlurRadius"},
+    {"color_transition_ms", "save_color_transition_ms", false, 0, 2000, "colorTransitionMs"},
+    {"album_art_corner_radius", "save_album_art_corner_radius", false, 2, 32, "albumArtCornerRadius"},
+    {"bg_overlay_opacity", "save_background_overlay_opacity", false, 0, 100, "backgroundOverlayOpacity"},
+    {"side_card_opacity", "save_side_card_opacity", true, 0.1, 1.0, "sideCardOpacity"},
+    {"side_card_angle", "save_side_card_angle", false, 5, 60, "sideCardAngle"},
+    {"button_tilt_duration", "save_button_tilt_duration", false, 50, 500, "buttonTiltDuration"},
+    {"text_scroll_speed", "save_text_scroll_speed", false, 1000, 10000, "textScrollSpeed"},
+    {"clock_size", "save_clock_size", false, 10, 85, "clockSize"},
 };
 
 const QList<std::tuple<QString, const char *, QStringList>> kStrSettings = {
@@ -378,10 +382,16 @@ void registerCoreActions(CommandServer &server, const CoreTargets &t)
             v = std::trunc(v);
         v = std::clamp(v, n.lo, n.hi);
         const QVariant value = n.isFloat ? QVariant(v) : QVariant(int(v));
-        return Gui::onGui([s, key, n, value] {
+        const QVariant now = Gui::onGui([s, n, value] {
             invokeByName(s, n.method, {value});
-            return QVariant(QVariantMap{{"key", key}, {"value", value}});
+            return s->property(n.property);
         });
+        // The settings manager has the last word (its table's range, a
+        // clamp): say what the setting is now, and say so if it was refused
+        if (std::abs(now.toDouble() - value.toDouble()) > 1e-4)
+            throw CommandError(QStringLiteral("%1 did not take %2 (it is %3)")
+                                   .arg(key, value.toString(), now.toString()));
+        return QVariant(QVariantMap{{"key", key}, {"value", value}});
     });
     server.registerAction("list_numeric_settings", [](const QVariantMap &) {
         QVariantMap out;

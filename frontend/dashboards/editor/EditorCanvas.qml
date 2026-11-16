@@ -32,6 +32,7 @@
 import QtQuick 2.15
 import QtQuick.Window 2.15
 import "../.." as App
+import "../CellProps.js" as CellProps
 
 Item {
     id: canvas
@@ -186,15 +187,6 @@ Item {
         dragActive = false
         dragResizing = false
         dragIndex = -1
-    }
-
-    function _unitBinding(paramId, v) {
-        return Qt.binding(function() { return App.OBDParameterModel.toDisplay(paramId, v) })
-    }
-
-    function _coerce(v) {
-        if (v === "NaN") return NaN
-        return v
     }
 
     // ── Background: taps on free space ──────────────────────────────────
@@ -407,20 +399,12 @@ Item {
                     if (paramId !== "" && item.paramId !== undefined
                             && App.OBDParameterModel.hasParameter(paramId))
                         item.paramId = paramId
-                    // Range props (min, max, thresholds) are in the PID's own
-                    // unit in the spec: bound through the gauges' unit, so
-                    // they follow a unit setting change too
-                    var props = JSON.parse(model.propsJson || "{}")
-                    var unitKeys = paramId ? App.WidgetCatalog.paramUnitProps(model.type) : []
-                    for (var key in props) {
-                        if (!props.hasOwnProperty(key)) continue
-                        if (item[key] === undefined) continue
-                        var v = canvas._coerce(props[key])
-                        if (unitKeys.indexOf(key) !== -1)
-                            item[key] = canvas._unitBinding(paramId, v)
-                        else
-                            item[key] = v
-                    }
+                    // The cell's props, exactly as the renderer applies them
+                    // (dashboards/CellProps.js)
+                    var props = {}
+                    try { props = JSON.parse(model.propsJson || "{}") } catch (e) { props = {} }
+                    CellProps.apply(item, model.type, paramId, props, App.WidgetCatalog,
+                                    App.OBDParameterModel, "EditorCanvas")
                     if (cellRoot._test !== undefined) cellRoot._applyTest()
                 }
             }

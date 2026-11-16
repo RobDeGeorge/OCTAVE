@@ -4,7 +4,7 @@
 package octave
 
 // ObjectNames is every service object, as hello lists them.
-var ObjectNames = []string{"airPlayManager", "androidAutoManager", "audioAnalyzer", "berryIMU", "clock", "dashboardManager", "diagnosticsManager", "esp32VolumeManager", "fontCatalog", "frontendManager", "gestureSensor", "mediaManager", "networkManager", "nowPlaying", "obdAdapterFinder", "obdManager", "paramStore", "parameterCatalog", "phoneMirrorManager", "settingsManager", "shiftLightManager", "sim", "spotifyManager", "themeCatalog", "tripRecorder", "units", "volumeController"}
+var ObjectNames = []string{"airPlayManager", "androidAutoManager", "audioAnalyzer", "berryIMU", "busMonitor", "clock", "customPids", "dashboardManager", "diagnosticsManager", "esp32VolumeManager", "fontCatalog", "frontendManager", "gestureSensor", "mediaManager", "networkManager", "nowPlaying", "obdAdapterFinder", "obdManager", "paramStore", "parameterCatalog", "phoneMirrorManager", "settingsManager", "shiftLightManager", "sim", "spotifyManager", "themeCatalog", "tripRecorder", "units", "volumeController"}
 
 // AirPlayManager is the service object "airPlayManager" (C++ AirPlayManager); NewAirPlayManager(c) binds it to a client.
 type AirPlayManager struct{ c *Client }
@@ -492,33 +492,45 @@ func (o AudioAnalyzer) SetPosition(positionMs int64) error {
 }
 
 // AnalyzeFile calls analyze_file(QString).
+//
+// Deprecated: use analyzeFile; goes in protocol 5
 func (o AudioAnalyzer) AnalyzeFile(filePath string) error {
 	return o.c.Call("audioAnalyzer", "analyze_file", nil, filePath)
 }
 
 // UpdatePosition calls update_position(float).
+//
+// Deprecated: use updatePosition; goes in protocol 5
 func (o AudioAnalyzer) UpdatePosition(positionSeconds float64) error {
 	return o.c.Call("audioAnalyzer", "update_position", nil, positionSeconds)
 }
 
 // SetActive calls set_active(bool).
+//
+// Deprecated: use setActive; goes in protocol 5
 func (o AudioAnalyzer) SetActive(active bool) error {
 	return o.c.Call("audioAnalyzer", "set_active", nil, active)
 }
 
 // GetCurrentLevels calls get_current_levels() -> QVariantList.
+//
+// Deprecated: use getCurrentLevels; goes in protocol 5
 func (o AudioAnalyzer) GetCurrentLevels() (v []any, err error) {
 	err = o.c.Call("audioAnalyzer", "get_current_levels", &v)
 	return
 }
 
 // GetNumBarsCall calls get_num_bars() -> int.
+//
+// Deprecated: use getNumBars; goes in protocol 5
 func (o AudioAnalyzer) GetNumBarsCall() (v int, err error) {
 	err = o.c.Call("audioAnalyzer", "get_num_bars", &v)
 	return
 }
 
 // IsAnalyzed calls is_analyzed() -> bool.
+//
+// Deprecated: use isAnalyzed; goes in protocol 5
 func (o AudioAnalyzer) IsAnalyzed() (v bool, err error) {
 	err = o.c.Call("audioAnalyzer", "is_analyzed", &v)
 	return
@@ -530,18 +542,72 @@ func (o AudioAnalyzer) Clear() error {
 }
 
 // SetLive calls set_live(bool).
+//
+// Deprecated: use setLive; goes in protocol 5
 func (o AudioAnalyzer) SetLive(live bool) error {
 	return o.c.Call("audioAnalyzer", "set_live", nil, live)
 }
 
 // UpdateLive calls update_live().
+//
+// Deprecated: use updateLive; goes in protocol 5
 func (o AudioAnalyzer) UpdateLive() error {
 	return o.c.Call("audioAnalyzer", "update_live", nil)
 }
 
 // FeedLivePcm calls feed_live_pcm(QByteArray, int).
+//
+// Deprecated: use feedLivePcm; goes in protocol 5
 func (o AudioAnalyzer) FeedLivePcm(pcm string, bufferedMs int) error {
 	return o.c.Call("audioAnalyzer", "feed_live_pcm", nil, pcm, bufferedMs)
+}
+
+// AnalyzeFileCall calls analyzeFile(QString).
+func (o AudioAnalyzer) AnalyzeFileCall(filePath string) error {
+	return o.c.Call("audioAnalyzer", "analyzeFile", nil, filePath)
+}
+
+// UpdatePositionCall calls updatePosition(float).
+func (o AudioAnalyzer) UpdatePositionCall(positionSeconds float64) error {
+	return o.c.Call("audioAnalyzer", "updatePosition", nil, positionSeconds)
+}
+
+// SetActiveCall calls setActive(bool).
+func (o AudioAnalyzer) SetActiveCall(active bool) error {
+	return o.c.Call("audioAnalyzer", "setActive", nil, active)
+}
+
+// GetCurrentLevelsCall calls getCurrentLevels() -> QVariantList.
+func (o AudioAnalyzer) GetCurrentLevelsCall() (v []any, err error) {
+	err = o.c.Call("audioAnalyzer", "getCurrentLevels", &v)
+	return
+}
+
+// GetNumBarsCallCall calls getNumBars() -> int.
+func (o AudioAnalyzer) GetNumBarsCallCall() (v int, err error) {
+	err = o.c.Call("audioAnalyzer", "getNumBars", &v)
+	return
+}
+
+// IsAnalyzedCall calls isAnalyzed() -> bool.
+func (o AudioAnalyzer) IsAnalyzedCall() (v bool, err error) {
+	err = o.c.Call("audioAnalyzer", "isAnalyzed", &v)
+	return
+}
+
+// SetLiveCall calls setLive(bool).
+func (o AudioAnalyzer) SetLiveCall(live bool) error {
+	return o.c.Call("audioAnalyzer", "setLive", nil, live)
+}
+
+// UpdateLiveCall calls updateLive().
+func (o AudioAnalyzer) UpdateLiveCall() error {
+	return o.c.Call("audioAnalyzer", "updateLive", nil)
+}
+
+// FeedLivePcmCall calls feedLivePcm(QByteArray, int).
+func (o AudioAnalyzer) FeedLivePcmCall(pcm string, bufferedMs int) error {
+	return o.c.Call("audioAnalyzer", "feedLivePcm", nil, pcm, bufferedMs)
 }
 
 // BerryIMU is the service object "berryIMU" (C++ BerryIMUManager); NewBerryIMU(c) binds it to a client.
@@ -618,6 +684,116 @@ func (o BerryIMU) Cleanup() error {
 	return o.c.Call("berryIMU", "cleanup", nil)
 }
 
+// BusMonitor is the service object "busMonitor" (C++ BusMonitor); NewBusMonitor(c) binds it to a client.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+type BusMonitor struct{ c *Client }
+
+// NewBusMonitor binds "busMonitor" to c.
+func NewBusMonitor(c *Client) BusMonitor { return BusMonitor{c} }
+
+// Name is the object's name on the wire.
+func (BusMonitor) Name() string { return "busMonitor" }
+
+// GetAvailable reads the property "available" (bool).
+func (o BusMonitor) GetAvailable() (v bool, err error) {
+	err = o.c.Get("busMonitor", "available", &v)
+	return
+}
+
+// GetActive reads the property "active" (bool).
+func (o BusMonitor) GetActive() (v bool, err error) {
+	err = o.c.Get("busMonitor", "active", &v)
+	return
+}
+
+// GetFilter reads the property "filter" (QString).
+func (o BusMonitor) GetFilter() (v string, err error) {
+	err = o.c.Get("busMonitor", "filter", &v)
+	return
+}
+
+// GetNote reads the property "note" (QString).
+func (o BusMonitor) GetNote() (v string, err error) {
+	err = o.c.Get("busMonitor", "note", &v)
+	return
+}
+
+// GetIds reads the property "ids" (QVariantList).
+func (o BusMonitor) GetIds() (v []any, err error) {
+	err = o.c.Get("busMonitor", "ids", &v)
+	return
+}
+
+// GetFrameCount reads the property "frameCount" (int).
+func (o BusMonitor) GetFrameCount() (v int, err error) {
+	err = o.c.Get("busMonitor", "frameCount", &v)
+	return
+}
+
+// GetFramesPerSecond reads the property "framesPerSecond" (int).
+func (o BusMonitor) GetFramesPerSecond() (v int, err error) {
+	err = o.c.Get("busMonitor", "framesPerSecond", &v)
+	return
+}
+
+// GetOverruns reads the property "overruns" (int).
+func (o BusMonitor) GetOverruns() (v int, err error) {
+	err = o.c.Get("busMonitor", "overruns", &v)
+	return
+}
+
+// GetCanRecord reads the property "canRecord" (bool).
+func (o BusMonitor) GetCanRecord() (v bool, err error) {
+	err = o.c.Get("busMonitor", "canRecord", &v)
+	return
+}
+
+// GetRecording reads the property "recording" (bool).
+func (o BusMonitor) GetRecording() (v bool, err error) {
+	err = o.c.Get("busMonitor", "recording", &v)
+	return
+}
+
+// GetLogFile reads the property "logFile" (QString).
+func (o BusMonitor) GetLogFile() (v string, err error) {
+	err = o.c.Get("busMonitor", "logFile", &v)
+	return
+}
+
+// Start1 calls start(QString) -> bool.
+func (o BusMonitor) Start1(filter string) (v bool, err error) {
+	err = o.c.Call("busMonitor", "start", &v, filter)
+	return
+}
+
+// Start0 calls start() -> bool.
+func (o BusMonitor) Start0() (v bool, err error) {
+	err = o.c.Call("busMonitor", "start", &v)
+	return
+}
+
+// Stop calls stop().
+func (o BusMonitor) Stop() error {
+	return o.c.Call("busMonitor", "stop", nil)
+}
+
+// Clear calls clear().
+func (o BusMonitor) Clear() error {
+	return o.c.Call("busMonitor", "clear", nil)
+}
+
+// StartRecording calls startRecording() -> bool.
+func (o BusMonitor) StartRecording() (v bool, err error) {
+	err = o.c.Call("busMonitor", "startRecording", &v)
+	return
+}
+
+// StopRecording calls stopRecording().
+func (o BusMonitor) StopRecording() error {
+	return o.c.Call("busMonitor", "stopRecording", nil)
+}
+
 // Clock is the service object "clock" (C++ Clock); NewClock(c) binds it to a client.
 type Clock struct{ c *Client }
 
@@ -634,8 +810,56 @@ func (o Clock) GetTime() (v string, err error) {
 }
 
 // UpdateTime calls update_time().
+//
+// Deprecated: use updateTime; goes in protocol 5
 func (o Clock) UpdateTime() error {
 	return o.c.Call("clock", "update_time", nil)
+}
+
+// UpdateTimeCall calls updateTime().
+func (o Clock) UpdateTimeCall() error {
+	return o.c.Call("clock", "updateTime", nil)
+}
+
+// CustomPids is the service object "customPids" (C++ CustomPids); NewCustomPids(c) binds it to a client.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+type CustomPids struct{ c *Client }
+
+// NewCustomPids binds "customPids" to c.
+func NewCustomPids(c *Client) CustomPids { return CustomPids{c} }
+
+// Name is the object's name on the wire.
+func (CustomPids) Name() string { return "customPids" }
+
+// GetFile reads the property "file" (QString).
+func (o CustomPids) GetFile() (v string, err error) {
+	err = o.c.Get("customPids", "file", &v)
+	return
+}
+
+// GetFileExists reads the property "fileExists" (bool).
+func (o CustomPids) GetFileExists() (v bool, err error) {
+	err = o.c.Get("customPids", "fileExists", &v)
+	return
+}
+
+// GetPids reads the property "pids" (QVariantList).
+func (o CustomPids) GetPids() (v []any, err error) {
+	err = o.c.Get("customPids", "pids", &v)
+	return
+}
+
+// GetErrors reads the property "errors" (QStringList).
+func (o CustomPids) GetErrors() (v []string, err error) {
+	err = o.c.Get("customPids", "errors", &v)
+	return
+}
+
+// CreateExample calls createExample() -> bool.
+func (o CustomPids) CreateExample() (v bool, err error) {
+	err = o.c.Call("customPids", "createExample", &v)
+	return
 }
 
 // DashboardManager is the service object "dashboardManager" (C++ DashboardManager); NewDashboardManager(c) binds it to a client.
@@ -1072,45 +1296,61 @@ func (o Esp32VolumeManager) GetAvailablePorts() (v []any, err error) {
 }
 
 // ConnectDevice calls connect_device().
+//
+// Deprecated: use connectDevice; goes in protocol 5
 func (o Esp32VolumeManager) ConnectDevice() error {
 	return o.c.Call("esp32VolumeManager", "connect_device", nil)
 }
 
 // DisconnectDevice calls disconnect_device().
+//
+// Deprecated: use disconnectDevice; goes in protocol 5
 func (o Esp32VolumeManager) DisconnectDevice() error {
 	return o.c.Call("esp32VolumeManager", "disconnect_device", nil)
 }
 
 // GetAvailablePortsCall calls get_available_ports() -> QVariantList.
+//
+// Deprecated: use getAvailablePorts; goes in protocol 5
 func (o Esp32VolumeManager) GetAvailablePortsCall() (v []any, err error) {
 	err = o.c.Call("esp32VolumeManager", "get_available_ports", &v)
 	return
 }
 
 // IsConnected calls is_connected() -> bool.
+//
+// Deprecated: use isConnected; goes in protocol 5
 func (o Esp32VolumeManager) IsConnected() (v bool, err error) {
 	err = o.c.Call("esp32VolumeManager", "is_connected", &v)
 	return
 }
 
 // GetConnectionStatusCall calls get_connection_status() -> QString.
+//
+// Deprecated: use getConnectionStatus; goes in protocol 5
 func (o Esp32VolumeManager) GetConnectionStatusCall() (v string, err error) {
 	err = o.c.Call("esp32VolumeManager", "get_connection_status", &v)
 	return
 }
 
 // GetConnectionDetailCall calls get_connection_detail() -> QString.
+//
+// Deprecated: use getConnectionDetail; goes in protocol 5
 func (o Esp32VolumeManager) GetConnectionDetailCall() (v string, err error) {
 	err = o.c.Call("esp32VolumeManager", "get_connection_detail", &v)
 	return
 }
 
 // RefreshPorts calls refresh_ports().
+//
+// Deprecated: use refreshPorts; goes in protocol 5
 func (o Esp32VolumeManager) RefreshPorts() error {
 	return o.c.Call("esp32VolumeManager", "refresh_ports", nil)
 }
 
 // ResetReconnectAttempts calls reset_reconnect_attempts().
+//
+// Deprecated: use resetReconnectAttempts; goes in protocol 5
 func (o Esp32VolumeManager) ResetReconnectAttempts() error {
 	return o.c.Call("esp32VolumeManager", "reset_reconnect_attempts", nil)
 }
@@ -1118,6 +1358,50 @@ func (o Esp32VolumeManager) ResetReconnectAttempts() error {
 // Cleanup calls cleanup().
 func (o Esp32VolumeManager) Cleanup() error {
 	return o.c.Call("esp32VolumeManager", "cleanup", nil)
+}
+
+// ConnectDeviceCall calls connectDevice().
+func (o Esp32VolumeManager) ConnectDeviceCall() error {
+	return o.c.Call("esp32VolumeManager", "connectDevice", nil)
+}
+
+// DisconnectDeviceCall calls disconnectDevice().
+func (o Esp32VolumeManager) DisconnectDeviceCall() error {
+	return o.c.Call("esp32VolumeManager", "disconnectDevice", nil)
+}
+
+// GetAvailablePortsCallCall calls getAvailablePorts() -> QVariantList.
+func (o Esp32VolumeManager) GetAvailablePortsCallCall() (v []any, err error) {
+	err = o.c.Call("esp32VolumeManager", "getAvailablePorts", &v)
+	return
+}
+
+// IsConnectedCall calls isConnected() -> bool.
+func (o Esp32VolumeManager) IsConnectedCall() (v bool, err error) {
+	err = o.c.Call("esp32VolumeManager", "isConnected", &v)
+	return
+}
+
+// GetConnectionStatusCallCall calls getConnectionStatus() -> QString.
+func (o Esp32VolumeManager) GetConnectionStatusCallCall() (v string, err error) {
+	err = o.c.Call("esp32VolumeManager", "getConnectionStatus", &v)
+	return
+}
+
+// GetConnectionDetailCallCall calls getConnectionDetail() -> QString.
+func (o Esp32VolumeManager) GetConnectionDetailCallCall() (v string, err error) {
+	err = o.c.Call("esp32VolumeManager", "getConnectionDetail", &v)
+	return
+}
+
+// RefreshPortsCall calls refreshPorts().
+func (o Esp32VolumeManager) RefreshPortsCall() error {
+	return o.c.Call("esp32VolumeManager", "refreshPorts", nil)
+}
+
+// ResetReconnectAttemptsCall calls resetReconnectAttempts().
+func (o Esp32VolumeManager) ResetReconnectAttemptsCall() error {
+	return o.c.Call("esp32VolumeManager", "resetReconnectAttempts", nil)
 }
 
 // FontCatalog is the service object "fontCatalog" (C++ FontCatalog); NewFontCatalog(c) binds it to a client.
@@ -1341,36 +1625,50 @@ func (o MediaManager) GetCurrentAudioOutput() (v string, err error) {
 }
 
 // ConnectSettingsManager calls connect_settings_manager(QObject*).
+//
+// Deprecated: does nothing; goes in protocol 5
 func (o MediaManager) ConnectSettingsManager(arg0 any) error {
 	return o.c.Call("mediaManager", "connect_settings_manager", nil, arg0)
 }
 
 // SavePlaybackState calls _save_playback_state().
+//
+// Deprecated: internal; goes in protocol 5
 func (o MediaManager) SavePlaybackState() error {
 	return o.c.Call("mediaManager", "_save_playback_state", nil)
 }
 
 // ClearTempFiles calls _clear_temp_files().
+//
+// Deprecated: internal; goes in protocol 5
 func (o MediaManager) ClearTempFiles() error {
 	return o.c.Call("mediaManager", "_clear_temp_files", nil)
 }
 
 // FlushMetadataStore calls flush_metadata_store().
+//
+// Deprecated: use flushMetadataStore; goes in protocol 5
 func (o MediaManager) FlushMetadataStore() error {
 	return o.c.Call("mediaManager", "flush_metadata_store", nil)
 }
 
 // PlayFile calls play_file(QString).
+//
+// Deprecated: use playFile; goes in protocol 5
 func (o MediaManager) PlayFile(filename string) error {
 	return o.c.Call("mediaManager", "play_file", nil, filename)
 }
 
 // NextTrack calls next_track().
+//
+// Deprecated: use nextTrack; goes in protocol 5
 func (o MediaManager) NextTrack() error {
 	return o.c.Call("mediaManager", "next_track", nil)
 }
 
 // PreviousTrack calls previous_track().
+//
+// Deprecated: use previousTrack; goes in protocol 5
 func (o MediaManager) PreviousTrack() error {
 	return o.c.Call("mediaManager", "previous_track", nil)
 }
@@ -1381,6 +1679,8 @@ func (o MediaManager) Pause() error {
 }
 
 // TogglePlay calls toggle_play().
+//
+// Deprecated: use togglePlay; goes in protocol 5
 func (o MediaManager) TogglePlay() error {
 	return o.c.Call("mediaManager", "toggle_play", nil)
 }
@@ -1391,6 +1691,8 @@ func (o MediaManager) SetMuted(muted bool) error {
 }
 
 // ToggleShuffle calls toggle_shuffle().
+//
+// Deprecated: use toggleShuffle; goes in protocol 5
 func (o MediaManager) ToggleShuffle() error {
 	return o.c.Call("mediaManager", "toggle_shuffle", nil)
 }
@@ -1406,177 +1708,239 @@ func (o MediaManager) SetDucking(factor float64) error {
 }
 
 // SetPosition calls set_position(int).
+//
+// Deprecated: use setPosition; goes in protocol 5
 func (o MediaManager) SetPosition(positionMs int) error {
 	return o.c.Call("mediaManager", "set_position", nil, positionMs)
 }
 
 // ExtractColorsFromAlbumArt calls extract_colors_from_album_art(QString).
+//
+// Deprecated: use extractColorsFromAlbumArt; goes in protocol 5
 func (o MediaManager) ExtractColorsFromAlbumArt(filename string) error {
 	return o.c.Call("mediaManager", "extract_colors_from_album_art", nil, filename)
 }
 
 // ExtractColorsFromImage calls extract_colors_from_image(QString).
+//
+// Deprecated: use extractColorsFromImage; goes in protocol 5
 func (o MediaManager) ExtractColorsFromImage(imagePath string) error {
 	return o.c.Call("mediaManager", "extract_colors_from_image", nil, imagePath)
 }
 
 // ScanLibrary1 calls scan_library(bool).
+//
+// Deprecated: use scanLibrary; goes in protocol 5
 func (o MediaManager) ScanLibrary1(resetDisplayNames bool) error {
 	return o.c.Call("mediaManager", "scan_library", nil, resetDisplayNames)
 }
 
 // ScanLibrary0 calls scan_library().
+//
+// Deprecated: use scanLibrary; goes in protocol 5
 func (o MediaManager) ScanLibrary0() error {
 	return o.c.Call("mediaManager", "scan_library", nil)
 }
 
 // SetLibraryRoot calls set_library_root(QString).
+//
+// Deprecated: use setLibraryRoot; goes in protocol 5
 func (o MediaManager) SetLibraryRoot(path string) error {
 	return o.c.Call("mediaManager", "set_library_root", nil, path)
 }
 
 // StripFilenames calls strip_filenames().
+//
+// Deprecated: use stripFilenames; goes in protocol 5
 func (o MediaManager) StripFilenames() error {
 	return o.c.Call("mediaManager", "strip_filenames", nil)
 }
 
 // SelectPlaylist calls select_playlist(QString).
+//
+// Deprecated: use selectPlaylist; goes in protocol 5
 func (o MediaManager) SelectPlaylist(name string) error {
 	return o.c.Call("mediaManager", "select_playlist", nil, name)
 }
 
 // CreatePlaylist calls create_playlist(QString) -> bool.
+//
+// Deprecated: use createPlaylist; goes in protocol 5
 func (o MediaManager) CreatePlaylist(name string) (v bool, err error) {
 	err = o.c.Call("mediaManager", "create_playlist", &v, name)
 	return
 }
 
 // DeletePlaylist calls delete_playlist(QString) -> bool.
+//
+// Deprecated: use deletePlaylist; goes in protocol 5
 func (o MediaManager) DeletePlaylist(name string) (v bool, err error) {
 	err = o.c.Call("mediaManager", "delete_playlist", &v, name)
 	return
 }
 
 // MoveSongToPlaylist calls move_song_to_playlist(QString, QString) -> bool.
+//
+// Deprecated: use moveSongToPlaylist; goes in protocol 5
 func (o MediaManager) MoveSongToPlaylist(filename string, targetPlaylist string) (v bool, err error) {
 	err = o.c.Call("mediaManager", "move_song_to_playlist", &v, filename, targetPlaylist)
 	return
 }
 
 // DeleteSong calls delete_song(QString) -> bool.
+//
+// Deprecated: use deleteSong; goes in protocol 5
 func (o MediaManager) DeleteSong(filename string) (v bool, err error) {
 	err = o.c.Call("mediaManager", "delete_song", &v, filename)
 	return
 }
 
 // PlayFileAtPath calls play_file_at_path(QString) -> bool.
+//
+// Deprecated: use playFileAtPath; goes in protocol 5
 func (o MediaManager) PlayFileAtPath(filePath string) (v bool, err error) {
 	err = o.c.Call("mediaManager", "play_file_at_path", &v, filePath)
 	return
 }
 
 // InvalidateStatsCache calls invalidate_stats_cache().
+//
+// Deprecated: use invalidateStatsCache; goes in protocol 5
 func (o MediaManager) InvalidateStatsCache() error {
 	return o.c.Call("mediaManager", "invalidate_stats_cache", nil)
 }
 
 // GetMediaFiles1 calls get_media_files(bool) -> QStringList.
+//
+// Deprecated: use getMediaFiles; goes in protocol 5
 func (o MediaManager) GetMediaFiles1(emitSignal bool) (v []string, err error) {
 	err = o.c.Call("mediaManager", "get_media_files", &v, emitSignal)
 	return
 }
 
 // GetMediaFiles0 calls get_media_files() -> QStringList.
+//
+// Deprecated: use getMediaFiles; goes in protocol 5
 func (o MediaManager) GetMediaFiles0() (v []string, err error) {
 	err = o.c.Call("mediaManager", "get_media_files", &v)
 	return
 }
 
 // GetFormattedDuration calls get_formatted_duration(QString) -> QString.
+//
+// Deprecated: use getFormattedDuration; goes in protocol 5
 func (o MediaManager) GetFormattedDuration(filename string) (v string, err error) {
 	err = o.c.Call("mediaManager", "get_formatted_duration", &v, filename)
 	return
 }
 
 // GetBand calls get_band(QString) -> QString.
+//
+// Deprecated: use getBand; goes in protocol 5
 func (o MediaManager) GetBand(filename string) (v string, err error) {
 	err = o.c.Call("mediaManager", "get_band", &v, filename)
 	return
 }
 
 // GetAlbum calls get_album(QString) -> QString.
+//
+// Deprecated: use getAlbum; goes in protocol 5
 func (o MediaManager) GetAlbum(filename string) (v string, err error) {
 	err = o.c.Call("mediaManager", "get_album", &v, filename)
 	return
 }
 
 // GetAlbumArt calls get_album_art(QString) -> QString.
+//
+// Deprecated: use getAlbumArt; goes in protocol 5
 func (o MediaManager) GetAlbumArt(filename string) (v string, err error) {
 	err = o.c.Call("mediaManager", "get_album_art", &v, filename)
 	return
 }
 
 // GetCurrentFile calls get_current_file() -> QString.
+//
+// Deprecated: use getCurrentFile; goes in protocol 5
 func (o MediaManager) GetCurrentFile() (v string, err error) {
 	err = o.c.Call("mediaManager", "get_current_file", &v)
 	return
 }
 
 // GetNextTrackName calls get_next_track_name() -> QString.
+//
+// Deprecated: use getNextTrackName; goes in protocol 5
 func (o MediaManager) GetNextTrackName() (v string, err error) {
 	err = o.c.Call("mediaManager", "get_next_track_name", &v)
 	return
 }
 
 // GetPreviousTrackName calls get_previous_track_name() -> QString.
+//
+// Deprecated: use getPreviousTrackName; goes in protocol 5
 func (o MediaManager) GetPreviousTrackName() (v string, err error) {
 	err = o.c.Call("mediaManager", "get_previous_track_name", &v)
 	return
 }
 
 // GetNextTrackAlbumArt calls get_next_track_album_art() -> QString.
+//
+// Deprecated: use getNextTrackAlbumArt; goes in protocol 5
 func (o MediaManager) GetNextTrackAlbumArt() (v string, err error) {
 	err = o.c.Call("mediaManager", "get_next_track_album_art", &v)
 	return
 }
 
 // GetPreviousTrackAlbumArt calls get_previous_track_album_art() -> QString.
+//
+// Deprecated: use getPreviousTrackAlbumArt; goes in protocol 5
 func (o MediaManager) GetPreviousTrackAlbumArt() (v string, err error) {
 	err = o.c.Call("mediaManager", "get_previous_track_album_art", &v)
 	return
 }
 
 // GetNeighborAlbumArts calls get_neighbor_album_arts() -> QStringList.
+//
+// Deprecated: use getNeighborAlbumArts; goes in protocol 5
 func (o MediaManager) GetNeighborAlbumArts() (v []string, err error) {
 	err = o.c.Call("mediaManager", "get_neighbor_album_arts", &v)
 	return
 }
 
 // IsPlaying calls is_playing() -> bool.
+//
+// Deprecated: use isPlaying; goes in protocol 5
 func (o MediaManager) IsPlaying() (v bool, err error) {
 	err = o.c.Call("mediaManager", "is_playing", &v)
 	return
 }
 
 // IsPaused calls is_paused() -> bool.
+//
+// Deprecated: use isPaused; goes in protocol 5
 func (o MediaManager) IsPaused() (v bool, err error) {
 	err = o.c.Call("mediaManager", "is_paused", &v)
 	return
 }
 
 // GetDuration calls get_duration() -> float.
+//
+// Deprecated: use getDuration; goes in protocol 5
 func (o MediaManager) GetDuration() (v float64, err error) {
 	err = o.c.Call("mediaManager", "get_duration", &v)
 	return
 }
 
 // GetPosition calls get_position() -> float.
+//
+// Deprecated: use getPosition; goes in protocol 5
 func (o MediaManager) GetPosition() (v float64, err error) {
 	err = o.c.Call("mediaManager", "get_position", &v)
 	return
 }
 
 // IsMuted calls is_muted() -> bool.
+//
+// Deprecated: use isMuted; goes in protocol 5
 func (o MediaManager) IsMuted() (v bool, err error) {
 	err = o.c.Call("mediaManager", "is_muted", &v)
 	return
@@ -1589,110 +1953,461 @@ func (o MediaManager) GetVolume() (v float64, err error) {
 }
 
 // IsShuffled calls is_shuffled() -> bool.
+//
+// Deprecated: use isShuffled; goes in protocol 5
 func (o MediaManager) IsShuffled() (v bool, err error) {
 	err = o.c.Call("mediaManager", "is_shuffled", &v)
 	return
 }
 
 // GetPlaylistNames calls get_playlist_names() -> QStringList.
+//
+// Deprecated: use getPlaylistNames; goes in protocol 5
 func (o MediaManager) GetPlaylistNames() (v []string, err error) {
 	err = o.c.Call("mediaManager", "get_playlist_names", &v)
 	return
 }
 
 // GetCurrentPlaylistName calls get_current_playlist_name() -> QString.
+//
+// Deprecated: use getCurrentPlaylistName; goes in protocol 5
 func (o MediaManager) GetCurrentPlaylistName() (v string, err error) {
 	err = o.c.Call("mediaManager", "get_current_playlist_name", &v)
 	return
 }
 
 // GetCurrentSongList calls get_current_song_list() -> QStringList.
+//
+// Deprecated: use getCurrentSongList; goes in protocol 5
 func (o MediaManager) GetCurrentSongList() (v []string, err error) {
 	err = o.c.Call("mediaManager", "get_current_song_list", &v)
 	return
 }
 
 // GetMovablePlaylistNames calls get_movable_playlist_names() -> QStringList.
+//
+// Deprecated: use getMovablePlaylistNames; goes in protocol 5
 func (o MediaManager) GetMovablePlaylistNames() (v []string, err error) {
 	err = o.c.Call("mediaManager", "get_movable_playlist_names", &v)
 	return
 }
 
 // GetSongPlaylistName calls get_song_playlist_name(QString) -> QString.
+//
+// Deprecated: use getSongPlaylistName; goes in protocol 5
 func (o MediaManager) GetSongPlaylistName(filename string) (v string, err error) {
 	err = o.c.Call("mediaManager", "get_song_playlist_name", &v, filename)
 	return
 }
 
 // GetSongFilePath calls get_song_file_path(QString) -> QString.
+//
+// Deprecated: use getSongFilePath; goes in protocol 5
 func (o MediaManager) GetSongFilePath(filename string) (v string, err error) {
 	err = o.c.Call("mediaManager", "get_song_file_path", &v, filename)
 	return
 }
 
 // GetFullFilePath calls get_full_file_path(QString) -> QString.
+//
+// Deprecated: use getFullFilePath; goes in protocol 5
 func (o MediaManager) GetFullFilePath(filename string) (v string, err error) {
 	err = o.c.Call("mediaManager", "get_full_file_path", &v, filename)
 	return
 }
 
 // GetDisplayName calls get_display_name(QString) -> QString.
+//
+// Deprecated: use getDisplayName; goes in protocol 5
 func (o MediaManager) GetDisplayName(filename string) (v string, err error) {
 	err = o.c.Call("mediaManager", "get_display_name", &v, filename)
 	return
 }
 
 // GetDefaultMediaDir calls get_default_media_dir() -> QString.
+//
+// Deprecated: use getDefaultMediaDir; goes in protocol 5
 func (o MediaManager) GetDefaultMediaDir() (v string, err error) {
 	err = o.c.Call("mediaManager", "get_default_media_dir", &v)
 	return
 }
 
 // GetMediaFolderName calls get_media_folder_name() -> QString.
+//
+// Deprecated: use getMediaFolderName; goes in protocol 5
 func (o MediaManager) GetMediaFolderName() (v string, err error) {
 	err = o.c.Call("mediaManager", "get_media_folder_name", &v)
 	return
 }
 
 // BrowseMusicFolders calls browse_music_folders(QString) -> QVariantMap.
+//
+// Deprecated: use browseMusicFolders; goes in protocol 5
 func (o MediaManager) BrowseMusicFolders(path string) (v map[string]any, err error) {
 	err = o.c.Call("mediaManager", "browse_music_folders", &v, path)
 	return
 }
 
 // PickBrowserLibrary calls pick_browser_library() -> bool.
+//
+// Deprecated: use pickBrowserLibrary; goes in protocol 5
 func (o MediaManager) PickBrowserLibrary() (v bool, err error) {
 	err = o.c.Call("mediaManager", "pick_browser_library", &v)
 	return
 }
 
 // GetTotalDuration calls get_total_duration() -> QString.
+//
+// Deprecated: use getTotalDuration; goes in protocol 5
 func (o MediaManager) GetTotalDuration() (v string, err error) {
 	err = o.c.Call("mediaManager", "get_total_duration", &v)
 	return
 }
 
 // GetAlbumCount calls get_album_count() -> int.
+//
+// Deprecated: use getAlbumCount; goes in protocol 5
 func (o MediaManager) GetAlbumCount() (v int, err error) {
 	err = o.c.Call("mediaManager", "get_album_count", &v)
 	return
 }
 
 // GetArtistCount calls get_artist_count() -> int.
+//
+// Deprecated: use getArtistCount; goes in protocol 5
 func (o MediaManager) GetArtistCount() (v int, err error) {
 	err = o.c.Call("mediaManager", "get_artist_count", &v)
 	return
 }
 
 // SortMediaFiles2 calls sort_media_files(QString, bool) -> QStringList.
+//
+// Deprecated: use sortMediaFiles; goes in protocol 5
 func (o MediaManager) SortMediaFiles2(sortColumn string, ascending bool) (v []string, err error) {
 	err = o.c.Call("mediaManager", "sort_media_files", &v, sortColumn, ascending)
 	return
 }
 
 // SortMediaFiles1 calls sort_media_files(QString) -> QStringList.
+//
+// Deprecated: use sortMediaFiles; goes in protocol 5
 func (o MediaManager) SortMediaFiles1(sortColumn string) (v []string, err error) {
 	err = o.c.Call("mediaManager", "sort_media_files", &v, sortColumn)
+	return
+}
+
+// FlushMetadataStoreCall calls flushMetadataStore().
+func (o MediaManager) FlushMetadataStoreCall() error {
+	return o.c.Call("mediaManager", "flushMetadataStore", nil)
+}
+
+// PlayFileCall calls playFile(QString).
+func (o MediaManager) PlayFileCall(filename string) error {
+	return o.c.Call("mediaManager", "playFile", nil, filename)
+}
+
+// NextTrackCall calls nextTrack().
+func (o MediaManager) NextTrackCall() error {
+	return o.c.Call("mediaManager", "nextTrack", nil)
+}
+
+// PreviousTrackCall calls previousTrack().
+func (o MediaManager) PreviousTrackCall() error {
+	return o.c.Call("mediaManager", "previousTrack", nil)
+}
+
+// TogglePlayCall calls togglePlay().
+func (o MediaManager) TogglePlayCall() error {
+	return o.c.Call("mediaManager", "togglePlay", nil)
+}
+
+// ToggleShuffleCall calls toggleShuffle().
+func (o MediaManager) ToggleShuffleCall() error {
+	return o.c.Call("mediaManager", "toggleShuffle", nil)
+}
+
+// SetPositionCall calls setPosition(int).
+func (o MediaManager) SetPositionCall(positionMs int) error {
+	return o.c.Call("mediaManager", "setPosition", nil, positionMs)
+}
+
+// ExtractColorsFromAlbumArtCall calls extractColorsFromAlbumArt(QString).
+func (o MediaManager) ExtractColorsFromAlbumArtCall(filename string) error {
+	return o.c.Call("mediaManager", "extractColorsFromAlbumArt", nil, filename)
+}
+
+// ExtractColorsFromImageCall calls extractColorsFromImage(QString).
+func (o MediaManager) ExtractColorsFromImageCall(imagePath string) error {
+	return o.c.Call("mediaManager", "extractColorsFromImage", nil, imagePath)
+}
+
+// ScanLibrary1Call calls scanLibrary(bool).
+func (o MediaManager) ScanLibrary1Call(resetDisplayNames bool) error {
+	return o.c.Call("mediaManager", "scanLibrary", nil, resetDisplayNames)
+}
+
+// ScanLibrary0Call calls scanLibrary().
+func (o MediaManager) ScanLibrary0Call() error {
+	return o.c.Call("mediaManager", "scanLibrary", nil)
+}
+
+// SetLibraryRootCall calls setLibraryRoot(QString).
+func (o MediaManager) SetLibraryRootCall(path string) error {
+	return o.c.Call("mediaManager", "setLibraryRoot", nil, path)
+}
+
+// StripFilenamesCall calls stripFilenames().
+func (o MediaManager) StripFilenamesCall() error {
+	return o.c.Call("mediaManager", "stripFilenames", nil)
+}
+
+// SelectPlaylistCall calls selectPlaylist(QString).
+func (o MediaManager) SelectPlaylistCall(name string) error {
+	return o.c.Call("mediaManager", "selectPlaylist", nil, name)
+}
+
+// CreatePlaylistCall calls createPlaylist(QString) -> bool.
+func (o MediaManager) CreatePlaylistCall(name string) (v bool, err error) {
+	err = o.c.Call("mediaManager", "createPlaylist", &v, name)
+	return
+}
+
+// DeletePlaylistCall calls deletePlaylist(QString) -> bool.
+func (o MediaManager) DeletePlaylistCall(name string) (v bool, err error) {
+	err = o.c.Call("mediaManager", "deletePlaylist", &v, name)
+	return
+}
+
+// MoveSongToPlaylistCall calls moveSongToPlaylist(QString, QString) -> bool.
+func (o MediaManager) MoveSongToPlaylistCall(filename string, targetPlaylist string) (v bool, err error) {
+	err = o.c.Call("mediaManager", "moveSongToPlaylist", &v, filename, targetPlaylist)
+	return
+}
+
+// DeleteSongCall calls deleteSong(QString) -> bool.
+func (o MediaManager) DeleteSongCall(filename string) (v bool, err error) {
+	err = o.c.Call("mediaManager", "deleteSong", &v, filename)
+	return
+}
+
+// PlayFileAtPathCall calls playFileAtPath(QString) -> bool.
+func (o MediaManager) PlayFileAtPathCall(filePath string) (v bool, err error) {
+	err = o.c.Call("mediaManager", "playFileAtPath", &v, filePath)
+	return
+}
+
+// InvalidateStatsCacheCall calls invalidateStatsCache().
+func (o MediaManager) InvalidateStatsCacheCall() error {
+	return o.c.Call("mediaManager", "invalidateStatsCache", nil)
+}
+
+// GetMediaFiles1Call calls getMediaFiles(bool) -> QStringList.
+func (o MediaManager) GetMediaFiles1Call(emitSignal bool) (v []string, err error) {
+	err = o.c.Call("mediaManager", "getMediaFiles", &v, emitSignal)
+	return
+}
+
+// GetMediaFiles0Call calls getMediaFiles() -> QStringList.
+func (o MediaManager) GetMediaFiles0Call() (v []string, err error) {
+	err = o.c.Call("mediaManager", "getMediaFiles", &v)
+	return
+}
+
+// GetFormattedDurationCall calls getFormattedDuration(QString) -> QString.
+func (o MediaManager) GetFormattedDurationCall(filename string) (v string, err error) {
+	err = o.c.Call("mediaManager", "getFormattedDuration", &v, filename)
+	return
+}
+
+// GetBandCall calls getBand(QString) -> QString.
+func (o MediaManager) GetBandCall(filename string) (v string, err error) {
+	err = o.c.Call("mediaManager", "getBand", &v, filename)
+	return
+}
+
+// GetAlbumCall calls getAlbum(QString) -> QString.
+func (o MediaManager) GetAlbumCall(filename string) (v string, err error) {
+	err = o.c.Call("mediaManager", "getAlbum", &v, filename)
+	return
+}
+
+// GetAlbumArtCall calls getAlbumArt(QString) -> QString.
+func (o MediaManager) GetAlbumArtCall(filename string) (v string, err error) {
+	err = o.c.Call("mediaManager", "getAlbumArt", &v, filename)
+	return
+}
+
+// GetCurrentFileCall calls getCurrentFile() -> QString.
+func (o MediaManager) GetCurrentFileCall() (v string, err error) {
+	err = o.c.Call("mediaManager", "getCurrentFile", &v)
+	return
+}
+
+// GetNextTrackNameCall calls getNextTrackName() -> QString.
+func (o MediaManager) GetNextTrackNameCall() (v string, err error) {
+	err = o.c.Call("mediaManager", "getNextTrackName", &v)
+	return
+}
+
+// GetPreviousTrackNameCall calls getPreviousTrackName() -> QString.
+func (o MediaManager) GetPreviousTrackNameCall() (v string, err error) {
+	err = o.c.Call("mediaManager", "getPreviousTrackName", &v)
+	return
+}
+
+// GetNextTrackAlbumArtCall calls getNextTrackAlbumArt() -> QString.
+func (o MediaManager) GetNextTrackAlbumArtCall() (v string, err error) {
+	err = o.c.Call("mediaManager", "getNextTrackAlbumArt", &v)
+	return
+}
+
+// GetPreviousTrackAlbumArtCall calls getPreviousTrackAlbumArt() -> QString.
+func (o MediaManager) GetPreviousTrackAlbumArtCall() (v string, err error) {
+	err = o.c.Call("mediaManager", "getPreviousTrackAlbumArt", &v)
+	return
+}
+
+// GetNeighborAlbumArtsCall calls getNeighborAlbumArts() -> QStringList.
+func (o MediaManager) GetNeighborAlbumArtsCall() (v []string, err error) {
+	err = o.c.Call("mediaManager", "getNeighborAlbumArts", &v)
+	return
+}
+
+// IsPlayingCall calls isPlaying() -> bool.
+func (o MediaManager) IsPlayingCall() (v bool, err error) {
+	err = o.c.Call("mediaManager", "isPlaying", &v)
+	return
+}
+
+// IsPausedCall calls isPaused() -> bool.
+func (o MediaManager) IsPausedCall() (v bool, err error) {
+	err = o.c.Call("mediaManager", "isPaused", &v)
+	return
+}
+
+// GetDurationCall calls getDuration() -> float.
+func (o MediaManager) GetDurationCall() (v float64, err error) {
+	err = o.c.Call("mediaManager", "getDuration", &v)
+	return
+}
+
+// GetPositionCall calls getPosition() -> float.
+func (o MediaManager) GetPositionCall() (v float64, err error) {
+	err = o.c.Call("mediaManager", "getPosition", &v)
+	return
+}
+
+// IsMutedCall calls isMuted() -> bool.
+func (o MediaManager) IsMutedCall() (v bool, err error) {
+	err = o.c.Call("mediaManager", "isMuted", &v)
+	return
+}
+
+// IsShuffledCall calls isShuffled() -> bool.
+func (o MediaManager) IsShuffledCall() (v bool, err error) {
+	err = o.c.Call("mediaManager", "isShuffled", &v)
+	return
+}
+
+// GetPlaylistNamesCall calls getPlaylistNames() -> QStringList.
+func (o MediaManager) GetPlaylistNamesCall() (v []string, err error) {
+	err = o.c.Call("mediaManager", "getPlaylistNames", &v)
+	return
+}
+
+// GetCurrentPlaylistNameCall calls getCurrentPlaylistName() -> QString.
+func (o MediaManager) GetCurrentPlaylistNameCall() (v string, err error) {
+	err = o.c.Call("mediaManager", "getCurrentPlaylistName", &v)
+	return
+}
+
+// GetCurrentSongListCall calls getCurrentSongList() -> QStringList.
+func (o MediaManager) GetCurrentSongListCall() (v []string, err error) {
+	err = o.c.Call("mediaManager", "getCurrentSongList", &v)
+	return
+}
+
+// GetMovablePlaylistNamesCall calls getMovablePlaylistNames() -> QStringList.
+func (o MediaManager) GetMovablePlaylistNamesCall() (v []string, err error) {
+	err = o.c.Call("mediaManager", "getMovablePlaylistNames", &v)
+	return
+}
+
+// GetSongPlaylistNameCall calls getSongPlaylistName(QString) -> QString.
+func (o MediaManager) GetSongPlaylistNameCall(filename string) (v string, err error) {
+	err = o.c.Call("mediaManager", "getSongPlaylistName", &v, filename)
+	return
+}
+
+// GetSongFilePathCall calls getSongFilePath(QString) -> QString.
+func (o MediaManager) GetSongFilePathCall(filename string) (v string, err error) {
+	err = o.c.Call("mediaManager", "getSongFilePath", &v, filename)
+	return
+}
+
+// GetFullFilePathCall calls getFullFilePath(QString) -> QString.
+func (o MediaManager) GetFullFilePathCall(filename string) (v string, err error) {
+	err = o.c.Call("mediaManager", "getFullFilePath", &v, filename)
+	return
+}
+
+// GetDisplayNameCall calls getDisplayName(QString) -> QString.
+func (o MediaManager) GetDisplayNameCall(filename string) (v string, err error) {
+	err = o.c.Call("mediaManager", "getDisplayName", &v, filename)
+	return
+}
+
+// GetDefaultMediaDirCall calls getDefaultMediaDir() -> QString.
+func (o MediaManager) GetDefaultMediaDirCall() (v string, err error) {
+	err = o.c.Call("mediaManager", "getDefaultMediaDir", &v)
+	return
+}
+
+// GetMediaFolderNameCall calls getMediaFolderName() -> QString.
+func (o MediaManager) GetMediaFolderNameCall() (v string, err error) {
+	err = o.c.Call("mediaManager", "getMediaFolderName", &v)
+	return
+}
+
+// BrowseMusicFoldersCall calls browseMusicFolders(QString) -> QVariantMap.
+func (o MediaManager) BrowseMusicFoldersCall(path string) (v map[string]any, err error) {
+	err = o.c.Call("mediaManager", "browseMusicFolders", &v, path)
+	return
+}
+
+// PickBrowserLibraryCall calls pickBrowserLibrary() -> bool.
+func (o MediaManager) PickBrowserLibraryCall() (v bool, err error) {
+	err = o.c.Call("mediaManager", "pickBrowserLibrary", &v)
+	return
+}
+
+// GetTotalDurationCall calls getTotalDuration() -> QString.
+func (o MediaManager) GetTotalDurationCall() (v string, err error) {
+	err = o.c.Call("mediaManager", "getTotalDuration", &v)
+	return
+}
+
+// GetAlbumCountCall calls getAlbumCount() -> int.
+func (o MediaManager) GetAlbumCountCall() (v int, err error) {
+	err = o.c.Call("mediaManager", "getAlbumCount", &v)
+	return
+}
+
+// GetArtistCountCall calls getArtistCount() -> int.
+func (o MediaManager) GetArtistCountCall() (v int, err error) {
+	err = o.c.Call("mediaManager", "getArtistCount", &v)
+	return
+}
+
+// SortMediaFiles2Call calls sortMediaFiles(QString, bool) -> QStringList.
+func (o MediaManager) SortMediaFiles2Call(sortColumn string, ascending bool) (v []string, err error) {
+	err = o.c.Call("mediaManager", "sortMediaFiles", &v, sortColumn, ascending)
+	return
+}
+
+// SortMediaFiles1Call calls sortMediaFiles(QString) -> QStringList.
+func (o MediaManager) SortMediaFiles1Call(sortColumn string) (v []string, err error) {
+	err = o.c.Call("mediaManager", "sortMediaFiles", &v, sortColumn)
 	return
 }
 
@@ -1792,6 +2507,8 @@ func (o NetworkManager) RestartApp() error {
 }
 
 // ShutdownDevice calls shutdown_device().
+//
+// Deprecated: use shutdownDevice; goes in protocol 5
 func (o NetworkManager) ShutdownDevice() error {
 	return o.c.Call("networkManager", "shutdown_device", nil)
 }
@@ -1799,6 +2516,11 @@ func (o NetworkManager) ShutdownDevice() error {
 // Cleanup calls cleanup().
 func (o NetworkManager) Cleanup() error {
 	return o.c.Call("networkManager", "cleanup", nil)
+}
+
+// ShutdownDeviceCall calls shutdownDevice().
+func (o NetworkManager) ShutdownDeviceCall() error {
+	return o.c.Call("networkManager", "shutdownDevice", nil)
 }
 
 // NowPlaying is the service object "nowPlaying" (C++ NowPlaying); NewNowPlaying(c) binds it to a client.
@@ -1949,6 +2671,14 @@ func (o ObdAdapterFinder) GetCanScan() (v bool, err error) {
 	return
 }
 
+// GetCanPickSerial reads the property "canPickSerial" (bool).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o ObdAdapterFinder) GetCanPickSerial() (v bool, err error) {
+	err = o.c.Get("obdAdapterFinder", "canPickSerial", &v)
+	return
+}
+
 // GetBluetoothOn reads the property "bluetoothOn" (bool).
 func (o ObdAdapterFinder) GetBluetoothOn() (v bool, err error) {
 	err = o.c.Get("obdAdapterFinder", "bluetoothOn", &v)
@@ -1988,6 +2718,13 @@ func (o ObdAdapterFinder) GetStatusIsError() (v bool, err error) {
 // StartScan calls startScan().
 func (o ObdAdapterFinder) StartScan() error {
 	return o.c.Call("obdAdapterFinder", "startScan", nil)
+}
+
+// PickSerialPort calls pickSerialPort().
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o ObdAdapterFinder) PickSerialPort() error {
+	return o.c.Call("obdAdapterFinder", "pickSerialPort", nil)
 }
 
 // StopScan calls stopScan().
@@ -2098,6 +2835,8 @@ func (o ObdManager) GetVehicleScanComplete() (v bool, err error) {
 }
 
 // ConnectObd calls connect_obd().
+//
+// Deprecated: use connectObd; goes in protocol 5
 func (o ObdManager) ConnectObd() error {
 	return o.c.Call("obdManager", "connect_obd", nil)
 }
@@ -2108,6 +2847,8 @@ func (o ObdManager) Reconnect() error {
 }
 
 // ForceConnect calls force_connect().
+//
+// Deprecated: use forceConnect; goes in protocol 5
 func (o ObdManager) ForceConnect() error {
 	return o.c.Call("obdManager", "force_connect", nil)
 }
@@ -2118,11 +2859,15 @@ func (o ObdManager) Close() error {
 }
 
 // ResetConnection calls reset_connection().
+//
+// Deprecated: use resetConnection; goes in protocol 5
 func (o ObdManager) ResetConnection() error {
 	return o.c.Call("obdManager", "reset_connection", nil)
 }
 
 // GetConnectionStatusCall calls get_connection_status() -> QString.
+//
+// Deprecated: use getConnectionStatus (or the connectionStatus property); goes in protocol 5
 func (o ObdManager) GetConnectionStatusCall() (v string, err error) {
 	err = o.c.Call("obdManager", "get_connection_status", &v)
 	return
@@ -2135,11 +2880,15 @@ func (o ObdManager) GetConnectionStatusCallCall() (v string, err error) {
 }
 
 // RefreshPorts calls refresh_ports().
+//
+// Deprecated: use refreshPorts; goes in protocol 5
 func (o ObdManager) RefreshPorts() error {
 	return o.c.Call("obdManager", "refresh_ports", nil)
 }
 
 // GetAvailablePorts calls get_available_ports() -> QVariantList.
+//
+// Deprecated: use getAvailablePorts; goes in protocol 5
 func (o ObdManager) GetAvailablePorts() (v []any, err error) {
 	err = o.c.Call("obdManager", "get_available_ports", &v)
 	return
@@ -2157,114 +2906,156 @@ func (o ObdManager) AvailableAdapters() (v []any, err error) {
 }
 
 // ConnectToAdapter calls connect_to_adapter(QString).
+//
+// Deprecated: use connectToAdapter; goes in protocol 5
 func (o ObdManager) ConnectToAdapter(identifier string) error {
 	return o.c.Call("obdManager", "connect_to_adapter", nil, identifier)
 }
 
 // PlatformHint calls platform_hint() -> QString.
+//
+// Deprecated: use platformHint; goes in protocol 5
 func (o ObdManager) PlatformHint() (v string, err error) {
 	err = o.c.Call("obdManager", "platform_hint", &v)
 	return
 }
 
 // ScanVehicle calls scan_vehicle().
+//
+// Deprecated: use scanVehicle; goes in protocol 5
 func (o ObdManager) ScanVehicle() error {
 	return o.c.Call("obdManager", "scan_vehicle", nil)
 }
 
 // IsScanning calls is_scanning() -> bool.
+//
+// Deprecated: use isScanning; goes in protocol 5
 func (o ObdManager) IsScanning() (v bool, err error) {
 	err = o.c.Call("obdManager", "is_scanning", &v)
 	return
 }
 
 // GetAllParameterNames calls get_all_parameter_names() -> QStringList.
+//
+// Deprecated: use getAllParameterNames; goes in protocol 5
 func (o ObdManager) GetAllParameterNames() (v []string, err error) {
 	err = o.c.Call("obdManager", "get_all_parameter_names", &v)
 	return
 }
 
 // GetSupportedCommands calls get_supported_commands() -> QVariantList.
+//
+// Deprecated: use getSupportedCommands; goes in protocol 5
 func (o ObdManager) GetSupportedCommands() (v []any, err error) {
 	err = o.c.Call("obdManager", "get_supported_commands", &v)
 	return
 }
 
 // EnableScannedParameters calls enable_scanned_parameters(QVariantList).
+//
+// Deprecated: use enableScannedParameters; goes in protocol 5
 func (o ObdManager) EnableScannedParameters(paramNames []any) error {
 	return o.c.Call("obdManager", "enable_scanned_parameters", nil, paramNames)
 }
 
 // EnableAllSupported calls enable_all_supported().
+//
+// Deprecated: use enableAllSupported; goes in protocol 5
 func (o ObdManager) EnableAllSupported() error {
 	return o.c.Call("obdManager", "enable_all_supported", nil)
 }
 
 // EnterDiagnosticMode calls enter_diagnostic_mode().
+//
+// Deprecated: use enterDiagnosticMode; goes in protocol 5
 func (o ObdManager) EnterDiagnosticMode() error {
 	return o.c.Call("obdManager", "enter_diagnostic_mode", nil)
 }
 
 // ExitDiagnosticMode calls exit_diagnostic_mode().
+//
+// Deprecated: use exitDiagnosticMode; goes in protocol 5
 func (o ObdManager) ExitDiagnosticMode() error {
 	return o.c.Call("obdManager", "exit_diagnostic_mode", nil)
 }
 
 // IsDiagnosticMode calls is_diagnostic_mode() -> bool.
+//
+// Deprecated: use isDiagnosticMode; goes in protocol 5
 func (o ObdManager) IsDiagnosticMode() (v bool, err error) {
 	err = o.c.Call("obdManager", "is_diagnostic_mode", &v)
 	return
 }
 
 // ReadDtc calls read_dtc().
+//
+// Deprecated: use readDtc; goes in protocol 5
 func (o ObdManager) ReadDtc() error {
 	return o.c.Call("obdManager", "read_dtc", nil)
 }
 
 // ReadCurrentDtc calls read_current_dtc().
+//
+// Deprecated: use readCurrentDtc; goes in protocol 5
 func (o ObdManager) ReadCurrentDtc() error {
 	return o.c.Call("obdManager", "read_current_dtc", nil)
 }
 
 // ReadStatus calls read_status().
+//
+// Deprecated: use readStatus; goes in protocol 5
 func (o ObdManager) ReadStatus() error {
 	return o.c.Call("obdManager", "read_status", nil)
 }
 
 // ClearDtc calls clear_dtc().
+//
+// Deprecated: use clearDtc; goes in protocol 5
 func (o ObdManager) ClearDtc() error {
 	return o.c.Call("obdManager", "clear_dtc", nil)
 }
 
 // ReadFreezeFrame calls read_freeze_frame().
+//
+// Deprecated: use readFreezeFrame; goes in protocol 5
 func (o ObdManager) ReadFreezeFrame() error {
 	return o.c.Call("obdManager", "read_freeze_frame", nil)
 }
 
 // ReadVin calls read_vin().
+//
+// Deprecated: use readVin; goes in protocol 5
 func (o ObdManager) ReadVin() error {
 	return o.c.Call("obdManager", "read_vin", nil)
 }
 
 // GetDtcCodes calls get_dtc_codes() -> QVariantList.
+//
+// Deprecated: use getDtcCodes; goes in protocol 5
 func (o ObdManager) GetDtcCodes() (v []any, err error) {
 	err = o.c.Call("obdManager", "get_dtc_codes", &v)
 	return
 }
 
 // GetDtcCount calls get_dtc_count() -> int.
+//
+// Deprecated: use getDtcCount; goes in protocol 5
 func (o ObdManager) GetDtcCount() (v int, err error) {
 	err = o.c.Call("obdManager", "get_dtc_count", &v)
 	return
 }
 
 // GetMilStatus calls get_mil_status() -> bool.
+//
+// Deprecated: use getMilStatus; goes in protocol 5
 func (o ObdManager) GetMilStatus() (v bool, err error) {
 	err = o.c.Call("obdManager", "get_mil_status", &v)
 	return
 }
 
 // GetFreezeFrame calls get_freeze_frame() -> QVariantList.
+//
+// Deprecated: use getFreezeFrame; goes in protocol 5
 func (o ObdManager) GetFreezeFrame() (v []any, err error) {
 	err = o.c.Call("obdManager", "get_freeze_frame", &v)
 	return
@@ -2379,43 +3170,240 @@ func (o ObdManager) IgnitionTiming() (v float64, err error) {
 }
 
 // RefreshValues calls refresh_values().
+//
+// Deprecated: use refreshValues; goes in protocol 5
 func (o ObdManager) RefreshValues() error {
 	return o.c.Call("obdManager", "refresh_values", nil)
 }
 
 // OpenBluetoothSettings calls open_bluetooth_settings().
+//
+// Deprecated: use openBluetoothSettings; goes in protocol 5
 func (o ObdManager) OpenBluetoothSettings() error {
 	return o.c.Call("obdManager", "open_bluetooth_settings", nil)
 }
 
 // SetTargetAddress calls set_target_address(QString).
+//
+// Deprecated: use setTargetAddress; goes in protocol 5
 func (o ObdManager) SetTargetAddress(address string) error {
 	return o.c.Call("obdManager", "set_target_address", nil, address)
 }
 
 // ConnectDirect2 calls connect_direct(QString, int).
+//
+// Deprecated: use connectDirect; goes in protocol 5
 func (o ObdManager) ConnectDirect2(mac string, channel int) error {
 	return o.c.Call("obdManager", "connect_direct", nil, mac, channel)
 }
 
 // ConnectDirect1 calls connect_direct(QString).
+//
+// Deprecated: use connectDirect; goes in protocol 5
 func (o ObdManager) ConnectDirect1(mac string) error {
 	return o.c.Call("obdManager", "connect_direct", nil, mac)
 }
 
 // SetAutoReconnect calls set_auto_reconnect(bool).
+//
+// Deprecated: use setAutoReconnect; goes in protocol 5
 func (o ObdManager) SetAutoReconnect(enabled bool) error {
 	return o.c.Call("obdManager", "set_auto_reconnect", nil, enabled)
 }
 
 // SetConnectionTimeout calls set_connection_timeout(int).
+//
+// Deprecated: use setConnectionTimeout; goes in protocol 5
 func (o ObdManager) SetConnectionTimeout(timeoutSeconds int) error {
 	return o.c.Call("obdManager", "set_connection_timeout", nil, timeoutSeconds)
 }
 
 // CheckDevicePresence calls check_device_presence() -> bool.
+//
+// Deprecated: use checkDevicePresence; goes in protocol 5
 func (o ObdManager) CheckDevicePresence() (v bool, err error) {
 	err = o.c.Call("obdManager", "check_device_presence", &v)
+	return
+}
+
+// ConnectObdCall calls connectObd().
+func (o ObdManager) ConnectObdCall() error {
+	return o.c.Call("obdManager", "connectObd", nil)
+}
+
+// ForceConnectCall calls forceConnect().
+func (o ObdManager) ForceConnectCall() error {
+	return o.c.Call("obdManager", "forceConnect", nil)
+}
+
+// ResetConnectionCall calls resetConnection().
+func (o ObdManager) ResetConnectionCall() error {
+	return o.c.Call("obdManager", "resetConnection", nil)
+}
+
+// RefreshPortsCall calls refreshPorts().
+func (o ObdManager) RefreshPortsCall() error {
+	return o.c.Call("obdManager", "refreshPorts", nil)
+}
+
+// GetAvailablePortsCall calls getAvailablePorts() -> QVariantList.
+func (o ObdManager) GetAvailablePortsCall() (v []any, err error) {
+	err = o.c.Call("obdManager", "getAvailablePorts", &v)
+	return
+}
+
+// ConnectToAdapterCall calls connectToAdapter(QString).
+func (o ObdManager) ConnectToAdapterCall(identifier string) error {
+	return o.c.Call("obdManager", "connectToAdapter", nil, identifier)
+}
+
+// PlatformHintCall calls platformHint() -> QString.
+func (o ObdManager) PlatformHintCall() (v string, err error) {
+	err = o.c.Call("obdManager", "platformHint", &v)
+	return
+}
+
+// ScanVehicleCall calls scanVehicle().
+func (o ObdManager) ScanVehicleCall() error {
+	return o.c.Call("obdManager", "scanVehicle", nil)
+}
+
+// IsScanningCall calls isScanning() -> bool.
+func (o ObdManager) IsScanningCall() (v bool, err error) {
+	err = o.c.Call("obdManager", "isScanning", &v)
+	return
+}
+
+// GetAllParameterNamesCall calls getAllParameterNames() -> QStringList.
+func (o ObdManager) GetAllParameterNamesCall() (v []string, err error) {
+	err = o.c.Call("obdManager", "getAllParameterNames", &v)
+	return
+}
+
+// GetSupportedCommandsCall calls getSupportedCommands() -> QVariantList.
+func (o ObdManager) GetSupportedCommandsCall() (v []any, err error) {
+	err = o.c.Call("obdManager", "getSupportedCommands", &v)
+	return
+}
+
+// EnableScannedParametersCall calls enableScannedParameters(QVariantList).
+func (o ObdManager) EnableScannedParametersCall(paramNames []any) error {
+	return o.c.Call("obdManager", "enableScannedParameters", nil, paramNames)
+}
+
+// EnableAllSupportedCall calls enableAllSupported().
+func (o ObdManager) EnableAllSupportedCall() error {
+	return o.c.Call("obdManager", "enableAllSupported", nil)
+}
+
+// EnterDiagnosticModeCall calls enterDiagnosticMode().
+func (o ObdManager) EnterDiagnosticModeCall() error {
+	return o.c.Call("obdManager", "enterDiagnosticMode", nil)
+}
+
+// ExitDiagnosticModeCall calls exitDiagnosticMode().
+func (o ObdManager) ExitDiagnosticModeCall() error {
+	return o.c.Call("obdManager", "exitDiagnosticMode", nil)
+}
+
+// IsDiagnosticModeCall calls isDiagnosticMode() -> bool.
+func (o ObdManager) IsDiagnosticModeCall() (v bool, err error) {
+	err = o.c.Call("obdManager", "isDiagnosticMode", &v)
+	return
+}
+
+// ReadDtcCall calls readDtc().
+func (o ObdManager) ReadDtcCall() error {
+	return o.c.Call("obdManager", "readDtc", nil)
+}
+
+// ReadCurrentDtcCall calls readCurrentDtc().
+func (o ObdManager) ReadCurrentDtcCall() error {
+	return o.c.Call("obdManager", "readCurrentDtc", nil)
+}
+
+// ReadStatusCall calls readStatus().
+func (o ObdManager) ReadStatusCall() error {
+	return o.c.Call("obdManager", "readStatus", nil)
+}
+
+// ClearDtcCall calls clearDtc().
+func (o ObdManager) ClearDtcCall() error {
+	return o.c.Call("obdManager", "clearDtc", nil)
+}
+
+// ReadFreezeFrameCall calls readFreezeFrame().
+func (o ObdManager) ReadFreezeFrameCall() error {
+	return o.c.Call("obdManager", "readFreezeFrame", nil)
+}
+
+// ReadVinCall calls readVin().
+func (o ObdManager) ReadVinCall() error {
+	return o.c.Call("obdManager", "readVin", nil)
+}
+
+// GetDtcCodesCall calls getDtcCodes() -> QVariantList.
+func (o ObdManager) GetDtcCodesCall() (v []any, err error) {
+	err = o.c.Call("obdManager", "getDtcCodes", &v)
+	return
+}
+
+// GetDtcCountCall calls getDtcCount() -> int.
+func (o ObdManager) GetDtcCountCall() (v int, err error) {
+	err = o.c.Call("obdManager", "getDtcCount", &v)
+	return
+}
+
+// GetMilStatusCall calls getMilStatus() -> bool.
+func (o ObdManager) GetMilStatusCall() (v bool, err error) {
+	err = o.c.Call("obdManager", "getMilStatus", &v)
+	return
+}
+
+// GetFreezeFrameCall calls getFreezeFrame() -> QVariantList.
+func (o ObdManager) GetFreezeFrameCall() (v []any, err error) {
+	err = o.c.Call("obdManager", "getFreezeFrame", &v)
+	return
+}
+
+// RefreshValuesCall calls refreshValues().
+func (o ObdManager) RefreshValuesCall() error {
+	return o.c.Call("obdManager", "refreshValues", nil)
+}
+
+// OpenBluetoothSettingsCall calls openBluetoothSettings().
+func (o ObdManager) OpenBluetoothSettingsCall() error {
+	return o.c.Call("obdManager", "openBluetoothSettings", nil)
+}
+
+// SetTargetAddressCall calls setTargetAddress(QString).
+func (o ObdManager) SetTargetAddressCall(address string) error {
+	return o.c.Call("obdManager", "setTargetAddress", nil, address)
+}
+
+// ConnectDirect2Call calls connectDirect(QString, int).
+func (o ObdManager) ConnectDirect2Call(mac string, channel int) error {
+	return o.c.Call("obdManager", "connectDirect", nil, mac, channel)
+}
+
+// ConnectDirect1Call calls connectDirect(QString).
+func (o ObdManager) ConnectDirect1Call(mac string) error {
+	return o.c.Call("obdManager", "connectDirect", nil, mac)
+}
+
+// SetAutoReconnectCall calls setAutoReconnect(bool).
+func (o ObdManager) SetAutoReconnectCall(enabled bool) error {
+	return o.c.Call("obdManager", "setAutoReconnect", nil, enabled)
+}
+
+// SetConnectionTimeoutCall calls setConnectionTimeout(int).
+func (o ObdManager) SetConnectionTimeoutCall(timeoutSeconds int) error {
+	return o.c.Call("obdManager", "setConnectionTimeout", nil, timeoutSeconds)
+}
+
+// CheckDevicePresenceCall calls checkDevicePresence() -> bool.
+func (o ObdManager) CheckDevicePresenceCall() (v bool, err error) {
+	err = o.c.Call("obdManager", "checkDevicePresence", &v)
 	return
 }
 
@@ -2431,6 +3419,8 @@ func (o ObdManager) ClearConnectionLog() error {
 }
 
 // IsConnectedCall calls is_connected() -> bool.
+//
+// Deprecated: use isConnected (or the connected property); goes in protocol 5
 func (o ObdManager) IsConnectedCall() (v bool, err error) {
 	err = o.c.Call("obdManager", "is_connected", &v)
 	return
@@ -3005,111 +3995,219 @@ func NewSettingsManager(c *Client) SettingsManager { return SettingsManager{c} }
 // Name is the object's name on the wire.
 func (SettingsManager) Name() string { return "settingsManager" }
 
-// GetDeviceName reads the property "deviceName" (QString).
+// GetDeviceName reads the property "deviceName" (QString, writable).
 func (o SettingsManager) GetDeviceName() (v string, err error) {
 	err = o.c.Get("settingsManager", "deviceName", &v)
 	return
 }
 
-// GetFontSetting reads the property "fontSetting" (QString).
+// SetDeviceName writes the property "deviceName" and returns the value read back.
+func (o SettingsManager) SetDeviceName(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "deviceName", value, &v)
+	return
+}
+
+// GetFontSetting reads the property "fontSetting" (QString, writable).
 func (o SettingsManager) GetFontSetting() (v string, err error) {
 	err = o.c.Get("settingsManager", "fontSetting", &v)
 	return
 }
 
-// GetThemeSetting reads the property "themeSetting" (QString).
+// SetFontSetting writes the property "fontSetting" and returns the value read back.
+func (o SettingsManager) SetFontSetting(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "fontSetting", value, &v)
+	return
+}
+
+// GetThemeSetting reads the property "themeSetting" (QString, writable).
 func (o SettingsManager) GetThemeSetting() (v string, err error) {
 	err = o.c.Get("settingsManager", "themeSetting", &v)
 	return
 }
 
-// GetUiScale reads the property "uiScale" (float).
+// SetThemeSetting writes the property "themeSetting" and returns the value read back.
+func (o SettingsManager) SetThemeSetting(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "themeSetting", value, &v)
+	return
+}
+
+// GetUiScale reads the property "uiScale" (float, writable).
 func (o SettingsManager) GetUiScale() (v float64, err error) {
 	err = o.c.Get("settingsManager", "uiScale", &v)
 	return
 }
 
-// GetColorTransitionMs reads the property "colorTransitionMs" (int).
+// SetUiScale writes the property "uiScale" and returns the value read back.
+func (o SettingsManager) SetUiScale(value float64) (v float64, err error) {
+	err = o.c.Set("settingsManager", "uiScale", value, &v)
+	return
+}
+
+// GetColorTransitionMs reads the property "colorTransitionMs" (int, writable).
 func (o SettingsManager) GetColorTransitionMs() (v int, err error) {
 	err = o.c.Get("settingsManager", "colorTransitionMs", &v)
 	return
 }
 
-// GetSongLengthTransition reads the property "songLengthTransition" (bool).
+// SetColorTransitionMs writes the property "colorTransitionMs" and returns the value read back.
+func (o SettingsManager) SetColorTransitionMs(value int) (v int, err error) {
+	err = o.c.Set("settingsManager", "colorTransitionMs", value, &v)
+	return
+}
+
+// GetSongLengthTransition reads the property "songLengthTransition" (bool, writable).
 func (o SettingsManager) GetSongLengthTransition() (v bool, err error) {
 	err = o.c.Get("settingsManager", "songLengthTransition", &v)
 	return
 }
 
-// GetShowClock reads the property "showClock" (bool).
+// SetSongLengthTransition writes the property "songLengthTransition" and returns the value read back.
+func (o SettingsManager) SetSongLengthTransition(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "songLengthTransition", value, &v)
+	return
+}
+
+// GetShowClock reads the property "showClock" (bool, writable).
 func (o SettingsManager) GetShowClock() (v bool, err error) {
 	err = o.c.Get("settingsManager", "showClock", &v)
 	return
 }
 
-// GetClockFormat24Hour reads the property "clockFormat24Hour" (bool).
+// SetShowClock writes the property "showClock" and returns the value read back.
+func (o SettingsManager) SetShowClock(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "showClock", value, &v)
+	return
+}
+
+// GetClockFormat24Hour reads the property "clockFormat24Hour" (bool, writable).
 func (o SettingsManager) GetClockFormat24Hour() (v bool, err error) {
 	err = o.c.Get("settingsManager", "clockFormat24Hour", &v)
 	return
 }
 
-// GetClockShowSeconds reads the property "clockShowSeconds" (bool).
+// SetClockFormat24Hour writes the property "clockFormat24Hour" and returns the value read back.
+func (o SettingsManager) SetClockFormat24Hour(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "clockFormat24Hour", value, &v)
+	return
+}
+
+// GetClockShowSeconds reads the property "clockShowSeconds" (bool, writable).
 func (o SettingsManager) GetClockShowSeconds() (v bool, err error) {
 	err = o.c.Get("settingsManager", "clockShowSeconds", &v)
 	return
 }
 
-// GetClockSize reads the property "clockSize" (int).
+// SetClockShowSeconds writes the property "clockShowSeconds" and returns the value read back.
+func (o SettingsManager) SetClockShowSeconds(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "clockShowSeconds", value, &v)
+	return
+}
+
+// GetClockSize reads the property "clockSize" (int, writable).
 func (o SettingsManager) GetClockSize() (v int, err error) {
 	err = o.c.Get("settingsManager", "clockSize", &v)
 	return
 }
 
-// GetClockSizeAuto reads the property "clockSizeAuto" (bool).
+// SetClockSize writes the property "clockSize" and returns the value read back.
+func (o SettingsManager) SetClockSize(value int) (v int, err error) {
+	err = o.c.Set("settingsManager", "clockSize", value, &v)
+	return
+}
+
+// GetClockSizeAuto reads the property "clockSizeAuto" (bool, writable).
 func (o SettingsManager) GetClockSizeAuto() (v bool, err error) {
 	err = o.c.Get("settingsManager", "clockSizeAuto", &v)
 	return
 }
 
-// GetBackgroundGrid reads the property "backgroundGrid" (QString).
+// SetClockSizeAuto writes the property "clockSizeAuto" and returns the value read back.
+func (o SettingsManager) SetClockSizeAuto(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "clockSizeAuto", value, &v)
+	return
+}
+
+// GetBackgroundGrid reads the property "backgroundGrid" (QString, writable).
 func (o SettingsManager) GetBackgroundGrid() (v string, err error) {
 	err = o.c.Get("settingsManager", "backgroundGrid", &v)
 	return
 }
 
-// GetScreenWidth reads the property "screenWidth" (int).
+// SetBackgroundGrid writes the property "backgroundGrid" and returns the value read back.
+func (o SettingsManager) SetBackgroundGrid(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "backgroundGrid", value, &v)
+	return
+}
+
+// GetScreenWidth reads the property "screenWidth" (int, writable).
 func (o SettingsManager) GetScreenWidth() (v int, err error) {
 	err = o.c.Get("settingsManager", "screenWidth", &v)
 	return
 }
 
-// GetScreenHeight reads the property "screenHeight" (int).
+// SetScreenWidth writes the property "screenWidth" and returns the value read back.
+func (o SettingsManager) SetScreenWidth(value int) (v int, err error) {
+	err = o.c.Set("settingsManager", "screenWidth", value, &v)
+	return
+}
+
+// GetScreenHeight reads the property "screenHeight" (int, writable).
 func (o SettingsManager) GetScreenHeight() (v int, err error) {
 	err = o.c.Get("settingsManager", "screenHeight", &v)
 	return
 }
 
-// GetBackgroundBlurRadius reads the property "backgroundBlurRadius" (int).
+// SetScreenHeight writes the property "screenHeight" and returns the value read back.
+func (o SettingsManager) SetScreenHeight(value int) (v int, err error) {
+	err = o.c.Set("settingsManager", "screenHeight", value, &v)
+	return
+}
+
+// GetBackgroundBlurRadius reads the property "backgroundBlurRadius" (int, writable).
 func (o SettingsManager) GetBackgroundBlurRadius() (v int, err error) {
 	err = o.c.Get("settingsManager", "backgroundBlurRadius", &v)
 	return
 }
 
-// GetBottomBarOrientation reads the property "bottomBarOrientation" (QString).
+// SetBackgroundBlurRadius writes the property "backgroundBlurRadius" and returns the value read back.
+func (o SettingsManager) SetBackgroundBlurRadius(value int) (v int, err error) {
+	err = o.c.Set("settingsManager", "backgroundBlurRadius", value, &v)
+	return
+}
+
+// GetBottomBarOrientation reads the property "bottomBarOrientation" (QString, writable).
 func (o SettingsManager) GetBottomBarOrientation() (v string, err error) {
 	err = o.c.Get("settingsManager", "bottomBarOrientation", &v)
 	return
 }
 
-// GetShowBottomBarMediaControls reads the property "showBottomBarMediaControls" (bool).
+// SetBottomBarOrientation writes the property "bottomBarOrientation" and returns the value read back.
+func (o SettingsManager) SetBottomBarOrientation(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "bottomBarOrientation", value, &v)
+	return
+}
+
+// GetShowBottomBarMediaControls reads the property "showBottomBarMediaControls" (bool, writable).
 func (o SettingsManager) GetShowBottomBarMediaControls() (v bool, err error) {
 	err = o.c.Get("settingsManager", "showBottomBarMediaControls", &v)
 	return
 }
 
-// GetSettingsLayoutStyle reads the property "settingsLayoutStyle" (QString).
+// SetShowBottomBarMediaControls writes the property "showBottomBarMediaControls" and returns the value read back.
+func (o SettingsManager) SetShowBottomBarMediaControls(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "showBottomBarMediaControls", value, &v)
+	return
+}
+
+// GetSettingsLayoutStyle reads the property "settingsLayoutStyle" (QString, writable).
 func (o SettingsManager) GetSettingsLayoutStyle() (v string, err error) {
 	err = o.c.Get("settingsManager", "settingsLayoutStyle", &v)
+	return
+}
+
+// SetSettingsLayoutStyle writes the property "settingsLayoutStyle" and returns the value read back.
+func (o SettingsManager) SetSettingsLayoutStyle(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "settingsLayoutStyle", value, &v)
 	return
 }
 
@@ -3125,9 +4223,15 @@ func (o SettingsManager) GetSettingsMenuVisibility() (v string, err error) {
 	return
 }
 
-// GetStartUpVolume reads the property "startUpVolume" (float).
+// GetStartUpVolume reads the property "startUpVolume" (float, writable).
 func (o SettingsManager) GetStartUpVolume() (v float64, err error) {
 	err = o.c.Get("settingsManager", "startUpVolume", &v)
+	return
+}
+
+// SetStartUpVolume writes the property "startUpVolume" and returns the value read back.
+func (o SettingsManager) SetStartUpVolume(value float64) (v float64, err error) {
+	err = o.c.Set("settingsManager", "startUpVolume", value, &v)
 	return
 }
 
@@ -3137,147 +4241,291 @@ func (o SettingsManager) GetCurrentVolume() (v int, err error) {
 	return
 }
 
-// GetMediaFolder reads the property "mediaFolder" (QString).
+// GetMediaFolder reads the property "mediaFolder" (QString, writable).
 func (o SettingsManager) GetMediaFolder() (v string, err error) {
 	err = o.c.Get("settingsManager", "mediaFolder", &v)
 	return
 }
 
-// GetAutoPlayOnStartup reads the property "autoPlayOnStartup" (bool).
+// SetMediaFolder writes the property "mediaFolder" and returns the value read back.
+func (o SettingsManager) SetMediaFolder(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "mediaFolder", value, &v)
+	return
+}
+
+// GetAutoPlayOnStartup reads the property "autoPlayOnStartup" (bool, writable).
 func (o SettingsManager) GetAutoPlayOnStartup() (v bool, err error) {
 	err = o.c.Get("settingsManager", "autoPlayOnStartup", &v)
 	return
 }
 
-// GetPersistShuffleState reads the property "persistShuffleState" (bool).
+// SetAutoPlayOnStartup writes the property "autoPlayOnStartup" and returns the value read back.
+func (o SettingsManager) SetAutoPlayOnStartup(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "autoPlayOnStartup", value, &v)
+	return
+}
+
+// GetPersistShuffleState reads the property "persistShuffleState" (bool, writable).
 func (o SettingsManager) GetPersistShuffleState() (v bool, err error) {
 	err = o.c.Get("settingsManager", "persistShuffleState", &v)
 	return
 }
 
-// GetLastShuffleState reads the property "lastShuffleState" (bool).
+// SetPersistShuffleState writes the property "persistShuffleState" and returns the value read back.
+func (o SettingsManager) SetPersistShuffleState(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "persistShuffleState", value, &v)
+	return
+}
+
+// GetLastShuffleState reads the property "lastShuffleState" (bool, writable).
 func (o SettingsManager) GetLastShuffleState() (v bool, err error) {
 	err = o.c.Get("settingsManager", "lastShuffleState", &v)
 	return
 }
 
-// GetLastPlayedSong reads the property "lastPlayedSong" (QString).
+// SetLastShuffleState writes the property "lastShuffleState" and returns the value read back.
+func (o SettingsManager) SetLastShuffleState(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "lastShuffleState", value, &v)
+	return
+}
+
+// GetLastPlayedSong reads the property "lastPlayedSong" (QString, writable).
 func (o SettingsManager) GetLastPlayedSong() (v string, err error) {
 	err = o.c.Get("settingsManager", "lastPlayedSong", &v)
 	return
 }
 
-// GetLastPlayedPosition reads the property "lastPlayedPosition" (int).
+// SetLastPlayedSong writes the property "lastPlayedSong" and returns the value read back.
+func (o SettingsManager) SetLastPlayedSong(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "lastPlayedSong", value, &v)
+	return
+}
+
+// GetLastPlayedPosition reads the property "lastPlayedPosition" (int, writable).
 func (o SettingsManager) GetLastPlayedPosition() (v int, err error) {
 	err = o.c.Get("settingsManager", "lastPlayedPosition", &v)
 	return
 }
 
-// GetLastPlayedPlaylist reads the property "lastPlayedPlaylist" (QString).
+// SetLastPlayedPosition writes the property "lastPlayedPosition" and returns the value read back.
+func (o SettingsManager) SetLastPlayedPosition(value int) (v int, err error) {
+	err = o.c.Set("settingsManager", "lastPlayedPosition", value, &v)
+	return
+}
+
+// GetLastPlayedPlaylist reads the property "lastPlayedPlaylist" (QString, writable).
 func (o SettingsManager) GetLastPlayedPlaylist() (v string, err error) {
 	err = o.c.Get("settingsManager", "lastPlayedPlaylist", &v)
 	return
 }
 
-// GetMusicButtonDefaultPage reads the property "musicButtonDefaultPage" (QString).
+// SetLastPlayedPlaylist writes the property "lastPlayedPlaylist" and returns the value read back.
+func (o SettingsManager) SetLastPlayedPlaylist(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "lastPlayedPlaylist", value, &v)
+	return
+}
+
+// GetMusicButtonDefaultPage reads the property "musicButtonDefaultPage" (QString, writable).
 func (o SettingsManager) GetMusicButtonDefaultPage() (v string, err error) {
 	err = o.c.Get("settingsManager", "musicButtonDefaultPage", &v)
 	return
 }
 
-// GetReturnToLibraryAfterSelection reads the property "returnToLibraryAfterSelection" (bool).
+// SetMusicButtonDefaultPage writes the property "musicButtonDefaultPage" and returns the value read back.
+func (o SettingsManager) SetMusicButtonDefaultPage(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "musicButtonDefaultPage", value, &v)
+	return
+}
+
+// GetReturnToLibraryAfterSelection reads the property "returnToLibraryAfterSelection" (bool, writable).
 func (o SettingsManager) GetReturnToLibraryAfterSelection() (v bool, err error) {
 	err = o.c.Get("settingsManager", "returnToLibraryAfterSelection", &v)
 	return
 }
 
-// GetShowWaveformVisualizer reads the property "showWaveformVisualizer" (bool).
+// SetReturnToLibraryAfterSelection writes the property "returnToLibraryAfterSelection" and returns the value read back.
+func (o SettingsManager) SetReturnToLibraryAfterSelection(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "returnToLibraryAfterSelection", value, &v)
+	return
+}
+
+// GetShowWaveformVisualizer reads the property "showWaveformVisualizer" (bool, writable).
 func (o SettingsManager) GetShowWaveformVisualizer() (v bool, err error) {
 	err = o.c.Get("settingsManager", "showWaveformVisualizer", &v)
 	return
 }
 
-// GetShow3DButtonTilt reads the property "show3DButtonTilt" (bool).
+// SetShowWaveformVisualizer writes the property "showWaveformVisualizer" and returns the value read back.
+func (o SettingsManager) SetShowWaveformVisualizer(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "showWaveformVisualizer", value, &v)
+	return
+}
+
+// GetShow3DButtonTilt reads the property "show3DButtonTilt" (bool, writable).
 func (o SettingsManager) GetShow3DButtonTilt() (v bool, err error) {
 	err = o.c.Get("settingsManager", "show3DButtonTilt", &v)
 	return
 }
 
-// GetShow3DAlbumPreview reads the property "show3DAlbumPreview" (bool).
+// SetShow3DButtonTilt writes the property "show3DButtonTilt" and returns the value read back.
+func (o SettingsManager) SetShow3DButtonTilt(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "show3DButtonTilt", value, &v)
+	return
+}
+
+// GetShow3DAlbumPreview reads the property "show3DAlbumPreview" (bool, writable).
 func (o SettingsManager) GetShow3DAlbumPreview() (v bool, err error) {
 	err = o.c.Get("settingsManager", "show3DAlbumPreview", &v)
 	return
 }
 
-// GetRoundedAlbumArt reads the property "roundedAlbumArt" (bool).
+// SetShow3DAlbumPreview writes the property "show3DAlbumPreview" and returns the value read back.
+func (o SettingsManager) SetShow3DAlbumPreview(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "show3DAlbumPreview", value, &v)
+	return
+}
+
+// GetRoundedAlbumArt reads the property "roundedAlbumArt" (bool, writable).
 func (o SettingsManager) GetRoundedAlbumArt() (v bool, err error) {
 	err = o.c.Get("settingsManager", "roundedAlbumArt", &v)
 	return
 }
 
-// GetAlbumArtCornerRadius reads the property "albumArtCornerRadius" (int).
+// SetRoundedAlbumArt writes the property "roundedAlbumArt" and returns the value read back.
+func (o SettingsManager) SetRoundedAlbumArt(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "roundedAlbumArt", value, &v)
+	return
+}
+
+// GetAlbumArtCornerRadius reads the property "albumArtCornerRadius" (int, writable).
 func (o SettingsManager) GetAlbumArtCornerRadius() (v int, err error) {
 	err = o.c.Get("settingsManager", "albumArtCornerRadius", &v)
 	return
 }
 
-// GetShowAlbumArtShadow reads the property "showAlbumArtShadow" (bool).
+// SetAlbumArtCornerRadius writes the property "albumArtCornerRadius" and returns the value read back.
+func (o SettingsManager) SetAlbumArtCornerRadius(value int) (v int, err error) {
+	err = o.c.Set("settingsManager", "albumArtCornerRadius", value, &v)
+	return
+}
+
+// GetShowAlbumArtShadow reads the property "showAlbumArtShadow" (bool, writable).
 func (o SettingsManager) GetShowAlbumArtShadow() (v bool, err error) {
 	err = o.c.Get("settingsManager", "showAlbumArtShadow", &v)
 	return
 }
 
-// GetVinylRecordMode reads the property "vinylRecordMode" (bool).
+// SetShowAlbumArtShadow writes the property "showAlbumArtShadow" and returns the value read back.
+func (o SettingsManager) SetShowAlbumArtShadow(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "showAlbumArtShadow", value, &v)
+	return
+}
+
+// GetVinylRecordMode reads the property "vinylRecordMode" (bool, writable).
 func (o SettingsManager) GetVinylRecordMode() (v bool, err error) {
 	err = o.c.Get("settingsManager", "vinylRecordMode", &v)
 	return
 }
 
-// GetAlbumArtTransition reads the property "albumArtTransition" (QString).
+// SetVinylRecordMode writes the property "vinylRecordMode" and returns the value read back.
+func (o SettingsManager) SetVinylRecordMode(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "vinylRecordMode", value, &v)
+	return
+}
+
+// GetAlbumArtTransition reads the property "albumArtTransition" (QString, writable).
 func (o SettingsManager) GetAlbumArtTransition() (v string, err error) {
 	err = o.c.Get("settingsManager", "albumArtTransition", &v)
 	return
 }
 
-// GetAudioOutputDevice reads the property "audioOutputDevice" (QString).
+// SetAlbumArtTransition writes the property "albumArtTransition" and returns the value read back.
+func (o SettingsManager) SetAlbumArtTransition(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "albumArtTransition", value, &v)
+	return
+}
+
+// GetAudioOutputDevice reads the property "audioOutputDevice" (QString, writable).
 func (o SettingsManager) GetAudioOutputDevice() (v string, err error) {
 	err = o.c.Get("settingsManager", "audioOutputDevice", &v)
 	return
 }
 
-// GetBackgroundOverlayOpacity reads the property "backgroundOverlayOpacity" (int).
+// SetAudioOutputDevice writes the property "audioOutputDevice" and returns the value read back.
+func (o SettingsManager) SetAudioOutputDevice(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "audioOutputDevice", value, &v)
+	return
+}
+
+// GetBackgroundOverlayOpacity reads the property "backgroundOverlayOpacity" (int, writable).
 func (o SettingsManager) GetBackgroundOverlayOpacity() (v int, err error) {
 	err = o.c.Get("settingsManager", "backgroundOverlayOpacity", &v)
 	return
 }
 
-// GetSideCardOpacity reads the property "sideCardOpacity" (double).
+// SetBackgroundOverlayOpacity writes the property "backgroundOverlayOpacity" and returns the value read back.
+func (o SettingsManager) SetBackgroundOverlayOpacity(value int) (v int, err error) {
+	err = o.c.Set("settingsManager", "backgroundOverlayOpacity", value, &v)
+	return
+}
+
+// GetSideCardOpacity reads the property "sideCardOpacity" (double, writable).
 func (o SettingsManager) GetSideCardOpacity() (v float64, err error) {
 	err = o.c.Get("settingsManager", "sideCardOpacity", &v)
 	return
 }
 
-// GetSideCardAngle reads the property "sideCardAngle" (int).
+// SetSideCardOpacity writes the property "sideCardOpacity" and returns the value read back.
+func (o SettingsManager) SetSideCardOpacity(value float64) (v float64, err error) {
+	err = o.c.Set("settingsManager", "sideCardOpacity", value, &v)
+	return
+}
+
+// GetSideCardAngle reads the property "sideCardAngle" (int, writable).
 func (o SettingsManager) GetSideCardAngle() (v int, err error) {
 	err = o.c.Get("settingsManager", "sideCardAngle", &v)
 	return
 }
 
-// GetButtonTiltDuration reads the property "buttonTiltDuration" (int).
+// SetSideCardAngle writes the property "sideCardAngle" and returns the value read back.
+func (o SettingsManager) SetSideCardAngle(value int) (v int, err error) {
+	err = o.c.Set("settingsManager", "sideCardAngle", value, &v)
+	return
+}
+
+// GetButtonTiltDuration reads the property "buttonTiltDuration" (int, writable).
 func (o SettingsManager) GetButtonTiltDuration() (v int, err error) {
 	err = o.c.Get("settingsManager", "buttonTiltDuration", &v)
 	return
 }
 
-// GetTextScrollSpeed reads the property "textScrollSpeed" (int).
+// SetButtonTiltDuration writes the property "buttonTiltDuration" and returns the value read back.
+func (o SettingsManager) SetButtonTiltDuration(value int) (v int, err error) {
+	err = o.c.Set("settingsManager", "buttonTiltDuration", value, &v)
+	return
+}
+
+// GetTextScrollSpeed reads the property "textScrollSpeed" (int, writable).
 func (o SettingsManager) GetTextScrollSpeed() (v int, err error) {
 	err = o.c.Get("settingsManager", "textScrollSpeed", &v)
 	return
 }
 
-// GetObdBluetoothPort reads the property "obdBluetoothPort" (QString).
+// SetTextScrollSpeed writes the property "textScrollSpeed" and returns the value read back.
+func (o SettingsManager) SetTextScrollSpeed(value int) (v int, err error) {
+	err = o.c.Set("settingsManager", "textScrollSpeed", value, &v)
+	return
+}
+
+// GetObdBluetoothPort reads the property "obdBluetoothPort" (QString, writable).
 func (o SettingsManager) GetObdBluetoothPort() (v string, err error) {
 	err = o.c.Get("settingsManager", "obdBluetoothPort", &v)
+	return
+}
+
+// SetObdBluetoothPort writes the property "obdBluetoothPort" and returns the value read back.
+func (o SettingsManager) SetObdBluetoothPort(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "obdBluetoothPort", value, &v)
 	return
 }
 
@@ -3287,63 +4535,123 @@ func (o SettingsManager) GetObdSavedAdapters() (v []any, err error) {
 	return
 }
 
-// GetObdFastMode reads the property "obdFastMode" (bool).
+// GetObdFastMode reads the property "obdFastMode" (bool, writable).
 func (o SettingsManager) GetObdFastMode() (v bool, err error) {
 	err = o.c.Get("settingsManager", "obdFastMode", &v)
 	return
 }
 
-// GetObdCardStyleCircular reads the property "obdCardStyleCircular" (bool).
+// SetObdFastMode writes the property "obdFastMode" and returns the value read back.
+func (o SettingsManager) SetObdFastMode(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "obdFastMode", value, &v)
+	return
+}
+
+// GetObdCardStyleCircular reads the property "obdCardStyleCircular" (bool, writable).
 func (o SettingsManager) GetObdCardStyleCircular() (v bool, err error) {
 	err = o.c.Get("settingsManager", "obdCardStyleCircular", &v)
 	return
 }
 
-// GetGaugeTempUnit reads the property "gaugeTempUnit" (QString).
+// SetObdCardStyleCircular writes the property "obdCardStyleCircular" and returns the value read back.
+func (o SettingsManager) SetObdCardStyleCircular(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "obdCardStyleCircular", value, &v)
+	return
+}
+
+// GetGaugeTempUnit reads the property "gaugeTempUnit" (QString, writable).
 func (o SettingsManager) GetGaugeTempUnit() (v string, err error) {
 	err = o.c.Get("settingsManager", "gaugeTempUnit", &v)
 	return
 }
 
-// GetGaugeSpeedUnit reads the property "gaugeSpeedUnit" (QString).
+// SetGaugeTempUnit writes the property "gaugeTempUnit" and returns the value read back.
+func (o SettingsManager) SetGaugeTempUnit(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "gaugeTempUnit", value, &v)
+	return
+}
+
+// GetGaugeSpeedUnit reads the property "gaugeSpeedUnit" (QString, writable).
 func (o SettingsManager) GetGaugeSpeedUnit() (v string, err error) {
 	err = o.c.Get("settingsManager", "gaugeSpeedUnit", &v)
 	return
 }
 
-// GetObdAutoReconnectAttempts reads the property "obdAutoReconnectAttempts" (int).
+// SetGaugeSpeedUnit writes the property "gaugeSpeedUnit" and returns the value read back.
+func (o SettingsManager) SetGaugeSpeedUnit(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "gaugeSpeedUnit", value, &v)
+	return
+}
+
+// GetObdAutoReconnectAttempts reads the property "obdAutoReconnectAttempts" (int, writable).
 func (o SettingsManager) GetObdAutoReconnectAttempts() (v int, err error) {
 	err = o.c.Get("settingsManager", "obdAutoReconnectAttempts", &v)
 	return
 }
 
-// GetFuelTankCapacity reads the property "fuelTankCapacity" (float).
+// SetObdAutoReconnectAttempts writes the property "obdAutoReconnectAttempts" and returns the value read back.
+func (o SettingsManager) SetObdAutoReconnectAttempts(value int) (v int, err error) {
+	err = o.c.Set("settingsManager", "obdAutoReconnectAttempts", value, &v)
+	return
+}
+
+// GetFuelTankCapacity reads the property "fuelTankCapacity" (float, writable).
 func (o SettingsManager) GetFuelTankCapacity() (v float64, err error) {
 	err = o.c.Get("settingsManager", "fuelTankCapacity", &v)
 	return
 }
 
-// GetBlackBoxEnabled reads the property "blackBoxEnabled" (bool).
+// SetFuelTankCapacity writes the property "fuelTankCapacity" and returns the value read back.
+func (o SettingsManager) SetFuelTankCapacity(value float64) (v float64, err error) {
+	err = o.c.Set("settingsManager", "fuelTankCapacity", value, &v)
+	return
+}
+
+// GetBlackBoxEnabled reads the property "blackBoxEnabled" (bool, writable).
 func (o SettingsManager) GetBlackBoxEnabled() (v bool, err error) {
 	err = o.c.Get("settingsManager", "blackBoxEnabled", &v)
 	return
 }
 
-// GetBlackBoxSweepAll reads the property "blackBoxSweepAll" (bool).
+// SetBlackBoxEnabled writes the property "blackBoxEnabled" and returns the value read back.
+func (o SettingsManager) SetBlackBoxEnabled(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "blackBoxEnabled", value, &v)
+	return
+}
+
+// GetBlackBoxSweepAll reads the property "blackBoxSweepAll" (bool, writable).
 func (o SettingsManager) GetBlackBoxSweepAll() (v bool, err error) {
 	err = o.c.Get("settingsManager", "blackBoxSweepAll", &v)
 	return
 }
 
-// GetBlackBoxMaxMB reads the property "blackBoxMaxMB" (int).
+// SetBlackBoxSweepAll writes the property "blackBoxSweepAll" and returns the value read back.
+func (o SettingsManager) SetBlackBoxSweepAll(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "blackBoxSweepAll", value, &v)
+	return
+}
+
+// GetBlackBoxMaxMB reads the property "blackBoxMaxMB" (int, writable).
 func (o SettingsManager) GetBlackBoxMaxMB() (v int, err error) {
 	err = o.c.Get("settingsManager", "blackBoxMaxMB", &v)
 	return
 }
 
-// GetHomeOBDParameters reads the property "homeOBDParameters" (QVariantList).
+// SetBlackBoxMaxMB writes the property "blackBoxMaxMB" and returns the value read back.
+func (o SettingsManager) SetBlackBoxMaxMB(value int) (v int, err error) {
+	err = o.c.Set("settingsManager", "blackBoxMaxMB", value, &v)
+	return
+}
+
+// GetHomeOBDParameters reads the property "homeOBDParameters" (QVariantList, writable).
 func (o SettingsManager) GetHomeOBDParameters() (v []any, err error) {
 	err = o.c.Get("settingsManager", "homeOBDParameters", &v)
+	return
+}
+
+// SetHomeOBDParameters writes the property "homeOBDParameters" and returns the value read back.
+func (o SettingsManager) SetHomeOBDParameters(value []any) (v []any, err error) {
+	err = o.c.Set("settingsManager", "homeOBDParameters", value, &v)
 	return
 }
 
@@ -3377,177 +4685,351 @@ func (o SettingsManager) GetDirectoryHistory() (v []any, err error) {
 	return
 }
 
-// GetWindowState reads the property "windowState" (QString).
+// GetWindowState reads the property "windowState" (QString, writable).
 func (o SettingsManager) GetWindowState() (v string, err error) {
 	err = o.c.Get("settingsManager", "windowState", &v)
 	return
 }
 
-// GetLastSettingsSection reads the property "lastSettingsSection" (QString).
+// SetWindowState writes the property "windowState" and returns the value read back.
+func (o SettingsManager) SetWindowState(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "windowState", value, &v)
+	return
+}
+
+// GetLastSettingsSection reads the property "lastSettingsSection" (QString, writable).
 func (o SettingsManager) GetLastSettingsSection() (v string, err error) {
 	err = o.c.Get("settingsManager", "lastSettingsSection", &v)
 	return
 }
 
-// GetAndroidAutoEnabled reads the property "androidAutoEnabled" (bool).
+// SetLastSettingsSection writes the property "lastSettingsSection" and returns the value read back.
+func (o SettingsManager) SetLastSettingsSection(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "lastSettingsSection", value, &v)
+	return
+}
+
+// GetAndroidAutoEnabled reads the property "androidAutoEnabled" (bool, writable).
 func (o SettingsManager) GetAndroidAutoEnabled() (v bool, err error) {
 	err = o.c.Get("settingsManager", "androidAutoEnabled", &v)
 	return
 }
 
-// GetPhoneMirrorEnabled reads the property "phoneMirrorEnabled" (bool).
+// SetAndroidAutoEnabled writes the property "androidAutoEnabled" and returns the value read back.
+func (o SettingsManager) SetAndroidAutoEnabled(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "androidAutoEnabled", value, &v)
+	return
+}
+
+// GetPhoneMirrorEnabled reads the property "phoneMirrorEnabled" (bool, writable).
 func (o SettingsManager) GetPhoneMirrorEnabled() (v bool, err error) {
 	err = o.c.Get("settingsManager", "phoneMirrorEnabled", &v)
 	return
 }
 
-// GetScrcpyDisplaySize reads the property "scrcpyDisplaySize" (QString).
+// SetPhoneMirrorEnabled writes the property "phoneMirrorEnabled" and returns the value read back.
+func (o SettingsManager) SetPhoneMirrorEnabled(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "phoneMirrorEnabled", value, &v)
+	return
+}
+
+// GetScrcpyDisplaySize reads the property "scrcpyDisplaySize" (QString, writable).
 func (o SettingsManager) GetScrcpyDisplaySize() (v string, err error) {
 	err = o.c.Get("settingsManager", "scrcpyDisplaySize", &v)
 	return
 }
 
-// GetScrcpyAudioGain reads the property "scrcpyAudioGain" (double).
+// SetScrcpyDisplaySize writes the property "scrcpyDisplaySize" and returns the value read back.
+func (o SettingsManager) SetScrcpyDisplaySize(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "scrcpyDisplaySize", value, &v)
+	return
+}
+
+// GetScrcpyAudioGain reads the property "scrcpyAudioGain" (double, writable).
 func (o SettingsManager) GetScrcpyAudioGain() (v float64, err error) {
 	err = o.c.Get("settingsManager", "scrcpyAudioGain", &v)
 	return
 }
 
-// GetScrcpyAudioGainDb reads the property "scrcpyAudioGainDb" (double).
+// SetScrcpyAudioGain writes the property "scrcpyAudioGain" and returns the value read back.
+func (o SettingsManager) SetScrcpyAudioGain(value float64) (v float64, err error) {
+	err = o.c.Set("settingsManager", "scrcpyAudioGain", value, &v)
+	return
+}
+
+// GetScrcpyAudioGainDb reads the property "scrcpyAudioGainDb" (double, writable).
 func (o SettingsManager) GetScrcpyAudioGainDb() (v float64, err error) {
 	err = o.c.Get("settingsManager", "scrcpyAudioGainDb", &v)
 	return
 }
 
-// GetScrcpyAudioDuckLevelDb reads the property "scrcpyAudioDuckLevelDb" (double).
+// SetScrcpyAudioGainDb writes the property "scrcpyAudioGainDb" and returns the value read back.
+func (o SettingsManager) SetScrcpyAudioGainDb(value float64) (v float64, err error) {
+	err = o.c.Set("settingsManager", "scrcpyAudioGainDb", value, &v)
+	return
+}
+
+// GetScrcpyAudioDuckLevelDb reads the property "scrcpyAudioDuckLevelDb" (double, writable).
 func (o SettingsManager) GetScrcpyAudioDuckLevelDb() (v float64, err error) {
 	err = o.c.Get("settingsManager", "scrcpyAudioDuckLevelDb", &v)
 	return
 }
 
-// GetScrcpyAudioDuckEnabled reads the property "scrcpyAudioDuckEnabled" (bool).
+// SetScrcpyAudioDuckLevelDb writes the property "scrcpyAudioDuckLevelDb" and returns the value read back.
+func (o SettingsManager) SetScrcpyAudioDuckLevelDb(value float64) (v float64, err error) {
+	err = o.c.Set("settingsManager", "scrcpyAudioDuckLevelDb", value, &v)
+	return
+}
+
+// GetScrcpyAudioDuckEnabled reads the property "scrcpyAudioDuckEnabled" (bool, writable).
 func (o SettingsManager) GetScrcpyAudioDuckEnabled() (v bool, err error) {
 	err = o.c.Get("settingsManager", "scrcpyAudioDuckEnabled", &v)
 	return
 }
 
-// GetScrcpyAudioDuckLevel reads the property "scrcpyAudioDuckLevel" (double).
+// SetScrcpyAudioDuckEnabled writes the property "scrcpyAudioDuckEnabled" and returns the value read back.
+func (o SettingsManager) SetScrcpyAudioDuckEnabled(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "scrcpyAudioDuckEnabled", value, &v)
+	return
+}
+
+// GetScrcpyAudioDuckLevel reads the property "scrcpyAudioDuckLevel" (double, writable).
 func (o SettingsManager) GetScrcpyAudioDuckLevel() (v float64, err error) {
 	err = o.c.Get("settingsManager", "scrcpyAudioDuckLevel", &v)
 	return
 }
 
-// GetScrcpyPhoneScreenOff reads the property "scrcpyPhoneScreenOff" (bool).
+// SetScrcpyAudioDuckLevel writes the property "scrcpyAudioDuckLevel" and returns the value read back.
+func (o SettingsManager) SetScrcpyAudioDuckLevel(value float64) (v float64, err error) {
+	err = o.c.Set("settingsManager", "scrcpyAudioDuckLevel", value, &v)
+	return
+}
+
+// GetScrcpyPhoneScreenOff reads the property "scrcpyPhoneScreenOff" (bool, writable).
 func (o SettingsManager) GetScrcpyPhoneScreenOff() (v bool, err error) {
 	err = o.c.Get("settingsManager", "scrcpyPhoneScreenOff", &v)
 	return
 }
 
-// GetScrcpyDisplayDpi reads the property "scrcpyDisplayDpi" (int).
+// SetScrcpyPhoneScreenOff writes the property "scrcpyPhoneScreenOff" and returns the value read back.
+func (o SettingsManager) SetScrcpyPhoneScreenOff(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "scrcpyPhoneScreenOff", value, &v)
+	return
+}
+
+// GetScrcpyDisplayDpi reads the property "scrcpyDisplayDpi" (int, writable).
 func (o SettingsManager) GetScrcpyDisplayDpi() (v int, err error) {
 	err = o.c.Get("settingsManager", "scrcpyDisplayDpi", &v)
 	return
 }
 
-// GetScrcpyBitRateUsb reads the property "scrcpyBitRateUsb" (int).
+// SetScrcpyDisplayDpi writes the property "scrcpyDisplayDpi" and returns the value read back.
+func (o SettingsManager) SetScrcpyDisplayDpi(value int) (v int, err error) {
+	err = o.c.Set("settingsManager", "scrcpyDisplayDpi", value, &v)
+	return
+}
+
+// GetScrcpyBitRateUsb reads the property "scrcpyBitRateUsb" (int, writable).
 func (o SettingsManager) GetScrcpyBitRateUsb() (v int, err error) {
 	err = o.c.Get("settingsManager", "scrcpyBitRateUsb", &v)
 	return
 }
 
-// GetScrcpyBitRateWifi reads the property "scrcpyBitRateWifi" (int).
+// SetScrcpyBitRateUsb writes the property "scrcpyBitRateUsb" and returns the value read back.
+func (o SettingsManager) SetScrcpyBitRateUsb(value int) (v int, err error) {
+	err = o.c.Set("settingsManager", "scrcpyBitRateUsb", value, &v)
+	return
+}
+
+// GetScrcpyBitRateWifi reads the property "scrcpyBitRateWifi" (int, writable).
 func (o SettingsManager) GetScrcpyBitRateWifi() (v int, err error) {
 	err = o.c.Get("settingsManager", "scrcpyBitRateWifi", &v)
 	return
 }
 
-// GetScrcpyAutoWifi reads the property "scrcpyAutoWifi" (bool).
+// SetScrcpyBitRateWifi writes the property "scrcpyBitRateWifi" and returns the value read back.
+func (o SettingsManager) SetScrcpyBitRateWifi(value int) (v int, err error) {
+	err = o.c.Set("settingsManager", "scrcpyBitRateWifi", value, &v)
+	return
+}
+
+// GetScrcpyAutoWifi reads the property "scrcpyAutoWifi" (bool, writable).
 func (o SettingsManager) GetScrcpyAutoWifi() (v bool, err error) {
 	err = o.c.Get("settingsManager", "scrcpyAutoWifi", &v)
 	return
 }
 
-// GetScrcpyBitRateAuto reads the property "scrcpyBitRateAuto" (bool).
+// SetScrcpyAutoWifi writes the property "scrcpyAutoWifi" and returns the value read back.
+func (o SettingsManager) SetScrcpyAutoWifi(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "scrcpyAutoWifi", value, &v)
+	return
+}
+
+// GetScrcpyBitRateAuto reads the property "scrcpyBitRateAuto" (bool, writable).
 func (o SettingsManager) GetScrcpyBitRateAuto() (v bool, err error) {
 	err = o.c.Get("settingsManager", "scrcpyBitRateAuto", &v)
 	return
 }
 
-// GetScrcpyWirelessAddress reads the property "scrcpyWirelessAddress" (QString).
+// SetScrcpyBitRateAuto writes the property "scrcpyBitRateAuto" and returns the value read back.
+func (o SettingsManager) SetScrcpyBitRateAuto(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "scrcpyBitRateAuto", value, &v)
+	return
+}
+
+// GetScrcpyWirelessAddress reads the property "scrcpyWirelessAddress" (QString, writable).
 func (o SettingsManager) GetScrcpyWirelessAddress() (v string, err error) {
 	err = o.c.Get("settingsManager", "scrcpyWirelessAddress", &v)
 	return
 }
 
-// GetEsp32VolumeEnabled reads the property "esp32VolumeEnabled" (bool).
+// SetScrcpyWirelessAddress writes the property "scrcpyWirelessAddress" and returns the value read back.
+func (o SettingsManager) SetScrcpyWirelessAddress(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "scrcpyWirelessAddress", value, &v)
+	return
+}
+
+// GetEsp32VolumeEnabled reads the property "esp32VolumeEnabled" (bool, writable).
 func (o SettingsManager) GetEsp32VolumeEnabled() (v bool, err error) {
 	err = o.c.Get("settingsManager", "esp32VolumeEnabled", &v)
 	return
 }
 
-// GetEsp32VolumePort reads the property "esp32VolumePort" (QString).
+// SetEsp32VolumeEnabled writes the property "esp32VolumeEnabled" and returns the value read back.
+func (o SettingsManager) SetEsp32VolumeEnabled(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "esp32VolumeEnabled", value, &v)
+	return
+}
+
+// GetEsp32VolumePort reads the property "esp32VolumePort" (QString, writable).
 func (o SettingsManager) GetEsp32VolumePort() (v string, err error) {
 	err = o.c.Get("settingsManager", "esp32VolumePort", &v)
 	return
 }
 
-// GetEsp32VolumeStepSize reads the property "esp32VolumeStepSize" (double).
+// SetEsp32VolumePort writes the property "esp32VolumePort" and returns the value read back.
+func (o SettingsManager) SetEsp32VolumePort(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "esp32VolumePort", value, &v)
+	return
+}
+
+// GetEsp32VolumeStepSize reads the property "esp32VolumeStepSize" (double, writable).
 func (o SettingsManager) GetEsp32VolumeStepSize() (v float64, err error) {
 	err = o.c.Get("settingsManager", "esp32VolumeStepSize", &v)
 	return
 }
 
-// GetEsp32AutoReconnect reads the property "esp32AutoReconnect" (bool).
+// SetEsp32VolumeStepSize writes the property "esp32VolumeStepSize" and returns the value read back.
+func (o SettingsManager) SetEsp32VolumeStepSize(value float64) (v float64, err error) {
+	err = o.c.Set("settingsManager", "esp32VolumeStepSize", value, &v)
+	return
+}
+
+// GetEsp32AutoReconnect reads the property "esp32AutoReconnect" (bool, writable).
 func (o SettingsManager) GetEsp32AutoReconnect() (v bool, err error) {
 	err = o.c.Get("settingsManager", "esp32AutoReconnect", &v)
 	return
 }
 
-// GetEsp32LedSleepEnabled reads the property "esp32LedSleepEnabled" (bool).
+// SetEsp32AutoReconnect writes the property "esp32AutoReconnect" and returns the value read back.
+func (o SettingsManager) SetEsp32AutoReconnect(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "esp32AutoReconnect", value, &v)
+	return
+}
+
+// GetEsp32LedSleepEnabled reads the property "esp32LedSleepEnabled" (bool, writable).
 func (o SettingsManager) GetEsp32LedSleepEnabled() (v bool, err error) {
 	err = o.c.Get("settingsManager", "esp32LedSleepEnabled", &v)
 	return
 }
 
-// GetEsp32LedColorMode reads the property "esp32LedColorMode" (QString).
+// SetEsp32LedSleepEnabled writes the property "esp32LedSleepEnabled" and returns the value read back.
+func (o SettingsManager) SetEsp32LedSleepEnabled(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "esp32LedSleepEnabled", value, &v)
+	return
+}
+
+// GetEsp32LedColorMode reads the property "esp32LedColorMode" (QString, writable).
 func (o SettingsManager) GetEsp32LedColorMode() (v string, err error) {
 	err = o.c.Get("settingsManager", "esp32LedColorMode", &v)
 	return
 }
 
-// GetEsp32LedStaticColor reads the property "esp32LedStaticColor" (QString).
+// SetEsp32LedColorMode writes the property "esp32LedColorMode" and returns the value read back.
+func (o SettingsManager) SetEsp32LedColorMode(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "esp32LedColorMode", value, &v)
+	return
+}
+
+// GetEsp32LedStaticColor reads the property "esp32LedStaticColor" (QString, writable).
 func (o SettingsManager) GetEsp32LedStaticColor() (v string, err error) {
 	err = o.c.Get("settingsManager", "esp32LedStaticColor", &v)
 	return
 }
 
-// GetImuEnabled reads the property "imuEnabled" (bool).
+// SetEsp32LedStaticColor writes the property "esp32LedStaticColor" and returns the value read back.
+func (o SettingsManager) SetEsp32LedStaticColor(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "esp32LedStaticColor", value, &v)
+	return
+}
+
+// GetImuEnabled reads the property "imuEnabled" (bool, writable).
 func (o SettingsManager) GetImuEnabled() (v bool, err error) {
 	err = o.c.Get("settingsManager", "imuEnabled", &v)
 	return
 }
 
-// GetSensorEmitRate reads the property "sensorEmitRate" (int).
+// SetImuEnabled writes the property "imuEnabled" and returns the value read back.
+func (o SettingsManager) SetImuEnabled(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "imuEnabled", value, &v)
+	return
+}
+
+// GetSensorEmitRate reads the property "sensorEmitRate" (int, writable).
 func (o SettingsManager) GetSensorEmitRate() (v int, err error) {
 	err = o.c.Get("settingsManager", "sensorEmitRate", &v)
 	return
 }
 
-// GetSensorDecimalPlaces reads the property "sensorDecimalPlaces" (int).
+// SetSensorEmitRate writes the property "sensorEmitRate" and returns the value read back.
+func (o SettingsManager) SetSensorEmitRate(value int) (v int, err error) {
+	err = o.c.Set("settingsManager", "sensorEmitRate", value, &v)
+	return
+}
+
+// GetSensorDecimalPlaces reads the property "sensorDecimalPlaces" (int, writable).
 func (o SettingsManager) GetSensorDecimalPlaces() (v int, err error) {
 	err = o.c.Get("settingsManager", "sensorDecimalPlaces", &v)
 	return
 }
 
-// GetSensorTempUnit reads the property "sensorTempUnit" (QString).
+// SetSensorDecimalPlaces writes the property "sensorDecimalPlaces" and returns the value read back.
+func (o SettingsManager) SetSensorDecimalPlaces(value int) (v int, err error) {
+	err = o.c.Set("settingsManager", "sensorDecimalPlaces", value, &v)
+	return
+}
+
+// GetSensorTempUnit reads the property "sensorTempUnit" (QString, writable).
 func (o SettingsManager) GetSensorTempUnit() (v string, err error) {
 	err = o.c.Get("settingsManager", "sensorTempUnit", &v)
 	return
 }
 
-// GetSensorAltitudeUnit reads the property "sensorAltitudeUnit" (QString).
+// SetSensorTempUnit writes the property "sensorTempUnit" and returns the value read back.
+func (o SettingsManager) SetSensorTempUnit(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "sensorTempUnit", value, &v)
+	return
+}
+
+// GetSensorAltitudeUnit reads the property "sensorAltitudeUnit" (QString, writable).
 func (o SettingsManager) GetSensorAltitudeUnit() (v string, err error) {
 	err = o.c.Get("settingsManager", "sensorAltitudeUnit", &v)
+	return
+}
+
+// SetSensorAltitudeUnit writes the property "sensorAltitudeUnit" and returns the value read back.
+func (o SettingsManager) SetSensorAltitudeUnit(value string) (v string, err error) {
+	err = o.c.Set("settingsManager", "sensorAltitudeUnit", value, &v)
 	return
 }
 
@@ -3557,21 +5039,39 @@ func (o SettingsManager) GetSensorCards() (v map[string]any, err error) {
 	return
 }
 
-// GetGestureSensorEnabled reads the property "gestureSensorEnabled" (bool).
+// GetGestureSensorEnabled reads the property "gestureSensorEnabled" (bool, writable).
 func (o SettingsManager) GetGestureSensorEnabled() (v bool, err error) {
 	err = o.c.Get("settingsManager", "gestureSensorEnabled", &v)
 	return
 }
 
-// GetGestureVolumeStep reads the property "gestureVolumeStep" (int).
+// SetGestureSensorEnabled writes the property "gestureSensorEnabled" and returns the value read back.
+func (o SettingsManager) SetGestureSensorEnabled(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "gestureSensorEnabled", value, &v)
+	return
+}
+
+// GetGestureVolumeStep reads the property "gestureVolumeStep" (int, writable).
 func (o SettingsManager) GetGestureVolumeStep() (v int, err error) {
 	err = o.c.Get("settingsManager", "gestureVolumeStep", &v)
 	return
 }
 
-// GetGestureCooldown reads the property "gestureCooldown" (int).
+// SetGestureVolumeStep writes the property "gestureVolumeStep" and returns the value read back.
+func (o SettingsManager) SetGestureVolumeStep(value int) (v int, err error) {
+	err = o.c.Set("settingsManager", "gestureVolumeStep", value, &v)
+	return
+}
+
+// GetGestureCooldown reads the property "gestureCooldown" (int, writable).
 func (o SettingsManager) GetGestureCooldown() (v int, err error) {
 	err = o.c.Get("settingsManager", "gestureCooldown", &v)
+	return
+}
+
+// SetGestureCooldown writes the property "gestureCooldown" and returns the value read back.
+func (o SettingsManager) SetGestureCooldown(value int) (v int, err error) {
+	err = o.c.Set("settingsManager", "gestureCooldown", value, &v)
 	return
 }
 
@@ -3582,91 +5082,127 @@ func (o SettingsManager) GetPinnedSettings() (v []any, err error) {
 }
 
 // SaveDeviceName calls save_device_name(QString).
+//
+// Deprecated: use the deviceName property; goes in protocol 5
 func (o SettingsManager) SaveDeviceName(name string) error {
 	return o.c.Call("settingsManager", "save_device_name", nil, name)
 }
 
 // SaveFontSetting calls save_font_setting(QString).
+//
+// Deprecated: use the fontSetting property; goes in protocol 5
 func (o SettingsManager) SaveFontSetting(font string) error {
 	return o.c.Call("settingsManager", "save_font_setting", nil, font)
 }
 
 // SaveThemeSetting calls save_theme_setting(QString).
+//
+// Deprecated: use the themeSetting property; goes in protocol 5
 func (o SettingsManager) SaveThemeSetting(theme string) error {
 	return o.c.Call("settingsManager", "save_theme_setting", nil, theme)
 }
 
 // SaveUiScale calls save_ui_scale(float).
+//
+// Deprecated: use the uiScale property; goes in protocol 5
 func (o SettingsManager) SaveUiScale(scale float64) error {
 	return o.c.Call("settingsManager", "save_ui_scale", nil, scale)
 }
 
 // SaveColorTransitionMs calls save_color_transition_ms(int).
+//
+// Deprecated: use the colorTransitionMs property; goes in protocol 5
 func (o SettingsManager) SaveColorTransitionMs(ms int) error {
 	return o.c.Call("settingsManager", "save_color_transition_ms", nil, ms)
 }
 
 // SaveSongLengthTransition calls save_song_length_transition(bool).
+//
+// Deprecated: use the songLengthTransition property; goes in protocol 5
 func (o SettingsManager) SaveSongLengthTransition(enabled bool) error {
 	return o.c.Call("settingsManager", "save_song_length_transition", nil, enabled)
 }
 
 // SaveShowClock calls save_show_clock(bool).
+//
+// Deprecated: use the showClock property; goes in protocol 5
 func (o SettingsManager) SaveShowClock(show bool) error {
 	return o.c.Call("settingsManager", "save_show_clock", nil, show)
 }
 
 // SaveClockFormat calls save_clock_format(bool).
+//
+// Deprecated: use the clockFormat24Hour property; goes in protocol 5
 func (o SettingsManager) SaveClockFormat(is24hour bool) error {
 	return o.c.Call("settingsManager", "save_clock_format", nil, is24hour)
 }
 
 // SaveClockShowSeconds calls save_clock_show_seconds(bool).
+//
+// Deprecated: use the clockShowSeconds property; goes in protocol 5
 func (o SettingsManager) SaveClockShowSeconds(show bool) error {
 	return o.c.Call("settingsManager", "save_clock_show_seconds", nil, show)
 }
 
 // SaveClockSize calls save_clock_size(int).
+//
+// Deprecated: use the clockSize property; goes in protocol 5
 func (o SettingsManager) SaveClockSize(size int) error {
 	return o.c.Call("settingsManager", "save_clock_size", nil, size)
 }
 
 // SaveClockSizeAuto calls save_clock_size_auto(bool).
+//
+// Deprecated: use the clockSizeAuto property; goes in protocol 5
 func (o SettingsManager) SaveClockSizeAuto(autoSize bool) error {
 	return o.c.Call("settingsManager", "save_clock_size_auto", nil, autoSize)
 }
 
 // SaveBackgroundGrid calls save_background_grid(QString).
+//
+// Deprecated: use the backgroundGrid property; goes in protocol 5
 func (o SettingsManager) SaveBackgroundGrid(grid string) error {
 	return o.c.Call("settingsManager", "save_background_grid", nil, grid)
 }
 
 // SaveScreenWidth calls save_screen_width(int).
+//
+// Deprecated: use the screenWidth property; goes in protocol 5
 func (o SettingsManager) SaveScreenWidth(width int) error {
 	return o.c.Call("settingsManager", "save_screen_width", nil, width)
 }
 
 // SaveScreenHeight calls save_screen_height(int).
+//
+// Deprecated: use the screenHeight property; goes in protocol 5
 func (o SettingsManager) SaveScreenHeight(height int) error {
 	return o.c.Call("settingsManager", "save_screen_height", nil, height)
 }
 
 // SaveBackgroundBlurRadius calls save_background_blur_radius(int).
+//
+// Deprecated: use the backgroundBlurRadius property; goes in protocol 5
 func (o SettingsManager) SaveBackgroundBlurRadius(radius int) error {
 	return o.c.Call("settingsManager", "save_background_blur_radius", nil, radius)
 }
 
 // SaveBottomBarOrientation calls save_bottom_bar_orientation(QString).
+//
+// Deprecated: use the bottomBarOrientation property; goes in protocol 5
 func (o SettingsManager) SaveBottomBarOrientation(orientation string) error {
 	return o.c.Call("settingsManager", "save_bottom_bar_orientation", nil, orientation)
 }
 
 // SaveShowBottomBarMediaControls calls save_show_bottom_bar_media_controls(bool).
+//
+// Deprecated: use the showBottomBarMediaControls property; goes in protocol 5
 func (o SettingsManager) SaveShowBottomBarMediaControls(show bool) error {
 	return o.c.Call("settingsManager", "save_show_bottom_bar_media_controls", nil, show)
 }
 
 // SaveSettingsLayoutStyle calls save_settings_layout_style(QString).
+//
+// Deprecated: use the settingsLayoutStyle property; goes in protocol 5
 func (o SettingsManager) SaveSettingsLayoutStyle(style string) error {
 	return o.c.Call("settingsManager", "save_settings_layout_style", nil, style)
 }
@@ -3677,6 +5213,8 @@ func (o SettingsManager) SetAlbumArtColors(colorsJson string) error {
 }
 
 // SaveStartVolume calls save_start_volume(float).
+//
+// Deprecated: use the startUpVolume property; goes in protocol 5
 func (o SettingsManager) SaveStartVolume(volume float64) error {
 	return o.c.Call("settingsManager", "save_start_volume", nil, volume)
 }
@@ -3687,6 +5225,8 @@ func (o SettingsManager) SetCurrentVolume(volume int) error {
 }
 
 // SaveMediaFolder calls save_media_folder(QString) -> bool.
+//
+// Deprecated: use the mediaFolder property; goes in protocol 5
 func (o SettingsManager) SaveMediaFolder(folderPath string) (v bool, err error) {
 	err = o.c.Call("settingsManager", "save_media_folder", &v, folderPath)
 	return
@@ -3699,31 +5239,43 @@ func (o SettingsManager) SaveMediaFolderUrl(url string) (v bool, err error) {
 }
 
 // SaveAutoPlayOnStartup calls save_auto_play_on_startup(bool).
+//
+// Deprecated: use the autoPlayOnStartup property; goes in protocol 5
 func (o SettingsManager) SaveAutoPlayOnStartup(enabled bool) error {
 	return o.c.Call("settingsManager", "save_auto_play_on_startup", nil, enabled)
 }
 
 // SavePersistShuffleState calls save_persist_shuffle_state(bool).
+//
+// Deprecated: use the persistShuffleState property; goes in protocol 5
 func (o SettingsManager) SavePersistShuffleState(enabled bool) error {
 	return o.c.Call("settingsManager", "save_persist_shuffle_state", nil, enabled)
 }
 
 // SaveLastShuffleState calls save_last_shuffle_state(bool).
+//
+// Deprecated: use the lastShuffleState property; goes in protocol 5
 func (o SettingsManager) SaveLastShuffleState(enabled bool) error {
 	return o.c.Call("settingsManager", "save_last_shuffle_state", nil, enabled)
 }
 
 // SaveLastPlayedSong calls save_last_played_song(QString).
+//
+// Deprecated: use the lastPlayedSong property; goes in protocol 5
 func (o SettingsManager) SaveLastPlayedSong(filename string) error {
 	return o.c.Call("settingsManager", "save_last_played_song", nil, filename)
 }
 
 // SaveLastPlayedPosition calls save_last_played_position(int).
+//
+// Deprecated: use the lastPlayedPosition property; goes in protocol 5
 func (o SettingsManager) SaveLastPlayedPosition(positionMs int) error {
 	return o.c.Call("settingsManager", "save_last_played_position", nil, positionMs)
 }
 
 // SaveLastPlayedPlaylist calls save_last_played_playlist(QString).
+//
+// Deprecated: use the lastPlayedPlaylist property; goes in protocol 5
 func (o SettingsManager) SaveLastPlayedPlaylist(playlistName string) error {
 	return o.c.Call("settingsManager", "save_last_played_playlist", nil, playlistName)
 }
@@ -3734,86 +5286,120 @@ func (o SettingsManager) SavePlaybackState(song string, positionMs int, playlist
 }
 
 // SaveMusicButtonDefaultPage calls save_music_button_default_page(QString).
+//
+// Deprecated: use the musicButtonDefaultPage property; goes in protocol 5
 func (o SettingsManager) SaveMusicButtonDefaultPage(page string) error {
 	return o.c.Call("settingsManager", "save_music_button_default_page", nil, page)
 }
 
 // SaveReturnToLibraryAfterSelection calls save_return_to_library_after_selection(bool).
+//
+// Deprecated: use the returnToLibraryAfterSelection property; goes in protocol 5
 func (o SettingsManager) SaveReturnToLibraryAfterSelection(returnToLibrary bool) error {
 	return o.c.Call("settingsManager", "save_return_to_library_after_selection", nil, returnToLibrary)
 }
 
 // SaveShowWaveformVisualizer calls save_show_waveform_visualizer(bool).
+//
+// Deprecated: use the showWaveformVisualizer property; goes in protocol 5
 func (o SettingsManager) SaveShowWaveformVisualizer(enabled bool) error {
 	return o.c.Call("settingsManager", "save_show_waveform_visualizer", nil, enabled)
 }
 
 // SaveShow3dButtonTilt calls save_show_3d_button_tilt(bool).
+//
+// Deprecated: use the show3DButtonTilt property; goes in protocol 5
 func (o SettingsManager) SaveShow3dButtonTilt(enabled bool) error {
 	return o.c.Call("settingsManager", "save_show_3d_button_tilt", nil, enabled)
 }
 
 // SaveShow3dAlbumPreview calls save_show_3d_album_preview(bool).
+//
+// Deprecated: use the show3DAlbumPreview property; goes in protocol 5
 func (o SettingsManager) SaveShow3dAlbumPreview(enabled bool) error {
 	return o.c.Call("settingsManager", "save_show_3d_album_preview", nil, enabled)
 }
 
 // SaveRoundedAlbumArt calls save_rounded_album_art(bool).
+//
+// Deprecated: use the roundedAlbumArt property; goes in protocol 5
 func (o SettingsManager) SaveRoundedAlbumArt(enabled bool) error {
 	return o.c.Call("settingsManager", "save_rounded_album_art", nil, enabled)
 }
 
 // SaveAlbumArtCornerRadius calls save_album_art_corner_radius(int).
+//
+// Deprecated: use the albumArtCornerRadius property; goes in protocol 5
 func (o SettingsManager) SaveAlbumArtCornerRadius(radius int) error {
 	return o.c.Call("settingsManager", "save_album_art_corner_radius", nil, radius)
 }
 
 // SaveShowAlbumArtShadow calls save_show_album_art_shadow(bool).
+//
+// Deprecated: use the showAlbumArtShadow property; goes in protocol 5
 func (o SettingsManager) SaveShowAlbumArtShadow(enabled bool) error {
 	return o.c.Call("settingsManager", "save_show_album_art_shadow", nil, enabled)
 }
 
 // SaveVinylRecordMode calls save_vinyl_record_mode(bool).
+//
+// Deprecated: use the vinylRecordMode property; goes in protocol 5
 func (o SettingsManager) SaveVinylRecordMode(enabled bool) error {
 	return o.c.Call("settingsManager", "save_vinyl_record_mode", nil, enabled)
 }
 
 // SaveAlbumArtTransition calls save_album_art_transition(QString).
+//
+// Deprecated: use the albumArtTransition property; goes in protocol 5
 func (o SettingsManager) SaveAlbumArtTransition(transition string) error {
 	return o.c.Call("settingsManager", "save_album_art_transition", nil, transition)
 }
 
 // SaveAudioOutputDevice calls save_audio_output_device(QString).
+//
+// Deprecated: use the audioOutputDevice property; goes in protocol 5
 func (o SettingsManager) SaveAudioOutputDevice(id string) error {
 	return o.c.Call("settingsManager", "save_audio_output_device", nil, id)
 }
 
 // SaveBackgroundOverlayOpacity calls save_background_overlay_opacity(int).
+//
+// Deprecated: use the backgroundOverlayOpacity property; goes in protocol 5
 func (o SettingsManager) SaveBackgroundOverlayOpacity(opacity int) error {
 	return o.c.Call("settingsManager", "save_background_overlay_opacity", nil, opacity)
 }
 
 // SaveSideCardOpacity calls save_side_card_opacity(double).
+//
+// Deprecated: use the sideCardOpacity property; goes in protocol 5
 func (o SettingsManager) SaveSideCardOpacity(opacity float64) error {
 	return o.c.Call("settingsManager", "save_side_card_opacity", nil, opacity)
 }
 
 // SaveSideCardAngle calls save_side_card_angle(int).
+//
+// Deprecated: use the sideCardAngle property; goes in protocol 5
 func (o SettingsManager) SaveSideCardAngle(angle int) error {
 	return o.c.Call("settingsManager", "save_side_card_angle", nil, angle)
 }
 
 // SaveButtonTiltDuration calls save_button_tilt_duration(int).
+//
+// Deprecated: use the buttonTiltDuration property; goes in protocol 5
 func (o SettingsManager) SaveButtonTiltDuration(duration int) error {
 	return o.c.Call("settingsManager", "save_button_tilt_duration", nil, duration)
 }
 
 // SaveTextScrollSpeed calls save_text_scroll_speed(int).
+//
+// Deprecated: use the textScrollSpeed property; goes in protocol 5
 func (o SettingsManager) SaveTextScrollSpeed(speed int) error {
 	return o.c.Call("settingsManager", "save_text_scroll_speed", nil, speed)
 }
 
 // SaveObdBluetoothPort calls save_obd_bluetooth_port(QString).
+//
+// Deprecated: use the obdBluetoothPort property; goes in protocol 5
 func (o SettingsManager) SaveObdBluetoothPort(port string) error {
 	return o.c.Call("settingsManager", "save_obd_bluetooth_port", nil, port)
 }
@@ -3829,46 +5415,64 @@ func (o SettingsManager) RemoveObdSavedAdapter(mac string) error {
 }
 
 // SaveObdFastMode calls save_obd_fast_mode(bool).
+//
+// Deprecated: use the obdFastMode property; goes in protocol 5
 func (o SettingsManager) SaveObdFastMode(enabled bool) error {
 	return o.c.Call("settingsManager", "save_obd_fast_mode", nil, enabled)
 }
 
 // SaveObdCardStyleCircular calls save_obd_card_style_circular(bool).
+//
+// Deprecated: use the obdCardStyleCircular property; goes in protocol 5
 func (o SettingsManager) SaveObdCardStyleCircular(circular bool) error {
 	return o.c.Call("settingsManager", "save_obd_card_style_circular", nil, circular)
 }
 
 // SaveGaugeTempUnit calls save_gauge_temp_unit(QString).
+//
+// Deprecated: use the gaugeTempUnit property; goes in protocol 5
 func (o SettingsManager) SaveGaugeTempUnit(unit string) error {
 	return o.c.Call("settingsManager", "save_gauge_temp_unit", nil, unit)
 }
 
 // SaveGaugeSpeedUnit calls save_gauge_speed_unit(QString).
+//
+// Deprecated: use the gaugeSpeedUnit property; goes in protocol 5
 func (o SettingsManager) SaveGaugeSpeedUnit(unit string) error {
 	return o.c.Call("settingsManager", "save_gauge_speed_unit", nil, unit)
 }
 
 // SaveObdAutoReconnectAttempts calls save_obd_auto_reconnect_attempts(int).
+//
+// Deprecated: use the obdAutoReconnectAttempts property; goes in protocol 5
 func (o SettingsManager) SaveObdAutoReconnectAttempts(attempts int) error {
 	return o.c.Call("settingsManager", "save_obd_auto_reconnect_attempts", nil, attempts)
 }
 
 // SaveFuelTankCapacity calls save_fuel_tank_capacity(float).
+//
+// Deprecated: use the fuelTankCapacity property; goes in protocol 5
 func (o SettingsManager) SaveFuelTankCapacity(capacity float64) error {
 	return o.c.Call("settingsManager", "save_fuel_tank_capacity", nil, capacity)
 }
 
 // SaveBlackBoxEnabled calls save_black_box_enabled(bool).
+//
+// Deprecated: use the blackBoxEnabled property; goes in protocol 5
 func (o SettingsManager) SaveBlackBoxEnabled(enabled bool) error {
 	return o.c.Call("settingsManager", "save_black_box_enabled", nil, enabled)
 }
 
 // SaveBlackBoxSweepAll calls save_black_box_sweep_all(bool).
+//
+// Deprecated: use the blackBoxSweepAll property; goes in protocol 5
 func (o SettingsManager) SaveBlackBoxSweepAll(enabled bool) error {
 	return o.c.Call("settingsManager", "save_black_box_sweep_all", nil, enabled)
 }
 
 // SaveBlackBoxMaxMb calls save_black_box_max_mb(int).
+//
+// Deprecated: use the blackBoxMaxMB property; goes in protocol 5
 func (o SettingsManager) SaveBlackBoxMaxMb(megabytes int) error {
 	return o.c.Call("settingsManager", "save_black_box_max_mb", nil, megabytes)
 }
@@ -3884,6 +5488,8 @@ func (o SettingsManager) SaveSupportedObdParameters(parameters []any) error {
 }
 
 // SaveHomeObdParameters calls save_home_obd_parameters(QVariantList).
+//
+// Deprecated: use the homeOBDParameters property; goes in protocol 5
 func (o SettingsManager) SaveHomeObdParameters(parameters []any) error {
 	return o.c.Call("settingsManager", "save_home_obd_parameters", nil, parameters)
 }
@@ -3938,12 +5544,16 @@ func (o SettingsManager) DeleteCustomTheme(name string) error {
 }
 
 // SaveWindowState calls save_window_state(QString).
+//
+// Deprecated: use the windowState property; goes in protocol 5
 func (o SettingsManager) SaveWindowState(state string) error {
 	return o.c.Call("settingsManager", "save_window_state", nil, state)
 }
 
-// SetLastSettingsSection calls set_last_settings_section(QString).
-func (o SettingsManager) SetLastSettingsSection(section string) error {
+// SetLastSettingsSectionCall calls set_last_settings_section(QString).
+//
+// Deprecated: use the lastSettingsSection property; goes in protocol 5
+func (o SettingsManager) SetLastSettingsSectionCall(section string) error {
 	return o.c.Call("settingsManager", "set_last_settings_section", nil, section)
 }
 
@@ -3953,136 +5563,190 @@ func (o SettingsManager) SaveSettingsSectionVisibility(section string, visible b
 }
 
 // SaveAndroidAutoEnabled calls save_android_auto_enabled(bool).
+//
+// Deprecated: use the androidAutoEnabled property; goes in protocol 5
 func (o SettingsManager) SaveAndroidAutoEnabled(enabled bool) error {
 	return o.c.Call("settingsManager", "save_android_auto_enabled", nil, enabled)
 }
 
 // SavePhoneMirrorEnabled calls save_phone_mirror_enabled(bool).
+//
+// Deprecated: use the phoneMirrorEnabled property; goes in protocol 5
 func (o SettingsManager) SavePhoneMirrorEnabled(enabled bool) error {
 	return o.c.Call("settingsManager", "save_phone_mirror_enabled", nil, enabled)
 }
 
 // SaveScrcpyDisplaySize calls save_scrcpy_display_size(QString).
+//
+// Deprecated: use the scrcpyDisplaySize property; goes in protocol 5
 func (o SettingsManager) SaveScrcpyDisplaySize(size string) error {
 	return o.c.Call("settingsManager", "save_scrcpy_display_size", nil, size)
 }
 
 // SaveScrcpyAudioGain calls save_scrcpy_audio_gain(double).
+//
+// Deprecated: use the scrcpyAudioGain property; goes in protocol 5
 func (o SettingsManager) SaveScrcpyAudioGain(gain float64) error {
 	return o.c.Call("settingsManager", "save_scrcpy_audio_gain", nil, gain)
 }
 
 // SaveScrcpyAudioDuckEnabled calls save_scrcpy_audio_duck_enabled(bool).
+//
+// Deprecated: use the scrcpyAudioDuckEnabled property; goes in protocol 5
 func (o SettingsManager) SaveScrcpyAudioDuckEnabled(enabled bool) error {
 	return o.c.Call("settingsManager", "save_scrcpy_audio_duck_enabled", nil, enabled)
 }
 
 // SaveScrcpyAudioDuckLevel calls save_scrcpy_audio_duck_level(double).
+//
+// Deprecated: use the scrcpyAudioDuckLevel property; goes in protocol 5
 func (o SettingsManager) SaveScrcpyAudioDuckLevel(level float64) error {
 	return o.c.Call("settingsManager", "save_scrcpy_audio_duck_level", nil, level)
 }
 
 // SaveScrcpyAudioGainDb calls save_scrcpy_audio_gain_db(double).
+//
+// Deprecated: use the scrcpyAudioGainDb property; goes in protocol 5
 func (o SettingsManager) SaveScrcpyAudioGainDb(db float64) error {
 	return o.c.Call("settingsManager", "save_scrcpy_audio_gain_db", nil, db)
 }
 
 // SaveScrcpyAudioDuckLevelDb calls save_scrcpy_audio_duck_level_db(double).
+//
+// Deprecated: use the scrcpyAudioDuckLevelDb property; goes in protocol 5
 func (o SettingsManager) SaveScrcpyAudioDuckLevelDb(db float64) error {
 	return o.c.Call("settingsManager", "save_scrcpy_audio_duck_level_db", nil, db)
 }
 
 // SaveScrcpyPhoneScreenOff calls save_scrcpy_phone_screen_off(bool).
+//
+// Deprecated: use the scrcpyPhoneScreenOff property; goes in protocol 5
 func (o SettingsManager) SaveScrcpyPhoneScreenOff(off bool) error {
 	return o.c.Call("settingsManager", "save_scrcpy_phone_screen_off", nil, off)
 }
 
 // SaveScrcpyDisplayDpi calls save_scrcpy_display_dpi(int).
+//
+// Deprecated: use the scrcpyDisplayDpi property; goes in protocol 5
 func (o SettingsManager) SaveScrcpyDisplayDpi(dpi int) error {
 	return o.c.Call("settingsManager", "save_scrcpy_display_dpi", nil, dpi)
 }
 
 // SaveScrcpyBitRateUsb calls save_scrcpy_bit_rate_usb(int).
+//
+// Deprecated: use the scrcpyBitRateUsb property; goes in protocol 5
 func (o SettingsManager) SaveScrcpyBitRateUsb(mbps int) error {
 	return o.c.Call("settingsManager", "save_scrcpy_bit_rate_usb", nil, mbps)
 }
 
 // SaveScrcpyBitRateWifi calls save_scrcpy_bit_rate_wifi(int).
+//
+// Deprecated: use the scrcpyBitRateWifi property; goes in protocol 5
 func (o SettingsManager) SaveScrcpyBitRateWifi(mbps int) error {
 	return o.c.Call("settingsManager", "save_scrcpy_bit_rate_wifi", nil, mbps)
 }
 
 // SaveScrcpyAutoWifi calls save_scrcpy_auto_wifi(bool).
+//
+// Deprecated: use the scrcpyAutoWifi property; goes in protocol 5
 func (o SettingsManager) SaveScrcpyAutoWifi(enabled bool) error {
 	return o.c.Call("settingsManager", "save_scrcpy_auto_wifi", nil, enabled)
 }
 
 // SaveScrcpyBitRateAuto calls save_scrcpy_bit_rate_auto(bool).
+//
+// Deprecated: use the scrcpyBitRateAuto property; goes in protocol 5
 func (o SettingsManager) SaveScrcpyBitRateAuto(enabled bool) error {
 	return o.c.Call("settingsManager", "save_scrcpy_bit_rate_auto", nil, enabled)
 }
 
 // SaveScrcpyWirelessAddress calls save_scrcpy_wireless_address(QString).
+//
+// Deprecated: use the scrcpyWirelessAddress property; goes in protocol 5
 func (o SettingsManager) SaveScrcpyWirelessAddress(address string) error {
 	return o.c.Call("settingsManager", "save_scrcpy_wireless_address", nil, address)
 }
 
 // SaveEsp32VolumeEnabled calls save_esp32_volume_enabled(bool).
+//
+// Deprecated: use the esp32VolumeEnabled property; goes in protocol 5
 func (o SettingsManager) SaveEsp32VolumeEnabled(enabled bool) error {
 	return o.c.Call("settingsManager", "save_esp32_volume_enabled", nil, enabled)
 }
 
 // SaveEsp32VolumePort calls save_esp32_volume_port(QString).
+//
+// Deprecated: use the esp32VolumePort property; goes in protocol 5
 func (o SettingsManager) SaveEsp32VolumePort(port string) error {
 	return o.c.Call("settingsManager", "save_esp32_volume_port", nil, port)
 }
 
 // SaveEsp32VolumeStepSize calls save_esp32_volume_step_size(double).
+//
+// Deprecated: use the esp32VolumeStepSize property; goes in protocol 5
 func (o SettingsManager) SaveEsp32VolumeStepSize(stepSize float64) error {
 	return o.c.Call("settingsManager", "save_esp32_volume_step_size", nil, stepSize)
 }
 
 // SaveEsp32AutoReconnect calls save_esp32_auto_reconnect(bool).
+//
+// Deprecated: use the esp32AutoReconnect property; goes in protocol 5
 func (o SettingsManager) SaveEsp32AutoReconnect(enabled bool) error {
 	return o.c.Call("settingsManager", "save_esp32_auto_reconnect", nil, enabled)
 }
 
 // SaveEsp32LedSleepEnabled calls save_esp32_led_sleep_enabled(bool).
+//
+// Deprecated: use the esp32LedSleepEnabled property; goes in protocol 5
 func (o SettingsManager) SaveEsp32LedSleepEnabled(enabled bool) error {
 	return o.c.Call("settingsManager", "save_esp32_led_sleep_enabled", nil, enabled)
 }
 
 // SaveEsp32LedColorMode calls save_esp32_led_color_mode(QString).
+//
+// Deprecated: use the esp32LedColorMode property; goes in protocol 5
 func (o SettingsManager) SaveEsp32LedColorMode(mode string) error {
 	return o.c.Call("settingsManager", "save_esp32_led_color_mode", nil, mode)
 }
 
 // SaveEsp32LedStaticColor calls save_esp32_led_static_color(QString).
+//
+// Deprecated: use the esp32LedStaticColor property; goes in protocol 5
 func (o SettingsManager) SaveEsp32LedStaticColor(color string) error {
 	return o.c.Call("settingsManager", "save_esp32_led_static_color", nil, color)
 }
 
 // SaveImuEnabled calls save_imu_enabled(bool).
+//
+// Deprecated: use the imuEnabled property; goes in protocol 5
 func (o SettingsManager) SaveImuEnabled(enabled bool) error {
 	return o.c.Call("settingsManager", "save_imu_enabled", nil, enabled)
 }
 
 // SaveSensorEmitRate calls save_sensor_emit_rate(int).
+//
+// Deprecated: use the sensorEmitRate property; goes in protocol 5
 func (o SettingsManager) SaveSensorEmitRate(hz int) error {
 	return o.c.Call("settingsManager", "save_sensor_emit_rate", nil, hz)
 }
 
 // SaveSensorDecimalPlaces calls save_sensor_decimal_places(int).
+//
+// Deprecated: use the sensorDecimalPlaces property; goes in protocol 5
 func (o SettingsManager) SaveSensorDecimalPlaces(places int) error {
 	return o.c.Call("settingsManager", "save_sensor_decimal_places", nil, places)
 }
 
 // SaveSensorTempUnit calls save_sensor_temp_unit(QString).
+//
+// Deprecated: use the sensorTempUnit property; goes in protocol 5
 func (o SettingsManager) SaveSensorTempUnit(unit string) error {
 	return o.c.Call("settingsManager", "save_sensor_temp_unit", nil, unit)
 }
 
 // SaveSensorAltitudeUnit calls save_sensor_altitude_unit(QString).
+//
+// Deprecated: use the sensorAltitudeUnit property; goes in protocol 5
 func (o SettingsManager) SaveSensorAltitudeUnit(unit string) error {
 	return o.c.Call("settingsManager", "save_sensor_altitude_unit", nil, unit)
 }
@@ -4093,6 +5757,8 @@ func (o SettingsManager) SaveSensorCardVisible(card string, visible bool) error 
 }
 
 // SaveGestureSensorEnabled calls save_gesture_sensor_enabled(bool).
+//
+// Deprecated: use the gestureSensorEnabled property; goes in protocol 5
 func (o SettingsManager) SaveGestureSensorEnabled(enabled bool) error {
 	return o.c.Call("settingsManager", "save_gesture_sensor_enabled", nil, enabled)
 }
@@ -4113,11 +5779,15 @@ func (o SettingsManager) ResetGestureMapping() error {
 }
 
 // SaveGestureVolumeStep calls save_gesture_volume_step(int).
+//
+// Deprecated: use the gestureVolumeStep property; goes in protocol 5
 func (o SettingsManager) SaveGestureVolumeStep(step int) error {
 	return o.c.Call("settingsManager", "save_gesture_volume_step", nil, step)
 }
 
 // SaveGestureCooldown calls save_gesture_cooldown(int).
+//
+// Deprecated: use the gestureCooldown property; goes in protocol 5
 func (o SettingsManager) SaveGestureCooldown(ms int) error {
 	return o.c.Call("settingsManager", "save_gesture_cooldown", nil, ms)
 }
@@ -4180,72 +5850,96 @@ func (o SettingsManager) GetSupportedObdParameters() (v []any, err error) {
 }
 
 // GetDirectoryHistoryCall calls get_directory_history() -> QVariantList.
+//
+// Deprecated: use the directoryHistory property; goes in protocol 5
 func (o SettingsManager) GetDirectoryHistoryCall() (v []any, err error) {
 	err = o.c.Call("settingsManager", "get_directory_history", &v)
 	return
 }
 
 // GetHomeObdParameters calls get_home_obd_parameters() -> QVariantList.
+//
+// Deprecated: use the homeOBDParameters property; goes in protocol 5
 func (o SettingsManager) GetHomeObdParameters() (v []any, err error) {
 	err = o.c.Call("settingsManager", "get_home_obd_parameters", &v)
 	return
 }
 
 // GetAutoPlayOnStartupCall calls get_auto_play_on_startup() -> bool.
+//
+// Deprecated: use the autoPlayOnStartup property; goes in protocol 5
 func (o SettingsManager) GetAutoPlayOnStartupCall() (v bool, err error) {
 	err = o.c.Call("settingsManager", "get_auto_play_on_startup", &v)
 	return
 }
 
 // GetPersistShuffleStateCall calls get_persist_shuffle_state() -> bool.
+//
+// Deprecated: use the persistShuffleState property; goes in protocol 5
 func (o SettingsManager) GetPersistShuffleStateCall() (v bool, err error) {
 	err = o.c.Call("settingsManager", "get_persist_shuffle_state", &v)
 	return
 }
 
 // GetLastShuffleStateCall calls get_last_shuffle_state() -> bool.
+//
+// Deprecated: use the lastShuffleState property; goes in protocol 5
 func (o SettingsManager) GetLastShuffleStateCall() (v bool, err error) {
 	err = o.c.Call("settingsManager", "get_last_shuffle_state", &v)
 	return
 }
 
 // GetLastPlayedSongCall calls get_last_played_song() -> QString.
+//
+// Deprecated: use the lastPlayedSong property; goes in protocol 5
 func (o SettingsManager) GetLastPlayedSongCall() (v string, err error) {
 	err = o.c.Call("settingsManager", "get_last_played_song", &v)
 	return
 }
 
 // GetLastPlayedPositionCall calls get_last_played_position() -> int.
+//
+// Deprecated: use the lastPlayedPosition property; goes in protocol 5
 func (o SettingsManager) GetLastPlayedPositionCall() (v int, err error) {
 	err = o.c.Call("settingsManager", "get_last_played_position", &v)
 	return
 }
 
 // GetLastPlayedPlaylistCall calls get_last_played_playlist() -> QString.
+//
+// Deprecated: use the lastPlayedPlaylist property; goes in protocol 5
 func (o SettingsManager) GetLastPlayedPlaylistCall() (v string, err error) {
 	err = o.c.Call("settingsManager", "get_last_played_playlist", &v)
 	return
 }
 
 // GetLastSettingsSectionCall calls get_last_settings_section() -> QString.
+//
+// Deprecated: use the lastSettingsSection property; goes in protocol 5
 func (o SettingsManager) GetLastSettingsSectionCall() (v string, err error) {
 	err = o.c.Call("settingsManager", "get_last_settings_section", &v)
 	return
 }
 
 // GetWindowStateCall calls get_window_state() -> QString.
+//
+// Deprecated: use the windowState property; goes in protocol 5
 func (o SettingsManager) GetWindowStateCall() (v string, err error) {
 	err = o.c.Call("settingsManager", "get_window_state", &v)
 	return
 }
 
 // GetMusicButtonDefaultPageCall calls get_music_button_default_page() -> QString.
+//
+// Deprecated: use the musicButtonDefaultPage property; goes in protocol 5
 func (o SettingsManager) GetMusicButtonDefaultPageCall() (v string, err error) {
 	err = o.c.Call("settingsManager", "get_music_button_default_page", &v)
 	return
 }
 
 // GetReturnToLibraryAfterSelectionCall calls get_return_to_library_after_selection() -> bool.
+//
+// Deprecated: use the returnToLibraryAfterSelection property; goes in protocol 5
 func (o SettingsManager) GetReturnToLibraryAfterSelectionCall() (v bool, err error) {
 	err = o.c.Call("settingsManager", "get_return_to_library_after_selection", &v)
 	return
@@ -4257,138 +5951,184 @@ func (o SettingsManager) FlushPendingSave() error {
 }
 
 // GetAndroidAutoEnabledCall calls get_android_auto_enabled() -> bool.
+//
+// Deprecated: use the androidAutoEnabled property; goes in protocol 5
 func (o SettingsManager) GetAndroidAutoEnabledCall() (v bool, err error) {
 	err = o.c.Call("settingsManager", "get_android_auto_enabled", &v)
 	return
 }
 
 // GetPhoneMirrorEnabledCall calls get_phone_mirror_enabled() -> bool.
+//
+// Deprecated: use the phoneMirrorEnabled property; goes in protocol 5
 func (o SettingsManager) GetPhoneMirrorEnabledCall() (v bool, err error) {
 	err = o.c.Call("settingsManager", "get_phone_mirror_enabled", &v)
 	return
 }
 
 // GetScrcpyDisplaySizeCall calls get_scrcpy_display_size() -> QString.
+//
+// Deprecated: use the scrcpyDisplaySize property; goes in protocol 5
 func (o SettingsManager) GetScrcpyDisplaySizeCall() (v string, err error) {
 	err = o.c.Call("settingsManager", "get_scrcpy_display_size", &v)
 	return
 }
 
 // GetScrcpyAudioGainCall calls get_scrcpy_audio_gain() -> double.
+//
+// Deprecated: use the scrcpyAudioGain property; goes in protocol 5
 func (o SettingsManager) GetScrcpyAudioGainCall() (v float64, err error) {
 	err = o.c.Call("settingsManager", "get_scrcpy_audio_gain", &v)
 	return
 }
 
 // GetScrcpyAudioDuckEnabledCall calls get_scrcpy_audio_duck_enabled() -> bool.
+//
+// Deprecated: use the scrcpyAudioDuckEnabled property; goes in protocol 5
 func (o SettingsManager) GetScrcpyAudioDuckEnabledCall() (v bool, err error) {
 	err = o.c.Call("settingsManager", "get_scrcpy_audio_duck_enabled", &v)
 	return
 }
 
 // GetScrcpyAudioDuckLevelCall calls get_scrcpy_audio_duck_level() -> double.
+//
+// Deprecated: use the scrcpyAudioDuckLevel property; goes in protocol 5
 func (o SettingsManager) GetScrcpyAudioDuckLevelCall() (v float64, err error) {
 	err = o.c.Call("settingsManager", "get_scrcpy_audio_duck_level", &v)
 	return
 }
 
 // GetScrcpyPhoneScreenOffCall calls get_scrcpy_phone_screen_off() -> bool.
+//
+// Deprecated: use the scrcpyPhoneScreenOff property; goes in protocol 5
 func (o SettingsManager) GetScrcpyPhoneScreenOffCall() (v bool, err error) {
 	err = o.c.Call("settingsManager", "get_scrcpy_phone_screen_off", &v)
 	return
 }
 
 // GetScrcpyDisplayDpiCall calls get_scrcpy_display_dpi() -> int.
+//
+// Deprecated: use the scrcpyDisplayDpi property; goes in protocol 5
 func (o SettingsManager) GetScrcpyDisplayDpiCall() (v int, err error) {
 	err = o.c.Call("settingsManager", "get_scrcpy_display_dpi", &v)
 	return
 }
 
 // GetScrcpyBitRateUsbCall calls get_scrcpy_bit_rate_usb() -> int.
+//
+// Deprecated: use the scrcpyBitRateUsb property; goes in protocol 5
 func (o SettingsManager) GetScrcpyBitRateUsbCall() (v int, err error) {
 	err = o.c.Call("settingsManager", "get_scrcpy_bit_rate_usb", &v)
 	return
 }
 
 // GetScrcpyBitRateWifiCall calls get_scrcpy_bit_rate_wifi() -> int.
+//
+// Deprecated: use the scrcpyBitRateWifi property; goes in protocol 5
 func (o SettingsManager) GetScrcpyBitRateWifiCall() (v int, err error) {
 	err = o.c.Call("settingsManager", "get_scrcpy_bit_rate_wifi", &v)
 	return
 }
 
 // GetScrcpyAutoWifiCall calls get_scrcpy_auto_wifi() -> bool.
+//
+// Deprecated: use the scrcpyAutoWifi property; goes in protocol 5
 func (o SettingsManager) GetScrcpyAutoWifiCall() (v bool, err error) {
 	err = o.c.Call("settingsManager", "get_scrcpy_auto_wifi", &v)
 	return
 }
 
 // GetScrcpyBitRateAutoCall calls get_scrcpy_bit_rate_auto() -> bool.
+//
+// Deprecated: use the scrcpyBitRateAuto property; goes in protocol 5
 func (o SettingsManager) GetScrcpyBitRateAutoCall() (v bool, err error) {
 	err = o.c.Call("settingsManager", "get_scrcpy_bit_rate_auto", &v)
 	return
 }
 
 // GetScrcpyWirelessAddressCall calls get_scrcpy_wireless_address() -> QString.
+//
+// Deprecated: use the scrcpyWirelessAddress property; goes in protocol 5
 func (o SettingsManager) GetScrcpyWirelessAddressCall() (v string, err error) {
 	err = o.c.Call("settingsManager", "get_scrcpy_wireless_address", &v)
 	return
 }
 
 // GetEsp32VolumeEnabledCall calls get_esp32_volume_enabled() -> bool.
+//
+// Deprecated: use the esp32VolumeEnabled property; goes in protocol 5
 func (o SettingsManager) GetEsp32VolumeEnabledCall() (v bool, err error) {
 	err = o.c.Call("settingsManager", "get_esp32_volume_enabled", &v)
 	return
 }
 
 // GetEsp32VolumePortCall calls get_esp32_volume_port() -> QString.
+//
+// Deprecated: use the esp32VolumePort property; goes in protocol 5
 func (o SettingsManager) GetEsp32VolumePortCall() (v string, err error) {
 	err = o.c.Call("settingsManager", "get_esp32_volume_port", &v)
 	return
 }
 
 // GetEsp32VolumeStepSizeCall calls get_esp32_volume_step_size() -> double.
+//
+// Deprecated: use the esp32VolumeStepSize property; goes in protocol 5
 func (o SettingsManager) GetEsp32VolumeStepSizeCall() (v float64, err error) {
 	err = o.c.Call("settingsManager", "get_esp32_volume_step_size", &v)
 	return
 }
 
 // GetEsp32AutoReconnectCall calls get_esp32_auto_reconnect() -> bool.
+//
+// Deprecated: use the esp32AutoReconnect property; goes in protocol 5
 func (o SettingsManager) GetEsp32AutoReconnectCall() (v bool, err error) {
 	err = o.c.Call("settingsManager", "get_esp32_auto_reconnect", &v)
 	return
 }
 
 // GetEsp32LedSleepEnabledCall calls get_esp32_led_sleep_enabled() -> bool.
+//
+// Deprecated: use the esp32LedSleepEnabled property; goes in protocol 5
 func (o SettingsManager) GetEsp32LedSleepEnabledCall() (v bool, err error) {
 	err = o.c.Call("settingsManager", "get_esp32_led_sleep_enabled", &v)
 	return
 }
 
 // GetEsp32LedColorModeCall calls get_esp32_led_color_mode() -> QString.
+//
+// Deprecated: use the esp32LedColorMode property; goes in protocol 5
 func (o SettingsManager) GetEsp32LedColorModeCall() (v string, err error) {
 	err = o.c.Call("settingsManager", "get_esp32_led_color_mode", &v)
 	return
 }
 
 // GetEsp32LedStaticColorCall calls get_esp32_led_static_color() -> QString.
+//
+// Deprecated: use the esp32LedStaticColor property; goes in protocol 5
 func (o SettingsManager) GetEsp32LedStaticColorCall() (v string, err error) {
 	err = o.c.Call("settingsManager", "get_esp32_led_static_color", &v)
 	return
 }
 
 // GetShowWaveformVisualizerCall calls get_show_waveform_visualizer() -> bool.
+//
+// Deprecated: use the showWaveformVisualizer property; goes in protocol 5
 func (o SettingsManager) GetShowWaveformVisualizerCall() (v bool, err error) {
 	err = o.c.Call("settingsManager", "get_show_waveform_visualizer", &v)
 	return
 }
 
 // GetImuEnabledCall calls get_imu_enabled() -> bool.
+//
+// Deprecated: use the imuEnabled property; goes in protocol 5
 func (o SettingsManager) GetImuEnabledCall() (v bool, err error) {
 	err = o.c.Call("settingsManager", "get_imu_enabled", &v)
 	return
 }
 
 // GetGestureSensorEnabledCall calls get_gesture_sensor_enabled() -> bool.
+//
+// Deprecated: use the gestureSensorEnabled property; goes in protocol 5
 func (o SettingsManager) GetGestureSensorEnabledCall() (v bool, err error) {
 	err = o.c.Call("settingsManager", "get_gesture_sensor_enabled", &v)
 	return
@@ -4425,6 +6165,8 @@ func (o SettingsManager) GetPinnedSettingsMetadata() (v string, err error) {
 }
 
 // GetSettingsMenuVisibilityCall calls get_settings_menu_visibility() -> QString.
+//
+// Deprecated: use the settingsMenuVisibility property; goes in protocol 5
 func (o SettingsManager) GetSettingsMenuVisibilityCall() (v string, err error) {
 	err = o.c.Call("settingsManager", "get_settings_menu_visibility", &v)
 	return

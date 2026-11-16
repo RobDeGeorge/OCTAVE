@@ -635,11 +635,11 @@ static void act(Ui *ui, Link *l, const State *s, int id)
         break;
     }
     case B_MUTE: link_set(l, "volumeController", "muted", s->muted ? "false" : "true"); break;
-    case B_READ: link_call(l, "obdManager", "read_dtc", NULL); break;
+    case B_READ: link_call(l, "obdManager", "readDtc", NULL); break;
     case B_CLEAR: if (s->obd_connected) ui->confirm_clear = true; break;
-    case B_YES: ui->confirm_clear = false; link_call(l, "obdManager", "clear_dtc", NULL); break;
+    case B_YES: ui->confirm_clear = false; link_call(l, "obdManager", "clearDtc", NULL); break;
     case B_NO: ui->confirm_clear = false; break;
-    case B_OBD_CONNECT: link_call(l, "obdManager", "connect_obd", NULL); break;
+    case B_OBD_CONNECT: link_call(l, "obdManager", "connectObd", NULL); break;
     default: break;
     }
 }

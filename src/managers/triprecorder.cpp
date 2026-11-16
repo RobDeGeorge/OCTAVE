@@ -175,6 +175,8 @@ void TripRecorder::attach(OBDManager *obd)
     connect(obd, &OBDManager::connectionStatusChanged, this, [this, obd](const QString &) {
         setConnected(obd->isConnected());
     });
+    m_simulated = obd->isSimulated();
+    connect(obd, &OBDManager::simulatedChanged, this, [this, obd]() { m_simulated = obd->isSimulated(); });
     connect(obd, &OBDManager::connectionLostUnexpectedly, this, [this](const QString &reason) {
         noteEvent(QStringLiteral("connection_lost"), reason);
     });
@@ -297,7 +299,8 @@ void TripRecorder::openTrip(qint64 now)
     m_buffer.clear();
     m_rpmZeroSinceMs = 0;
     const qint64 id = m_tripId;
-    const QVariantMap meta = m_identity;
+    QVariantMap meta = m_identity;
+    meta[QStringLiteral("simulated")] = m_simulated;
     onStore([id, now, meta](TripStore *store) { store->beginTrip(id, now, meta); });
     m_flushTimer.start();
     qCInfo(lcTrip) << "Trip" << id << "started";

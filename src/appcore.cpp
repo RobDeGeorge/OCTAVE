@@ -17,6 +17,7 @@ AppCore::AppCore(const QDir &frontendDir, Units *units)
     : clock(&settingsManager)
     , volumeController(&settingsManager)
     , obdManager(&settingsManager)
+    , busMonitor(&obdManager)
     , shiftLightManager(&settingsManager)
     , obdAdapterFinder(&obdManager, &settingsManager)
     , tripRecorder(&settingsManager)
@@ -71,8 +72,14 @@ AppCore::AppCore(const QDir &frontendDir, Units *units)
     // Parameter catalog: title / unit / range / kind of every OBD PID and IMU
     // reading, for every frontend (OBDParameterModel reads it)
     expose("parameterCatalog", &parameterCatalog);
+    // Custom PIDs: the manufacturer-specific readings of <config>/custom-pids.json,
+    // already in the catalog (the member's constructor); the poller gets the requests
+    expose("customPids", &customPids);
+    obdManager.setCustomPids(customPids.requests());
     // OBD Manager — vehicle diagnostics via ELM327
     expose("obdManager", &obdManager);
+    // Bus monitor: what the adapter hears while it only listens
+    expose("busMonitor", &busMonitor);
     // Shift light — which RPM flag is active and its flash phase, fed by OBD
     QObject::connect(&obdManager, &OBDManager::rpmChanged,
                      &shiftLightManager, &ShiftLightManager::setRpm);

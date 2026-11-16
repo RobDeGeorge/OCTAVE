@@ -318,7 +318,7 @@ bool ServicePairing::tokenIdValid(const QString &id) const
     return false;
 }
 
-QString ServicePairing::mintTicket(const QString &tokenId)
+QString ServicePairing::mintTicket(const QString &tokenId, const QStringList &localScopes)
 {
     QMutexLocker l(&m_lock);
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
@@ -333,7 +333,7 @@ QString ServicePairing::mintTicket(const QString &tokenId)
         m_tickets.erase(oldest);
     }
     const QString ticket = randomHex(16);
-    m_tickets.insert(hashOf(ticket), Ticket{tokenId, now + kTicketLifetimeMs, ++m_ticketSeq});
+    m_tickets.insert(hashOf(ticket), Ticket{tokenId, localScopes, now + kTicketLifetimeMs, ++m_ticketSeq});
     return ticket;
 }
 
@@ -345,8 +345,11 @@ bool ServicePairing::ticketAllows(const QString &ticket, bool peerLoopback, cons
     const auto it = m_tickets.constFind(hashOf(ticket));
     if (it == m_tickets.constEnd() || it->expires <= QDateTime::currentMSecsSinceEpoch())
         return false;
-    if (it->tokenId.isEmpty())   // minted by a trusted local connection: local use only
-        return peerLoopback && m_loopbackOpen;
+    // Minted by a trusted local connection: local use only, and only for
+    // what that connection could do itself. Without the scope check a web
+    // frontend limited to "read media" minted a ticket and fetched /export.
+    if (it->tokenId.isEmpty())
+        return peerLoopback && m_loopbackOpen && OctaveService::scopeAllows(it->localScopes, scope);
     for (const Device &d : m_devices)
         if (d.id == it->tokenId)
             return OctaveService::scopeAllows(d.scopes, scope);

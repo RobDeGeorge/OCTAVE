@@ -11,6 +11,15 @@
         },
         {
             "kind": "slot",
+            "name": "pickSerialPort",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "vehicle",
+            "stability": "experimental"
+        },
+        {
+            "kind": "slot",
             "name": "stopScan",
             "params": [
             ],
@@ -59,6 +68,14 @@
             "constant": true,
             "name": "canScan",
             "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "canPickSerial",
+            "readable": true,
+            "stability": "experimental",
             "type": "bool",
             "writable": false
         },

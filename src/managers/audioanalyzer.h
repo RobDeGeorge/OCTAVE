@@ -33,8 +33,20 @@ class AudioAnalyzer : public QObject
     Q_OBJECT
     // Service permissions (src/service/servicescopes.h)
     Q_CLASSINFO("octave.scope", "media")
-    Q_CLASSINFO("octave.scope.read", "get_current_levels get_num_bars is_analyzed setDemand")
-    Q_CLASSINFO("octave.scope.full", "analyze_file feed_live_pcm setLocalFile update_live update_position")
+    Q_CLASSINFO("octave.scope.read", "getCurrentLevels getNumBars get_current_levels get_num_bars isAnalyzed is_analyzed setDemand")
+    Q_CLASSINFO("octave.scope.full",
+                "analyzeFile analyze_file feedLivePcm feed_live_pcm setLocalFile updateLive updatePosition "
+                "update_live update_position")
+    // Deprecated names (src/service/metadescribe.h): the camelCase one beside each stays
+    Q_CLASSINFO("octave.deprecated.analyze_file", "use analyzeFile; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.update_position", "use updatePosition; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.set_active", "use setActive; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_current_levels", "use getCurrentLevels; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_num_bars", "use getNumBars; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.is_analyzed", "use isAnalyzed; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.set_live", "use setLive; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.update_live", "use updateLive; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.feed_live_pcm", "use feedLivePcm; goes in protocol 5")
     Q_PROPERTY(QVariantList levels READ get_current_levels NOTIFY fftDataChanged)
     Q_PROPERTY(int numBars READ get_num_bars CONSTANT)
 
@@ -82,6 +94,18 @@ public slots:
     // s16le 48 kHz stereo just written to the audio sink; bufferedMs is
     // how much the sink still holds ahead of it (what is not heard yet)
     void feed_live_pcm(const QByteArray &pcm, int bufferedMs);
+
+    // camelCase names for the snake_case methods above (protocol 3 keeps both;
+    // the old names are marked octave.deprecated and go in protocol 5)
+    void analyzeFile(const QString &filePath) { analyze_file(filePath); }
+    void updatePosition(float positionSeconds) { update_position(positionSeconds); }
+    void setActive(bool active) { set_active(active); }
+    QVariantList getCurrentLevels() const { return get_current_levels(); }
+    int getNumBars() const { return get_num_bars(); }
+    bool isAnalyzed() const { return is_analyzed(); }
+    void setLive(bool live) { set_live(live); }
+    void updateLive() { update_live(); }
+    void feedLivePcm(const QByteArray &pcm, int bufferedMs) { feed_live_pcm(pcm, bufferedMs); }
 
 public:
     // ── FFT helpers (no external deps) ─────────────────────────

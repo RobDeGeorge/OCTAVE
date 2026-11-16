@@ -4,8 +4,11 @@ import QtQuick 2.15
 
 QtObject {
     // ===== Base dimensions and scaling factors =====
-    property int applicationWidth: width
-    property int applicationHeight: height
+    // Set by Main.qml (updateDimensions) as soon as the window has a size.
+    // A QtObject has no width / height of its own: binding to them here was
+    // a ReferenceError at startup that left both at 0 until then.
+    property int applicationWidth: 1280
+    property int applicationHeight: 720
     // Taller than wide: a phone held upright (the browser demo on a phone,
     // a portrait tablet). Pages built as side-by-side panels stack instead.
     readonly property bool isPortrait: applicationHeight > applicationWidth

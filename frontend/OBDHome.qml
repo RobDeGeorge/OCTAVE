@@ -33,11 +33,6 @@ Item {
     // Every step toward a link (the BLE ones included), from the manager's state
     readonly property bool connecting: !!obdManager && obdManager.connectionState === OBDManager.Connecting
 
-    // Connection log shown beneath the status row (the manager keeps the last
-    // 60 lines). Most useful on Android where the BLE state machine has many
-    // steps and silent failures are easy unless each transition shows.
-    readonly property var connectionLog: obdManager ? obdManager.connectionLog : []
-
     // Helper to push a subpage
     function pushSubpage(qmlFile) {
         if (settingsManager) {
@@ -130,36 +125,6 @@ Item {
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                     }
-                }
-            }
-
-            // Connection log — surfaces each BLE/RFCOMM state transition so
-            // failures are visible without an adb cable. Auto-scrolls to the
-            // newest line; tap to clear isn't worth the complexity for v0.9.
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: dp(120)
-                visible: obdHome.connectionLog.length > 0
-                radius: dpMin(6, 2)
-                color: Qt.darker(backgroundColor, 1.2)
-                border.color: Qt.lighter(backgroundColor, 1.4)
-                border.width: 1
-
-                ListView {
-                    id: logList
-                    anchors.fill: parent
-                    anchors.margins: dp(8)
-                    clip: true
-                    model: obdHome.connectionLog
-                    delegate: Text {
-                        text: modelData
-                        color: labelColor
-                        font.pixelSize: App.Spacing.overallText * 0.75
-                        font.family: "Monospace"
-                        wrapMode: Text.Wrap
-                        width: logList.width
-                    }
-                    onCountChanged: positionViewAtEnd()
                 }
             }
 

@@ -120,7 +120,7 @@ async function main() {
   console.log(`OCTAVE ${hello.app.version} (${hello.app.build}) at ${base}`)
 
   // a track playing and the sim car moving make every page show something
-  if (!(await svc.get('nowPlaying', 'hasTrack'))) { const files = await svc.call('mediaManager', 'get_media_files'); if (files[0]) await svc.call('mediaManager', 'play_file', files[0]) }
+  if (!(await svc.get('nowPlaying', 'hasTrack'))) { const files = await svc.call('mediaManager', 'getMediaFiles'); if (files[0]) await svc.call('mediaManager', 'playFile', files[0]) }
   if (!(await svc.get('nowPlaying', 'playing'))) await svc.call('nowPlaying', 'togglePlay')
   await svc.sim('sim_throttle', { value: 40 })
 
@@ -176,7 +176,7 @@ async function main() {
       svc.signals.length = 0
       await b.click('button', 'Read codes')
       const read = await until(() => svc.signals.some((e) => e.name === 'dtcCodesChanged'), 10000)
-      const codes = await svc.call('obdManager', 'get_dtc_codes')
+      const codes = await svc.call('obdManager', 'getDtcCodes')
       check('DTC read answers', read, codes.length ? codes.map((c) => c.code).join(' ') : 'no stored codes on this car')
       svc.signals.length = 0
       await b.click('button', 'Clear codes')

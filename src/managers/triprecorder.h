@@ -82,6 +82,10 @@ public:
     // Wire the OBD manager's samples, connection state, vehicle identity and
     // diagnostic events into the recorder, and register the background sweep.
     void attach(OBDManager *obd);
+    // The readings come from the simulated car: trips started from now on
+    // are marked, so a real car's history never passes a made-up drive off
+    // Not a slot: the service must not offer it.
+    void setSimulated(bool simulated) { m_simulated = simulated; }
     // End the trip being recorded, write it out and stop the store thread.
     // Blocks (bounded) so the files exist before the process exits.
     void shutdown();
@@ -208,6 +212,7 @@ private:
     bool m_rpmExpected = true;      // the car has an RPM PID (or we don't know yet)
     QStringList m_vehicleParams;
     QVariantMap m_identity;
+    bool m_simulated = false;
 
     // Coalescing
     struct Last { bool valid = false; float value = 0.0f; qint64 tsMs = 0; };

@@ -14,33 +14,18 @@
 
 import QtQuick 2.15
 import ".." as App
+import "AlertLevel.js" as Alerts
 
 Item {
     id: root
 
-    // ── Widget manifest (consumed by the dashboard editor) ──────────
     readonly property var octaveSupportedKinds: ["*"]
-    readonly property var octaveEditableProps: [
-        { name: "label",        type: "string", label: "Label text",          default: "" },
-        { name: "triggerAbove", type: "real",   label: "Trigger above",       default: NaN },
-        { name: "triggerBelow", type: "real",   label: "Trigger below",       default: NaN },
-        { name: "pulse",        type: "bool",   label: "Pulse when lit",      default: false },
-        { name: "activeColor",  type: "color",  label: "Active color",        default: "#E74C3C" },
-        { name: "maxSize",      type: "real",   label: "Max size (dp, 0 = fill)",
-          default: 0, min: 0, max: 300 }
-    ]
 
     // ── Data binding ────────────────────────────────────────────────
     property string paramId: ""
 
-    readonly property var _pInfo: {
-        if (!paramId) return null
-        var all = App.OBDParameterModel.displayParameters   // in the gauges' units
-        for (var i = 0; i < all.length; i++) {
-            if (all[i].id === paramId) return all[i]
-        }
-        return null
-    }
+    // The PID's row in the gauges' units, null without one
+    readonly property var _pInfo: App.OBDParameterModel.displayInfo(paramId)
 
     property string title: _pInfo ? _pInfo.title : ""
     property string unit: _pInfo ? _pInfo.unit : ""
@@ -56,6 +41,11 @@ Item {
     // Both default NaN = disabled; set whichever direction applies.
     property real triggerAbove: NaN
     property real triggerBelow: NaN
+    // Once lit, the light stays lit until the value is back inside the
+    // threshold by this much (display unit), so a reading hovering at the
+    // threshold does not blink it. NaN = 1 % of the range.
+    property real alertHysteresis: NaN
+    property var _memo: ({ "level": 0, "key": "" })   // see ValueGaugeBase._alertMemo
 
     // ── Style ───────────────────────────────────────────────────────
     property string label: ""                 // short text shown inside the light
@@ -72,12 +62,9 @@ Item {
     property real maxSize: 0
 
     // ── Computed ────────────────────────────────────────────────────
-    readonly property bool _active: {
-        if (!hasValue) return false
-        if (!isNaN(triggerAbove) && value >= triggerAbove) return true
-        if (!isNaN(triggerBelow) && value <= triggerBelow) return true
-        return false
-    }
+    readonly property bool _active:
+        Alerts.track(_memo, value, NaN, NaN, triggerAbove, triggerBelow,
+                     Alerts.margin(min, max, App.OBDParameterModel.decimalsFor(paramId), alertHysteresis)) === 2
 
     // ── Light ───────────────────────────────────────────────────────
     Rectangle {

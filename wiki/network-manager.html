@@ -476,7 +476,7 @@ NetworkManager (src/managers/networkmanager.cpp)
         <section id="device-shutdown">
           <h2>Device Shutdown</h2>
           <p>
-            The <code>shutdown_device()</code> slot (the power button on
+            The <code>shutdownDevice()</code> slot (the power button on
             <span class="file-path">frontend/settings/DeviceSettingsPage.qml</span>) gives vehicle-mounted installs a clean
             power-off request: it launches the OS shutdown command detached and then quits OCTAVE, triggering
             <code>aboutToQuit</code> cleanup. The manager does not verify that the OS accepted the request or wait for cleanup
@@ -537,6 +537,7 @@ Windows: shutdown /s /t 5</code></pre>
         <!-- Slots -->
         <section id="slots">
           <h2>Slots Reference</h2>
+        <p><strong>Names:</strong> the camelCase name is the one to use (<code>next_track</code> is <code>nextTrack</code>, <code>get_album</code> is <code>getAlbum</code>, <code>is_scanning</code> is <code>isScanning</code>): same parameters, same result, same permission. The tables below show the camelCase names. The older snake_case name of each still works through protocol&nbsp;4, is marked <code>deprecated</code> in <code>describe</code> and <span class="file-path">docs/api/</span>, and goes in protocol&nbsp;5. The full list with each note is in the <a href="api-reference.html">API reference</a>.</p>
           <table>
             <thead>
               <tr><th>Slot</th><th>Parameters</th><th>Description</th></tr>
@@ -546,7 +547,7 @@ Windows: shutdown /s /t 5</code></pre>
               <tr><td><code>checkForUpdates()</code></td><td>--</td><td>Start a GitHub update check (About page button; also auto-run once on first connectivity)</td></tr>
               <tr><td><code>applySelfUpdate()</code></td><td>--</td><td>Begin the git self-update pipeline after re-checking the preconditions</td></tr>
               <tr><td><code>restartApp()</code></td><td>--</td><td>Restart the OCTAVE application</td></tr>
-              <tr><td><code>shutdown_device()</code></td><td>--</td><td>Shut down the host OS and quit OCTAVE</td></tr>
+              <tr><td><code>shutdownDevice()</code></td><td>--</td><td>Shut down the host OS and quit OCTAVE</td></tr>
               <tr><td><code>cleanup()</code></td><td>--</td><td>Stop timers and kill every helper process still running (git, network name, Ethernet) at exit</td></tr>
             </tbody>
           </table>
@@ -568,8 +569,7 @@ ctx-&gt;setContextProperty(<span class="str">"networkManager"</span>, &amp;netwo
             <tbody>
               <tr><td><span class="file-path">frontend/settings/AboutPage.qml</span></td><td>"Check for Updates" button (disabled while <code>updateStatus === "checking"</code>), colour-coded status row with <code>updateMessage</code>, remote commit hash + message card, the self-update card (hidden while <code>workingTreeDirty</code>, replaced by a "commit or stash" warning), progress / error / restart-required states driven by <code>selfUpdateStatus</code> and <code>selfUpdateMessage</code>, a <strong>Download</strong> button with the address when <code>releaseUrl</code> is set (a packaged build with a newer release), and "Pull the latest changes from GitHub to update." for a checkout that cannot rebuild itself (<code>!canSelfUpdate</code>, no <code>releaseUrl</code>)</td></tr>
               <tr><td><span class="file-path">frontend/BottomBar.qml</span>, <span class="file-path">frontend/SettingsMenu.qml</span></td><td>Pulsing badge on the settings button while <code>updateStatus === "update-available"</code></td></tr>
-              <tr><td><span class="file-path">frontend/settings/widgets/AboutWidget.qml</span>, <span class="file-path">frontend/settings/widgets/DeviceWidget.qml</span></td><td>Compact settings tiles: update status text/colour and a "Check Updates" button; connection dot, <code>networkName</code> and a refresh calling <code>refreshNetwork()</code></td></tr>
-              <tr><td><span class="file-path">frontend/settings/DeviceSettingsPage.qml</span></td><td>Green/red dot from <code>isConnected</code>, <code>networkName</code> ("Not Connected" / "No internet access" texts), <code>refreshNetwork()</code>, and the power-off button calling <code>shutdown_device()</code></td></tr>
+              <tr><td><span class="file-path">frontend/settings/DeviceSettingsPage.qml</span></td><td>Green/red dot from <code>isConnected</code>, <code>networkName</code> ("Not Connected" / "No internet access" texts), <code>refreshNetwork()</code>, and the power-off button calling <code>shutdownDevice()</code></td></tr>
             </tbody>
           </table>
           <p>Many bindings guard a null <code>networkManager</code>. <span class="file-path">src/main.cpp</span> registers this context property before loading QML.</p>

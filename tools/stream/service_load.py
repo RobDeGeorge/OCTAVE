@@ -585,7 +585,8 @@ try:
     ids = [p["id"] for p in ctl.rpc({"op": "get", "object": "parameterCatalog", "property": "parameters"})["result"]]
     log = open(f"{WORK}/app.log").read()
     if "Using adb" in log:
-        raise SystemExit("the app found an adb: stopping before it talks to a device")
+        print("the app found an adb: stopping before it talks to a device (skipped)")
+        raise SystemExit(77)
     for _ in range(60):   # the simulated car connects
         try:
             if sim_status(ctl)["polls"] > 0:
@@ -600,7 +601,7 @@ try:
         ctl.rpc({"op": "call", "object": "sim", "method": "setVideo", "args": [True]})
     files = sorted(f for f in os.listdir(opt.media) if not f.startswith(".")) if opt.media else []
     if files:
-        ctl.rpc({"op": "call", "object": "mediaManager", "method": "play_file", "args": [files[0]]})
+        ctl.rpc({"op": "call", "object": "mediaManager", "method": "playFile", "args": [files[0]]})
     rows = []
     for name in opt.scenario:
         print(f"[{MODE}] {name} ...", file=sys.stderr, flush=True)

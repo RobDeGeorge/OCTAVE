@@ -83,7 +83,7 @@ class GestureManager : public QObject
     Q_CLASSINFO("octave.scope", "vehicle")
     Q_CLASSINFO("octave.scope.read", "cooldownMs getConnectionStatus getGestureAction isEnabled")
     Q_CLASSINFO("octave.scope.full", "cleanup")
-    // Read by AccessoriesWidget.qml; mirrors the mobile stub's property.
+    // Mirrors the mobile stub's property.
     Q_PROPERTY(QString connectionStatus READ getConnectionStatus NOTIFY connectionStatusChanged)
     // The gestures the sensor reports and the actions they can map to
     // ({key, label}); see gesturevocabulary.h

@@ -15,7 +15,7 @@ namespace {
 
 Reply reply(int status, const QByteArray &reason, const QByteArray &body)
 {
-    return Reply{status, reason, "text/plain", body};
+    return Reply{status, reason, "text/plain", body, {}};
 }
 
 // `path` (canonical) is `root` (canonical) or inside it
@@ -39,7 +39,7 @@ Reply file(const QString &root, const QString &path)
     QFile f(canonical);
     if (!f.open(QIODevice::ReadOnly))
         return reply(403, "Forbidden", "unreadable\n");
-    return Reply{200, "OK", contentTypeFor(canonical), f.readAll()};
+    return Reply{200, "OK", contentTypeFor(canonical), f.readAll(), {}};
 }
 
 } // namespace
@@ -150,7 +150,7 @@ Reply serveDownload(const QString &localPath, qint64 maxBytes)
         type = "text/csv; charset=utf-8";
     else if (suffix == QLatin1String("log"))
         type = "text/plain; charset=utf-8";
-    Reply r{200, "OK", type, f.readAll()};
+    Reply r{200, "OK", type, f.readAll(), {}};
     r.headers = "Content-Disposition: attachment; filename=\"" + name + "\"\r\n";
     return r;
 }
@@ -163,7 +163,7 @@ Reply serveFromFolder(const QString &dir, const QString &name, qint64 maxBytes)
     const QStringList files = QDir(dir).entryList(QDir::Files | QDir::NoDotAndDotDot, QDir::Name);
     if (name.isNull()) {
         const QByteArray json = QJsonDocument(QJsonArray::fromStringList(files)).toJson(QJsonDocument::Compact);
-        return Reply{200, "OK", "application/json", json};
+        return Reply{200, "OK", "application/json", json, {}};
     }
     if (!files.contains(name) || name.contains(QLatin1Char('/')) || name.contains(QLatin1Char('\\')))
         return reply(404, "Not Found", "no such file\n");
@@ -185,7 +185,7 @@ Reply serveImage(const QString &localPath)
     const QByteArray type = imageTypeOf(bytes);
     if (type.isEmpty())
         return reply(404, "Not Found", "no art\n");
-    return Reply{200, "OK", type, bytes};
+    return Reply{200, "OK", type, bytes, {}};
 }
 
 Reply serve(const QString &root, const QByteArray &target)

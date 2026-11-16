@@ -58,7 +58,7 @@ No image provider: push decoded `QVideoFrame`s to the `QVideoSink` of a QML `Vid
 
 1. **Hardware** — buy a Carlinkit CPC200-CCPA. Don't start work without one; the dongle protocol can't be unit-tested without a real device + paired phone.
 2. **libusb dependency** — add `libusb-1.0` to `CMakeLists.txt` (`pkg_check_modules(LIBUSB libusb-1.0)`). Already a transitive dep on most Linux distros; needs vcpkg or homebrew formula on Windows/macOS.
-3. **H.264 decode path** — settled: libavcodec → `QVideoFrame` → `QVideoSink` already ships in phone mirror (`OCTAVE_HAVE_FFMPEG`, `CMakeLists.txt:86-110`). Reuse it through the shared decoder class above instead of copying it.
+3. **H.264 decode path** — settled: libavcodec → `QVideoFrame` → `QVideoSink` already ships in phone mirror (`OCTAVE_HAVE_FFMPEG`, `CMakeLists.txt:184-219`). Reuse it through the shared decoder class above instead of copying it.
 4. **udev rule for Linux** — the dongle needs a `/etc/udev/rules.d/99-carlinkit.rules` granting non-root access. LIVI prompts to install it on first launch via pkexec — port that UX into a new `frontend/settings/CarPlaySettingsPage.qml`. The same pattern applies to the ESP32 volume knob's serial port on Linux (`src/managers/esp32volumemanager.cpp`), and `packaging/linux/51-android.rules` is the existing example of a shipped udev rule.
 5. **Read the Ludwig reverse-engineering writeup first** — `github.com/ludwig-v/wireless-carplay-dongle-reverse-engineering` documents the exact message types and ordering that `dongleDriver.ts` implements. Saves a week of guessing.
 

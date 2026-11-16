@@ -44,9 +44,12 @@ Pem makeSelfSigned(const char *cn)
     X509_gmtime_adj(X509_getm_notBefore(x), -3600);
     X509_gmtime_adj(X509_getm_notAfter(x), 3600);
     X509_set_pubkey(x, key);
-    X509_NAME *name = X509_get_subject_name(x);
+    // A name of our own: X509_get_subject_name() returns const from OpenSSL 4
+    X509_NAME *name = X509_NAME_new();
     X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, reinterpret_cast<const unsigned char *>(cn), -1, -1, 0);
+    X509_set_subject_name(x, name);
     X509_set_issuer_name(x, name);
+    X509_NAME_free(name);
     X509_sign(x, key, EVP_sha256());
     BIO *cb = BIO_new(BIO_s_mem());
     PEM_write_bio_X509(cb, x);

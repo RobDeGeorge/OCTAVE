@@ -3,23 +3,13 @@ import QtQuick 2.15
 import ".." as App
 import "AlertLevel.js" as Alerts
 
-Item {
+ValueGaugeBase {
     id: root
 
     readonly property var octaveSupportedKinds: ["*"]
-    property string paramId: ""
-    readonly property var _pInfo: {
-        var all = App.OBDParameterModel.displayParameters
-        for (var i = 0; i < all.length; ++i)
-            if (all[i].id === paramId) return all[i]
-        return null
-    }
-    property string title: _pInfo ? _pInfo.title : ""
-    property string unit: _pInfo ? _pInfo.unit : ""
-    property real min: _pInfo ? _pInfo.min : 0
-    property real max: _pInfo ? _pInfo.max : 100
-    property real value: App.OBDParameterModel.sample(paramId)
-    property int decimals: 0
+    // paramId, title, unit, min, max, value, hasValue, decimals and the alert
+    // properties (warnAbove ... alertLevel) are ValueGaugeBase's
+
     property int segmentCount: 20
     property bool showLabel: true
     property bool showValue: true
@@ -28,29 +18,6 @@ Item {
     property color labelColor: App.Style.obdLabelColor
     property color valueColor: App.Style.obdValueColor
 
-    readonly property bool hasValue: isFinite(value)
-
-    // ── Alerts (gauges/AlertLevel.js) ───────────────────────────────
-    // Limits in the display unit, NaN = unset. Level 1 colours the value
-    // warnColor, level 2 critColor; alertFlash blinks it while critical.
-    property real warnAbove: NaN
-    property real warnBelow: NaN
-    property real critAbove: NaN
-    property real critBelow: NaN
-    property bool alertFlash: false
-    property color warnColor: App.Style.statusWarning
-    property color critColor: App.Style.statusDanger
-    readonly property int alertLevel: Alerts.level(value, warnAbove, warnBelow, critAbove, critBelow)
-    readonly property color _alertColor: alertLevel === 2 ? critColor : warnColor
-    property bool _flashOn: true
-    readonly property real _alertOpacity: (alertFlash && alertLevel === 2 && !_flashOn) ? 0.3 : 1.0
-    Timer {
-        running: root.alertFlash && root.alertLevel === 2
-        interval: 400
-        repeat: true
-        onTriggered: root._flashOn = !root._flashOn
-        onRunningChanged: if (!running) root._flashOn = true
-    }
     readonly property bool _validRange: isFinite(min) && isFinite(max) && max > min
     readonly property int _count: Math.max(2, Math.min(40, segmentCount))
     readonly property real _normalized: hasValue && _validRange
@@ -113,12 +80,20 @@ Item {
                 delegate: Rectangle {
                     required property int index
                     readonly property bool lit: index < root._litSegments
-                    // The level of the value at this segment's top: a lit
-                    // segment past a limit shows that limit's colour, like
-                    // a shift-light strip
+                    // The part of the scale this segment covers. It shows a
+                    // limit's colour when it lies wholly past it, like a
+                    // shift-light strip: at or above a high limit from its
+                    // lower edge, at or below a low limit up to its upper
+                    // edge. (Judged by the upper edge alone, the segment
+                    // below a high limit lit amber up to a segment early,
+                    // and low limits coloured nothing.)
+                    readonly property real _step: (root.max - root.min) / root._count
+                    readonly property real _lo: root.min + index * _step
+                    readonly property real _hi: root.min + (index + 1) * _step
+                    readonly property real _eps: Math.abs(_step) * 1e-6
                     readonly property int bandLevel: root._validRange
-                        ? Alerts.level(root.min + (index + 1) * (root.max - root.min) / root._count,
-                                       root.warnAbove, NaN, root.critAbove, NaN) : 0
+                        ? Math.max(Alerts.level(_lo + _eps, root.warnAbove, NaN, root.critAbove, NaN),
+                                   Alerts.level(_hi - _eps, NaN, root.warnBelow, NaN, root.critBelow)) : 0
                     readonly property bool warningBand: bandLevel > 0
                     readonly property color bandColor: bandLevel === 2 ? root.critColor : root.warnColor
                     width: Math.max(0, (segments.width - (root._count - 1) * segments.spacing) / root._count)

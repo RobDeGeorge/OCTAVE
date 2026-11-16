@@ -63,8 +63,12 @@ Item {
         imuConnected = berryIMU.connected
     }
 
+    // Readings only while on screen: the page stays alive hidden (page
+    // cache), and every sample re-laid out its cards for nothing (as
+    // CarMenu found). The next sample after it returns brings it up to date.
     Connections {
         target: berryIMU
+        enabled: sensorMenu.visible
         function onPitchChanged(val) { currentPitch = val }
         function onRollChanged(val) { currentRoll = val }
         function onHeadingChanged(val) { currentHeading = val }
@@ -73,6 +77,9 @@ Item {
         function onLateralGChanged(val) { currentLateralG = val }
         function onLongitudinalGChanged(val) { currentLongitudinalG = val }
         function onBaroTempChanged(val) { currentBaroTemp = val }
+    }
+    Connections {
+        target: berryIMU
         function onConnectionStatusChanged(status) { imuConnected = (status === "Connected") }
     }
 

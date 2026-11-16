@@ -13,7 +13,7 @@
 The app must be serving: `octave --service`, `octave --headless`, the
 serviceEnabled setting, or `--profile` in a developer build. Protocol:
 wiki/utilities.html#service-protocol; objects, types and the versioning rule:
-docs/api/ (this client speaks protocol versions 1 and 2).
+docs/api/ (this client speaks every protocol version up to PROTOCOL_VERSION).
 
 Over the network (an app started with --service-bind) a client pairs once:
 show the code in OCTAVE's Settings > Service, then
@@ -24,6 +24,11 @@ show the code in OCTAVE's Settings > Service, then
         ...
 
 On this device no pairing is needed unless serviceLoopbackOpen is false.
+
+When the app goes away, events() ends and `client.closed` is True (a quiet
+`timeout` also ends events(), with `closed` still False); requests raise
+OctaveError. Events nobody reads are kept up to `max_events`, then the
+oldest is dropped (`client.dropped_events` counts them).
 """
 
 import itertools
@@ -35,30 +40,43 @@ import threading
 
 from .launch import find_binary, launch_headless
 
-__all__ = ["Client", "OctaveError", "PROTOCOL_VERSION", "PROTOCOL_VERSIONS", "find_binary", "launch_headless"]
+__all__ = ["Client", "OctaveError", "OctaveConnectError", "PROTOCOL_VERSION", "PROTOCOL_VERSIONS",
+           "find_binary", "launch_headless"]
 
-PROTOCOL_VERSION = 3            # the newest this client knows
-PROTOCOL_VERSIONS = (1, 2, 3)   # every version it can talk to
+PROTOCOL_VERSION = 3                                         # the newest this client knows (docs/api/protocol.json)
+PROTOCOL_VERSIONS = tuple(range(1, PROTOCOL_VERSION + 1))    # every version it can talk to: all up to that one
+
+_RECORD_HEADER = 12
 
 
 def _record(raw):
     """A stream record as an event dict (header: u8 version, u8 stream,
-    u8 flags, u8 reserved, u64 pts in microseconds)."""
-    _version, stream, flags, _reserved, pts = struct.unpack(">BBBBQ", raw[:12])
+    u8 flags, u8 reserved, u64 pts in microseconds), or None for one that
+    is too short or of another version."""
+    if len(raw) < _RECORD_HEADER or raw[0] != 1:
+        return None
+    _version, stream, flags, _reserved, pts = struct.unpack(">BBBBQ", raw[:_RECORD_HEADER])
     return {"event": "record", "stream": stream, "flags": flags, "pts": pts,
             "key": bool(flags & 1), "config": bool(flags & 2), "jpeg": bool(flags & 4),
-            "discontinuity": bool(flags & 8), "data": raw[12:]}
+            "discontinuity": bool(flags & 8), "data": raw[_RECORD_HEADER:]}
 
 
 class OctaveError(RuntimeError):
     """The app answered {"ok": false, "error": ...}, or the connection went.
     `code` is the reply's machine-readable code when it has one
     ("unauthorised": pair first; "forbidden": this device lacks the
-    permission), else None."""
+    permission; "rateLimited": too many ops, and `retry_after_ms` says when
+    the next one would pass), else None."""
 
-    def __init__(self, message, code=None):
+    def __init__(self, message, code=None, retry_after_ms=None):
         super().__init__(message)
         self.code = code
+        self.retry_after_ms = retry_after_ms
+
+
+class OctaveConnectError(OctaveError, OSError):
+    """No connection could be made (nothing listening, no route, a timeout).
+    Also an OSError, for code that caught that before this class existed."""
 
 
 class Client:
@@ -69,20 +87,32 @@ class Client:
     raises OctaveError if the app speaks a protocol version this client
     doesn't know (a version only changes on a breaking change); pass
     check_version=False to talk to it anyway. The reply is in `self.server`;
-    `self.trusted` says whether ops will be accepted (if not, pair())."""
+    `self.trusted` says whether ops will be accepted (if not, pair()).
 
-    def __init__(self, host="127.0.0.1", port=9876, timeout=30.0, check_version=True, token=None):
+    Events wait in a queue of at most `max_events` until events() reads
+    them; past that the oldest is dropped and `dropped_events` counts it
+    (after a dropped stream record, wait for the next one with "key")."""
+
+    def __init__(self, host="127.0.0.1", port=9876, timeout=30.0, check_version=True, token=None, max_events=10000):
         self.timeout = timeout
-        self._sock = socket.create_connection((host, port), timeout=timeout)
+        self.dropped_events = 0
+        try:
+            self._sock = socket.create_connection((host, port), timeout=timeout)
+        except OSError as e:
+            raise OctaveConnectError(f"cannot connect to OCTAVE at {host}:{port}: {e}") from e
         self._sock.settimeout(None)
         self._ids = itertools.count(1)
         self._lock = threading.Lock()
         self._pending = {}
-        self._events = queue.Queue()
+        self._events = queue.Queue(maxsize=max(1, int(max_events)))
         self._closed = False
         self._reader = threading.Thread(target=self._read, name="octave-client", daemon=True)
         self._reader.start()
-        self.server = self.hello(token)
+        try:
+            self.server = self.hello(token)
+        except BaseException:
+            self.close()   # no socket or reader thread left behind by a hello that failed
+            raise
         if check_version and self.server.get("protocolVersion") not in PROTOCOL_VERSIONS:
             self.close()
             raise OctaveError(f"the app speaks protocol {self.server.get('protocolVersion')}, "
@@ -113,7 +143,19 @@ class Client:
         reply = self.request("pair", **args)
         self.trusted = True
         self.scopes = reply.get("scopes", ["full"])
+        # An untrusted hello leaves out the app and its objects: ask again, now trusted
+        try:
+            self.server = self.hello(reply["token"])
+        except OctaveError:
+            pass   # the pairing stands
         return reply["token"]
+
+    def unpair(self):
+        """Forget this connection's own device on the head unit. The
+        connection is untrusted afterwards (the app closes it)."""
+        self.request("unpair")
+        self.trusted = False
+        self.scopes = []
 
     def media_ticket(self):
         """{ticket, expiresIn}: for GET /art?ticket=... and /export/...?ticket=...,
@@ -169,15 +211,28 @@ class Client:
     def unstream(self, stream_id):
         return self.request("unstream", stream=stream_id)
 
-    def events(self, timeout=None):
+    @property
+    def closed(self):
+        """True once the connection is gone (closed here, or by the app)."""
+        return self._closed
+
+    def events(self, timeout=None, closed_error=False):
         """Yield events as they come. With `timeout`, stop after that many
-        seconds without one; without, run until the connection closes."""
+        seconds without one; without, run until the connection closes.
+        Either way what was already received is yielded first. To tell the
+        two endings apart look at `closed`, or pass closed_error=True and
+        the end of the connection raises OctaveError (code "closed")."""
         while True:
-            try:
-                event = self._events.get(timeout=timeout)
-            except queue.Empty:
-                return
+            if self._closed and self._events.empty():
+                event = None
+            else:
+                try:
+                    event = self._events.get(timeout=timeout)
+                except queue.Empty:
+                    return
             if event is None:
+                if closed_error:
+                    raise OctaveError("connection closed", "closed")
                 return
             yield event
 
@@ -203,22 +258,38 @@ class Client:
         if reply is None:
             raise OctaveError("connection closed")
         if not reply.get("ok"):
-            raise OctaveError(reply.get("error", "unknown error"), reply.get("code"))
+            raise OctaveError(reply.get("error", "unknown error"), reply.get("code"), reply.get("retryAfterMs"))
         return reply.get("result")
 
     # ── plumbing ──────────────────────────────────────────────────────────
 
     def close(self):
+        """End the connection (from any thread, any number of times)."""
         with self._lock:
-            if self._closed:
-                return
+            already = self._closed
             self._closed = True
-        try:
-            self._sock.shutdown(socket.SHUT_RDWR)
-        except OSError:
-            pass
-        self._sock.close()
-        self._reader.join(timeout=2)
+        if not already:
+            try:
+                self._sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            self._sock.close()
+        if threading.current_thread() is not self._reader:
+            self._reader.join(timeout=2)
+
+    def _push(self, event):
+        """Queue an event without ever waiting: when the queue is full the
+        oldest goes. Only the reader thread calls this."""
+        while True:
+            try:
+                self._events.put_nowait(event)
+                return
+            except queue.Full:
+                try:
+                    self._events.get_nowait()
+                    self.dropped_events += 1
+                except queue.Empty:
+                    pass
 
     def __enter__(self):
         return self
@@ -243,7 +314,9 @@ class Client:
                         n = struct.unpack(">I", buf[1:5])[0]
                         if len(buf) < 5 + n:
                             break
-                        self._events.put(_record(buf[5:5 + n]))
+                        record = _record(buf[5:5 + n])
+                        if record is not None:
+                            self._push(record)
                         buf = buf[5 + n:]
                         continue
                     nl = buf.find(b"\n")
@@ -256,15 +329,32 @@ class Client:
             pass
         finally:
             with self._lock:
+                already = self._closed
                 self._closed = True
                 pending, self._pending = self._pending, {}
+            if not already:   # the app closed it: let go of the socket here too
+                try:
+                    self._sock.close()
+                except OSError:
+                    pass
             for box in pending.values():
                 box.put(None)
-            self._events.put(None)
+            self._push(None)   # wakes an events() that is waiting
 
     def _dispatch(self, message):
+        if not isinstance(message, dict):
+            raise ValueError("not a protocol message")
         if "event" in message:
-            self._events.put(message)
+            self._push(message)
+            return
+        if "id" not in message and message.get("ok") is False:
+            # A refusal with no id ("Invalid JSON", "request too long") answers a
+            # line the app could not read, so it cannot say which request that
+            # was: every waiting one gets it, rather than waiting out its timeout
+            with self._lock:
+                pending, self._pending = self._pending, {}
+            for box in pending.values():
+                box.put(message)
             return
         with self._lock:
             box = self._pending.pop(message.get("id"), None)

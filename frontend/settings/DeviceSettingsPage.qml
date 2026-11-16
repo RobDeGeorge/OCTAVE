@@ -356,12 +356,12 @@ Flickable {
 
                     SettingsButton {
                         text: shutdownRow.confirmingShutdown ? "Confirm Shutdown" : "Shut Down"
-                        buttonColor: shutdownRow.confirmingShutdown ? "#F44336" : App.Style.accent
-                        height: pageRoot.dp(34)
+                        buttonColor: shutdownRow.confirmingShutdown ? App.Style.statusDanger : App.Style.accent
+                        height: pageRoot.dp(44)
                         onClicked: {
                             if (shutdownRow.confirmingShutdown) {
                                 if (networkManager)
-                                    networkManager.shutdown_device()
+                                    networkManager.shutdownDevice()
                             } else {
                                 shutdownRow.confirmingShutdown = true
                                 shutdownResetTimer.restart()
@@ -506,12 +506,13 @@ Flickable {
                             height: pageRoot.dp(28)
                             onClicked: pageRoot._pairing.setDeviceScopes(modelData.id, readOnly ? ["full"] : ["read"])
                         }
-                        SettingsButton {
+                        ConfirmButton {
                             objectName: "revoke_" + modelData.id
-                            text: "Revoke"
+                            label: "Revoke"
+                            confirmLabel: "Confirm revoke"
                             tooltipText: "Forget this device; it is disconnected at once"
-                            height: pageRoot.dp(28)
-                            onClicked: pageRoot._pairing.revoke(modelData.id)
+                            height: pageRoot.dp(44)
+                            onConfirmed: pageRoot._pairing.revoke(modelData.id)
                         }
                     }
                 }
@@ -673,15 +674,16 @@ Flickable {
                                 Layout.minimumWidth: pageRoot.dp(48)
                                 onClicked: if (!fm.tryFrontend(installedTile.modelData.id, 120)) pageRoot.frontendStatus = fm.lastError
                             }
-                            SettingsButton {
+                            ConfirmButton {
                                 objectName: "removeFrontend_" + installedTile.modelData.id
-                                text: "Remove"
+                                label: "Remove"
+                                confirmLabel: "Confirm"
                                 enabled: installedTile.modelData.id !== fm.runningId
                                 opacity: enabled ? 1 : 0.4
                                 height: pageRoot.dp(26)
                                 Layout.fillWidth: true
                                 Layout.minimumWidth: pageRoot.dp(48)
-                                onClicked: if (!fm.remove(installedTile.modelData.id)) pageRoot.frontendStatus = fm.lastError
+                                onConfirmed: if (!fm.remove(installedTile.modelData.id)) pageRoot.frontendStatus = fm.lastError
                             }
                         }
                     }
@@ -804,7 +806,7 @@ Flickable {
         }
     }
 
-    // ── Default rendering: stacked SettingsCards (Carousel/Hub/Dashboard layouts).
+    // ── Stacked SettingsCards, for a host that leaves renderCards on (none does now).
     //    Sidebar layout sets pageRoot.visible = false and renders the tile grid + popup instead.
     ColumnLayout {
         id: settingsContent

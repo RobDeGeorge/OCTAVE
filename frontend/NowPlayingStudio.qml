@@ -36,15 +36,13 @@ import "settings"
 //
 // ── Recipes (copy-paste then rename) ──
 // Toggle row:
-//   NowPlayingMiniToggle {
-//       label: "My Toggle"
+//   SettingsToggle {
+//       compact: true
+//       text: "My Toggle"
 //       checked: settingsManager ? settingsManager.myProp : false
 //       onToggled: function(c) { if (settingsManager) settingsManager.save_my_prop(c) }
-//       Connections {
-//           target: settingsManager
-//           function onMyPropChanged() { checked = settingsManager.myProp }
-//       }
 //   }
+//   (no Connections needed: the toggle keeps its `checked` binding)
 // Slider row:        mirror radiusSlider's ColumnLayout-with-RowLayout-header pattern.
 // Chips row:         mirror trackTransitionCtl (ColumnLayout: SettingLabel → SettingsChips).
 // Sub-cluster (master toggle + gated dependent): mirror the Rounded ↳ Radius block —
@@ -391,10 +389,6 @@ Item {
                             togglable: true
                             checked: settingsManager ? settingsManager.roundedAlbumArt : true
                             onToggled: function(c) { if (settingsManager) settingsManager.save_rounded_album_art(c) }
-                            Connections {
-                                target: settingsManager
-                                function onRoundedAlbumArtChanged() { roundedSub.checked = settingsManager.roundedAlbumArt }
-                            }
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 spacing: studio.dp(4)
@@ -430,10 +424,6 @@ Item {
                                 activeColor: App.Style.accent
                                 inactiveColor: App.Style.hoverColor
                                 onToggled: function(c) { if (settingsManager) settingsManager.save_show_album_art_shadow(c) }
-                                Connections {
-                                    target: settingsManager
-                                    function onShowAlbumArtShadowChanged() { shadowToggle.checked = settingsManager.showAlbumArtShadow }
-                                }
                             }
                         }
 
@@ -464,10 +454,6 @@ Item {
                                 activeColor: App.Style.accent
                                 inactiveColor: App.Style.hoverColor
                                 onToggled: function(c) { if (settingsManager) settingsManager.save_vinyl_record_mode(c) }
-                                Connections {
-                                    target: settingsManager
-                                    function onVinylRecordModeChanged() { vinylToggle.checked = settingsManager.vinylRecordMode }
-                                }
                             }
                         }
 
@@ -483,10 +469,6 @@ Item {
                                 activeColor: App.Style.accent
                                 inactiveColor: App.Style.hoverColor
                                 onToggled: function(c) { if (settingsManager) settingsManager.save_show_waveform_visualizer(c) }
-                                Connections {
-                                    target: settingsManager
-                                    function onShowWaveformVisualizerChanged() { waveformToggle.checked = settingsManager.showWaveformVisualizer }
-                                }
                             }
                         }
 
@@ -511,10 +493,6 @@ Item {
                             togglable: true
                             checked: settingsManager ? settingsManager.show3DAlbumPreview : false
                             onToggled: function(c) { if (settingsManager) settingsManager.save_show_3d_album_preview(c) }
-                            Connections {
-                                target: settingsManager
-                                function onShow3DAlbumPreviewChanged() { enable3dSub.checked = settingsManager.show3DAlbumPreview }
-                            }
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 spacing: studio.dp(10)
@@ -600,10 +578,6 @@ Item {
                             togglable: true
                             checked: settingsManager ? settingsManager.show3DButtonTilt : false
                             onToggled: function(c) { if (settingsManager) settingsManager.save_show_3d_button_tilt(c) }
-                            Connections {
-                                target: settingsManager
-                                function onShow3DButtonTiltChanged() { tiltSub.checked = settingsManager.show3DButtonTilt }
-                            }
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 spacing: studio.dp(4)

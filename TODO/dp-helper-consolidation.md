@@ -7,9 +7,9 @@
 
 ## Why it's parked
 
-63 QML files under `frontend/` define their own `function dp(size)` / `dpMin(size, floor)` (43 of them carry the comment "work around Qt Android singleton-function bug"). The `pragma Singleton` `frontend/Spacing.qml` already has both (`:165-171`). The copies exist only to dodge an old Qt bug where JS functions on a QML singleton returned undefined on Android. If that bug still bit, removing them would break scaling on every Android screen.
+60 QML files under `frontend/` (counted 2026-11-15) define their own `function dp(size)` / `dpMin(size, floor)` (37 of them carry the comment "work around Qt Android singleton-function bug"). The `pragma Singleton` `frontend/Spacing.qml` already has both (`:165-171`). The copies exist only to dodge an old Qt bug where JS functions on a QML singleton returned undefined on Android. If that bug still bit, removing them would break scaling on every Android screen.
 
-The bug looks fixed: 17 files already call `App.Spacing.dp(...)` directly, including in bindings evaluated at component init. They have shipped in every APK since Android started working (0.9.3): all gauges in `frontend/gauges/`, `dashboards/DashboardRenderer.qml`, `dashboards/widgets/{NowPlaying,MediaControls}Widget.qml`, and `settings/widgets/{About,Device,OBD}Widget.qml`, `WidgetPill.qml`, `WidgetChip.qml`.
+The bug looks fixed: 14 files already call `App.Spacing.dp(...)` directly, including in bindings evaluated at component init. They have shipped in every APK since Android started working (0.9.3): all gauges in `frontend/gauges/`, `dashboards/DashboardRenderer.qml` and `dashboards/widgets/{NowPlaying,MediaControls,Clock}Widget.qml`. (The `settings/widgets/` files this list used to name were deleted with the experimental settings layouts on 2026-11-15.)
 
 ## Steps
 

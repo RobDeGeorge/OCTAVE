@@ -119,15 +119,15 @@ def main():
 
             # DTC: opening the page reads the codes; CLEAR needs a second tap within 4 s
             tap.click(*TARGETS["tab_dtc"])
-            if wait(lambda: sdk.call("obdManager", "get_dtc_codes"), timeout=6):
+            if wait(lambda: sdk.call("obdManager", "getDtcCodes"), timeout=6):
                 print("ok   opening the DTC page reads the stored codes")
                 tap.click(*TARGETS["dtc_clear"])
                 time.sleep(1.0)
-                ok = bool(sdk.call("obdManager", "get_dtc_codes"))
+                ok = bool(sdk.call("obdManager", "getDtcCodes"))
                 print(f"{'ok  ' if ok else 'FAIL'} one tap on CLEAR only arms it")
                 if not ok:
                     failures.append("one tap on CLEAR only arms it")
-                check("a second tap clears the codes", "dtc_clear", lambda: not sdk.call("obdManager", "get_dtc_codes"))
+                check("a second tap clears the codes", "dtc_clear", lambda: not sdk.call("obdManager", "getDtcCodes"))
             else:
                 tap.click(*TARGETS["dtc_read"])
                 print("skip the car has no stored codes to read and clear (cleared earlier?)")

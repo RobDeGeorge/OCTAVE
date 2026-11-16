@@ -39,6 +39,20 @@ QtObject {
         return m;
     }
 
+    // id -> its displayParameters row, built once per unit setting: every
+    // gauge looks its PID up here instead of scanning all the rows
+    readonly property var _displayById: {
+        var m = {};
+        for (var i = 0; i < displayParameters.length; i++)
+            m[displayParameters[i].id] = displayParameters[i];
+        return m;
+    }
+    // The row of `paramId` in the gauges' units (title / unit / min / max /
+    // kind / decimals), or null for an empty or unknown id
+    function displayInfo(paramId) {
+        return (paramId && _displayById[paramId]) || null;
+    }
+
     // id -> parameter, for the per-id helpers below
     readonly property var _byId: {
         var m = {};
@@ -110,9 +124,21 @@ QtObject {
         var c = _conversion[paramId];
         return (c && typeof v === "number") ? v * c[0] + c[1] : v;
     }
+    // A difference (a tolerance, a hold margin) of paramId from its own unit
+    // to the gauges': the scale without the offset, so 5 °C is 9 °F
+    function toDisplayDelta(paramId, d) {
+        var c = _conversion[paramId];
+        return (c && typeof d === "number") ? d * Math.abs(c[0]) : d;
+    }
     function fromDisplay(paramId, v) {
         var c = _conversion[paramId];
         return (c && typeof v === "number") ? Math.round((v - c[1]) / c[0] * 1e6) / 1e6 : v;
+    }
+
+    // A parameter's row in its own unit (min / max as the store holds the
+    // values), or null
+    function nativeInfo(paramId) {
+        return _byId[paramId] || null;
     }
 
     // A parameter's own unit (what the store and the black box hold)

@@ -144,6 +144,9 @@ bool OBDAdapterFinder::supported() const
 }
 
 bool OBDAdapterFinder::canScan() const { return supported(); }
+// Browser build only (obdadapterfinder_wasm.cpp)
+bool OBDAdapterFinder::canPickSerial() const { return false; }
+void OBDAdapterFinder::pickSerialPort() {}
 
 bool OBDAdapterFinder::bluetoothOn() const
 {

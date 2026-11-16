@@ -8,74 +8,22 @@
 // Usage (manual override):
 //     CircularGauge { value: customValue; min: 0; max: 100; title: "Boost"; unit: "psi" }
 //
-// See docs/GAUGE_AUTHORING.md for the full API and all 93 PID IDs.
+// See docs/GAUGE_AUTHORING.md for the full API and all 129 parameter IDs.
 
 import QtQuick 2.15
 import QtQuick.Shapes 1.15
 import ".." as App
 import "AlertLevel.js" as Alerts
 
-Item {
+ValueGaugeBase {
     id: root
 
-    // ── Widget manifest (consumed by the dashboard editor) ──────────
-    // `octaveSupportedKinds` filters the PID picker; `*` = any PID.
-    // `octaveEditableProps` is what shows up in the properties panel
-    // when a user selects this widget in the editor.
+    // The PID kinds this gauge can show; `*` = any. What the editor offers
+    // for it is data: frontend/dashboards/widget-catalog.json.
     readonly property var octaveSupportedKinds: ["*"]
-    readonly property var octaveEditableProps: [
-        { name: "showNeedle",         type: "bool", label: "Show needle",       default: false },
-        { name: "showTicks",          type: "bool", label: "Show ticks",        default: true  },
-        { name: "redlineStart",       type: "real", label: "Redline start",     default: NaN   },
-        { name: "majorTickCount",     type: "int",  label: "Major ticks",       default: 9,  min: 2, max: 20 },
-        { name: "minorTicksPerMajor", type: "int",  label: "Minor per major",   default: 5,  min: 0, max: 10 },
-        { name: "decimals",           type: "int",  label: "Decimals",          default: 0,  min: 0, max: 4  },
-        { name: "startAngle",         type: "real", label: "Start angle",       default: 135 },
-        { name: "sweepAngle",         type: "real", label: "Sweep angle",       default: 270 },
-        { name: "showCenterReadout",  type: "bool", label: "Show center text",  default: true  }
-    ]
+    // paramId, title, unit, min, max, value, hasValue, decimals and the alert
+    // properties (warnAbove ... alertLevel) are ValueGaugeBase's
 
-    // ── Data binding ────────────────────────────────────────────────
-    property string paramId: ""
-
-    readonly property var _pInfo: {
-        if (!paramId) return null
-        var all = App.OBDParameterModel.displayParameters   // in the gauges' units
-        for (var i = 0; i < all.length; i++) {
-            if (all[i].id === paramId) return all[i]
-        }
-        return null
-    }
-
-    property string title: _pInfo ? _pInfo.title : ""
-    property string unit: _pInfo ? _pInfo.unit : ""
-    property real min: _pInfo ? _pInfo.min : 0
-    property real max: _pInfo ? _pInfo.max : 100
-    // NaN = no reading yet: "--", no fill or needle, no redline colour
-    property real value: App.OBDParameterModel.sample(paramId)
-    readonly property bool hasValue: isFinite(value)
-
-    // ── Alerts (gauges/AlertLevel.js) ───────────────────────────────
-    // Limits in the display unit, NaN = unset. Level 1 colours the value
-    // warnColor, level 2 critColor; alertFlash blinks it while critical.
-    property real warnAbove: NaN
-    property real warnBelow: NaN
-    property real critAbove: NaN
-    property real critBelow: NaN
-    property bool alertFlash: false
-    property color warnColor: App.Style.statusWarning
-    property color critColor: App.Style.statusDanger
-    readonly property int alertLevel: Alerts.level(value, warnAbove, warnBelow, critAbove, critBelow)
-    readonly property color _alertColor: alertLevel === 2 ? critColor : warnColor
-    property bool _flashOn: true
-    readonly property real _alertOpacity: (alertFlash && alertLevel === 2 && !_flashOn) ? 0.3 : 1.0
-    Timer {
-        running: root.alertFlash && root.alertLevel === 2
-        interval: 400
-        repeat: true
-        onTriggered: root._flashOn = !root._flashOn
-        onRunningChanged: if (!running) root._flashOn = true
-    }
     readonly property string _formatted: hasValue ? value.toFixed(Math.max(0, Math.min(4, decimals))) : "--"
 
     // ── Geometry ────────────────────────────────────────────────────
@@ -99,7 +47,6 @@ Item {
     readonly property int _tickSteps: Math.max(1, minorTicksPerMajor)
     property real redlineStart: NaN            // value above which arc turns red
     property bool showCenterReadout: true
-    property int decimals: 0
 
     // ── Computed ────────────────────────────────────────────────────
     readonly property real _normalized: {

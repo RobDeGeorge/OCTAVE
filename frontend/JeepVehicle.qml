@@ -35,9 +35,12 @@ Node {
     readonly property real engineMotionScale: 1 / 60
     property real crankAngle: 0
     readonly property real crankDegreesPerSecond: -Math.max(0, Math.min(7000, engineRpm)) * 6 * engineMotionScale
+    // Whether the model is on screen. A Quick3D Node's own `visible` stays
+    // true while the page that holds its View3D is hidden, so the host says.
+    property bool active: true
     Timer {
         interval: 16; repeat: true
-        running: vehicle.ready && vehicle.visible && (vehicle.wheelSpeedKph !== 0 || vehicle.engineRpm > 0)
+        running: vehicle.ready && vehicle.active && vehicle.visible && (vehicle.wheelSpeedKph !== 0 || vehicle.engineRpm > 0)
         property double lastTick: 0
         onRunningChanged: lastTick = Date.now()
         onTriggered: {

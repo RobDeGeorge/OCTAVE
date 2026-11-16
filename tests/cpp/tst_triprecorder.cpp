@@ -39,7 +39,8 @@ class TstTripRecorder : public QObject
         r->setHeartbeatMs(2000);
         r->start();
         // The store opens on its own thread; nothing is recorded until it reports ready
-        QTest::qWaitFor([&r]() { return r->storeReady(); }, 5000);
+        if (!QTest::qWaitFor([&r]() { return r->storeReady(); }, 5000))
+            qWarning("the trip store did not report ready within 5 s");
         r->setConnected(true);
         r->setVehicleParameters({QStringLiteral("RPM"), QStringLiteral("SPEED"), QStringLiteral("COOLANT_TEMP")});
         return r;
@@ -262,6 +263,161 @@ private slots:
         QCOMPARE(t.value("clean").toBool(), false);
         QCOMPARE(t.value("durationS").toDouble(), 9.0);   // last sample time
         QVERIFY(QFile::exists(t.value("file").toString()));
+    }
+
+    // A database that is not one any more (a power cut, a bad block): set
+    // aside, a new one started, and the black box records again
+    void aDamagedDatabaseIsSetAsideNotFatal()
+    {
+        const QString dir = m_tmp->path() + "/damaged";
+        QVERIFY(QDir().mkpath(dir));
+        {
+            QFile f(dir + "/blackbox.sqlite");
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(QByteArray(8192, 'x'));
+        }
+        auto r = makeRecorder(QStringLiteral("damaged"));
+        QVERIFY(r->storeReady());
+        const QStringList aside = QDir(dir).entryList({"blackbox.sqlite.damaged-*"}, QDir::Files);
+        QCOMPARE(aside.size(), 1);
+        QCOMPARE(QFileInfo(dir + "/" + aside.first()).size(), qint64(8192));
+        QVERIFY(QFile::exists(dir + "/blackbox.sqlite"));
+    }
+
+    // A drive of the simulated car is marked as one, in the list and the
+    // detail; a real drive carries no mark
+    void simulatedDrivesAreMarked()
+    {
+        auto r = makeRecorder(QStringLiteral("simulated"));
+        r->setSimulated(true);
+        QSignalSpy ended(r.get(), &TripRecorder::tripEnded);
+        drive(*r, 30, 30.0f);
+        // Engine off past the timeout ends the first trip
+        for (int i = 0; i < 7; ++i) {
+            m_now += 1000;
+            r->recordSample(QStringLiteral("RPM"), 0.0f);
+            r->tick();
+        }
+        QVERIFY(!r->recording());
+        QTRY_COMPARE_WITH_TIMEOUT(ended.count(), 1, 5000);
+        r->setSimulated(false);
+        m_now += 60'000;
+        drive(*r, 30, 30.0f);
+        r->shutdown();
+        TripStore store;
+        QVERIFY(store.open(m_tmp->path() + "/simulated"));
+        const QVariantList trips = store.listTrips();
+        QVERIFY2(trips.size() >= 2, qPrintable(QString::number(trips.size())));
+        int marked = 0;
+        for (const QVariant &t : trips)
+            marked += t.toMap().value("simulated").toBool() ? 1 : 0;
+        QCOMPARE(marked, 1);
+        const QVariantMap oldest = trips.last().toMap();
+        QCOMPARE(oldest.value("simulated").toBool(), true);
+        QCOMPARE(store.tripDetail(oldest.value("id").toLongLong()).value("simulated").toBool(), true);
+    }
+
+    // A database from before the column existed is brought up on open,
+    // with its trips kept and unmarked
+    void anOlderDatabaseIsMigrated()
+    {
+        const QString dir = m_tmp->path() + "/older";
+        QVERIFY(QDir().mkpath(dir));
+        {
+            sqlite3 *db = nullptr;
+            QCOMPARE(sqlite3_open((dir + "/blackbox.sqlite").toUtf8().constData(), &db), SQLITE_OK);
+            const char *v1 =
+                "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);"
+                "INSERT INTO meta VALUES('schema', '1');"
+                "CREATE TABLE trips(id INTEGER PRIMARY KEY, start_ms INTEGER NOT NULL, end_ms INTEGER, "
+                "clean INTEGER NOT NULL DEFAULT 0, vin TEXT, make TEXT, model_year INTEGER, "
+                "sample_count INTEGER NOT NULL DEFAULT 0, summary TEXT, file_base TEXT);"
+                "INSERT INTO trips(id, start_ms, end_ms, clean, vin) VALUES(1000, 1000, 61000, 1, 'OLDVIN');";
+            QCOMPARE(sqlite3_exec(db, v1, nullptr, nullptr, nullptr), SQLITE_OK);
+            sqlite3_close(db);
+        }
+        TripStore store;
+        QVERIFY(store.open(dir));
+        const QVariantList trips = store.listTrips();
+        QCOMPARE(trips.size(), 1);
+        QCOMPARE(trips.first().toMap().value("vin").toString(), QStringLiteral("OLDVIN"));
+        QCOMPARE(trips.first().toMap().value("simulated").toBool(), false);
+        store.close();
+        QVERIFY(store.open(dir));   // and again: the migration ran once
+        QCOMPARE(store.listTrips().size(), 1);
+    }
+
+    // The state an interrupted migration of the first schema-2 build left:
+    // the column added, the number still 1. It used to fail on "duplicate
+    // column" at every boot and the black box stayed off for good
+    void aHalfMigratedDatabaseIsFinished()
+    {
+        const QString dir = m_tmp->path() + "/halfway";
+        QVERIFY(QDir().mkpath(dir));
+        const auto schema = [&dir] {
+            sqlite3 *db = nullptr;
+            sqlite3_open((dir + "/blackbox.sqlite").toUtf8().constData(), &db);
+            sqlite3_stmt *st = nullptr;
+            sqlite3_prepare_v2(db, "SELECT value FROM meta WHERE key = 'schema'", -1, &st, nullptr);
+            const QString v = sqlite3_step(st) == SQLITE_ROW
+                                  ? QString::fromUtf8(reinterpret_cast<const char *>(sqlite3_column_text(st, 0)))
+                                  : QString();
+            sqlite3_finalize(st);
+            sqlite3_close(db);
+            return v;
+        };
+        {
+            sqlite3 *db = nullptr;
+            QCOMPARE(sqlite3_open((dir + "/blackbox.sqlite").toUtf8().constData(), &db), SQLITE_OK);
+            const char *half =
+                "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);"
+                "INSERT INTO meta VALUES('schema', '1');"
+                "CREATE TABLE trips(id INTEGER PRIMARY KEY, start_ms INTEGER NOT NULL, end_ms INTEGER, "
+                "clean INTEGER NOT NULL DEFAULT 0, vin TEXT, make TEXT, model_year INTEGER, "
+                "sample_count INTEGER NOT NULL DEFAULT 0, summary TEXT, file_base TEXT, "
+                "simulated INTEGER NOT NULL DEFAULT 0);"
+                "INSERT INTO trips(id, start_ms, end_ms, clean, vin) VALUES(1000, 1000, 61000, 1, 'HALFVIN');";
+            QCOMPARE(sqlite3_exec(db, half, nullptr, nullptr, nullptr), SQLITE_OK);
+            sqlite3_close(db);
+        }
+        TripStore store;
+        QVERIFY(store.open(dir));
+        QCOMPARE(store.listTrips().size(), 1);
+        QCOMPARE(store.listTrips().first().toMap().value("vin").toString(), QStringLiteral("HALFVIN"));
+        store.close();
+        QCOMPARE(schema(), QStringLiteral("2"));
+        QVERIFY(QDir(dir).entryList({"blackbox.sqlite.damaged-*"}, QDir::Files).isEmpty());   // not set aside
+    }
+
+    // Of the copies a damaged database leaves, the newest three stay
+    void oldDamagedCopiesArePruned()
+    {
+        const QString dir = m_tmp->path() + "/copies";
+        QVERIFY(QDir().mkpath(dir));
+        for (const char *stamp : {"20200101-000000", "20200102-000000", "20200103-000000", "20200104-000000"}) {
+            for (const char *suffix : {"", "-wal"}) {
+                QFile f(dir + "/blackbox.sqlite.damaged-" + stamp + suffix);
+                QVERIFY(f.open(QIODevice::WriteOnly));
+                f.write("old");
+            }
+        }
+        {
+            QFile f(dir + "/blackbox.sqlite");
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(QByteArray(8192, 'x'));
+        }
+        TripStore store;
+        QVERIFY(store.open(dir));
+        store.close();
+        QStringList left;
+        for (const QString &name : QDir(dir).entryList({"blackbox.sqlite.damaged-*"}, QDir::Files, QDir::Name))
+            if (!name.endsWith("-wal") && !name.endsWith("-shm"))
+                left.append(name);
+        QCOMPARE(left.size(), 3);
+        QVERIFY(!left.contains("blackbox.sqlite.damaged-20200101-000000"));
+        QVERIFY(!left.contains("blackbox.sqlite.damaged-20200102-000000"));
+        QVERIFY(!QFile::exists(dir + "/blackbox.sqlite.damaged-20200101-000000-wal"));
+        QVERIFY(QFile::exists(dir + "/blackbox.sqlite.damaged-20200104-000000-wal"));
     }
 
     void storePrunesOldestFirst()

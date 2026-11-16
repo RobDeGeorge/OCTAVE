@@ -1,18 +1,14 @@
 #include "webbluetooth.h"
 
 #include "../../managers/obdmanager.h"
+#include "webport.h"
 
-#include <QIODevice>
 #include <QLoggingCategory>
-#include <QMutex>
-#include <QThread>
-#include <QWaitCondition>
 
 #include <emscripten.h>
 #include <emscripten/bind.h>
 #include <emscripten/val.h>
 
-#include <cstring>
 #include <string>
 #include <vector>
 
@@ -23,19 +19,10 @@ namespace {
 constexpr const char *kScheme = "webbt://";
 // What the main thread (notifications, link events) shares with the port
 // device on the OBD worker thread
-struct Shared {
-    QMutex mutex;
-    QWaitCondition changed;
-    QByteArray rx;
-    bool up = false;
-    QString error;
-    QString describe;   // the characteristics in use, for the connection log
-};
-
-Shared &shared()
+WebPortChannel &channel()
 {
-    static Shared s;
-    return s;
+    static WebPortChannel c;
+    return c;
 }
 
 WebBluetoothLink *g_link = nullptr;
@@ -355,79 +342,6 @@ void onBytes(emscripten::val bytes)
         g_link->handleBytes(QByteArray(reinterpret_cast<const char *>(v.data()), qsizetype(v.size())));
 }
 
-// The ELM327 as the OBD worker sees it. Lives on the worker thread.
-class PortDevice : public QIODevice
-{
-public:
-    using QIODevice::QIODevice;
-
-    bool isSequential() const override { return true; }
-
-    bool open(OpenMode mode) override
-    {
-        Shared &s = shared();
-        QMutexLocker lock(&s.mutex);
-        if (!s.up) {
-            // Ask the main thread to bring the last adapter back and fail
-            // now: OBDManager retries the port on its own schedule. Waiting
-            // here for the main thread let a main thread that waits on this
-            // worker (a reconnect tearing it down) freeze the page for the
-            // whole connect timeout.
-            lock.unlock();
-            QMetaObject::invokeMethod(g_link, [] { g_link->reconnect(); }, Qt::QueuedConnection);
-            setErrorString(QStringLiteral("Reconnecting the Bluetooth adapter"));
-            return false;
-        }
-        s.rx.clear();
-        setObjectName(s.describe);
-        return QIODevice::open(mode);
-    }
-
-    qint64 bytesAvailable() const override
-    {
-        Shared &s = shared();
-        QMutexLocker lock(&s.mutex);
-        return s.rx.size() + QIODevice::bytesAvailable();
-    }
-
-    bool waitForReadyRead(int msecs) override
-    {
-        Shared &s = shared();
-        QMutexLocker lock(&s.mutex);
-        if (s.rx.isEmpty() && s.up)
-            s.changed.wait(&s.mutex, QDeadlineTimer(msecs));
-        if (!s.rx.isEmpty())
-            return true;
-        if (!s.up) {
-            // OBDConnectionWorker::sendCommand() reports a closed custom
-            // transport as a lost connection, with this error
-            const QString err = s.error.isEmpty() ? QStringLiteral("The Bluetooth adapter disconnected") : s.error;
-            lock.unlock();
-            setErrorString(err);
-            close();
-        }
-        return false;
-    }
-
-protected:
-    qint64 readData(char *data, qint64 maxSize) override
-    {
-        Shared &s = shared();
-        QMutexLocker lock(&s.mutex);
-        const qint64 n = qMin<qint64>(maxSize, s.rx.size());
-        std::memcpy(data, s.rx.constData(), size_t(n));
-        s.rx.remove(0, n);
-        return n;
-    }
-
-    qint64 writeData(const char *data, qint64 size) override
-    {
-        const QByteArray bytes(data, size);
-        QMetaObject::invokeMethod(g_link, [bytes] { g_link->write(bytes); }, Qt::QueuedConnection);
-        return size;
-    }
-};
-
 } // namespace
 
 EMSCRIPTEN_BINDINGS(octave_webbt)
@@ -454,7 +368,12 @@ void WebBluetoothLink::registerTransport()
     instance();
     OBDConnectionWorker::addCustomTransport(
         [](const QString &port) { return port.startsWith(QLatin1String(kScheme)); },
-        [](const QString &, QObject *parent) -> QIODevice * { return new PortDevice(parent); });
+        [](const QString &, QObject *parent) -> QIODevice * {
+            return channel().createDevice(parent, {g_link, [] { g_link->reconnect(); },
+                                                   [](const QByteArray &bytes) { g_link->write(bytes); },
+                                                   QStringLiteral("Reconnecting the Bluetooth adapter"),
+                                                   QStringLiteral("The Bluetooth adapter disconnected")});
+        });
 }
 
 QString WebBluetoothLink::portFor(const QString &deviceId)
@@ -479,13 +398,7 @@ void WebBluetoothLink::choose(bool everyDevice)
 
 void WebBluetoothLink::connectDevice(const QString &id)
 {
-    {
-        Shared &s = shared();
-        QMutexLocker lock(&s.mutex);
-        s.up = false;
-        s.error.clear();
-        s.changed.wakeAll();
-    }
+    channel().connecting();
     m_connectingId = id;
     m_connecting = true;
     qCInfo(lcWebBt) << "connecting" << id;
@@ -520,10 +433,7 @@ void WebBluetoothLink::write(const QByteArray &bytes)
 
 void WebBluetoothLink::handleBytes(const QByteArray &bytes)
 {
-    Shared &s = shared();
-    QMutexLocker lock(&s.mutex);
-    s.rx.append(bytes);
-    s.changed.wakeAll();
+    channel().received(bytes);
 }
 
 void WebBluetoothLink::handleEvent(const QString &kind, const QString &a, const QString &b, const QString &c)
@@ -549,27 +459,13 @@ void WebBluetoothLink::handleEvent(const QString &kind, const QString &a, const 
         m_lastId = id;
         m_connecting = false;
         qCInfo(lcWebBt) << "link up to" << b << c;
-        {
-            Shared &s = shared();
-            QMutexLocker lock(&s.mutex);
-            s.rx.clear();
-            s.describe = c;
-            s.up = true;
-            s.error.clear();
-            s.changed.wakeAll();
-        }
+        channel().up(c);
         emit linkUp(id, b);
     } else if (kind == QLatin1String("down") || kind == QLatin1String("error")) {
         qCWarning(lcWebBt) << kind << a;
         if (kind == QLatin1String("error"))
             m_connecting = false;
-        {
-            Shared &s = shared();
-            QMutexLocker lock(&s.mutex);
-            s.up = false;
-            s.error = a;
-            s.changed.wakeAll();
-        }
+        channel().down(a);
         emit linkDown(a);
     } else {
         qCInfo(lcWebBt) << a;

@@ -1,5 +1,7 @@
 # Native phone mirror: OCTAVE as a scrcpy-protocol client
 
+> **Finished plan (note added 2026-11-15).** Every phase below is done and the removals have shipped; read the phase sections as history. The part that is still live reference is the protocol byte layouts (items 7–9 under the Phase 0 results), which `CLAUDE.md` points to: keep those in step with `phone_server/` and `src/phone_mirror/scrcpyclient.cpp`.
+
 **Status:** phases 0–3 complete and the server forked (`phone_server/`, 2026-09-09); hardware validation of Python and C++ on the fork done; only the cable-pull / unplugged-start tests remain
 **Owner:** OCTAVE dev agent + Orange Pi hardware agent
 **Goal:** phone mirroring with **no user-installed dependencies**. No scrcpy binary, no
@@ -118,11 +120,11 @@ at the pinned tag. Verify each detail against that tag before coding.
      pressure u16 fixed-point (0xFFFF = 1.0), action_button i32, buttons i32. 32 bytes total.
    - `0` INJECT_KEYCODE: action u8, keycode i32, repeat i32, metastate i32.
    - `1` INJECT_TEXT, `9` SET_CLIPBOARD, `10` SET_DISPLAY_POWER (screen off while mirroring), `4` BACK_OR_SCREEN_ON.
-   - OCTAVE extensions (our server fork only): `100` OCTAVE_SET_KEEPER `[u8 enabled][u8 panelDark][i32 graceMs]` and `101` OCTAVE_TAKE_BACK (no payload). They drive `control/MirrorKeeper.java`, which wakes the phone on doze, keeps its panel dark and tracks the keyguard from inside the device. `102` OCTAVE_SET_BIT_RATE `[i32 bps]` (adaptive quality) goes to `video/VideoBitRate.java`: applied live with `MediaCodec.setParameters(PARAMETER_KEY_VIDEO_BITRATE)` and used for every encoder created after it (capture reset, resize). `103` OCTAVE_MEDIA `[u8 action][i64 arg]` drives `control/PhoneMedia.java` (the phone's media session): action 0 WATCH (arg 1 = on), 1 PLAY, 2 PAUSE, 3 PLAY_PAUSE, 4 NEXT, 5 PREVIOUS, 6 SEEK (arg = ms).
+   - OCTAVE extensions (our server fork only): `100` OCTAVE_SET_KEEPER `[u8 enabled][u8 panelDark][i32 graceMs]` and `101` OCTAVE_TAKE_BACK (no payload). They drive `control/MirrorKeeper.java`, which wakes the phone on doze, keeps its panel dark and tracks the keyguard from inside the device. `102` OCTAVE_SET_BIT_RATE `[i32 bps]` (adaptive quality) goes to `video/VideoBitRate.java`: applied live with `MediaCodec.setParameters(PARAMETER_KEY_VIDEO_BITRATE)` and used for every encoder created after it (capture reset, resize). `103` OCTAVE_MEDIA `[u8 action][i64 arg]` drives `control/PhoneMedia.java` (the phone's media session): action 0 WATCH (arg 1 = on), 1 PLAY, 2 PAUSE, 3 PLAY_PAUSE, 4 NEXT, 5 PREVIOUS, 6 SEEK (arg = ms), 7 SKIP_TO_QUEUE_ITEM (arg = a queue item id from device message `103`).
    - Server option `octave_persist_ms=N` (our fork): after the client's sockets close, the server keeps the virtual display (and the apps on it) and re-listens on the same `localabstract:scrcpy_<scid>` for up to N ms (`Server.runSession` loop, `NewDisplayCapture.setPersistent`). The clients launch the server with `nohup ... & wait` so it survives adbd killing the shell on a USB data dropout, and `start(attach_scid=...)` / `start(..., attachScid)` re-forwards and reconnects to the same scid (server log then followed via `logcat -s scrcpy:I`). A deliberate stop still `pkill`s the server.
    Coordinates are relative to the mirrored display, so the virtual display needs no
    `input -d`: the server routes injection to the display it mirrors.
-9. **Device messages** (control socket, server → client): `[u8 type]` then `0` CLIPBOARD `[u32 len][utf8]`, `1` ACK_CLIPBOARD `[u64 seq]`, `2` UHID_OUTPUT `[u16 id][u16 len][data]`, and OCTAVE's `100` PHONE_STATE `[u8 asleep][u8 inUse][u8 panelDark]`, sent by the MirrorKeeper on every change. PhoneMedia sends `101` MEDIA_STATE `[u8 flags: 1 session, 2 playing, 4 canSeek][i64 positionMs][i64 durationMs]` + package, title, artist, album each `[u16 len][utf8]`, and `102` MEDIA_ART `[u32 len][JPEG]` (0 = no art). Both clients run a reader thread on the control socket; `clipboard_autosync=false` keeps the clipboard traffic off.
+9. **Device messages** (control socket, server → client): `[u8 type]` then `0` CLIPBOARD `[u32 len][utf8]`, `1` ACK_CLIPBOARD `[u64 seq]`, `2` UHID_OUTPUT `[u16 id][u16 len][data]`, and OCTAVE's `100` PHONE_STATE `[u8 asleep][u8 inUse][u8 panelDark]`, sent by the MirrorKeeper on every change. PhoneMedia sends `101` MEDIA_STATE `[u8 flags: 1 session, 2 playing, 4 canSeek][i64 positionMs][i64 durationMs]` + package, title, artist, album each `[u16 len][utf8]`, `102` MEDIA_ART `[u32 len][JPEG]` (0 = no art), `103` MEDIA_QUEUE `[i64 activeId]` + queue title `[u16 len][utf8]` + `[u16 count]` then per item `[i64 id]` + title, subtitle, art URI each `[u16 len][utf8]`, and `104` MEDIA_QUEUE_ART: art URI `[u16 len][utf8]` + `[u32 len][JPEG]` (0 = unreadable). The client runs a reader thread on the control socket (the plan's "both clients" were the Python and C++ ones; only the C++ client remains); `clipboard_autosync=false` keeps the clipboard traffic off.
 10. **Teardown:** close both sockets and kill the `app_process` child; the server exits and
     destroys the virtual display (`cleanup=true`). Keep the `adb shell pkill -f com.genymobile.scrcpy` safety net and `adb forward --remove`.
 
@@ -192,7 +194,7 @@ Windows and macOS builds in CI (`cpp-build-*` jobs) proving the bundled adb + ja
 `scrcpyVideoDevice` / `phoneMirrorNative` settings are removed; the built-in client is the only path.
 adb bundling DONE (`scripts/fetch_platform_tools.py`, pinned
 platform-tools 37.0.1 with SHA-256, shipped by all three CI packagers; finders prefer it). The
-removals wait for hardware validation of phases 1–2. Original scope: Add `tools/platform-tools/<platform>/adb` and
+removals were held until hardware validation of phases 1–2 and have since been made (see DONE above). Original scope: Add `tools/platform-tools/<platform>/adb` and
 `tools/scrcpy-server` with their LICENSE files to the repo (or a CI download step with
 pinned hashes) and to every packaging target in `BUILD.md`. Delete the v4l2 / window-grab
 code, the `scrcpyPath` / `scrcpyVideoDevice` settings, and the dead classes. Flip

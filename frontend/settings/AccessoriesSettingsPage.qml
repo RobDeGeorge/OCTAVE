@@ -23,7 +23,7 @@ Flickable {
 
     function refreshPorts() {
         if (typeof esp32VolumeManager !== "undefined" && esp32VolumeManager)
-            esp32VolumeManager.refresh_ports()
+            esp32VolumeManager.refreshPorts()
     }
 
     Component.onCompleted: refreshPorts()
@@ -120,19 +120,19 @@ Flickable {
                         width: pageRoot.dp(14)
                         height: pageRoot.dp(14)
                         radius: pageRoot.dpMin(7, 2)
-                        color: (typeof esp32VolumeManager !== "undefined" && esp32VolumeManager && esp32VolumeManager.is_connected()) ? App.Style.statusConnected : App.Style.statusDisconnected
+                        color: (typeof esp32VolumeManager !== "undefined" && esp32VolumeManager && esp32VolumeManager.isConnected()) ? App.Style.statusConnected : App.Style.statusDisconnected
 
                         Connections {
                             target: typeof esp32VolumeManager !== "undefined" ? esp32VolumeManager : null
                             function onConnectionStatusChanged(status) {
-                                esp32StatusDot.color = esp32VolumeManager.is_connected() ? App.Style.statusConnected : App.Style.statusDisconnected
+                                esp32StatusDot.color = esp32VolumeManager.isConnected() ? App.Style.statusConnected : App.Style.statusDisconnected
                             }
                         }
                     }
 
                     Text {
                         id: esp32StatusText
-                        text: (typeof esp32VolumeManager !== "undefined" && esp32VolumeManager) ? esp32VolumeManager.get_connection_detail() : "Not initialized"
+                        text: (typeof esp32VolumeManager !== "undefined" && esp32VolumeManager) ? esp32VolumeManager.getConnectionDetail() : "Not initialized"
                         color: App.Style.primaryTextColor
                         font.pixelSize: App.Spacing.overallText
                         font.family: App.Style.fontFamily
@@ -141,7 +141,7 @@ Flickable {
                         Connections {
                             target: typeof esp32VolumeManager !== "undefined" ? esp32VolumeManager : null
                             function onConnectionDetailChanged(detail) {
-                                esp32StatusText.text = esp32VolumeManager.get_connection_detail()
+                                esp32StatusText.text = esp32VolumeManager.getConnectionDetail()
                             }
                         }
                     }
@@ -272,8 +272,8 @@ Flickable {
                                                     settingsManager.save_esp32_volume_enabled(true)
                                                 }
                                                 if (esp32VolumeManager) {
-                                                    esp32VolumeManager.reset_reconnect_attempts()
-                                                    esp32VolumeManager.connect_device()
+                                                    esp32VolumeManager.resetReconnectAttempts()
+                                                    esp32VolumeManager.connectDevice()
                                                 }
                                             }
                                         }
@@ -501,13 +501,6 @@ Flickable {
                     onToggled: function(checked) {
                         if (settingsManager) {
                             settingsManager.save_esp32_led_sleep_enabled(!checked)
-                        }
-                    }
-
-                    Connections {
-                        target: settingsManager
-                        function onEsp32LedSleepEnabledChanged(enabled) {
-                            ledSleepToggle.checked = !enabled
                         }
                     }
                 }
@@ -923,13 +916,6 @@ Flickable {
                             settingsManager.save_imu_enabled(checked)
                         }
                     }
-
-                    Connections {
-                        target: settingsManager
-                        function onImuEnabledChanged(enabled) {
-                            imuEnabledToggle.checked = enabled
-                        }
-                    }
                 }
             }
 
@@ -1143,13 +1129,6 @@ Flickable {
                             settingsManager.save_gesture_sensor_enabled(checked)
                         }
                     }
-
-                    Connections {
-                        target: settingsManager
-                        function onGestureSensorEnabledChanged(enabled) {
-                            gestureEnabledToggle.checked = enabled
-                        }
-                    }
                 }
             }
 
@@ -1211,7 +1190,8 @@ Flickable {
                             width: gsVolumeStepSlider.availableWidth
                             height: implicitHeight
                             radius: 3
-                            color: App.Style.hoverColor
+                            // As SettingsSlider draws it: hoverColor is nearly the card colour in the dark themes
+                            color: Qt.rgba(App.Style.settingsSliderColor.r, App.Style.settingsSliderColor.g, App.Style.settingsSliderColor.b, 0.25)
 
                             Rectangle {
                                 // Ends at the handle's center so the rounded end stays under it
@@ -1316,7 +1296,8 @@ Flickable {
                             width: cooldownSlider.availableWidth
                             height: implicitHeight
                             radius: 3
-                            color: App.Style.hoverColor
+                            // As SettingsSlider draws it: hoverColor is nearly the card colour in the dark themes
+                            color: Qt.rgba(App.Style.settingsSliderColor.r, App.Style.settingsSliderColor.g, App.Style.settingsSliderColor.b, 0.25)
 
                             Rectangle {
                                 // Ends at the handle's center so the rounded end stays under it
@@ -1515,8 +1496,8 @@ Flickable {
                         spacing: pageRoot.dp(6)
 
                         Text {
-                            text: "Reset to Defaults"
-                            color: App.Style.primaryTextColor
+                            text: resetArea.armed ? "Tap again to reset" : "Reset to Defaults"
+                            color: resetArea.armed ? App.Style.statusDanger : App.Style.primaryTextColor
                             font.pixelSize: App.Spacing.overallText
                             font.family: App.Style.fontFamily
                             anchors.verticalCenter: parent.verticalCenter
@@ -1527,7 +1508,19 @@ Flickable {
                         id: resetArea
                         anchors.fill: parent
                         hoverEnabled: true
+                        // Every gesture's assignment goes: two taps, as
+                        // ConfirmButton does it
+                        property bool armed: false
+                        onVisibleChanged: if (!visible) armed = false
+                        Timer { id: resetArmTimer; interval: 4000; onTriggered: resetArea.armed = false }
                         onClicked: {
+                            if (!armed) {
+                                armed = true
+                                resetArmTimer.restart()
+                                return
+                            }
+                            armed = false
+                            resetArmTimer.stop()
                             if (typeof gestureSensor !== "undefined" && gestureSensor) {
                                 gestureSensor.resetMappingToDefaults()
                             }
@@ -1566,13 +1559,6 @@ Flickable {
                     onToggled: function(checked) {
                         if (settingsManager) {
                             settingsManager.save_phone_mirror_enabled(checked)
-                        }
-                    }
-
-                    Connections {
-                        target: settingsManager
-                        function onPhoneMirrorEnabledChanged() {
-                            phoneMirrorEnabledToggle.checked = settingsManager.phoneMirrorEnabled
                         }
                     }
                 }
@@ -1648,12 +1634,13 @@ Flickable {
 
                         Item { Layout.fillWidth: true }
 
-                        SettingsButton {
-                            text: "Forget"
-                            buttonColor: App.Style.statusError
+                        ConfirmButton {
+                            label: "Forget"
+                            confirmLabel: "Confirm forget"
+                            idleColor: App.Style.statusError
                             Layout.preferredHeight: pageRoot.dp(56)
                             visible: wirelessSection.remembered !== ""
-                            onClicked: {
+                            onConfirmed: {
                                 wirelessSection.resultOk = true
                                 wirelessSection.resultText = "Forgot " + wirelessSection.remembered
                                     + ". To revoke it completely, remove OCTAVE from the phone's paired devices."
@@ -1750,13 +1737,6 @@ Flickable {
                             var size = checked ? "auto" : "1280x800"
                             settingsManager.save_scrcpy_display_size(size)
                             if (phoneMirrorManager) phoneMirrorManager.setDisplaySize(size)
-                        }
-
-                        Connections {
-                            target: settingsManager
-                            function onScrcpyDisplaySizeChanged() {
-                                scrcpyFitToggle.checked = settingsManager.scrcpyDisplaySize === "auto"
-                            }
                         }
                     }
 
@@ -1862,13 +1842,6 @@ Flickable {
                         onToggled: function(checked) {
                             if (settingsManager)
                                 settingsManager.save_scrcpy_bit_rate_auto(checked)
-                        }
-
-                        Connections {
-                            target: settingsManager
-                            function onScrcpyBitRateAutoChanged() {
-                                scrcpyBitRateAutoToggle.checked = settingsManager.scrcpyBitRateAuto
-                            }
                         }
                     }
 
@@ -1977,13 +1950,6 @@ Flickable {
                             if (settingsManager)
                                 settingsManager.save_scrcpy_auto_wifi(checked)
                         }
-
-                        Connections {
-                            target: settingsManager
-                            function onScrcpyAutoWifiChanged() {
-                                scrcpyAutoWifiToggle.checked = settingsManager.scrcpyAutoWifi
-                            }
-                        }
                     }
                 }
 
@@ -2012,13 +1978,6 @@ Flickable {
                         onToggled: function(checked) {
                             if (settingsManager) {
                                 settingsManager.save_scrcpy_phone_screen_off(checked)
-                            }
-                        }
-
-                        Connections {
-                            target: settingsManager
-                            function onScrcpyPhoneScreenOffChanged() {
-                                scrcpyPhoneScreenOffToggle.checked = settingsManager.scrcpyPhoneScreenOff
                             }
                         }
                     }
@@ -2092,13 +2051,6 @@ Flickable {
                         onToggled: function(checked) {
                             if (settingsManager) {
                                 settingsManager.save_scrcpy_audio_duck_enabled(checked)
-                            }
-                        }
-
-                        Connections {
-                            target: settingsManager
-                            function onScrcpyAudioDuckEnabledChanged() {
-                                scrcpyAudioDuckEnabledToggle.checked = settingsManager.scrcpyAudioDuckEnabled
                             }
                         }
                     }
@@ -2176,13 +2128,6 @@ Flickable {
 
                     onToggled: function(checked) {
                         if (settingsManager) settingsManager.save_android_auto_enabled(checked)
-                    }
-
-                    Connections {
-                        target: settingsManager
-                        function onAndroidAutoEnabledChanged() {
-                            androidAutoEnabledToggle.checked = settingsManager.androidAutoEnabled
-                        }
                     }
                 }
 
@@ -2360,10 +2305,11 @@ Flickable {
                             Layout.preferredHeight: pageRoot.dp(48)
                             onClicked: airPlayCategory.ap.pairTouch(!airPlayCategory.ap.touchPairing)
                         }
-                        SettingsButton {
-                            text: "Forget paired iPhones"
+                        ConfirmButton {
+                            label: "Forget paired iPhones"
+                            confirmLabel: "Confirm: forget all"
                             Layout.preferredHeight: pageRoot.dp(48)
-                            onClicked: if (airPlayCategory.ap) airPlayCategory.ap.forgetDevices()
+                            onConfirmed: if (airPlayCategory.ap) airPlayCategory.ap.forgetDevices()
                         }
                     }
                 }
@@ -2371,7 +2317,7 @@ Flickable {
         }
     }
 
-    // ── Default rendering: stacked SettingsCards (Carousel/Hub/Dashboard layouts).
+    // ── Stacked SettingsCards, for a host that leaves renderCards on (none does now).
     //    Sidebar layout sets pageRoot.visible = false and renders the tile grid + popup instead.
     ColumnLayout {
         id: settingsContent

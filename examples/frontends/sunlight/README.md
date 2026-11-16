@@ -90,7 +90,7 @@ The top bar holds the page tabs, the OBD state and car, the REC lamp with the tr
 | `GET /art` | the current cover, fetched again when `artRevision` changes (404: no cover) |
 | `volumeController` | `percent`, `muted` (set), `effectivelyMuted`, `applyVolume` |
 | `shiftLightManager` | `maxRpm`, `flags`, `lit` for the shift bar |
-| `obdManager` (codes) | `read_dtc`, `clear_dtc`, `get_mil_status`, and the `dtcCodesChanged` / `milStatusChanged` / `dtcClearResult` signals |
+| `obdManager` (codes) | `readDtc`, `clearDtc`, `getMilStatus`, and the `dtcCodesChanged` / `milStatusChanged` / `dtcClearResult` signals |
 | `tripRecorder` | `trips`, the current trip, `requestDetail` (answered by `detailReady`) |
 | `clock` | `clock.time` |
 

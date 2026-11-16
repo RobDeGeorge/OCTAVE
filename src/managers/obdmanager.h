@@ -22,6 +22,7 @@
 #include <functional>
 
 #include "elm327protocol.h"
+#include "obdconnectionworker.h"
 #include "settingsmanager.h"
 
 // Android-only OBD: we deliberately bypass Qt's QLowEnergyController stack
@@ -29,9 +30,20 @@
 // and refuses to initialize the BLE adapter even with all underlying perms
 // granted). All BLE work runs through OctaveOBDBridge.java via JNI instead.
 
-class OBDConnectionWorker;
-class RfcommSocket;
 class QProcess;
+
+// Where the messages of the listen-only bus monitor go (busmonitor.h).
+// Called on the manager's thread.
+class BusSink
+{
+public:
+    virtual ~BusSink() = default;
+    // `overruns`: times the adapter's buffer filled since the last call
+    // (messages were lost each time)
+    virtual void busFrames(const QList<BusFrame> &frames, int overruns) = 0;
+    // `note` says why monitoring ended when it wasn't asked to
+    virtual void busMonitorChanged(bool active, const QString &note) = 0;
+};
 
 // ===========================================================================
 // OBDManager -- desktop (USB/serial) OBD-II manager using QSerialPort.
@@ -45,13 +57,50 @@ class OBDManager : public QObject
     Q_CLASSINFO("octave.scope", "vehicle")
     Q_CLASSINFO("octave.scope.read",
                 "airFuelRatio availableAdapters coolantTemp engineLoad engineOilTemp fuelLevel fuelPressure "
-                "getConnectionStatus get_all_parameter_names get_available_ports get_connection_status "
-                "get_dtc_codes get_dtc_count get_freeze_frame get_mil_status get_supported_commands "
-                "ignitionTiming intakeManifoldPressure intakeTemp isConnected is_connected "
-                "is_diagnostic_mode is_scanning longTermFuelTrim massAirFlow oxygenSensorVoltage "
-                "platform_hint rpm setBackgroundDemand setParameterDemand shortTermFuelTrim speedMPH "
-                "throttlePosition timingAdvance voltage")
-    Q_CLASSINFO("octave.scope.system", "open_bluetooth_settings")
+                "getAllParameterNames getAvailablePorts getConnectionStatus getDtcCodes getDtcCount "
+                "getFreezeFrame getMilStatus getSupportedCommands get_all_parameter_names get_available_ports "
+                "get_connection_status get_dtc_codes get_dtc_count get_freeze_frame get_mil_status "
+                "get_supported_commands ignitionTiming intakeManifoldPressure intakeTemp isConnected "
+                "isDiagnosticMode isScanning is_connected is_diagnostic_mode is_scanning longTermFuelTrim "
+                "massAirFlow oxygenSensorVoltage platformHint platform_hint rpm setBackgroundDemand "
+                "setParameterDemand shortTermFuelTrim speedMPH throttlePosition timingAdvance voltage")
+    Q_CLASSINFO("octave.scope.system", "openBluetoothSettings open_bluetooth_settings")
+    // Deprecated names (src/service/metadescribe.h): the camelCase one beside each stays
+    Q_CLASSINFO("octave.deprecated.connect_obd", "use connectObd; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.force_connect", "use forceConnect; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.reset_connection", "use resetConnection; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_connection_status", "use getConnectionStatus (or the connectionStatus property); goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.refresh_ports", "use refreshPorts; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_available_ports", "use getAvailablePorts; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.connect_to_adapter", "use connectToAdapter; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.platform_hint", "use platformHint; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.scan_vehicle", "use scanVehicle; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.is_scanning", "use isScanning; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_all_parameter_names", "use getAllParameterNames; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_supported_commands", "use getSupportedCommands; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.enable_scanned_parameters", "use enableScannedParameters; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.enable_all_supported", "use enableAllSupported; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.enter_diagnostic_mode", "use enterDiagnosticMode; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.exit_diagnostic_mode", "use exitDiagnosticMode; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.is_diagnostic_mode", "use isDiagnosticMode; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.read_dtc", "use readDtc; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.read_current_dtc", "use readCurrentDtc; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.read_status", "use readStatus; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.clear_dtc", "use clearDtc; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.read_freeze_frame", "use readFreezeFrame; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.read_vin", "use readVin; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_dtc_codes", "use getDtcCodes; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_dtc_count", "use getDtcCount; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_mil_status", "use getMilStatus; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_freeze_frame", "use getFreezeFrame; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.refresh_values", "use refreshValues; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.open_bluetooth_settings", "use openBluetoothSettings; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.set_target_address", "use setTargetAddress; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.connect_direct", "use connectDirect; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.set_auto_reconnect", "use setAutoReconnect; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.set_connection_timeout", "use setConnectionTimeout; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.check_device_presence", "use checkDevicePresence; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.is_connected", "use isConnected (or the connected property); goes in protocol 5")
 
     // Expose connection state as QML-readable properties
     Q_PROPERTY(bool connected READ isConnected NOTIFY connectionStatusChanged)
@@ -289,6 +338,22 @@ public:
     // setParameterDemand(); ids already in the foreground are polled there.
     Q_INVOKABLE void setBackgroundDemand(const QString &consumer, const QStringList &paramIds);
 
+    // The manufacturer-specific readings of the user's custom PID file
+    // (custompids.h). Once, before the first connection. Each is polled
+    // while its paramId is demanded, whatever the vehicle scan found (the
+    // scan can't see them), and counts as supported by the vehicle.
+    void setCustomPids(const QList<CustomPidRequest> &pids);
+
+    // The bus monitor (busmonitor.h): the adapter only listens ("ATMA") and
+    // every message it hears goes to the sink. Polling pauses meanwhile and
+    // resumes when it stops; any other request (trouble codes, a scan) ends
+    // it. `filter` is ELM327Protocol::busFilter() text or empty. False when
+    // there is no connection that can do it (none, or the Android BLE path).
+    void setBusSink(BusSink *sink) { m_busSink = sink; }
+    bool canMonitorBus() const;
+    bool startBusMonitor(const QString &filter);
+    void stopBusMonitor();
+
     // The poll list for a demand set (consumer -> parameter ids) and this
     // session's scan result: what buildPidsToWatch() uses. Static so the
     // rules can be tested without a connection.
@@ -419,6 +484,42 @@ public slots:
     void set_connection_timeout(int timeoutSeconds);
     bool check_device_presence();
 
+    // camelCase names for the snake_case methods above (protocol 3 keeps both;
+    // the old names are marked octave.deprecated and go in protocol 5)
+    void connectObd() { connect_obd(); }
+    void forceConnect() { force_connect(); }
+    void resetConnection() { reset_connection(); }
+    void refreshPorts() { refresh_ports(); }
+    QVariantList getAvailablePorts() { return get_available_ports(); }
+    void connectToAdapter(const QString &identifier) { connect_to_adapter(identifier); }
+    QString platformHint() const { return platform_hint(); }
+    void scanVehicle() { scan_vehicle(); }
+    bool isScanning() const { return is_scanning(); }
+    QStringList getAllParameterNames() const { return get_all_parameter_names(); }
+    QVariantList getSupportedCommands() const { return get_supported_commands(); }
+    void enableScannedParameters(const QVariantList &paramNames) { enable_scanned_parameters(paramNames); }
+    void enableAllSupported() { enable_all_supported(); }
+    void enterDiagnosticMode() { enter_diagnostic_mode(); }
+    void exitDiagnosticMode() { exit_diagnostic_mode(); }
+    bool isDiagnosticMode() const { return is_diagnostic_mode(); }
+    void readDtc() { read_dtc(); }
+    void readCurrentDtc() { read_current_dtc(); }
+    void readStatus() { read_status(); }
+    void clearDtc() { clear_dtc(); }
+    void readFreezeFrame() { read_freeze_frame(); }
+    void readVin() { read_vin(); }
+    QVariantList getDtcCodes() const { return get_dtc_codes(); }
+    int getDtcCount() const { return get_dtc_count(); }
+    bool getMilStatus() const { return get_mil_status(); }
+    QVariantList getFreezeFrame() const { return get_freeze_frame(); }
+    void refreshValues() { refresh_values(); }
+    void openBluetoothSettings() { open_bluetooth_settings(); }
+    void setTargetAddress(const QString &address) { set_target_address(address); }
+    void connectDirect(const QString &mac, int channel = 1) { connect_direct(mac, channel); }
+    void setAutoReconnect(bool enabled) { set_auto_reconnect(enabled); }
+    void setConnectionTimeout(int timeoutSeconds) { set_connection_timeout(timeoutSeconds); }
+    bool checkDevicePresence() { return check_device_presence(); }
+
 private slots:
     // Worker thread callbacks
     void onWorkerInitComplete(bool success, const QString &message);
@@ -433,6 +534,8 @@ private slots:
     void onWorkerScanProgress(int progress, const QString &message);
     void onWorkerScanComplete(const QStringList &supported);
     void onWorkerScanOutput(const QString &line);
+    void onWorkerBusFrames(const QList<BusFrame> &frames, int overruns);
+    void onWorkerBusMonitor(bool active, const QString &note);
 
     // Internal timers
     void onStartupTimer();
@@ -477,7 +580,9 @@ private:
     void setConnectionProgress(int progress);
 
     // Port scanning
-    void scanForDevices();
+    // `passiveRetry`: the scan timer's tick, which may also retry an adapter
+    // that is there and not answering; a ports query passes false
+    void scanForDevices(bool passiveRetry = false);
 
     // Unified-adapter helpers — classify an identifier (MAC/COM/dev path)
     // into the {name, kind} the QML chip / row renders.
@@ -506,6 +611,11 @@ private:
     // from applyPollList().
     QList<PidKey> buildPidsToWatch() const;
     QList<PidKey> buildBackgroundPids(const QList<PidKey> &foreground) const;
+    // {kCustomPidMode, index} of every custom PID `demand` asks for
+    QList<PidKey> customKeys(const QHash<QString, QSet<QString>> &demand) const;
+    QList<CustomPidRequest> m_customPids;
+    BusSink *m_busSink = nullptr;
+    bool m_busMonitoring = false;   // the data watchdog is off meanwhile
 
     QHash<QString, QSet<QString>> m_paramDemand;
     QHash<QString, QSet<QString>> m_backgroundDemand;
@@ -534,15 +644,12 @@ private:
     quint64 m_rfcommBindGeneration = 0;
     QProcess *m_rfcommBindProc = nullptr;  // in-flight `rfcomm bind` (Linux)
 
-    // Serial port (owned by worker thread when polling)
-    QSerialPort *m_serialPort = nullptr;
-
     // Worker thread
     QThread *m_workerThread = nullptr;
     OBDConnectionWorker *m_worker = nullptr;
 
-    // Connection state
-    mutable QMutex m_lock;
+    // Connection state. Everything here is touched on the manager's thread
+    // only: the worker reports back through queued signals.
     bool m_connected = false;
     bool m_isConnecting = false;
     int m_connectionAttempts = 0;
@@ -556,8 +663,6 @@ private:
 
     // Diagnostic mode
     bool m_diagnosticMode = false;
-    QMutex m_diagnosticModeLock;
-    bool m_diagnosticModeTransitioning = false;
     bool m_reconnectingAfterDiagnostic = false;
 
     // Scanning
@@ -572,7 +677,7 @@ private:
     bool m_milStatus = false;
     QVariantList m_freezeFrameDtcs;
 
-    // Parameter values -- Original 18
+    // The last value of the original 18 parameters, for their getters
     float m_coolantTemp = 0.0f;
     float m_voltage = 0.0f;
     float m_engineLoad = 0.0f;
@@ -592,86 +697,27 @@ private:
     float m_oilTemp = 0.0f;
     float m_ignitionTiming = 0.0f;
 
-    // Parameter values -- Batch 1
-    float m_runTime = 0.0f;
-    float m_distanceWithMIL = 0.0f;
-    float m_fuelRailPressure = 0.0f;
-    float m_fuelRailPressureDirect = 0.0f;
-    float m_barometricPressure = 0.0f;
-    float m_ambientAirTemp = 0.0f;
-    float m_relativeThrottlePos = 0.0f;
-    float m_absoluteThrottlePosB = 0.0f;
-    float m_acceleratorPos = 0.0f;
-    float m_catalystTempB1S1 = 0.0f;
-    float m_catalystTempB1S2 = 0.0f;
-    float m_evapVaporPressure = 0.0f;
-    float m_shortFuelTrim2 = 0.0f;
-    float m_longFuelTrim2 = 0.0f;
-    float m_o2SensorB1S2 = 0.0f;
-    float m_o2SensorB2S1 = 0.0f;
-    float m_o2SensorB2S2 = 0.0f;
-    float m_distanceSinceCodesCleared = 0.0f;
-    float m_warmupsSinceCodesCleared = 0.0f;
-    float m_absoluteLoad = 0.0f;
-    float m_commandedEGR = 0.0f;
-    float m_egrError = 0.0f;
-    float m_ethanolPercent = 0.0f;
-
-    // Parameter values -- Batch 2
-    float m_o2SensorB1S3 = 0.0f;
-    float m_o2SensorB1S4 = 0.0f;
-    float m_o2SensorB2S3 = 0.0f;
-    float m_o2SensorB2S4 = 0.0f;
-    float m_o2S1WRVoltage = 0.0f;
-    float m_o2S2WRVoltage = 0.0f;
-    float m_o2S3WRVoltage = 0.0f;
-    float m_o2S4WRVoltage = 0.0f;
-    float m_o2S5WRVoltage = 0.0f;
-    float m_o2S6WRVoltage = 0.0f;
-    float m_o2S7WRVoltage = 0.0f;
-    float m_o2S8WRVoltage = 0.0f;
-    float m_o2S1WRCurrent = 0.0f;
-    float m_o2S2WRCurrent = 0.0f;
-    float m_o2S3WRCurrent = 0.0f;
-    float m_o2S4WRCurrent = 0.0f;
-    float m_o2S5WRCurrent = 0.0f;
-    float m_o2S6WRCurrent = 0.0f;
-    float m_o2S7WRCurrent = 0.0f;
-    float m_o2S8WRCurrent = 0.0f;
-    float m_catalystTempB2S1 = 0.0f;
-    float m_catalystTempB2S2 = 0.0f;
-    float m_throttlePosC = 0.0f;
-    float m_acceleratorPosE = 0.0f;
-    float m_acceleratorPosF = 0.0f;
-    float m_throttleActuator = 0.0f;
-    float m_evaporativePurge = 0.0f;
-    float m_fuelRailPressureAbs = 0.0f;
-    float m_fuelInjectTiming = 0.0f;
-    float m_fuelRate = 0.0f;
-    float m_runTimeMIL = 0.0f;
-    float m_timeSinceDTCCleared = 0.0f;
-    float m_maxMAF = 0.0f;
-    float m_fuelType = 0.0f;
-    float m_evapVaporPressureAbs = 0.0f;
-    float m_evapVaporPressureAlt = 0.0f;
-    float m_shortO2TrimB1 = 0.0f;
-    float m_longO2TrimB1 = 0.0f;
-    float m_shortO2TrimB2 = 0.0f;
-    float m_longO2TrimB2 = 0.0f;
-    float m_relativeAccelPos = 0.0f;
-    float m_hybridBatteryRemaining = 0.0f;
-    float m_elmVoltage = 0.0f;
-
     // Device discovery
     QStringList m_availablePorts;
-    qint64 m_lastDeviceScan = 0;
 
-    // Signal dispatch table: signalName -> lambda that stores + emits
-    QHash<QString, std::function<void(float)>> m_signalDispatch;
+    // Signal dispatch table: signalName -> the signal to emit, and where its
+    // last value is kept when a getter reads it back
+    struct ParamSignal {
+        void (OBDManager::*emitter)(float);
+        float OBDManager::*store;
+    };
+    QHash<QString, ParamSignal> m_signalDispatch;
 
     // Timers
     QTimer m_startupTimer;
     QTimer m_dataWatchdogTimer;
+    // The one pending "try again later" (auto-reconnect, post-diagnostic,
+    // stale link). A member, so a connection made meanwhile cancels it: as
+    // QTimer::singleShot calls these fired into a live link and rebuilt it.
+    QTimer m_retryTimer;
+    // The last attempt reached the adapter and no vehicle answered: the
+    // passive scan keeps trying, as the ignition is probably just off
+    bool m_waitingForVehicle = false;
     QTimer m_deviceScannerTimer;
     QTimer m_portChangeTimer;
 
@@ -688,6 +734,9 @@ private:
     // Android-only BLE state -- on Android the worker thread is bypassed
     // entirely; the main thread drives OctaveOBDBridge.java (native
     // BluetoothGatt) over JNI and polls it on a timer.
+    // Taken around m_isConnecting by this path alone, which also runs on the
+    // manager's thread; it goes when the path folds into the worker
+    QMutex m_lock;
     void startAndroidConnection();
     void cleanupAndroidConnection();
     // Bonded devices from BluetoothAdapter.getBondedDevices() via the Java
@@ -735,159 +784,6 @@ private:
     // MAC -> friendly name from the last bonded-device listing.
     QHash<QString, QString> m_androidDeviceNames;
 #endif
-};
-
-// ===========================================================================
-// OBDConnectionWorker -- runs on a dedicated QThread, owns the QSerialPort.
-//
-// Handles ELM327 initialization, PID polling, and diagnostic commands.
-// Communicates results back to OBDManager via signals (thread-safe).
-// ===========================================================================
-class OBDConnectionWorker : public QObject
-{
-    Q_OBJECT
-
-public:
-    explicit OBDConnectionWorker(QObject *parent = nullptr);
-    ~OBDConnectionWorker() override;
-
-    void setPort(const QString &portName);
-    void setFastMode(bool fast);
-    void setTimeout(int seconds);
-    void setPidsToWatch(const QList<PidKey> &pids, const QList<PidKey> &background = {});
-
-    // Extra transport for ports the serial / RFCOMM paths don't handle:
-    // `claims` says whether it serves a port, `create` returns an unopened
-    // QIODevice for it. Dev tooling registers the simulated ELM327
-    // ("sim://elm327") this way; nothing is registered in a normal run. Set
-    // before the first connection; `create` runs on the worker thread.
-    // setCustomTransport() replaces every registered transport (empty
-    // functions clear them), addCustomTransport() adds one beside them (the
-    // browser demo serves the simulated car and Web Bluetooth adapters).
-    using TransportCreate = std::function<QIODevice *(const QString &port, QObject *parent)>;
-    static void setCustomTransport(std::function<bool(const QString &port)> claims, TransportCreate create);
-    static void addCustomTransport(std::function<bool(const QString &port)> claims, TransportCreate create);
-    static bool transportClaims(const QString &port);
-
-signals:
-    // Connection
-    void initComplete(bool success, const QString &message);
-    void connectionLost(const QString &reason);
-
-    // Live data
-    void dataReceived(const QString &signalName, float value);
-    void extendedDataReceived(const QString &paramId, float value);
-    void vinRead(const QString &vin);
-
-    // Diagnostics
-    void dtcResult(const QStringList &codes);
-    void dtcCleared(bool success, const QString &message);
-    void milStatus(bool mil, int dtcCount);
-    // The code that stored freeze frame 0, and the frame's values by
-    // signal name (native units)
-    void freezeFrame(const QStringList &codes, const QVariantMap &values);
-
-    // Scan
-    void scanProgress(int progress, const QString &message);
-    void scanComplete(const QStringList &supported);
-    void scanOutput(const QString &line);
-
-    // One line for the settings page's connection log
-    void logLine(const QString &line);
-
-public slots:
-    // Called from OBDManager (via queued connection)
-    void doConnect();
-    void doDisconnect();
-    void releasePort();   // close + delete the QSerialPort; nothing may hold it open while idle
-    void startPolling();
-    void stopPolling();
-    // Swap the poll list without reconnecting (settings toggles).
-    void updatePidsToWatch(const QList<PidKey> &pids, const QList<PidKey> &background);
-    void doReadDtc();
-    void doReadCurrentDtc();
-    void doClearDtc();
-    void doReadStatus();
-    void doReadFreezeFrame();
-    void doReadVin();
-    void doScanVehicle();
-
-private slots:
-    void onPollTimer();
-    void onSerialReadyRead();
-    void onSerialError(QSerialPort::SerialPortError error);
-
-private:
-    // ELM327 init sequence
-    bool sendInitSequence();
-    bool openSerialPort();   // QSerialPort path of doConnect(); emits initComplete(false) itself
-
-    // Send a command and wait for response (blocking, with timeout)
-    QString sendCommand(const QByteArray &cmd, int timeoutMs = 2000);
-
-    // Query supported PIDs from vehicle
-    QSet<int> querySupportedPids();
-
-    // The link to the adapter, created on the worker thread: a QSerialPort
-    // (USB, /dev/rfcommN, COM) or, for "rfcomm://<MAC>", a direct Bluetooth
-    // socket. m_io is whichever one is open; everything talks through it.
-    QSerialPort *m_serial = nullptr;
-    RfcommSocket *m_rfcomm = nullptr;
-    QIODevice *m_custom = nullptr;   // from setCustomTransport()
-    QIODevice *m_io = nullptr;
-    ResponseBuffer m_responseBuffer;
-
-    // Configuration
-    QString m_portName;
-    bool m_fastMode = true;
-    int m_timeout = 5;
-
-    // PIDs to poll: the foreground list round-robin, with one background
-    // PID slipped in after every full pass (or plain round-robin over the
-    // background list when the foreground is empty)
-    QList<PidKey> m_pidsToWatch;
-    int m_currentPidIndex = 0;
-    QList<PidKey> m_backgroundPids;
-    int m_backgroundIndex = 0;
-    bool m_backgroundNext = false;
-    // The PID for this poll slot, advancing the cursors
-    PidKey nextPollPid();
-
-    // Poll timer
-    QTimer m_pollTimer;
-    bool m_polling = false;
-
-    // Polls ask for one reply ("010C1"): the adapter answers at the first
-    // ECU instead of waiting out ATST for more. Fast mode only; dropped for
-    // the connection when the adapter answers "?" (a clone without it).
-    bool m_singleReply = true;
-    // On CAN, consecutive batchable PIDs share one request ("010C0D05",
-    // up to 6): one round trip for a whole page. Fast mode only; dropped for
-    // the connection when the ECU keeps answering one PID per request.
-    bool m_isCan = false;
-    bool m_multiPid = true;
-    int m_batchMisses = 0;
-    QList<PidKey> m_deferred;   // drawn by a batch they couldn't join; polled next, in order
-    void pollBatch(const QList<int> &pids);
-    // Poll round trips, logged at info level ("OBD polling: ...") 10 s
-    // into the connection and every 30 s after
-    QElapsedTimer m_statsWindow;
-    bool m_statsLogged = false;
-    int m_statValues = 0;
-    int m_statReplies = 0;
-    int m_statNoData = 0;
-    int m_statSilent = 0;
-    qint64 m_statMs = 0;
-    qint64 m_statMaxMs = 0;
-    void notePoll(qint64 ms, const QString &response, int values);
-
-    // State
-    bool m_initialized = false;
-    bool m_waitingForResponse = false;
-    PidKey m_pendingPid;
-
-    // Supported PIDs (discovered from vehicle)
-    QSet<int> m_supportedPids;
 };
 
 #endif // OBDMANAGER_H

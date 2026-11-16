@@ -56,13 +56,13 @@
       octave.signal('obdManager', 'freezeFrameChanged', (list) => { frame = list as unknown as Code[]; busy = '' }),
       octave.signal('obdManager', 'dtcClearResult', (ok, msg) => { busy = ''; toast(ok ? 'Trouble codes cleared' : String(msg || 'Clearing failed'), ok ? 'ok' : 'bad') }),
     ]
-    octave.call<Code[]>('obdManager', 'get_dtc_codes').then((c) => (codes = c)).catch(() => {})
-    octave.call<Code[]>('obdManager', 'get_freeze_frame').then((f) => (frame = f)).catch(() => {})
-    octave.call<boolean>('obdManager', 'get_mil_status').then((m) => (mil = m)).catch(() => {})
-    octave.call('obdManager', 'enter_diagnostic_mode').catch(() => {})
-    return () => { unsubs.forEach((u) => u()); octave.call('obdManager', 'exit_diagnostic_mode').catch(() => {}) }
+    octave.call<Code[]>('obdManager', 'getDtcCodes').then((c) => (codes = c)).catch(() => {})
+    octave.call<Code[]>('obdManager', 'getFreezeFrame').then((f) => (frame = f)).catch(() => {})
+    octave.call<boolean>('obdManager', 'getMilStatus').then((m) => (mil = m)).catch(() => {})
+    octave.call('obdManager', 'enterDiagnosticMode').catch(() => {})
+    return () => { unsubs.forEach((u) => u()); octave.call('obdManager', 'exitDiagnosticMode').catch(() => {}) }
   })
-  function read(what: 'read_dtc' | 'read_freeze_frame' | 'read_status') {
+  function read(what: 'readDtc' | 'readFreezeFrame' | 'readStatus') {
     busy = what
     act(octave.call('obdManager', what))
     setTimeout(() => { if (busy === what) busy = '' }, 8000)
@@ -131,12 +131,12 @@
             <button class="btn" onclick={() => act(octave.call('obdManager', 'reconnect'))}><Icon name="refresh" />Reconnect</button>
             <button class="btn danger" onclick={() => act(octave.call('obdManager', 'close'))}><Icon name="unlink" />Disconnect</button>
           {:else}
-            <button class="btn primary" onclick={() => act(octave.call('obdManager', 'connect_obd'))}><Icon name="link" />Connect</button>
-            <button class="btn" onclick={() => act(octave.call('obdManager', 'force_connect'))}>Force connect</button>
+            <button class="btn primary" onclick={() => act(octave.call('obdManager', 'connectObd'))}><Icon name="link" />Connect</button>
+            <button class="btn" onclick={() => act(octave.call('obdManager', 'forceConnect'))}>Force connect</button>
           {/if}
-          <button class="btn" onclick={() => act(octave.call('obdManager', 'reset_connection'))}>Reset</button>
-          <button class="btn" onclick={() => act(octave.call('obdManager', 'scan_vehicle'), 'Scanning the vehicle')}>Rescan PIDs</button>
-          <button class="btn" onclick={() => act(octave.call('obdManager', 'read_vin'))}>Read VIN</button>
+          <button class="btn" onclick={() => act(octave.call('obdManager', 'resetConnection'))}>Reset</button>
+          <button class="btn" onclick={() => act(octave.call('obdManager', 'scanVehicle'), 'Scanning the vehicle')}>Rescan PIDs</button>
+          <button class="btn" onclick={() => act(octave.call('obdManager', 'readVin'))}>Read VIN</button>
         </div>
         <h3>Log</h3>
         <pre class="log small" bind:this={logEl}>{$log.join('\n') || 'Nothing yet.'}</pre>
@@ -151,7 +151,7 @@
             <div class="row">
               <div class="label"><span>{a.name || a.mac}</span><span class="small num">{a.mac}</span></div>
               <div class="wrap">
-                <button class="btn" class:on={$port === a.mac} onclick={() => act(octave.call('obdManager', 'connect_to_adapter', a.mac), `Connecting to ${a.name || a.mac}`)}>Use</button>
+                <button class="btn" class:on={$port === a.mac} onclick={() => act(octave.call('obdManager', 'connectToAdapter', a.mac), `Connecting to ${a.name || a.mac}`)}>Use</button>
                 <button class="btn icon danger" aria-label="Forget {a.name}" onclick={() => act(octave.call('settingsManager', 'remove_obd_saved_adapter', a.mac), 'Forgotten')}><Icon name="trash" /></button>
               </div>
             </div>
@@ -163,12 +163,12 @@
         {#each $adapters as a}
           <div class="row">
             <div class="label"><span>{a.name}</span><span class="small num muted">{a.identifier} · {a.kind}</span></div>
-            <button class="btn" class:on={$port === a.identifier} onclick={() => act(octave.call('obdManager', 'connect_to_adapter', a.identifier), `Connecting to ${a.name}`)}>Use</button>
+            <button class="btn" class:on={$port === a.identifier} onclick={() => act(octave.call('obdManager', 'connectToAdapter', a.identifier), `Connecting to ${a.name}`)}>Use</button>
           </div>
         {/each}
         <div class="manual">
           <input class="field" placeholder="Address or port, e.g. 00:1D:A5:00:12:34 or /dev/rfcomm0" bind:value={manual} aria-label="Adapter address" />
-          <button class="btn" disabled={!manual.trim()} onclick={() => act(octave.call('obdManager', 'connect_to_adapter', manual.trim()))}>Use</button>
+          <button class="btn" disabled={!manual.trim()} onclick={() => act(octave.call('obdManager', 'connectToAdapter', manual.trim()))}>Use</button>
         </div>
 
         <h3>Bluetooth</h3>
@@ -206,8 +206,8 @@
           <span class="chip" class:bad={mil}><Icon name="warn" size={18} />{mil ? 'Check engine on' : 'Check engine off'}</span>
         </div>
         <div class="wrap">
-          <button class="btn primary" disabled={!$obd.connected || busy !== ''} onclick={() => read('read_dtc')}>{busy === 'read_dtc' ? 'Reading…' : 'Read codes'}</button>
-          <button class="btn" disabled={!$obd.connected || busy !== ''} onclick={() => read('read_status')}>Check lamp</button>
+          <button class="btn primary" disabled={!$obd.connected || busy !== ''} onclick={() => read('readDtc')}>{busy === 'readDtc' ? 'Reading…' : 'Read codes'}</button>
+          <button class="btn" disabled={!$obd.connected || busy !== ''} onclick={() => read('readStatus')}>Check lamp</button>
           <button class="btn danger" disabled={!$obd.connected || busy !== ''} onclick={() => (confirmClear = true)}><Icon name="trash" />Clear codes</button>
         </div>
         {#if codes.length === 0}
@@ -221,7 +221,7 @@
       <div class="glass panel span-5 col">
         <h2>Freeze frame</h2>
         <p class="muted small">The code the ECU stored its snapshot for.</p>
-        <div class="wrap"><button class="btn" disabled={!$obd.connected || busy !== ''} onclick={() => read('read_freeze_frame')}>{busy === 'read_freeze_frame' ? 'Reading…' : 'Read freeze frame'}</button></div>
+        <div class="wrap"><button class="btn" disabled={!$obd.connected || busy !== ''} onclick={() => read('readFreezeFrame')}>{busy === 'readFreezeFrame' ? 'Reading…' : 'Read freeze frame'}</button></div>
         {#if frame.length === 0}
           <p class="muted">Nothing read yet.</p>
         {:else}
@@ -237,7 +237,7 @@
 {#if confirmClear}
   <Modal title="Clear trouble codes?" onclose={() => (confirmClear = false)}>
     <p class="muted">This also turns off the check-engine lamp and resets the readiness monitors. The codes come back if the fault is still there.</p>
-    <button class="btn danger on" onclick={() => { confirmClear = false; busy = 'clear'; act(octave.call('obdManager', 'clear_dtc')) }}>Clear codes</button>
+    <button class="btn danger on" onclick={() => { confirmClear = false; busy = 'clear'; act(octave.call('obdManager', 'clearDtc')) }}>Clear codes</button>
   </Modal>
 {/if}
 

@@ -529,7 +529,7 @@ private:
     qint64 m_mediaPositionMs = 0;      // as last reported...
     qint64 m_mediaPositionAtMs = 0;    // ...at this wall-clock time
     QString m_mediaArtUrl;
-    int m_mediaArtSeq = 0;             // alternates the art file so QML reloads it
+    quint32 m_mediaArtSeq = 0;         // number of the art file: a new name per cover (util/artfile.h)
     bool m_mediaActive = false;
     bool m_mediaReported = false;      // the session's first media report arrived
     QVariantList m_mediaQueue;          // as published: items with "art" filled in

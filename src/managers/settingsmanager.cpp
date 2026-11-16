@@ -13,6 +13,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -28,15 +29,6 @@
 
 #include <cmath>
 
-#ifdef Q_OS_WIN
-#include <windows.h>
-#include <io.h>
-#else
-#include <sys/file.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#endif
-
 Q_LOGGING_CATEGORY(lcSettings, "octave.settings")
 
 namespace {
@@ -44,6 +36,388 @@ namespace {
 const QStringList kSensorCards = {
     QStringLiteral("Pitch"), QStringLiteral("Roll"), QStringLiteral("Heading"),
     QStringLiteral("GForce"), QStringLiteral("Altitude"), QStringLiteral("Temperature")};
+}
+
+// ===========================================================================
+// The settings table
+//
+// One row per plain setting: a single bool, number or string under one key
+// of settingsConfigure.json. A row gives the key, its type, its default,
+// what values it takes, the signal that says it changed and the save slot
+// QML has always called. Everything else is driven from here: the defaults
+// (buildDefaultSettings), loading (populateMembers), every way of setting a
+// value (setRow: the save_* slots, the writable properties, save_setting,
+// apply_settings), get_setting, reset_to_defaults and the pinned-settings
+// values.
+//
+// A new setting: one row here; in the header its Q_PROPERTY (READ / WRITE /
+// NOTIFY), getter, signal and save slot; and their two one-line bodies
+// below. tst_settingsmanager checks every row against the meta-object.
+//
+// Rules: any() takes every value of the type; clampTo() brings a number
+// into range, as the slot it replaces did; within() refuses a number
+// outside the range the UI offers (the slots had no check: the range is the
+// QML slider's from / to, named beside the row); oneOf() refuses anything
+// else; custom() is a function that may change the value or refuse it.
+// Loading is more lenient than saving: a clampTo() value is clamped, a
+// oneOf() or custom() value that fails becomes the default, and a within()
+// value is kept as the file has it.
+// ===========================================================================
+namespace {
+
+struct Rule {
+    enum Kind { Any, Clamp, Within, OneOf, Custom } kind = Any;
+    double lo = 0;
+    double hi = 0;
+    QStringList allowed;
+    bool (*fix)(QVariant &) = nullptr;
+};
+Rule any() { return {}; }
+Rule clampTo(double lo, double hi) { Rule r; r.kind = Rule::Clamp; r.lo = lo; r.hi = hi; return r; }
+Rule within(double lo, double hi) { Rule r; r.kind = Rule::Within; r.lo = lo; r.hi = hi; return r; }
+Rule oneOf(const QStringList &allowed) { Rule r; r.kind = Rule::OneOf; r.allowed = allowed; return r; }
+Rule custom(bool (*fix)(QVariant &)) { Rule r; r.kind = Rule::Custom; r.fix = fix; return r; }
+
+// Plain: the row has a writable property of its own name and type.
+// Derived: stored as a string, shown to QML as a list or a map by a property
+// of the same name. Part: one of several rows behind one map property.
+enum Shape { Plain, Derived, Part };
+
+struct SettingRow {
+    const char *key;
+    QMetaType::Type type;   // Bool, Int, Double or QString
+    QVariant def;
+    Rule rule;
+    void (*notify)(SettingsManager *, const QVariant &);
+    const char *slot;       // the save slot, nullptr if none is public
+    Shape shape;
+};
+
+// Current SettingsMenu.qml sections, plus the per-feature ids an older
+// settingsConfigure.json may still carry
+const QStringList kSettingsSections = {
+    QStringLiteral("displaySettings"), QStringLiteral("mediaSettings"),
+    QStringLiteral("obdSettings"), QStringLiteral("accessoriesSettings"),
+    QStringLiteral("deviceSettings"), QStringLiteral("about"),
+    QStringLiteral("androidAutoSettings"), QStringLiteral("phoneMirrorSettings"),
+    QStringLiteral("volumeKnobSettings"), QStringLiteral("gestureSensorSettings")};
+
+const QStringList kAlbumArtTransitions = {
+    QStringLiteral("Crossfade"), QStringLiteral("Slide"), QStringLiteral("Vinyl Lift"),
+    QStringLiteral("Dissolve"), QStringLiteral("Flip"), QStringLiteral("Coverflow"),
+    QStringLiteral("Conveyor"), QStringLiteral("Stack"), QStringLiteral("Depth"),
+    QStringLiteral("Swing")};
+
+// The adapters list is a compact JSON array; nothing saved is "[]"
+bool fixSavedAdapters(QVariant &v)
+{
+    if (v.toString().isEmpty())
+        v = QStringLiteral("[]");
+    return true;
+}
+
+// Virtual display density: 0 (or less) = scaled from the phone's own
+bool fixDisplayDpi(QVariant &v)
+{
+    const int dpi = v.toInt();
+    v = dpi <= 0 ? 0 : qBound(80, dpi, 640);
+    return true;
+}
+
+bool fixTrimmed(QVariant &v)
+{
+    v = v.toString().trimmed();
+    return true;
+}
+
+// % per encoder tick: 0.25 to 10, to the nearest 0.25
+bool fixKnobStep(QVariant &v)
+{
+    v = std::round(qBound(0.25, v.toDouble(), 10.0) * 4.0) / 4.0;
+    return true;
+}
+
+// Any id is kept, even one not plugged in now: the earbuds or the car's
+// output come back later, and playback falls back to the default meanwhile.
+// Only something that cannot be a device id is refused.
+bool fixDeviceId(QVariant &v)
+{
+    return v.toString().size() <= 512;
+}
+
+#define N_BOOL(sig)   [](SettingsManager *s, const QVariant &v) { emit s->sig(v.toBool()); }
+#define N_INT(sig)    [](SettingsManager *s, const QVariant &v) { emit s->sig(v.toInt()); }
+#define N_DOUBLE(sig) [](SettingsManager *s, const QVariant &v) { emit s->sig(v.toDouble()); }
+#define N_FLOAT(sig)  [](SettingsManager *s, const QVariant &v) { emit s->sig(v.toFloat()); }
+#define N_STR(sig)    [](SettingsManager *s, const QVariant &v) { emit s->sig(v.toString()); }
+#define N_VOID(sig)   [](SettingsManager *s, const QVariant &) { emit s->sig(); }
+// startUpVolumeChanged carries the number as text, as it always has
+#define N_NUMBER_AS_STR(sig) [](SettingsManager *s, const QVariant &v) { emit s->sig(QString::number(v.toDouble())); }
+
+// key, type, default, rule, notify, save slot, shape
+// Ranges given with within() are the sliders': startUpVolume is the linear
+// 0-1 the volume slider maps to (MediaSettingsPage.qml), clockSize 10-85,
+// uiScale 0.5-2.0, colorTransitionMs 0-2000 (DisplaySettingsPage.qml),
+// backgroundBlurRadius 0-100 (MediaSettingsPage.qml, NowPlayingStudio.qml).
+#define OCTAVE_SETTINGS(X) \
+    X(deviceName, QMetaType::QString, QStringLiteral("Default Device"), any(), N_STR(deviceNameChanged), "save_device_name", Plain) \
+    X(themeSetting, QMetaType::QString, QStringLiteral("CosmicVoyager"), any(), N_STR(themeSettingChanged), "save_theme_setting", Plain) \
+    X(fontSetting, QMetaType::QString, QStringLiteral("GoogleSans Regular"), any(), N_STR(fontSettingChanged), "save_font_setting", Plain) \
+    X(startUpVolume, QMetaType::Double, 0.1, within(0.0, 1.0), N_NUMBER_AS_STR(startUpVolumeChanged), "save_start_volume", Plain) \
+    X(showClock, QMetaType::Bool, true, any(), N_BOOL(showClockChanged), "save_show_clock", Plain) \
+    X(clockFormat24Hour, QMetaType::Bool, true, any(), N_BOOL(clockFormatChanged), "save_clock_format", Plain) \
+    X(clockShowSeconds, QMetaType::Bool, false, any(), N_BOOL(clockShowSecondsChanged), "save_clock_show_seconds", Plain) \
+    X(clockSize, QMetaType::Int, 18, within(10, 85), N_INT(clockSizeChanged), "save_clock_size", Plain) \
+    X(clockSizeAuto, QMetaType::Bool, true, any(), N_BOOL(clockSizeAutoChanged), "save_clock_size_auto", Plain) \
+    X(backgroundGrid, QMetaType::QString, QStringLiteral("4x4"), any(), N_STR(backgroundGridChanged), "save_background_grid", Plain) \
+    X(screenWidth, QMetaType::Int, 1280, clampTo(SettingsManager::kMinScreenWidth, SettingsManager::kMaxScreenWidth), N_INT(screenWidthChanged), "save_screen_width", Plain) \
+    X(screenHeight, QMetaType::Int, 720, clampTo(SettingsManager::kMinScreenHeight, SettingsManager::kMaxScreenHeight), N_INT(screenHeightChanged), "save_screen_height", Plain) \
+    X(backgroundBlurRadius, QMetaType::Int, 40, within(0, 100), N_INT(backgroundBlurRadiusChanged), "save_background_blur_radius", Plain) \
+    X(uiScale, QMetaType::Double, 1.0, within(0.5, 2.0), N_FLOAT(uiScaleChanged), "save_ui_scale", Plain) \
+    X(colorTransitionMs, QMetaType::Int, 1000, within(0, 2000), N_INT(colorTransitionMsChanged), "save_color_transition_ms", Plain) \
+    X(songLengthTransition, QMetaType::Bool, false, any(), N_BOOL(songLengthTransitionChanged), "save_song_length_transition", Plain) \
+    X(obdBluetoothPort, QMetaType::QString, QString(), any(), N_STR(obdBluetoothPortChanged), "save_obd_bluetooth_port", Plain) \
+    X(obdSavedAdapters, QMetaType::QString, QStringLiteral("[]"), custom(fixSavedAdapters), N_VOID(obdSavedAdaptersChanged), nullptr, Derived) \
+    X(obdFastMode, QMetaType::Bool, true, any(), N_BOOL(obdFastModeChanged), "save_obd_fast_mode", Plain) \
+    X(obdCardStyleCircular, QMetaType::Bool, false, any(), N_BOOL(obdCardStyleCircularChanged), "save_obd_card_style_circular", Plain) \
+    X(gaugeTempUnit, QMetaType::QString, QStringLiteral("C"), oneOf({QStringLiteral("C"), QStringLiteral("F")}), N_VOID(gaugeTempUnitChanged), "save_gauge_temp_unit", Plain) \
+    X(gaugeSpeedUnit, QMetaType::QString, QStringLiteral("mph"), oneOf({QStringLiteral("mph"), QStringLiteral("km/h")}), N_VOID(gaugeSpeedUnitChanged), "save_gauge_speed_unit", Plain) \
+    X(obdAutoReconnectAttempts, QMetaType::Int, 0, clampTo(0, 10), N_INT(obdAutoReconnectAttemptsChanged), "save_obd_auto_reconnect_attempts", Plain) \
+    X(bottomBarOrientation, QMetaType::QString, QStringLiteral("bottom"), any(), N_STR(bottomBarOrientationChanged), "save_bottom_bar_orientation", Plain) \
+    X(showBottomBarMediaControls, QMetaType::Bool, false, any(), N_BOOL(showBottomBarMediaControlsChanged), "save_show_bottom_bar_media_controls", Plain) \
+    X(fuelTankCapacity, QMetaType::Double, 15.0, any(), N_FLOAT(fuelTankCapacityChanged), "save_fuel_tank_capacity", Plain) \
+    X(blackBoxEnabled, QMetaType::Bool, true, any(), N_BOOL(blackBoxEnabledChanged), "save_black_box_enabled", Plain) \
+    X(blackBoxSweepAll, QMetaType::Bool, true, any(), N_BOOL(blackBoxSweepAllChanged), "save_black_box_sweep_all", Plain) \
+    X(blackBoxMaxMB, QMetaType::Int, 500, clampTo(50, 5000), N_INT(blackBoxMaxMBChanged), "save_black_box_max_mb", Plain) \
+    X(lastSettingsSection, QMetaType::QString, QStringLiteral("deviceSettings"), oneOf(kSettingsSections), N_STR(lastSettingsSectionChanged), "set_last_settings_section", Plain) \
+    X(autoPlayOnStartup, QMetaType::Bool, false, any(), N_BOOL(autoPlayOnStartupChanged), "save_auto_play_on_startup", Plain) \
+    X(persistShuffleState, QMetaType::Bool, false, any(), N_BOOL(persistShuffleStateChanged), "save_persist_shuffle_state", Plain) \
+    X(lastShuffleState, QMetaType::Bool, false, any(), N_BOOL(lastShuffleStateChanged), "save_last_shuffle_state", Plain) \
+    X(lastPlayedSong, QMetaType::QString, QString(), any(), N_STR(lastPlayedSongChanged), "save_last_played_song", Plain) \
+    X(lastPlayedPosition, QMetaType::Int, 0, any(), N_INT(lastPlayedPositionChanged), "save_last_played_position", Plain) \
+    X(lastPlayedPlaylist, QMetaType::QString, QString(), any(), N_STR(lastPlayedPlaylistChanged), "save_last_played_playlist", Plain) \
+    X(windowState, QMetaType::QString, QStringLiteral("windowed"), oneOf({QStringLiteral("windowed"), QStringLiteral("fullscreen"), QStringLiteral("maximized")}), N_STR(windowStateChanged), "save_window_state", Plain) \
+    X(musicButtonDefaultPage, QMetaType::QString, QStringLiteral("mediaRoom"), oneOf({QStringLiteral("mediaRoom"), QStringLiteral("mediaPlayer")}), N_STR(musicButtonDefaultPageChanged), "save_music_button_default_page", Plain) \
+    X(returnToLibraryAfterSelection, QMetaType::Bool, false, any(), N_BOOL(returnToLibraryAfterSelectionChanged), "save_return_to_library_after_selection", Plain) \
+    X(androidAutoEnabled, QMetaType::Bool, false, any(), N_BOOL(androidAutoEnabledChanged), "save_android_auto_enabled", Plain) \
+    X(phoneMirrorEnabled, QMetaType::Bool, false, any(), N_BOOL(phoneMirrorEnabledChanged), "save_phone_mirror_enabled", Plain) \
+    X(scrcpyDisplaySize, QMetaType::QString, QStringLiteral("auto"), any(), N_STR(scrcpyDisplaySizeChanged), "save_scrcpy_display_size", Plain) \
+    X(scrcpyAudioGain, QMetaType::Double, 2.0, clampTo(0.25, 8.0), N_DOUBLE(scrcpyAudioGainChanged), "save_scrcpy_audio_gain", Plain) \
+    X(scrcpyAudioDuckEnabled, QMetaType::Bool, true, any(), N_BOOL(scrcpyAudioDuckEnabledChanged), "save_scrcpy_audio_duck_enabled", Plain) \
+    X(scrcpyAudioDuckLevel, QMetaType::Double, 0.1, clampTo(0.0, 1.0), N_DOUBLE(scrcpyAudioDuckLevelChanged), "save_scrcpy_audio_duck_level", Plain) \
+    X(scrcpyPhoneScreenOff, QMetaType::Bool, false, any(), N_BOOL(scrcpyPhoneScreenOffChanged), "save_scrcpy_phone_screen_off", Plain) \
+    X(scrcpyDisplayDpi, QMetaType::Int, 0, custom(fixDisplayDpi), N_INT(scrcpyDisplayDpiChanged), "save_scrcpy_display_dpi", Plain) \
+    X(scrcpyBitRateUsb, QMetaType::Int, 16, clampTo(2, 40), N_INT(scrcpyBitRateUsbChanged), "save_scrcpy_bit_rate_usb", Plain) \
+    X(scrcpyBitRateWifi, QMetaType::Int, 8, clampTo(2, 40), N_INT(scrcpyBitRateWifiChanged), "save_scrcpy_bit_rate_wifi", Plain) \
+    X(scrcpyAutoWifi, QMetaType::Bool, false, any(), N_BOOL(scrcpyAutoWifiChanged), "save_scrcpy_auto_wifi", Plain) \
+    X(scrcpyBitRateAuto, QMetaType::Bool, true, any(), N_BOOL(scrcpyBitRateAutoChanged), "save_scrcpy_bit_rate_auto", Plain) \
+    X(scrcpyWirelessAddress, QMetaType::QString, QString(), custom(fixTrimmed), N_STR(scrcpyWirelessAddressChanged), "save_scrcpy_wireless_address", Plain) \
+    X(esp32VolumeEnabled, QMetaType::Bool, true, any(), N_BOOL(esp32VolumeEnabledChanged), "save_esp32_volume_enabled", Plain) \
+    X(esp32VolumePort, QMetaType::QString, QString(), any(), N_STR(esp32VolumePortChanged), "save_esp32_volume_port", Plain) \
+    X(esp32VolumeStepSize, QMetaType::Double, 1.0, custom(fixKnobStep), N_DOUBLE(esp32VolumeStepSizeChanged), "save_esp32_volume_step_size", Plain) \
+    X(esp32AutoReconnect, QMetaType::Bool, true, any(), N_BOOL(esp32AutoReconnectChanged), "save_esp32_auto_reconnect", Plain) \
+    X(esp32LedSleepEnabled, QMetaType::Bool, true, any(), N_BOOL(esp32LedSleepEnabledChanged), "save_esp32_led_sleep_enabled", Plain) \
+    X(esp32LedColorMode, QMetaType::QString, QStringLiteral("theme"), oneOf({QStringLiteral("theme"), QStringLiteral("static")}), N_STR(esp32LedColorModeChanged), "save_esp32_led_color_mode", Plain) \
+    X(esp32LedStaticColor, QMetaType::QString, QStringLiteral("#00FFFF"), any(), N_STR(esp32LedStaticColorChanged), "save_esp32_led_static_color", Plain) \
+    X(showWaveformVisualizer, QMetaType::Bool, true, any(), N_BOOL(showWaveformVisualizerChanged), "save_show_waveform_visualizer", Plain) \
+    X(show3DButtonTilt, QMetaType::Bool, false, any(), N_BOOL(show3DButtonTiltChanged), "save_show_3d_button_tilt", Plain) \
+    X(show3DAlbumPreview, QMetaType::Bool, false, any(), N_BOOL(show3DAlbumPreviewChanged), "save_show_3d_album_preview", Plain) \
+    X(roundedAlbumArt, QMetaType::Bool, true, any(), N_BOOL(roundedAlbumArtChanged), "save_rounded_album_art", Plain) \
+    X(albumArtCornerRadius, QMetaType::Int, 16, clampTo(2, 32), N_INT(albumArtCornerRadiusChanged), "save_album_art_corner_radius", Plain) \
+    X(showAlbumArtShadow, QMetaType::Bool, true, any(), N_BOOL(showAlbumArtShadowChanged), "save_show_album_art_shadow", Plain) \
+    X(vinylRecordMode, QMetaType::Bool, false, any(), N_BOOL(vinylRecordModeChanged), "save_vinyl_record_mode", Plain) \
+    X(albumArtTransition, QMetaType::QString, QStringLiteral("Crossfade"), oneOf(kAlbumArtTransitions), N_STR(albumArtTransitionChanged), "save_album_art_transition", Plain) \
+    X(audioOutputDevice, QMetaType::QString, QString(), custom(fixDeviceId), N_STR(audioOutputDeviceChanged), "save_audio_output_device", Plain) \
+    X(backgroundOverlayOpacity, QMetaType::Int, 80, clampTo(0, 100), N_INT(backgroundOverlayOpacityChanged), "save_background_overlay_opacity", Plain) \
+    X(sideCardOpacity, QMetaType::Double, 0.4, clampTo(0.1, 1.0), N_DOUBLE(sideCardOpacityChanged), "save_side_card_opacity", Plain) \
+    X(sideCardAngle, QMetaType::Int, 30, clampTo(5, 60), N_INT(sideCardAngleChanged), "save_side_card_angle", Plain) \
+    X(buttonTiltDuration, QMetaType::Int, 200, clampTo(50, 500), N_INT(buttonTiltDurationChanged), "save_button_tilt_duration", Plain) \
+    X(textScrollSpeed, QMetaType::Int, 5000, clampTo(1000, 10000), N_INT(textScrollSpeedChanged), "save_text_scroll_speed", Plain) \
+    X(settingsLayoutStyle, QMetaType::QString, QStringLiteral("Sidebar"), oneOf({QStringLiteral("Carousel"), QStringLiteral("Sidebar"), QStringLiteral("Hub"), QStringLiteral("Dashboard")}), N_STR(settingsLayoutStyleChanged), "save_settings_layout_style", Plain) \
+    X(albumArtColors, QMetaType::QString, QString(), any(), N_VOID(albumArtColorsChanged), "set_album_art_colors", Derived) \
+    X(imuEnabled, QMetaType::Bool, true, any(), N_BOOL(imuEnabledChanged), "save_imu_enabled", Plain) \
+    X(sensorEmitRate, QMetaType::Int, 60, clampTo(10, 120), N_INT(sensorEmitRateChanged), "save_sensor_emit_rate", Plain) \
+    X(sensorDecimalPlaces, QMetaType::Int, 1, clampTo(0, 4), N_INT(sensorDecimalPlacesChanged), "save_sensor_decimal_places", Plain) \
+    X(sensorTempUnit, QMetaType::QString, QStringLiteral("F"), oneOf({QStringLiteral("F"), QStringLiteral("C")}), N_STR(sensorTempUnitChanged), "save_sensor_temp_unit", Plain) \
+    X(sensorAltitudeUnit, QMetaType::QString, QStringLiteral("m"), oneOf({QStringLiteral("m"), QStringLiteral("ft")}), N_STR(sensorAltitudeUnitChanged), "save_sensor_altitude_unit", Plain) \
+    X(sensorShowPitch, QMetaType::Bool, true, any(), N_VOID(sensorCardsChanged), nullptr, Part) \
+    X(sensorShowRoll, QMetaType::Bool, true, any(), N_VOID(sensorCardsChanged), nullptr, Part) \
+    X(sensorShowHeading, QMetaType::Bool, true, any(), N_VOID(sensorCardsChanged), nullptr, Part) \
+    X(sensorShowGForce, QMetaType::Bool, true, any(), N_VOID(sensorCardsChanged), nullptr, Part) \
+    X(sensorShowAltitude, QMetaType::Bool, true, any(), N_VOID(sensorCardsChanged), nullptr, Part) \
+    X(sensorShowTemperature, QMetaType::Bool, true, any(), N_VOID(sensorCardsChanged), nullptr, Part) \
+    X(gestureSensorEnabled, QMetaType::Bool, true, any(), N_BOOL(gestureSensorEnabledChanged), "save_gesture_sensor_enabled", Plain) \
+    X(gestureVolumeStep, QMetaType::Int, 5, clampTo(1, 100), N_INT(gestureVolumeStepChanged), "save_gesture_volume_step", Plain) \
+    X(gestureCooldown, QMetaType::Int, 300, clampTo(100, 2000), N_INT(gestureCooldownChanged), "save_gesture_cooldown", Plain)
+
+#define X(key, type, def, rule, notify, slot, shape) R_##key,
+enum RowIndex { OCTAVE_SETTINGS(X) kRowCount };
+#undef X
+
+const QList<SettingRow> &rows()
+{
+#define X(key, type, def, rule, notify, slot, shape) SettingRow{#key, type, QVariant(def), rule, notify, slot, shape},
+    static const QList<SettingRow> table = {OCTAVE_SETTINGS(X)};
+#undef X
+    return table;
+}
+
+// The row of a key, -1 if the key is not a plain setting
+int rowIndex(const QString &key)
+{
+    static const QHash<QString, int> index = [] {
+        QHash<QString, int> h;
+        for (int i = 0; i < rows().size(); ++i)
+            h.insert(QString::fromLatin1(rows().at(i).key), i);
+        return h;
+    }();
+    return index.value(key, -1);
+}
+
+bool isNumber(const QVariant &v)
+{
+    const int id = v.typeId();
+    return id == QMetaType::Int || id == QMetaType::LongLong || id == QMetaType::Double || id == QMetaType::UInt
+           || id == QMetaType::ULongLong || id == QMetaType::Float;
+}
+
+// `v` as a value of the row's type. Strict: only when it already is one
+// ("true" is not a bool, "5" is not a number); an int row rounds.
+bool coerce(QVariant &v, QMetaType::Type type, bool strict)
+{
+    switch (type) {
+    case QMetaType::Bool:
+        if (strict && v.typeId() != QMetaType::Bool)
+            return false;
+        v = v.toBool();
+        return true;
+    case QMetaType::Int:
+        if (strict && !isNumber(v))
+            return false;
+        v = int(qRound(v.toDouble()));
+        return true;
+    case QMetaType::Double:
+        if (strict && !isNumber(v))
+            return false;
+        v = v.toDouble();
+        return std::isfinite(v.toDouble());
+    case QMetaType::QString:
+        if (strict && v.typeId() != QMetaType::QString)
+            return false;
+        v = v.toString();
+        return true;
+    default:
+        return false;
+    }
+}
+
+// The row's rule on a value of the row's type. False = refused.
+bool applyRule(const SettingRow &r, QVariant &v, bool loading)
+{
+    switch (r.rule.kind) {
+    case Rule::Any:
+        return true;
+    case Rule::Clamp:
+        if (r.type == QMetaType::Int)
+            v = qBound(int(r.rule.lo), v.toInt(), int(r.rule.hi));
+        else
+            v = qBound(r.rule.lo, v.toDouble(), r.rule.hi);
+        return true;
+    case Rule::Within: {
+        // A float that went through a double is a hair off its limit
+        const double d = v.toDouble();
+        return loading || (d >= r.rule.lo - 1e-6 && d <= r.rule.hi + 1e-6);
+    }
+    case Rule::OneOf:
+        return r.rule.allowed.contains(v.toString());
+    case Rule::Custom:
+        return r.rule.fix(v);
+    }
+    return true;
+}
+
+// A row's value out of the file; invalid if the file has another type there
+QVariant fromJson(const QJsonValue &jv, QMetaType::Type type)
+{
+    switch (type) {
+    case QMetaType::Bool:    return jv.isBool() ? QVariant(jv.toBool()) : QVariant();
+    case QMetaType::Int:     return jv.isDouble() ? QVariant(int(qRound(jv.toDouble()))) : QVariant();
+    case QMetaType::Double:  return jv.isDouble() ? QVariant(jv.toDouble()) : QVariant();
+    case QMetaType::QString: return jv.isString() ? QVariant(jv.toString()) : QVariant();
+    default:                 return QVariant();
+    }
+}
+
+// The settings that are a list or a map: each has its own savers and its
+// own signal; save_setting() and reset_to_defaults() use this to keep the
+// members and the listeners in step
+struct StructuredSetting {
+    const char *key;
+    void (*notify)(SettingsManager *);
+};
+const QList<StructuredSetting> &structuredSettings()
+{
+    static const QList<StructuredSetting> list = {
+        {"obdParameters",          [](SettingsManager *s) { emit s->obdParametersChanged(); }},
+        {"homeOBDParameters",      [](SettingsManager *s) { emit s->homeOBDParametersChanged(); }},
+        {"supportedOBDParameters", [](SettingsManager *s) { emit s->supportedOBDParametersChanged(); }},
+        {"directoryHistory",       [](SettingsManager *s) { emit s->directoryHistoryChanged(); }},
+        {"settingsMenuVisibility", [](SettingsManager *s) { emit s->settingsMenuVisibilityChanged(); }},
+        {"gestureMapping",         [](SettingsManager *s) { emit s->gestureMappingChanged(); }},
+        {"pinnedSettings",         [](SettingsManager *s) { emit s->pinnedSettingsChanged(); }},
+        {"customThemes",           [](SettingsManager *s) { emit s->customThemesChanged(); }},
+    };
+    return list;
+}
+const StructuredSetting *structuredSetting(const QString &key)
+{
+    for (const StructuredSetting &s : structuredSettings())
+        if (key == QLatin1String(s.key))
+            return &s;
+    return nullptr;
+}
+
+} // namespace
+
+// ---------------------------------------------------------------------------
+// setRow: the one place a plain setting changes
+// ---------------------------------------------------------------------------
+SettingsManager::SetResult SettingsManager::setRow(int index, QVariant value, bool strictType)
+{
+    const SettingRow &r = rows().at(index);
+    if (!coerce(value, r.type, strictType) || !applyRule(r, value, false)) {
+        qCWarning(lcSettings).noquote() << "Setting" << r.key << "refused:" << value.toString().left(80)
+                                        << "is not a value it takes";
+        return SetResult::Refused;
+    }
+    if (value == m_values.at(index))
+        return SetResult::Unchanged;   // no write, no signal
+    qCDebug(lcSettings).noquote() << "Saving" << r.key << "=" << value.toString().left(80);
+    m_values[index] = value;
+    m_settings.insert(QString::fromLatin1(r.key), QJsonValue::fromVariant(value));
+    saveSettings(m_settings);
+    r.notify(this, value);
+    return SetResult::Changed;
+}
+
+// For the tests: the table as data
+QVariantList SettingsManager::describeTable()
+{
+    QVariantList out;
+    for (const SettingRow &r : rows()) {
+        static const char *const kinds[] = {"any", "clamp", "within", "oneOf", "custom"};
+        static const char *const shapes[] = {"plain", "derived", "part"};
+        out.append(QVariantMap{{QStringLiteral("key"), QString::fromLatin1(r.key)},
+                               {QStringLiteral("type"), QString::fromLatin1(QMetaType(r.type).name())},
+                               {QStringLiteral("default"), r.def},
+                               {QStringLiteral("rule"), QString::fromLatin1(kinds[r.rule.kind])},
+                               {QStringLiteral("lo"), r.rule.lo},
+                               {QStringLiteral("hi"), r.rule.hi},
+                               {QStringLiteral("allowed"), r.rule.allowed},
+                               {QStringLiteral("slot"), QString::fromLatin1(r.slot ? r.slot : "")},
+                               {QStringLiteral("shape"), QString::fromLatin1(shapes[r.shape])}});
+    }
+    return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -137,35 +511,13 @@ QJsonObject SettingsManager::buildSettingsRegistry()
 QJsonObject SettingsManager::buildDefaultSettings() const
 {
     QJsonObject d;
-    d[QStringLiteral("deviceName")]          = QStringLiteral("Default Device");
-    d[QStringLiteral("themeSetting")]         = QStringLiteral("CosmicVoyager");
-    d[QStringLiteral("fontSetting")]          = QStringLiteral("GoogleSans Regular");  // display name Main.qml derives from GoogleSans-Regular.ttf
-    d[QStringLiteral("startUpVolume")]        = 0.1;
-    d[QStringLiteral("showClock")]            = true;
-    d[QStringLiteral("clockFormat24Hour")]    = true;
-    d[QStringLiteral("clockShowSeconds")]     = false;
-    d[QStringLiteral("clockSize")]            = 18;
-    d[QStringLiteral("clockSizeAuto")]        = true;
-    d[QStringLiteral("backgroundGrid")]       = QStringLiteral("4x4");
-    d[QStringLiteral("screenWidth")]          = 1280;
-    d[QStringLiteral("screenHeight")]         = 720;
-    d[QStringLiteral("backgroundBlurRadius")] = 40;
-    d[QStringLiteral("uiScale")]              = 1.0;
-    d[QStringLiteral("colorTransitionMs")]    = 1000;
-    d[QStringLiteral("songLengthTransition")] = false;
-    d[QStringLiteral("obdBluetoothPort")]     = QString();
-    d[QStringLiteral("obdSavedAdapters")]     = QStringLiteral("[]");
-    d[QStringLiteral("obdFastMode")]          = true;
-    d[QStringLiteral("obdCardStyleCircular")] = false;
-    d[QStringLiteral("gaugeTempUnit")]        = QStringLiteral("C");
-    d[QStringLiteral("gaugeSpeedUnit")]       = QStringLiteral("mph");
-    d[QStringLiteral("obdAutoReconnectAttempts")] = 0;
-    d[QStringLiteral("bottomBarOrientation")]  = QStringLiteral("bottom");
-    d[QStringLiteral("showBottomBarMediaControls")] = false;   // opt-in: Display > Layout
-    d[QStringLiteral("fuelTankCapacity")]      = 15.0;
-    d[QStringLiteral("blackBoxEnabled")]       = true;
-    d[QStringLiteral("blackBoxSweepAll")]      = true;
-    d[QStringLiteral("blackBoxMaxMB")]         = 500;
+    // The plain settings: from the table
+    for (const SettingRow &r : rows())
+        d[QString::fromLatin1(r.key)] = QJsonValue::fromVariant(r.def);
+
+    // What follows has no row: keys read and written by name only
+    // (get_setting / save_setting), the file-only service keys, and the
+    // settings that are a list or a map.
     d[QStringLiteral("serviceEnabled")]        = false;   // the service at every start (src/service/serviceoptions.h)
     d[QStringLiteral("serviceWebRoot")]        = QString();   // a frontend served at GET / ("" = the reference client)
     d[QStringLiteral("serviceLoopbackOpen")]   = true;    // programs on this device need no pairing (ServicePairing)
@@ -230,21 +582,10 @@ QJsonObject SettingsManager::buildDefaultSettings() const
         QStringLiteral("COOLANT_TEMP"), QStringLiteral("CONTROL_MODULE_VOLTAGE")
     });
     d[QStringLiteral("supportedOBDParameters")] = QJsonArray();
-    d[QStringLiteral("lastSettingsSection")]     = QStringLiteral("deviceSettings");
     d[QStringLiteral("mediaFolder")]             = QString();
     d[QStringLiteral("customThemes")]            = QJsonObject();
-    d[QStringLiteral("autoPlayOnStartup")]       = false;
-    d[QStringLiteral("persistShuffleState")]     = false;
-    d[QStringLiteral("lastShuffleState")]        = false;
-    d[QStringLiteral("lastPlayedSong")]          = QString();
-    d[QStringLiteral("lastPlayedPosition")]      = 0;
     d[QStringLiteral("mediaLastSource")]         = QStringLiteral("local");  // who owned the music: local | phone | androidauto (NowPlaying)
     d[QStringLiteral("mediaLastPlaying")]        = false;    // and whether it was playing
-    d[QStringLiteral("lastPlayedPlaylist")]      = QString();
-    d[QStringLiteral("windowState")]             = QStringLiteral("windowed");
-    d[QStringLiteral("musicButtonDefaultPage")]  = QStringLiteral("mediaRoom");
-    d[QStringLiteral("returnToLibraryAfterSelection")] = false;
-    d[QStringLiteral("androidAutoEnabled")]      = false;
     d[QStringLiteral("androidAutoBackend")]      = QStringLiteral("dhu");      // "dhu" | "native" (OCTAVE is the head unit)
     d[QStringLiteral("androidAutoCertPath")]     = QString();  // head-unit certificate (PEM); "" = <config>/android-auto/headunit.crt + .key
     d[QStringLiteral("androidAutoResolution")]   = QStringLiteral("1280x720"); // 800x480 | 1280x720 | 1920x1080
@@ -256,18 +597,6 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("airPlayResolution")]       = QStringLiteral("1280x720"); // size offered to the iPhone: 1280x720 | 1920x1080
     d[QStringLiteral("airPlayTouchEnabled")]     = true;       // OCTAVE is also a Bluetooth mouse for the mirrored iPhone
     d[QStringLiteral("airPlayTouchScale")]       = 600.0;      // mouse counts across the iPhone screen's short side (calibration)
-    d[QStringLiteral("phoneMirrorEnabled")]      = false;
-    d[QStringLiteral("scrcpyDisplaySize")]       = QStringLiteral("auto");  // --new-display WxH, "auto" = fit the view, "" = phone screen
-    d[QStringLiteral("scrcpyAudioGain")]         = 2.0;   // linear gain on phone audio before OCTAVE's volume (+6 dB)
-    d[QStringLiteral("scrcpyAudioDuckEnabled")]  = true;  // duck local media while the phone produces sound
-    d[QStringLiteral("scrcpyAudioDuckLevel")]    = 0.1;   // linear factor applied to local media while ducked (-20 dB)
-    d[QStringLiteral("scrcpyPhoneScreenOff")]    = false; // opt-in: keep the phone's own panel dark while mirroring (dims instead of blanking on some phones)
-    d[QStringLiteral("scrcpyDisplayDpi")]        = 0;     // virtual display density, 0 = scaled from the phone's own
-    d[QStringLiteral("scrcpyBitRateUsb")]        = 16;    // video bit rate over USB, Mbps
-    d[QStringLiteral("scrcpyBitRateWifi")]       = 8;     // video bit rate over Wi-Fi, Mbps
-    d[QStringLiteral("scrcpyAutoWifi")]          = false; // switch a USB phone to adb over TCP for later Wi-Fi use (off: adb then listens on the network)
-    d[QStringLiteral("scrcpyBitRateAuto")]       = true;  // adapt the bit rate to the link, rates above are the ceiling
-    d[QStringLiteral("scrcpyWirelessAddress")]   = QString();  // last phone connected over Wi-Fi ("ip:port"), "" = none
 
     // Settings menu visibility
     QJsonObject menuVis;
@@ -279,54 +608,10 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     menuVis[QStringLiteral("about")]                = true;
     d[QStringLiteral("settingsMenuVisibility")]     = menuVis;
 
-    // ESP32
-    d[QStringLiteral("esp32VolumeEnabled")]    = true;
-    d[QStringLiteral("esp32VolumePort")]       = QString();  // empty = auto-select the ESP32-S3 on startup
-    d[QStringLiteral("esp32VolumeStepSize")]   = 1.0;        // % per encoder tick; double so 0.25/0.5/0.75 round-trip
-    d[QStringLiteral("esp32AutoReconnect")]    = true;
-    d[QStringLiteral("esp32LedSleepEnabled")]  = true;
-    d[QStringLiteral("esp32LedColorMode")]     = QStringLiteral("theme");
-    d[QStringLiteral("esp32LedStaticColor")]   = QStringLiteral("#00FFFF");
-
-    // Waveform
-    d[QStringLiteral("showWaveformVisualizer")] = true;
-
-    // 3D effects
-    d[QStringLiteral("show3DButtonTilt")]        = false;
-    d[QStringLiteral("show3DAlbumPreview")]      = false;
-    d[QStringLiteral("roundedAlbumArt")]         = true;
-    d[QStringLiteral("albumArtCornerRadius")]    = 16;
-    d[QStringLiteral("showAlbumArtShadow")]      = true;
     d[QStringLiteral("musicDeviceModel")] = QStringLiteral("Album art");
-    d[QStringLiteral("vinylRecordMode")]         = false;
-    d[QStringLiteral("albumArtTransition")]      = QStringLiteral("Crossfade");
-    d[QStringLiteral("audioOutputDevice")]       = QString();   // the system default
-    d[QStringLiteral("backgroundOverlayOpacity")] = 80;
-    d[QStringLiteral("sideCardOpacity")]         = 0.4;
-    d[QStringLiteral("sideCardAngle")]           = 30;
-    d[QStringLiteral("buttonTiltDuration")]      = 200;
-    d[QStringLiteral("textScrollSpeed")]         = 5000;
-    d[QStringLiteral("settingsLayoutStyle")]     = QStringLiteral("Sidebar");
-    d[QStringLiteral("albumArtColors")]          = QString();
-
-    // IMU
-    d[QStringLiteral("imuEnabled")]              = true;
-    d[QStringLiteral("sensorEmitRate")]          = 60;
-    d[QStringLiteral("sensorDecimalPlaces")]     = 1;
-    d[QStringLiteral("sensorTempUnit")]          = QStringLiteral("F");
-    d[QStringLiteral("sensorAltitudeUnit")]      = QStringLiteral("m");
-    d[QStringLiteral("sensorShowPitch")]         = true;
-    d[QStringLiteral("sensorShowRoll")]          = true;
-    d[QStringLiteral("sensorShowHeading")]       = true;
-    d[QStringLiteral("sensorShowGForce")]        = true;
-    d[QStringLiteral("sensorShowAltitude")]      = true;
-    d[QStringLiteral("sensorShowTemperature")]   = true;
 
     // Gesture
-    d[QStringLiteral("gestureSensorEnabled")]    = true;
     d[QStringLiteral("gestureMapping")]          = QJsonObject::fromVariantMap(GestureVocabulary::defaultMapping());
-    d[QStringLiteral("gestureVolumeStep")]       = 5;
-    d[QStringLiteral("gestureCooldown")]         = 300;
     d[QStringLiteral("pinnedSettings")]          = QJsonArray();
 
     // Expanded cards
@@ -391,7 +676,7 @@ SettingsManager::SettingsManager(QObject *parent)
     m_appDataDir  = getAppDataDir();
     m_settingsFile = m_appDataDir + QStringLiteral("/settingsConfigure.json");
 
-    // backend_dir equivalent: directory of the executable (or compile-time path)
+    // Where the executable is: its parent is asked for the git information
     m_backendDir = QCoreApplication::applicationDirPath();
 
     // Build defaults
@@ -439,6 +724,15 @@ SettingsManager::SettingsManager(QObject *parent)
         QFile::remove(getAppDataDir() + QStringLiteral("/.spotify_token_cache"));   // its login token
     }
 
+    // Legacy "/dev/rfcomm0": it was the desktop default, means nothing on
+    // Android (where the field holds a MAC address) and showed in the UI as
+    // if the user had typed it
+    if (m_settings.value(QStringLiteral("obdBluetoothPort")).toString() == QLatin1String("/dev/rfcomm0"))
+        m_settings[QStringLiteral("obdBluetoothPort")] = QString();
+    // The clock's own settings section became part of Display
+    if (m_settings.value(QStringLiteral("lastSettingsSection")).toString() == QLatin1String("clockSettings"))
+        m_settings[QStringLiteral("lastSettingsSection")] = QStringLiteral("displaySettings");
+
     m_settingsLoaded = true;
     m_saveTimer.setSingleShot(true);
     m_saveTimer.setInterval(500);
@@ -453,13 +747,36 @@ SettingsManager::SettingsManager(QObject *parent)
 }
 
 // ---------------------------------------------------------------------------
-// populateMembers — load every cached member from m_settings (falling back to
-// the defaults). Runs from the constructor and again from reset_to_defaults()
-// so no cached value can go stale.
+// populateMembers: everything derived from m_settings. Runs from the
+// constructor and again from reset_to_defaults().
 // ---------------------------------------------------------------------------
 void SettingsManager::populateMembers()
 {
-    // Containers below are appended to, so start from a clean slate.
+    // The plain settings: each row's value in its own type. What the file
+    // has is brought within the row's rule (see the table), and m_settings
+    // is corrected with it, so the file and the properties agree.
+    m_values.clear();
+    m_values.reserve(rows().size());
+    for (const SettingRow &r : rows()) {
+        const QString key = QString::fromLatin1(r.key);
+        QVariant v = fromJson(m_settings.value(key), r.type);
+        if (!v.isValid() || !applyRule(r, v, true))
+            v = r.def;
+        m_values.append(v);
+        const QJsonValue stored = QJsonValue::fromVariant(v);
+        if (m_settings.value(key) != stored)
+            m_settings.insert(key, stored);
+    }
+
+    populateStructured();
+
+    // Current volume: from startUpVolume (linear), converted to 0-100 scale
+    m_currentVolume = VolumeController::toPercentStatic(startUpVolume());
+}
+
+// The settings that are a list or a map, and the media folder
+void SettingsManager::populateStructured()
+{
     m_homeObdParameters.clear();
     m_settingsMenuVisibility.clear();
     m_gestureMapping.clear();
@@ -468,46 +785,12 @@ void SettingsManager::populateMembers()
     m_supportedObdParameters.clear();
     m_directoryHistory.clear();
 
-    // Helper lambda: read a value from m_settings falling back to defaults
+    // Read a value from m_settings falling back to defaults
     auto s = [&](const QString &key) -> QJsonValue {
         if (m_settings.contains(key))
             return m_settings.value(key);
         return m_defaultSettings.value(key);
     };
-
-    // --- Populate member variables from loaded settings ---
-    m_deviceName        = s(QStringLiteral("deviceName")).toString();
-    m_themeSetting      = s(QStringLiteral("themeSetting")).toString();
-    m_fontSetting       = s(QStringLiteral("fontSetting")).toString();
-    m_startVolume       = static_cast<float>(s(QStringLiteral("startUpVolume")).toDouble());
-    m_showClock         = s(QStringLiteral("showClock")).toBool();
-    m_clockFormat24Hour = s(QStringLiteral("clockFormat24Hour")).toBool();
-    m_clockShowSeconds  = s(QStringLiteral("clockShowSeconds")).toBool();
-    m_clockSize         = s(QStringLiteral("clockSize")).toInt();
-    m_clockSizeAuto     = s(QStringLiteral("clockSizeAuto")).toBool();
-    m_backgroundGrid    = s(QStringLiteral("backgroundGrid")).toString();
-    m_screenWidth       = s(QStringLiteral("screenWidth")).toInt();
-    m_screenHeight      = s(QStringLiteral("screenHeight")).toInt();
-    m_backgroundBlurRadius = s(QStringLiteral("backgroundBlurRadius")).toInt();
-    m_uiScale           = static_cast<float>(s(QStringLiteral("uiScale")).toDouble());
-    m_colorTransitionMs = s(QStringLiteral("colorTransitionMs")).toInt();
-    m_songLengthTransition = s(QStringLiteral("songLengthTransition")).toBool();
-    m_obdBluetoothPort  = s(QStringLiteral("obdBluetoothPort")).toString();
-    // Migrate legacy "/dev/rfcomm0" placeholder — it was the desktop default but
-    // is meaningless on Android (where the field now holds a MAC address) and
-    // was leaking into the UI as if the user had entered it themselves.
-    if (m_obdBluetoothPort == QStringLiteral("/dev/rfcomm0")) {
-        m_obdBluetoothPort.clear();
-    }
-    m_obdSavedAdapters  = s(QStringLiteral("obdSavedAdapters")).toString();
-    if (m_obdSavedAdapters.isEmpty()) m_obdSavedAdapters = QStringLiteral("[]");
-    m_obdFastMode       = s(QStringLiteral("obdFastMode")).toBool();
-    m_obdCardStyleCircular = s(QStringLiteral("obdCardStyleCircular")).toBool();
-    m_gaugeTempUnit = s(QStringLiteral("gaugeTempUnit")).toString() == QLatin1String("F")
-                          ? QStringLiteral("F") : QStringLiteral("C");
-    m_gaugeSpeedUnit = s(QStringLiteral("gaugeSpeedUnit")).toString() == QLatin1String("km/h")
-                           ? QStringLiteral("km/h") : QStringLiteral("mph");
-    m_obdAutoReconnectAttempts = s(QStringLiteral("obdAutoReconnectAttempts")).toInt();
 
     // Media folder: default to the OS-standard music location if empty.
     // QStandardPaths::MusicLocation is ~/Music on desktop, /storage/emulated/0/Music
@@ -524,47 +807,12 @@ void SettingsManager::populateMembers()
     QDir().mkpath(m_mediaFolder);
 #endif
 
-    m_fuelTankCapacity      = static_cast<float>(s(QStringLiteral("fuelTankCapacity")).toDouble());
-    m_blackBoxEnabled       = s(QStringLiteral("blackBoxEnabled")).toBool();
-    m_blackBoxSweepAll      = s(QStringLiteral("blackBoxSweepAll")).toBool();
-    m_blackBoxMaxMB         = qBound(50, s(QStringLiteral("blackBoxMaxMB")).toInt(), 5000);
-    m_bottomBarOrientation  = s(QStringLiteral("bottomBarOrientation")).toString();
-    m_showBottomBarMediaControls = s(QStringLiteral("showBottomBarMediaControls")).toBool();
-
     // Home OBD parameters (JSON array -> QVariantList)
     {
         QJsonArray arr = s(QStringLiteral("homeOBDParameters")).toArray();
         for (const auto &v : arr)
             m_homeObdParameters.append(v.toString());
     }
-
-    // Auto-play / resume
-    m_autoPlayOnStartup   = s(QStringLiteral("autoPlayOnStartup")).toBool();
-    m_persistShuffleState = s(QStringLiteral("persistShuffleState")).toBool();
-    m_lastShuffleState    = s(QStringLiteral("lastShuffleState")).toBool();
-    m_lastPlayedSong      = s(QStringLiteral("lastPlayedSong")).toString();
-    m_lastPlayedPosition  = s(QStringLiteral("lastPlayedPosition")).toInt();
-    m_lastPlayedPlaylist  = s(QStringLiteral("lastPlayedPlaylist")).toString();
-
-    // Window
-    m_windowState              = s(QStringLiteral("windowState")).toString();
-    m_musicButtonDefaultPage   = s(QStringLiteral("musicButtonDefaultPage")).toString();
-    m_returnToLibraryAfterSelection = s(QStringLiteral("returnToLibraryAfterSelection")).toBool();
-
-    // Android Auto / Phone Mirror
-    m_androidAutoEnabled  = s(QStringLiteral("androidAutoEnabled")).toBool();
-    m_phoneMirrorEnabled  = s(QStringLiteral("phoneMirrorEnabled")).toBool();
-    m_scrcpyDisplaySize   = s(QStringLiteral("scrcpyDisplaySize")).toString();
-    m_scrcpyAudioGain     = s(QStringLiteral("scrcpyAudioGain")).toDouble();
-    m_scrcpyAudioDuckEnabled = s(QStringLiteral("scrcpyAudioDuckEnabled")).toBool();
-    m_scrcpyAudioDuckLevel   = s(QStringLiteral("scrcpyAudioDuckLevel")).toDouble();
-    m_scrcpyPhoneScreenOff   = s(QStringLiteral("scrcpyPhoneScreenOff")).toBool();
-    m_scrcpyDisplayDpi       = s(QStringLiteral("scrcpyDisplayDpi")).toInt();
-    m_scrcpyBitRateUsb       = s(QStringLiteral("scrcpyBitRateUsb")).toInt();
-    m_scrcpyBitRateWifi      = s(QStringLiteral("scrcpyBitRateWifi")).toInt();
-    m_scrcpyAutoWifi         = s(QStringLiteral("scrcpyAutoWifi")).toBool();
-    m_scrcpyBitRateAuto      = s(QStringLiteral("scrcpyBitRateAuto")).toBool();
-    m_scrcpyWirelessAddress  = s(QStringLiteral("scrcpyWirelessAddress")).toString();
 
     // Settings menu visibility
     {
@@ -580,57 +828,12 @@ void SettingsManager::populateMembers()
             m_settingsMenuVisibility[it.key()] = it.value().toVariant();
     }
 
-    // ESP32
-    m_esp32VolumeEnabled   = s(QStringLiteral("esp32VolumeEnabled")).toBool();
-    m_esp32VolumePort      = s(QStringLiteral("esp32VolumePort")).toString();
-    m_esp32VolumeStepSize  = s(QStringLiteral("esp32VolumeStepSize")).toDouble();
-    m_esp32AutoReconnect   = s(QStringLiteral("esp32AutoReconnect")).toBool();
-    m_esp32LedSleepEnabled = s(QStringLiteral("esp32LedSleepEnabled")).toBool();
-    m_esp32LedColorMode    = s(QStringLiteral("esp32LedColorMode")).toString();
-    m_esp32LedStaticColor  = s(QStringLiteral("esp32LedStaticColor")).toString();
-
-    // Waveform
-    m_showWaveformVisualizer = s(QStringLiteral("showWaveformVisualizer")).toBool();
-
-    // 3D effects
-    m_show3DButtonTilt        = s(QStringLiteral("show3DButtonTilt")).toBool();
-    m_show3DAlbumPreview      = s(QStringLiteral("show3DAlbumPreview")).toBool();
-    m_roundedAlbumArt         = s(QStringLiteral("roundedAlbumArt")).toBool();
-    m_albumArtCornerRadius    = s(QStringLiteral("albumArtCornerRadius")).toInt();
-    m_showAlbumArtShadow      = s(QStringLiteral("showAlbumArtShadow")).toBool();
-    m_vinylRecordMode         = s(QStringLiteral("vinylRecordMode")).toBool();
-    m_albumArtTransition      = s(QStringLiteral("albumArtTransition")).toString();
-    m_audioOutputDevice       = s(QStringLiteral("audioOutputDevice")).toString();
-    m_backgroundOverlayOpacity = s(QStringLiteral("backgroundOverlayOpacity")).toInt();
-    m_sideCardOpacity         = s(QStringLiteral("sideCardOpacity")).toDouble();
-    m_sideCardAngle           = s(QStringLiteral("sideCardAngle")).toInt();
-    m_buttonTiltDuration      = s(QStringLiteral("buttonTiltDuration")).toInt();
-    m_textScrollSpeed         = s(QStringLiteral("textScrollSpeed")).toInt();
-
-    // Layout
-    m_settingsLayoutStyle = s(QStringLiteral("settingsLayoutStyle")).toString();
-
-    // IMU
-    m_imuEnabled = s(QStringLiteral("imuEnabled")).toBool();
-    m_sensorEmitRate = qBound(10, s(QStringLiteral("sensorEmitRate")).toInt(), 120);
-    m_sensorDecimalPlaces = qBound(0, s(QStringLiteral("sensorDecimalPlaces")).toInt(), 4);
-    m_sensorTempUnit = s(QStringLiteral("sensorTempUnit")).toString() == QLatin1String("C")
-                           ? QStringLiteral("C") : QStringLiteral("F");
-    m_sensorAltitudeUnit = s(QStringLiteral("sensorAltitudeUnit")).toString() == QLatin1String("ft")
-                               ? QStringLiteral("ft") : QStringLiteral("m");
-    m_sensorCards.clear();
-    for (const QString &card : kSensorCards)
-        m_sensorCards.insert(card, s(QStringLiteral("sensorShow") + card).toBool());
-
-    // Gesture
-    m_gestureSensorEnabled = s(QStringLiteral("gestureSensorEnabled")).toBool();
+    // Gesture mapping
     {
         QJsonObject gm = s(QStringLiteral("gestureMapping")).toObject();
         for (auto it = gm.begin(); it != gm.end(); ++it)
             m_gestureMapping[it.key()] = it.value().toVariant();
     }
-    m_gestureVolumeStep = s(QStringLiteral("gestureVolumeStep")).toInt();
-    m_gestureCooldown   = s(QStringLiteral("gestureCooldown")).toInt();
 
     // Pinned settings
     {
@@ -638,14 +841,6 @@ void SettingsManager::populateMembers()
         for (const auto &v : arr)
             m_pinnedSettings.append(v.toString());
     }
-
-    // Current volume: from startUpVolume (linear), converted to 0-100 scale
-    m_currentVolume = VolumeController::toPercentStatic(m_startVolume);
-
-    // Last settings section (migrate clockSettings -> displaySettings)
-    m_lastSettingsSection = s(QStringLiteral("lastSettingsSection")).toString();
-    if (m_lastSettingsSection == QStringLiteral("clockSettings"))
-        m_lastSettingsSection = QStringLiteral("displaySettings");
 
     // OBD parameters
     {
@@ -673,41 +868,6 @@ void SettingsManager::populateMembers()
         for (const auto &v : arr)
             m_directoryHistory.append(v.toString());
     }
-
-    // Album art colors — persisted so the last-extracted palette is reapplied
-    // on startup before a fresh extraction runs (avoids flashing the placeholder).
-    m_albumArtColors = s(QStringLiteral("albumArtColors")).toString();
-}
-
-// ---------------------------------------------------------------------------
-// File locking helpers
-// ---------------------------------------------------------------------------
-static void lockFile(QFile &f, bool exclusive)
-{
-#ifdef Q_OS_WIN
-    Q_UNUSED(exclusive);
-    // Windows: LockFileEx
-    HANDLE hFile = reinterpret_cast<HANDLE>(_get_osfhandle(f.handle()));
-    OVERLAPPED ov = {};
-    DWORD flags = LOCKFILE_FAIL_IMMEDIATELY;
-    if (exclusive)
-        flags |= LOCKFILE_EXCLUSIVE_LOCK;
-    LockFileEx(hFile, flags, 0, 1, 0, &ov);
-#else
-    int op = exclusive ? (LOCK_EX | LOCK_NB) : (LOCK_SH | LOCK_NB);
-    flock(f.handle(), op);
-#endif
-}
-
-static void unlockFile(QFile &f)
-{
-#ifdef Q_OS_WIN
-    HANDLE hFile = reinterpret_cast<HANDLE>(_get_osfhandle(f.handle()));
-    OVERLAPPED ov = {};
-    UnlockFileEx(hFile, 0, 1, 0, &ov);
-#else
-    flock(f.handle(), LOCK_UN);
-#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -772,7 +932,7 @@ QJsonObject SettingsManager::validateSettings(const QJsonObject &settings)
 }
 
 // ---------------------------------------------------------------------------
-// loadSettings — read JSON file with file locking
+// loadSettings — the settings in memory (the file, the first time)
 // ---------------------------------------------------------------------------
 QJsonObject SettingsManager::loadSettings()
 {
@@ -830,9 +990,7 @@ bool SettingsManager::parseSettingsFile(const QString &path, QJsonObject &out, Q
         error = f.errorString();
         return false;
     }
-    lockFile(f, false);
     QByteArray data = f.readAll();
-    unlockFile(f);
     f.close();
 
     QJsonParseError err;
@@ -928,33 +1086,33 @@ void SettingsManager::updateSetting(const QString &key, const QVariant &value)
 }
 
 // =========================================================================
-// Property getters
+// Property getters (a plain setting reads its table row)
 // =========================================================================
 
 // --- Device ---
-QString SettingsManager::deviceName() const        { return m_deviceName; }
-QString SettingsManager::fontSetting() const       { return m_fontSetting; }
+QString SettingsManager::deviceName() const { return row(R_deviceName).toString(); }
+QString SettingsManager::fontSetting() const { return row(R_fontSetting).toString(); }
 
 // --- Theme / Display ---
-QString SettingsManager::themeSetting() const      { return m_themeSetting; }
-float   SettingsManager::uiScale() const           { return m_uiScale; }
-int     SettingsManager::colorTransitionMs() const { return m_colorTransitionMs; }
-bool    SettingsManager::songLengthTransition() const { return m_songLengthTransition; }
-bool    SettingsManager::showClock() const         { return m_showClock; }
-bool    SettingsManager::clockFormat24Hour() const { return m_clockFormat24Hour; }
-bool    SettingsManager::clockShowSeconds() const  { return m_clockShowSeconds; }
-int     SettingsManager::clockSize() const         { return m_clockSize; }
-bool    SettingsManager::clockSizeAuto() const     { return m_clockSizeAuto; }
-QString SettingsManager::backgroundGrid() const    { return m_backgroundGrid; }
-int     SettingsManager::screenWidth() const       { return m_screenWidth; }
-int     SettingsManager::screenHeight() const      { return m_screenHeight; }
-int     SettingsManager::backgroundBlurRadius() const { return m_backgroundBlurRadius; }
-QString SettingsManager::bottomBarOrientation() const  { return m_bottomBarOrientation; }
-bool    SettingsManager::showBottomBarMediaControls() const { return m_showBottomBarMediaControls; }
-QString SettingsManager::settingsLayoutStyle() const { return m_settingsLayoutStyle; }
+QString SettingsManager::themeSetting() const { return row(R_themeSetting).toString(); }
+float SettingsManager::uiScale() const { return static_cast<float>(row(R_uiScale).toDouble()); }
+int SettingsManager::colorTransitionMs() const { return row(R_colorTransitionMs).toInt(); }
+bool SettingsManager::songLengthTransition() const { return row(R_songLengthTransition).toBool(); }
+bool SettingsManager::showClock() const { return row(R_showClock).toBool(); }
+bool SettingsManager::clockFormat24Hour() const { return row(R_clockFormat24Hour).toBool(); }
+bool SettingsManager::clockShowSeconds() const { return row(R_clockShowSeconds).toBool(); }
+int SettingsManager::clockSize() const { return row(R_clockSize).toInt(); }
+bool SettingsManager::clockSizeAuto() const { return row(R_clockSizeAuto).toBool(); }
+QString SettingsManager::backgroundGrid() const { return row(R_backgroundGrid).toString(); }
+int SettingsManager::screenWidth() const { return row(R_screenWidth).toInt(); }
+int SettingsManager::screenHeight() const { return row(R_screenHeight).toInt(); }
+int SettingsManager::backgroundBlurRadius() const { return row(R_backgroundBlurRadius).toInt(); }
+QString SettingsManager::bottomBarOrientation() const { return row(R_bottomBarOrientation).toString(); }
+bool SettingsManager::showBottomBarMediaControls() const { return row(R_showBottomBarMediaControls).toBool(); }
+QString SettingsManager::settingsLayoutStyle() const { return row(R_settingsLayoutStyle).toString(); }
 QVariantMap SettingsManager::albumArtColors() const
 {
-    return QJsonDocument::fromJson(m_albumArtColors.toUtf8()).object().toVariantMap();
+    return QJsonDocument::fromJson(row(R_albumArtColors).toString().toUtf8()).object().toVariantMap();
 }
 
 QString SettingsManager::settingsMenuVisibility() const
@@ -966,47 +1124,49 @@ QString SettingsManager::settingsMenuVisibility() const
 }
 
 // --- Media ---
-float   SettingsManager::startUpVolume() const     { return m_startVolume; }
+float SettingsManager::startUpVolume() const { return static_cast<float>(row(R_startUpVolume).toDouble()); }
 int     SettingsManager::currentVolume() const     { return m_currentVolume; }
 QString SettingsManager::mediaFolder() const       { return m_mediaFolder; }
-bool    SettingsManager::autoPlayOnStartup() const { return m_autoPlayOnStartup; }
-bool    SettingsManager::persistShuffleState() const { return m_persistShuffleState; }
-bool    SettingsManager::lastShuffleState() const  { return m_lastShuffleState; }
-QString SettingsManager::lastPlayedSong() const    { return m_lastPlayedSong; }
-int     SettingsManager::lastPlayedPosition() const { return m_lastPlayedPosition; }
-QString SettingsManager::lastPlayedPlaylist() const { return m_lastPlayedPlaylist; }
-QString SettingsManager::musicButtonDefaultPage() const { return m_musicButtonDefaultPage; }
-bool    SettingsManager::returnToLibraryAfterSelection() const { return m_returnToLibraryAfterSelection; }
-bool    SettingsManager::showWaveformVisualizer() const { return m_showWaveformVisualizer; }
+bool SettingsManager::autoPlayOnStartup() const { return row(R_autoPlayOnStartup).toBool(); }
+bool SettingsManager::persistShuffleState() const { return row(R_persistShuffleState).toBool(); }
+bool SettingsManager::lastShuffleState() const { return row(R_lastShuffleState).toBool(); }
+QString SettingsManager::lastPlayedSong() const { return row(R_lastPlayedSong).toString(); }
+int SettingsManager::lastPlayedPosition() const { return row(R_lastPlayedPosition).toInt(); }
+QString SettingsManager::lastPlayedPlaylist() const { return row(R_lastPlayedPlaylist).toString(); }
+QString SettingsManager::musicButtonDefaultPage() const { return row(R_musicButtonDefaultPage).toString(); }
+bool SettingsManager::returnToLibraryAfterSelection() const { return row(R_returnToLibraryAfterSelection).toBool(); }
+bool SettingsManager::showWaveformVisualizer() const { return row(R_showWaveformVisualizer).toBool(); }
 
 // --- 3D effects ---
-bool    SettingsManager::show3DButtonTilt() const        { return m_show3DButtonTilt; }
-bool    SettingsManager::show3DAlbumPreview() const      { return m_show3DAlbumPreview; }
-bool    SettingsManager::roundedAlbumArt() const         { return m_roundedAlbumArt; }
-int     SettingsManager::albumArtCornerRadius() const    { return m_albumArtCornerRadius; }
-bool    SettingsManager::showAlbumArtShadow() const      { return m_showAlbumArtShadow; }
-bool    SettingsManager::vinylRecordMode() const         { return m_vinylRecordMode; }
-QString SettingsManager::albumArtTransition() const      { return m_albumArtTransition; }
-QString SettingsManager::audioOutputDevice() const       { return m_audioOutputDevice; }
-int     SettingsManager::backgroundOverlayOpacity() const { return m_backgroundOverlayOpacity; }
-double  SettingsManager::sideCardOpacity() const         { return m_sideCardOpacity; }
-int     SettingsManager::sideCardAngle() const           { return m_sideCardAngle; }
-int     SettingsManager::buttonTiltDuration() const      { return m_buttonTiltDuration; }
-int     SettingsManager::textScrollSpeed() const         { return m_textScrollSpeed; }
+bool SettingsManager::show3DButtonTilt() const { return row(R_show3DButtonTilt).toBool(); }
+bool SettingsManager::show3DAlbumPreview() const { return row(R_show3DAlbumPreview).toBool(); }
+bool SettingsManager::roundedAlbumArt() const { return row(R_roundedAlbumArt).toBool(); }
+int SettingsManager::albumArtCornerRadius() const { return row(R_albumArtCornerRadius).toInt(); }
+bool SettingsManager::showAlbumArtShadow() const { return row(R_showAlbumArtShadow).toBool(); }
+bool SettingsManager::vinylRecordMode() const { return row(R_vinylRecordMode).toBool(); }
+QString SettingsManager::albumArtTransition() const { return row(R_albumArtTransition).toString(); }
+QString SettingsManager::audioOutputDevice() const { return row(R_audioOutputDevice).toString(); }
+int SettingsManager::backgroundOverlayOpacity() const { return row(R_backgroundOverlayOpacity).toInt(); }
+double SettingsManager::sideCardOpacity() const { return row(R_sideCardOpacity).toDouble(); }
+int SettingsManager::sideCardAngle() const { return row(R_sideCardAngle).toInt(); }
+int SettingsManager::buttonTiltDuration() const { return row(R_buttonTiltDuration).toInt(); }
+int SettingsManager::textScrollSpeed() const { return row(R_textScrollSpeed).toInt(); }
 
 // --- OBD ---
-QString SettingsManager::obdBluetoothPort() const        { return m_obdBluetoothPort; }
+QString SettingsManager::obdBluetoothPort() const { return row(R_obdBluetoothPort).toString(); }
 QVariantList SettingsManager::obdSavedAdapters() const
 {
-    return QJsonDocument::fromJson(m_obdSavedAdapters.toUtf8()).array().toVariantList();
+    return QJsonDocument::fromJson(row(R_obdSavedAdapters).toString().toUtf8()).array().toVariantList();
 }
-bool    SettingsManager::obdFastMode() const             { return m_obdFastMode; }
-bool    SettingsManager::obdCardStyleCircular() const    { return m_obdCardStyleCircular; }
-int     SettingsManager::obdAutoReconnectAttempts() const { return m_obdAutoReconnectAttempts; }
-float   SettingsManager::fuelTankCapacity() const        { return m_fuelTankCapacity; }
-bool    SettingsManager::blackBoxEnabled() const         { return m_blackBoxEnabled; }
-bool    SettingsManager::blackBoxSweepAll() const        { return m_blackBoxSweepAll; }
-int     SettingsManager::blackBoxMaxMB() const           { return m_blackBoxMaxMB; }
+bool SettingsManager::obdFastMode() const { return row(R_obdFastMode).toBool(); }
+bool SettingsManager::obdCardStyleCircular() const { return row(R_obdCardStyleCircular).toBool(); }
+QString SettingsManager::gaugeTempUnit() const { return row(R_gaugeTempUnit).toString(); }
+QString SettingsManager::gaugeSpeedUnit() const { return row(R_gaugeSpeedUnit).toString(); }
+int SettingsManager::obdAutoReconnectAttempts() const { return row(R_obdAutoReconnectAttempts).toInt(); }
+float SettingsManager::fuelTankCapacity() const { return static_cast<float>(row(R_fuelTankCapacity).toDouble()); }
+bool SettingsManager::blackBoxEnabled() const { return row(R_blackBoxEnabled).toBool(); }
+bool SettingsManager::blackBoxSweepAll() const { return row(R_blackBoxSweepAll).toBool(); }
+int SettingsManager::blackBoxMaxMB() const { return row(R_blackBoxMaxMB).toInt(); }
 QVariantList SettingsManager::homeOBDParameters() const  { return m_homeObdParameters; }
 
 QVariantList SettingsManager::customThemes() const
@@ -1030,225 +1190,92 @@ QVariantMap SettingsManager::customThemeData() const
 QVariantList SettingsManager::directoryHistory() const { return m_directoryHistory; }
 
 // --- Window ---
-QString SettingsManager::windowState() const         { return m_windowState; }
-QString SettingsManager::lastSettingsSection() const { return m_lastSettingsSection; }
+QString SettingsManager::windowState() const { return row(R_windowState).toString(); }
+QString SettingsManager::lastSettingsSection() const { return row(R_lastSettingsSection).toString(); }
 
 // --- Android Auto / Phone Mirror ---
-bool    SettingsManager::androidAutoEnabled() const  { return m_androidAutoEnabled; }
-bool    SettingsManager::phoneMirrorEnabled() const  { return m_phoneMirrorEnabled; }
-QString SettingsManager::scrcpyDisplaySize() const   { return m_scrcpyDisplaySize; }
-double  SettingsManager::scrcpyAudioGain() const     { return m_scrcpyAudioGain; }
-bool    SettingsManager::scrcpyAudioDuckEnabled() const { return m_scrcpyAudioDuckEnabled; }
-double  SettingsManager::scrcpyAudioDuckLevel() const { return m_scrcpyAudioDuckLevel; }
-bool    SettingsManager::scrcpyPhoneScreenOff() const { return m_scrcpyPhoneScreenOff; }
-int     SettingsManager::scrcpyDisplayDpi() const { return m_scrcpyDisplayDpi; }
-int     SettingsManager::scrcpyBitRateUsb() const { return m_scrcpyBitRateUsb; }
-int     SettingsManager::scrcpyBitRateWifi() const { return m_scrcpyBitRateWifi; }
-bool    SettingsManager::scrcpyAutoWifi() const   { return m_scrcpyAutoWifi; }
-bool    SettingsManager::scrcpyBitRateAuto() const { return m_scrcpyBitRateAuto; }
-QString SettingsManager::scrcpyWirelessAddress() const { return m_scrcpyWirelessAddress; }
+bool SettingsManager::androidAutoEnabled() const { return row(R_androidAutoEnabled).toBool(); }
+bool SettingsManager::phoneMirrorEnabled() const { return row(R_phoneMirrorEnabled).toBool(); }
+QString SettingsManager::scrcpyDisplaySize() const { return row(R_scrcpyDisplaySize).toString(); }
+double SettingsManager::scrcpyAudioGain() const { return row(R_scrcpyAudioGain).toDouble(); }
+bool SettingsManager::scrcpyAudioDuckEnabled() const { return row(R_scrcpyAudioDuckEnabled).toBool(); }
+double SettingsManager::scrcpyAudioDuckLevel() const { return row(R_scrcpyAudioDuckLevel).toDouble(); }
+bool SettingsManager::scrcpyPhoneScreenOff() const { return row(R_scrcpyPhoneScreenOff).toBool(); }
+int SettingsManager::scrcpyDisplayDpi() const { return row(R_scrcpyDisplayDpi).toInt(); }
+int SettingsManager::scrcpyBitRateUsb() const { return row(R_scrcpyBitRateUsb).toInt(); }
+int SettingsManager::scrcpyBitRateWifi() const { return row(R_scrcpyBitRateWifi).toInt(); }
+bool SettingsManager::scrcpyAutoWifi() const { return row(R_scrcpyAutoWifi).toBool(); }
+bool SettingsManager::scrcpyBitRateAuto() const { return row(R_scrcpyBitRateAuto).toBool(); }
+QString SettingsManager::scrcpyWirelessAddress() const { return row(R_scrcpyWirelessAddress).toString(); }
 
 // --- ESP32 ---
-bool    SettingsManager::esp32VolumeEnabled() const    { return m_esp32VolumeEnabled; }
-QString SettingsManager::esp32VolumePort() const       { return m_esp32VolumePort; }
-double  SettingsManager::esp32VolumeStepSize() const   { return m_esp32VolumeStepSize; }
-bool    SettingsManager::esp32AutoReconnect() const    { return m_esp32AutoReconnect; }
-bool    SettingsManager::esp32LedSleepEnabled() const  { return m_esp32LedSleepEnabled; }
-QString SettingsManager::esp32LedColorMode() const     { return m_esp32LedColorMode; }
-QString SettingsManager::esp32LedStaticColor() const   { return m_esp32LedStaticColor; }
+bool SettingsManager::esp32VolumeEnabled() const { return row(R_esp32VolumeEnabled).toBool(); }
+QString SettingsManager::esp32VolumePort() const { return row(R_esp32VolumePort).toString(); }
+double SettingsManager::esp32VolumeStepSize() const { return row(R_esp32VolumeStepSize).toDouble(); }
+bool SettingsManager::esp32AutoReconnect() const { return row(R_esp32AutoReconnect).toBool(); }
+bool SettingsManager::esp32LedSleepEnabled() const { return row(R_esp32LedSleepEnabled).toBool(); }
+QString SettingsManager::esp32LedColorMode() const { return row(R_esp32LedColorMode).toString(); }
+QString SettingsManager::esp32LedStaticColor() const { return row(R_esp32LedStaticColor).toString(); }
 
 // --- IMU ---
-bool    SettingsManager::imuEnabled() const            { return m_imuEnabled; }
-int     SettingsManager::sensorEmitRate() const        { return m_sensorEmitRate; }
-int     SettingsManager::sensorDecimalPlaces() const   { return m_sensorDecimalPlaces; }
-QString SettingsManager::sensorTempUnit() const        { return m_sensorTempUnit; }
-QString SettingsManager::sensorAltitudeUnit() const    { return m_sensorAltitudeUnit; }
-QVariantMap SettingsManager::sensorCards() const       { return m_sensorCards; }
+bool SettingsManager::imuEnabled() const { return row(R_imuEnabled).toBool(); }
+int SettingsManager::sensorEmitRate() const { return row(R_sensorEmitRate).toInt(); }
+int SettingsManager::sensorDecimalPlaces() const { return row(R_sensorDecimalPlaces).toInt(); }
+QString SettingsManager::sensorTempUnit() const { return row(R_sensorTempUnit).toString(); }
+QString SettingsManager::sensorAltitudeUnit() const { return row(R_sensorAltitudeUnit).toString(); }
+QVariantMap SettingsManager::sensorCards() const
+{
+    QVariantMap cards;
+    for (const QString &card : kSensorCards)
+        cards.insert(card, row(rowIndex(QStringLiteral("sensorShow") + card)).toBool());
+    return cards;
+}
 
 // --- Gesture ---
-bool    SettingsManager::gestureSensorEnabled() const  { return m_gestureSensorEnabled; }
-int     SettingsManager::gestureVolumeStep() const     { return m_gestureVolumeStep; }
-int     SettingsManager::gestureCooldown() const       { return m_gestureCooldown; }
+bool SettingsManager::gestureSensorEnabled() const { return row(R_gestureSensorEnabled).toBool(); }
+int SettingsManager::gestureVolumeStep() const { return row(R_gestureVolumeStep).toInt(); }
+int SettingsManager::gestureCooldown() const { return row(R_gestureCooldown).toInt(); }
 
 // --- Pinned ---
 QVariantList SettingsManager::pinnedSettings() const   { return m_pinnedSettings; }
 
 // =========================================================================
-// Save / setter slots
+// Save / setter slots (a plain setting goes through setRow())
 // =========================================================================
 
 // --- Device ---
-void SettingsManager::save_device_name(const QString &name)
-{
-    qCDebug(lcSettings) << "Saving device name:" << name;
-    m_deviceName = name;
-    updateSetting(QStringLiteral("deviceName"), name);
-    emit deviceNameChanged(name);
-}
-
-void SettingsManager::save_font_setting(const QString &font)
-{
-    qCDebug(lcSettings) << "Saving font setting:" << font;
-    m_fontSetting = font;
-    updateSetting(QStringLiteral("fontSetting"), font);
-    emit fontSettingChanged(font);
-}
+void SettingsManager::save_device_name(const QString &name) { setRow(R_deviceName, name); }
+void SettingsManager::save_font_setting(const QString &font) { setRow(R_fontSetting, font); }
 
 // --- Theme / Display ---
-void SettingsManager::save_theme_setting(const QString &theme)
-{
-    qCDebug(lcSettings) << "Saving theme setting:" << theme;
-    m_themeSetting = theme;
-    updateSetting(QStringLiteral("themeSetting"), theme);
-    emit themeSettingChanged(theme);
-}
-
-void SettingsManager::save_ui_scale(float scale)
-{
-    qCDebug(lcSettings) << "Saving UI scale:" << scale;
-    m_uiScale = scale;
-    updateSetting(QStringLiteral("uiScale"), static_cast<double>(scale));
-    emit uiScaleChanged(scale);
-}
-
-void SettingsManager::save_color_transition_ms(int ms)
-{
-    qCDebug(lcSettings) << "Saving color transition ms:" << ms;
-    m_colorTransitionMs = ms;
-    updateSetting(QStringLiteral("colorTransitionMs"), ms);
-    emit colorTransitionMsChanged(ms);
-}
-
-void SettingsManager::save_song_length_transition(bool enabled)
-{
-    qCDebug(lcSettings) << "Saving song length transition:" << enabled;
-    m_songLengthTransition = enabled;
-    updateSetting(QStringLiteral("songLengthTransition"), enabled);
-    emit songLengthTransitionChanged(enabled);
-}
-
-void SettingsManager::save_show_clock(bool show)
-{
-    qCDebug(lcSettings) << "Saving show clock:" << show;
-    m_showClock = show;
-    updateSetting(QStringLiteral("showClock"), show);
-    emit showClockChanged(show);
-}
-
-void SettingsManager::save_clock_format(bool is24hour)
-{
-    qCDebug(lcSettings) << "Saving clock format:" << is24hour;
-    m_clockFormat24Hour = is24hour;
-    updateSetting(QStringLiteral("clockFormat24Hour"), is24hour);
-    emit clockFormatChanged(is24hour);
-}
-
-void SettingsManager::save_clock_show_seconds(bool show)
-{
-    qCDebug(lcSettings) << "Saving clock show seconds:" << show;
-    m_clockShowSeconds = show;
-    updateSetting(QStringLiteral("clockShowSeconds"), show);
-    emit clockShowSecondsChanged(show);
-}
-
-void SettingsManager::save_clock_size(int size)
-{
-    qCDebug(lcSettings) << "Saving clock size:" << size;
-    m_clockSize = size;
-    updateSetting(QStringLiteral("clockSize"), size);
-    emit clockSizeChanged(size);
-}
-
-void SettingsManager::save_clock_size_auto(bool autoSize)
-{
-    qCDebug(lcSettings) << "Saving clock size auto:" << autoSize;
-    m_clockSizeAuto = autoSize;
-    updateSetting(QStringLiteral("clockSizeAuto"), autoSize);
-    emit clockSizeAutoChanged(autoSize);
-}
-
-void SettingsManager::save_background_grid(const QString &grid)
-{
-    qCDebug(lcSettings) << "Saving background grid:" << grid;
-    m_backgroundGrid = grid;
-    updateSetting(QStringLiteral("backgroundGrid"), grid);
-    emit backgroundGridChanged(grid);
-}
-
-void SettingsManager::save_screen_width(int width)
-{
-    width = qBound(kMinScreenWidth, width, kMaxScreenWidth);
-    if (width == m_screenWidth)
-        return;
-    m_screenWidth = width;
-    updateSetting(QStringLiteral("screenWidth"), width);
-    emit screenWidthChanged(width);
-}
-
-void SettingsManager::save_screen_height(int height)
-{
-    height = qBound(kMinScreenHeight, height, kMaxScreenHeight);
-    if (height == m_screenHeight)
-        return;
-    m_screenHeight = height;
-    updateSetting(QStringLiteral("screenHeight"), height);
-    emit screenHeightChanged(height);
-}
-
-void SettingsManager::save_background_blur_radius(int radius)
-{
-    qCDebug(lcSettings) << "Saving background blur radius:" << radius;
-    m_backgroundBlurRadius = radius;
-    updateSetting(QStringLiteral("backgroundBlurRadius"), radius);
-    emit backgroundBlurRadiusChanged(radius);
-}
-
-void SettingsManager::save_bottom_bar_orientation(const QString &orientation)
-{
-    qCDebug(lcSettings) << "Saving bottom bar orientation:" << orientation;
-    m_bottomBarOrientation = orientation;
-    updateSetting(QStringLiteral("bottomBarOrientation"), orientation);
-    emit bottomBarOrientationChanged(orientation);
-}
-
-void SettingsManager::save_show_bottom_bar_media_controls(bool show)
-{
-    qCDebug(lcSettings) << "Saving show bottom bar media controls:" << show;
-    m_showBottomBarMediaControls = show;
-    updateSetting(QStringLiteral("showBottomBarMediaControls"), show);
-    emit showBottomBarMediaControlsChanged(show);
-}
-
-void SettingsManager::save_settings_layout_style(const QString &style)
-{
-    static const QStringList valid = {
-        QStringLiteral("Carousel"), QStringLiteral("Sidebar"),
-        QStringLiteral("Hub"), QStringLiteral("Dashboard")
-    };
-    if (!valid.contains(style))
-        return;
-    qCDebug(lcSettings) << "Saving settings layout style:" << style;
-    m_settingsLayoutStyle = style;
-    updateSetting(QStringLiteral("settingsLayoutStyle"), style);
-    emit settingsLayoutStyleChanged(style);
-}
-
+void SettingsManager::save_theme_setting(const QString &theme) { setRow(R_themeSetting, theme); }
+void SettingsManager::save_ui_scale(float scale) { setRow(R_uiScale, static_cast<double>(scale)); }
+void SettingsManager::save_color_transition_ms(int ms) { setRow(R_colorTransitionMs, ms); }
+void SettingsManager::save_song_length_transition(bool enabled) { setRow(R_songLengthTransition, enabled); }
+void SettingsManager::save_show_clock(bool show) { setRow(R_showClock, show); }
+void SettingsManager::save_clock_format(bool is24hour) { setRow(R_clockFormat24Hour, is24hour); }
+void SettingsManager::save_clock_show_seconds(bool show) { setRow(R_clockShowSeconds, show); }
+void SettingsManager::save_clock_size(int size) { setRow(R_clockSize, size); }
+void SettingsManager::save_clock_size_auto(bool autoSize) { setRow(R_clockSizeAuto, autoSize); }
+void SettingsManager::save_background_grid(const QString &grid) { setRow(R_backgroundGrid, grid); }
+void SettingsManager::save_screen_width(int width) { setRow(R_screenWidth, width); }
+void SettingsManager::save_screen_height(int height) { setRow(R_screenHeight, height); }
+void SettingsManager::save_background_blur_radius(int radius) { setRow(R_backgroundBlurRadius, radius); }
+void SettingsManager::save_bottom_bar_orientation(const QString &orientation) { setRow(R_bottomBarOrientation, orientation); }
+void SettingsManager::save_show_bottom_bar_media_controls(bool show) { setRow(R_showBottomBarMediaControls, show); }
+void SettingsManager::save_settings_layout_style(const QString &style) { setRow(R_settingsLayoutStyle, style); }
 void SettingsManager::set_album_art_colors(const QString &colorsJson)
 {
-    qCDebug(lcSettings) << "set_album_art_colors called, length:" << colorsJson.length();
-    m_albumArtColors = colorsJson;
-    updateSetting(QStringLiteral("albumArtColors"), colorsJson);
-    emit albumArtColorsChanged();
+    // The palette reaches QML through this signal and nothing else (Style
+    // holds its own copy, which Album Art Capture being switched off and on
+    // clears), so the same palette again is still announced. Unchanged, it
+    // is not written again.
+    if (setRow(R_albumArtColors, colorsJson) == SetResult::Unchanged)
+        emit albumArtColorsChanged();
 }
 
 // --- Media ---
-void SettingsManager::save_start_volume(float volume)
-{
-    qCDebug(lcSettings) << "Saving volume setting:" << volume;
-    m_startVolume = volume;
-    updateSetting(QStringLiteral("startUpVolume"), static_cast<double>(volume));
-    emit startUpVolumeChanged(QString::number(static_cast<double>(volume)));
-}
+void SettingsManager::save_start_volume(float volume) { setRow(R_startUpVolume, static_cast<double>(volume)); }
 
 void SettingsManager::setCurrentVolume(int volume)
 {
@@ -1290,213 +1317,42 @@ bool SettingsManager::save_media_folder(const QString &folderPathIn)
     return true;
 }
 
-void SettingsManager::save_auto_play_on_startup(bool enabled)
-{
-    qCDebug(lcSettings) << "Saving auto-play on startup:" << enabled;
-    m_autoPlayOnStartup = enabled;
-    updateSetting(QStringLiteral("autoPlayOnStartup"), enabled);
-    emit autoPlayOnStartupChanged(enabled);
-}
-
-void SettingsManager::save_persist_shuffle_state(bool enabled)
-{
-    qCDebug(lcSettings) << "Saving persist shuffle state:" << enabled;
-    m_persistShuffleState = enabled;
-    updateSetting(QStringLiteral("persistShuffleState"), enabled);
-    emit persistShuffleStateChanged(enabled);
-}
-
-void SettingsManager::save_last_shuffle_state(bool enabled)
-{
-    m_lastShuffleState = enabled;
-    updateSetting(QStringLiteral("lastShuffleState"), enabled);
-    emit lastShuffleStateChanged(enabled);
-}
-
-void SettingsManager::save_last_played_song(const QString &filename)
-{
-    m_lastPlayedSong = filename;
-    updateSetting(QStringLiteral("lastPlayedSong"), filename);
-    emit lastPlayedSongChanged(filename);
-}
-
-void SettingsManager::save_last_played_position(int positionMs)
-{
-    m_lastPlayedPosition = positionMs;
-    updateSetting(QStringLiteral("lastPlayedPosition"), positionMs);
-    emit lastPlayedPositionChanged(positionMs);
-}
-
-void SettingsManager::save_last_played_playlist(const QString &playlistName)
-{
-    m_lastPlayedPlaylist = playlistName;
-    updateSetting(QStringLiteral("lastPlayedPlaylist"), playlistName);
-    emit lastPlayedPlaylistChanged(playlistName);
-}
+void SettingsManager::save_auto_play_on_startup(bool enabled) { setRow(R_autoPlayOnStartup, enabled); }
+void SettingsManager::save_persist_shuffle_state(bool enabled) { setRow(R_persistShuffleState, enabled); }
+void SettingsManager::save_last_shuffle_state(bool enabled) { setRow(R_lastShuffleState, enabled); }
+void SettingsManager::save_last_played_song(const QString &filename) { setRow(R_lastPlayedSong, filename); }
+void SettingsManager::save_last_played_position(int positionMs) { setRow(R_lastPlayedPosition, positionMs); }
+void SettingsManager::save_last_played_playlist(const QString &playlistName) { setRow(R_lastPlayedPlaylist, playlistName); }
 
 void SettingsManager::save_playback_state(const QString &song, int positionMs, const QString &playlist)
 {
-    m_lastPlayedSong     = song;
-    m_lastPlayedPosition = positionMs;
-    m_lastPlayedPlaylist = playlist;
-
-    QJsonObject settings = loadSettings();
-    settings[QStringLiteral("lastPlayedSong")]     = song;
-    settings[QStringLiteral("lastPlayedPosition")]  = positionMs;
-    settings[QStringLiteral("lastPlayedPlaylist")]  = playlist;
-    saveSettings(settings);
+    setRow(R_lastPlayedSong, song);
+    setRow(R_lastPlayedPosition, positionMs);
+    setRow(R_lastPlayedPlaylist, playlist);
 }
 
-void SettingsManager::save_music_button_default_page(const QString &page)
-{
-    static const QStringList valid = {
-        QStringLiteral("mediaRoom"), QStringLiteral("mediaPlayer")
-    };
-    if (!valid.contains(page))
-        return;
-    qCDebug(lcSettings) << "Saving music button default page:" << page;
-    m_musicButtonDefaultPage = page;
-    updateSetting(QStringLiteral("musicButtonDefaultPage"), page);
-    emit musicButtonDefaultPageChanged(page);
-}
-
-void SettingsManager::save_return_to_library_after_selection(bool returnToLibrary)
-{
-    qCDebug(lcSettings) << "Saving return to library after selection:" << returnToLibrary;
-    m_returnToLibraryAfterSelection = returnToLibrary;
-    updateSetting(QStringLiteral("returnToLibraryAfterSelection"), returnToLibrary);
-    emit returnToLibraryAfterSelectionChanged(returnToLibrary);
-}
-
-void SettingsManager::save_show_waveform_visualizer(bool enabled)
-{
-    qCDebug(lcSettings) << "Saving show waveform visualizer:" << enabled;
-    m_showWaveformVisualizer = enabled;
-    updateSetting(QStringLiteral("showWaveformVisualizer"), enabled);
-    emit showWaveformVisualizerChanged(enabled);
-}
+void SettingsManager::save_music_button_default_page(const QString &page) { setRow(R_musicButtonDefaultPage, page); }
+void SettingsManager::save_return_to_library_after_selection(bool returnToLibrary) { setRow(R_returnToLibraryAfterSelection, returnToLibrary); }
+void SettingsManager::save_show_waveform_visualizer(bool enabled) { setRow(R_showWaveformVisualizer, enabled); }
 
 // --- 3D visual effects ---
-void SettingsManager::save_show_3d_button_tilt(bool enabled)
-{
-    m_show3DButtonTilt = enabled;
-    updateSetting(QStringLiteral("show3DButtonTilt"), enabled);
-    emit show3DButtonTiltChanged(enabled);
-}
-
-void SettingsManager::save_show_3d_album_preview(bool enabled)
-{
-    m_show3DAlbumPreview = enabled;
-    updateSetting(QStringLiteral("show3DAlbumPreview"), enabled);
-    emit show3DAlbumPreviewChanged(enabled);
-}
-
-void SettingsManager::save_rounded_album_art(bool enabled)
-{
-    m_roundedAlbumArt = enabled;
-    updateSetting(QStringLiteral("roundedAlbumArt"), enabled);
-    emit roundedAlbumArtChanged(enabled);
-}
-
-void SettingsManager::save_album_art_corner_radius(int radius)
-{
-    m_albumArtCornerRadius = qBound(2, radius, 32);
-    updateSetting(QStringLiteral("albumArtCornerRadius"), m_albumArtCornerRadius);
-    emit albumArtCornerRadiusChanged(m_albumArtCornerRadius);
-}
-
-void SettingsManager::save_show_album_art_shadow(bool enabled)
-{
-    m_showAlbumArtShadow = enabled;
-    updateSetting(QStringLiteral("showAlbumArtShadow"), enabled);
-    emit showAlbumArtShadowChanged(enabled);
-}
-
-void SettingsManager::save_vinyl_record_mode(bool enabled)
-{
-    m_vinylRecordMode = enabled;
-    updateSetting(QStringLiteral("vinylRecordMode"), enabled);
-    emit vinylRecordModeChanged(enabled);
-}
-
-void SettingsManager::save_audio_output_device(const QString &id)
-{
-    // Any id is kept, even one not plugged in now: the earbuds or the car's
-    // output come back later, and playback falls back to the default meanwhile
-    if (id == m_audioOutputDevice || id.size() > 512)
-        return;
-    m_audioOutputDevice = id;
-    updateSetting(QStringLiteral("audioOutputDevice"), id);
-    emit audioOutputDeviceChanged(id);
-}
-
-void SettingsManager::save_album_art_transition(const QString &transition)
-{
-    static const QStringList valid = {
-        QStringLiteral("Crossfade"), QStringLiteral("Slide"),
-        QStringLiteral("Vinyl Lift"), QStringLiteral("Dissolve"),
-        QStringLiteral("Flip"),
-        QStringLiteral("Coverflow"), QStringLiteral("Conveyor"),
-        QStringLiteral("Stack"), QStringLiteral("Depth"),
-        QStringLiteral("Swing")
-    };
-    if (!valid.contains(transition))
-        return;
-    m_albumArtTransition = transition;
-    updateSetting(QStringLiteral("albumArtTransition"), transition);
-    emit albumArtTransitionChanged(transition);
-}
-
-void SettingsManager::save_background_overlay_opacity(int opacity)
-{
-    m_backgroundOverlayOpacity = qBound(0, opacity, 100);
-    updateSetting(QStringLiteral("backgroundOverlayOpacity"), m_backgroundOverlayOpacity);
-    emit backgroundOverlayOpacityChanged(m_backgroundOverlayOpacity);
-}
-
-void SettingsManager::save_side_card_opacity(double opacity)
-{
-    m_sideCardOpacity = qBound(0.1, opacity, 1.0);
-    updateSetting(QStringLiteral("sideCardOpacity"), m_sideCardOpacity);
-    emit sideCardOpacityChanged(m_sideCardOpacity);
-}
-
-void SettingsManager::save_side_card_angle(int angle)
-{
-    m_sideCardAngle = qBound(5, angle, 60);
-    updateSetting(QStringLiteral("sideCardAngle"), m_sideCardAngle);
-    emit sideCardAngleChanged(m_sideCardAngle);
-}
-
-void SettingsManager::save_button_tilt_duration(int duration)
-{
-    m_buttonTiltDuration = qBound(50, duration, 500);
-    updateSetting(QStringLiteral("buttonTiltDuration"), m_buttonTiltDuration);
-    emit buttonTiltDurationChanged(m_buttonTiltDuration);
-}
-
-void SettingsManager::save_text_scroll_speed(int speed)
-{
-    m_textScrollSpeed = qBound(1000, speed, 10000);
-    updateSetting(QStringLiteral("textScrollSpeed"), m_textScrollSpeed);
-    emit textScrollSpeedChanged(m_textScrollSpeed);
-}
+void SettingsManager::save_show_3d_button_tilt(bool enabled) { setRow(R_show3DButtonTilt, enabled); }
+void SettingsManager::save_show_3d_album_preview(bool enabled) { setRow(R_show3DAlbumPreview, enabled); }
+void SettingsManager::save_rounded_album_art(bool enabled) { setRow(R_roundedAlbumArt, enabled); }
+void SettingsManager::save_album_art_corner_radius(int radius) { setRow(R_albumArtCornerRadius, radius); }
+void SettingsManager::save_show_album_art_shadow(bool enabled) { setRow(R_showAlbumArtShadow, enabled); }
+void SettingsManager::save_vinyl_record_mode(bool enabled) { setRow(R_vinylRecordMode, enabled); }
+void SettingsManager::save_audio_output_device(const QString &id) { setRow(R_audioOutputDevice, id); }
+void SettingsManager::save_album_art_transition(const QString &transition) { setRow(R_albumArtTransition, transition); }
+void SettingsManager::save_background_overlay_opacity(int opacity) { setRow(R_backgroundOverlayOpacity, opacity); }
+void SettingsManager::save_side_card_opacity(double opacity) { setRow(R_sideCardOpacity, opacity); }
+void SettingsManager::save_side_card_angle(int angle) { setRow(R_sideCardAngle, angle); }
+void SettingsManager::save_button_tilt_duration(int duration) { setRow(R_buttonTiltDuration, duration); }
+void SettingsManager::save_text_scroll_speed(int speed) { setRow(R_textScrollSpeed, speed); }
 
 // --- OBD ---
-void SettingsManager::save_obd_bluetooth_port(const QString &port)
-{
-    qCDebug(lcSettings) << "Saving OBD Bluetooth port:" << port;
-    m_obdBluetoothPort = port;
-    updateSetting(QStringLiteral("obdBluetoothPort"), port);
-    emit obdBluetoothPortChanged(port);
-}
-
-void SettingsManager::save_obd_saved_adapters(const QString &json)
-{
-    m_obdSavedAdapters = json.isEmpty() ? QStringLiteral("[]") : json;
-    updateSetting(QStringLiteral("obdSavedAdapters"), m_obdSavedAdapters);
-    emit obdSavedAdaptersChanged();
-}
+void SettingsManager::save_obd_bluetooth_port(const QString &port) { setRow(R_obdBluetoothPort, port); }
+void SettingsManager::save_obd_saved_adapters(const QString &json) { setRow(R_obdSavedAdapters, json); }
 
 void SettingsManager::add_obd_saved_adapter(const QString &name, const QString &mac)
 {
@@ -1506,7 +1362,7 @@ void SettingsManager::add_obd_saved_adapter(const QString &name, const QString &
     if (trimmed.startsWith(QStringLiteral("RFCOMM://")))
         trimmed.replace(0, 9, QStringLiteral("rfcomm://"));
 
-    QJsonArray arr = QJsonDocument::fromJson(m_obdSavedAdapters.toUtf8()).array();
+    QJsonArray arr = QJsonDocument::fromJson(row(R_obdSavedAdapters).toString().toUtf8()).array();
     // Remove any existing entry with the same MAC, then prepend the new one
     // so the most recently used adapter is first.
     for (int i = arr.size() - 1; i >= 0; --i) {
@@ -1530,7 +1386,7 @@ void SettingsManager::remove_obd_saved_adapter(const QString &mac)
     const QString trimmed = mac.trimmed().toUpper();
     if (trimmed.isEmpty()) return;
 
-    QJsonArray arr = QJsonDocument::fromJson(m_obdSavedAdapters.toUtf8()).array();
+    QJsonArray arr = QJsonDocument::fromJson(row(R_obdSavedAdapters).toString().toUtf8()).array();
     for (int i = arr.size() - 1; i >= 0; --i) {
         const QJsonObject o = arr.at(i).toObject();
         if (o.value(QStringLiteral("mac")).toString().toUpper() == trimmed) {
@@ -1540,78 +1396,15 @@ void SettingsManager::remove_obd_saved_adapter(const QString &mac)
     save_obd_saved_adapters(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact)));
 }
 
-void SettingsManager::save_obd_fast_mode(bool enabled)
-{
-    qCDebug(lcSettings) << "Saving OBD fast mode:" << enabled;
-    m_obdFastMode = enabled;
-    updateSetting(QStringLiteral("obdFastMode"), enabled);
-    emit obdFastModeChanged(enabled);
-}
-
-void SettingsManager::save_obd_card_style_circular(bool circular)
-{
-    m_obdCardStyleCircular = circular;
-    updateSetting(QStringLiteral("obdCardStyleCircular"), circular);
-    emit obdCardStyleCircularChanged(circular);
-}
-
-void SettingsManager::save_gauge_temp_unit(const QString &unit)
-{
-    if ((unit != QLatin1String("C") && unit != QLatin1String("F")) || unit == m_gaugeTempUnit)
-        return;
-    m_gaugeTempUnit = unit;
-    updateSetting(QStringLiteral("gaugeTempUnit"), unit);
-    emit gaugeTempUnitChanged();
-}
-
-void SettingsManager::save_gauge_speed_unit(const QString &unit)
-{
-    if ((unit != QLatin1String("mph") && unit != QLatin1String("km/h")) || unit == m_gaugeSpeedUnit)
-        return;
-    m_gaugeSpeedUnit = unit;
-    updateSetting(QStringLiteral("gaugeSpeedUnit"), unit);
-    emit gaugeSpeedUnitChanged();
-}
-
-void SettingsManager::save_obd_auto_reconnect_attempts(int attempts)
-{
-    qCDebug(lcSettings) << "Saving OBD auto-reconnect attempts:" << attempts;
-    m_obdAutoReconnectAttempts = qBound(0, attempts, 10);
-    updateSetting(QStringLiteral("obdAutoReconnectAttempts"), m_obdAutoReconnectAttempts);
-    emit obdAutoReconnectAttemptsChanged(m_obdAutoReconnectAttempts);
-}
-
-void SettingsManager::save_fuel_tank_capacity(float capacity)
-{
-    qCDebug(lcSettings) << "Saving fuel tank capacity:" << capacity;
-    m_fuelTankCapacity = capacity;
-    updateSetting(QStringLiteral("fuelTankCapacity"), static_cast<double>(capacity));
-    emit fuelTankCapacityChanged(capacity);
-}
-
-void SettingsManager::save_black_box_enabled(bool enabled)
-{
-    qCDebug(lcSettings) << "Saving black box enabled:" << enabled;
-    m_blackBoxEnabled = enabled;
-    updateSetting(QStringLiteral("blackBoxEnabled"), enabled);
-    emit blackBoxEnabledChanged(enabled);
-}
-
-void SettingsManager::save_black_box_sweep_all(bool enabled)
-{
-    qCDebug(lcSettings) << "Saving black box sweep-all:" << enabled;
-    m_blackBoxSweepAll = enabled;
-    updateSetting(QStringLiteral("blackBoxSweepAll"), enabled);
-    emit blackBoxSweepAllChanged(enabled);
-}
-
-void SettingsManager::save_black_box_max_mb(int megabytes)
-{
-    m_blackBoxMaxMB = qBound(50, megabytes, 5000);
-    qCDebug(lcSettings) << "Saving black box cap (MB):" << m_blackBoxMaxMB;
-    updateSetting(QStringLiteral("blackBoxMaxMB"), m_blackBoxMaxMB);
-    emit blackBoxMaxMBChanged(m_blackBoxMaxMB);
-}
+void SettingsManager::save_obd_fast_mode(bool enabled) { setRow(R_obdFastMode, enabled); }
+void SettingsManager::save_obd_card_style_circular(bool circular) { setRow(R_obdCardStyleCircular, circular); }
+void SettingsManager::save_gauge_temp_unit(const QString &unit) { setRow(R_gaugeTempUnit, unit); }
+void SettingsManager::save_gauge_speed_unit(const QString &unit) { setRow(R_gaugeSpeedUnit, unit); }
+void SettingsManager::save_obd_auto_reconnect_attempts(int attempts) { setRow(R_obdAutoReconnectAttempts, attempts); }
+void SettingsManager::save_fuel_tank_capacity(float capacity) { setRow(R_fuelTankCapacity, static_cast<double>(capacity)); }
+void SettingsManager::save_black_box_enabled(bool enabled) { setRow(R_blackBoxEnabled, enabled); }
+void SettingsManager::save_black_box_sweep_all(bool enabled) { setRow(R_blackBoxSweepAll, enabled); }
+void SettingsManager::save_black_box_max_mb(int megabytes) { setRow(R_blackBoxMaxMB, megabytes); }
 
 void SettingsManager::save_obd_parameter_enabled(const QString &parameter, bool enabled)
 {
@@ -1790,58 +1583,42 @@ void SettingsManager::save_custom_theme(const QString &name, const QVariantMap &
 void SettingsManager::downloadThemeArtAsync(const QString &themeName, const QString &url,
                                               const QString &artDir, const QString &safeName)
 {
-    // Use a thread to download, then poll on the main thread
-    m_pendingThemeArtName.clear();
-    m_pendingThemeArtUrl.clear();
-
+    // Download on a thread; the result comes back to this (GUI) thread as a
+    // queued call. It used to be left in two members the GUI polled every
+    // 100 ms with no lock, and a failed download left that timer running
+    // for the life of the process.
     QThread *thread = QThread::create([this, themeName, url, artDir, safeName]() {
         QDir().mkpath(artDir);
-        QString dest = artDir + QStringLiteral("/theme_") + safeName + QStringLiteral(".jpg");
+        const QString dest = artDir + QStringLiteral("/theme_") + safeName + QStringLiteral(".jpg");
         // Use QProcess + curl as a portable download approach
 #if QT_CONFIG(process)
         QProcess proc;
         proc.start(QStringLiteral("curl"), {QStringLiteral("-sL"), QStringLiteral("-o"), dest, url});
-        proc.waitForFinished(30000);
-        const bool downloaded = proc.exitCode() == 0;
+        const bool downloaded = proc.waitForFinished(30000) && proc.exitStatus() == QProcess::NormalExit
+                                && proc.exitCode() == 0;
 #else
         const bool downloaded = false;   // no processes in the browser (wasm)
 #endif
-        if (downloaded && QFile::exists(dest)) {
-            m_pendingThemeArtName = themeName;
-            m_pendingThemeArtUrl  = QUrl::fromLocalFile(dest).toString();
-            qCDebug(lcSettings) << "Downloaded theme art to:" << dest;
-        } else {
+        if (!downloaded || !QFile::exists(dest)) {
             qCWarning(lcSettings) << "Failed to download theme album art from:" << url;
+            return;
         }
-    });
-
-    connect(thread, &QThread::finished, thread, &QThread::deleteLater);
-
-    // Poll for completion
-    QTimer *timer = new QTimer(this);
-    timer->setInterval(100);
-    connect(timer, &QTimer::timeout, this, [this, timer]() {
-        if (!m_pendingThemeArtName.isEmpty()) {
-            timer->stop();
-            timer->deleteLater();
-            QString name = m_pendingThemeArtName;
-            QString localUrl = m_pendingThemeArtUrl;
-            m_pendingThemeArtName.clear();
-            m_pendingThemeArtUrl.clear();
-
+        qCDebug(lcSettings) << "Downloaded theme art to:" << dest;
+        const QString localUrl = QUrl::fromLocalFile(dest).toString();
+        QMetaObject::invokeMethod(this, [this, themeName, localUrl]() {
             QJsonObject settings = loadSettings();
             QJsonObject themes = settings.value(QStringLiteral("customThemes")).toObject();
-            if (themes.contains(name)) {
-                QJsonObject t = themes.value(name).toObject();
-                t[QStringLiteral("albumArt")] = localUrl;
-                themes[name] = t;
-                settings[QStringLiteral("customThemes")] = themes;
-                saveSettings(settings);
-                emit customThemesChanged();
-            }
-        }
+            if (!themes.contains(themeName))
+                return;   // deleted while the picture was on its way
+            QJsonObject t = themes.value(themeName).toObject();
+            t[QStringLiteral("albumArt")] = localUrl;
+            themes[themeName] = t;
+            settings[QStringLiteral("customThemes")] = themes;
+            saveSettings(settings);
+            emit customThemesChanged();
+        }, Qt::QueuedConnection);
     });
-    timer->start();
+    connect(thread, &QThread::finished, thread, &QThread::deleteLater);
     thread->start();
 }
 
@@ -1870,39 +1647,8 @@ void SettingsManager::delete_custom_theme(const QString &name)
 }
 
 // --- Window / Settings navigation ---
-void SettingsManager::save_window_state(const QString &state)
-{
-    static const QStringList valid = {
-        QStringLiteral("windowed"), QStringLiteral("fullscreen"), QStringLiteral("maximized")
-    };
-    if (!valid.contains(state))
-        return;
-    m_windowState = state;
-    updateSetting(QStringLiteral("windowState"), state);
-    emit windowStateChanged(state);
-}
-
-void SettingsManager::set_last_settings_section(const QString &section)
-{
-    // Current SettingsMenu.qml pageModel sections, plus the legacy per-feature
-    // IDs that an older settingsConfigure.json may still carry.
-    static const QStringList valid = {
-        QStringLiteral("displaySettings"), QStringLiteral("mediaSettings"),
-        QStringLiteral("obdSettings"), QStringLiteral("accessoriesSettings"),
-        QStringLiteral("deviceSettings"), QStringLiteral("about"),
-        QStringLiteral("androidAutoSettings"), QStringLiteral("phoneMirrorSettings"),
-        QStringLiteral("volumeKnobSettings"), QStringLiteral("gestureSensorSettings")
-    };
-    if (!valid.contains(section))
-        return;
-    if (section != m_lastSettingsSection) {
-        m_lastSettingsSection = section;
-        QJsonObject settings = loadSettings();
-        settings[QStringLiteral("lastSettingsSection")] = section;
-        saveSettings(settings);
-        emit lastSettingsSectionChanged(section);
-    }
-}
+void SettingsManager::save_window_state(const QString &state) { setRow(R_windowState, state); }
+void SettingsManager::set_last_settings_section(const QString &section) { setRow(R_lastSettingsSection, section); }
 
 // --- Settings section visibility ---
 void SettingsManager::save_settings_section_visibility(const QString &section, bool visible)
@@ -1919,49 +1665,14 @@ void SettingsManager::save_settings_section_visibility(const QString &section, b
 }
 
 // --- Android Auto / Phone Mirror ---
-void SettingsManager::save_android_auto_enabled(bool enabled)
-{
-    qCDebug(lcSettings) << "Saving Android Auto enabled:" << enabled;
-    m_androidAutoEnabled = enabled;
-    updateSetting(QStringLiteral("androidAutoEnabled"), enabled);
-    emit androidAutoEnabledChanged(enabled);
-}
+void SettingsManager::save_android_auto_enabled(bool enabled) { setRow(R_androidAutoEnabled, enabled); }
+void SettingsManager::save_phone_mirror_enabled(bool enabled) { setRow(R_phoneMirrorEnabled, enabled); }
+void SettingsManager::save_scrcpy_display_size(const QString &size) { setRow(R_scrcpyDisplaySize, size); }
+void SettingsManager::save_scrcpy_audio_gain(double gain) { setRow(R_scrcpyAudioGain, gain); }
+void SettingsManager::save_scrcpy_audio_duck_enabled(bool enabled) { setRow(R_scrcpyAudioDuckEnabled, enabled); }
 
-void SettingsManager::save_phone_mirror_enabled(bool enabled)
-{
-    qCDebug(lcSettings) << "Saving Phone Mirror enabled:" << enabled;
-    m_phoneMirrorEnabled = enabled;
-    updateSetting(QStringLiteral("phoneMirrorEnabled"), enabled);
-    emit phoneMirrorEnabledChanged(enabled);
-}
-
-void SettingsManager::save_scrcpy_display_size(const QString &size)
-{
-    qCDebug(lcSettings) << "Saving scrcpy display size:" << size;
-    m_scrcpyDisplaySize = size;
-    updateSetting(QStringLiteral("scrcpyDisplaySize"), size);
-    emit scrcpyDisplaySizeChanged(size);
-}
-
-void SettingsManager::save_scrcpy_audio_gain(double gain)
-{
-    gain = qBound(0.25, gain, 8.0);
-    qCDebug(lcSettings) << "Saving scrcpy audio gain:" << gain;
-    m_scrcpyAudioGain = gain;
-    updateSetting(QStringLiteral("scrcpyAudioGain"), gain);
-    emit scrcpyAudioGainChanged(gain);
-}
-
-void SettingsManager::save_scrcpy_audio_duck_enabled(bool enabled)
-{
-    qCDebug(lcSettings) << "Saving scrcpy audio duck enabled:" << enabled;
-    m_scrcpyAudioDuckEnabled = enabled;
-    updateSetting(QStringLiteral("scrcpyAudioDuckEnabled"), enabled);
-    emit scrcpyAudioDuckEnabledChanged(enabled);
-}
-
-double SettingsManager::scrcpyAudioGainDb() const { return UnitsFn::linearToDb(m_scrcpyAudioGain); }
-double SettingsManager::scrcpyAudioDuckLevelDb() const { return UnitsFn::linearToDb(m_scrcpyAudioDuckLevel); }
+double SettingsManager::scrcpyAudioGainDb() const { return UnitsFn::linearToDb(scrcpyAudioGain()); }
+double SettingsManager::scrcpyAudioDuckLevelDb() const { return UnitsFn::linearToDb(scrcpyAudioDuckLevel()); }
 
 void SettingsManager::save_scrcpy_audio_gain_db(double db)
 {
@@ -1973,195 +1684,40 @@ void SettingsManager::save_scrcpy_audio_duck_level_db(double db)
     save_scrcpy_audio_duck_level(UnitsFn::dbToLinear(qBound(kAudioDuckMinDb, db, kAudioDuckMaxDb)));
 }
 
-void SettingsManager::save_scrcpy_audio_duck_level(double level)
-{
-    level = qBound(0.0, level, 1.0);
-    qCDebug(lcSettings) << "Saving scrcpy audio duck level:" << level;
-    m_scrcpyAudioDuckLevel = level;
-    updateSetting(QStringLiteral("scrcpyAudioDuckLevel"), level);
-    emit scrcpyAudioDuckLevelChanged(level);
-}
-
-void SettingsManager::save_scrcpy_phone_screen_off(bool off)
-{
-    qCDebug(lcSettings) << "Saving scrcpy phone screen off:" << off;
-    m_scrcpyPhoneScreenOff = off;
-    updateSetting(QStringLiteral("scrcpyPhoneScreenOff"), off);
-    emit scrcpyPhoneScreenOffChanged(off);
-}
-
-void SettingsManager::save_scrcpy_display_dpi(int dpi)
-{
-    dpi = dpi <= 0 ? 0 : qBound(80, dpi, 640);
-    qCDebug(lcSettings) << "Saving scrcpy display dpi:" << dpi;
-    m_scrcpyDisplayDpi = dpi;
-    updateSetting(QStringLiteral("scrcpyDisplayDpi"), dpi);
-    emit scrcpyDisplayDpiChanged(dpi);
-}
-
-void SettingsManager::save_scrcpy_bit_rate_usb(int mbps)
-{
-    mbps = qBound(2, mbps, 40);
-    qCDebug(lcSettings) << "Saving scrcpy USB bit rate:" << mbps << "Mbps";
-    m_scrcpyBitRateUsb = mbps;
-    updateSetting(QStringLiteral("scrcpyBitRateUsb"), mbps);
-    emit scrcpyBitRateUsbChanged(mbps);
-}
-
-void SettingsManager::save_scrcpy_bit_rate_wifi(int mbps)
-{
-    mbps = qBound(2, mbps, 40);
-    qCDebug(lcSettings) << "Saving scrcpy Wi-Fi bit rate:" << mbps << "Mbps";
-    m_scrcpyBitRateWifi = mbps;
-    updateSetting(QStringLiteral("scrcpyBitRateWifi"), mbps);
-    emit scrcpyBitRateWifiChanged(mbps);
-}
-
-void SettingsManager::save_scrcpy_auto_wifi(bool enabled)
-{
-    qCDebug(lcSettings) << "Saving scrcpy auto Wi-Fi:" << enabled;
-    m_scrcpyAutoWifi = enabled;
-    updateSetting(QStringLiteral("scrcpyAutoWifi"), enabled);
-    emit scrcpyAutoWifiChanged(enabled);
-}
-
-void SettingsManager::save_scrcpy_bit_rate_auto(bool enabled)
-{
-    qCDebug(lcSettings) << "Saving scrcpy adaptive bit rate:" << enabled;
-    m_scrcpyBitRateAuto = enabled;
-    updateSetting(QStringLiteral("scrcpyBitRateAuto"), enabled);
-    emit scrcpyBitRateAutoChanged(enabled);
-}
-
-void SettingsManager::save_scrcpy_wireless_address(const QString &address)
-{
-    const QString value = address.trimmed();
-    if (value == m_scrcpyWirelessAddress)
-        return;
-    qCDebug(lcSettings) << "Saving scrcpy wireless address:" << value;
-    m_scrcpyWirelessAddress = value;
-    updateSetting(QStringLiteral("scrcpyWirelessAddress"), value);
-    emit scrcpyWirelessAddressChanged(value);
-}
+void SettingsManager::save_scrcpy_audio_duck_level(double level) { setRow(R_scrcpyAudioDuckLevel, level); }
+void SettingsManager::save_scrcpy_phone_screen_off(bool off) { setRow(R_scrcpyPhoneScreenOff, off); }
+void SettingsManager::save_scrcpy_display_dpi(int dpi) { setRow(R_scrcpyDisplayDpi, dpi); }
+void SettingsManager::save_scrcpy_bit_rate_usb(int mbps) { setRow(R_scrcpyBitRateUsb, mbps); }
+void SettingsManager::save_scrcpy_bit_rate_wifi(int mbps) { setRow(R_scrcpyBitRateWifi, mbps); }
+void SettingsManager::save_scrcpy_auto_wifi(bool enabled) { setRow(R_scrcpyAutoWifi, enabled); }
+void SettingsManager::save_scrcpy_bit_rate_auto(bool enabled) { setRow(R_scrcpyBitRateAuto, enabled); }
+void SettingsManager::save_scrcpy_wireless_address(const QString &address) { setRow(R_scrcpyWirelessAddress, address); }
 
 // --- ESP32 ---
-void SettingsManager::save_esp32_volume_enabled(bool enabled)
-{
-    qCDebug(lcSettings) << "Saving ESP32 volume enabled:" << enabled;
-    m_esp32VolumeEnabled = enabled;
-    updateSetting(QStringLiteral("esp32VolumeEnabled"), enabled);
-    emit esp32VolumeEnabledChanged(enabled);
-}
-
-void SettingsManager::save_esp32_volume_port(const QString &port)
-{
-    qCDebug(lcSettings) << "Saving ESP32 volume port:" << port;
-    m_esp32VolumePort = port;
-    updateSetting(QStringLiteral("esp32VolumePort"), port);
-    emit esp32VolumePortChanged(port);
-}
-
-void SettingsManager::save_esp32_volume_step_size(double stepSize)
-{
-    qCDebug(lcSettings) << "Saving ESP32 volume step size:" << stepSize;
-    double clamped = qBound(0.25, stepSize, 10.0);
-    m_esp32VolumeStepSize = std::round(clamped * 4.0) / 4.0;  // nearest 0.25
-    updateSetting(QStringLiteral("esp32VolumeStepSize"), m_esp32VolumeStepSize);
-    emit esp32VolumeStepSizeChanged(m_esp32VolumeStepSize);
-}
-
-void SettingsManager::save_esp32_auto_reconnect(bool enabled)
-{
-    qCDebug(lcSettings) << "Saving ESP32 auto-reconnect:" << enabled;
-    m_esp32AutoReconnect = enabled;
-    updateSetting(QStringLiteral("esp32AutoReconnect"), enabled);
-    emit esp32AutoReconnectChanged(enabled);
-}
-
-void SettingsManager::save_esp32_led_sleep_enabled(bool enabled)
-{
-    qCDebug(lcSettings) << "Saving ESP32 LED sleep enabled:" << enabled;
-    m_esp32LedSleepEnabled = enabled;
-    updateSetting(QStringLiteral("esp32LedSleepEnabled"), enabled);
-    emit esp32LedSleepEnabledChanged(enabled);
-}
-
-void SettingsManager::save_esp32_led_color_mode(const QString &mode)
-{
-    if (mode != QStringLiteral("theme") && mode != QStringLiteral("static"))
-        return;
-    qCDebug(lcSettings) << "Saving ESP32 LED color mode:" << mode;
-    m_esp32LedColorMode = mode;
-    updateSetting(QStringLiteral("esp32LedColorMode"), mode);
-    emit esp32LedColorModeChanged(mode);
-}
-
-void SettingsManager::save_esp32_led_static_color(const QString &color)
-{
-    qCDebug(lcSettings) << "Saving ESP32 LED static color:" << color;
-    m_esp32LedStaticColor = color;
-    updateSetting(QStringLiteral("esp32LedStaticColor"), color);
-    emit esp32LedStaticColorChanged(color);
-}
+void SettingsManager::save_esp32_volume_enabled(bool enabled) { setRow(R_esp32VolumeEnabled, enabled); }
+void SettingsManager::save_esp32_volume_port(const QString &port) { setRow(R_esp32VolumePort, port); }
+void SettingsManager::save_esp32_volume_step_size(double stepSize) { setRow(R_esp32VolumeStepSize, stepSize); }
+void SettingsManager::save_esp32_auto_reconnect(bool enabled) { setRow(R_esp32AutoReconnect, enabled); }
+void SettingsManager::save_esp32_led_sleep_enabled(bool enabled) { setRow(R_esp32LedSleepEnabled, enabled); }
+void SettingsManager::save_esp32_led_color_mode(const QString &mode) { setRow(R_esp32LedColorMode, mode); }
+void SettingsManager::save_esp32_led_static_color(const QString &color) { setRow(R_esp32LedStaticColor, color); }
 
 // --- IMU ---
-void SettingsManager::save_imu_enabled(bool enabled)
-{
-    qCDebug(lcSettings) << "Saving IMU enabled:" << enabled;
-    m_imuEnabled = enabled;
-    updateSetting(QStringLiteral("imuEnabled"), enabled);
-    emit imuEnabledChanged(enabled);
-}
-
-void SettingsManager::save_sensor_emit_rate(int hz)
-{
-    m_sensorEmitRate = qBound(10, hz, 120);   // BerryIMUManager::setEmitRate's range
-    updateSetting(QStringLiteral("sensorEmitRate"), m_sensorEmitRate);
-    emit sensorEmitRateChanged(m_sensorEmitRate);
-}
-
-void SettingsManager::save_sensor_decimal_places(int places)
-{
-    m_sensorDecimalPlaces = qBound(0, places, 4);
-    updateSetting(QStringLiteral("sensorDecimalPlaces"), m_sensorDecimalPlaces);
-    emit sensorDecimalPlacesChanged(m_sensorDecimalPlaces);
-}
-
-void SettingsManager::save_sensor_temp_unit(const QString &unit)
-{
-    if (unit != QLatin1String("F") && unit != QLatin1String("C"))
-        return;
-    m_sensorTempUnit = unit;
-    updateSetting(QStringLiteral("sensorTempUnit"), unit);
-    emit sensorTempUnitChanged(unit);
-}
-
-void SettingsManager::save_sensor_altitude_unit(const QString &unit)
-{
-    if (unit != QLatin1String("m") && unit != QLatin1String("ft"))
-        return;
-    m_sensorAltitudeUnit = unit;
-    updateSetting(QStringLiteral("sensorAltitudeUnit"), unit);
-    emit sensorAltitudeUnitChanged(unit);
-}
+void SettingsManager::save_imu_enabled(bool enabled) { setRow(R_imuEnabled, enabled); }
+void SettingsManager::save_sensor_emit_rate(int hz) { setRow(R_sensorEmitRate, hz); }
+void SettingsManager::save_sensor_decimal_places(int places) { setRow(R_sensorDecimalPlaces, places); }
+void SettingsManager::save_sensor_temp_unit(const QString &unit) { setRow(R_sensorTempUnit, unit); }
+void SettingsManager::save_sensor_altitude_unit(const QString &unit) { setRow(R_sensorAltitudeUnit, unit); }
 
 void SettingsManager::save_sensor_card_visible(const QString &card, bool visible)
 {
     if (!kSensorCards.contains(card))
         return;
-    m_sensorCards.insert(card, visible);
-    updateSetting(QStringLiteral("sensorShow") + card, visible);
-    emit sensorCardsChanged();
+    setRow(rowIndex(QStringLiteral("sensorShow") + card), visible);
 }
 
 // --- Gesture ---
-void SettingsManager::save_gesture_sensor_enabled(bool enabled)
-{
-    qCDebug(lcSettings) << "Saving gesture sensor enabled:" << enabled;
-    m_gestureSensorEnabled = enabled;
-    updateSetting(QStringLiteral("gestureSensorEnabled"), enabled);
-    emit gestureSensorEnabledChanged(enabled);
-}
+void SettingsManager::save_gesture_sensor_enabled(bool enabled) { setRow(R_gestureSensorEnabled, enabled); }
 
 void SettingsManager::save_gesture_action(const QString &gesture, const QString &action)
 {
@@ -2200,21 +1756,8 @@ void SettingsManager::reset_gesture_mapping()
     emit gestureMappingChanged();
 }
 
-void SettingsManager::save_gesture_volume_step(int step)
-{
-    qCDebug(lcSettings) << "Saving gesture volume step:" << step;
-    m_gestureVolumeStep = qBound(1, step, 100);
-    updateSetting(QStringLiteral("gestureVolumeStep"), m_gestureVolumeStep);
-    emit gestureVolumeStepChanged(m_gestureVolumeStep);
-}
-
-void SettingsManager::save_gesture_cooldown(int ms)
-{
-    qCDebug(lcSettings) << "Saving gesture cooldown:" << ms << "ms";
-    m_gestureCooldown = qBound(100, ms, 2000);
-    updateSetting(QStringLiteral("gestureCooldown"), m_gestureCooldown);
-    emit gestureCooldownChanged(m_gestureCooldown);
-}
+void SettingsManager::save_gesture_volume_step(int step) { setRow(R_gestureVolumeStep, step); }
+void SettingsManager::save_gesture_cooldown(int ms) { setRow(R_gestureCooldown, ms); }
 
 // --- Pinned settings ---
 void SettingsManager::toggle_pin_setting(const QString &settingId)
@@ -2358,7 +1901,12 @@ QVariantMap SettingsManager::apply_settings(const QVariantMap &values)
             refused.insert(key, QStringLiteral("set in settingsConfigure.json only"));
             continue;
         }
-        const QString slotName = registrySlots.value(key, QStringLiteral("save_") + snakeCase(key));
+        // The row's own slot first (clockFormat24Hour's is save_clock_format),
+        // then the registry's, then save_<snake_case of the key>
+        const int index = rowIndex(key);
+        const QString slotName = index >= 0 && rows().at(index).slot
+                                     ? QString::fromLatin1(rows().at(index).slot)
+                                     : registrySlots.value(key, QStringLiteral("save_") + snakeCase(key));
         QMetaMethod slot;
         for (int i = mo->methodOffset(); i < mo->methodCount(); ++i) {
             const QMetaMethod m = mo->method(i);
@@ -2394,9 +1942,38 @@ void SettingsManager::save_setting(const QString &key, const QVariant &value)
         qCWarning(lcSettings) << "save_setting: refused" << key << "(edit settingsConfigure.json)";
         return;
     }
+    // A plain setting: the same path as its save slot (type, limits, the
+    // live value, its signal). It used to be written to the file only: the
+    // property kept the old value until the next start.
+    const int index = rowIndex(key);
+    // The Album Art palette is the player's to set (set_album_art_colors,
+    // scope full), as apply_settings has it: not a settings-scope client's
+    if (index == R_albumArtColors) {
+        qCWarning(lcSettings) << "save_setting: refused" << key << "(set by the player from the album art)";
+        return;
+    }
+    if (index >= 0) {
+        if (setRow(index, value, true) == SetResult::Changed)
+            emit genericSettingChanged(key);
+        return;
+    }
+    // The media folder has rules of its own (an absolute path, not the root)
+    if (key == QLatin1String("mediaFolder")) {
+        if (value.typeId() == QMetaType::QString && save_media_folder(value.toString()))
+            emit genericSettingChanged(key);
+        return;
+    }
+    const StructuredSetting *structured = structuredSetting(key);
+    if (structured)
+        flushObdParameters();   // toggles waiting for their debounce are in m_obdParameters only
     QJsonObject settings = loadSettings();
     settings[key] = QJsonValue::fromVariant(value);
     saveSettings(settings);
+    if (structured) {
+        // A list or a map kept in a member too: follow what was just saved
+        populateStructured();
+        structured->notify(this);
+    }
     emit genericSettingChanged(key);
 }
 
@@ -2409,6 +1986,9 @@ QVariant SettingsManager::get_setting(const QString &key)
     // Not the service keys: the paired devices' hashes are nobody's business
     if (fileOnlyKeys().contains(key))
         return QVariant();
+    const int index = rowIndex(key);
+    if (index >= 0)
+        return row(index);
     QJsonObject settings = loadSettings();
     if (settings.contains(key))
         return settings.value(key).toVariant();
@@ -2419,6 +1999,9 @@ QVariant SettingsManager::get_setting_with_default(const QString &key, const QVa
 {
     if (fileOnlyKeys().contains(key))
         return defaultValue;
+    const int index = rowIndex(key);
+    if (index >= 0)
+        return row(index);
     QJsonObject settings = loadSettings();
     if (settings.contains(key))
         return settings.value(key).toVariant();
@@ -2448,39 +2031,39 @@ QVariantList SettingsManager::get_home_obd_parameters()
     return m_homeObdParameters;
 }
 
-bool    SettingsManager::get_auto_play_on_startup()    { return m_autoPlayOnStartup; }
-bool    SettingsManager::get_persist_shuffle_state()   { return m_persistShuffleState; }
-bool    SettingsManager::get_last_shuffle_state()      { return m_lastShuffleState; }
-QString SettingsManager::get_last_played_song()        { return m_lastPlayedSong; }
-int     SettingsManager::get_last_played_position()    { return m_lastPlayedPosition; }
-QString SettingsManager::get_last_played_playlist()    { return m_lastPlayedPlaylist; }
-QString SettingsManager::get_last_settings_section()   { return m_lastSettingsSection; }
-QString SettingsManager::get_window_state()            { return m_windowState; }
-QString SettingsManager::get_music_button_default_page() { return m_musicButtonDefaultPage; }
-bool    SettingsManager::get_return_to_library_after_selection() { return m_returnToLibraryAfterSelection; }
-bool    SettingsManager::get_android_auto_enabled()    { return m_androidAutoEnabled; }
-bool    SettingsManager::get_phone_mirror_enabled()    { return m_phoneMirrorEnabled; }
-QString SettingsManager::get_scrcpy_display_size()     { return m_scrcpyDisplaySize; }
-double  SettingsManager::get_scrcpy_audio_gain()       { return m_scrcpyAudioGain; }
-bool    SettingsManager::get_scrcpy_audio_duck_enabled() { return m_scrcpyAudioDuckEnabled; }
-double  SettingsManager::get_scrcpy_audio_duck_level() { return m_scrcpyAudioDuckLevel; }
-bool    SettingsManager::get_scrcpy_phone_screen_off() { return m_scrcpyPhoneScreenOff; }
-int     SettingsManager::get_scrcpy_display_dpi()      { return m_scrcpyDisplayDpi; }
-int     SettingsManager::get_scrcpy_bit_rate_usb()     { return m_scrcpyBitRateUsb; }
-int     SettingsManager::get_scrcpy_bit_rate_wifi()    { return m_scrcpyBitRateWifi; }
-bool    SettingsManager::get_scrcpy_auto_wifi()        { return m_scrcpyAutoWifi; }
-bool    SettingsManager::get_scrcpy_bit_rate_auto()    { return m_scrcpyBitRateAuto; }
-QString SettingsManager::get_scrcpy_wireless_address() { return m_scrcpyWirelessAddress; }
-bool    SettingsManager::get_esp32_volume_enabled()    { return m_esp32VolumeEnabled; }
-QString SettingsManager::get_esp32_volume_port()       { return m_esp32VolumePort; }
-double  SettingsManager::get_esp32_volume_step_size()  { return m_esp32VolumeStepSize; }
-bool    SettingsManager::get_esp32_auto_reconnect()    { return m_esp32AutoReconnect; }
-bool    SettingsManager::get_esp32_led_sleep_enabled() { return m_esp32LedSleepEnabled; }
-QString SettingsManager::get_esp32_led_color_mode()    { return m_esp32LedColorMode; }
-QString SettingsManager::get_esp32_led_static_color()  { return m_esp32LedStaticColor; }
-bool    SettingsManager::get_show_waveform_visualizer() { return m_showWaveformVisualizer; }
-bool    SettingsManager::get_imu_enabled()             { return m_imuEnabled; }
-bool    SettingsManager::get_gesture_sensor_enabled()  { return m_gestureSensorEnabled; }
+bool    SettingsManager::get_auto_play_on_startup()    { return autoPlayOnStartup(); }
+bool    SettingsManager::get_persist_shuffle_state()   { return persistShuffleState(); }
+bool    SettingsManager::get_last_shuffle_state()      { return lastShuffleState(); }
+QString SettingsManager::get_last_played_song()        { return lastPlayedSong(); }
+int     SettingsManager::get_last_played_position()    { return lastPlayedPosition(); }
+QString SettingsManager::get_last_played_playlist()    { return lastPlayedPlaylist(); }
+QString SettingsManager::get_last_settings_section()   { return lastSettingsSection(); }
+QString SettingsManager::get_window_state()            { return windowState(); }
+QString SettingsManager::get_music_button_default_page() { return musicButtonDefaultPage(); }
+bool    SettingsManager::get_return_to_library_after_selection() { return returnToLibraryAfterSelection(); }
+bool    SettingsManager::get_android_auto_enabled()    { return androidAutoEnabled(); }
+bool    SettingsManager::get_phone_mirror_enabled()    { return phoneMirrorEnabled(); }
+QString SettingsManager::get_scrcpy_display_size()     { return scrcpyDisplaySize(); }
+double  SettingsManager::get_scrcpy_audio_gain()       { return scrcpyAudioGain(); }
+bool    SettingsManager::get_scrcpy_audio_duck_enabled() { return scrcpyAudioDuckEnabled(); }
+double  SettingsManager::get_scrcpy_audio_duck_level() { return scrcpyAudioDuckLevel(); }
+bool    SettingsManager::get_scrcpy_phone_screen_off() { return scrcpyPhoneScreenOff(); }
+int     SettingsManager::get_scrcpy_display_dpi()      { return scrcpyDisplayDpi(); }
+int     SettingsManager::get_scrcpy_bit_rate_usb()     { return scrcpyBitRateUsb(); }
+int     SettingsManager::get_scrcpy_bit_rate_wifi()    { return scrcpyBitRateWifi(); }
+bool    SettingsManager::get_scrcpy_auto_wifi()        { return scrcpyAutoWifi(); }
+bool    SettingsManager::get_scrcpy_bit_rate_auto()    { return scrcpyBitRateAuto(); }
+QString SettingsManager::get_scrcpy_wireless_address() { return scrcpyWirelessAddress(); }
+bool    SettingsManager::get_esp32_volume_enabled()    { return esp32VolumeEnabled(); }
+QString SettingsManager::get_esp32_volume_port()       { return esp32VolumePort(); }
+double  SettingsManager::get_esp32_volume_step_size()  { return esp32VolumeStepSize(); }
+bool    SettingsManager::get_esp32_auto_reconnect()    { return esp32AutoReconnect(); }
+bool    SettingsManager::get_esp32_led_sleep_enabled() { return esp32LedSleepEnabled(); }
+QString SettingsManager::get_esp32_led_color_mode()    { return esp32LedColorMode(); }
+QString SettingsManager::get_esp32_led_static_color()  { return esp32LedStaticColor(); }
+bool    SettingsManager::get_show_waveform_visualizer() { return showWaveformVisualizer(); }
+bool    SettingsManager::get_imu_enabled()             { return imuEnabled(); }
+bool    SettingsManager::get_gesture_sensor_enabled()  { return gestureSensorEnabled(); }
 
 QString SettingsManager::get_gesture_mapping()
 {
@@ -2517,30 +2100,8 @@ QString SettingsManager::get_pinned_settings_metadata()
 
         // Resolve current value
         QString key = entry.value(QStringLiteral("key")).toString();
-        QString attr = keyToAttr(key);
-        QVariant val;
-        // Use a map for known keys to their member variables
-        if (attr == QStringLiteral("start_volume"))              val = QVariant(m_startVolume);
-        else if (attr == QStringLiteral("auto_play_on_startup")) val = QVariant(m_autoPlayOnStartup);
-        else if (attr == QStringLiteral("show_waveform_visualizer")) val = QVariant(m_showWaveformVisualizer);
-        else if (attr == QStringLiteral("ui_scale"))             val = QVariant(m_uiScale);
-        else if (attr == QStringLiteral("theme_setting"))        val = QVariant(m_themeSetting);
-        else if (attr == QStringLiteral("show_clock"))           val = QVariant(m_showClock);
-        else if (attr == QStringLiteral("show_bottom_bar_media_controls")) val = QVariant(m_showBottomBarMediaControls);
-        else if (attr == QStringLiteral("background_blur_radius")) val = QVariant(m_backgroundBlurRadius);
-        else if (attr == QStringLiteral("color_transition_ms"))  val = QVariant(m_colorTransitionMs);
-        else if (attr == QStringLiteral("obd_fast_mode"))        val = QVariant(m_obdFastMode);
-        else if (attr == QStringLiteral("black_box_enabled"))    val = QVariant(m_blackBoxEnabled);
-        else if (attr == QStringLiteral("black_box_sweep_all"))  val = QVariant(m_blackBoxSweepAll);
-        else if (attr == QStringLiteral("black_box_max_mb"))     val = QVariant(m_blackBoxMaxMB);
-        else if (attr == QStringLiteral("imu_enabled"))          val = QVariant(m_imuEnabled);
-        else if (attr == QStringLiteral("sensor_emit_rate"))     val = QVariant(m_sensorEmitRate);
-        else if (attr == QStringLiteral("gesture_sensor_enabled")) val = QVariant(m_gestureSensorEnabled);
-        else if (attr == QStringLiteral("settings_layout_style")) val = QVariant(m_settingsLayoutStyle);
-        else {
-            // Fallback: read from settings file
-            val = m_settings.value(key).toVariant();
-        }
+        const int index = rowIndex(key);
+        const QVariant val = index >= 0 ? row(index) : m_settings.value(key).toVariant();
         entry[QStringLiteral("currentValue")] = QJsonValue::fromVariant(val);
         result.append(entry);
     }
@@ -2560,148 +2121,64 @@ bool SettingsManager::is_settings_section_visible(const QString &section)
 }
 
 // =========================================================================
-// keyToAttr — maps camelCase JSON key to snake_case attr name
-// =========================================================================
-QString SettingsManager::keyToAttr(const QString &key) const
-{
-    static const QHash<QString, QString> map = {
-        {QStringLiteral("startUpVolume"),               QStringLiteral("start_volume")},
-        {QStringLiteral("autoPlayOnStartup"),           QStringLiteral("auto_play_on_startup")},
-        {QStringLiteral("showWaveformVisualizer"),      QStringLiteral("show_waveform_visualizer")},
-        {QStringLiteral("uiScale"),                     QStringLiteral("ui_scale")},
-        {QStringLiteral("themeSetting"),                QStringLiteral("theme_setting")},
-        {QStringLiteral("showClock"),                   QStringLiteral("show_clock")},
-        {QStringLiteral("showBottomBarMediaControls"),  QStringLiteral("show_bottom_bar_media_controls")},
-        {QStringLiteral("backgroundBlurRadius"),        QStringLiteral("background_blur_radius")},
-        {QStringLiteral("colorTransitionMs"),           QStringLiteral("color_transition_ms")},
-        {QStringLiteral("obdFastMode"),                 QStringLiteral("obd_fast_mode")},
-        {QStringLiteral("blackBoxEnabled"),             QStringLiteral("black_box_enabled")},
-        {QStringLiteral("blackBoxSweepAll"),            QStringLiteral("black_box_sweep_all")},
-        {QStringLiteral("blackBoxMaxMB"),               QStringLiteral("black_box_max_mb")},
-        {QStringLiteral("imuEnabled"),                  QStringLiteral("imu_enabled")},
-        {QStringLiteral("sensorEmitRate"),              QStringLiteral("sensor_emit_rate")},
-        {QStringLiteral("gestureSensorEnabled"),        QStringLiteral("gesture_sensor_enabled")},
-        {QStringLiteral("settingsLayoutStyle"),         QStringLiteral("settings_layout_style")},
-    };
-    return map.value(key, key);
-}
-
-// =========================================================================
 // reset_to_defaults
 // =========================================================================
 void SettingsManager::reset_to_defaults()
 {
-    // Persist the defaults, reload every cached member exactly as the
-    // constructor does, then notify QML of each property. The file-only
-    // keys keep what the file says: a reset from a client must not change
-    // what the service does at the next start.
+    // Persist the defaults, reload everything exactly as the constructor
+    // does, then tell QML about what changed and nothing else. The
+    // file-only keys keep what the file says: a reset from a client must
+    // not change what the service does at the next start.
+    flushObdParameters();
+    const QVariantList valuesBefore = m_values;
+    const QJsonObject before = m_settings;
+    const QString folderBefore = m_mediaFolder;
+    const int volumeBefore = m_currentVolume;
+
     QJsonObject defaults = m_defaultSettings;
-    const QJsonObject current = loadSettings();
     for (const QString &key : fileOnlyKeys())
-        if (current.contains(key))
-            defaults.insert(key, current.value(key));
+        if (before.contains(key))
+            defaults.insert(key, before.value(key));
     saveSettings(defaults);
     populateMembers();
 
-    emit deviceNameChanged(m_deviceName);
-    emit themeSettingChanged(m_themeSetting);
-    emit fontSettingChanged(m_fontSetting);
-    emit startUpVolumeChanged(QString::number(static_cast<double>(m_startVolume)));
-    emit currentVolumeChanged(m_currentVolume);
-    emit showClockChanged(m_showClock);
-    emit clockFormatChanged(m_clockFormat24Hour);
-    emit clockShowSecondsChanged(m_clockShowSeconds);
-    emit clockSizeChanged(m_clockSize);
-    emit clockSizeAutoChanged(m_clockSizeAuto);
-    emit backgroundGridChanged(m_backgroundGrid);
-    emit screenWidthChanged(m_screenWidth);
-    emit screenHeightChanged(m_screenHeight);
-    emit backgroundBlurRadiusChanged(m_backgroundBlurRadius);
-    emit uiScaleChanged(m_uiScale);
-    emit colorTransitionMsChanged(m_colorTransitionMs);
-    emit songLengthTransitionChanged(m_songLengthTransition);
-    emit obdBluetoothPortChanged(m_obdBluetoothPort);
-    emit obdSavedAdaptersChanged();
-    emit obdFastModeChanged(m_obdFastMode);
-    emit obdCardStyleCircularChanged(m_obdCardStyleCircular);
-    emit gaugeTempUnitChanged();
-    emit gaugeSpeedUnitChanged();
-    emit obdAutoReconnectAttemptsChanged(m_obdAutoReconnectAttempts);
-    emit obdParametersChanged();
-    emit homeOBDParametersChanged();
-    emit supportedOBDParametersChanged();
-    emit mediaFolderChanged(m_mediaFolder);
-    emit directoryHistoryChanged();
-    emit fuelTankCapacityChanged(m_fuelTankCapacity);
-    emit blackBoxEnabledChanged(m_blackBoxEnabled);
-    emit blackBoxSweepAllChanged(m_blackBoxSweepAll);
-    emit blackBoxMaxMBChanged(m_blackBoxMaxMB);
-    emit bottomBarOrientationChanged(m_bottomBarOrientation);
-    emit showBottomBarMediaControlsChanged(m_showBottomBarMediaControls);
-    emit autoPlayOnStartupChanged(m_autoPlayOnStartup);
-    emit persistShuffleStateChanged(m_persistShuffleState);
-    emit lastShuffleStateChanged(m_lastShuffleState);
-    emit lastPlayedSongChanged(m_lastPlayedSong);
-    emit lastPlayedPositionChanged(m_lastPlayedPosition);
-    emit lastPlayedPlaylistChanged(m_lastPlayedPlaylist);
-    emit windowStateChanged(m_windowState);
-    emit musicButtonDefaultPageChanged(m_musicButtonDefaultPage);
-    emit returnToLibraryAfterSelectionChanged(m_returnToLibraryAfterSelection);
-    emit androidAutoEnabledChanged(m_androidAutoEnabled);
-    emit phoneMirrorEnabledChanged(m_phoneMirrorEnabled);
-    emit scrcpyDisplaySizeChanged(m_scrcpyDisplaySize);
-    emit scrcpyAudioGainChanged(m_scrcpyAudioGain);
-    emit scrcpyAudioDuckEnabledChanged(m_scrcpyAudioDuckEnabled);
-    emit scrcpyAudioDuckLevelChanged(m_scrcpyAudioDuckLevel);
-    emit scrcpyPhoneScreenOffChanged(m_scrcpyPhoneScreenOff);
-    emit scrcpyDisplayDpiChanged(m_scrcpyDisplayDpi);
-    emit scrcpyBitRateUsbChanged(m_scrcpyBitRateUsb);
-    emit scrcpyBitRateWifiChanged(m_scrcpyBitRateWifi);
-    emit scrcpyAutoWifiChanged(m_scrcpyAutoWifi);
-    emit scrcpyBitRateAutoChanged(m_scrcpyBitRateAuto);
-    emit scrcpyWirelessAddressChanged(m_scrcpyWirelessAddress);
-    emit settingsMenuVisibilityChanged();
-    emit esp32VolumeEnabledChanged(m_esp32VolumeEnabled);
-    emit esp32VolumePortChanged(m_esp32VolumePort);
-    emit esp32VolumeStepSizeChanged(m_esp32VolumeStepSize);
-    emit esp32AutoReconnectChanged(m_esp32AutoReconnect);
-    emit esp32LedSleepEnabledChanged(m_esp32LedSleepEnabled);
-    emit esp32LedColorModeChanged(m_esp32LedColorMode);
-    emit esp32LedStaticColorChanged(m_esp32LedStaticColor);
-    emit showWaveformVisualizerChanged(m_showWaveformVisualizer);
-    emit show3DButtonTiltChanged(m_show3DButtonTilt);
-    emit show3DAlbumPreviewChanged(m_show3DAlbumPreview);
-    emit roundedAlbumArtChanged(m_roundedAlbumArt);
-    emit albumArtCornerRadiusChanged(m_albumArtCornerRadius);
-    emit showAlbumArtShadowChanged(m_showAlbumArtShadow);
-    emit vinylRecordModeChanged(m_vinylRecordMode);
-    emit genericSettingChanged(QStringLiteral("musicDeviceModel"));
-    emit albumArtTransitionChanged(m_albumArtTransition);
-    emit audioOutputDeviceChanged(m_audioOutputDevice);
-    emit backgroundOverlayOpacityChanged(m_backgroundOverlayOpacity);
-    emit sideCardOpacityChanged(m_sideCardOpacity);
-    emit sideCardAngleChanged(m_sideCardAngle);
-    emit buttonTiltDurationChanged(m_buttonTiltDuration);
-    emit textScrollSpeedChanged(m_textScrollSpeed);
-    emit albumArtColorsChanged();
-    emit settingsLayoutStyleChanged(m_settingsLayoutStyle);
-    emit imuEnabledChanged(m_imuEnabled);
-    emit sensorEmitRateChanged(m_sensorEmitRate);
-    emit sensorDecimalPlacesChanged(m_sensorDecimalPlaces);
-    emit sensorTempUnitChanged(m_sensorTempUnit);
-    emit sensorAltitudeUnitChanged(m_sensorAltitudeUnit);
-    emit sensorCardsChanged();
-    emit gestureSensorEnabledChanged(m_gestureSensorEnabled);
-    emit gestureMappingChanged();
-    emit gestureVolumeStepChanged(m_gestureVolumeStep);
-    emit gestureCooldownChanged(m_gestureCooldown);
-    emit pinnedSettingsChanged();
-    emit lastSettingsSectionChanged(m_lastSettingsSection);
-    emit customThemesChanged();
+    // The plain settings
+    bool cards = false;
+    for (int i = 0; i < rows().size(); ++i) {
+        if (m_values.at(i) == valuesBefore.at(i))
+            continue;
+        if (rows().at(i).shape == Part)
+            cards = true;   // six rows, one signal
+        else
+            rows().at(i).notify(this, m_values.at(i));
+    }
+    if (cards)
+        emit sensorCardsChanged();
+
+    // The lists and maps, then the keys known by name only (save_setting's)
+    QStringList keys = before.keys();
+    for (const QString &key : m_settings.keys())
+        if (!before.contains(key))
+            keys.append(key);
+    for (const QString &key : std::as_const(keys)) {
+        if (before.value(key) == m_settings.value(key) || rowIndex(key) >= 0 || fileOnlyKeys().contains(key)
+            || key == QLatin1String("mediaFolder"))
+            continue;
+        if (const StructuredSetting *structured = structuredSetting(key))
+            structured->notify(this);
+        else
+            emit genericSettingChanged(key);
+    }
+    if (m_mediaFolder != folderBefore)
+        emit mediaFolderChanged(m_mediaFolder);
+    if (m_currentVolume != volumeBefore)
+        emit currentVolumeChanged(m_currentVolume);
 }
 
 // =========================================================================
-// Git info methods
+// Git info methods (not settings: they belong with the About page's
+// DiagnosticsManager one day, as custom-theme art and the pinned-settings
+// registry belong in classes of their own)
 // =========================================================================
 QString SettingsManager::getGitRepoDir() const
 {
@@ -2709,18 +2186,44 @@ QString SettingsManager::getGitRepoDir() const
     return QFileInfo(m_backendDir).absolutePath();
 }
 
-QString SettingsManager::get_git_commit_hash()
+// One git question about OCTAVE's own checkout, asked once a run. The About
+// page binds to three of these: each used to start git on the GUI thread
+// with a 5 s wait every time the binding was evaluated, and with no .git
+// of its own, git answered for whatever repository the binary sat inside.
+namespace {
+QString gitAnswer(const QString &repoDir, const QStringList &args)
 {
 #if QT_CONFIG(process)
-    QProcess proc;
-    proc.setWorkingDirectory(getGitRepoDir());
-    proc.start(QStringLiteral("git"), {QStringLiteral("rev-parse"), QStringLiteral("--short"), QStringLiteral("HEAD")});
-    if (proc.waitForFinished(5000) && proc.exitCode() == 0) {
-        const QString hash = QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
-        if (!hash.isEmpty())
-            return hash;
+    static QHash<QString, QString> answers;
+    const QString key = args.join(QLatin1Char(' '));
+    const auto known = answers.constFind(key);
+    if (known != answers.constEnd())
+        return *known;
+    QString out;
+    if (QFileInfo::exists(repoDir + QStringLiteral("/.git"))) {
+        QProcess proc;
+        proc.setWorkingDirectory(repoDir);
+        proc.start(QStringLiteral("git"), args);
+        if (proc.waitForFinished(2000) && proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0)
+            out = QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
+        else
+            proc.kill();
     }
+    answers.insert(key, out);
+    return out;
+#else
+    Q_UNUSED(repoDir)
+    Q_UNUSED(args)
+    return QString();
 #endif
+}
+} // namespace
+
+QString SettingsManager::get_git_commit_hash()
+{
+    const QString hash = gitAnswer(getGitRepoDir(), {QStringLiteral("rev-parse"), QStringLiteral("--short"), QStringLiteral("HEAD")});
+    if (!hash.isEmpty())
+        return hash;
     // Packaged builds (APK, installers) have neither .git nor git: use the
     // value CMake baked in at configure time.
 #ifdef OCTAVE_GIT_COMMIT
@@ -2732,14 +2235,7 @@ QString SettingsManager::get_git_commit_hash()
 
 QString SettingsManager::get_git_commit_date()
 {
-    QString dateStr;
-#if QT_CONFIG(process)
-    QProcess proc;
-    proc.setWorkingDirectory(getGitRepoDir());
-    proc.start(QStringLiteral("git"), {QStringLiteral("log"), QStringLiteral("-1"), QStringLiteral("--format=%ci")});
-    if (proc.waitForFinished(5000) && proc.exitCode() == 0)
-        dateStr = QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
-#endif
+    QString dateStr = gitAnswer(getGitRepoDir(), {QStringLiteral("log"), QStringLiteral("-1"), QStringLiteral("--format=%ci")});
 #ifdef OCTAVE_GIT_DATE
     if (dateStr.isEmpty())
         dateStr = QStringLiteral(OCTAVE_GIT_DATE);   // baked in by CMake for packaged builds
@@ -2754,12 +2250,5 @@ QString SettingsManager::get_git_commit_date()
 
 QString SettingsManager::get_git_commit_message()
 {
-#if QT_CONFIG(process)
-    QProcess proc;
-    proc.setWorkingDirectory(getGitRepoDir());
-    proc.start(QStringLiteral("git"), {QStringLiteral("log"), QStringLiteral("-1"), QStringLiteral("--format=%s")});
-    if (proc.waitForFinished(5000) && proc.exitCode() == 0)
-        return QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
-#endif
-    return QString();
+    return gitAnswer(getGitRepoDir(), {QStringLiteral("log"), QStringLiteral("-1"), QStringLiteral("--format=%s")});
 }

@@ -1,0 +1,175 @@
+{
+    "class": "BusMonitor",
+    "methods": [
+        {
+            "kind": "invokable",
+            "name": "start",
+            "params": [
+                {
+                    "name": "filter",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "invokable",
+            "name": "start",
+            "params": [
+            ],
+            "returns": "bool",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "invokable",
+            "name": "stop",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "invokable",
+            "name": "clear",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "vehicle"
+        },
+        {
+            "kind": "invokable",
+            "name": "startRecording",
+            "params": [
+            ],
+            "returns": "bool",
+            "scope": "files"
+        },
+        {
+            "kind": "invokable",
+            "name": "stopRecording",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "files"
+        }
+    ],
+    "object": "busMonitor",
+    "properties": [
+        {
+            "constant": false,
+            "name": "available",
+            "notify": "availableChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "active",
+            "notify": "activeChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "filter",
+            "notify": "activeChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "note",
+            "notify": "noteChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "ids",
+            "notify": "idsChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "frameCount",
+            "notify": "idsChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "framesPerSecond",
+            "notify": "idsChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "overruns",
+            "notify": "idsChanged",
+            "readable": true,
+            "type": "int",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "canRecord",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "recording",
+            "notify": "recordingChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "logFile",
+            "notify": "recordingChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "availableChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "activeChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "noteChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "idsChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "recordingChanged",
+            "params": [
+            ]
+        }
+    ],
+    "stability": "experimental"
+}

@@ -21,7 +21,10 @@
 Q_LOGGING_CATEGORY(lcTripStore, "octave.tripstore")
 
 namespace {
-const int kSchemaVersion = 1;
+const int kSchemaVersion = 1;     // of the per-trip JSON files
+// Of the database. 2: trips.simulated (a drive of the simulated car)
+const int kDbSchemaVersion = 2;
+const int kDamagedCopiesKept = 3;
 // Gaps longer than this between two speed samples are not integrated into
 // the distance (a dropout, not a 10 s stretch at the last known speed)
 const qint64 kMaxIntegrationGapMs = 10000;
@@ -257,30 +260,127 @@ bool TripStore::open(const QString &dir)
         emit storeOpened(false, msg);
         return false;
     }
-    sqlite3 *db = nullptr;
-    const int rc = sqlite3_open_v2(databasePath().toUtf8().constData(), &db,
-                                   SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
-    if (rc != SQLITE_OK) {
-        const QString msg = QStringLiteral("Cannot open %1: %2")
-                                .arg(databasePath(), db ? QString::fromUtf8(sqlite3_errmsg(db)) : QString::fromUtf8(sqlite3_errstr(rc)));
-        qCWarning(lcTripStore) << msg;
-        if (db)
-            sqlite3_close(db);
-        emit error(msg);
+    // Twice at most: a database that is damaged (a power cut at the wrong
+    // moment, a bad SD card block) is set aside and a new one started. It
+    // used to fail here on every boot, and the black box stayed off until
+    // someone deleted the file by hand. The per-trip CSV / JSON files are
+    // untouched either way.
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        sqlite3 *db = nullptr;
+        const int rc = sqlite3_open_v2(databasePath().toUtf8().constData(), &db,
+                                       SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
+        bool damaged = rc == SQLITE_CORRUPT || rc == SQLITE_NOTADB;
+        QString msg;
+        if (rc != SQLITE_OK) {
+            msg = QStringLiteral("Cannot open %1: %2")
+                      .arg(databasePath(), db ? QString::fromUtf8(sqlite3_errmsg(db)) : QString::fromUtf8(sqlite3_errstr(rc)));
+            qCWarning(lcTripStore) << msg;
+            if (db)
+                sqlite3_close(db);
+            emit error(msg);
+        } else {
+            m_db = db;
+            sqlite3_busy_timeout(m_db, 2000);
+            if (createSchema() && checkSchemaVersion()) {
+                qCInfo(lcTripStore).noquote() << "Black box open at" << databasePath()
+                                              << QStringLiteral("(SQLite %1)").arg(QLatin1String(SQLITE_VERSION));
+                emit storeOpened(true, QString());
+                return true;
+            }
+            const int code = sqlite3_errcode(m_db);
+            damaged = code == SQLITE_CORRUPT || code == SQLITE_NOTADB;
+            msg = QStringLiteral("Cannot initialise %1").arg(databasePath());
+            sqlite3_close(m_db);   // no checkpoint: nothing here is worth writing back
+            m_db = nullptr;
+            m_paramIds.clear();
+        }
+        if (attempt == 0 && damaged && setDamagedDatabaseAside())
+            continue;
         emit storeOpened(false, msg);
         return false;
     }
-    m_db = db;
-    sqlite3_busy_timeout(m_db, 2000);
-    if (!createSchema()) {
-        const QString msg = QStringLiteral("Cannot initialise %1").arg(databasePath());
-        close();
-        emit storeOpened(false, msg);
+    return false;
+}
+
+// blackbox.sqlite (and its -wal / -shm) renamed to blackbox.sqlite.damaged-<time>
+bool TripStore::setDamagedDatabaseAside()
+{
+    const QString stamp = QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss"));
+    const QString aside = databasePath() + QStringLiteral(".damaged-") + stamp;
+    if (!QFile::rename(databasePath(), aside)) {
+        qCWarning(lcTripStore) << "The trip database is damaged and could not be set aside:" << databasePath();
         return false;
     }
-    qCInfo(lcTripStore).noquote() << "Black box open at" << databasePath()
-                                  << QStringLiteral("(SQLite %1)").arg(QLatin1String(SQLITE_VERSION));
-    emit storeOpened(true, QString());
+    for (const char *suffix : {"-wal", "-shm"})
+        QFile::rename(databasePath() + QLatin1String(suffix), aside + QLatin1String(suffix));
+    const QString msg = QStringLiteral("The trip database was damaged. It was kept as %1 and a new one started; "
+                                       "the trip files in history/trips are untouched.").arg(QFileInfo(aside).fileName());
+    qCWarning(lcTripStore).noquote() << msg;
+    emit error(msg);
+    // A card that keeps damaging the file must not fill itself with copies:
+    // the newest three stay (the stamp sorts by time)
+    const QFileInfo db(databasePath());
+    QStringList copies = db.dir().entryList({db.fileName() + QStringLiteral(".damaged-*")}, QDir::Files, QDir::Name);
+    copies.erase(std::remove_if(copies.begin(), copies.end(), [](const QString &name) {
+                     return name.endsWith(QLatin1String("-wal")) || name.endsWith(QLatin1String("-shm"));
+                 }), copies.end());
+    while (copies.size() > kDamagedCopiesKept) {
+        const QString old = db.dir().filePath(copies.takeFirst());
+        for (const char *suffix : {"", "-wal", "-shm"})
+            QFile::remove(old + QLatin1String(suffix));
+    }
+    return true;
+}
+
+// The schema number was written and never read. Read it: an older database
+// is brought up to date here (nothing to do yet at version 1), a newer one
+// is used as far as this build understands it, and said so in the log.
+bool TripStore::checkSchemaVersion()
+{
+    int stored = kDbSchemaVersion;
+    {
+        Query q(m_db);
+        if (q.prepare("SELECT value FROM meta WHERE key = 'schema'") && q.step())
+            stored = q.text(0).toInt();
+    }
+    if (stored > kDbSchemaVersion) {
+        qCWarning(lcTripStore) << "The trip database is schema" << stored << "and this build writes schema"
+                               << kDbSchemaVersion << "(made by a newer OCTAVE): using what this build knows";
+        return true;
+    }
+    if (stored < kDbSchemaVersion) {
+        // Migrations, oldest first, and the new number with them in one
+        // transaction (SQLite's DDL is transactional): a power cut leaves
+        // the old schema whole or the new one. Each step first looks at
+        // what is there, so a database that has the column and the old
+        // number (an earlier build wrote the two separately) is only
+        // renumbered instead of failing on "duplicate column" at every boot.
+        if (!exec(QStringLiteral("BEGIN IMMEDIATE")))
+            return false;
+        bool ok = true;
+        if (stored < 2) {
+            bool hasSimulated = false;
+            {
+                Query cols(m_db);
+                if (cols.prepare("SELECT 1 FROM pragma_table_info('trips') WHERE name = 'simulated'"))
+                    hasSimulated = cols.step();
+            }
+            ok = hasSimulated || exec(QStringLiteral("ALTER TABLE trips ADD COLUMN simulated INTEGER NOT NULL DEFAULT 0"));
+        }
+        if (ok) {
+            Query q(m_db);
+            ok = q.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES('schema', ?)")
+                 && q.bind(1, QString::number(kDbSchemaVersion)).exec();
+        }
+        if (!ok || !exec(QStringLiteral("COMMIT"))) {
+            // The error the open path reads (damaged or not) is the failed
+            // statement's: keep it across the rollback's own result
+            exec(QStringLiteral("ROLLBACK"));
+            qCWarning(lcTripStore) << "The trip database could not be brought up to schema" << kDbSchemaVersion;
+            return false;
+        }
+        qCInfo(lcTripStore) << "Trip database brought up to schema" << kDbSchemaVersion << "from" << stored;
+    }
     return true;
 }
 
@@ -323,7 +423,8 @@ bool TripStore::createSchema()
         QStringLiteral("CREATE TABLE IF NOT EXISTS trips("
                        "id INTEGER PRIMARY KEY, start_ms INTEGER NOT NULL, end_ms INTEGER, "
                        "clean INTEGER NOT NULL DEFAULT 0, vin TEXT, make TEXT, model_year INTEGER, "
-                       "sample_count INTEGER NOT NULL DEFAULT 0, summary TEXT, file_base TEXT)"),
+                       "sample_count INTEGER NOT NULL DEFAULT 0, summary TEXT, file_base TEXT, "
+                       "simulated INTEGER NOT NULL DEFAULT 0)"),
         QStringLiteral("CREATE TABLE IF NOT EXISTS params(id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE)"),
         QStringLiteral("CREATE TABLE IF NOT EXISTS samples("
                        "trip_id INTEGER NOT NULL, ts_ms INTEGER NOT NULL, param_id INTEGER NOT NULL, value REAL NOT NULL)"),
@@ -336,9 +437,19 @@ bool TripStore::createSchema()
         if (!exec(sql))
             return false;
     }
+    // A database made by an older build already has its tables, and its
+    // schema number says which; checkSchemaVersion() brings it up. Only a
+    // file with no number yet gets one here, by whether the newest column
+    // is present.
+    bool hasSimulated = false;
+    {
+        Query cols(m_db);
+        if (cols.prepare("SELECT 1 FROM pragma_table_info('trips') WHERE name = 'simulated'"))
+            hasSimulated = cols.step();
+    }
     Query q(m_db);
     if (q.prepare("INSERT OR IGNORE INTO meta(key, value) VALUES('schema', ?)"))
-        q.bind(1, QString::number(kSchemaVersion)).exec();
+        q.bind(1, QString::number(hasSimulated ? kDbSchemaVersion : 1)).exec();
     return true;
 }
 
@@ -382,12 +493,13 @@ void TripStore::beginTrip(qint64 id, qint64 startMs, const QVariantMap &meta)
     if (!isOpen())
         return;
     Query q(m_db);
-    if (!q.prepare("INSERT OR REPLACE INTO trips(id, start_ms, vin, make, model_year) VALUES(?, ?, ?, ?, ?)"))
+    if (!q.prepare("INSERT OR REPLACE INTO trips(id, start_ms, vin, make, model_year, simulated) VALUES(?, ?, ?, ?, ?, ?)"))
         return;
     q.bind(1, id).bind(2, startMs)
         .bind(3, meta.value(QStringLiteral("vin")).toString())
         .bind(4, meta.value(QStringLiteral("make")).toString())
-        .bind(5, meta.value(QStringLiteral("modelYear")).toInt());
+        .bind(5, meta.value(QStringLiteral("modelYear")).toInt())
+        .bind(6, meta.value(QStringLiteral("simulated")).toBool() ? 1 : 0);
     if (!q.exec()) {
         emit error(q.error());
         return;
@@ -455,8 +567,8 @@ QVariantMap TripStore::tripRow(qint64 id)
 {
     QVariantMap row;
     Query q(m_db);
-    if (!q.prepare("SELECT id, start_ms, end_ms, clean, vin, make, model_year, sample_count, summary, file_base "
-                   "FROM trips WHERE id = ?"))
+    if (!q.prepare("SELECT id, start_ms, end_ms, clean, vin, make, model_year, sample_count, summary, file_base, "
+                   "simulated FROM trips WHERE id = ?"))
         return row;
     q.bind(1, id);
     if (!q.step())
@@ -471,6 +583,7 @@ QVariantMap TripStore::tripRow(qint64 id)
     row[QStringLiteral("sampleCount")] = q.int64(7);
     row[QStringLiteral("summary")] = q.text(8);
     row[QStringLiteral("fileBase")] = q.text(9);
+    row[QStringLiteral("simulated")] = q.integer(10) != 0;
     return row;
 }
 
@@ -490,6 +603,7 @@ QVariantMap TripStore::endTrip(qint64 id, qint64 endMs, bool clean)
     meta[QStringLiteral("vin")] = row.value(QStringLiteral("vin"));
     meta[QStringLiteral("make")] = row.value(QStringLiteral("make"));
     meta[QStringLiteral("modelYear")] = row.value(QStringLiteral("modelYear"));
+    meta[QStringLiteral("simulated")] = row.value(QStringLiteral("simulated"));
 
     QVariantMap summary = summarise(id, startMs, endMs, clean, meta);
     QString base;
@@ -583,6 +697,9 @@ QVariantMap TripStore::summarise(qint64 id, qint64 startMs, qint64 endMs, bool c
     s[QStringLiteral("vin")] = meta.value(QStringLiteral("vin")).toString();
     s[QStringLiteral("make")] = meta.value(QStringLiteral("make")).toString();
     s[QStringLiteral("modelYear")] = meta.value(QStringLiteral("modelYear")).toInt();
+    // Only when true: a drive of the simulated car, never of a real one
+    if (meta.value(QStringLiteral("simulated")).toBool())
+        s[QStringLiteral("simulated")] = true;
 
     // Per-parameter statistics
     QVariantList params;
@@ -600,9 +717,9 @@ QVariantMap TripStore::summarise(qint64 id, qint64 startMs, qint64 endMs, bool c
                 p[QStringLiteral("min")] = q.dbl(2);
                 p[QStringLiteral("max")] = q.dbl(3);
                 p[QStringLiteral("avg")] = q.dbl(4);
-                if (const ParameterCatalog::Parameter *meta = ParameterCatalog::find(q.text(0))) {
-                    p[QStringLiteral("title")] = meta->title;
-                    p[QStringLiteral("unit")] = meta->unit;
+                if (const ParameterCatalog::Parameter *param = ParameterCatalog::find(q.text(0))) {
+                    p[QStringLiteral("title")] = param->title;
+                    p[QStringLiteral("unit")] = param->unit;
                 }
                 byName.insert(p.value(QStringLiteral("id")).toString(), p);
             }
@@ -1068,6 +1185,7 @@ QVariantMap TripStore::rowSummary(const QVariantMap &row)
     item[QStringLiteral("vin")] = row.value(QStringLiteral("vin"));
     item[QStringLiteral("make")] = row.value(QStringLiteral("make"));
     item[QStringLiteral("modelYear")] = row.value(QStringLiteral("modelYear"));
+    item[QStringLiteral("simulated")] = row.value(QStringLiteral("simulated")).toBool();
     item[QStringLiteral("sampleCount")] = row.value(QStringLiteral("sampleCount"));
     const QString base = row.value(QStringLiteral("fileBase")).toString();
     item[QStringLiteral("file")] = base.isEmpty() ? QString() : base + QStringLiteral(".csv");
@@ -1116,6 +1234,7 @@ QVariantMap TripStore::tripDetail(qint64 id)
         meta[QStringLiteral("vin")] = row.value(QStringLiteral("vin"));
         meta[QStringLiteral("make")] = row.value(QStringLiteral("make"));
         meta[QStringLiteral("modelYear")] = row.value(QStringLiteral("modelYear"));
+        meta[QStringLiteral("simulated")] = row.value(QStringLiteral("simulated"));
         detail = summarise(id, row.value(QStringLiteral("startMs")).toLongLong(), endMs, true, meta);
         detail[QStringLiteral("open")] = true;
     } else {
@@ -1197,16 +1316,25 @@ bool TripStore::deleteTrip(qint64 id)
     if (!isOpen())
         return false;
     const QString base = tripFileBase(id);
-    exec(QStringLiteral("BEGIN"));
+    // All three or none: a statement that fails must not leave a trip
+    // without its samples, or its files gone and its row still listed
+    bool ok = exec(QStringLiteral("BEGIN IMMEDIATE"));
+    const bool began = ok;
     for (const char *sql : {"DELETE FROM samples WHERE trip_id = ?", "DELETE FROM events WHERE trip_id = ?",
                             "DELETE FROM trips WHERE id = ?"}) {
+        if (!ok)
+            break;
         Query q(m_db);
-        if (q.prepare(sql))
-            q.bind(1, id).exec();
+        ok = q.prepare(sql) && q.bind(1, id).exec();
     }
-    const bool ok = exec(QStringLiteral("COMMIT"));
-    if (!ok)
-        exec(QStringLiteral("ROLLBACK"));
+    ok = ok && exec(QStringLiteral("COMMIT"));
+    if (!ok) {
+        // The trip is still in the database: keep its files too
+        if (began)
+            exec(QStringLiteral("ROLLBACK"));
+        qCWarning(lcTripStore) << "Trip" << id << "not deleted: the database refused";
+        return false;
+    }
     removeTripFiles(base);
     exec(QStringLiteral("PRAGMA incremental_vacuum"));
     qCInfo(lcTripStore) << "Trip" << id << "deleted";

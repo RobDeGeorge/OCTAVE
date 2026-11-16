@@ -53,7 +53,7 @@ jobs:
   build-wasm:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
       - name: Install build tools
         run: |
           sudo apt-get update
@@ -61,7 +61,7 @@ jobs:
       # The desktop kit first: the wasm cross build runs its host tools (moc,
       # qsb, balsam, qmlimportscanner) from here, so it needs the same modules.
       - name: Install host Qt ${{ env.QT_VERSION }}
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06  # v4
         with:
           version: ${{ env.QT_VERSION }}
           host: 'linux'
@@ -72,7 +72,7 @@ jobs:
           cache: true
           set-env: false
       - name: Install Qt ${{ env.QT_VERSION }} for WebAssembly
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06  # v4
         with:
           version: ${{ env.QT_VERSION }}
           host: 'all_os'
@@ -83,12 +83,12 @@ jobs:
           cache: true
           set-env: false
       - name: Install emsdk ${{ env.EMSDK_VERSION }}
-        uses: mymindstorm/setup-emsdk@v15
+        uses: mymindstorm/setup-emsdk@667eb33f24e84e7f362c16d8d7fff0629a73e15e  # v15
         with:
           version: ${{ env.EMSDK_VERSION }}
           actions-cache-folder: 'emsdk-cache'
       # The playground's bundled glass frontend (build.sh stages dist/)
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with:
           node-version: '22'
       - name: Build the glass example frontend
@@ -101,7 +101,7 @@ jobs:
       # the emsdk installed above (its first run builds the SDL2 port),
       # retro-cluster with Rust's wasm32 target and the wasm-bindgen program of
       # the version its Cargo.lock names (the release binary, not a compile)
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff  # v5
         with:
           go-version-file: examples/frontends/sunlight/go.mod
           cache-dependency-path: examples/frontends/sunlight/go.sum
@@ -137,7 +137,19 @@ jobs:
           status=$?
           kill $server
           exit $status
-      - uses: actions/upload-artifact@v4
+      # The Web Serial OBD transport against a fake ELM327 on a fake
+      # navigator.serial: connect, replug, hand-over to the simulated car
+      - name: Check the Web Serial adapter path
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          python3 packaging/wasm/serve.py wasm-site 8092 &
+          server=$!
+          CHROME=google-chrome node packaging/wasm/check_webserial.mjs http://127.0.0.1:8092/
+          status=$?
+          kill $server
+          exit $status
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: octave-wasm
           path: wasm-site
@@ -151,9 +163,9 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
       - name: Stage the app at the site root
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
         with:
           name: octave-wasm
           path: _site
@@ -183,9 +195,9 @@ jobs:
           done
           ls -la _site | head -20
           du -sh _site
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b  # v5
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa  # v3
         with:
           path: _site
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e  # v4

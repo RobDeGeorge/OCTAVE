@@ -52,10 +52,8 @@ Item {
 
     // Debugging output
     Component.onCompleted: {
-        console.log("CarMenu component created successfully")
         // Read initial IMU connection state (signal may have fired before this component loaded)
         imuConnected = berryIMU.connected
-        console.log("CarMenu: IMU connected =", imuConnected)
     }
 
     // Live OBD drives the 3D Jeep's fan/crank (RPM) and wheels/driveshafts
@@ -215,7 +213,7 @@ Item {
                     position: Qt.vector3d(0, 0, 0)
                     scale: Qt.vector3d(30, 30, 30)
 
-                    JeepVehicle { id: jeep }
+                    JeepVehicle { id: jeep; active: carMenu.visible }
                 }
             }
 

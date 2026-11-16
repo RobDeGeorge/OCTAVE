@@ -99,10 +99,22 @@ class FakeServerTest(unittest.TestCase):
             with self.assertRaises(OctaveError) as e:
                 again.call("nowPlaying", "extractArtColors")          # full: refused
             self.assertIn("permission", str(e.exception))
-        self.octave.call("fake", "revokeTokens")
+            self.assertEqual(self.octave.media_ticket()["expiresIn"], 600)
+            # The code worked once: a second device needs a new one, as on the head unit
+            with self.assertRaises(OctaveError) as e:
+                self.octave.pair("123456", "again")
+            self.assertIn("no pairing code is showing", str(e.exception))
+            # Revoking closes the paired device's connections (both of these hold the token)
+            with Client(port=self.server.port) as admin:
+                admin.call("fake", "revokeTokens")
+                self.assertEqual(list(again.events()), [])
+                self.assertTrue(again.closed)
+                self.assertEqual(list(self.octave.events()), [])
+                self.assertTrue(self.octave.closed)
+                self.assertFalse(admin.closed, "a connection that holds no token stays")
+                admin.call("fake", "showPairingCode", "123456")   # for whatever pairs next
         with Client(port=self.server.port, token=token) as rejected:
             self.assertTrue(rejected.server["tokenRejected"])
-        self.assertEqual(self.octave.media_ticket()["expiresIn"], 600)
 
     def test_untrusted_until_paired(self):
         server = FakeServer(port=0, untrusted=True).start()
@@ -117,6 +129,67 @@ class FakeServerTest(unittest.TestCase):
                 with self.assertRaises(OctaveError) as e:
                     c.call("nowPlaying", "togglePlay")                # needs media
                 self.assertIn("media permission", str(e.exception))
+        finally:
+            server.stop()
+
+    def test_the_code_expires_and_can_be_shown_again(self):
+        server = FakeServer(port=0, code_life=0.2).start()
+        try:
+            with Client(port=server.port) as c:
+                import time
+                time.sleep(0.3)
+                with self.assertRaises(OctaveError) as e:
+                    c.pair("123456", "late")
+                self.assertIn("no pairing code is showing", str(e.exception))
+                c.call("fake", "showPairingCode", "654321")
+                self.assertEqual(len(c.pair("654321", "in time")), 64)
+        finally:
+            server.stop()
+
+    def test_pairing_over_the_network_is_throttled(self):
+        server = FakeServer(port=0, untrusted=True, attempt_interval=0.3).start()
+        try:
+            with Client(port=server.port) as c:
+                with self.assertRaises(OctaveError) as e:
+                    c.pair("000000", "guess")
+                self.assertEqual(str(e.exception), "wrong code")
+                with self.assertRaises(OctaveError) as e:
+                    c.pair("123456", "at once")               # the right code, too soon
+                self.assertIn("too fast", str(e.exception))
+                import time
+                time.sleep(0.35)
+                self.assertEqual(len(c.pair("123456", "after the pause")), 64)
+            # Ten wrong codes and the address is refused until restart
+            server.show_pairing_code("123456")
+            server.failures["127.0.0.1"] = server.MAX_FAILURES_PER_PEER
+            with Client(port=server.port) as c:
+                with self.assertRaises(OctaveError) as e:
+                    c.pair("123456", "locked out")
+                self.assertIn("too many wrong codes", str(e.exception))
+        finally:
+            server.stop()
+
+    def test_an_unpaired_connection_is_closed_after_its_idle_time(self):
+        server = FakeServer(port=0, untrusted=True, untrusted_idle=0.3).start()
+        try:
+            with Client(port=server.port) as idle, Client(port=server.port) as paired:
+                paired.pair("123456", "test")
+                self.assertEqual(list(idle.events()), [])     # ends when the server closes it
+                self.assertTrue(idle.closed)
+                self.assertFalse(paired.closed, "a paired connection may stay silent")
+                self.assertEqual(paired.get("volumeController", "percent"), 32)
+        finally:
+            server.stop()
+
+    def test_both_streams_need_the_phone_permission(self):
+        server = FakeServer(port=0, untrusted=True).start()
+        try:
+            with Client(port=server.port) as c:
+                c.pair("123456", "test", scopes=["media"])
+                for obj, name in (("phoneMirrorManager", "video"), ("androidAutoManager", "frames")):
+                    with self.assertRaises(OctaveError) as e:
+                        c.stream(obj, name)
+                    self.assertEqual(e.exception.code, "forbidden", f"{obj}.{name}")
         finally:
             server.stop()
 

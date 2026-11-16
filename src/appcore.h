@@ -23,6 +23,8 @@
 #include "managers/volumecontroller.h"
 #include "managers/mediamanager.h"
 #include "managers/audioanalyzer.h"
+#include "managers/busmonitor.h"
+#include "managers/custompids.h"
 #include "managers/parametercatalog.h"
 #include "managers/obdmanager.h"
 #include "managers/shiftlightmanager.h"
@@ -73,8 +75,12 @@ public:
     VolumeController volumeController;
     MediaManager mediaManager;
     AudioAnalyzer audioAnalyzer;
+    // Reads <config>/custom-pids.json into the parameter catalog: before
+    // every member that reads the catalog (OBDManager, ParameterStore, ...)
+    CustomPids customPids;
     ParameterCatalog parameterCatalog;
     OBDManager obdManager;
+    BusMonitor busMonitor;
     ShiftLightManager shiftLightManager;
     OBDAdapterFinder obdAdapterFinder;
     TripRecorder tripRecorder;

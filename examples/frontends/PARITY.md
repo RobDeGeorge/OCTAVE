@@ -21,13 +21,13 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 | Shuffle | `nowPlaying.toggleShuffle`, `shuffled` | Yes | Yes | Yes | Yes | Yes | |
 | Volume and mute | `volumeController.applyVolume`, `percent`, `muted`, `effectivelyMuted` | Yes | Yes | Yes | Yes | Yes | |
 | Current cover | `GET /art`, `nowPlaying.artRevision` | Yes | Yes | No | Yes | Yes | console: a terminal; retro-cluster draws it as a dot matrix |
-| Library: songs with artist, album, length, sort | `mediaManager.get_media_files`, `get_band`, `get_album`, `get_formatted_duration`, `sort_media_files`, `get_total_duration`, `get_album_count`, `get_artist_count` | Yes | Yes | Yes | No | No | |
-| Play a library song | `mediaManager.play_file` | Yes | Yes | Yes | No | No | |
-| Playlists: select, create, delete | `mediaManager.get_playlist_names`, `select_playlist`, `create_playlist`, `delete_playlist` | Yes | Yes | Yes | No | No | |
-| Move a song to a playlist, delete a song | `mediaManager.move_song_to_playlist`, `delete_song`, `get_movable_playlist_names` | Yes | Yes | Yes | No | No | |
-| Library song covers | `mediaManager.get_album_art`, `get_neighbor_album_arts`, `GET /art?song=`, `?queue=` | Yes | No | Yes | No | No | GET /art?song= and ?queue= landed (lane A 9b); console: 32 x 16 half-block covers |
-| Rescan library, strip filenames | `mediaManager.scan_library`, `strip_filenames` | Yes | No | Yes | No | No | console: API pane only |
-| Media folder | `settingsManager.save_media_folder`, `mediaFolder`, `mediaManager.browse_music_folders` | Yes | Partial | Yes | No | No | browsing: `mediaManager.browse_music_folders` (lane A 9, landed); glass: a typed path so far |
+| Library: songs with artist, album, length, sort | `mediaManager.getMediaFiles`, `getBand`, `getAlbum`, `getFormattedDuration`, `sortMediaFiles`, `getTotalDuration`, `getAlbumCount`, `getArtistCount` | Yes | Yes | Yes | No | No | |
+| Play a library song | `mediaManager.playFile` | Yes | Yes | Yes | No | No | |
+| Playlists: select, create, delete | `mediaManager.getPlaylistNames`, `selectPlaylist`, `createPlaylist`, `deletePlaylist` | Yes | Yes | Yes | No | No | |
+| Move a song to a playlist, delete a song | `mediaManager.moveSongToPlaylist`, `deleteSong`, `getMovablePlaylistNames` | Yes | Yes | Yes | No | No | |
+| Library song covers | `mediaManager.getAlbumArt`, `getNeighborAlbumArts`, `GET /art?song=`, `?queue=` | Yes | No | Yes | No | No | GET /art?song= and ?queue= landed (lane A 9b); console: 32 x 16 half-block covers |
+| Rescan library, strip filenames | `mediaManager.scanLibrary`, `stripFilenames` | Yes | No | Yes | No | No | console: API pane only |
+| Media folder | `settingsManager.save_media_folder`, `mediaFolder`, `mediaManager.browseMusicFolders` | Yes | Partial | Yes | No | No | browsing: `mediaManager.browseMusicFolders` (lane A 9, landed); glass: a typed path so far |
 | Waveform / spectrum | `audioAnalyzer.levels`, `setDemand` | Yes | No | Yes | Yes | No | retro-cluster: AUDIO page; console: a one-line spectrum on the Library pane |
 | Phone media while mirroring | `nowPlaying.*` (follows the phone), `phoneMirrorManager.mediaTitle` / `mediaPlayPause` / ... | Yes | Yes | Partial | Partial | Partial | console, retro-cluster, sunlight: through `nowPlaying` only |
 | Phone queue | `phoneMirrorManager.mediaQueue`, `mediaQueueTitle`, `mediaQueueActiveId`, `mediaSkipToQueueItem` | Yes | No | Yes | No | No | |
@@ -37,18 +37,18 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 | Feature | API | QML | glass | console | retro-cluster | sunlight | Notes |
 |---|---|---|---|---|---|---|---|
 | Connection state, detail, progress, log | `obdManager.connectionState`, `connectionStatus`, `connectionDetail`, `connectionProgress`, `connectionLog` | Yes | Yes | Yes | Partial | Partial | retro-cluster, sunlight: state only |
-| Connect, reconnect, disconnect | `obdManager.connect_obd`, `reconnect`, `close` | Yes | Yes | Yes | No | No | |
-| Force connect, reset connection | `obdManager.force_connect`, `reset_connection` | Yes | Yes | Yes | No | No | |
-| Ports and adapters, connect to one | `obdManager.availableAdapters`, `refresh_ports`, `scan`, `connect_to_adapter` | Yes | Yes | Yes | No | No | |
+| Connect, reconnect, disconnect | `obdManager.connectObd`, `reconnect`, `close` | Yes | Yes | Yes | No | No | |
+| Force connect, reset connection | `obdManager.forceConnect`, `resetConnection` | Yes | Yes | Yes | No | No | |
+| Ports and adapters, connect to one | `obdManager.availableAdapters`, `refreshPorts`, `scan`, `connectToAdapter` | Yes | Yes | Yes | No | No | |
 | Bluetooth adapter scan, power on, pair | `obdAdapterFinder.*` | Yes | Yes | Yes | No | No | console: no power-on or cancel |
 | Saved adapters | `settingsManager.obdSavedAdapters`, `remove_obd_saved_adapter` | Yes | Yes | Yes | No | No | console: settings table shows the list |
-| Direct MAC connect, target address | `obdManager.connect_direct`, `set_target_address` | Yes | No | Yes | No | No | |
-| Vehicle: VIN, make, year, supported PIDs, scan | `obdManager.vin`, `vehicleMake`, `vehicleModelYear`, `vehicleSupportedParameters`, `scan_vehicle` | Yes | Yes | Yes | Partial | Partial | retro-cluster, sunlight: readouts only |
+| Direct MAC connect, target address | `obdManager.connectDirect`, `setTargetAddress` | Yes | No | Yes | No | No | |
+| Vehicle: VIN, make, year, supported PIDs, scan | `obdManager.vin`, `vehicleMake`, `vehicleModelYear`, `vehicleSupportedParameters`, `scanVehicle` | Yes | Yes | Yes | Partial | Partial | retro-cluster, sunlight: readouts only |
 | Live values of every PID, demand-driven | `paramStore`, `parameterCatalog.displayParameters`, `obdManager.setParameterDemand` | Yes | Yes | Yes | Yes | Partial | sunlight: DRIVE's five and the open dashboard's PIDs |
 | Home OBD cards: choose, order | `settingsManager.homeOBDParameters`, `add_home_obd_parameter`, `remove_home_obd_parameter`, `move_home_obd_parameter` | Yes | Yes | Yes | No | No | console: settings table (list as JSON) |
-| Trouble codes: read, clear, MIL | `obdManager.read_dtc`, `clear_dtc`, `get_dtc_codes`, `dtcCodesChanged`, `milStatusChanged` | Yes | Yes | Yes | Yes | Yes | |
-| Freeze frame | `obdManager.read_freeze_frame`, `freezeFrameChanged` | Yes | Yes | Yes | Yes | No | the frame's PID values since svc/9 |
-| Diagnostic mode, status, current codes | `obdManager.enter_diagnostic_mode`, `exit_diagnostic_mode`, `read_status`, `read_current_dtc` | Yes | Yes | Yes | No | No | |
+| Trouble codes: read, clear, MIL | `obdManager.readDtc`, `clearDtc`, `getDtcCodes`, `dtcCodesChanged`, `milStatusChanged` | Yes | Yes | Yes | Yes | Yes | |
+| Freeze frame | `obdManager.readFreezeFrame`, `freezeFrameChanged` | Yes | Yes | Yes | Yes | No | the frame's PID values since svc/9 |
+| Diagnostic mode, status, current codes | `obdManager.enterDiagnosticMode`, `exitDiagnosticMode`, `readStatus`, `readCurrentDtc` | Yes | Yes | Yes | No | No | |
 | Units (°F / °C, mph / km/h) | `settingsManager.gaugeTempUnit`, `gaugeSpeedUnit`, `displayParameters` | Yes | Yes | Yes | Yes | Yes | all follow the setting; QML, glass and the console can change it |
 | OBD settings (fast mode, reconnect attempts, card style, fuel tank, timeout) | `settingsManager.save_obd_*`, `save_fuel_tank_capacity` | Yes | Yes | Yes | No | No | console: settings table |
 
@@ -88,7 +88,7 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 | Tare, reset tare | `berryIMU.calibrateTare`, `resetTare` | Yes | Yes | Yes | No | No | |
 | IMU settings (enable, rate, decimals, units, cards) | `settingsManager.save_imu_enabled`, `save_sensor_*` | Yes | Yes | Partial | No | No | console: settings table |
 | Gesture sensor: enable, status, mapping, reset | `gestureSensor.gestures`, `actions`, `setGestureAction`, `resetMappingToDefaults`, `connectionStatus`, `settingsManager.save_gesture_*` | Yes | Yes | Yes | No | No | console: enable in the settings table; the mapping takes two arguments (API pane) |
-| ESP32 knob: ports, connect, status, LED and step settings | `esp32VolumeManager.availablePorts`, `refresh_ports`, `connect_device`, `connected`, `get_connection_detail`, `settingsManager.save_esp32_*` | Yes | Yes | Yes | No | No | console: settings only |
+| ESP32 knob: ports, connect, status, LED and step settings | `esp32VolumeManager.availablePorts`, `refreshPorts`, `connectDevice`, `connected`, `getConnectionDetail`, `settingsManager.save_esp32_*` | Yes | Yes | Yes | No | No | console: settings only |
 
 ## Phone mirroring and Android Auto
 
@@ -113,7 +113,7 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 | Settings sections shown, pinned settings | `settingsManager.save_settings_section_visibility`, `is_settings_section_visible`, `toggle_pin_setting` | Yes | No | Partial | No | No | console: API pane |
 | Network status | `networkManager.isConnected`, `networkName`, `refreshNetwork` | Yes | Yes | Yes | No | No | |
 | Updates: check, apply, restart | `networkManager.checkForUpdates`, `applySelfUpdate`, `restartApp`, `updateStatus`, `selfUpdateStatus` | Yes | Yes | Yes | No | No | |
-| Shut down the device | `networkManager.shutdown_device` | Yes | Yes | Yes | No | No | |
+| Shut down the device | `networkManager.shutdownDevice` | Yes | Yes | Yes | No | No | |
 | Diagnostics: version, device info, recent log, export logs | `diagnosticsManager.appVersion`, `deviceInfo`, `recentLogLines`, `exportLogs`, `logDir` | Yes | Yes | Yes | No | No | the exported bundle stays on the head unit (GET /export/..., lane A 9c, landed); clipboard copy is head-unit-local by design |
 | About: build, commit, licences | `settingsManager.get_git_commit_*`, `diagnosticsManager.licenseText` | Yes | Partial | Yes | No | No | |
 | Device name | `settingsManager.save_device_name` | Yes | Yes | Yes | No | No | |

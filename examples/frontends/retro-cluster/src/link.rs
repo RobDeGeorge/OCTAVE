@@ -337,9 +337,9 @@ impl State {
     /// The result of a call this client reads back, by "object.method".
     fn apply_result(&mut self, what: &str, v: &Value) {
         match what {
-            "obdManager.get_dtc_codes" => self.dtcs = dtc_list(v),
-            "obdManager.get_freeze_frame" => self.freeze = dtc_list(v),
-            "obdManager.get_mil_status" => self.mil = v.as_bool().unwrap_or(false),
+            "obdManager.getDtcCodes" => self.dtcs = dtc_list(v),
+            "obdManager.getFreezeFrame" => self.freeze = dtc_list(v),
+            "obdManager.getMilStatus" => self.mil = v.as_bool().unwrap_or(false),
             _ => {}
         }
     }
@@ -458,7 +458,7 @@ fn opening(token: Option<&str>, demand: &[String], bars: bool) -> Vec<(Value, St
         out.push((json!({"op": "subscribe", "object": object, "signals": signals}), format!("subscribe {object}")));
     }
     // Signals only report changes: read the trouble codes as they stand
-    for method in ["get_dtc_codes", "get_mil_status", "get_freeze_frame"] {
+    for method in ["getDtcCodes", "getMilStatus", "getFreezeFrame"] {
         out.push((json!({"op": "call", "object": "obdManager", "method": method, "args": []}), format!("obdManager.{method}")));
     }
     out.push((demand_msg(demand), "demand".to_string()));

@@ -171,7 +171,7 @@
 
         <p>The highlighted chip is <code>activeThemeName</code>: when Album Art Capture is on it shows <code>App.Style.lastStaticTheme</code> (the theme "borrowed" behind the live palette, defaulting to CosmicVoyager). Picking any chip calls <code>save_theme_setting(name)</code> + <code>App.Style.setTheme(name)</code>, which implicitly turns Album Art Capture off.</p>
 
-        <p>Below the chips a <code>SettingSubcategory</code> titled "Album Art Capture" carries the on/off switch (<code>togglable: true</code>, checked when <code>themeSetting === "Album Art Capture"</code>). Turning it on stores the current theme in <code>lastStaticTheme</code>, saves the setting, calls <code>setTheme</code> and immediately asks <code>mediaManager.extract_colors_from_album_art(get_current_file())</code>; turning it off restores <code>lastStaticTheme</code>. Its body holds the "Transition Speed" slider and the "Match Song Length" toggle described under <a href="#transitions">Colour Transitions</a>.</p>
+        <p>Below the chips a <code>SettingSubcategory</code> titled "Album Art Capture" carries the on/off switch (<code>togglable: true</code>, checked when <code>themeSetting === "Album Art Capture"</code>). Turning it on stores the current theme in <code>lastStaticTheme</code>, saves the setting, calls <code>setTheme</code> and immediately asks <code>mediaManager.extractColorsFromAlbumArt(getCurrentFile())</code>; turning it off restores <code>lastStaticTheme</code>. Its body holds the "Transition Speed" slider and the "Match Song Length" toggle described under <a href="#transitions">Colour Transitions</a>.</p>
 
         <!-- Custom Themes -->
         <h2 id="custom-themes">Custom (Saved Album Art) Themes</h2>
@@ -195,7 +195,7 @@
 
         <h3>Triggers</h3>
         <ul>
-          <li>One rule, in <a href="signals-slots-reference.html#nowPlaying"><code>NowPlaying</code></a>: while <code>themeSetting</code> is "Album Art Capture", the colours follow the art of whatever is playing, the phone's while it has the media controls, else the local track's. It extracts when <code>nowPlaying.artUrl</code> changes (a new track, a source switch, the phone's art arriving after its metadata, the restored track at startup; the same art keeps the same colours, so nothing runs) and when the theme is chosen. Local art goes through <code>extract_colors_from_album_art(file)</code>, the phone's through <code>extract_colors_from_image(artUrl)</code>.</li>
+          <li>One rule, in <a href="signals-slots-reference.html#nowPlaying"><code>NowPlaying</code></a>: while <code>themeSetting</code> is "Album Art Capture", the colours follow the art of whatever is playing, the phone's while it has the media controls, else the local track's. It extracts when <code>nowPlaying.artUrl</code> changes (a new track, a source switch, the phone's art arriving after its metadata, the restored track at startup; the same art keeps the same colours, so nothing runs) and when the theme is chosen. Local art goes through <code>extractColorsFromAlbumArt(file)</code>, the phone's through <code>extractColorsFromImage(artUrl)</code>.</li>
           <li>On demand: Media Room's "Save as Theme" popup calls <code>nowPlaying.extractArtColors()</code>.</li>
           <li>Until open-backend #5 the rule lived in four places (MediaManager's own hooks and a startup timer, <code>Main.qml</code> twice, the Display-page toggle), so a theme switch extracted twice and the toggle ignored the phone.</li>
         </ul>
@@ -212,7 +212,7 @@
         <h3>Threading and Delivery</h3>
         <p><code>MediaManager</code> runs the extraction off the GUI thread with <code>QtConcurrent::run</code> and a <code>QFutureWatcher</code>. A job counter (<code>m_colorJob</code>) makes a newer request supersede an older one, so a fast skip through several tracks applies only the last palette, and a repeat request for the same file within 2&nbsp;s is ignored (the restore-playback path and the 1&nbsp;s startup timer ask for the same track).</p>
 
-        <p>When the manager has a settings manager attached (Main.qml calls <code>mediaManager.connect_settings_manager(settingsManager)</code> at startup) the result goes to <code>settingsManager.set_album_art_colors(json)</code>, which persists it as the <code>albumArtColors</code> string and emits <code>albumArtColorsChanged</code>. The <code>albumArtColors</code> property is that palette as an object, so Main.qml's handler passes it straight to <code>App.Style.updateAlbumArtTheme(colors)</code> and <span class="file-path">src/main.cpp</span> reads the LED accent from it, with no JSON parsing in either. The <code>albumColorsExtracted(json)</code> signal on <code>mediaManager</code> is only emitted when no settings manager is connected (the tests); nothing in the app listens to it.</p>
+        <p>When the manager has a settings manager attached (Main.qml calls <code>mediaManager.connect_settings_manager(settingsManager)</code> at startup) the result goes to <code>settingsManager.set_album_art_colors(json)</code>, which persists it as the <code>albumArtColors</code> string and emits <code>albumArtColorsChanged</code>. The <code>albumArtColors</code> property is that palette as an object, so Main.qml's handler passes it straight to <code>App.Style.updateAlbumArtTheme(colors)</code> and <span class="file-path">src/appcore.cpp</span> reads the LED accent from it, with no JSON parsing in either. The <code>albumColorsExtracted(json)</code> signal on <code>mediaManager</code> is only emitted when no settings manager is connected (the tests); nothing in the app listens to it.</p>
 
         <h3>Applying in Style.qml</h3>
         <pre><code><span class="kw">function</span> <span class="fn">updateAlbumArtTheme</span>(newTheme) {
@@ -585,6 +585,8 @@ App.ThemedIcon { <span class="prop">source</span>: App.Style.assetBase + <span c
             </tr>
           </tbody>
         </table>
+
+        <p><strong>Method names:</strong> this page uses the camelCase names of the manager methods (<code>nextTrack</code>). The older snake_case name of each (<code>next_track</code>) still works through protocol&nbsp;4 and goes in protocol&nbsp;5; the <a href="api-reference.html">API reference</a> lists them.</p>
 
         <div class="related-pages">
           <h3>Related Pages</h3>

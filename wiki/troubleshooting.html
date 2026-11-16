@@ -177,7 +177,7 @@ pactl info                         <span class="cmt"># identifies the audio serv
 
         <!-- OBD -->
         <h2 id="obd">OBD Connection Issues</h2>
-        <p>Read the <strong>Connection Log</strong> on Settings &rarr; OBD first: every init step, rfcomm command and error the manager sees is appended there. The status dot and label above it follow <code>connectionStatusChanged</code>, and <code>get_connection_status()</code> returns the same vocabulary (initially "Disconnected"). The colour follows the manager's <code>connectionState</code>: <strong>Connected</strong> (accent); <strong>Connecting</strong> (warning) for Connecting, Reconnecting, Stale Connection and the Android BLE steps (Connecting BLE..., Discovering services..., Initializing ELM327..., Querying PIDs...); <strong>No Vehicle</strong> (info); <strong>Disconnected</strong> (grey); and <strong>Failed</strong> (error) for Device Not Found, Connection Failed, Error, No MAC Address, BLE connect failed, BLE error and anything else.</p>
+        <p>Read the <strong>Connection Log</strong> on Settings &rarr; OBD first: every init step, rfcomm command and error the manager sees is appended there. The status dot and label above it follow <code>connectionStatusChanged</code>, and <code>getConnectionStatus()</code> returns the same vocabulary (initially "Disconnected"). The colour follows the manager's <code>connectionState</code>: <strong>Connected</strong> (accent); <strong>Connecting</strong> (warning) for Connecting, Reconnecting, Stale Connection and the Android BLE steps (Connecting BLE..., Discovering services..., Initializing ELM327..., Querying PIDs...); <strong>No Vehicle</strong> (info); <strong>Disconnected</strong> (grey); and <strong>Failed</strong> (error) for Device Not Found, Connection Failed, Error, No MAC Address, BLE connect failed, BLE error and anything else.</p>
 
         <h3>Which port / address to enter</h3>
         <p>The single field (<code>obdBluetoothPort</code>, placeholder "MAC address, /dev path, or COM port") accepts a Bluetooth MAC, a device path or a COM port. Left empty, the default is <code>/dev/rfcomm0</code> on Linux, <code>COM3</code> on Windows, <code>/dev/tty.OBD</code> on macOS, and nothing on Android (a MAC is required). While disconnected, the OBD manager rescans every 10 s: Linux globs <code>/dev/rfcomm*</code>, <code>/dev/ttyUSB*</code>, <code>/dev/ttyACM*</code> (<code>/dev/ttyS*</code> is excluded as a false-positive source); Windows filters serial-port descriptions for bluetooth / obd / elm / serial / usb; macOS looks at <code>tty.OBD*</code>, <code>tty.Bluetooth*</code>, <code>cu.*</code>, <code>*ELM*</code>. Note the OBD scanner does <em>not</em> exclude the ESP32 volume knob's USB serial port; the knob's own manager does exclude the OBD port.</p>
@@ -186,7 +186,7 @@ pactl info                         <span class="cmt"># identifies the audio serv
         <pre><code>sudo usermod -aG dialout $USER     <span class="cmt"># log out and back in, then: groups | grep dialout</span></code></pre>
 
         <h3>Bluetooth ELM327 pairing (Linux)</h3>
-        <p>The Linux adapter picker uses direct RFCOMM sockets through <code>connect_direct()</code>; this path does not need a privileged <code>/dev/rfcommN</code> binding. A bare MAC entered through <code>connect_to_adapter()</code> uses the older <code>rfcomm bind</code> path. Pair and trust the adapter in the picker or with <code>bluetoothctl</code>. If using a serial-node connection, you can bind manually and enter the resulting device path:</p>
+        <p>The Linux adapter picker uses direct RFCOMM sockets through <code>connectDirect()</code>; this path does not need a privileged <code>/dev/rfcommN</code> binding. A bare MAC entered through <code>connectToAdapter()</code> uses the older <code>rfcomm bind</code> path. Pair and trust the adapter in the picker or with <code>bluetoothctl</code>. If using a serial-node connection, you can bind manually and enter the resulting device path:</p>
         <pre><code>sudo rfcomm bind 0 XX:XX:XX:XX:XX:XX
 ls -la /dev/rfcomm0</code></pre>
         <p>"rfcomm bind failed: rfcomm binary not found" in the Connection Log means <code>bluez-utils</code> (Arch) / the package that ships <code>rfcomm</code> is missing; the log also tells you to bind once with sudo and enter <code>/dev/rfcomm0</code>.</p>
@@ -194,7 +194,7 @@ ls -la /dev/rfcomm0</code></pre>
         <h3>Connection is slow or times out</h3>
         <ul>
           <li>The connection runs on a dedicated worker thread (<code>OBDConnectionWorker</code> on a <code>QThread</code>) so the UI never blocks; progress is reported through <code>connectionProgress</code> / <code>connectionDetail</code>.</li>
-          <li>The connection timeout is 5 s by default and is set at runtime through <code>obdManager.set_connection_timeout(seconds)</code>, clamped to 5&ndash;60 s (there is no <code>obdConnectionTimeout</code> settings key). The worker uses it for the vehicle-verify wait (the RPM probe after init) and fixed per-command timeouts otherwise (300&ndash;1500 ms for init commands, 500 ms per poll).</li>
+          <li>The connection timeout is 5 s by default and is set at runtime through <code>obdManager.setConnectionTimeout(seconds)</code>, clamped to 5&ndash;60 s (there is no <code>obdConnectionTimeout</code> settings key). The worker uses it for the vehicle-verify wait (the RPM probe after init) and fixed per-command timeouts otherwise (300&ndash;1500 ms for init commands, 500 ms per poll).</li>
           <li><code>obdFastMode</code> (default on): the worker polls with a 0 ms interval instead of 50 ms, and asks the adapter for a single reply per PID (<code>010C1</code>), so it doesn't wait out its timeout for more ECUs; on a CAN car it asks for up to six PIDs per request. Turn it off for an adapter that misreads that.</li>
           <li>The last successful protocol is not cached: every connect sends the fixed init sequence ending in <code>ATSP0</code> (auto-detect).</li>
           <li><code>obdAutoReconnectAttempts</code> is 0&ndash;10 and <strong>defaults to 0 = off</strong> (shown as "Off" on the slider). With 0, the active retry loop is off, but the 10 s passive scan remains: a saved direct <code>rfcomm://</code> address can be retried on each scan. Serial-node discovery retries when the detected list changes. With 1&ndash;10 a failed connect is retried that many times with a <code>min(10, 2 + 2n)</code> s backoff before falling back to the passive scan.</li>
@@ -359,6 +359,8 @@ i2cdetect -y 2
         <pre><code><span class="kw">export</span> QT_QUICK_BACKEND=software
 <span class="kw">export</span> LIBGL_ALWAYS_SOFTWARE=1
 ./build/octave</code></pre>
+
+        <p><strong>Method names:</strong> this page uses the camelCase names of the manager methods (<code>nextTrack</code>). The older snake_case name of each (<code>next_track</code>) still works through protocol&nbsp;4 and goes in protocol&nbsp;5; the <a href="api-reference.html">API reference</a> lists them.</p>
 
         <div class="related-pages">
           <h3>Related Pages</h3>

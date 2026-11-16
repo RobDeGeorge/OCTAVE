@@ -10,6 +10,30 @@ if(MSVC)
 endif()
 set(CMAKE_AUTOMOC ON)
 
+# Warnings for our own targets (octave and the tests), never third_party.
+# -DOCTAVE_WERROR=ON makes them errors; -DOCTAVE_SANITIZE=address,undefined
+# builds those targets with the sanitizers (GCC / Clang).
+option(OCTAVE_WERROR "Treat warnings in OCTAVE's own code as errors" OFF)
+set(OCTAVE_SANITIZE "" CACHE STRING "Sanitizers for OCTAVE's own targets, e.g. address,undefined")
+function(octave_own_code target)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W3)
+        if(OCTAVE_WERROR)
+            target_compile_options(${target} PRIVATE /WX)
+        endif()
+        return()
+    endif()
+    target_compile_options(${target} PRIVATE
+        -Wall -Wextra -Wshadow -Wnon-virtual-dtor -Wno-unused-parameter)
+    if(OCTAVE_WERROR)
+        target_compile_options(${target} PRIVATE -Werror)
+    endif()
+    if(OCTAVE_SANITIZE AND NOT EMSCRIPTEN)
+        target_compile_options(${target} PRIVATE -fsanitize=${OCTAVE_SANITIZE} -fno-omit-frame-pointer)
+        target_link_options(${target} PRIVATE -fsanitize=${OCTAVE_SANITIZE})
+    endif()
+endfunction()
+
 # ---- Qt 6 ----
 set(OCTAVE_QT_COMPONENTS Core Gui Qml Quick QuickControls2 Multimedia Network Concurrent SerialPort Bluetooth)
 if(ANDROID)
@@ -303,6 +327,7 @@ qt_add_executable(octave
     src/util/fontcatalog.h
     src/util/fontcatalog.cpp
     src/util/pathurl.h
+    src/util/artfile.h
     src/util/folderbrowser.h
     src/util/folderbrowser.cpp
     src/util/releasecheck.h
@@ -341,6 +366,10 @@ qt_add_executable(octave
     src/managers/networkmanager.cpp
     src/managers/volumecontroller.h
     src/managers/volumecontroller.cpp
+    src/managers/custompids.h
+    src/managers/custompids.cpp
+    src/managers/busmonitor.h
+    src/managers/busmonitor.cpp
     src/managers/parametercatalog.h
     src/managers/parametercatalog.cpp
     src/managers/parameterstore.h
@@ -361,6 +390,12 @@ qt_add_executable(octave
     src/managers/elm327protocol.cpp
     src/managers/obdmanager.h
     src/managers/obdmanager.cpp
+    src/managers/obdmanager_connection.cpp
+    src/managers/obdmanager_polling.cpp
+    src/managers/obdmanager_diagnostics.cpp
+    src/managers/obdmanager_android.cpp
+    src/managers/obdconnectionworker.h
+    src/managers/obdconnectionworker.cpp
     src/managers/dtcdescriptions.h
     src/managers/dtcdescriptions.cpp
     src/managers/rfcommsocket.h
@@ -498,6 +533,10 @@ if(EMSCRIPTEN)
         # a real Bluetooth LE OBD adapter over Web Bluetooth
         src/platform/wasm/webbluetooth.h
         src/platform/wasm/webbluetooth.cpp
+        src/platform/wasm/webport.h
+        src/platform/wasm/webport.cpp
+        src/platform/wasm/webserial.h
+        src/platform/wasm/webserial.cpp
         # the music library: a folder picked in the browser, played from blob: URLs
         src/platform/wasm/weblibrary.h
         src/platform/wasm/weblibrary.cpp
@@ -599,6 +638,8 @@ elseif(EMSCRIPTEN)
 else()
     target_link_libraries(octave PRIVATE PkgConfig::TAGLIB)
 endif()
+
+octave_own_code(octave)
 
 if(OCTAVE_DEV_TOOLS)
     # QTest drives synthetic mouse input (the click / drag / long_press commands)

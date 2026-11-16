@@ -1,0 +1,53 @@
+{
+    "class": "CustomPids",
+    "methods": [
+        {
+            "kind": "invokable",
+            "name": "createExample",
+            "params": [
+            ],
+            "returns": "bool",
+            "scope": "vehicle"
+        }
+    ],
+    "object": "customPids",
+    "properties": [
+        {
+            "constant": true,
+            "name": "file",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "fileExists",
+            "notify": "fileExistsChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "pids",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "errors",
+            "readable": true,
+            "type": "QStringList",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "fileExistsChanged",
+            "params": [
+            ]
+        }
+    ],
+    "stability": "experimental"
+}

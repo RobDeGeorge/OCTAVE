@@ -15,6 +15,8 @@ class Clock : public QObject
     Q_OBJECT
     // Service permissions (src/service/servicescopes.h)
     Q_CLASSINFO("octave.scope", "read")
+    // Deprecated names (src/service/metadescribe.h): the camelCase one beside each stays
+    Q_CLASSINFO("octave.deprecated.update_time", "use updateTime; goes in protocol 5")
     Q_PROPERTY(QString time READ time NOTIFY timeChanged)
 
 public:
@@ -27,6 +29,10 @@ signals:
 
 public slots:
     void update_time();
+
+    // camelCase names for the snake_case methods above (protocol 3 keeps both;
+    // the old names are marked octave.deprecated and go in protocol 5)
+    void updateTime() { update_time(); }
 
 private:
     SettingsManager *m_settingsManager;

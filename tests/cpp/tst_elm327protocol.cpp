@@ -58,12 +58,15 @@ private slots:
     void decodeExtendedPid_data();
     void decodeExtendedPid();
     void multiFrameReplyIsJoined();
+    void interleavedMultiFrameRepliesAreNotSpliced();
     void parseVin_data();
     void parseVin();
     void parseVinNoData();
     void decodeVin_data();
     void decodeVin();
     void everyExtendedParameterIsWired();
+    void monitorLines();
+    void busFilters();
 };
 
 void TstElm327Protocol::formatPidRequest()
@@ -260,6 +263,53 @@ void TstElm327Protocol::multiFrameReplyIsJoined()
     QVERIFY(qAbs(got.value("BOOST_PRESSURE_A") - 125.0) < 0.01);
 }
 
+// Headers off: two ECUs' multi-frame replies come frame by frame in bus
+// order. Each frame goes to the message waiting for its sequence digit
+void TstElm327Protocol::interleavedMultiFrameRepliesAreNotSpliced()
+{
+    const QString a = QStringLiteral("43040133017103000420");       // 10 bytes: P0133 P0171 P0300 P0420
+    const QString b = QStringLiteral("430501010102010301040105");   // 12 bytes: P0101 .. P0105
+    const QStringList interleaved{"00A", "0:430401330171", "00C", "0:430501010102", "1:03000420000000", "1:01030104010500"};
+    bool multi = false;
+    QCOMPARE(ELM327Protocol::splitMessages(interleaved, &multi), (QStringList{a, b}));
+    QVERIFY(multi);
+    QCOMPARE(ELM327Protocol::parseDtcResponse(interleaved, 0x03),
+             (QStringList{"P0133", "P0171", "P0300", "P0420", "P0101", "P0102", "P0103", "P0104", "P0105"}));
+    // One after the other, as before
+    QCOMPARE(ELM327Protocol::splitMessages({"00A", "0:430401330171", "1:03000420000000",
+                                            "00C", "0:430501010102", "1:01030104010500"}),
+             (QStringList{a, b}));
+    // A single-frame reply from another ECU in the middle
+    QCOMPARE(ELM327Protocol::splitMessages({"00A", "0:430401330171", "4300", "1:03000420000000"}),
+             (QStringList{a, "4300"}));
+    // The second ECU's last frame first: each still gets its own
+    QCOMPARE(ELM327Protocol::splitMessages({"00A", "0:430401330171", "00C", "0:430501010102", "1:03000420000000",
+                                            "4300", "1:01030104010500"}),
+             (QStringList{a, b, "4300"}));
+
+    // A frame nobody waits for is dropped, and a message left short in such
+    // a reply is not passed on with a hole in it
+    QCOMPARE(ELM327Protocol::splitMessages({"00A", "0:430401330171", "2:03000420000000"}), QStringList());
+    QCOMPARE(ELM327Protocol::splitMessages({"1:03000420000000"}), QStringList());
+    QCOMPARE(ELM327Protocol::splitMessages({"00A", "0:430401330171", "1:03000420000000", "1:01030104010500"}),
+             QStringList{a});
+    QCOMPARE(ELM327Protocol::parseDtcResponse({"00A", "0:430401330171", "2:03000420000000"}, 0x03), QStringList());
+    // Cut off by the adapter's timeout with every frame in order: what came is kept
+    QCOMPARE(ELM327Protocol::splitMessages({"00A", "0:430401330171"}), QStringList{"430401330171"});
+    // Frames with no byte count
+    QCOMPARE(ELM327Protocol::splitMessages({"0:430401330171", "1:03000420"}), QStringList{a});
+
+    // The sequence digit comes round after F: 6 + 16 * 7 = 118 bytes
+    QStringList longReply{"076", "0:4334" + QString(8, QLatin1Char('1'))};
+    QString want = "4334" + QString(8, QLatin1Char('1'));
+    for (int i = 1; i <= 16; ++i) {
+        const QString chunk(14, QLatin1Char("0123456789ABCDEF"[i % 16]));
+        longReply.append(QString::number(i % 16, 16).toUpper() + QLatin1Char(':') + chunk);
+        want += chunk;
+    }
+    QCOMPARE(ELM327Protocol::splitMessages(longReply), QStringList{want});
+}
+
 void TstElm327Protocol::parseVin_data()
 {
     QTest::addColumn<QStringList>("lines");
@@ -316,6 +366,54 @@ void TstElm327Protocol::everyExtendedParameterIsWired()
         QVERIFY2(settings.contains(QLatin1Char('"') + id + QLatin1Char('"')), qPrintable(id + " has no settings default"));
         QVERIFY2(ParameterCatalog::find(id), qPrintable(id + " has no ParameterCatalog entry"));
     }
+}
+
+// What the adapter prints in monitor mode ("ATMA", headers on)
+void TstElm327Protocol::monitorLines()
+{
+    // 11-bit CAN: three id digits, then the data
+    auto f = ELM327Protocol::parseMonitorLine("0C9" "001F400000000007", true);
+    QVERIFY(f.has_value());
+    QCOMPARE(f->id, 0x0C9u);
+    QCOMPARE(int(f->idDigits), 3);
+    QCOMPARE(f->data, QByteArray::fromHex("001F400000000007"));
+    // With spaces, and no data at all
+    f = ELM327Protocol::parseMonitorLine("7E8 03 41 0C 1F", true);
+    QVERIFY(f.has_value());
+    QCOMPARE(f->id, 0x7E8u);
+    QCOMPARE(f->data, QByteArray::fromHex("03410C1F"));
+    f = ELM327Protocol::parseMonitorLine("123", true);
+    QVERIFY(f.has_value());
+    QVERIFY(f->data.isEmpty());
+    // 29-bit CAN
+    f = ELM327Protocol::parseMonitorLine("18DAF110 02 01 0C", true);
+    QVERIFY(f.has_value());
+    QCOMPARE(f->id, 0x18DAF110u);
+    QCOMPARE(int(f->idDigits), 8);
+    QCOMPARE(f->data.size(), 3);
+    // J1850 / ISO: three header bytes, then data and checksum
+    f = ELM327Protocol::parseMonitorLine("48 6B 10 41 0C 1F 40 2A", false);
+    QVERIFY(f.has_value());
+    QCOMPARE(f->id, 0x486B10u);
+    QCOMPARE(int(f->idDigits), 6);
+    QCOMPARE(f->data, QByteArray::fromHex("410C1F402A"));
+
+    // Not messages: adapter notices, a remote frame, an id past 11 bits,
+    // nine data bytes
+    for (const char *line : {"BUFFER FULL", "STOPPED", "<RX ERROR", "0C9 RTR", "", "?", "CAN ERROR",
+                             "FFF0011", "0C9000102030405060708"})
+        QVERIFY2(!ELM327Protocol::parseMonitorLine(line, true), line);
+    QVERIFY(!ELM327Protocol::parseMonitorLine("486B1", false));
+}
+
+// Only hex digits and X ever reach "ATCRA"
+void TstElm327Protocol::busFilters()
+{
+    QCOMPARE(ELM327Protocol::busFilter("7e8"), QByteArray("7E8"));
+    QCOMPARE(ELM327Protocol::busFilter(" 0cx "), QByteArray("0CX"));
+    QCOMPARE(ELM327Protocol::busFilter("18DAF1XX"), QByteArray("18DAF1XX"));
+    for (const char *bad : {"", "7E", "7E88", "7G8", "7E8\rATZ", "7E 8", "AT Z", "18DAF1XX0"})
+        QVERIFY2(ELM327Protocol::busFilter(bad).isEmpty(), bad);
 }
 
 QTEST_GUILESS_MAIN(TstElm327Protocol)

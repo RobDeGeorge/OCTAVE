@@ -17,7 +17,7 @@ OBDManager ─ parameterSampled ─▶ paramStore (C++) ─▶ OBDParameterModel
 berryIMU ─ 8 signals ─────────▶   33 ms fold)          gate, demo mode)
 ```
 
-`OBDManager` is the C++ manager in `src/managers/obdmanager.cpp`, built in
+`OBDManager` is the C++ manager in `src/managers/obdmanager*.cpp`, built in
 `src/appcore.cpp` and exposed as the `obdManager` context property.
 
 You do **not** wire signals yourself. `src/appcore.cpp` feeds every decoded value
@@ -89,17 +89,22 @@ take no `paramId`):
 
 | Property       | Type    | Default                     | Notes                                                          |
 | -------------- | ------- | --------------------------- | -------------------------------------------------------------- |
-| `paramId`      | string  | `""`                        | Any ID from §6. Drives auto-population of title/unit/min/max. |
+| `paramId`      | string  | `""`                        | Any ID from §6, or one from the user's custom PID file (`docs/CUSTOM_PIDS.md`). Drives auto-population of title/unit/min/max. |
 | `title`        | string  | from paramId                | Override display label.                                        |
 | `unit`         | string  | from paramId                | Override unit suffix.                                          |
-| `min`, `max`   | real    | from paramId                | Override range used for normalization.                         |
+| `min`, `max`   | real    | from paramId                | Override range used for normalization. `DigitalReadout` draws no scale and uses them only for the alert hold (below). |
 | `value`        | real    | from paramId (live)         | Override manually for preview/testing.                         |
-| `decimals`     | int     | `0`                         | Digits after the decimal point.                                |
+| `decimals`     | int     | `0`                         | Digits after the decimal point. Not on `WarningLight`, which shows no number. |
 | `labelColor`   | color   | `App.Style.obdLabelColor`   | Override label tint.                                           |
 | `valueColor`   | color   | `App.Style.obdValueColor`   | Override value tint.                                           |
 
-**Alerts.** The value gauges (Circular, Arc, Bar, Segmented, Linear,
-DigitalReadout, Sparkline) share one warning / critical rule,
+The seven value gauges (Circular, Arc, Bar, Segmented, Linear,
+DigitalReadout, Sparkline) get all of this, and the alert properties below,
+from one base component, `frontend/gauges/ValueGaugeBase.qml`: each is
+`ValueGaugeBase { id: root ... }` and only draws. `WarningLight` binds the
+same way without the alert properties.
+
+**Alerts.** The value gauges share one warning / critical rule,
 `frontend/gauges/AlertLevel.js`:
 
 | Property | Type | Default | Notes |
@@ -108,7 +113,19 @@ DigitalReadout, Sparkline) share one warning / critical rule,
 | `critAbove`, `critBelow` | real | `NaN` | Critical at or past this value; critical wins over warning. |
 | `alertFlash` | bool | `false` | Blink the value (400 ms on, 400 ms off) while critical. |
 | `warnColor`, `critColor` | color | `statusWarning` (amber), `statusDanger` (red) | |
+| `alertHysteresis` | real | `NaN` | The hold, in the display unit: how far back inside a limit the value must come before the level drops. `NaN` = 1 % of `max - min` (0.01 V on a 0 to 1 V sensor; one step of the PID's readout only for a gauge with no usable range); `0` = no hold. In a dashboard spec the number is in the PID's own unit, like the limits, and is converted as a difference (5 °C holds 9 °F). |
 | `alertLevel` | int (read-only) | | 0 normal, 1 warning, 2 critical; always 0 without a reading. |
+
+A level is entered at its limit and left only once the value is back inside
+that limit by the hold (`AlertLevel.levelHeld`): with `warnAbove: 100` on a
+0–150 scale the gauge turns amber at 100 and back at 98.5. Without it a
+reading sitting on a limit changed level on every sample, so the colour
+flickered, the flash restarted and the dashboard's red banner (§5.1,
+`alertBanner`) popped in and out; the banner uses the same hold. Changing a
+limit starts from the plain rule, so an edit shows at once. `WarningLight`
+holds its lamp the same way (`alertHysteresis`, default 1 % of the range).
+The banner computes its hold exactly as the gauge does (same range, same
+unit), so the two enter and leave critical at the same reading.
 
 At a warning or critical level the value text and the fill (arc, bar, line,
 lit segments) take that level's colour. Circular and Arc also draw each band
@@ -142,6 +159,7 @@ Horizontal or vertical filled bar. Good for temperatures, fuel, throttle.
 | Property       | Type   | Default      | Notes                                                   |
 | -------------- | ------ | ------------ | ------------------------------------------------------- |
 | `orientation`  | string | `"horizontal"` | or `"vertical"`                                       |
+| `maxThickness` | real   | `0`          | Cap on the bar's thickness in dp; `0` fills the cell.   |
 | `warnAbove`, `critAbove`, ... | real | `NaN` | The shared alerts (§3): the bar and its value turn amber / red. |
 | `showLabel`    | bool   | `true`       | Header/title.                                           |
 | `showValue`    | bool   | `true`       | Current value text.                                     |
@@ -214,12 +232,14 @@ Binary tell-tale indicator bound to a threshold condition. Small (ideally square
 | ------------------- | ------ | ----------------------------------------- | ------------------------------------------------------------------ |
 | `triggerAbove`      | real   | `NaN`                                     | Light turns on when `value >= triggerAbove`.                       |
 | `triggerBelow`      | real   | `NaN`                                     | Light turns on when `value <= triggerBelow`. Both may be set.      |
+| `alertHysteresis`   | real   | `NaN`                                     | Once lit, stays lit until the value is back inside the threshold by this much (§3, Alerts). |
 | `label`             | string | `""`                                      | Short text shown inside the light (e.g. `"TEMP"`, `"!"`, `"FUEL"`).|
 | `activeColor`       | color  | theme danger (`Style.statusDanger`, red) | Bright color when lit.                                             |
 | `inactiveColor`     | color  | dark tint of `obdBoxBackground`           | Dim color when off.                                                |
-| `activeLabelColor`  | color  | `"white"`                                 | Label color when lit.                                              |
+| `activeLabelColor`  | color  | by luminance of `activeColor`             | Label color when lit: dark (`#141414`) on a light lamp (amber, yellow), white on a dark one. |
 | `labelColor`        | color  | `App.Style.obdLabelColor`                 | Label color when off.                                              |
 | `pulse`             | bool   | `false`                                   | Optional 1Hz opacity pulse while lit — reserve for critical alerts.|
+| `maxSize`           | real   | `0`                                       | Cap on the lamp's size in dp; `0` fills the cell.                  |
 
 Keep pulse off by default. Blinking is visually loud and in a car infotainment context should be used sparingly (overtemp, overrev, low oil pressure — not fuel trim drift).
 
@@ -246,7 +266,7 @@ CompassGauge the dashboards roadmap deferred until heading data existed.
 
 | Property      | Type | Default | Notes                       |
 | ------------- | ---- | ------- | --------------------------- |
-| `showDegrees` | bool | `true`  | Center "247° / WSW" readout.|
+| `showDegrees` | bool | `true`  | Center "247° / SW" readout (8-point compass label).|
 
 ### 3.10 `NowPlayingWidget` *(self-binding, lives in `frontend/dashboards/widgets/`)*
 
@@ -441,9 +461,17 @@ recolors its gauge looks like this:
 Omit a key to follow the bound PID's metadata (`title`, `unit`, `min`, `max`)
 or the live theme (colors). Which keys a widget accepts is declared in its
 `WidgetCatalog` entry (`labelProps`, `rangeProps`, `colorProps`,
-`editableProps` — see §7).
+`editableProps`, `specProps` — see §7).
 
-Per cell: `type` matches a widget registered in `WidgetCatalog` — the gauge primitives in `frontend/gauges/` (`CircularGauge`, `ArcGauge`, `BarGauge`, `LinearGauge`, `DigitalReadout`, `SparklineGauge`, `WarningLight`, and the self-binding `GForceGauge` and `CompassGauge`, which ignore `paramId`) plus the media widgets in `frontend/dashboards/widgets/` (`NowPlayingWidget`, `MediaControlsWidget`, no `paramId`). `paramId` must be one of §6 — an unknown id is logged by `DashboardRenderer` and the widget is left unbound; an unknown `type` is logged and the cell is skipped. `props` keys must be exposed `Q_PROPERTY` on the widget — unknown keys are silently skipped. `"NaN"` (string) decodes to JS `NaN` since JSON can't encode it natively.
+**Only those keys reach the widget.** The renderer and the editor canvas
+apply a cell's `props` through `frontend/dashboards/CellProps.js`: a key the
+catalog does not name for that type is ignored (with a `console.warn` when
+it is some other property of the QML item), so a dashboard file cannot hide
+a gauge (`visible`), resize it (`width`) or pin it to a made-up reading
+(`value`). Each key is applied on its own: a value of the wrong type is
+logged and that option stays at its default, and the rest still apply.
+
+Per cell: `type` matches a widget registered in `WidgetCatalog` — the gauge primitives in `frontend/gauges/` (`CircularGauge`, `ArcGauge`, `BarGauge`, `LinearGauge`, `DigitalReadout`, `SegmentedGauge`, `SparklineGauge`, `WarningLight`, and the self-binding `GForceGauge` and `CompassGauge`, which ignore `paramId`) plus the self-binding widgets in `frontend/dashboards/widgets/` (`NowPlayingWidget`, `MediaControlsWidget`, `ClockWidget`, no `paramId`). `paramId` must be one of §6 — an unknown id is logged by `DashboardRenderer` and the widget is left unbound; an unknown `type` is logged and the cell is skipped. `props` keys must be exposed `Q_PROPERTY` on the widget — unknown keys are silently skipped. `"NaN"` (string) decodes to JS `NaN` since JSON can't encode it natively.
 
 ### 5.2 Add a built-in preset
 
@@ -565,7 +593,7 @@ is needed. `dashboardManager.refresh()` forces an immediate rescan.
 
 - Built-in preset ids must be unique. User ids colliding with a built-in are rejected at load time (logged).
 - Built-ins are read-only: `deleteDashboard` on one hides it (ids listed in `<userDir>/.hidden-builtins`, id still reserved) and `restoreBuiltInDashboards()` brings them back; `hiddenBuiltInCount` drives the chooser's "Restore defaults" button. Parameter Cards (`grid`) can't be deleted. "Duplicate" via `dashboardManager.duplicateDashboard(sourceId, newLabel)` creates an editable user copy with an auto-generated unique id. New ids come from `dashboardManager.uniqueIdForLabel(label)` (editor, Duplicate and Import alike); it never returns a built-in id (hidden ones included) or `grid`, and `saveDashboard` refuses both.
-- **Newer schema.** A spec whose `schema` is above `dashboardManager.supportedSchema` (`kSupportedSchema`, 1) renders no cells, demands no PIDs, and shows one centred "This dashboard needs a newer version of OCTAVE" message. Import refuses such files; this covers one dropped into the folder by hand.
+- **Newer schema.** A spec whose `schema` is above `dashboardManager.supportedSchema` (`kSupportedSchema`, 2) renders no cells, demands no PIDs, and shows one centred "This dashboard needs a newer version of OCTAVE" message. Import refuses such files; this covers one dropped into the folder by hand.
 - **One set of spec rules** (`DashboardManager::normalizeSpec`, applied by `saveDashboard`, `loadDashboard` and every import, so the editor, Duplicate, Import and the renderer all see the same thing):
   - Kept keys: `schema`, `id`, `label`, `gridColumns`, `gridRows`, `margins`, `spacing`, `cells` and per cell `type` / `paramId` / `col` / `row` / `colSpan` / `rowSpan` / `props`; anything else is dropped. `props` keeps scalars only (bool, number, string ≤ 200 chars; `"NaN"` survives).
   - Numbers must be JSON numbers (a string or bool gets the default). Grid size: not a positive number = 12 × 6, else capped at 48. `margins` / `spacing`: 0..200, absent or `null` = the renderer's 20 / 16. Caps: 256 cells (refused on save and import; a file on disk shows its first 256), label 80 chars (whitespace collapsed).
@@ -575,7 +603,7 @@ is needed. `dashboardManager.refresh()` forces an immediate rescan.
   - Schema: missing = 1. A newer schema is refused by save and import, and `loadDashboard` passes such a file through untouched so the renderer can show its placeholder; the editor won't open it.
   - `saveDashboard` needs a label and a file-safe id (`[A-Za-z0-9_-]`, ≤ 64; new ids are slugs from `uniqueIdForLabel`, which `saveDashboard` calls itself when the spec has no id). A file with no `cells` loads as an empty dashboard.
   - Grid placement (`src/util/dashboardgrid.{h,cpp}`) is the same code in the editor: `dashboardManager.canPlace(cells, cols, rows, col, row, colSpan, rowSpan, exceptIndex)` for drag / resize, `dashboardManager.fitAt(cells, cols, rows, col, row, colSpan, rowSpan)` for the span a new widget shrinks to. The rescued editor draft goes through `dashboardManager.normalizedSpec(spec)`.
-  - A known widget's `editableProps` are held to their catalog `kind`: a `bool` must be a JSON bool, an `int` / `real` a number (clamped to `min` / `max`, an `int` rounded), an `enum` one of its `options`, a `string` a string; anything else is dropped, so the widget shows its default. Other props (title, unit, min, max, colours, keys the catalog doesn't curate) pass as before.
+  - A known widget's `editableProps` are held to their catalog `kind`: a `bool` must be a JSON bool, an `int` / `real` a number (clamped to `min` / `max`, an `int` rounded), an `enum` one of its `options`, a `string` a string; anything else is dropped, so the widget shows its default. Other props (title, unit, min, max, colours, keys the catalog doesn't curate) are kept in the file as before; the renderer applies only the ones the catalog names for the type (§5.1).
   - Every shipped preset already satisfies these rules (`presetsAreAlreadyNormal` in `tests/cpp/tst_dashboardmanager.cpp`).
 - **Validation in QML.** `DashboardRenderer` still checks every cell against `WidgetCatalog.isKnownType()` and `OBDParameterModel.hasParameter()`, `console.warn`s failures with the dashboard id and never crashes the view.
 - **Import.** `importDashboard` / `importDashboardFromClipboard` /
@@ -597,6 +625,9 @@ is needed. `dashboardManager.refresh()` forces an immediate rescan.
   `OBDParameterModel.toDisplay`, and the properties panel shows and stores
   them converted, so `sport.json`'s `critAbove: 105` on coolant means 221 °F
   for a °F user. A new threshold prop in parameter units needs the flag.
+  `alertHysteresis` is in the PID's own unit too, but it is a difference, so
+  `CellProps` converts it with the scale alone
+  (`OBDParameterModel.toDisplayDelta`).
 - **Gate.** `OBDParameterModel` mirrors `obdManager.vehicleSupportedParameters`
   / `vehicleScanComplete` — this session's scan only, cleared on disconnect —
   as `vehicleKnown`, `vehicleSupportedParameters`, `vehicleParameters` (the
@@ -827,9 +858,14 @@ polled as PID 0x0E and counts as supported whenever timing advance does.
 ## 7. Recipe: add a new gauge primitive
 
 1. Create `frontend/gauges/MyGauge.qml`.
-2. Implement the **shared binding API** (§3 table top rows). Copy the first
-   ~35 lines of any existing primitive — the `paramId` → `_pInfo` lookup is
-   boilerplate you should paste verbatim so behavior is identical.
+2. Get the **shared binding API** (§3 table top rows) and the alert rule by
+   making the root `ValueGaugeBase { id: root ... }`
+   (`frontend/gauges/ValueGaugeBase.qml`): `paramId`, `title`, `unit`, `min`,
+   `max`, `value`, `hasValue`, `decimals`, the `warn*` / `crit*` limits,
+   `alertLevel`, `_alertColor` and `_alertOpacity` are then already there.
+   Do not paste the block from another gauge. A widget that is not a value
+   gauge looks its PID up with `App.OBDParameterModel.displayInfo(paramId)`
+   (one map lookup; never scan `displayParameters`).
 3. Animate `_animNorm` with a `Behavior on _animNorm { NumberAnimation
    { duration: 100–150; easing.type: Easing.OutCubic } }`. Don't animate
    the raw `value` — that's upstream.
@@ -862,13 +898,18 @@ polled as PID 0x0E and counts as supported whenever timing advance does.
    - `colorProps` — the color props the single Color swatch row writes, all
      set to the same value (e.g. `["fillColor", "needleColor"]`); `[]` hides
      the row. Swatches come from the catalog's `colorSwatches`.
+   - `specProps` — the widget's other public props a hand-written spec may
+     set but no editor offers (`trackColor`, `labelColor`, `warnColor`,
+     `alertHysteresis` ...). A prop in none of these lists is not applied
+     (§5.1), so list every prop you document for the widget.
    - `editableProps` — `{ key, label, kind, def, section[, min, max][, options][, paramUnit] }` with
      `kind` ∈ `bool` (switch) · `int` / `real` (number field, clamped to
      `min`/`max`) · `string` (text field) · `enum` (segmented buttons over
      `options`). `def` is the gauge's real default (`null` for NaN-when-unset
      thresholds). `section` ∈ `look` · `range` · `advanced`: where the
      settings sheet shows it. A value gauge lists the shared alert props
-     (§3). Keep it in step with the gauge's own `octaveEditableProps`.
+     (§3). The catalog entry is the only list the editor reads; a gauge
+     declares no manifest of its own.
    - If a kind of parameter suits the new widget best, point the catalog's
      `suggestions.byKind` (or `byId`) at it: data-first add proposes it.
 7. Add an entry to this document under §3.
@@ -890,9 +931,10 @@ So an arc from `startAngle=135, sweepAngle=270`:
 
 ## 8. Pitfalls
 
-- **`value` jitter at connect time:** the OBD manager reports `0` for any
-  PID it hasn't polled yet. Either show a "disconnected" affordance or
-  just let the gauge sit at min — our primitives do the latter.
+- **No reading yet:** a PID that has not been polled reads `NaN`, never `0`
+  (`OBDParameterModel.sample()`). The primitives show an empty gauge and
+  "--" for the value; a new widget must treat `NaN` as "no reading" too
+  and not draw it as the minimum.
 - **Animated `x` + `Layout.fillWidth`:** don't mix them. Let the layout
   place the container; animate inside it.
 - **Redlines that equal `max`:** don't set `redlineStart == max` — the
@@ -925,12 +967,14 @@ frontend/
 │   ├── GForceGauge.qml        2D G-dot + trail (self-binding: LATERAL_G/LONGITUDINAL_G)
 │   ├── CompassGauge.qml       rotating compass card (self-binding: HEADING)
 │   ├── SegmentedGauge.qml     row of lit segments (shift-light strip)
-│   └── AlertLevel.js          the value gauges' shared warning / critical rule and bands
+│   ├── ValueGaugeBase.qml     what the seven value gauges share: PID binding, metadata, alerts
+│   └── AlertLevel.js          the warning / critical rule, its hold (levelHeld) and the bands
 ├── dashboards/
 │   ├── widgets/               self-binding non-gauge dashboard widgets
 │   │   ├── NowPlayingWidget.qml    art + title + artist + progress (local/phone)
 │   │   └── MediaControlsWidget.qml prev / play-pause / next transport
 │   ├── DashboardRenderer.qml  JSON spec → grid of widget instances
+│   ├── CellProps.js           how a cell's props reach its widget (catalog-listed keys only)
 │   ├── widget-catalog.json    the catalog data: gallery metadata (category,
 │   │                          description, demo), spans and sizes,
 │   │                          supportedKinds, label/range/color flags,

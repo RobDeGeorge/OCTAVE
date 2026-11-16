@@ -100,7 +100,11 @@ Item {
     }
 
     // ── Trail ───────────────────────────────────────────────────────
-    ListModel { id: trailModel }
+    // The last _trailMax positions, oldest first, drawn by a fixed set of
+    // dots that only move. (As ListModel rows appended and removed ten
+    // times a second, each tick destroyed one delegate and built another.)
+    readonly property int _trailMax: 20
+    property var _trail: []
 
     Timer {
         interval: 100
@@ -109,22 +113,25 @@ Item {
         onTriggered: {
             if (!root.hasValue) return
             var p = root._ringPos(root.lateralG, root.longitudinalG)
-            trailModel.append({ "tx": p.x, "ty": p.y })
-            while (trailModel.count > 20) trailModel.remove(0)
+            var t = root._trail.slice(-(root._trailMax - 1))
+            t.push({ "tx": p.x, "ty": p.y })
+            root._trail = t
         }
     }
 
-    onShowTrailChanged: if (!showTrail) trailModel.clear()
+    onShowTrailChanged: if (!showTrail) _trail = []
 
     Repeater {
-        model: root.showTrail ? trailModel : null
+        model: root.showTrail ? root._trailMax : 0
         delegate: Rectangle {
+            readonly property var _p: index < root._trail.length ? root._trail[index] : null
             readonly property real _d: Math.max(2, root._r * 0.06)
-            x: root._cx + model.tx * root._r - _d / 2
-            y: root._cy + model.ty * root._r - _d / 2
+            visible: _p !== null
+            x: root._cx + (_p ? _p.tx : 0) * root._r - _d / 2
+            y: root._cy + (_p ? _p.ty : 0) * root._r - _d / 2
             width: _d; height: _d; radius: _d / 2
             color: root.dotColor
-            opacity: 0.35 * (index + 1) / Math.max(1, trailModel.count)
+            opacity: 0.35 * (index + 1) / Math.max(1, root._trail.length)
         }
     }
 

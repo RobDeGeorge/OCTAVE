@@ -2,7 +2,9 @@
 
 **Goal:** browse and play the phone's Spotify library (Liked Songs, playlists, albums) from OCTAVE's music menu, using only the phone mirror server.
 **Status:** \* maybe — researched and prototyped, undecided whether to build the library reader. Step 1 below is worth doing on its own either way.
-**Last updated:** 2026-10-18
+**Last updated:** 2026-11-15
+
+> **Needs re-deciding (note added 2026-11-15).** This plan was written around a hard constraint of no Spotify Web API. Since then `spotifymanager` / `spotifyapi` shipped exactly that: PKCE sign-in, the library in the music menu's playlist dropdown, remote control of the Spotify app. Before any work here, decide whether the phone-mirror-only library reader is still wanted beside it or this file should be deleted. The `MediaPlayer.qml` line references below predate that work and have drifted.
 
 ## What it is
 

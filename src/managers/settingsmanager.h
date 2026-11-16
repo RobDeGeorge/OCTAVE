@@ -36,35 +36,160 @@ class SettingsManager : public QObject
                 "get_supported_obd_parameters get_window_state is_setting_pinned "
                 "is_settings_section_visible")
     Q_CLASSINFO("octave.scope.full", "setCurrentVolume set_album_art_colors")
+    // The plain settings are writable properties (the service's `set`, a QML
+    // assignment), through the same checks as their save_* slots. The slots
+    // and the get_* methods that only repeat a property stay until protocol 5.
+    Q_CLASSINFO("octave.deprecated.save_device_name", "use the deviceName property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_font_setting", "use the fontSetting property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_theme_setting", "use the themeSetting property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_ui_scale", "use the uiScale property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_color_transition_ms", "use the colorTransitionMs property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_song_length_transition", "use the songLengthTransition property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_show_clock", "use the showClock property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_clock_format", "use the clockFormat24Hour property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_clock_show_seconds", "use the clockShowSeconds property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_clock_size", "use the clockSize property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_clock_size_auto", "use the clockSizeAuto property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_background_grid", "use the backgroundGrid property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_screen_width", "use the screenWidth property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_screen_height", "use the screenHeight property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_background_blur_radius", "use the backgroundBlurRadius property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_bottom_bar_orientation", "use the bottomBarOrientation property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_show_bottom_bar_media_controls", "use the showBottomBarMediaControls property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_settings_layout_style", "use the settingsLayoutStyle property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_start_volume", "use the startUpVolume property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_media_folder", "use the mediaFolder property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_auto_play_on_startup", "use the autoPlayOnStartup property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_persist_shuffle_state", "use the persistShuffleState property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_last_shuffle_state", "use the lastShuffleState property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_last_played_song", "use the lastPlayedSong property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_last_played_position", "use the lastPlayedPosition property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_last_played_playlist", "use the lastPlayedPlaylist property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_music_button_default_page", "use the musicButtonDefaultPage property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_return_to_library_after_selection", "use the returnToLibraryAfterSelection property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_show_waveform_visualizer", "use the showWaveformVisualizer property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_show_3d_button_tilt", "use the show3DButtonTilt property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_show_3d_album_preview", "use the show3DAlbumPreview property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_rounded_album_art", "use the roundedAlbumArt property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_album_art_corner_radius", "use the albumArtCornerRadius property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_show_album_art_shadow", "use the showAlbumArtShadow property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_vinyl_record_mode", "use the vinylRecordMode property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_album_art_transition", "use the albumArtTransition property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_audio_output_device", "use the audioOutputDevice property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_background_overlay_opacity", "use the backgroundOverlayOpacity property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_side_card_opacity", "use the sideCardOpacity property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_side_card_angle", "use the sideCardAngle property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_button_tilt_duration", "use the buttonTiltDuration property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_text_scroll_speed", "use the textScrollSpeed property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_obd_bluetooth_port", "use the obdBluetoothPort property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_obd_fast_mode", "use the obdFastMode property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_obd_card_style_circular", "use the obdCardStyleCircular property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_gauge_temp_unit", "use the gaugeTempUnit property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_gauge_speed_unit", "use the gaugeSpeedUnit property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_obd_auto_reconnect_attempts", "use the obdAutoReconnectAttempts property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_fuel_tank_capacity", "use the fuelTankCapacity property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_black_box_enabled", "use the blackBoxEnabled property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_black_box_sweep_all", "use the blackBoxSweepAll property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_black_box_max_mb", "use the blackBoxMaxMB property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_home_obd_parameters", "use the homeOBDParameters property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_window_state", "use the windowState property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.set_last_settings_section", "use the lastSettingsSection property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_android_auto_enabled", "use the androidAutoEnabled property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_phone_mirror_enabled", "use the phoneMirrorEnabled property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_scrcpy_display_size", "use the scrcpyDisplaySize property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_scrcpy_audio_gain", "use the scrcpyAudioGain property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_scrcpy_audio_gain_db", "use the scrcpyAudioGainDb property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_scrcpy_audio_duck_level_db", "use the scrcpyAudioDuckLevelDb property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_scrcpy_audio_duck_enabled", "use the scrcpyAudioDuckEnabled property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_scrcpy_audio_duck_level", "use the scrcpyAudioDuckLevel property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_scrcpy_phone_screen_off", "use the scrcpyPhoneScreenOff property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_scrcpy_display_dpi", "use the scrcpyDisplayDpi property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_scrcpy_bit_rate_usb", "use the scrcpyBitRateUsb property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_scrcpy_bit_rate_wifi", "use the scrcpyBitRateWifi property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_scrcpy_auto_wifi", "use the scrcpyAutoWifi property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_scrcpy_bit_rate_auto", "use the scrcpyBitRateAuto property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_scrcpy_wireless_address", "use the scrcpyWirelessAddress property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_esp32_volume_enabled", "use the esp32VolumeEnabled property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_esp32_volume_port", "use the esp32VolumePort property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_esp32_volume_step_size", "use the esp32VolumeStepSize property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_esp32_auto_reconnect", "use the esp32AutoReconnect property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_esp32_led_sleep_enabled", "use the esp32LedSleepEnabled property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_esp32_led_color_mode", "use the esp32LedColorMode property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_esp32_led_static_color", "use the esp32LedStaticColor property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_imu_enabled", "use the imuEnabled property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_sensor_emit_rate", "use the sensorEmitRate property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_sensor_decimal_places", "use the sensorDecimalPlaces property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_sensor_temp_unit", "use the sensorTempUnit property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_sensor_altitude_unit", "use the sensorAltitudeUnit property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_gesture_sensor_enabled", "use the gestureSensorEnabled property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_gesture_volume_step", "use the gestureVolumeStep property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.save_gesture_cooldown", "use the gestureCooldown property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_directory_history", "use the directoryHistory property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_home_obd_parameters", "use the homeOBDParameters property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_auto_play_on_startup", "use the autoPlayOnStartup property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_persist_shuffle_state", "use the persistShuffleState property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_last_shuffle_state", "use the lastShuffleState property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_last_played_song", "use the lastPlayedSong property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_last_played_position", "use the lastPlayedPosition property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_last_played_playlist", "use the lastPlayedPlaylist property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_last_settings_section", "use the lastSettingsSection property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_window_state", "use the windowState property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_music_button_default_page", "use the musicButtonDefaultPage property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_return_to_library_after_selection", "use the returnToLibraryAfterSelection property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_android_auto_enabled", "use the androidAutoEnabled property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_phone_mirror_enabled", "use the phoneMirrorEnabled property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_scrcpy_display_size", "use the scrcpyDisplaySize property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_scrcpy_audio_gain", "use the scrcpyAudioGain property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_scrcpy_audio_duck_enabled", "use the scrcpyAudioDuckEnabled property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_scrcpy_audio_duck_level", "use the scrcpyAudioDuckLevel property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_scrcpy_phone_screen_off", "use the scrcpyPhoneScreenOff property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_scrcpy_display_dpi", "use the scrcpyDisplayDpi property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_scrcpy_bit_rate_usb", "use the scrcpyBitRateUsb property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_scrcpy_bit_rate_wifi", "use the scrcpyBitRateWifi property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_scrcpy_auto_wifi", "use the scrcpyAutoWifi property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_scrcpy_bit_rate_auto", "use the scrcpyBitRateAuto property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_scrcpy_wireless_address", "use the scrcpyWirelessAddress property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_esp32_volume_enabled", "use the esp32VolumeEnabled property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_esp32_volume_port", "use the esp32VolumePort property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_esp32_volume_step_size", "use the esp32VolumeStepSize property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_esp32_auto_reconnect", "use the esp32AutoReconnect property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_esp32_led_sleep_enabled", "use the esp32LedSleepEnabled property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_esp32_led_color_mode", "use the esp32LedColorMode property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_esp32_led_static_color", "use the esp32LedStaticColor property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_show_waveform_visualizer", "use the showWaveformVisualizer property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_imu_enabled", "use the imuEnabled property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_gesture_sensor_enabled", "use the gestureSensorEnabled property; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.get_settings_menu_visibility", "use the settingsMenuVisibility property; goes in protocol 5")
     friend class TstSettingsManager;
 
     // ======================================================================
-    // Q_PROPERTY declarations  (type, QML name, getter, notify)
-    // Properties that use simple set-and-save use OCTAVE_PROPERTY macro.
-    // Properties with custom logic are declared manually.
+    // Q_PROPERTY declarations. A plain setting (one value under one key of
+    // settingsConfigure.json) is a row of the table in settingsmanager.cpp:
+    // its default, type, limits and notify signal live there, and its
+    // property is writable through its save_* slot.
     // ======================================================================
 
     // --- Device ---
-    Q_PROPERTY(QString deviceName READ deviceName NOTIFY deviceNameChanged)
-    Q_PROPERTY(QString fontSetting READ fontSetting NOTIFY fontSettingChanged)
+    Q_PROPERTY(QString deviceName READ deviceName WRITE save_device_name NOTIFY deviceNameChanged)
+    Q_PROPERTY(QString fontSetting READ fontSetting WRITE save_font_setting NOTIFY fontSettingChanged)
 
     // --- Theme / Display ---
-    Q_PROPERTY(QString themeSetting READ themeSetting NOTIFY themeSettingChanged)
-    Q_PROPERTY(float uiScale READ uiScale NOTIFY uiScaleChanged)
-    Q_PROPERTY(int colorTransitionMs READ colorTransitionMs NOTIFY colorTransitionMsChanged)
-    Q_PROPERTY(bool songLengthTransition READ songLengthTransition NOTIFY songLengthTransitionChanged)
-    Q_PROPERTY(bool showClock READ showClock NOTIFY showClockChanged)
-    Q_PROPERTY(bool clockFormat24Hour READ clockFormat24Hour NOTIFY clockFormatChanged)
-    Q_PROPERTY(bool clockShowSeconds READ clockShowSeconds NOTIFY clockShowSecondsChanged)
-    Q_PROPERTY(int clockSize READ clockSize NOTIFY clockSizeChanged)
-    Q_PROPERTY(bool clockSizeAuto READ clockSizeAuto NOTIFY clockSizeAutoChanged)
-    Q_PROPERTY(QString backgroundGrid READ backgroundGrid NOTIFY backgroundGridChanged)
-    Q_PROPERTY(int screenWidth READ screenWidth NOTIFY screenWidthChanged)
-    Q_PROPERTY(int screenHeight READ screenHeight NOTIFY screenHeightChanged)
-    Q_PROPERTY(int backgroundBlurRadius READ backgroundBlurRadius NOTIFY backgroundBlurRadiusChanged)
-    Q_PROPERTY(QString bottomBarOrientation READ bottomBarOrientation NOTIFY bottomBarOrientationChanged)
-    Q_PROPERTY(bool showBottomBarMediaControls READ showBottomBarMediaControls NOTIFY showBottomBarMediaControlsChanged)
-    Q_PROPERTY(QString settingsLayoutStyle READ settingsLayoutStyle NOTIFY settingsLayoutStyleChanged)
+    Q_PROPERTY(QString themeSetting READ themeSetting WRITE save_theme_setting NOTIFY themeSettingChanged)
+    Q_PROPERTY(float uiScale READ uiScale WRITE save_ui_scale NOTIFY uiScaleChanged)
+    Q_PROPERTY(int colorTransitionMs READ colorTransitionMs WRITE save_color_transition_ms NOTIFY colorTransitionMsChanged)
+    Q_PROPERTY(bool songLengthTransition READ songLengthTransition WRITE save_song_length_transition NOTIFY songLengthTransitionChanged)
+    Q_PROPERTY(bool showClock READ showClock WRITE save_show_clock NOTIFY showClockChanged)
+    Q_PROPERTY(bool clockFormat24Hour READ clockFormat24Hour WRITE save_clock_format NOTIFY clockFormatChanged)
+    Q_PROPERTY(bool clockShowSeconds READ clockShowSeconds WRITE save_clock_show_seconds NOTIFY clockShowSecondsChanged)
+    Q_PROPERTY(int clockSize READ clockSize WRITE save_clock_size NOTIFY clockSizeChanged)
+    Q_PROPERTY(bool clockSizeAuto READ clockSizeAuto WRITE save_clock_size_auto NOTIFY clockSizeAutoChanged)
+    Q_PROPERTY(QString backgroundGrid READ backgroundGrid WRITE save_background_grid NOTIFY backgroundGridChanged)
+    Q_PROPERTY(int screenWidth READ screenWidth WRITE save_screen_width NOTIFY screenWidthChanged)
+    Q_PROPERTY(int screenHeight READ screenHeight WRITE save_screen_height NOTIFY screenHeightChanged)
+    Q_PROPERTY(int backgroundBlurRadius READ backgroundBlurRadius WRITE save_background_blur_radius NOTIFY backgroundBlurRadiusChanged)
+    Q_PROPERTY(QString bottomBarOrientation READ bottomBarOrientation WRITE save_bottom_bar_orientation NOTIFY bottomBarOrientationChanged)
+    Q_PROPERTY(bool showBottomBarMediaControls READ showBottomBarMediaControls WRITE save_show_bottom_bar_media_controls NOTIFY showBottomBarMediaControlsChanged)
+    Q_PROPERTY(QString settingsLayoutStyle READ settingsLayoutStyle WRITE save_settings_layout_style NOTIFY settingsLayoutStyleChanged)
     // The Album Art Capture palette extracted from the playing art, as a theme
     // object ({base, baseAlt, accent, text, ...}; empty before the first
     // extraction). Stored as a JSON string under the same key.
@@ -72,55 +197,55 @@ class SettingsManager : public QObject
     Q_PROPERTY(QString settingsMenuVisibility READ settingsMenuVisibility NOTIFY settingsMenuVisibilityChanged)
 
     // --- Media ---
-    Q_PROPERTY(float startUpVolume READ startUpVolume NOTIFY startUpVolumeChanged)
+    Q_PROPERTY(float startUpVolume READ startUpVolume WRITE save_start_volume NOTIFY startUpVolumeChanged)
     Q_PROPERTY(int currentVolume READ currentVolume NOTIFY currentVolumeChanged)
-    Q_PROPERTY(QString mediaFolder READ mediaFolder NOTIFY mediaFolderChanged)
-    Q_PROPERTY(bool autoPlayOnStartup READ autoPlayOnStartup NOTIFY autoPlayOnStartupChanged)
-    Q_PROPERTY(bool persistShuffleState READ persistShuffleState NOTIFY persistShuffleStateChanged)
-    Q_PROPERTY(bool lastShuffleState READ lastShuffleState NOTIFY lastShuffleStateChanged)
-    Q_PROPERTY(QString lastPlayedSong READ lastPlayedSong NOTIFY lastPlayedSongChanged)
-    Q_PROPERTY(int lastPlayedPosition READ lastPlayedPosition NOTIFY lastPlayedPositionChanged)
-    Q_PROPERTY(QString lastPlayedPlaylist READ lastPlayedPlaylist NOTIFY lastPlayedPlaylistChanged)
-    Q_PROPERTY(QString musicButtonDefaultPage READ musicButtonDefaultPage NOTIFY musicButtonDefaultPageChanged)
-    Q_PROPERTY(bool returnToLibraryAfterSelection READ returnToLibraryAfterSelection NOTIFY returnToLibraryAfterSelectionChanged)
-    Q_PROPERTY(bool showWaveformVisualizer READ showWaveformVisualizer NOTIFY showWaveformVisualizerChanged)
+    Q_PROPERTY(QString mediaFolder READ mediaFolder WRITE save_media_folder NOTIFY mediaFolderChanged)
+    Q_PROPERTY(bool autoPlayOnStartup READ autoPlayOnStartup WRITE save_auto_play_on_startup NOTIFY autoPlayOnStartupChanged)
+    Q_PROPERTY(bool persistShuffleState READ persistShuffleState WRITE save_persist_shuffle_state NOTIFY persistShuffleStateChanged)
+    Q_PROPERTY(bool lastShuffleState READ lastShuffleState WRITE save_last_shuffle_state NOTIFY lastShuffleStateChanged)
+    Q_PROPERTY(QString lastPlayedSong READ lastPlayedSong WRITE save_last_played_song NOTIFY lastPlayedSongChanged)
+    Q_PROPERTY(int lastPlayedPosition READ lastPlayedPosition WRITE save_last_played_position NOTIFY lastPlayedPositionChanged)
+    Q_PROPERTY(QString lastPlayedPlaylist READ lastPlayedPlaylist WRITE save_last_played_playlist NOTIFY lastPlayedPlaylistChanged)
+    Q_PROPERTY(QString musicButtonDefaultPage READ musicButtonDefaultPage WRITE save_music_button_default_page NOTIFY musicButtonDefaultPageChanged)
+    Q_PROPERTY(bool returnToLibraryAfterSelection READ returnToLibraryAfterSelection WRITE save_return_to_library_after_selection NOTIFY returnToLibraryAfterSelectionChanged)
+    Q_PROPERTY(bool showWaveformVisualizer READ showWaveformVisualizer WRITE save_show_waveform_visualizer NOTIFY showWaveformVisualizerChanged)
 
     // --- 3D visual effects ---
-    Q_PROPERTY(bool show3DButtonTilt READ show3DButtonTilt NOTIFY show3DButtonTiltChanged)
-    Q_PROPERTY(bool show3DAlbumPreview READ show3DAlbumPreview NOTIFY show3DAlbumPreviewChanged)
-    Q_PROPERTY(bool roundedAlbumArt READ roundedAlbumArt NOTIFY roundedAlbumArtChanged)
-    Q_PROPERTY(int albumArtCornerRadius READ albumArtCornerRadius NOTIFY albumArtCornerRadiusChanged)
-    Q_PROPERTY(bool showAlbumArtShadow READ showAlbumArtShadow NOTIFY showAlbumArtShadowChanged)
-    Q_PROPERTY(bool vinylRecordMode READ vinylRecordMode NOTIFY vinylRecordModeChanged)
-    Q_PROPERTY(QString albumArtTransition READ albumArtTransition NOTIFY albumArtTransitionChanged)
+    Q_PROPERTY(bool show3DButtonTilt READ show3DButtonTilt WRITE save_show_3d_button_tilt NOTIFY show3DButtonTiltChanged)
+    Q_PROPERTY(bool show3DAlbumPreview READ show3DAlbumPreview WRITE save_show_3d_album_preview NOTIFY show3DAlbumPreviewChanged)
+    Q_PROPERTY(bool roundedAlbumArt READ roundedAlbumArt WRITE save_rounded_album_art NOTIFY roundedAlbumArtChanged)
+    Q_PROPERTY(int albumArtCornerRadius READ albumArtCornerRadius WRITE save_album_art_corner_radius NOTIFY albumArtCornerRadiusChanged)
+    Q_PROPERTY(bool showAlbumArtShadow READ showAlbumArtShadow WRITE save_show_album_art_shadow NOTIFY showAlbumArtShadowChanged)
+    Q_PROPERTY(bool vinylRecordMode READ vinylRecordMode WRITE save_vinyl_record_mode NOTIFY vinylRecordModeChanged)
+    Q_PROPERTY(QString albumArtTransition READ albumArtTransition WRITE save_album_art_transition NOTIFY albumArtTransitionChanged)
     // The audio output to play to (a QAudioDevice id); empty = the system default
-    Q_PROPERTY(QString audioOutputDevice READ audioOutputDevice NOTIFY audioOutputDeviceChanged)
-    Q_PROPERTY(int backgroundOverlayOpacity READ backgroundOverlayOpacity NOTIFY backgroundOverlayOpacityChanged)
-    Q_PROPERTY(double sideCardOpacity READ sideCardOpacity NOTIFY sideCardOpacityChanged)
-    Q_PROPERTY(int sideCardAngle READ sideCardAngle NOTIFY sideCardAngleChanged)
-    Q_PROPERTY(int buttonTiltDuration READ buttonTiltDuration NOTIFY buttonTiltDurationChanged)
-    Q_PROPERTY(int textScrollSpeed READ textScrollSpeed NOTIFY textScrollSpeedChanged)
+    Q_PROPERTY(QString audioOutputDevice READ audioOutputDevice WRITE save_audio_output_device NOTIFY audioOutputDeviceChanged)
+    Q_PROPERTY(int backgroundOverlayOpacity READ backgroundOverlayOpacity WRITE save_background_overlay_opacity NOTIFY backgroundOverlayOpacityChanged)
+    Q_PROPERTY(double sideCardOpacity READ sideCardOpacity WRITE save_side_card_opacity NOTIFY sideCardOpacityChanged)
+    Q_PROPERTY(int sideCardAngle READ sideCardAngle WRITE save_side_card_angle NOTIFY sideCardAngleChanged)
+    Q_PROPERTY(int buttonTiltDuration READ buttonTiltDuration WRITE save_button_tilt_duration NOTIFY buttonTiltDurationChanged)
+    Q_PROPERTY(int textScrollSpeed READ textScrollSpeed WRITE save_text_scroll_speed NOTIFY textScrollSpeedChanged)
 
     // --- OBD ---
-    Q_PROPERTY(QString obdBluetoothPort READ obdBluetoothPort NOTIFY obdBluetoothPortChanged)
+    Q_PROPERTY(QString obdBluetoothPort READ obdBluetoothPort WRITE save_obd_bluetooth_port NOTIFY obdBluetoothPortChanged)
     // Recently used OBD adapters, newest first, at most 8: {name, mac} maps
     // (stored as a JSON string under the same key)
     Q_PROPERTY(QVariantList obdSavedAdapters READ obdSavedAdapters NOTIFY obdSavedAdaptersChanged)
-    Q_PROPERTY(bool obdFastMode READ obdFastMode NOTIFY obdFastModeChanged)
-    Q_PROPERTY(bool obdCardStyleCircular READ obdCardStyleCircular NOTIFY obdCardStyleCircularChanged)
+    Q_PROPERTY(bool obdFastMode READ obdFastMode WRITE save_obd_fast_mode NOTIFY obdFastModeChanged)
+    Q_PROPERTY(bool obdCardStyleCircular READ obdCardStyleCircular WRITE save_obd_card_style_circular NOTIFY obdCardStyleCircularChanged)
     // Units the OBD gauges and dashboards show (ParameterCatalog converts):
     // temperatures "C" | "F", speed "mph" | "km/h". Altitude follows
     // sensorAltitudeUnit. The Sensors page keeps sensorTempUnit.
-    Q_PROPERTY(QString gaugeTempUnit READ gaugeTempUnit NOTIFY gaugeTempUnitChanged)
-    Q_PROPERTY(QString gaugeSpeedUnit READ gaugeSpeedUnit NOTIFY gaugeSpeedUnitChanged)
-    Q_PROPERTY(int obdAutoReconnectAttempts READ obdAutoReconnectAttempts NOTIFY obdAutoReconnectAttemptsChanged)
-    Q_PROPERTY(float fuelTankCapacity READ fuelTankCapacity NOTIFY fuelTankCapacityChanged)
+    Q_PROPERTY(QString gaugeTempUnit READ gaugeTempUnit WRITE save_gauge_temp_unit NOTIFY gaugeTempUnitChanged)
+    Q_PROPERTY(QString gaugeSpeedUnit READ gaugeSpeedUnit WRITE save_gauge_speed_unit NOTIFY gaugeSpeedUnitChanged)
+    Q_PROPERTY(int obdAutoReconnectAttempts READ obdAutoReconnectAttempts WRITE save_obd_auto_reconnect_attempts NOTIFY obdAutoReconnectAttemptsChanged)
+    Q_PROPERTY(float fuelTankCapacity READ fuelTankCapacity WRITE save_fuel_tank_capacity NOTIFY fuelTankCapacityChanged)
     // Black box (TripRecorder): record every drive, also sweep PIDs that are
     // not on screen, and the on-disk cap for the history (database + files)
-    Q_PROPERTY(bool blackBoxEnabled READ blackBoxEnabled NOTIFY blackBoxEnabledChanged)
-    Q_PROPERTY(bool blackBoxSweepAll READ blackBoxSweepAll NOTIFY blackBoxSweepAllChanged)
-    Q_PROPERTY(int blackBoxMaxMB READ blackBoxMaxMB NOTIFY blackBoxMaxMBChanged)
-    Q_PROPERTY(QVariantList homeOBDParameters READ homeOBDParameters NOTIFY homeOBDParametersChanged)
+    Q_PROPERTY(bool blackBoxEnabled READ blackBoxEnabled WRITE save_black_box_enabled NOTIFY blackBoxEnabledChanged)
+    Q_PROPERTY(bool blackBoxSweepAll READ blackBoxSweepAll WRITE save_black_box_sweep_all NOTIFY blackBoxSweepAllChanged)
+    Q_PROPERTY(int blackBoxMaxMB READ blackBoxMaxMB WRITE save_black_box_max_mb NOTIFY blackBoxMaxMBChanged)
+    Q_PROPERTY(QVariantList homeOBDParameters READ homeOBDParameters WRITE save_home_obd_parameters NOTIFY homeOBDParametersChanged)
     // The home screen holds at most this many OBD cards
     Q_PROPERTY(int maxHomeObdParameters READ maxHomeObdParameters CONSTANT)
     Q_PROPERTY(QVariantList customThemes READ customThemes NOTIFY customThemesChanged)   // names
@@ -131,56 +256,56 @@ class SettingsManager : public QObject
     Q_PROPERTY(QVariantList directoryHistory READ directoryHistory NOTIFY directoryHistoryChanged)
 
     // --- Window ---
-    Q_PROPERTY(QString windowState READ windowState NOTIFY windowStateChanged)
-    Q_PROPERTY(QString lastSettingsSection READ lastSettingsSection NOTIFY lastSettingsSectionChanged)
+    Q_PROPERTY(QString windowState READ windowState WRITE save_window_state NOTIFY windowStateChanged)
+    Q_PROPERTY(QString lastSettingsSection READ lastSettingsSection WRITE set_last_settings_section NOTIFY lastSettingsSectionChanged)
 
     // --- Android Auto / Phone Mirror ---
-    Q_PROPERTY(bool androidAutoEnabled READ androidAutoEnabled NOTIFY androidAutoEnabledChanged)
-    Q_PROPERTY(bool phoneMirrorEnabled READ phoneMirrorEnabled NOTIFY phoneMirrorEnabledChanged)
-    Q_PROPERTY(QString scrcpyDisplaySize READ scrcpyDisplaySize NOTIFY scrcpyDisplaySizeChanged)
-    Q_PROPERTY(double scrcpyAudioGain READ scrcpyAudioGain NOTIFY scrcpyAudioGainChanged)
+    Q_PROPERTY(bool androidAutoEnabled READ androidAutoEnabled WRITE save_android_auto_enabled NOTIFY androidAutoEnabledChanged)
+    Q_PROPERTY(bool phoneMirrorEnabled READ phoneMirrorEnabled WRITE save_phone_mirror_enabled NOTIFY phoneMirrorEnabledChanged)
+    Q_PROPERTY(QString scrcpyDisplaySize READ scrcpyDisplaySize WRITE save_scrcpy_display_size NOTIFY scrcpyDisplaySizeChanged)
+    Q_PROPERTY(double scrcpyAudioGain READ scrcpyAudioGain WRITE save_scrcpy_audio_gain NOTIFY scrcpyAudioGainChanged)
     // The same two levels in dB, as the Phone Audio sliders show them (the
     // file and the audio path keep the linear factors above)
-    Q_PROPERTY(double scrcpyAudioGainDb READ scrcpyAudioGainDb NOTIFY scrcpyAudioGainChanged)
-    Q_PROPERTY(double scrcpyAudioDuckLevelDb READ scrcpyAudioDuckLevelDb NOTIFY scrcpyAudioDuckLevelChanged)
-    Q_PROPERTY(bool scrcpyAudioDuckEnabled READ scrcpyAudioDuckEnabled NOTIFY scrcpyAudioDuckEnabledChanged)
-    Q_PROPERTY(double scrcpyAudioDuckLevel READ scrcpyAudioDuckLevel NOTIFY scrcpyAudioDuckLevelChanged)
-    Q_PROPERTY(bool scrcpyPhoneScreenOff READ scrcpyPhoneScreenOff NOTIFY scrcpyPhoneScreenOffChanged)
+    Q_PROPERTY(double scrcpyAudioGainDb READ scrcpyAudioGainDb WRITE save_scrcpy_audio_gain_db NOTIFY scrcpyAudioGainChanged)
+    Q_PROPERTY(double scrcpyAudioDuckLevelDb READ scrcpyAudioDuckLevelDb WRITE save_scrcpy_audio_duck_level_db NOTIFY scrcpyAudioDuckLevelChanged)
+    Q_PROPERTY(bool scrcpyAudioDuckEnabled READ scrcpyAudioDuckEnabled WRITE save_scrcpy_audio_duck_enabled NOTIFY scrcpyAudioDuckEnabledChanged)
+    Q_PROPERTY(double scrcpyAudioDuckLevel READ scrcpyAudioDuckLevel WRITE save_scrcpy_audio_duck_level NOTIFY scrcpyAudioDuckLevelChanged)
+    Q_PROPERTY(bool scrcpyPhoneScreenOff READ scrcpyPhoneScreenOff WRITE save_scrcpy_phone_screen_off NOTIFY scrcpyPhoneScreenOffChanged)
     // Virtual display density override, 0 = scale the phone's own density
-    Q_PROPERTY(int scrcpyDisplayDpi READ scrcpyDisplayDpi NOTIFY scrcpyDisplayDpiChanged)
+    Q_PROPERTY(int scrcpyDisplayDpi READ scrcpyDisplayDpi WRITE save_scrcpy_display_dpi NOTIFY scrcpyDisplayDpiChanged)
     // Video bit rate in Mbps, per link
-    Q_PROPERTY(int scrcpyBitRateUsb READ scrcpyBitRateUsb NOTIFY scrcpyBitRateUsbChanged)
-    Q_PROPERTY(int scrcpyBitRateWifi READ scrcpyBitRateWifi NOTIFY scrcpyBitRateWifiChanged)
+    Q_PROPERTY(int scrcpyBitRateUsb READ scrcpyBitRateUsb WRITE save_scrcpy_bit_rate_usb NOTIFY scrcpyBitRateUsbChanged)
+    Q_PROPERTY(int scrcpyBitRateWifi READ scrcpyBitRateWifi WRITE save_scrcpy_bit_rate_wifi NOTIFY scrcpyBitRateWifiChanged)
     // Switch a USB phone to adb over TCP (port 5555) so it can be reached over Wi-Fi later
-    Q_PROPERTY(bool scrcpyAutoWifi READ scrcpyAutoWifi NOTIFY scrcpyAutoWifiChanged)
+    Q_PROPERTY(bool scrcpyAutoWifi READ scrcpyAutoWifi WRITE save_scrcpy_auto_wifi NOTIFY scrcpyAutoWifiChanged)
     // Adapt the mirror bit rate to the link; the per-link rates become the ceiling
-    Q_PROPERTY(bool scrcpyBitRateAuto READ scrcpyBitRateAuto NOTIFY scrcpyBitRateAutoChanged)
+    Q_PROPERTY(bool scrcpyBitRateAuto READ scrcpyBitRateAuto WRITE save_scrcpy_bit_rate_auto NOTIFY scrcpyBitRateAutoChanged)
     // Last phone connected over Wi-Fi ("ip:port"); reconnected automatically, "" = none
-    Q_PROPERTY(QString scrcpyWirelessAddress READ scrcpyWirelessAddress NOTIFY scrcpyWirelessAddressChanged)
+    Q_PROPERTY(QString scrcpyWirelessAddress READ scrcpyWirelessAddress WRITE save_scrcpy_wireless_address NOTIFY scrcpyWirelessAddressChanged)
 
     // --- ESP32 Volume Knob ---
-    Q_PROPERTY(bool esp32VolumeEnabled READ esp32VolumeEnabled NOTIFY esp32VolumeEnabledChanged)
-    Q_PROPERTY(QString esp32VolumePort READ esp32VolumePort NOTIFY esp32VolumePortChanged)
-    Q_PROPERTY(double esp32VolumeStepSize READ esp32VolumeStepSize NOTIFY esp32VolumeStepSizeChanged)
-    Q_PROPERTY(bool esp32AutoReconnect READ esp32AutoReconnect NOTIFY esp32AutoReconnectChanged)
-    Q_PROPERTY(bool esp32LedSleepEnabled READ esp32LedSleepEnabled NOTIFY esp32LedSleepEnabledChanged)
-    Q_PROPERTY(QString esp32LedColorMode READ esp32LedColorMode NOTIFY esp32LedColorModeChanged)
-    Q_PROPERTY(QString esp32LedStaticColor READ esp32LedStaticColor NOTIFY esp32LedStaticColorChanged)
+    Q_PROPERTY(bool esp32VolumeEnabled READ esp32VolumeEnabled WRITE save_esp32_volume_enabled NOTIFY esp32VolumeEnabledChanged)
+    Q_PROPERTY(QString esp32VolumePort READ esp32VolumePort WRITE save_esp32_volume_port NOTIFY esp32VolumePortChanged)
+    Q_PROPERTY(double esp32VolumeStepSize READ esp32VolumeStepSize WRITE save_esp32_volume_step_size NOTIFY esp32VolumeStepSizeChanged)
+    Q_PROPERTY(bool esp32AutoReconnect READ esp32AutoReconnect WRITE save_esp32_auto_reconnect NOTIFY esp32AutoReconnectChanged)
+    Q_PROPERTY(bool esp32LedSleepEnabled READ esp32LedSleepEnabled WRITE save_esp32_led_sleep_enabled NOTIFY esp32LedSleepEnabledChanged)
+    Q_PROPERTY(QString esp32LedColorMode READ esp32LedColorMode WRITE save_esp32_led_color_mode NOTIFY esp32LedColorModeChanged)
+    Q_PROPERTY(QString esp32LedStaticColor READ esp32LedStaticColor WRITE save_esp32_led_static_color NOTIFY esp32LedStaticColorChanged)
 
     // --- IMU ---
-    Q_PROPERTY(bool imuEnabled READ imuEnabled NOTIFY imuEnabledChanged)
-    Q_PROPERTY(int sensorEmitRate READ sensorEmitRate NOTIFY sensorEmitRateChanged)   // Hz, 10-120
+    Q_PROPERTY(bool imuEnabled READ imuEnabled WRITE save_imu_enabled NOTIFY imuEnabledChanged)
+    Q_PROPERTY(int sensorEmitRate READ sensorEmitRate WRITE save_sensor_emit_rate NOTIFY sensorEmitRateChanged)   // Hz, 10-120
     // Sensors page display (SensorMenu binds to these)
-    Q_PROPERTY(int sensorDecimalPlaces READ sensorDecimalPlaces NOTIFY sensorDecimalPlacesChanged)     // 0-4
-    Q_PROPERTY(QString sensorTempUnit READ sensorTempUnit NOTIFY sensorTempUnitChanged)               // "F" | "C"
-    Q_PROPERTY(QString sensorAltitudeUnit READ sensorAltitudeUnit NOTIFY sensorAltitudeUnitChanged)   // "m" | "ft"
+    Q_PROPERTY(int sensorDecimalPlaces READ sensorDecimalPlaces WRITE save_sensor_decimal_places NOTIFY sensorDecimalPlacesChanged)     // 0-4
+    Q_PROPERTY(QString sensorTempUnit READ sensorTempUnit WRITE save_sensor_temp_unit NOTIFY sensorTempUnitChanged)               // "F" | "C"
+    Q_PROPERTY(QString sensorAltitudeUnit READ sensorAltitudeUnit WRITE save_sensor_altitude_unit NOTIFY sensorAltitudeUnitChanged)   // "m" | "ft"
     // Which readouts show: {Pitch, Roll, Heading, GForce, Altitude, Temperature} -> bool
     Q_PROPERTY(QVariantMap sensorCards READ sensorCards NOTIFY sensorCardsChanged)
 
     // --- Gesture Sensor ---
-    Q_PROPERTY(bool gestureSensorEnabled READ gestureSensorEnabled NOTIFY gestureSensorEnabledChanged)
-    Q_PROPERTY(int gestureVolumeStep READ gestureVolumeStep NOTIFY gestureVolumeStepChanged)
-    Q_PROPERTY(int gestureCooldown READ gestureCooldown NOTIFY gestureCooldownChanged)
+    Q_PROPERTY(bool gestureSensorEnabled READ gestureSensorEnabled WRITE save_gesture_sensor_enabled NOTIFY gestureSensorEnabledChanged)
+    Q_PROPERTY(int gestureVolumeStep READ gestureVolumeStep WRITE save_gesture_volume_step NOTIFY gestureVolumeStepChanged)
+    Q_PROPERTY(int gestureCooldown READ gestureCooldown WRITE save_gesture_cooldown NOTIFY gestureCooldownChanged)
 
     // --- Pinned Settings ---
     Q_PROPERTY(QVariantList pinnedSettings READ pinnedSettings NOTIFY pinnedSettingsChanged)
@@ -256,8 +381,8 @@ public:
     QVariantList obdSavedAdapters() const;
     bool obdFastMode() const;
     bool obdCardStyleCircular() const;
-    QString gaugeTempUnit() const { return m_gaugeTempUnit; }
-    QString gaugeSpeedUnit() const { return m_gaugeSpeedUnit; }
+    QString gaugeTempUnit() const;
+    QString gaugeSpeedUnit() const;
     int obdAutoReconnectAttempts() const;
     float fuelTankCapacity() const;
     bool blackBoxEnabled() const;
@@ -706,9 +831,23 @@ private:
     QJsonObject validateSettings(const QJsonObject &settings);
     void setFilePermissions(const QString &filepath);
     QJsonObject buildDefaultSettings() const;
-    void populateMembers();   // cached members <- m_settings (constructor + reset_to_defaults)
+    void populateMembers();   // everything below m_settings <- m_settings (constructor + reset_to_defaults)
+    void populateStructured();   // the list / map settings only
     static QJsonObject buildSettingsRegistry();
-    QString keyToAttr(const QString &key) const;
+
+    // The table-driven core (settingsmanager.cpp, "The settings table").
+    // m_settings is what the file holds; m_values is each table row's value
+    // in its own type, written by setRow() and nothing else, so a typed
+    // setter, a property write, save_setting() and apply_settings() cannot
+    // leave two answers for one key.
+    enum class SetResult { Refused, Unchanged, Changed };
+    QVariant row(int index) const { return m_values.at(index); }
+    // `strictType`: the value came from outside (save_setting, the service)
+    // and must already be the row's type
+    SetResult setRow(int index, QVariant value, bool strictType = false);
+    QVariantList m_values;
+    // The table as data, for tst_settingsmanager
+    static QVariantList describeTable();
     QString getGitRepoDir() const;
 
     // OBD parameter debounce
@@ -746,138 +885,20 @@ private:
     QTimer m_obdParamsSaveTimer;
     bool m_obdParamsDirty = false;
 
-    // Pending theme art download result
-    QString m_pendingThemeArtName;
-    QString m_pendingThemeArtUrl;
-
-    // --- Setting member variables ---
-    QString m_deviceName;
-    QString m_themeSetting;
-    QString m_fontSetting;
-    float m_startVolume = 0.1f;
-    bool m_showClock = true;
-    bool m_clockFormat24Hour = true;
-    bool m_clockShowSeconds = false;
-    int m_clockSize = 18;
-    bool m_clockSizeAuto = true;
-    QString m_backgroundGrid;
-    int m_screenWidth = 1280;
-    int m_screenHeight = 720;
-    int m_backgroundBlurRadius = 40;
-    float m_uiScale = 1.0f;
-    int m_colorTransitionMs = 1000;
-    bool m_songLengthTransition = false;
-    QString m_obdBluetoothPort;
-    QString m_obdSavedAdapters = QStringLiteral("[]");
-    bool m_obdFastMode = true;
-    bool m_obdCardStyleCircular = false;
-    QString m_gaugeTempUnit = QStringLiteral("C");
-    QString m_gaugeSpeedUnit = QStringLiteral("mph");
-    int m_obdAutoReconnectAttempts = 0;
-    QString m_mediaFolder;
-    float m_fuelTankCapacity = 15.0f;
-    bool m_blackBoxEnabled = true;
-    bool m_blackBoxSweepAll = true;
-    int m_blackBoxMaxMB = 500;
+    // --- Settings that are a list or a map, each kept by its own savers ---
+    // (to move out one day: the pinned-settings registry, custom themes and
+    // their art download, and the git information are not settings storage)
+    QString m_mediaFolder;                 // "" in the file = the OS music folder
     QVariantList m_homeObdParameters;
-    QString m_bottomBarOrientation;
-    bool m_showBottomBarMediaControls = false;
-
-    // Auto-play / resume
-    bool m_autoPlayOnStartup = false;
-    bool m_persistShuffleState = false;
-    bool m_lastShuffleState = false;
-    QString m_lastPlayedSong;
-    int m_lastPlayedPosition = 0;
-    QString m_lastPlayedPlaylist;
-
-    // Window
-    QString m_windowState;
-    QString m_musicButtonDefaultPage;
-    bool m_returnToLibraryAfterSelection = false;
-
-    // Android Auto / Phone Mirror
-    bool m_androidAutoEnabled = false;
-    bool m_phoneMirrorEnabled = false;
-    QString m_scrcpyDisplaySize;
-    double m_scrcpyAudioGain = 2.0;
-    bool m_scrcpyAudioDuckEnabled = true;
-    double m_scrcpyAudioDuckLevel = 0.1;
-    bool m_scrcpyPhoneScreenOff = false;
-    int m_scrcpyDisplayDpi = 0;
-    int m_scrcpyBitRateUsb = 16;
-    int m_scrcpyBitRateWifi = 8;
-    bool m_scrcpyAutoWifi = false;
-    bool m_scrcpyBitRateAuto = true;
-    QString m_scrcpyWirelessAddress;
-
-    // Settings menu visibility
     QVariantMap m_settingsMenuVisibility;
-
-    // ESP32
-    bool m_esp32VolumeEnabled = true;
-    QString m_esp32VolumePort;
-    double m_esp32VolumeStepSize = 1.0;
-    bool m_esp32AutoReconnect = true;
-    bool m_esp32LedSleepEnabled = true;
-    QString m_esp32LedColorMode;
-    QString m_esp32LedStaticColor;
-
-    // Waveform
-    bool m_showWaveformVisualizer = true;
-
-    // 3D effects
-    bool m_show3DButtonTilt = false;
-    bool m_show3DAlbumPreview = false;
-    bool m_roundedAlbumArt = true;
-    int m_albumArtCornerRadius = 16;
-    bool m_showAlbumArtShadow = true;
-    bool m_vinylRecordMode = false;
-    QString m_albumArtTransition;
-    QString m_audioOutputDevice;
-    int m_backgroundOverlayOpacity = 80;
-    double m_sideCardOpacity = 0.4;
-    int m_sideCardAngle = 30;
-    int m_buttonTiltDuration = 200;
-    int m_textScrollSpeed = 5000;
-
-    // Settings layout
-    QString m_settingsLayoutStyle;
-
-    // IMU
-    bool m_imuEnabled = true;
-    int m_sensorEmitRate = 60;
-    int m_sensorDecimalPlaces = 1;
-    QString m_sensorTempUnit = QStringLiteral("F");
-    QString m_sensorAltitudeUnit = QStringLiteral("m");
-    QVariantMap m_sensorCards;
-
-    // Gesture
-    bool m_gestureSensorEnabled = true;
     QVariantMap m_gestureMapping;
-    int m_gestureVolumeStep = 5;
-    int m_gestureCooldown = 300;
-
-    // Pinned settings
     QVariantList m_pinnedSettings;
-
-    // Current volume (0-100)
-    int m_currentVolume = 0;
-
-    // Last settings section
-    QString m_lastSettingsSection;
-
-    // OBD parameters (parameter name -> enabled bool)
-    QVariantMap m_obdParameters;
-
-    // Supported OBD parameters from scan
-    QVariantList m_supportedObdParameters;
-
-    // Directory history
+    QVariantMap m_obdParameters;           // parameter name -> enabled
+    QVariantList m_supportedObdParameters; // from the last vehicle scan
     QVariantList m_directoryHistory;
 
-    // Album art colors JSON
-    QString m_albumArtColors;
+    // Current volume (0-100): live, never saved; starts from startUpVolume
+    int m_currentVolume = 0;
 
     // Static registry
     static QJsonObject s_settingsRegistry;

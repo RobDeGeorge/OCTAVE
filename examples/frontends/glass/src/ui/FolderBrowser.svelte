@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Pick the music folder on the head unit: mediaManager.browse_music_folders
+  // Pick the music folder on the head unit: mediaManager.browseMusicFolders
   // lists the roots, then each folder's sub-folders and audio files.
   import { octave } from '../lib/octave'
   import { act, toast } from '../lib/stores'
@@ -13,7 +13,7 @@
   let error = $state('')
   async function open(path: string) {
     error = ''
-    const r = await octave.call<Folder & Roots>('mediaManager', 'browse_music_folders', path).catch((e) => ({ error: e.message } as Folder & Roots))
+    const r = await octave.call<Folder & Roots>('mediaManager', 'browseMusicFolders', path).catch((e) => ({ error: e.message } as Folder & Roots))
     if (r.error) { error = r.error; return }
     if (path === '') { roots = r.roots ?? []; folder = null } else folder = r as Folder
   }

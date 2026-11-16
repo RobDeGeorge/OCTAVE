@@ -25,13 +25,13 @@ Done 2026-10-18: `display_ime_policy=local` for the virtual display, letterbox t
    - `deviceHint` reads sysfs only (`phonemirrormanager.cpp:295-303`, vendor `05ac`), so Windows and macOS just say "No Android device". Use SetupAPI (Windows) / IOKit (macOS) for the vendor ID; no USB library needed.
 4. **Host keyboard and text input.** **Effort:** M. **Device:** USB keyboard on the Orange Pi + S22/S26.
    - Send the scrcpy `INJECT_TEXT` control message (type 1; `scrcpyclient.cpp:66-73` has only 0, 2, 10, 100–103) from QML key events in `PhoneMirrorView.qml`, plus keycodes for Enter/Backspace/arrows.
-   - Optional, same session: clipboard sync. Today `clipboard_autosync=false` (`scrcpyclient.cpp:558`) and incoming clipboard messages (`:926-931`) are ignored.
+   - Optional, same session: clipboard sync. Today `clipboard_autosync=false` (`scrcpyclient.cpp:604`) and incoming clipboard messages (`:937-941`) are ignored.
 5. **Virtual display on non-Samsung phones.** **Effort:** M. **Device:** a Pixel (and ideally Android 11–13).
     - The Back/Home/Recents row is hidden in virtual-display mode on the assumption that a DeX-style taskbar exists (`PhoneMirrorView.qml:150,155`). Show it unless a taskbar is detected, or make it a setting.
     - If no launcher draws within a few seconds, fall back to phone-screen mode (today it only launches the launcher, `phonemirrormanager.cpp:692`).
     - Note: the `TRUSTED` flag is only set on API 33+ (`phone_server/.../video/NewDisplayCapture.java:185`).
 6. **Slow links.** **Effort:** L. **Device:** Orange Pi 5 Plus (RK3588) over Wi-Fi.
-    - Let adaptive bit rate lower `max_fps` and size once it hits the 2 Mbps floor (`kAdaptiveMinBps`, `phonemirrormanager.h:202`; `src/phone_mirror/adaptivebitrate.h` only changes bit rate).
+    - Let adaptive bit rate lower `max_fps` and size once it hits the 2 Mbps floor (`kAdaptiveMinBps`, `phonemirrormanager.h:230`; `src/phone_mirror/adaptivebitrate.h` only changes bit rate).
     - Try hardware decode on the RK3588 (`h264_rkmpp` / v4l2m2m). Do it in the shared decoder (`src/util/h264decoder`), so phone mirroring and Android Auto both get it.
 
 ## Hardware checks still open

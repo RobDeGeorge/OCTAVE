@@ -19,6 +19,7 @@ function(octave_add_test name)
         list(APPEND srcs "${OCTAVE_SRC}/${s}")
     endforeach()
     add_executable(${name} ${srcs})
+    octave_own_code(${name})
     target_include_directories(${name} PRIVATE "${OCTAVE_SRC}" "${CMAKE_BINARY_DIR}/generated")
     target_link_libraries(${name} PRIVATE Qt6::Test Qt6::Core ${T_LIBS})
     target_compile_definitions(${name} PRIVATE
@@ -31,6 +32,13 @@ function(octave_add_test name)
         TIMEOUT 120)
 endfunction()
 
+# OBDManager is one class in several files, and its worker
+set(OCTAVE_OBD_MANAGER_SOURCES
+    managers/obdmanager.h managers/obdmanager.cpp
+    managers/obdmanager_connection.cpp managers/obdmanager_polling.cpp
+    managers/obdmanager_diagnostics.cpp managers/obdmanager_android.cpp
+    managers/obdconnectionworker.h managers/obdconnectionworker.cpp)
+
 octave_add_test(tst_elm327protocol SOURCES managers/elm327protocol.cpp managers/parametercatalog.h managers/parametercatalog.cpp)
 octave_add_test(tst_dtcdescriptions SOURCES managers/dtcdescriptions.h managers/dtcdescriptions.cpp)
 # The license texts of Settings > About: same resource as the app's
@@ -38,10 +46,17 @@ octave_add_test(tst_licensetexts SOURCES util/licensetexts.h util/licensetexts.c
 octave_add_license_texts(tst_licensetexts)
 octave_add_test(tst_adaptivebitrate)
 octave_add_test(tst_settingsmanager SOURCES managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
+if(UNIX)   # the crash path it tests is the POSIX one (signals); each case re-runs the binary as a child
+    octave_add_test(tst_logger SOURCES util/logger.h util/logger.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
+endif()
 octave_add_test(tst_volumecontroller SOURCES managers/volumecontroller.h managers/volumecontroller.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
 octave_add_test(tst_shiftlightmanager SOURCES managers/shiftlightmanager.h managers/shiftlightmanager.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
 octave_add_test(tst_parametercatalog
     SOURCES managers/parametercatalog.h managers/parametercatalog.cpp managers/elm327protocol.cpp
+    LIBS Qt6::Gui Qt6::Qml)
+octave_add_test(tst_custompids
+    SOURCES managers/custompids.h managers/custompids.cpp managers/parametercatalog.h managers/parametercatalog.cpp
+            managers/elm327protocol.cpp managers/settingsmanager.h managers/settingsmanager.cpp
     LIBS Qt6::Gui Qt6::Qml)
 octave_add_test(tst_parameterstore
     SOURCES managers/parameterstore.h managers/parameterstore.cpp managers/parametercatalog.h managers/parametercatalog.cpp
@@ -56,7 +71,7 @@ octave_add_test(tst_dashboardwidgets
     LIBS Qt6::Gui Qt6::Qml Qt6::Quick)
 octave_add_test(tst_triprecorder
     SOURCES managers/tripstore.h managers/tripstore.cpp managers/triprecorder.h managers/triprecorder.cpp
-            managers/obdmanager.h managers/obdmanager.cpp managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
+            ${OCTAVE_OBD_MANAGER_SOURCES} managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
             managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
     LIBS Qt6::Gui Qt6::SerialPort octave_sqlite)
@@ -74,16 +89,17 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         LIBS Qt6::Gui)
 endif()
 octave_add_test(tst_obdmanager
-    SOURCES managers/obdmanager.h managers/obdmanager.cpp managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
+    SOURCES ${OCTAVE_OBD_MANAGER_SOURCES} managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
             managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
     LIBS Qt6::Gui Qt6::SerialPort)
 
 # Integration: the real OBD stack against the simulated adapter (src/sim/)
 octave_add_test(tst_obdsim
-    SOURCES managers/obdmanager.h managers/obdmanager.cpp managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
+    SOURCES ${OCTAVE_OBD_MANAGER_SOURCES} managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
             managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
+            managers/busmonitor.h managers/busmonitor.cpp
             sim/carsim.h sim/carsim.cpp sim/simelm327.h sim/simelm327.cpp
     LIBS Qt6::Gui Qt6::SerialPort)
 
@@ -104,7 +120,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET Qt6::DBus)
 endif()
 octave_add_test(tst_obdadapterfinder
     SOURCES ${_finder_sources}
-            managers/obdmanager.h managers/obdmanager.cpp managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
+            ${OCTAVE_OBD_MANAGER_SOURCES} managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
             managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
             sim/carsim.h sim/carsim.cpp sim/simelm327.h sim/simelm327.cpp
@@ -138,6 +154,7 @@ octave_add_test(tst_themecatalog SOURCES managers/themecatalog.h managers/themec
 # QML fixtures (tests/fixtures/), each run in its own qmlfixturehost process
 add_executable(qmlfixturehost qmlfixturehost.cpp
     "${OCTAVE_SRC}/managers/settingsmanager.h" "${OCTAVE_SRC}/managers/settingsmanager.cpp"
+    "${OCTAVE_SRC}/managers/shiftlightmanager.h" "${OCTAVE_SRC}/managers/shiftlightmanager.cpp"
     "${OCTAVE_SRC}/util/assetstore.h" "${OCTAVE_SRC}/util/assetstore.cpp"
     "${OCTAVE_SRC}/util/units.h" "${OCTAVE_SRC}/util/units.cpp"
     "${OCTAVE_SRC}/managers/themecatalog.h" "${OCTAVE_SRC}/managers/themecatalog.cpp")
@@ -153,6 +170,8 @@ endif()
 octave_add_test(tst_qmlfixtures DEFINES ${_fixture_defines})
 add_dependencies(tst_qmlfixtures qmlfixturehost)
 set_tests_properties(tst_qmlfixtures PROPERTIES TIMEOUT 300)
+# 106 s of the default 120 on a hosted runner (11 s on a desktop)
+set_tests_properties(tst_dashboardwidgets PROPERTIES TIMEOUT 300)
 
 # Phone mirror: the client (and the manager on top) with tests/cpp/fake-adb.sh
 # as adb; the decoding tests need libavcodec, as the app does
@@ -304,7 +323,8 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME service_load_check
         COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/tools/stream/service_load.py"
                 $<TARGET_FILE:octave> 0 "${CMAKE_CURRENT_BINARY_DIR}/service_load_check" --check)
-    set_tests_properties(service_load_check PROPERTIES TIMEOUT 60)
+    # exit 77: an adb is installed here, and the check will not run beside one
+    set_tests_properties(service_load_check PROPERTIES TIMEOUT 60 SKIP_RETURN_CODE 77)
     # AppCore's cross-manager wiring on the real binary (`octave --headless
     # --sim`): volume / mute to the outputs, RPM to the shift light, readings to
     # paramStore and the black box, gauge units to the catalog, a track change

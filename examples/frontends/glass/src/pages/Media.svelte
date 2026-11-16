@@ -25,20 +25,20 @@
   let movable = $state<string[]>([])
 
   async function loadLists() {
-    playlists = await octave.call<string[]>('mediaManager', 'get_playlist_names')
-    current = await octave.call<string>('mediaManager', 'get_current_playlist_name')
+    playlists = await octave.call<string[]>('mediaManager', 'getPlaylistNames')
+    current = await octave.call<string>('mediaManager', 'getCurrentPlaylistName')
   }
   async function loadSongs() {
     loading = true
     try {
-      const files = await octave.call<string[]>('mediaManager', 'sort_media_files', sort, ascending)
-      currentFile = await octave.call<string>('mediaManager', 'get_current_file')
+      const files = await octave.call<string[]>('mediaManager', 'sortMediaFiles', sort, ascending)
+      currentFile = await octave.call<string>('mediaManager', 'getCurrentFile')
       songs = await Promise.all(files.map(async (file) => {
         const [title, artist, album, duration] = await Promise.all([
-          octave.call<string>('mediaManager', 'get_display_name', file),
-          octave.call<string>('mediaManager', 'get_band', file),
-          octave.call<string>('mediaManager', 'get_album', file),
-          octave.call<string>('mediaManager', 'get_formatted_duration', file),
+          octave.call<string>('mediaManager', 'getDisplayName', file),
+          octave.call<string>('mediaManager', 'getBand', file),
+          octave.call<string>('mediaManager', 'getAlbum', file),
+          octave.call<string>('mediaManager', 'getFormattedDuration', file),
         ])
         return { file, title: title || file, artist, album, duration }
       }))
@@ -66,12 +66,12 @@
   }
   async function openMenu(s: Song) {
     picked = s
-    movable = await octave.call<string[]>('mediaManager', 'get_movable_playlist_names')
+    movable = await octave.call<string[]>('mediaManager', 'getMovablePlaylistNames')
   }
   async function createList() {
     const name = newName.trim()
     if (!name) return
-    const ok = await act(octave.call<boolean>('mediaManager', 'create_playlist', name))
+    const ok = await act(octave.call<boolean>('mediaManager', 'createPlaylist', name))
     if (ok) { toast(`Created ${name}`); newList = false; newName = '' }
     else toast('That playlist exists already', 'bad')
   }
@@ -86,7 +86,7 @@
       <div class="lists" role="tablist" aria-label="Playlists">
         {#each playlists as p}
           <button class="btn" class:on={p === current} role="tab" aria-selected={p === current}
-                  onclick={() => act(octave.call('mediaManager', 'select_playlist', p))}>{p}</button>
+                  onclick={() => act(octave.call('mediaManager', 'selectPlaylist', p))}>{p}</button>
         {/each}
         <button class="btn icon" aria-label="New playlist" onclick={() => (newList = true)}><Icon name="plus" /></button>
         {#if deletable}
@@ -108,7 +108,7 @@
     <ul class="songs">
       {#each songs as s (s.file)}
         <li class:now={s.file === currentFile}>
-          <button class="play" onclick={() => act(octave.call('mediaManager', 'play_file', s.file))}>
+          <button class="play" onclick={() => act(octave.call('mediaManager', 'playFile', s.file))}>
             <span class="mark">{#if s.file === currentFile}<Icon name={$nowPlaying.playing ? 'pause' : 'play'} size={20} />{/if}</span>
             {#key $ticket}<Art title={s.title} artist={s.artist} url={mediaUrl('/art', { song: s.file })} size={48} />{/key}
             <span class="t">
@@ -127,13 +127,13 @@
 {#if picked}
   <Modal title={picked.title} onclose={() => (picked = null)}>
     <p class="muted">{[picked.artist, picked.album].filter(Boolean).join(' – ')}</p>
-    <button class="btn primary" onclick={() => { act(octave.call('mediaManager', 'play_file', picked!.file)); picked = null }}><Icon name="play" />Play</button>
+    <button class="btn primary" onclick={() => { act(octave.call('mediaManager', 'playFile', picked!.file)); picked = null }}><Icon name="play" />Play</button>
     {#if movable.length}
       <h3>Move to playlist</h3>
       <div class="wrap">
         {#each movable as p}
           <button class="btn" onclick={async () => {
-            const ok = await act(octave.call<boolean>('mediaManager', 'move_song_to_playlist', picked!.file, p))
+            const ok = await act(octave.call<boolean>('mediaManager', 'moveSongToPlaylist', picked!.file, p))
             if (ok) { toast(`Moved to ${p}`); picked = null; loadSongs() } else toast('Could not move it', 'bad')
           }}>{p}</button>
         {/each}
@@ -154,7 +154,7 @@
   <Modal title="Delete {current}?" onclose={() => (confirmDeleteList = false)}>
     <p class="muted">The songs go back to Unsorted. This cannot be undone.</p>
     <button class="btn danger on" onclick={async () => {
-      const ok = await act(octave.call<boolean>('mediaManager', 'delete_playlist', current))
+      const ok = await act(octave.call<boolean>('mediaManager', 'deletePlaylist', current))
       confirmDeleteList = false
       toast(ok ? 'Playlist deleted' : 'Could not delete it', ok ? 'ok' : 'bad')
     }}>Delete playlist</button>
@@ -165,7 +165,7 @@
   <Modal title="Delete {confirmDeleteSong.title}?" onclose={() => (confirmDeleteSong = null)}>
     <p class="muted">The file is removed from the head unit. This cannot be undone.</p>
     <button class="btn danger on" onclick={async () => {
-      const ok = await act(octave.call<boolean>('mediaManager', 'delete_song', confirmDeleteSong!.file))
+      const ok = await act(octave.call<boolean>('mediaManager', 'deleteSong', confirmDeleteSong!.file))
       confirmDeleteSong = null
       toast(ok ? 'Song deleted' : 'Could not delete it', ok ? 'ok' : 'bad')
       loadSongs()

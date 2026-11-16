@@ -19,13 +19,13 @@ These are stubs (no-ops) on Android today: `gesturemanager`, `androidautomanager
 
 ## Remaining work, easiest first
 
-1. **App icon.** `android/res/mipmap-anydpi-v26/` is empty and the manifest has no `android:icon`, so the launcher shows the stock Android icon. Add an adaptive icon (foreground + background) plus PNG fallbacks for each mipmap density, and set `android:icon` / `android:roundIcon` on `<application>`.
+1. **App icon.** `android/res/` has no icon files (git tracks only `values/`; `mipmap-anydpi-v26/` is an empty folder git does not carry, so create it) and the manifest has no `android:icon`, so the launcher shows the stock Android icon. Add an adaptive icon (foreground + background) plus PNG fallbacks for each mipmap density, and set `android:icon` / `android:roundIcon` on `<application>`.
    **Effort:** S. **Needs:** S22 to eyeball the launcher.
 2. **Splash screen.** Nothing exists. Add a `windowBackground`/splash theme (Android 12+ `SplashScreen` attributes) showing the OCTAVE mark until Qt draws its first frame.
    **Effort:** S. **Needs:** S22.
 3. **On-device observability check.** Code is in place but never run on a phone:
    - Settings → About → Diagnostics: `DiagnosticsManager::exportLogs()` (`src/managers/diagnosticsmanager.cpp:97`) should create `/storage/emulated/0/Download/OCTAVE-logs-<timestamp>/`, visible in Files and attachable from a mail app.
-   - Connect the ELM327 and check `octave-cpp.log` for `[BLE]` lines (`OBDManager::onAndroidBlePoll()`, `src/managers/obdmanager.cpp:2688`); pull the dongle and look for a `[BLE]` warning.
+   - Connect the ELM327 and check `octave-cpp.log` for `[BLE]` lines (`OBDManager::onAndroidBlePoll()`, `src/managers/obdmanager_android.cpp`); pull the dongle and look for a `[BLE]` warning.
    - Confirm `octave-cpp.log` exists at all, and that `kill -SEGV` leaves a `==== FATAL SIGSEGV ====` block with the "no backtrace support" line (bionic has no `execinfo`).
    **Effort:** S. **Needs:** S22 + the BLE ELM327 dongle.
 4. **Just-in-time permissions with denial handling.** Today `AppCore` (`src/appcore.cpp`, the `Q_OS_ANDROID` block after `mediaManager`) asks for audio and Bluetooth permissions all at once on launch, and `OctaveOBDBridge.java` re-asks on connect. Steps: drop the startup loop; ask for `READ_MEDIA_AUDIO` when the media library is first opened and Bluetooth when OBD connect is first tapped; on denial, show a short explainer with "Try again" and "Open app settings" (`Settings.ACTION_APPLICATION_DETAILS_SETTINGS` via JNI); re-scan the library once audio is granted.

@@ -94,21 +94,21 @@ async def test_library_playlists_move_and_play(sdk):
         if await wait_for(pilot, lambda: pane.covers.get(pane.cover_query) is not None, timeout=5):
             assert "▀" in str(app.query_one("#lib-cover").render())
             shot(app, "library-cover")
-        home = sdk.call("mediaManager", "get_song_playlist_name", first)
+        home = sdk.call("mediaManager", "getSongPlaylistName", first)
         # a new playlist
         await pilot.press("n")
         assert await wait_for(pilot, lambda: screen_name(app) == "EditValue")
         await pilot.press(*"pilot-pl", "enter")
-        assert await sdk_wait(lambda: "pilot-pl" in sdk.call("mediaManager", "get_playlist_names"))
+        assert await sdk_wait(lambda: "pilot-pl" in sdk.call("mediaManager", "getPlaylistNames"))
         assert await wait_for(pilot, lambda: "pilot-pl" in pane.playlists)
         # move the first song into it and back
         app.query_one("#lib-songs", DataTable).focus()
         app.query_one("#lib-songs", DataTable).move_cursor(row=0)
         await pilot.press("v")
         await pick(pilot, app, "pilot-pl")
-        assert await sdk_wait(lambda: sdk.call("mediaManager", "get_song_playlist_name", first) == "pilot-pl")
+        assert await sdk_wait(lambda: sdk.call("mediaManager", "getSongPlaylistName", first) == "pilot-pl")
         shot(app, "library")
-        sdk.call("mediaManager", "move_song_to_playlist", first, home)
+        sdk.call("mediaManager", "moveSongToPlaylist", first, home)
         # delete the playlist (asks first)
         table = app.query_one("#lib-playlists", DataTable)
         assert await wait_for(pilot, lambda: "pilot-pl" in pane.playlists)
@@ -117,14 +117,14 @@ async def test_library_playlists_move_and_play(sdk):
         await pilot.press("D")
         assert await wait_for(pilot, lambda: screen_name(app) == "Confirm")
         await pilot.press("y")
-        assert await sdk_wait(lambda: "pilot-pl" not in sdk.call("mediaManager", "get_playlist_names"))
+        assert await sdk_wait(lambda: "pilot-pl" not in sdk.call("mediaManager", "getPlaylistNames"))
         # Enter on a song plays it
         songs = app.query_one("#lib-songs", DataTable)
         songs.focus()
         songs.move_cursor(row=1)
         target = pane.songs[1]
         await pilot.press("enter")
-        assert await sdk_wait(lambda: sdk.call("mediaManager", "get_current_file") == target["file"])
+        assert await sdk_wait(lambda: sdk.call("mediaManager", "getCurrentFile") == target["file"])
         sdk.call("nowPlaying", "togglePlay") if sdk.get("nowPlaying", "playing") else None
         # sort cycles title -> artist
         await pilot.press("s")
@@ -276,12 +276,12 @@ async def test_obd_diag_mode_and_live_home_cards(sdk):
         await linked(pilot, app)
         pane = app.query_one("#pane-obd")
         await pilot.click("#dtc-diag")
-        assert await sdk_wait(lambda: sdk.call("obdManager", "is_diagnostic_mode") is True)
+        assert await sdk_wait(lambda: sdk.call("obdManager", "isDiagnosticMode") is True)
         assert await wait_for(pilot, lambda: pane.diag_mode)
         await pilot.click("#dtc-status")
         assert await wait_for(pilot, lambda: app.note == "reading status")
         await pilot.click("#dtc-diag")
-        assert await sdk_wait(lambda: sdk.call("obdManager", "is_diagnostic_mode") is False)
+        assert await sdk_wait(lambda: sdk.call("obdManager", "isDiagnosticMode") is False)
 
         await pilot.press("1")
         live_pane = app.query_one("#pane-live")

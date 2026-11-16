@@ -30,13 +30,7 @@ ApplicationWindow {
 
     // Properties bound to settings manager
     property string deviceName: settingsManager ? settingsManager.deviceName : "Default Device"
-    property string theme: settingsManager ? settingsManager.themeSetting : "Light"
-    property real startUpVolume: settingsManager ? settingsManager.startUpVolume : 0.1
-    property bool showClock: settingsManager ? settingsManager.showClock : true
-    property bool clockFormat24Hour: settingsManager ? settingsManager.clockFormat24Hour : true
-    property int clockSize: settingsManager ? settingsManager.clockSize : 18
     property string lastSettingsSection: settingsManager ? settingsManager.lastSettingsSection : "deviceSettings"
-    property string fontSetting: settingsManager ? settingsManager.fontSetting : "System Default"
 
     // Font loading properties
 
@@ -84,7 +78,6 @@ ApplicationWindow {
 
     // Handle window close (force close / X button)
     onClosing: function(close) {
-        console.log("Window closing - running cleanup...")
         if (mediaManager) {
             mediaManager._save_playback_state()
         }
@@ -93,8 +86,6 @@ ApplicationWindow {
 
     // Initialize settings and theme
     Component.onCompleted: {
-        console.log("[GlobalFlash] ========== Main.qml Component.onCompleted START ==========")
-        console.log("[QML] Main.qml Component.onCompleted - QML console working!")
 
         // Capture the system default font at startup (before any custom font is applied)
         systemDefaultFont = font.family
@@ -122,7 +113,6 @@ ApplicationWindow {
 
             // Load theme — startup is always instant, transition speed only
             // applies to album-art-driven shifts on song change.
-            console.log("[QML] Loading theme:", settingsManager.themeSetting)
             if (settingsManager.themeSetting) {
                 // If Album Art was the active theme last session, prime
                 // `albumArtTheme` with the persisted palette BEFORE switching
@@ -230,7 +220,6 @@ ApplicationWindow {
                 var newTheme = settingsManager.themeSetting
                 // Manual theme switch — instant, no fade.
                 App.Style.setThemeInstant(newTheme)
-                theme = newTheme
                 // Album Art Capture extracts in C++ (nowPlaying follows the
                 // live source's art, phone or local)
             }
@@ -239,7 +228,6 @@ ApplicationWindow {
         function onFontSettingChanged() {
             if (settingsManager) {
                 App.Style.setFont(settingsManager.fontSetting)
-                fontSetting = settingsManager.fontSetting
             }
         }
         
@@ -318,13 +306,11 @@ ApplicationWindow {
             console.warn("[NAV] Unknown page:", pageName)
             return
         }
-        if (stackView.openPage(entry.file, entry.props))
-            console.log("[NAV] Opened", pageName)
+        stackView.openPage(entry.file, entry.props)
     }
 
     function navigateHome() {
         stackView.pop(null)  // pop to the initial item
-        console.log("[NAV] Returned to home")
     }
 
     // Open Settings on a specific section. Settings is special-cased because
@@ -339,7 +325,6 @@ ApplicationWindow {
             stackView.currentItem.navigateToCategory(target)
             if (tile)
                 stackView.currentItem.openTile(tile)
-            console.log("[NAV] Settings section ->", target)
             return
         }
         var page = stackView.openPage("SettingsMenu.qml", { initialSection: target })
@@ -347,7 +332,6 @@ ApplicationWindow {
             page.navigateToCategory(target)
             if (tile)
                 page.openTile(tile)
-            console.log("[NAV] Opened Settings ->", target)
         }
     }
 
@@ -369,7 +353,6 @@ ApplicationWindow {
     function navigateBack() {
         if (stackView.depth > 1) {
             stackView.pop()
-            console.log("[NAV] Popped one page")
         }
     }
 
@@ -977,21 +960,6 @@ ApplicationWindow {
         if (settingsManager && newDeviceName.trim() !== "") {
             settingsManager.save_device_name(newDeviceName)
             deviceName = newDeviceName
-        }
-    }
-
-    function updateFont(newFont) {
-        if (settingsManager) {
-            settingsManager.save_font_setting(newFont)
-            App.Style.setFont(newFont)
-            fontSetting = newFont
-        }
-    }
-
-    function updateStartupVolume(newVolume) {
-        if (settingsManager) {
-            settingsManager.save_start_volume(newVolume)
-            startUpVolume = newVolume
         }
     }
 

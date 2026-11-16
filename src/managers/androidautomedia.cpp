@@ -1,5 +1,6 @@
 #include "androidautomedia.h"
 #include "settingsmanager.h"
+#include "../util/artfile.h"
 
 #include <QDir>
 #include <QFile>
@@ -87,16 +88,13 @@ void AndroidAutoMedia::setMetadata(const QString &title, const QString &artist, 
     }
     QString url;
     if (!art.isEmpty()) {
-        const QString dir = SettingsManager::getAppDataDir() + QStringLiteral("/temp");
-        QDir().mkpath(dir);
-        // Alternate between two files: a new URL makes QML reload the image
-        m_artSeq = (m_artSeq + 1) % 2;
-        const QString path = dir + QStringLiteral("/androidauto_media_art_%1").arg(m_artSeq);
-        QFile f(path);
-        if (f.open(QIODevice::WriteOnly) && f.write(art) == art.size())
+        // A new file name per cover: QML caches the picture by URL
+        const QString path = ArtFile::write(SettingsManager::getAppDataDir() + QStringLiteral("/temp"),
+                                            QStringLiteral("androidauto_media_art"), QString(), art, m_artSeq);
+        if (!path.isEmpty())
             url = QUrl::fromLocalFile(path).toString();
         else
-            qCWarning(lcAaMedia) << "Could not write Android Auto album art to" << path;
+            qCWarning(lcAaMedia) << "Could not write Android Auto album art";
     }
     if (url != m_artUrl) {
         m_artUrl = url;

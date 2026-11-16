@@ -16,7 +16,7 @@ cmake -S . -B build && cmake --build build -j4
 
 Needs `libsdl2-dev` (Debian / Ubuntu / Raspberry Pi OS) or `sdl2` / `sdl2-compat` (Arch), CMake 3.16 and a C11 compiler. It builds warning-free with `-Wall -Wextra -Wpedantic`; the two vendored libraries (`third_party/`, cJSON v1.7.18 and stb_image v2.30, with their licences) are compiled with warnings off. Start it before or after OCTAVE: until the service answers it shows NO SIGNAL and retries every second, and it re-subscribes on every reconnect.
 
-Over the network (OCTAVE started with `--service-bind 0.0.0.0`, protocol 2) the service refuses everything until the device pairs: the PAIR page shows a keypad for the 6-digit code from the car's Settings, Service, Pair a device (keys 0-9, Backspace, Enter work too). It asks for the manifest's two permissions, media and vehicle, and no more. Keep the token with `--token-file PATH` (written on a successful pair, read on the next start), or pass one with `--token T` / `OCTAVE_TOKEN`; without either the token is printed once. The cover is fetched with `Authorization: Bearer`. A token OCTAVE rejects is dropped and the PAIR page returns.
+Over the network (OCTAVE started with `--service-bind 0.0.0.0`, protocol 2) the service refuses everything until the device pairs: the PAIR page shows a keypad for the 6-digit code from the car's Settings, Service, Pair a device (keys 0-9, Backspace, Enter work too). It asks for the manifest's two permissions, media and vehicle, and no more. Keep the token with `--token-file PATH` (written on a successful pair, read on the next start), or pass one with `--token T` / `OCTAVE_TOKEN`; without either the pairing lasts for that run (the token is a credential and is never printed). The cover is fetched with `Authorization: Bearer`. A token OCTAVE rejects is dropped and the PAIR page returns.
 
 | Key | Does |
 |---|---|
@@ -75,7 +75,7 @@ Pressing mute five times within four seconds always ends it and brings back OCTA
 | Object | For |
 |---|---|
 | `paramStore` | SPEED, RPM, COOLANT_TEMP, FUEL_LEVEL, CONTROL_MODULE_VOLTAGE, LATERAL_G (one `subscribe`, 50 ms batches) |
-| `obdManager` | `setParameterDemand("arcade", ids)`, `connected`, `connectionState`, `connect_obd`, `get_dtc_codes`, `read_dtc`, `clear_dtc`, the DTC signals |
+| `obdManager` | `setParameterDemand("arcade", ids)`, `connected`, `connectionState`, `connectObd`, `getDtcCodes`, `readDtc`, `clearDtc`, the DTC signals |
 | `nowPlaying` | track, position, `artRevision`, `togglePlay` / `next` / `previous` / `toggleShuffle` |
 | `volumeController` | `percent`, `muted` (set directly for a definite state), `applyVolume` |
 | `shiftLightManager`, `clock`, `berryIMU` | the SHIFT flash, the clock text, whether an IMU is there |

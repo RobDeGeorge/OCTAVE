@@ -90,7 +90,7 @@ What differs from the native program: no F11 / `--fullscreen` and no Ctrl+Q; the
 |---|---|
 | `paramStore` | every reading (one `subscribe`, 40 ms batches) |
 | `parameterCatalog.displayParameters` | titles, units, ranges, and `displayScale` / `displayOffset`, so the gauges follow the user's °F / km/h choice |
-| `obdManager` | `setParameterDemand("retro-cluster", ids)` for the PIDs on the current page; `connected`, `vehicleSupportedParameters`, VIN, make, year; `read_dtc`, `clear_dtc`, `read_freeze_frame`, `get_dtc_codes` / `get_mil_status` / `get_freeze_frame` and their change signals, `dtcClearResult` |
+| `obdManager` | `setParameterDemand("retro-cluster", ids)` for the PIDs on the current page; `connected`, `vehicleSupportedParameters`, VIN, make, year; `readDtc`, `clearDtc`, `readFreezeFrame`, `getDtcCodes` / `getMilStatus` / `getFreezeFrame` and their change signals, `dtcClearResult` |
 | `nowPlaying` | track, position, source, `togglePlay` / `next` / `previous` / `seek` / `toggleShuffle`; `artRevision`, and the cover from `GET /art` when it changes |
 | `volumeController` | `percent`, `muted`, `applyVolume`, `toggleMute` |
 | `tripRecorder` | `trips`, `requestDetail` / `detailReady`, `exportTrip` / `exportFinished`, `endTripNow`, the REC lamp and the trip timer |

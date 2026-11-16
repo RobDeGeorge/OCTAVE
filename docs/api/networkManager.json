@@ -34,6 +34,7 @@
             "scope": "system"
         },
         {
+            "deprecated": "use shutdownDevice; goes in protocol 5",
             "kind": "slot",
             "name": "shutdown_device",
             "params": [
@@ -48,6 +49,14 @@
             ],
             "returns": "",
             "scope": "full"
+        },
+        {
+            "kind": "slot",
+            "name": "shutdownDevice",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "system"
         }
     ],
     "object": "networkManager",

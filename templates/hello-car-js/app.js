@@ -11,13 +11,25 @@ const store = {                                 // the pairing token, per page o
   set(v) { try { v ? localStorage.setItem('octave.token', v) : localStorage.removeItem('octave.token') } catch { /* private window */ } },
 }
 
+let retryMs = 1000                              // the pause before the next connection, growing to 8 s
+
 export async function main() {
   const octave = new Octave(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/`)
-  octave.onclose = () => { $('status').textContent = 'disconnected: reload to reconnect' }
+  let lost = () => {}
+  // When the connection goes (OCTAVE restarted, or it closed one that had not paired after a
+  // minute) connect again and set everything up again: no reload needed
+  octave.onclose = () => {
+    $('status').textContent = 'disconnected: reconnecting…'
+    lost()
+    setTimeout(() => main().catch(show), retryMs)
+    retryMs = Math.min(retryMs * 2, 8000)
+  }
 
   let hello = await octave.connect(store.get() ?? undefined)
   if (hello.tokenRejected) store.set(null)      // revoked or unknown: pair again
-  if (hello.auth === 'untrusted') hello = await pair(octave)
+  if (hello.auth === 'untrusted') hello = await pair(octave, (fn) => { lost = fn })
+  $('pairing').hidden = true
+  retryMs = 1000
   $('status').textContent = `OCTAVE ${hello.app.version}, protocol ${hello.protocolVersion}`
 
   // Readings: titles and units from the catalog, values from paramStore (native units)
@@ -38,16 +50,23 @@ export async function main() {
 
 // Pairing: the user reads a 6-digit code off the head unit (Settings > Service > Pair a device);
 // we ask only for the media permission (play / pause), readings are always allowed
-async function pair(octave) {
+async function pair(octave, whenLost) {
   $('pairing').hidden = false
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    // Fetching the code can take longer than OCTAVE keeps an unpaired connection: main()
+    // connects again and shows this again, with what was typed still in the field
+    whenLost(() => reject(new Error('connection closed')))
+    let paired = false
     $('pair').onclick = async () => {
       $('pair-error').textContent = ''
       try {
-        store.set(await octave.pair($('code').value.replace(/\D/g, ''), NAME, ['media']))
+        // A code works once: after it has paired, another press only asks hello again
+        if (!paired) { store.set(await octave.pair($('code').value.replace(/\D/g, ''), NAME, ['media'])); paired = true }
+        // The panel stays until hello has answered, so a failure here is seen
+        const hello = await octave.request('hello', { token: store.get() })
         $('pairing').hidden = true
-        resolve(await octave.request('hello', { token: store.get() }))
-      } catch (err) { $('pair-error').textContent = err.message }
+        resolve(hello)
+      } catch (err) { $('pair-error').textContent = paired ? `Paired, but OCTAVE did not answer after that (${err.message}). Press Pair to try again.` : err.message }
     }
   })
 }
@@ -64,4 +83,6 @@ async function render(octave, np) {
   img.src = `/art?rev=${np.artRevision}&ticket=${await octave.ticket()}`
 }
 
-main().catch((err) => { $('status').textContent = err.message })
+function show(err) { if (err.message !== 'connection closed') $('status').textContent = err.message }
+
+main().catch(show)

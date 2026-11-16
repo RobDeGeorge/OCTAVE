@@ -22,8 +22,20 @@ Item {
     property string text: ""
     property color activeColor: App.Style.accent
     property color inactiveColor: App.Style.hoverColor
-    property font font
     signal toggled(bool checked)
+
+    // A tap asks for the other state and lets the caller's `checked` binding
+    // follow its source. Assigning `checked` here (as this used to) cut that
+    // binding on the first tap, and every page then needed a Connections
+    // block to copy the setting back. Only a caller whose `checked` did not
+    // follow (no binding, or one on a value that does not notify) has the
+    // state set here.
+    function flip() {
+        var want = !control.checked
+        control.toggled(want)
+        if (control.checked !== want)
+            control.checked = want
+    }
 
     // ─── Compact mode (inline switch) ───
     Item {
@@ -86,11 +98,12 @@ Item {
         }
 
         MouseArea {
+            // The switch is drawn dp(26) tall; the touch target is never
+            // under dp(44), reaching past it above and below
             anchors.fill: parent
-            onClicked: {
-                control.checked = !control.checked
-                control.toggled(control.checked)
-            }
+            anchors.topMargin: -Math.max(0, (dp(44) - parent.height) / 2)
+            anchors.bottomMargin: anchors.topMargin
+            onClicked: control.flip()
         }
     }
 
@@ -109,10 +122,7 @@ Item {
 
             MouseArea {
                 anchors.fill: parent
-                onClicked: {
-                    control.checked = !control.checked
-                    control.toggled(control.checked)
-                }
+                onClicked: control.flip()
             }
         }
 
@@ -228,10 +238,7 @@ Item {
             MouseArea {
                 id: controlMouseArea
                 anchors.fill: parent
-                onClicked: {
-                    control.checked = !control.checked
-                    control.toggled(control.checked)
-                }
+                onClicked: control.flip()
 
                 onPressed: {
                     pulseAnimation.start()

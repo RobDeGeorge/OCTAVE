@@ -2,6 +2,7 @@
     "class": "MediaManager",
     "methods": [
         {
+            "deprecated": "does nothing; goes in protocol 5",
             "kind": "slot",
             "name": "connect_settings_manager",
             "params": [
@@ -14,6 +15,7 @@
             "scope": "full"
         },
         {
+            "deprecated": "internal; goes in protocol 5",
             "kind": "slot",
             "name": "_save_playback_state",
             "params": [
@@ -22,6 +24,7 @@
             "scope": "full"
         },
         {
+            "deprecated": "internal; goes in protocol 5",
             "kind": "slot",
             "name": "_clear_temp_files",
             "params": [
@@ -30,6 +33,7 @@
             "scope": "full"
         },
         {
+            "deprecated": "use flushMetadataStore; goes in protocol 5",
             "kind": "slot",
             "name": "flush_metadata_store",
             "params": [
@@ -38,6 +42,7 @@
             "scope": "files"
         },
         {
+            "deprecated": "use playFile; goes in protocol 5",
             "kind": "slot",
             "name": "play_file",
             "params": [
@@ -50,6 +55,7 @@
             "scope": "media"
         },
         {
+            "deprecated": "use nextTrack; goes in protocol 5",
             "kind": "slot",
             "name": "next_track",
             "params": [
@@ -58,6 +64,7 @@
             "scope": "media"
         },
         {
+            "deprecated": "use previousTrack; goes in protocol 5",
             "kind": "slot",
             "name": "previous_track",
             "params": [
@@ -74,6 +81,7 @@
             "scope": "media"
         },
         {
+            "deprecated": "use togglePlay; goes in protocol 5",
             "kind": "slot",
             "name": "toggle_play",
             "params": [
@@ -94,6 +102,7 @@
             "scope": "full"
         },
         {
+            "deprecated": "use toggleShuffle; goes in protocol 5",
             "kind": "slot",
             "name": "toggle_shuffle",
             "params": [
@@ -126,6 +135,7 @@
             "scope": "full"
         },
         {
+            "deprecated": "use setPosition; goes in protocol 5",
             "kind": "slot",
             "name": "set_position",
             "params": [
@@ -138,6 +148,7 @@
             "scope": "media"
         },
         {
+            "deprecated": "use extractColorsFromAlbumArt; goes in protocol 5",
             "kind": "slot",
             "name": "extract_colors_from_album_art",
             "params": [
@@ -150,6 +161,7 @@
             "scope": "full"
         },
         {
+            "deprecated": "use extractColorsFromImage; goes in protocol 5",
             "kind": "slot",
             "name": "extract_colors_from_image",
             "params": [
@@ -162,6 +174,7 @@
             "scope": "full"
         },
         {
+            "deprecated": "use scanLibrary; goes in protocol 5",
             "kind": "slot",
             "name": "scan_library",
             "params": [
@@ -174,6 +187,7 @@
             "scope": "media"
         },
         {
+            "deprecated": "use scanLibrary; goes in protocol 5",
             "kind": "slot",
             "name": "scan_library",
             "params": [
@@ -182,6 +196,7 @@
             "scope": "media"
         },
         {
+            "deprecated": "use setLibraryRoot; goes in protocol 5",
             "kind": "slot",
             "name": "set_library_root",
             "params": [
@@ -194,6 +209,7 @@
             "scope": "files"
         },
         {
+            "deprecated": "use stripFilenames; goes in protocol 5",
             "kind": "slot",
             "name": "strip_filenames",
             "params": [
@@ -202,6 +218,7 @@
             "scope": "files"
         },
         {
+            "deprecated": "use selectPlaylist; goes in protocol 5",
             "kind": "slot",
             "name": "select_playlist",
             "params": [
@@ -214,6 +231,7 @@
             "scope": "media"
         },
         {
+            "deprecated": "use createPlaylist; goes in protocol 5",
             "kind": "slot",
             "name": "create_playlist",
             "params": [
@@ -226,6 +244,7 @@
             "scope": "files"
         },
         {
+            "deprecated": "use deletePlaylist; goes in protocol 5",
             "kind": "slot",
             "name": "delete_playlist",
             "params": [
@@ -238,6 +257,7 @@
             "scope": "files"
         },
         {
+            "deprecated": "use moveSongToPlaylist; goes in protocol 5",
             "kind": "slot",
             "name": "move_song_to_playlist",
             "params": [
@@ -254,6 +274,7 @@
             "scope": "files"
         },
         {
+            "deprecated": "use deleteSong; goes in protocol 5",
             "kind": "slot",
             "name": "delete_song",
             "params": [
@@ -266,6 +287,7 @@
             "scope": "files"
         },
         {
+            "deprecated": "use playFileAtPath; goes in protocol 5",
             "kind": "slot",
             "name": "play_file_at_path",
             "params": [
@@ -278,6 +300,7 @@
             "scope": "media"
         },
         {
+            "deprecated": "use invalidateStatsCache; goes in protocol 5",
             "kind": "slot",
             "name": "invalidate_stats_cache",
             "params": [
@@ -286,6 +309,7 @@
             "scope": "full"
         },
         {
+            "deprecated": "use getMediaFiles; goes in protocol 5",
             "kind": "slot",
             "name": "get_media_files",
             "params": [
@@ -298,6 +322,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getMediaFiles; goes in protocol 5",
             "kind": "slot",
             "name": "get_media_files",
             "params": [
@@ -306,6 +331,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getFormattedDuration; goes in protocol 5",
             "kind": "slot",
             "name": "get_formatted_duration",
             "params": [
@@ -318,6 +344,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getBand; goes in protocol 5",
             "kind": "slot",
             "name": "get_band",
             "params": [
@@ -330,6 +357,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getAlbum; goes in protocol 5",
             "kind": "slot",
             "name": "get_album",
             "params": [
@@ -342,6 +370,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getAlbumArt; goes in protocol 5",
             "kind": "slot",
             "name": "get_album_art",
             "params": [
@@ -354,6 +383,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getCurrentFile; goes in protocol 5",
             "kind": "slot",
             "name": "get_current_file",
             "params": [
@@ -362,6 +392,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getNextTrackName; goes in protocol 5",
             "kind": "slot",
             "name": "get_next_track_name",
             "params": [
@@ -370,6 +401,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getPreviousTrackName; goes in protocol 5",
             "kind": "slot",
             "name": "get_previous_track_name",
             "params": [
@@ -378,6 +410,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getNextTrackAlbumArt; goes in protocol 5",
             "kind": "slot",
             "name": "get_next_track_album_art",
             "params": [
@@ -386,6 +419,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getPreviousTrackAlbumArt; goes in protocol 5",
             "kind": "slot",
             "name": "get_previous_track_album_art",
             "params": [
@@ -394,6 +428,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getNeighborAlbumArts; goes in protocol 5",
             "kind": "slot",
             "name": "get_neighbor_album_arts",
             "params": [
@@ -402,6 +437,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use isPlaying; goes in protocol 5",
             "kind": "slot",
             "name": "is_playing",
             "params": [
@@ -410,6 +446,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use isPaused; goes in protocol 5",
             "kind": "slot",
             "name": "is_paused",
             "params": [
@@ -418,6 +455,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getDuration; goes in protocol 5",
             "kind": "slot",
             "name": "get_duration",
             "params": [
@@ -426,6 +464,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getPosition; goes in protocol 5",
             "kind": "slot",
             "name": "get_position",
             "params": [
@@ -434,6 +473,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use isMuted; goes in protocol 5",
             "kind": "slot",
             "name": "is_muted",
             "params": [
@@ -450,6 +490,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use isShuffled; goes in protocol 5",
             "kind": "slot",
             "name": "is_shuffled",
             "params": [
@@ -458,6 +499,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getPlaylistNames; goes in protocol 5",
             "kind": "slot",
             "name": "get_playlist_names",
             "params": [
@@ -466,6 +508,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getCurrentPlaylistName; goes in protocol 5",
             "kind": "slot",
             "name": "get_current_playlist_name",
             "params": [
@@ -474,6 +517,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getCurrentSongList; goes in protocol 5",
             "kind": "slot",
             "name": "get_current_song_list",
             "params": [
@@ -482,6 +526,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getMovablePlaylistNames; goes in protocol 5",
             "kind": "slot",
             "name": "get_movable_playlist_names",
             "params": [
@@ -490,6 +535,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getSongPlaylistName; goes in protocol 5",
             "kind": "slot",
             "name": "get_song_playlist_name",
             "params": [
@@ -502,6 +548,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getSongFilePath; goes in protocol 5",
             "kind": "slot",
             "name": "get_song_file_path",
             "params": [
@@ -514,6 +561,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getFullFilePath; goes in protocol 5",
             "kind": "slot",
             "name": "get_full_file_path",
             "params": [
@@ -526,6 +574,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getDisplayName; goes in protocol 5",
             "kind": "slot",
             "name": "get_display_name",
             "params": [
@@ -538,6 +587,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getDefaultMediaDir; goes in protocol 5",
             "kind": "slot",
             "name": "get_default_media_dir",
             "params": [
@@ -546,6 +596,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getMediaFolderName; goes in protocol 5",
             "kind": "slot",
             "name": "get_media_folder_name",
             "params": [
@@ -554,6 +605,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use browseMusicFolders; goes in protocol 5",
             "kind": "slot",
             "name": "browse_music_folders",
             "params": [
@@ -566,6 +618,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use pickBrowserLibrary; goes in protocol 5",
             "kind": "slot",
             "name": "pick_browser_library",
             "params": [
@@ -574,6 +627,7 @@
             "scope": "files"
         },
         {
+            "deprecated": "use getTotalDuration; goes in protocol 5",
             "kind": "slot",
             "name": "get_total_duration",
             "params": [
@@ -582,6 +636,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getAlbumCount; goes in protocol 5",
             "kind": "slot",
             "name": "get_album_count",
             "params": [
@@ -590,6 +645,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use getArtistCount; goes in protocol 5",
             "kind": "slot",
             "name": "get_artist_count",
             "params": [
@@ -598,6 +654,7 @@
             "scope": "read"
         },
         {
+            "deprecated": "use sortMediaFiles; goes in protocol 5",
             "kind": "slot",
             "name": "sort_media_files",
             "params": [
@@ -614,8 +671,553 @@
             "scope": "media"
         },
         {
+            "deprecated": "use sortMediaFiles; goes in protocol 5",
             "kind": "slot",
             "name": "sort_media_files",
+            "params": [
+                {
+                    "name": "sortColumn",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QStringList",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "flushMetadataStore",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "files"
+        },
+        {
+            "kind": "slot",
+            "name": "playFile",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "nextTrack",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "previousTrack",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "togglePlay",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "toggleShuffle",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "setPosition",
+            "params": [
+                {
+                    "name": "positionMs",
+                    "type": "int"
+                }
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "extractColorsFromAlbumArt",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": "",
+            "scope": "full"
+        },
+        {
+            "kind": "slot",
+            "name": "extractColorsFromImage",
+            "params": [
+                {
+                    "name": "imagePath",
+                    "type": "QString"
+                }
+            ],
+            "returns": "",
+            "scope": "full"
+        },
+        {
+            "kind": "slot",
+            "name": "scanLibrary",
+            "params": [
+                {
+                    "name": "resetDisplayNames",
+                    "type": "bool"
+                }
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "scanLibrary",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "setLibraryRoot",
+            "params": [
+                {
+                    "name": "path",
+                    "type": "QString"
+                }
+            ],
+            "returns": "",
+            "scope": "files"
+        },
+        {
+            "kind": "slot",
+            "name": "stripFilenames",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "files"
+        },
+        {
+            "kind": "slot",
+            "name": "selectPlaylist",
+            "params": [
+                {
+                    "name": "name",
+                    "type": "QString"
+                }
+            ],
+            "returns": "",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "createPlaylist",
+            "params": [
+                {
+                    "name": "name",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool",
+            "scope": "files"
+        },
+        {
+            "kind": "slot",
+            "name": "deletePlaylist",
+            "params": [
+                {
+                    "name": "name",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool",
+            "scope": "files"
+        },
+        {
+            "kind": "slot",
+            "name": "moveSongToPlaylist",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                },
+                {
+                    "name": "targetPlaylist",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool",
+            "scope": "files"
+        },
+        {
+            "kind": "slot",
+            "name": "deleteSong",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool",
+            "scope": "files"
+        },
+        {
+            "kind": "slot",
+            "name": "playFileAtPath",
+            "params": [
+                {
+                    "name": "filePath",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "invalidateStatsCache",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "full"
+        },
+        {
+            "kind": "slot",
+            "name": "getMediaFiles",
+            "params": [
+                {
+                    "name": "emitSignal",
+                    "type": "bool"
+                }
+            ],
+            "returns": "QStringList",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getMediaFiles",
+            "params": [
+            ],
+            "returns": "QStringList",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getFormattedDuration",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getBand",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getAlbum",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getAlbumArt",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getCurrentFile",
+            "params": [
+            ],
+            "returns": "QString",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getNextTrackName",
+            "params": [
+            ],
+            "returns": "QString",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getPreviousTrackName",
+            "params": [
+            ],
+            "returns": "QString",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getNextTrackAlbumArt",
+            "params": [
+            ],
+            "returns": "QString",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getPreviousTrackAlbumArt",
+            "params": [
+            ],
+            "returns": "QString",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getNeighborAlbumArts",
+            "params": [
+            ],
+            "returns": "QStringList",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "isPlaying",
+            "params": [
+            ],
+            "returns": "bool",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "isPaused",
+            "params": [
+            ],
+            "returns": "bool",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getDuration",
+            "params": [
+            ],
+            "returns": "float",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getPosition",
+            "params": [
+            ],
+            "returns": "float",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "isMuted",
+            "params": [
+            ],
+            "returns": "bool",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "isShuffled",
+            "params": [
+            ],
+            "returns": "bool",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getPlaylistNames",
+            "params": [
+            ],
+            "returns": "QStringList",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getCurrentPlaylistName",
+            "params": [
+            ],
+            "returns": "QString",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getCurrentSongList",
+            "params": [
+            ],
+            "returns": "QStringList",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getMovablePlaylistNames",
+            "params": [
+            ],
+            "returns": "QStringList",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getSongPlaylistName",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getSongFilePath",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getFullFilePath",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getDisplayName",
+            "params": [
+                {
+                    "name": "filename",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getDefaultMediaDir",
+            "params": [
+            ],
+            "returns": "QString",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getMediaFolderName",
+            "params": [
+            ],
+            "returns": "QString",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "browseMusicFolders",
+            "params": [
+                {
+                    "name": "path",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QVariantMap",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "pickBrowserLibrary",
+            "params": [
+            ],
+            "returns": "bool",
+            "scope": "files"
+        },
+        {
+            "kind": "slot",
+            "name": "getTotalDuration",
+            "params": [
+            ],
+            "returns": "QString",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getAlbumCount",
+            "params": [
+            ],
+            "returns": "int",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "getArtistCount",
+            "params": [
+            ],
+            "returns": "int",
+            "scope": "read"
+        },
+        {
+            "kind": "slot",
+            "name": "sortMediaFiles",
+            "params": [
+                {
+                    "name": "sortColumn",
+                    "type": "QString"
+                },
+                {
+                    "name": "ascending",
+                    "type": "bool"
+                }
+            ],
+            "returns": "QStringList",
+            "scope": "media"
+        },
+        {
+            "kind": "slot",
+            "name": "sortMediaFiles",
             "params": [
                 {
                     "name": "sortColumn",

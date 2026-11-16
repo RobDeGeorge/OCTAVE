@@ -71,6 +71,7 @@ extern "C" {
 #endif
 #ifdef OCTAVE_WASM
 #include "platform/wasm/webbluetooth.h"
+#include "platform/wasm/webserial.h"
 #include "platform/wasm/webservice.h"
 #include "platform/wasm/webfrontends.h"
 #endif
@@ -664,8 +665,12 @@ int main(int argc, char *argv[])
             headless = true;
         else if (std::strcmp(argv[i], "--dump-api") == 0 && i + 1 < argc)
             dumpApiDir = QString::fromLocal8Bit(argv[++i]);
+        else if (std::strncmp(argv[i], "--dump-api=", 11) == 0)
+            dumpApiDir = QString::fromLocal8Bit(argv[i] + 11);
         else if (std::strcmp(argv[i], "--config") == 0 && i + 1 < argc)
             configDir = QString::fromLocal8Bit(argv[++i]);
+        else if (std::strncmp(argv[i], "--config=", 9) == 0)
+            configDir = QString::fromLocal8Bit(argv[i] + 9);
         else if (std::strcmp(argv[i], "--sim") == 0)
             sim = true;
     }
@@ -792,7 +797,12 @@ int main(int argc, char *argv[])
     // Outlives the engine: bindings that format times still run while it
     // tears down (declared after it, it went first and they read null)
     Units units;
-    QQmlApplicationEngine engine;
+    // On the heap so that it can go before the managers (engineOwner.reset()
+    // after exec()): as a local it outlived `core`, declared below, and every
+    // binding on a manager re-ran against null on the way out (a TypeError
+    // per binding in the error log at each exit)
+    auto engineOwner = std::make_unique<QQmlApplicationEngine>();
+    QQmlApplicationEngine &engine = *engineOwner;
 
     // ---- Auto-detect screen scale ----
     // Scale off the SHORTER axis so the factor is the same whether the
@@ -913,9 +923,12 @@ int main(int argc, char *argv[])
 
 #ifdef OCTAVE_WASM
     WebBluetoothLink::registerTransport();
+    WebSerialLink::registerTransport();
     QObject::connect(&core.obdManager, &OBDManager::simulatedChanged, &core.obdManager, [&core] {
-        if (core.obdManager.isSimulated())
+        if (core.obdManager.isSimulated()) {
             WebBluetoothLink::instance()->disconnectDevice();
+            WebSerialLink::instance()->disconnectPort();
+        }
     });
 #endif
 
@@ -1022,11 +1035,14 @@ int main(int argc, char *argv[])
         app.quit();
     });
     const int code = app.exec();
+    engineOwner.reset();   // the QML tree goes while every manager it binds to is alive
     if (restart)
         startAgain(app.arguments(), Relaunch::AsChosen);
     return code;
 #else
-    return app.exec();
+    const int code = app.exec();
+    engineOwner.reset();
+    return code;
 #endif
 }
 

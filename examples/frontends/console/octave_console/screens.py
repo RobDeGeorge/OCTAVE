@@ -117,7 +117,7 @@ class Pick(ModalScreen):
 
 
 class FolderPick(ModalScreen):
-    """Browse the head unit's folders with mediaManager.browse_music_folders;
+    """Browse the head unit's folders with mediaManager.browseMusicFolders;
     returns the chosen folder's path, or None."""
 
     BINDINGS = [Binding("s", "choose", "Use this folder"), Binding("backspace", "up", "Up"),
@@ -141,7 +141,7 @@ class FolderPick(ModalScreen):
         self.open(self.start)
 
     def open(self, path):
-        self.app.invoke("mediaManager", "browse_music_folders", path, done=self.show)
+        self.app.invoke("mediaManager", "browseMusicFolders", path, done=self.show)
 
     def show(self, result):
         result = result or {}

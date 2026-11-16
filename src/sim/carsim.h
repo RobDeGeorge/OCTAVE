@@ -29,6 +29,7 @@ struct CarValues {
     double throttle = 0.0;      // pedal, 0-100
     double brake = 0.0;         // 0-100
     int gear = 1;
+    qint64 gearHeldUntilMs = 0; // a gear chosen by hand stays this long (msecs since epoch)
     double engineLoad = 15.0;
     double maf = 8.0;           // g/s
     double map = 35.0;          // kPa
@@ -56,6 +57,20 @@ struct LinkSettings {
     bool realistic = true;      // Bluetooth-ish latency + 2 % NO DATA
     double failureRate = 0.02;
     qint64 downUntilMs = 0;     // simulated Bluetooth dropout ends at (msecs since epoch)
+
+    // What a real car and adapter refuse or get wrong. All off unless a
+    // test turns them on: the OBD stack has to cope with each.
+    bool ignitionOff = false;   // no ECU answers: "SEARCHING...", then "UNABLE TO CONNECT"
+    bool refuseClear = false;   // mode 04 is refused: 7F 04 22 (conditions not correct)
+    bool silent = false;        // the port opens, takes bytes and never answers (not an ELM327)
+    int chunkBytes = 0;         // > 0: a reply arrives this many bytes at a time
+    bool noRpm = false;         // the car has no PID 0C (some EVs)
+    // The adapter was listening to the bus (ATMA) when its port was last
+    // closed: it stays that way while it has power. The first byte of the
+    // next connection only ends the listening, and until an ATZ it answers
+    // no request (raw CAN formatting is still on). Set by the device when it
+    // is closed mid-monitor; a test may set it too.
+    bool leftMonitoring = false;
 };
 
 class CarState

@@ -11,60 +11,13 @@
 
 import QtQuick 2.15
 import ".." as App
-import "AlertLevel.js" as Alerts
 
-Item {
+ValueGaugeBase {
     id: root
 
-    // ── Widget manifest (consumed by the dashboard editor) ──────────
     readonly property var octaveSupportedKinds: ["*"]
-    readonly property var octaveEditableProps: [
-        { name: "padDigits",  type: "int",  label: "Pad digits",   default: 0,   min: 0, max: 8 },
-        { name: "valueScale", type: "real", label: "Value scale",  default: 3.5, min: 0.5, max: 12 },
-        { name: "decimals",   type: "int",  label: "Decimals",     default: 0,   min: 0, max: 4 },
-        { name: "showTitle",  type: "bool", label: "Show title",   default: true },
-        { name: "showUnit",   type: "bool", label: "Show unit",    default: true }
-    ]
-
-    // ── Data binding ────────────────────────────────────────────────
-    property string paramId: ""
-
-    readonly property var _pInfo: {
-        if (!paramId) return null
-        var all = App.OBDParameterModel.displayParameters   // in the gauges' units
-        for (var i = 0; i < all.length; i++) {
-            if (all[i].id === paramId) return all[i]
-        }
-        return null
-    }
-
-    property string title: _pInfo ? _pInfo.title : ""
-    property string unit: _pInfo ? _pInfo.unit : ""
-    // NaN = no reading yet (shows "--")
-    property real value: App.OBDParameterModel.sample(paramId)
-    readonly property bool hasValue: isFinite(value)
-
-    // ── Alerts (gauges/AlertLevel.js) ───────────────────────────────
-    // Limits in the display unit, NaN = unset. Level 1 colours the value
-    // warnColor, level 2 critColor; alertFlash blinks it while critical.
-    property real warnAbove: NaN
-    property real warnBelow: NaN
-    property real critAbove: NaN
-    property real critBelow: NaN
-    property bool alertFlash: false
-    property color warnColor: App.Style.statusWarning
-    property color critColor: App.Style.statusDanger
-    readonly property int alertLevel: Alerts.level(value, warnAbove, warnBelow, critAbove, critBelow)
-    readonly property color _alertColor: alertLevel === 2 ? critColor : warnColor
-    property bool _flashOn: true
-    readonly property real _alertOpacity: (alertFlash && alertLevel === 2 && !_flashOn) ? 0.3 : 1.0
-    Timer {
-        running: root.alertFlash && root.alertLevel === 2
-        interval: 400
-        repeat: true
-        onTriggered: root._flashOn = !root._flashOn
-        onRunningChanged: if (!running) root._flashOn = true
-    }
+    // paramId, title, unit, min, max, value, hasValue, decimals and the alert
+    // properties (warnAbove ... alertLevel) are ValueGaugeBase's
 
     // ── Style ───────────────────────────────────────────────────────
     property color labelColor: App.Style.obdLabelColor
@@ -72,7 +25,6 @@ Item {
     property color unitColor: App.Style.obdLabelColor
 
     // ── Features ────────────────────────────────────────────────────
-    property int decimals: 0
     property int padDigits: 0       // pad with leading zeros to this width (0 = off)
     property real valueScale: 3.5   // multiplier on App.Spacing.overallText for the big number
     property bool showTitle: true

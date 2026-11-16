@@ -175,7 +175,7 @@ Item {
         }
     }
 
-    // "Now Playing" hijacks the whole window — see SettingsHubCard.
+    // "Now Playing" takes the whole window (the Now Playing Studio).
     function selectTile(cardId, rect) {
         if (cardId === "media_now_playing"
             && settingsMenu && settingsMenu.mainWindow

@@ -145,7 +145,7 @@ Item {
     // Side-card art refresh — fires on the next event-loop tick after any
     // track or shuffle change so the backend slot calls never compete with
     // animation frames for frame budget.  Uses a single batched backend
-    // call (get_neighbor_album_arts) to halve QML-to-C++ calls.
+    // call (getNeighborAlbumArts) to halve QML-to-C++ calls.
     // Also feeds hidden preloader Images so the QML cache is warm.
     Timer {
         id: sideCardRefreshTimer
@@ -155,7 +155,7 @@ Item {
             if (mediaRoom.useRemote) {
                 // The phone reports only what is playing now: no side cards
             } else if (mediaManager) {
-                var arts = mediaManager.get_neighbor_album_arts()
+                var arts = mediaManager.getNeighborAlbumArts()
                 prevUrl = arts[0] || ""
                 nextUrl = arts[1] || ""
             }
@@ -299,7 +299,7 @@ Item {
         // The carousel's local bookkeeping; what is playing comes from nowPlaying
         function syncNowPlaying() {
             if (!mediaRoom.useRemote && mediaManager) {
-                var currentFile = mediaManager.get_current_file()
+                var currentFile = mediaManager.getCurrentFile()
                 if (currentFile) {
                     currentSongText.text = currentFile
                 }
@@ -310,7 +310,7 @@ Item {
             // Initialize local song count from the active playlist (not raw
             // directory scan, which misses "All Music" and other combined lists)
             if (mediaManager) {
-                localSongCount = mediaManager.get_current_song_list().length
+                localSongCount = mediaManager.getCurrentSongList().length
             }
         }
 
@@ -428,17 +428,31 @@ Item {
                         anchors.topMargin: -dp(10)
                         anchors.bottomMargin: -dp(10)
 
+                        // A press on the slider itself is the slider's (it sets its
+                        // own `pressed`). One in the margin above or below never
+                        // reaches it, so this area drags for it. Setting `pressed`
+                        // and then passing every press on, as this used to, left it
+                        // stuck true after a margin press: no release ever came.
+                        property bool own: false
+                        function valueAt(x) {
+                            var pos = Math.max(0, Math.min(1, (x - volumeSlider.leftPadding) / volumeSlider.availableWidth))
+                            return volumeSlider.from + pos * (volumeSlider.to - volumeSlider.from)
+                        }
                         onPressed: function(mouse) {
-                            var newPos = Math.max(0, Math.min(1, (mouseX - volumeSlider.leftPadding) / volumeSlider.availableWidth))
-                            volumeSlider.value = volumeSlider.from + newPos * (volumeSlider.to - volumeSlider.from)
+                            own = mouse.y < dp(10) || mouse.y > height - dp(10)
+                            if (!own) {
+                                mouse.accepted = false
+                                return
+                            }
                             volumeSlider.pressed = true
-                            mouse.accepted = false
+                            volumeSlider.value = valueAt(mouse.x)
                         }
-                        
-                        onReleased: function(mouse) {
-                            volumeSlider.pressed = false
-                            mouse.accepted = false
+                        onPositionChanged: function(mouse) {
+                            if (own && pressed)
+                                volumeSlider.value = valueAt(mouse.x)
                         }
+                        onReleased: { if (own) volumeSlider.pressed = false; own = false }
+                        onCanceled: { if (own) volumeSlider.pressed = false; own = false }
                     }
                     
                     // Volume change logic
@@ -481,9 +495,10 @@ Item {
                 if (!volumeController || volumeController.effectivelyMuted) {   // null at shutdown
                     return "./assets/mute_on.svg"
                 }
-                if (volumeControl.currentValue < 20) return "./assets/mute_off_med.svg"
-                if (volumeControl.currentValue > 90) return "./assets/mute_off_low.svg"
-                return "./assets/mute_off_low.svg"
+                // The same steps as the nav bar's volume button (BottomBar.qml)
+                if (volumeControl.currentValue < 33) return "./assets/mute_off_low.svg"
+                if (volumeControl.currentValue < 66) return "./assets/mute_off_med.svg"
+                return "./assets/mute_off_high.svg"
             }
             
             function updateVolumeIcon() {
@@ -1071,7 +1086,7 @@ Item {
                     height: dp(40)
                     text: "Browse"
                     // the browser demo opens the browser's own folder picker instead
-                    onClicked: if (!mediaManager || !mediaManager.pick_browser_library()) emptyFolderDialog.open()
+                    onClicked: if (!mediaManager || !mediaManager.pickBrowserLibrary()) emptyFolderDialog.open()
                 }
 
                 Settings.SettingsButton {
@@ -1367,19 +1382,31 @@ Item {
                         anchors.topMargin: -dp(10)
                         anchors.bottomMargin: -dp(10)
 
+                        // A press on the slider itself is the slider's (it sets its
+                        // own `pressed`). One in the margin above or below never
+                        // reaches it, so this area drags for it. Setting `pressed`
+                        // and then passing every press on, as this used to, left it
+                        // stuck true after a margin press: no release ever came.
+                        property bool own: false
+                        function valueAt(x) {
+                            var pos = Math.max(0, Math.min(1, (x - progressSlider.leftPadding) / progressSlider.availableWidth))
+                            return progressSlider.from + pos * (progressSlider.to - progressSlider.from)
+                        }
                         onPressed: function(mouse) {
-                            // Pause the position binding first, then jump to the press point
-                            userSeeking = true
-                            var newPos = Math.max(0, Math.min(1, (mouseX - progressSlider.leftPadding) / progressSlider.availableWidth))
-                            progressSlider.value = progressSlider.from + newPos * (progressSlider.to - progressSlider.from)
+                            own = mouse.y < dp(10) || mouse.y > height - dp(10)
+                            if (!own) {
+                                mouse.accepted = false
+                                return
+                            }
                             progressSlider.pressed = true
-                            mouse.accepted = false  // Allow the event to propagate to the Slider
+                            progressSlider.value = valueAt(mouse.x)
                         }
-                        onReleased: function(mouse) {
-                            // onPressedChanged seeks (once: this used to seek too)
-                            progressSlider.pressed = false
-                            mouse.accepted = false
+                        onPositionChanged: function(mouse) {
+                            if (own && pressed)
+                                progressSlider.value = valueAt(mouse.x)
                         }
+                        onReleased: { if (own) progressSlider.pressed = false; own = false }
+                        onCanceled: { if (own) progressSlider.pressed = false; own = false }
                     }
 
                     onPressedChanged: {
@@ -1476,7 +1503,7 @@ Item {
             var wasEmpty = mediaRoom.localSongCount === 0
             mediaRoom.localSongCount = files.length
             if (wasEmpty && files.length > 0 && !mediaRoom.useRemote) {
-                mediaManager.play_file(files[0])
+                mediaManager.playFile(files[0])
             }
         }
     }

@@ -72,7 +72,12 @@ def load(path):
 
 
 rig = json.loads((ROOT / "jeep_tj/rig.json").read_text())
-doc, full = load(ROOT / "jeep_tj_2003.glb")
+# The full model is a reference, not an app asset: a scratch build has it
+# beside the parts, the installed one lives in tools/vehicle/reference/
+FULL = ROOT / "jeep_tj_2003.glb"
+if not FULL.exists():
+    FULL = Path(__file__).resolve().parent / "reference/jeep_tj_2003.glb"
+doc, full = load(FULL)
 assert {a["name"] for a in doc["animations"]} == {
     "Open_" + k for k in rig["parts"] if rig["parts"][k]["openAngle"] != 0
 }

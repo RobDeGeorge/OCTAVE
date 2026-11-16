@@ -83,16 +83,16 @@ public:
         emit deviceStateChanged();
     }
     // As the manager does: kind and session state first, then the signal
-    void fail(const QString &kind, const QString &message, const QString &state)
+    void fail(const QString &kind, const QString &message, const QString &sessionState)
     {
         errorKind = kind;
         emit lastErrorKindChanged();
-        setSession(state);
+        setSession(sessionState);
         emit scrcpyError(message);
     }
-    void setSession(const QString &state)
+    void setSession(const QString &sessionState)
     {
-        session = state;
+        session = sessionState;
         emit sessionStateChanged();
     }
     void goLive()

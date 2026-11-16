@@ -5,6 +5,7 @@
 #include "../phone_mirror/scrcpyclient.h"
 #include "../phone_mirror/qrcodegen.hpp"
 #include "settingsmanager.h"
+#include "../util/artfile.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -1513,16 +1514,13 @@ void PhoneMirrorManager::onMediaArt(const QByteArray &jpeg)
 {
     QString url;
     if (!jpeg.isEmpty()) {
-        const QString dir = SettingsManager::getAppDataDir() + QStringLiteral("/temp");
-        QDir().mkpath(dir);
-        // Alternate between two files: a new URL makes QML reload the image
-        m_mediaArtSeq = (m_mediaArtSeq + 1) % 2;
-        const QString path = dir + QStringLiteral("/phone_media_art_%1.jpg").arg(m_mediaArtSeq);
-        QFile f(path);
-        if (f.open(QIODevice::WriteOnly) && f.write(jpeg) == jpeg.size())
+        // A new file name per cover: QML caches the picture by URL
+        const QString path = ArtFile::write(SettingsManager::getAppDataDir() + QStringLiteral("/temp"),
+                                            QStringLiteral("phone_media_art"), QStringLiteral(".jpg"), jpeg, m_mediaArtSeq);
+        if (!path.isEmpty())
             url = QUrl::fromLocalFile(path).toString();
         else
-            qCWarning(lcPhoneMirror) << "Could not write phone album art to" << path;
+            qCWarning(lcPhoneMirror) << "Could not write phone album art";
     }
     if (url != m_mediaArtUrl) {
         m_mediaArtUrl = url;
