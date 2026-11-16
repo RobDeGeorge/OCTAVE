@@ -1190,7 +1190,8 @@ Flickable {
                             width: gsVolumeStepSlider.availableWidth
                             height: implicitHeight
                             radius: 3
-                            color: App.Style.hoverColor
+                            // As SettingsSlider draws it: hoverColor is nearly the card colour in the dark themes
+                            color: Qt.rgba(App.Style.settingsSliderColor.r, App.Style.settingsSliderColor.g, App.Style.settingsSliderColor.b, 0.25)
 
                             Rectangle {
                                 // Ends at the handle's center so the rounded end stays under it
@@ -1295,7 +1296,8 @@ Flickable {
                             width: cooldownSlider.availableWidth
                             height: implicitHeight
                             radius: 3
-                            color: App.Style.hoverColor
+                            // As SettingsSlider draws it: hoverColor is nearly the card colour in the dark themes
+                            color: Qt.rgba(App.Style.settingsSliderColor.r, App.Style.settingsSliderColor.g, App.Style.settingsSliderColor.b, 0.25)
 
                             Rectangle {
                                 // Ends at the handle's center so the rounded end stays under it
