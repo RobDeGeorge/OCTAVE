@@ -170,12 +170,17 @@ void OBDManager::setVehicleSupport(const QStringList &names, bool complete)
 {
     QStringList sorted = withAliases(names);
     // The scan can't see custom PIDs: the user's file says this car has them
+#ifndef Q_OS_ANDROID
     if (!sorted.isEmpty()) {
         for (const CustomPidRequest &p : m_customPids) {
             if (!sorted.contains(p.paramId))
                 sorted.append(p.paramId);
         }
     }
+#endif
+    // (Android's own Bluetooth path polls no custom PID yet,
+    // rebuildAndroidPollList(): saying the car has them left their gauges
+    // passing the support gate and blank)
     sorted.sort();
     if (sorted == m_vehicleSupportedParameters && complete == m_vehicleScanComplete)
         return;

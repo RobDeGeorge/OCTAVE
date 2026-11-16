@@ -170,6 +170,8 @@ endif()
 octave_add_test(tst_qmlfixtures DEFINES ${_fixture_defines})
 add_dependencies(tst_qmlfixtures qmlfixturehost)
 set_tests_properties(tst_qmlfixtures PROPERTIES TIMEOUT 300)
+# 106 s of the default 120 on a hosted runner (11 s on a desktop)
+set_tests_properties(tst_dashboardwidgets PROPERTIES TIMEOUT 300)
 
 # Phone mirror: the client (and the manager on top) with tests/cpp/fake-adb.sh
 # as adb; the decoding tests need libavcodec, as the app does

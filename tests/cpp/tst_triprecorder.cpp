@@ -347,6 +347,79 @@ private slots:
         QCOMPARE(store.listTrips().size(), 1);
     }
 
+    // The state an interrupted migration of the first schema-2 build left:
+    // the column added, the number still 1. It used to fail on "duplicate
+    // column" at every boot and the black box stayed off for good
+    void aHalfMigratedDatabaseIsFinished()
+    {
+        const QString dir = m_tmp->path() + "/halfway";
+        QVERIFY(QDir().mkpath(dir));
+        const auto schema = [&dir] {
+            sqlite3 *db = nullptr;
+            sqlite3_open((dir + "/blackbox.sqlite").toUtf8().constData(), &db);
+            sqlite3_stmt *st = nullptr;
+            sqlite3_prepare_v2(db, "SELECT value FROM meta WHERE key = 'schema'", -1, &st, nullptr);
+            const QString v = sqlite3_step(st) == SQLITE_ROW
+                                  ? QString::fromUtf8(reinterpret_cast<const char *>(sqlite3_column_text(st, 0)))
+                                  : QString();
+            sqlite3_finalize(st);
+            sqlite3_close(db);
+            return v;
+        };
+        {
+            sqlite3 *db = nullptr;
+            QCOMPARE(sqlite3_open((dir + "/blackbox.sqlite").toUtf8().constData(), &db), SQLITE_OK);
+            const char *half =
+                "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);"
+                "INSERT INTO meta VALUES('schema', '1');"
+                "CREATE TABLE trips(id INTEGER PRIMARY KEY, start_ms INTEGER NOT NULL, end_ms INTEGER, "
+                "clean INTEGER NOT NULL DEFAULT 0, vin TEXT, make TEXT, model_year INTEGER, "
+                "sample_count INTEGER NOT NULL DEFAULT 0, summary TEXT, file_base TEXT, "
+                "simulated INTEGER NOT NULL DEFAULT 0);"
+                "INSERT INTO trips(id, start_ms, end_ms, clean, vin) VALUES(1000, 1000, 61000, 1, 'HALFVIN');";
+            QCOMPARE(sqlite3_exec(db, half, nullptr, nullptr, nullptr), SQLITE_OK);
+            sqlite3_close(db);
+        }
+        TripStore store;
+        QVERIFY(store.open(dir));
+        QCOMPARE(store.listTrips().size(), 1);
+        QCOMPARE(store.listTrips().first().toMap().value("vin").toString(), QStringLiteral("HALFVIN"));
+        store.close();
+        QCOMPARE(schema(), QStringLiteral("2"));
+        QVERIFY(QDir(dir).entryList({"blackbox.sqlite.damaged-*"}, QDir::Files).isEmpty());   // not set aside
+    }
+
+    // Of the copies a damaged database leaves, the newest three stay
+    void oldDamagedCopiesArePruned()
+    {
+        const QString dir = m_tmp->path() + "/copies";
+        QVERIFY(QDir().mkpath(dir));
+        for (const char *stamp : {"20200101-000000", "20200102-000000", "20200103-000000", "20200104-000000"}) {
+            for (const char *suffix : {"", "-wal"}) {
+                QFile f(dir + "/blackbox.sqlite.damaged-" + stamp + suffix);
+                QVERIFY(f.open(QIODevice::WriteOnly));
+                f.write("old");
+            }
+        }
+        {
+            QFile f(dir + "/blackbox.sqlite");
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(QByteArray(8192, 'x'));
+        }
+        TripStore store;
+        QVERIFY(store.open(dir));
+        store.close();
+        QStringList left;
+        for (const QString &name : QDir(dir).entryList({"blackbox.sqlite.damaged-*"}, QDir::Files, QDir::Name))
+            if (!name.endsWith("-wal") && !name.endsWith("-shm"))
+                left.append(name);
+        QCOMPARE(left.size(), 3);
+        QVERIFY(!left.contains("blackbox.sqlite.damaged-20200101-000000"));
+        QVERIFY(!left.contains("blackbox.sqlite.damaged-20200102-000000"));
+        QVERIFY(!QFile::exists(dir + "/blackbox.sqlite.damaged-20200101-000000-wal"));
+        QVERIFY(QFile::exists(dir + "/blackbox.sqlite.damaged-20200104-000000-wal"));
+    }
+
     void storePrunesOldestFirst()
     {
         TripStore store;

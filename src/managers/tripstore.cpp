@@ -24,6 +24,7 @@ namespace {
 const int kSchemaVersion = 1;     // of the per-trip JSON files
 // Of the database. 2: trips.simulated (a drive of the simulated car)
 const int kDbSchemaVersion = 2;
+const int kDamagedCopiesKept = 3;
 // Gaps longer than this between two speed samples are not integrated into
 // the distance (a dropout, not a 10 s stretch at the last known speed)
 const qint64 kMaxIntegrationGapMs = 10000;
@@ -316,6 +317,18 @@ bool TripStore::setDamagedDatabaseAside()
                                        "the trip files in history/trips are untouched.").arg(QFileInfo(aside).fileName());
     qCWarning(lcTripStore).noquote() << msg;
     emit error(msg);
+    // A card that keeps damaging the file must not fill itself with copies:
+    // the newest three stay (the stamp sorts by time)
+    const QFileInfo db(databasePath());
+    QStringList copies = db.dir().entryList({db.fileName() + QStringLiteral(".damaged-*")}, QDir::Files, QDir::Name);
+    copies.erase(std::remove_if(copies.begin(), copies.end(), [](const QString &name) {
+                     return name.endsWith(QLatin1String("-wal")) || name.endsWith(QLatin1String("-shm"));
+                 }), copies.end());
+    while (copies.size() > kDamagedCopiesKept) {
+        const QString old = db.dir().filePath(copies.takeFirst());
+        for (const char *suffix : {"", "-wal", "-shm"})
+            QFile::remove(old + QLatin1String(suffix));
+    }
     return true;
 }
 
@@ -336,17 +349,37 @@ bool TripStore::checkSchemaVersion()
         return true;
     }
     if (stored < kDbSchemaVersion) {
-        // Migrations, oldest first. Each is one statement SQLite applies
-        // atomically; the number moves only when its statement worked.
+        // Migrations, oldest first, and the new number with them in one
+        // transaction (SQLite's DDL is transactional): a power cut leaves
+        // the old schema whole or the new one. Each step first looks at
+        // what is there, so a database that has the column and the old
+        // number (an earlier build wrote the two separately) is only
+        // renumbered instead of failing on "duplicate column" at every boot.
+        if (!exec(QStringLiteral("BEGIN IMMEDIATE")))
+            return false;
+        bool ok = true;
         if (stored < 2) {
-            if (!exec(QStringLiteral("ALTER TABLE trips ADD COLUMN simulated INTEGER NOT NULL DEFAULT 0")))
-                return false;
-            stored = 2;
+            bool hasSimulated = false;
+            {
+                Query cols(m_db);
+                if (cols.prepare("SELECT 1 FROM pragma_table_info('trips') WHERE name = 'simulated'"))
+                    hasSimulated = cols.step();
+            }
+            ok = hasSimulated || exec(QStringLiteral("ALTER TABLE trips ADD COLUMN simulated INTEGER NOT NULL DEFAULT 0"));
         }
-        Query q(m_db);
-        if (q.prepare("UPDATE meta SET value = ? WHERE key = 'schema'"))
-            q.bind(1, QString::number(stored)).exec();
-        qCInfo(lcTripStore) << "Trip database brought up to schema" << stored;
+        if (ok) {
+            Query q(m_db);
+            ok = q.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES('schema', ?)")
+                 && q.bind(1, QString::number(kDbSchemaVersion)).exec();
+        }
+        if (!ok || !exec(QStringLiteral("COMMIT"))) {
+            // The error the open path reads (damaged or not) is the failed
+            // statement's: keep it across the rollback's own result
+            exec(QStringLiteral("ROLLBACK"));
+            qCWarning(lcTripStore) << "The trip database could not be brought up to schema" << kDbSchemaVersion;
+            return false;
+        }
+        qCInfo(lcTripStore) << "Trip database brought up to schema" << kDbSchemaVersion << "from" << stored;
     }
     return true;
 }
@@ -1283,17 +1316,22 @@ bool TripStore::deleteTrip(qint64 id)
     if (!isOpen())
         return false;
     const QString base = tripFileBase(id);
-    exec(QStringLiteral("BEGIN"));
+    // All three or none: a statement that fails must not leave a trip
+    // without its samples, or its files gone and its row still listed
+    bool ok = exec(QStringLiteral("BEGIN IMMEDIATE"));
+    const bool began = ok;
     for (const char *sql : {"DELETE FROM samples WHERE trip_id = ?", "DELETE FROM events WHERE trip_id = ?",
                             "DELETE FROM trips WHERE id = ?"}) {
+        if (!ok)
+            break;
         Query q(m_db);
-        if (q.prepare(sql))
-            q.bind(1, id).exec();
+        ok = q.prepare(sql) && q.bind(1, id).exec();
     }
-    const bool ok = exec(QStringLiteral("COMMIT"));
+    ok = ok && exec(QStringLiteral("COMMIT"));
     if (!ok) {
         // The trip is still in the database: keep its files too
-        exec(QStringLiteral("ROLLBACK"));
+        if (began)
+            exec(QStringLiteral("ROLLBACK"));
         qCWarning(lcTripStore) << "Trip" << id << "not deleted: the database refused";
         return false;
     }

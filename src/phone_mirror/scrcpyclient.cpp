@@ -308,13 +308,21 @@ void ScrcpyClient::stop()
     m_running = false;
     // Unblock the worker: shut the control descriptor down from here; the
     // worker owns the QTcpSocket/QProcess objects and tears them down itself.
-    const qintptr fd = m_controlFd.exchange(-1);
-    if (fd >= 0) {
+    // Under the mutex the worker's teardown takes before it closes the
+    // socket: a session ending by itself at this moment could otherwise
+    // close the descriptor between the read and the shutdown, and the number
+    // be another socket's by then. (The socket is non-blocking, so nobody
+    // holds this lock across a wait.)
+    {
+        std::lock_guard<std::mutex> lock(m_sendMutex);
+        const qintptr fd = m_controlFd.exchange(-1);
+        if (fd >= 0) {
 #ifdef Q_OS_WIN
-        ::shutdown(static_cast<SOCKET>(fd), SD_BOTH);
+            ::shutdown(static_cast<SOCKET>(fd), SD_BOTH);
 #else
-        ::shutdown(static_cast<int>(fd), SHUT_RDWR);
+            ::shutdown(static_cast<int>(fd), SHUT_RDWR);
 #endif
+        }
     }
     if (m_thread.joinable()) {
         if (std::this_thread::get_id() == m_thread.get_id())

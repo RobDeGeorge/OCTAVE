@@ -65,6 +65,12 @@ struct LinkSettings {
     bool silent = false;        // the port opens, takes bytes and never answers (not an ELM327)
     int chunkBytes = 0;         // > 0: a reply arrives this many bytes at a time
     bool noRpm = false;         // the car has no PID 0C (some EVs)
+    // The adapter was listening to the bus (ATMA) when its port was last
+    // closed: it stays that way while it has power. The first byte of the
+    // next connection only ends the listening, and until an ATZ it answers
+    // no request (raw CAN formatting is still on). Set by the device when it
+    // is closed mid-monitor; a test may set it too.
+    bool leftMonitoring = false;
 };
 
 class CarState

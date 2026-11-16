@@ -181,6 +181,11 @@ void BusMonitor::busMonitorChanged(bool active, const QString &note)
         return;
     m_active = active;
     if (active) {
+        // The frames' times count from here: the worker starts its clock as
+        // it says this, after setting the adapter up (start() is earlier by
+        // that set-up, seconds when a filter is retried, and the recorded
+        // times were early by as much)
+        m_startEpochMs = QDateTime::currentMSecsSinceEpoch();
         m_refresh.start();
     } else {
         m_refresh.stop();

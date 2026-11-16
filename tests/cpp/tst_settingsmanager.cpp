@@ -655,6 +655,25 @@ private slots:
 
             // In through the generic path, out through the typed one
             const QVariant value = another(r, original);
+            if (key == "albumArtColors") {
+                // The player's to set, not a settings client's: refused
+                // here as in apply_settings, and its own setter is the way in
+                sm.save_setting(key, value);
+                QVERIFY(same(sm.get_setting(key), original));
+                QCOMPARE(notify.count(), 0);
+                QCOMPARE(generic.count(), 0);
+                sm.set_album_art_colors(value.toString());
+                QVERIFY(same(sm.get_setting(key), value));
+                QVERIFY(same(sm.m_settings.value(key).toVariant(), value));
+                QCOMPARE(notify.count(), 1);
+                // The same palette again is announced (QML has no other
+                // way to get it back) and not written
+                sm.flushPendingSave();
+                sm.set_album_art_colors(value.toString());
+                QCOMPARE(notify.count(), 2);
+                QVERIFY(!sm.m_savePending);
+                continue;
+            }
             sm.save_setting(key, value);
             QVERIFY2(same(sm.get_setting(key), value), k.constData());
             if (plain)
@@ -711,7 +730,10 @@ private slots:
                 const QVariantMap r = rv.toMap();
                 const QString key = r.value("key").toString();
                 wanted.insert(key, another(r, first.get_setting(key)));
-                first.save_setting(key, wanted.value(key));
+                if (key == "albumArtColors")
+                    first.set_album_art_colors(wanted.value(key).toString());   // not save_setting's to write
+                else
+                    first.save_setting(key, wanted.value(key));
             }
             first.flushPendingSave();
         }

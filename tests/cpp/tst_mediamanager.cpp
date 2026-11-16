@@ -14,6 +14,8 @@
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QThread>
+#include <QUuid>
 #include <QUrl>
 
 #include <memory>
@@ -368,6 +370,77 @@ private slots:
             QVERIFY(f.isFinished());
     }
 
+    // The song list asks for artist / album / length of every row it shows.
+    // While the background pass is reading the playlist, those calls open
+    // no file on this thread: placeholders now, the tags when the pass reports
+    void rowsOpenNoFileWhileThePassReads()
+    {
+        QList<Song> songs;
+        for (int i = 0; i < 300; ++i)
+            songs.append({QStringLiteral("row%1.wav").arg(i, 3, 10, QLatin1Char('0')), "T", "Ann", "First"});
+        auto mm = taggedLibrary(songs);
+        forgetTags(mm.get(), songs);
+        QVERIFY(mm->m_warmRunning);
+        QSignalSpy duration(mm.get(), &MediaManager::totalDurationChanged);
+        const int gui = MediaManager::s_guiTagReads.load();
+        QCOMPARE(mm->get_band(songs.first().file), QStringLiteral("Unknown Artist"));   // not known yet, not read here
+        for (int i = 280; i < 300; ++i) {
+            const QString f = songs.at(i).file;
+            const QString band = mm->get_band(f);
+            QVERIFY(band == QStringLiteral("Unknown Artist") || band == QStringLiteral("Ann"));
+            mm->get_album(f);
+            mm->get_formatted_duration(f);
+        }
+        QCOMPARE(MediaManager::s_guiTagReads.load(), gui);
+        QTRY_VERIFY_WITH_TIMEOUT(duration.count() >= 1, 60000);
+        QCOMPARE(mm->get_band(songs.last().file), QStringLiteral("Ann"));
+        QCOMPARE(mm->get_album(songs.last().file), QStringLiteral("First"));
+        QCOMPARE(mm->get_formatted_duration(songs.last().file), QStringLiteral("0:01"));
+        QCOMPARE(MediaManager::s_guiTagReads.load(), gui);
+    }
+
+    // The power goes (or the app quits) before the pass has reported: what
+    // it read is in the tag store, and the next start reads only the rest.
+    // It used to keep nothing until the whole pass was over.
+    void anUnfinishedPassKeepsWhatItRead()
+    {
+        const int n = 300;
+        QList<Song> songs;
+        // Names of this run's own: the tag store is shared by the cases
+        // (and by earlier runs on the same config directory)
+        const QString prefix = QStringLiteral("part-") + QUuid::createUuid().toString(QUuid::Id128).left(8);
+        const auto kept = [&prefix](const MediaManager &m) {
+            int count = 0;
+            for (auto it = m.m_metaStore.constBegin(); it != m.m_metaStore.constEnd(); ++it)
+                count += it.key().startsWith(prefix) ? 1 : 0;
+            return count;
+        };
+        for (int i = 0; i < n; ++i)
+            songs.append({QStringLiteral("%1-%2.wav").arg(prefix).arg(i, 3, 10, QLatin1Char('0')), "T", "Ann", "First"});
+        auto mm = taggedLibrary(songs);
+        const int before = MediaManager::s_tagReads.load();
+        forgetTags(mm.get(), songs);
+        // No event loop runs here: no batch has been delivered when it goes
+        QElapsedTimer t;
+        t.start();
+        while (MediaManager::s_tagReads.load() - before < 60 && t.elapsed() < 20000)
+            QThread::msleep(1);
+        QCOMPARE(kept(*mm), 0);
+        mm.reset();
+        const int first = MediaManager::s_tagReads.load() - before;
+        QVERIFY2(first >= 60, qPrintable(QString::number(first)));
+
+        auto again = std::make_unique<MediaManager>();
+        QCOMPARE(kept(*again), first);   // every tag read was kept
+        QSignalSpy duration(again.get(), &MediaManager::totalDurationChanged);
+        again->set_library_root(m_lib->path());
+        again->select_playlist("Road");
+        QTRY_VERIFY_WITH_TIMEOUT(duration.count() >= 1, 60000);
+        waitForBackground(again.get());
+        QCOMPARE(MediaManager::s_tagReads.load() - before, n);   // each file once, over the two runs
+        QCOMPARE(again->get_artist_count(), 1);
+    }
+
 private:
     struct Song {
         QString file, title, artist, album;
@@ -422,6 +495,18 @@ private:
         m_playlist = QStringLiteral("Road");
         mm->select_playlist(m_playlist);
         return mm;
+    }
+
+    // The first scan of a new file reads its tags to tidy its display name
+    // (and so knows them). Back to a library whose tags are not known: a
+    // big one on its first visit, or after the tag store was lost
+    static void forgetTags(MediaManager *mm, const QList<Song> &songs)
+    {
+        for (const Song &song : songs)
+            mm->m_metaStore.remove(song.file);
+        mm->_clear_metadata_cache();
+        mm->invalidate_stats_cache();
+        mm->_calculate_all_stats();   // as the song list's bindings do
     }
 
     static void waitForBackground(MediaManager *mm)

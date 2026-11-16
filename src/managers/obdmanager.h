@@ -485,7 +485,7 @@ public slots:
     bool check_device_presence();
 
     // camelCase names for the snake_case methods above (protocol 3 keeps both;
-    // the old names are marked octave.deprecated and go in protocol 4)
+    // the old names are marked octave.deprecated and go in protocol 5)
     void connectObd() { connect_obd(); }
     void forceConnect() { force_connect(); }
     void resetConnection() { reset_connection(); }
@@ -580,7 +580,9 @@ private:
     void setConnectionProgress(int progress);
 
     // Port scanning
-    void scanForDevices();
+    // `passiveRetry`: the scan timer's tick, which may also retry an adapter
+    // that is there and not answering; a ports query passes false
+    void scanForDevices(bool passiveRetry = false);
 
     // Unified-adapter helpers — classify an identifier (MAC/COM/dev path)
     // into the {name, kind} the QML chip / row renders.

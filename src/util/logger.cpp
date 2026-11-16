@@ -206,7 +206,8 @@ void crashHandler(int sig)
 
 // After the error log rotates, the descriptor opened at start-up points at
 // octave-cpp-error.log.1 (later .2 ... then a deleted file): a crash's
-// backtrace went where nobody looks. Open the new file, swap, close the old.
+// backtrace went where nobody looks. Open the new file and put it on the
+// same descriptor number.
 void reopenCrashFd(const QString &rotatedPath)
 {
     if (g_crashFd < 0 || !rotatedPath.endsWith(QLatin1String("/octave-cpp-error.log")))
@@ -214,9 +215,12 @@ void reopenCrashFd(const QString &rotatedPath)
     const int fresh = ::open(rotatedPath.toLocal8Bit().constData(), O_WRONLY | O_APPEND | O_CREAT, 0644);
     if (fresh < 0)
         return;
-    const int old = g_crashFd;
-    g_crashFd = fresh;
-    ::close(old);
+    // The number stays: dup2 swaps what it refers to in one step, so a
+    // crash handler, the watchdog or a line that gave up on the lock,
+    // reading g_crashFd on another thread meanwhile, never holds a closed
+    // number (or, worse, one the next open() or socket() has taken)
+    (void)::dup2(fresh, g_crashFd);
+    ::close(fresh);
 }
 
 void installCrashHandlers()
@@ -292,9 +296,9 @@ void reopenCrashFd(const QString &rotatedPath)
     const int fresh = _open(rotatedPath.toLocal8Bit().constData(), _O_WRONLY | _O_APPEND | _O_CREAT, 0644);
     if (fresh < 0)
         return;
-    const int old = g_crashFd;
-    g_crashFd = fresh;
-    _close(old);
+    // The number stays (see the POSIX twin above)
+    _dup2(fresh, g_crashFd);
+    _close(fresh);
 }
 
 void installCrashHandlers()
@@ -355,12 +359,17 @@ void writeDirect(const char *line)
 
 void flush()
 {
-    QMutexLocker<QRecursiveMutex> lock(&g_mutex);
+    // Timed, as in the handler: a fatal message is flushed on its way to
+    // abort(), and a thread stuck inside a log write must not keep that
+    // abort (and its backtrace, and the restart) from ever happening
+    if (!g_mutex.tryLock(kLockWaitMs))
+        return;
     // Only open files: QFile::flush() on a closed one (the debug log when
     // --debug is off) emits a qWarning, which used to self-deadlock here.
     for (RotatingFile *f : {&g_main, &g_error, &g_debug})
         if (f->file.isOpen())
             f->file.flush();
+    g_mutex.unlock();
 }
 
 }  // namespace OctaveLog

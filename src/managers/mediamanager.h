@@ -18,6 +18,7 @@
 #include <QMediaDevices>
 #include <QRegularExpression>
 #include <QFuture>
+#include <functional>
 
 #include <atomic>
 #include <memory>
@@ -278,7 +279,7 @@ public slots:
     Q_INVOKABLE QStringList sort_media_files(const QString &sortColumn, bool ascending = true);
 
     // camelCase names for the snake_case methods above (protocol 3 keeps both;
-    // the old names are marked octave.deprecated and go in protocol 4)
+    // the old names are marked octave.deprecated and go in protocol 5)
     Q_INVOKABLE void flushMetadataStore() { flush_metadata_store(); }
     void playFile(const QString &filename) { play_file(filename); }
     void nextTrack() { next_track(); }
@@ -512,6 +513,11 @@ private:
     QList<QFuture<void>> m_background;
     // Tag reads from files so far (tests count them)
     static std::atomic<int> s_tagReads;
+    // ...and those of them made on the GUI thread (the song list's rows must make none)
+    static std::atomic<int> s_guiTagReads;
+    // Takes the tag pass's batches not delivered yet (set while one runs)
+    std::function<void()> m_warmDrain;
+    bool _row_metadata(const QString &filename);
 
     // Display names
     QHash<QString, QString> m_displayNames;

@@ -1264,7 +1264,15 @@ void SettingsManager::save_background_blur_radius(int radius) { setRow(R_backgro
 void SettingsManager::save_bottom_bar_orientation(const QString &orientation) { setRow(R_bottomBarOrientation, orientation); }
 void SettingsManager::save_show_bottom_bar_media_controls(bool show) { setRow(R_showBottomBarMediaControls, show); }
 void SettingsManager::save_settings_layout_style(const QString &style) { setRow(R_settingsLayoutStyle, style); }
-void SettingsManager::set_album_art_colors(const QString &colorsJson) { setRow(R_albumArtColors, colorsJson); }
+void SettingsManager::set_album_art_colors(const QString &colorsJson)
+{
+    // The palette reaches QML through this signal and nothing else (Style
+    // holds its own copy, which Album Art Capture being switched off and on
+    // clears), so the same palette again is still announced. Unchanged, it
+    // is not written again.
+    if (setRow(R_albumArtColors, colorsJson) == SetResult::Unchanged)
+        emit albumArtColorsChanged();
+}
 
 // --- Media ---
 void SettingsManager::save_start_volume(float volume) { setRow(R_startUpVolume, static_cast<double>(volume)); }
@@ -1938,6 +1946,12 @@ void SettingsManager::save_setting(const QString &key, const QVariant &value)
     // live value, its signal). It used to be written to the file only: the
     // property kept the old value until the next start.
     const int index = rowIndex(key);
+    // The Album Art palette is the player's to set (set_album_art_colors,
+    // scope full), as apply_settings has it: not a settings-scope client's
+    if (index == R_albumArtColors) {
+        qCWarning(lcSettings) << "save_setting: refused" << key << "(set by the player from the album art)";
+        return;
+    }
     if (index >= 0) {
         if (setRow(index, value, true) == SetResult::Changed)
             emit genericSettingChanged(key);

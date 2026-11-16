@@ -143,7 +143,7 @@ void OBDManager::onStartupTimer()
 // Device scanning
 // ---------------------------------------------------------------------------
 
-void OBDManager::scanForDevices()
+void OBDManager::scanForDevices(bool passiveRetry)
 {
     QStringList ports;
 
@@ -249,12 +249,21 @@ void OBDManager::scanForDevices()
     // The same for any adapter that answered while the car did not (ignition
     // off at boot, key off and on again): its /dev node never changes, so
     // without this it sat at "waiting for vehicle" until someone tapped Connect
-    if ((RfcommSocket::isUrl(configured) || OBDConnectionWorker::transportClaims(configured)
-         || (m_waitingForVehicle && checkPortExists(configured)))
-        && !m_connected && !m_isConnecting
+    //
+    // Only on the scan timer's own tick: a ports query (get_available_ports,
+    // refresh_ports, scan: read scope) asks what is there and starts nothing.
+    // And not while a timed retry is pending: this used to zero the attempt
+    // count under it every 10 s, so obdAutoReconnectAttempts never ran out
+    // in this state. Once the timed retries are used up they stay used up
+    // (the count is kept) and this is one quiet attempt per tick.
+    if (passiveRetry
+        && (RfcommSocket::isUrl(configured) || OBDConnectionWorker::transportClaims(configured)
+            || (m_waitingForVehicle && checkPortExists(configured)))
+        && !m_connected && !m_isConnecting && !m_retryTimer.isActive()
         && !m_forceStopReconnect && !m_diagnosticMode) {
         qDebug() << "[OBD] Retrying direct Bluetooth adapter" << configured;
-        m_connectionAttempts = 0;
+        if (!isAutoReconnectEnabled())
+            m_connectionAttempts = 0;   // no timed retries to count: every tick is attempt 1
         startConnection();
     }
 
@@ -262,7 +271,7 @@ void OBDManager::scanForDevices()
 
 void OBDManager::onDeviceScanTimer()
 {
-    scanForDevices();
+    scanForDevices(true);
 }
 
 // ---------------------------------------------------------------------------

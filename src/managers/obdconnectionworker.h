@@ -113,6 +113,7 @@ private slots:
 
 private:
     // ELM327 init sequence
+    bool leaveMonitorMode(int waitMs);
     bool sendInitSequence();
     bool openSerialPort();   // QSerialPort path of doConnect(); emits initComplete(false) itself
 

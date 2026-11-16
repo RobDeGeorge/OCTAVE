@@ -112,7 +112,21 @@ bool SimElm327Device::open(OpenMode mode)
     m_spaces = true;
     m_echo = true;
     m_clock.start();
+    // Closing the port does not reset an adapter that still has power
+    m_monitoring = m_unreset = m_state->link().leftMonitoring;
+    m_headersOn = m_monitoring;
+    m_monitorAtMs = 0;
+    m_monitorSent = 0;
     return QIODevice::open(mode | QIODevice::Unbuffered);
+}
+
+void SimElm327Device::close()
+{
+    if (isOpen()) {
+        const bool listening = m_monitoring;
+        m_state->updateLink([listening](LinkSettings &l) { l.leftMonitoring = listening; });
+    }
+    QIODevice::close();
 }
 
 bool SimElm327Device::dropLink()
@@ -274,7 +288,9 @@ qint64 SimElm327Device::writeData(const char *data, qint64 size)
         if (faults.silent)
             continue;   // something on the port that is not an ELM327
         const bool echoed = m_echo;   // as it was when the command arrived
-        QByteArray reply = respond(command);
+        // Left listening and not reset since: no request is answered
+        const bool request = !command.trimmed().toUpper().startsWith("AT") && !command.trimmed().isEmpty();
+        QByteArray reply = m_unreset && request ? QByteArrayLiteral("NO DATA") : respond(command);
         if (m_monitoring)
             continue;   // "ATMA": messages follow, no prompt
         // Headers on: each reply line starts with the answering ECU's id
@@ -383,6 +399,7 @@ QByteArray SimElm327Device::respond(const QByteArray &command)
 
     if (cmd.startsWith("AT")) {
         if (cmd == "ATZ" || cmd == "ATWS") {
+            m_unreset = false;
             m_spaces = true;
             m_echo = true;
             m_probed = false;

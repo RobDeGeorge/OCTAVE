@@ -83,7 +83,7 @@ public slots:
     void cleanup();
 
     // camelCase names for the snake_case methods above (protocol 3 keeps both;
-    // the old names are marked octave.deprecated and go in protocol 4)
+    // the old names are marked octave.deprecated and go in protocol 5)
     void shutdownDevice() { shutdown_device(); }
 
 signals:

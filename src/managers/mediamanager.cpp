@@ -19,6 +19,9 @@
 #include <QJsonObject>
 #include <QCryptographicHash>
 #include <QStandardPaths>
+#include <QElapsedTimer>
+#include <QPointer>
+#include <QPromise>
 #include <QThread>
 #include <QCoreApplication>
 #include <QtConcurrent>
@@ -170,6 +173,14 @@ static QString cleanForSort(const QString &filename)
 }
 
 std::atomic<int> MediaManager::s_tagReads{0};
+std::atomic<int> MediaManager::s_guiTagReads{0};
+
+#ifdef OCTAVE_TAGLIB
+namespace {
+constexpr int kWarmBatch = 50;   // files per delivery of the background tag pass
+constexpr int kWarmSaveMs = 30000;   // the tag store is written this often while a pass runs
+}
+#endif
 
 // ─── Constructor ───────────────────────────────────────────────────
 
@@ -290,7 +301,6 @@ MediaManager::~MediaManager()
         m_saveStateTimer.stop();
         _save_playback_state_now();
     }
-    _save_meta_store();
     if (m_player) {
         m_player->stop();
     }
@@ -303,6 +313,13 @@ MediaManager::~MediaManager()
         m_warmCancel->store(true);
     for (QFuture<void> &work : m_background)
         work.waitForFinished();
+    // What the tag pass read and had not delivered yet (its batches arrive
+    // through the event loop, which is not coming back), then the store:
+    // the next start goes on from here instead of reading it all again
+    if (m_warmDrain)
+        m_warmDrain();
+    m_warmDrain = nullptr;
+    _save_meta_store();
 }
 
 void MediaManager::_track(const QFuture<void> &work)
@@ -840,6 +857,8 @@ MediaMetadata MediaManager::_read_tags(const QString &filePath, const QString &b
 {
     // Pure TagLib read; safe on a worker thread.
     s_tagReads.fetch_add(1, std::memory_order_relaxed);
+    if (QCoreApplication::instance() && QThread::currentThread() == QCoreApplication::instance()->thread())
+        s_guiTagReads.fetch_add(1, std::memory_order_relaxed);
     std::unique_ptr<TagLib::IOStream> stream;
     const auto fileRef = openTags<TagLib::FileRef>(filePath, stream);
     if (fileRef->isNull() || !fileRef->tag())
@@ -1575,12 +1594,38 @@ QStringList MediaManager::get_media_files(bool emitSignal)
 
 // ─── Metadata getters ──────────────────────────────────────────────
 
+// For the per-row getters (the song list asks for every visible row): true
+// when the track's tags are in the cache. While the background pass is
+// reading this playlist they are not read here as well: the row gets its
+// placeholder, and the tags when the pass reports (totalDurationChanged).
+// Opening the file here, tags and cover, was a stall per row on a cold
+// library, with the pass reading the same files at the same time.
+bool MediaManager::_row_metadata(const QString &filename)
+{
+    if (m_metadataCache.contains(filename))
+        return true;
+#ifdef OCTAVE_TAGLIB
+    if (m_warmRunning && m_warmFiles.contains(filename)) {
+        const QJsonValue stored = m_metaStore.value(filename);
+        if (stored.isObject()) {
+            // Known from an earlier run: one stat to check it is the same file
+            const QString filePath = _get_file_path(filename);
+            MediaMetadata meta;
+            if (!filePath.isEmpty() && _meta_from_store(filename, filePath, &meta)) {
+                m_metadataCache.insert(filename, meta);
+                return true;
+            }
+        }
+        return false;
+    }
+#endif
+    _cache_metadata(filename);
+    return m_metadataCache.contains(filename);
+}
+
 QString MediaManager::get_formatted_duration(const QString &filename)
 {
-    if (!m_metadataCache.contains(filename))
-        _cache_metadata(filename);
-
-    if (!m_metadataCache.contains(filename))
+    if (!_row_metadata(filename))
         return QStringLiteral("0:00");
 
     int secs = m_metadataCache[filename].durationSeconds;
@@ -1593,18 +1638,12 @@ QString MediaManager::get_formatted_duration(const QString &filename)
 
 QString MediaManager::get_band(const QString &filename)
 {
-    if (!m_metadataCache.contains(filename))
-        _cache_metadata(filename);
-    return m_metadataCache.contains(filename) ? m_metadataCache[filename].artist
-                                               : QStringLiteral("Unknown Artist");
+    return _row_metadata(filename) ? m_metadataCache[filename].artist : QStringLiteral("Unknown Artist");
 }
 
 QString MediaManager::get_album(const QString &filename)
 {
-    if (!m_metadataCache.contains(filename))
-        _cache_metadata(filename);
-    return m_metadataCache.contains(filename) ? m_metadataCache[filename].album
-                                               : QStringLiteral("Unknown Album");
+    return _row_metadata(filename) ? m_metadataCache[filename].album : QStringLiteral("Unknown Album");
 }
 
 // ─── Current file / peek ───────────────────────────────────────────
@@ -3007,44 +3046,72 @@ void MediaManager::_warm_metadata(const QStringList &files)
         jobs.append(job);
     }
 
+    // The tags come back in batches of kWarmBatch files, each merged into
+    // the cache and the tag store as it arrives: a library too big to read
+    // within one drive used to keep nothing (everything arrived at the end,
+    // which never came) and started from zero at every boot.
     auto *watcher = new QFutureWatcher<QList<Result>>(this);
-    connect(watcher, &QFutureWatcher<QList<Result>>::finished, this, [this, watcher, generation, files]() {
-        watcher->deleteLater();
-        const QList<Result> results = watcher->result();
+    const QPointer<QFutureWatcher<QList<Result>>> guard(watcher);
+    const auto taken = std::make_shared<int>(0);
+    const auto sinceSave = std::make_shared<QElapsedTimer>();
+    const auto takeBatches = [this, guard, taken, sinceSave, generation]() {
+        if (!guard)
+            return;
+        const QFuture<QList<Result>> future = guard->future();
         const bool current = generation == m_warmGeneration;
-        for (const Result &r : results) {
-            // A tag read is worth keeping whichever list it was made for
-            // (the store checks size and mtime before it believes an entry)
-            if (!r.fromStore) {
-                if (r.exists) {
-                    QJsonObject e;
-                    e[QStringLiteral("title")] = r.meta.title;
-                    e[QStringLiteral("artist")] = r.meta.artist;
-                    e[QStringLiteral("album")] = r.meta.album;
-                    e[QStringLiteral("duration")] = r.meta.durationSeconds;
-                    e[QStringLiteral("size")] = double(r.size);
-                    e[QStringLiteral("mtime")] = double(r.mtime);
-                    m_metaStore[r.filename] = e;
-                } else if (r.hadStored) {
-                    m_metaStore.remove(r.filename);   // deleted or renamed track
+        while (*taken < future.resultCount()) {
+            const QList<Result> results = future.resultAt((*taken)++);
+            for (const Result &r : results) {
+                // A tag read is worth keeping whichever list it was made for
+                // (the store checks size and mtime before it believes an entry)
+                if (!r.fromStore) {
+                    if (r.exists) {
+                        QJsonObject e;
+                        e[QStringLiteral("title")] = r.meta.title;
+                        e[QStringLiteral("artist")] = r.meta.artist;
+                        e[QStringLiteral("album")] = r.meta.album;
+                        e[QStringLiteral("duration")] = r.meta.durationSeconds;
+                        e[QStringLiteral("size")] = double(r.size);
+                        e[QStringLiteral("mtime")] = double(r.mtime);
+                        m_metaStore[r.filename] = e;
+                    } else if (r.hadStored) {
+                        m_metaStore.remove(r.filename);   // deleted or renamed track
+                    }
+                    if (r.exists || r.hadStored) {
+                        m_metaStoreDirty = true;
+                        // Written soon after the first batch and then every
+                        // kWarmSaveMs while the pass runs (the whole store is
+                        // one file); the end of the pass and the destructor
+                        // write what is left
+                        if (!sinceSave->isValid() || sinceSave->elapsed() >= kWarmSaveMs) {
+                            sinceSave->start();
+                            if (!m_metaStoreSaveTimer.isActive())
+                                m_metaStoreSaveTimer.start();
+                        }
+                    }
                 }
-                if (r.exists || r.hadStored) {
-                    m_metaStoreDirty = true;
-                    m_metaStoreSaveTimer.start();
-                }
+                if (current && !m_metadataCache.contains(r.filename))
+                    m_metadataCache.insert(r.filename, r.meta);
             }
-            if (current && !m_metadataCache.contains(r.filename))
-                m_metadataCache.insert(r.filename, r.meta);
         }
-        if (!current)
+    };
+    m_warmDrain = takeBatches;   // for the destructor: what was read and not yet delivered
+    connect(watcher, &QFutureWatcher<QList<Result>>::resultReadyAt, this, [takeBatches](int) { takeBatches(); });
+    connect(watcher, &QFutureWatcher<QList<Result>>::finished, this, [this, watcher, takeBatches, generation, files]() {
+        takeBatches();
+        watcher->deleteLater();
+        if (generation != m_warmGeneration)
             return;   // the playlist changed meanwhile; its own pass reports
+        m_warmDrain = nullptr;
         m_warmRunning = false;
         m_warmFiles.clear();
+        if (m_metaStoreDirty && !m_metaStoreSaveTimer.isActive())
+            m_metaStoreSaveTimer.start();
         _finish_stats(files);
     });
-    const QFuture<QList<Result>> work = QtConcurrent::run([jobs, cancel]() {
+    const QFuture<QList<Result>> work = QtConcurrent::run([jobs, cancel](QPromise<QList<Result>> &promise) {
         QList<Result> out;
-        out.reserve(jobs.size());
+        out.reserve(kWarmBatch);
         for (const Job &j : jobs) {
             if (cancel->load())
                 break;
@@ -3068,8 +3135,13 @@ void MediaManager::_warm_metadata(const QStringList &files)
                 r.meta = _read_tags(j.filePath, j.baseName);
             }
             out.append(r);
+            if (out.size() >= kWarmBatch) {
+                promise.addResult(out);
+                out.clear();
+            }
         }
-        return out;
+        if (!out.isEmpty())
+            promise.addResult(out);
     });
     _track(QFuture<void>(work));
     watcher->setFuture(work);

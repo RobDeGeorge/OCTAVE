@@ -318,10 +318,15 @@ void OBDConnectionWorker::releasePort()
 void OBDConnectionWorker::doDisconnect()
 {
     if (m_monitoring) {
-        // The port is about to close: nothing to put back in the adapter
+        // The port is about to close, and the adapter keeps its power: it
+        // would go on listening (ATMA), and the first byte of the next
+        // connection, the A of ATZ, would only end that and the reset be
+        // lost. One byte ends it now; ATH1 / ATCAF0 / ATCRA are left to the
+        // next connection's ATZ. Bounded: this also runs while quitting.
         m_monitoring = false;
         m_monitorTimer.stop();
         m_monitorBatch.clear();
+        leaveMonitorMode(300);
         emit busMonitorChanged(false, QString());
     }
     stopPolling();
@@ -329,8 +334,45 @@ void OBDConnectionWorker::doDisconnect()
     m_initialized = false;
 }
 
+// One byte, which is all it takes to end "ATMA", then whatever the adapter
+// says until its prompt or `waitMs`. A space: a carriage return at the
+// prompt would repeat the last command, and a space before a command is
+// ignored. True when the adapter said something (it was listening).
+bool OBDConnectionWorker::leaveMonitorMode(int waitMs)
+{
+    if (!m_io || !m_io->isOpen())
+        return false;
+    m_io->write(QByteArrayLiteral(" "));
+    if (m_serial)
+        m_serial->flush();
+    QElapsedTimer t;
+    t.start();
+    bool heard = false;
+    bool prompt = false;
+    while (!prompt && t.elapsed() < waitMs && m_io && m_io->isOpen()) {
+        if (m_io->bytesAvailable() > 0 || m_io->waitForReadyRead(30)) {
+            const QByteArray bytes = m_io->readAll();
+            heard = heard || !bytes.isEmpty();
+            prompt = bytes.contains('>');
+        } else if (!heard && t.elapsed() >= qMin(waitMs, 120)) {
+            break;   // at its prompt already: a space there is answered by nothing
+        }
+    }
+    if (m_serial)
+        m_serial->clearError();   // the waits' TimeoutError
+    m_responseBuffer.clear();
+    return heard;
+}
+
 bool OBDConnectionWorker::sendInitSequence()
 {
+    // An adapter still listening to the bus from a connection that ended
+    // without saying so (a crash, a power cut to this end only) would take
+    // the first byte of ATZ as "stop" and never reset
+    if (leaveMonitorMode(250)) {
+        qCInfo(lcElm327) << "the adapter was still in monitor mode on" << m_portName;
+        emit logLine(QStringLiteral("The adapter was still listening to the bus; stopped it"));
+    }
     const auto cmds = ELM327Protocol::initCommands();
     int answered = 0;
     QString resetAnswer;
@@ -743,7 +785,11 @@ void OBDConnectionWorker::onMonitorTimer()
     QElapsedTimer wait;
     wait.start();
     QByteArray chunk;
-    if (m_io->waitForReadyRead(50)) {
+    // bytesAvailable() first: this runs from the event loop, where the
+    // port's own notifier may have buffered the bytes already, and
+    // waitForReadyRead() only reports NEW ones (the tail of a message sat
+    // unread until the next message arrived)
+    if (m_io->bytesAvailable() > 0 || m_io->waitForReadyRead(50)) {
         chunk = m_io->readAll();
         // Readable with nothing to read, over and over: a link whose other
         // end went away (see sendCommand())
@@ -761,9 +807,15 @@ void OBDConnectionWorker::onMonitorTimer()
         return;
     } else if (m_serial) {
         const auto err = m_serial->error();
-        if (err == QSerialPort::ResourceError || err == QSerialPort::DeviceNotFoundError ||
-            err == QSerialPort::PermissionError || err == QSerialPort::NotOpenError) {
-            // onSerialError reports the port; monitoring is over either way
+        if (err == QSerialPort::PermissionError || err == QSerialPort::NotOpenError) {
+            // onSerialError reports only the two below: say this one here,
+            // or the worker sat connected, neither polling nor listening,
+            // until the manager's 30 s data watchdog noticed
+            monitorLinkLost(QStringLiteral("Serial port error: %1").arg(m_serial->errorString()));
+            return;
+        }
+        if (err == QSerialPort::ResourceError || err == QSerialPort::DeviceNotFoundError) {
+            // onSerialError has reported the port (connectionLost); monitoring is over
             m_monitoring = false;
             m_monitorTimer.stop();
             flushMonitorBatch();

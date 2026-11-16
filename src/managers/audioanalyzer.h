@@ -96,7 +96,7 @@ public slots:
     void feed_live_pcm(const QByteArray &pcm, int bufferedMs);
 
     // camelCase names for the snake_case methods above (protocol 3 keeps both;
-    // the old names are marked octave.deprecated and go in protocol 4)
+    // the old names are marked octave.deprecated and go in protocol 5)
     void analyzeFile(const QString &filePath) { analyze_file(filePath); }
     void updatePosition(float positionSeconds) { update_position(positionSeconds); }
     void setActive(bool active) { set_active(active); }

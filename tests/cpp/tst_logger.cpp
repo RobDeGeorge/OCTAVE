@@ -10,10 +10,21 @@
 #include <QTest>
 
 #include <csignal>
+#include <cstdio>
 #include <cstring>
 #include <sys/resource.h>
 
 #include "util/logger.h"
+
+// GCC says __SANITIZE_ADDRESS__; Clang answers __has_feature
+#if defined(__has_feature)
+#  if __has_feature(address_sanitizer)
+#    define OCTAVE_CLANG_ASAN 1
+#  endif
+#endif
+#ifndef OCTAVE_CLANG_ASAN
+#  define OCTAVE_CLANG_ASAN 0
+#endif
 
 namespace {
 // Recursion the compiler can neither prove endless nor turn into a loop
@@ -35,6 +46,16 @@ int child(const QByteArray &how)
     OctaveLog::install(false);
     if (how == "overflow")
         return recurse(0);
+    if (how == "rotated") {
+        // Past the error log's 2 MB: it rotates, and the crash must land in
+        // the new file. The lines themselves need not be seen
+        if (!std::freopen("/dev/null", "w", stderr))
+            return 3;
+        const QByteArray filler(200, 'w');
+        for (int i = 0; i < 9000; ++i)
+            qWarning("%s", filler.constData());
+        std::raise(SIGSEGV);
+    }
     if (how == "segv")
         std::raise(SIGSEGV);
     if (how == "direct")
@@ -97,12 +118,23 @@ private slots:
     // handlers had a stack of their own this died with an empty log
     void aStackOverflowOnTheMainThreadIsLoggedToo()
     {
-#if defined(__SANITIZE_ADDRESS__)
+#if defined(__SANITIZE_ADDRESS__) || OCTAVE_CLANG_ASAN
         QSKIP("the address sanitizer takes a stack overflow itself");
 #endif
         const Run r = run("overflow");
         QCOMPARE(r.status, QProcess::CrashExit);
         QVERIFY2(r.errorLog.contains("==== FATAL SIGSEGV"), r.errorLog.constData());
+        QVERIFY(r.errorLog.contains("==== end ===="));
+    }
+
+    // The handler's descriptor follows the error log through a rotation,
+    // under the same number
+    void aCrashAfterARotationIsInTheNewLog()
+    {
+        const Run r = run("rotated");
+        QCOMPARE(r.status, QProcess::CrashExit);
+        QVERIFY2(r.errorLog.size() < 1024 * 1024, "the error log did not rotate");
+        QVERIFY2(r.errorLog.contains("==== FATAL SIGSEGV"), r.errorLog.right(400).constData());
         QVERIFY(r.errorLog.contains("==== end ===="));
     }
 

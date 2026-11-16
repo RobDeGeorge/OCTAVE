@@ -44,6 +44,8 @@ public:
     // Public for tests.
     QByteArray respond(const QByteArray &command);
 
+    void close() override;
+
 protected:
     qint64 readData(char *data, qint64 maxSize) override;
     qint64 writeData(const char *data, qint64 size) override;
@@ -82,6 +84,7 @@ private:
     QByteArray m_receiveFilter;    // ATCRA's, X = any digit; empty for all
     qint64 m_monitorAtMs = 0;      // traffic is generated up to here
     int m_monitorSent = 0;
+    bool m_unreset = false;        // came up listening (LinkSettings::leftMonitoring) and has had no ATZ since
 };
 
 } // namespace OctaveSim
