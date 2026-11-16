@@ -48,7 +48,7 @@ The branch compiles for the browser (2026-11-15, `packaging/wasm/build.sh` with 
 | Pin linuxdeploy and its Qt plugin (today: the moving `continuous` tag, no hash) and wasm-bindgen (piped from curl) by hash | `packaging/linux/build-appimage.sh:138-139`, `.github/workflows/wiki-pages.yml` | S |
 | Make a jar that differs from its source an error once the toolchain difference the warning mentions is understood | `.github/workflows/build.yml` (phone-server job) | M |
 | A sanitizer job and `-DOCTAVE_WERROR=ON` in `cpp-compile-check` (the options exist; CI's GCC is older than the one they were tried with) | `.github/workflows/build.yml`, `CMakeLists.txt` | S |
-| Run the C++ tests on more than Linux x86_64 Debug | `.github/workflows/build.yml` | M |
+| Run the C++ tests on Windows first, then macOS. Do this before the other rows: on 2026-11-15 the VM pass found that no library file had played on Windows since April (a path check against the native separator, `mediamanager.cpp` `_is_safe_path`), which a Windows test run would have caught. Start as a step that may fail without failing the job, and tighten once it is green | `.github/workflows/build.yml` | M |
 
 ## 5. Desktop work that was not reached
 
