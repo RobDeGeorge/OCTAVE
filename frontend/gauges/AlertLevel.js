@@ -16,16 +16,19 @@ function level(v, warnAbove, warnBelow, critAbove, critBelow) {
     return 0
 }
 
-// The default hold margin of a gauge: 1 % of its range, and never less
-// than one step of what it shows (10^-decimals), so a level cannot change
-// on a difference the readout does not even display. `override` (the
-// gauge's alertHysteresis, display unit) wins when it is a number >= 0.
+// The default hold margin of a gauge: 1 % of its range, whatever the range
+// is (0.01 V on a 0 to 1 V oxygen sensor, 80 on an 8000 rpm tachometer).
+// Only a gauge with no usable range falls back to one step of the PID's
+// readout (10^-decimals, `decimals` being the parameter catalog's). It was
+// "at least one whole step of the gauge's own decimals", which is 1 for a
+// gauge that sets none: a lamp on a 0 to 1 V sensor could then never go
+// out. `override` (the gauge's alertHysteresis, display unit) wins when it
+// is a number >= 0.
 function margin(min, max, decimals, override) {
     if (isFinite(override) && override >= 0) return override
+    if (isFinite(min) && isFinite(max) && max > min) return (max - min) * 0.01
     var d = Math.max(0, Math.min(4, isFinite(decimals) ? decimals : 0))
-    var step = Math.pow(10, -d)
-    var range = (isFinite(min) && isFinite(max) && max > min) ? (max - min) * 0.01 : 0
-    return Math.max(step, range)
+    return Math.pow(10, -d)
 }
 
 // level() with a hold: a level is entered at its limit, as above, and left

@@ -193,7 +193,7 @@
             <tr><td>MediaManager</td><td><code>mediamanager.{h,cpp}</code></td><td><code>mediaManager</code></td><td>Local playback (QMediaPlayer), library scan, album art + colours, persistent metadata store</td></tr>
             <tr><td>AudioAnalyzer</td><td><code>audioanalyzer.{h,cpp}</code></td><td><code>audioAnalyzer</code></td><td>96-bar FFT waveform (QAudioDecoder + radix-2 FFT)</td></tr>
             <tr><td>OBDManager (+ ELM327)</td><td><code>obdmanager.h</code>, <code>obdmanager*.cpp</code>, <code>obdconnectionworker.{h,cpp}</code>, <code>elm327protocol.{h,cpp}</code></td><td><code>obdManager</code></td><td>Vehicle diagnostics, standard and extended PID decoding, DTCs; Android BLE via a JNI bridge</td></tr>
-            <tr><td>OBDAdapterFinder</td><td><code>obdadapterfinder.{h,cpp}</code> (+ <code>platform/bluezpairer.{h,cpp}</code>)</td><td><code>obdAdapterFinder</code></td><td>Bluetooth scan, PIN pairing via BlueZ, trust, hand-off to <code>connect_direct()</code> (desktop Linux)</td></tr>
+            <tr><td>OBDAdapterFinder</td><td><code>obdadapterfinder.{h,cpp}</code> (+ <code>platform/bluezpairer.{h,cpp}</code>)</td><td><code>obdAdapterFinder</code></td><td>Bluetooth scan, PIN pairing via BlueZ, trust, hand-off to <code>connectDirect()</code> (desktop Linux)</td></tr>
             <tr><td>ESP32VolumeManager</td><td><code>esp32volumemanager.{h,cpp}</code></td><td><code>esp32VolumeManager</code></td><td>Wireless rotary knob over USB serial (ESP-NOW pair); stub on mobile</td></tr>
             <tr><td>BerryIMUManager</td><td><code>berryimumanager.{h,cpp}</code></td><td><code>berryIMU</code></td><td>Madgwick fusion (accel + gyro, 6DOF; magnetometer for heading only) over I²C; on Android re-implemented with QtSensors (accelerometer, compass, pressure)</td></tr>
             <tr><td>GestureManager</td><td><code>gesturemanager.{h,cpp}</code></td><td><code>gestureSensor</code></td><td>PAJ7620U2 gesture sensor over I²C; stub on mobile</td></tr>
@@ -245,10 +245,10 @@ ctx-&gt;setContextProperty(<span class="str">"mediaManager"</span>, &amp;mediaMa
 
         <pre><code><span class="cmt">// QML</span>
 Button {
-    onClicked: mediaManager.next_track()
+    onClicked: mediaManager.nextTrack()
 }
 Text {
-    text: mediaManager.get_display_name(mediaManager.get_current_file())
+    text: mediaManager.getDisplayName(mediaManager.getCurrentFile())
 }</code></pre>
 
         <p>
@@ -268,7 +268,7 @@ Text {
 Connections {
     target: mediaManager
     <span class="kw">function</span> onCurrentMediaChanged(filename) {
-        albumArt.source = mediaManager.get_album_art(filename)
+        albumArt.source = mediaManager.getAlbumArt(filename)
     }
 }</code></pre>
 
@@ -809,7 +809,7 @@ QObject::connect(&amp;app, &amp;QGuiApplication::aboutToQuit, [&amp;]() {
     obdManager.close();
     networkManager.cleanup();
     mediaManager._save_playback_state();   <span class="cmt">// before the settings flush</span>
-    mediaManager.flush_metadata_store();
+    mediaManager.flushMetadataStore();
     settingsManager.flushPendingSave();
     OctaveLog::flush();                    <span class="cmt">// last: everything the cleanup logged reaches disk</span>
 });</code></pre>
@@ -922,6 +922,8 @@ QObject::connect(&amp;app, &amp;QGuiApplication::aboutToQuit, [&amp;]() {
         </p>
 
         <!-- Related Pages -->
+        <p><strong>Method names:</strong> this page uses the camelCase names of the manager methods (<code>nextTrack</code>). The older snake_case name of each (<code>next_track</code>) still works through protocol&nbsp;4 and goes in protocol&nbsp;5; the <a href="api-reference.html">API reference</a> lists them.</p>
+
         <div class="related-pages">
           <h3>Related Pages</h3>
           <div class="related-links">

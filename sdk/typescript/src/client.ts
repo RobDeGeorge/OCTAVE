@@ -67,6 +67,10 @@ export class OctaveClient {
   private _hello: Hello | null = null
   private nextId = 1
   private pending = new Map<number, Pending>()
+  /** subscribe / stream requests that timed out here and may still be answered:
+   *  request id -> the subscription it was for (null: a stream). The service
+   *  holds whatever a late reply names until this client deals with it. */
+  private late = new Map<number, Subscription | null>()
   private subs = new Set<Subscription>()
   private streams = new Map<number, StreamHandlers>()
   private describeCache = new Map<string, Promise<Description>>()
@@ -198,6 +202,7 @@ export class OctaveClient {
       this.failPending(new OctaveError('connection closed'))
       for (const sub of this.subs) sub.id = 0
       this.issuing.clear()
+      this.late.clear()
       this.streams.clear()
       this.describeCache.clear()
       this.setStatus('offline')
@@ -236,7 +241,7 @@ export class OctaveClient {
       return
     }
     const p = this.pending.get(reply.id as number)
-    if (!p) return
+    if (!p) { this.lateReply(reply); return }
     this.pending.delete(reply.id as number)
     if (p.timer) clearTimeout(p.timer)
     if (p.sub) this.issuing.delete(p.sub)
@@ -277,6 +282,10 @@ export class OctaveClient {
           if (this.pending.get(id) !== p) return
           this.pending.delete(id)
           if (sub) this.issuing.delete(sub)
+          // The service may still answer, and then it is streaming to an id
+          // nobody here knows: lateReply() adopts or ends it
+          if (sub) this.late.set(id, sub)
+          else if (stream) this.late.set(id, null)
           reject(new OctaveError(`${op} was not answered in ${ms} ms`, 'timeout'))
         }, ms)
       }
@@ -297,6 +306,26 @@ export class OctaveClient {
   rows<T = Record<string, Json>>(object: string, property: string, from = 0, count?: number): Promise<T[]> {
     return this.request('rows', { object, property, from, ...(count !== undefined ? { count } : {}) }) as Promise<T[]>
   }
+  /** The reply to a subscribe / stream that had timed out here. A
+   *  subscription the caller still holds, and that nothing has issued again,
+   *  takes the id and works from now on; anything else is ended on the
+   *  service, which would otherwise send its events for the life of the
+   *  connection. */
+  private lateReply(reply: Reply): void {
+    const id = reply.id as number
+    if (!this.late.has(id)) return
+    const sub = this.late.get(id) ?? null
+    this.late.delete(id)
+    if (!reply.ok) return
+    if (sub) {
+      const subId = (reply.result as { sub: number }).sub
+      if (this.subs.has(sub) && sub.id === 0 && !this.issuing.has(sub)) sub.id = subId
+      else this.send0('unsubscribe', { sub: subId }).catch(() => {})
+    } else {
+      this.send0('unstream', { stream: (reply.result as { stream: number }).stream }).catch(() => {})
+    }
+  }
+
   describe(object: string): Promise<Description> {
     let p = this.describeCache.get(object)
     if (!p) {

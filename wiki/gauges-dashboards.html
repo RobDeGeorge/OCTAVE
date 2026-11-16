@@ -242,8 +242,8 @@ berryIMU (8 signals) ─────────┴─> paramStore (C++, 33 ms f
           <code>critAbove</code> / <code>critBelow</code> (level 2, <code>critColor</code> = <code>statusDanger</code>,
           red), inclusive, critical winning; <code>alertLevel</code> is 0 without a reading. At a level the value text and
           the fill take its colour, and <code>alertFlash</code> blinks the value while critical. A level is entered at its
-          limit and left only once the value is back inside it by a hold (<code>alertHysteresis</code>, display unit;
-          default 1&nbsp;% of the range and at least one step of the readout; <code>Alerts.levelHeld()</code>), so a
+          limit and left only once the value is back inside it by a hold (<code>alertHysteresis</code>, display unit on the gauge and the PID's own unit in a spec, where it is converted as a difference;
+          default 1&nbsp;% of the range, whatever the range is; <code>Alerts.levelHeld()</code>; the dashboard's banner computes the same hold), so a
           reading sitting on a limit does not flicker the colour, restart the flash or pop the dashboard's alert banner in
           and out. <code>WarningLight</code> holds its lamp the same way. Circular and Arc draw each
           band as a thin arc on the inner edge of the scale (<code>Alerts.bands()</code>; a warning band stops where a

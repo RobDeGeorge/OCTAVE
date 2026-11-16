@@ -60,6 +60,10 @@ The branch compiles for the browser (2026-11-15, `packaging/wasm/build.sh` with 
 | With headers off, two ECUs waiting for the same sequence digit cannot be told apart (the earlier-opened message takes the first frame). Reading trouble codes with headers on (`ATH1`, reassembly per ECU id) would end the guess; the simulator prints headed multi-frame replies to test it against | `src/managers/elm327protocol.cpp` (`splitMessages`), `obdconnectionworker.cpp` | M |
 | Crash handlers have their own stack on the GUI thread only: a stack overflow on a worker thread still leaves nothing in the log | `src/util/logger.cpp` (`installCrashHandlers`) | S |
 | `networkmanager.cpp` (1,254 lines) and `androidautomanager.cpp` have no test | `tests/cpp/` | M |
+| A loopback HTTP request counts as a browser only when it carries `Origin` or `Sec-Fetch-Site`. A scope-limited web frontend in an engine that sends neither (older WebKit) gets full loopback trust for a same-origin `fetch('/export/...')` and needs no ticket. Found by the 2026-11-15 review; older than the branch | `src/service/commandserver.cpp:419`, `src/service/servicebridge.cpp:279` | M |
+| The UI watchdog can block before it aborts: its earlier warnings go through the message handler, which writes to stderr (stdio lock, blocking `write`) before the timed log lock; a GUI thread stuck in a stderr write to a stalled launcher pipe takes the watchdog with it. Check how the car's launcher wires stderr first | `src/util/uiwatchdog.cpp:127-154`, `src/util/logger.cpp:130` | S–M |
+| The trip database is called damaged only when the schema statements fail: a corrupt page inside `samples` or `trips` opens as healthy and every later insert fails. Run `PRAGMA quick_check` at open (measure it on a large database on the Pi first), and prune old `.damaged-*` copies | `src/managers/tripstore.cpp:283-320` | M |
+| The first scan of a library reads each new file's tags and cover on the GUI thread (`_auto_strip_display_names` → `_strip_single_filename` → `_cache_metadata`; 300 files, 300 reads) | `src/managers/mediamanager.cpp` | M |
 
 ## 6. Refactors, one at a time, after the above
 
@@ -75,7 +79,7 @@ The branch compiles for the browser (2026-11-15, `packaging/wasm/build.sh` with 
 Done 2026-11-15: mediaManager, obdManager, audioAnalyzer, esp32VolumeManager, clock and networkManager have a camelCase method beside each snake_case one, and the 113 old ones are marked deprecated ("goes in protocol 5"). `docs/api/README.md` promises a deprecated member one full protocol version, so they stay through protocol 4.
 
 Left:
-- Move the QML (about 259 call sites), the SDK examples and the templates to the new names. **Effort:** M, desktop.
+- Done 2026-11-15: the QML, the SDK examples, the templates and the wiki pages use the new names (the wiki keeps the old ones only in the "names" notes, in C++ snippets, and where the same word is a gesture action or a dev-tool action).
 - `settingsManager`: done with the table-driven refactor. 85 properties are writable and 121 `save_*` / `get_*` methods are deprecated in their favour; the QML still calls the methods and moves with the sweep above.
 - Deprecate, with the same notice: the per-parameter OBD signals nothing listens to, `settingsLayoutStyle` (its layouts are gone), and announce that a `pair` request with no scope list will get `read`, not `full`.
 - Protocol 5: remove everything deprecated above. **Effort:** M, desktop.

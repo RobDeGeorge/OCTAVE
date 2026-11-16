@@ -84,7 +84,12 @@ function fakeService({ pairing = false } = {}) {
             if (m.object === 'slow') setTimeout(answer, 150); else answer()
             break
           }
-          case 'stream': reply({ stream: 7, codec: 'avc1.42c01e', width: 640, height: 360, format: 'annexb' }); sock.write(frame(2, Buffer.from(buildRecord(7, F_KEY, 1000, Uint8Array.from([1, 2, 3]))))); break
+          case 'stream': {
+            const open = () => { reply({ stream: 7, codec: 'avc1.42c01e', width: 640, height: 360, format: 'annexb' }); sock.write(frame(2, Buffer.from(buildRecord(7, F_KEY, 1000, Uint8Array.from([1, 2, 3]))))) }
+            if (m.object === 'slow') setTimeout(open, 150); else open()
+            break
+          }
+          case 'unstream': reply(true); break
           default: sock.write(frame(1, Buffer.from(JSON.stringify({ id: m.id, ok: false, error: `no op ${m.op}` }))))
         }
       }
@@ -195,6 +200,47 @@ test('a request nothing answers times out; an id-less refusal fails what is wait
   assert.equal(await client.get('volumeController', 'percent'), 32, 'the client still works after a timeout')
   await assert.rejects(client.request('unreadable', {}), (e) => e instanceof OctaveError && /Invalid JSON/.test(e.message))
   await assert.rejects(client.request('limited', {}), (e) => e instanceof OctaveError && e.code === 'rateLimited' && e.retryAfterMs === 25)
+  client.close()
+  await stop()
+})
+
+test('a subscribe or stream answered after its timeout is adopted or ended, never left streaming to nobody', { timeout: 10000 }, async () => {
+  const { port, state, stop } = await fakeService()
+  // 'slow' answers after 150 ms; the client gives up at 50
+  const client = new OctaveClient({ url: `ws://127.0.0.1:${port}/`, requestTimeoutMs: 50 })
+  client.connect()
+  await client.whenOnline(3000)
+
+  // Still held when the late reply comes: it takes the id and its events arrive
+  const kept = [], errors = []
+  const offKept = client.subscribe('slow', { properties: ['percent'] }, (e) => { if (e.event === 'property') kept.push(e.value) }, (e) => errors.push(e.code))
+  await new Promise((r) => setTimeout(r, 400))
+  assert.deepEqual(errors, ['timeout'], 'the caller was told about the timeout')
+  assert.deepEqual(kept, [32], 'and the subscription works once the service answers')
+  assert.equal(state.sends.filter((m) => m.op === 'unsubscribe').length, 0)
+  offKept()
+  await new Promise((r) => setTimeout(r, 50))
+  assert.equal(state.sends.filter((m) => m.op === 'unsubscribe').length, 1, 'and can be ended like any other')
+
+  // Dropped between the timeout and the late reply: ended on the service
+  const dropped = []
+  const offDropped = client.subscribe('slow', { properties: ['percent'] }, (e) => dropped.push(e), () => {})
+  await new Promise((r) => setTimeout(r, 90))
+  offDropped()
+  await new Promise((r) => setTimeout(r, 300))
+  const unsub = state.sends.filter((m) => m.op === 'unsubscribe')
+  assert.equal(unsub.length, 2)
+  assert.equal(unsub[1].sub, state.subs)
+  assert.deepEqual(dropped, [])
+
+  // A stream the caller never got a handle for is closed
+  let records = 0
+  await assert.rejects(client.stream('slow', 'video', { onRecord: () => { records++ } }), (e) => e instanceof OctaveError && e.code === 'timeout')
+  await new Promise((r) => setTimeout(r, 300))
+  const unstream = state.sends.filter((m) => m.op === 'unstream')
+  assert.equal(unstream.length, 1)
+  assert.equal(unstream[0].stream, 7)
+  assert.equal(records, 0)
   client.close()
   await stop()
 })

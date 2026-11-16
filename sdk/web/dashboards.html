@@ -284,10 +284,11 @@ function alertLevel(v, p, param, prev) {
   if (!(prev > now) || typeof v !== "number" || !isFinite(v)) return now;
   const min = isFinite(limit(p.min)) ? limit(p.min) : (param ? param.min : NaN);
   const max = isFinite(limit(p.max)) ? limit(p.max) : (param ? param.max : NaN);
-  const decimals = Math.max(0, Math.min(4, p.decimals !== undefined ? Number(p.decimals) || 0 : 0));
+  // 1 % of the range; one step of the PID's readout only when there is no range
+  const decimals = Math.max(0, Math.min(4, param && isFinite(Number(param.decimals)) ? Number(param.decimals) : 1));
   const own = limit(p.alertHysteresis);
   const hold = isFinite(own) && own >= 0 ? own
-             : Math.max(Math.pow(10, -decimals), isFinite(min) && isFinite(max) && max > min ? (max - min) * 0.01 : 0);
+             : (isFinite(min) && isFinite(max) && max > min ? (max - min) * 0.01 : Math.pow(10, -decimals));
   if (!(hold > 0)) return now;
   return Math.max(now, Math.min(prev, plainLevel(v, wa - hold, wb + hold, ca - hold, cb + hold)));
 }

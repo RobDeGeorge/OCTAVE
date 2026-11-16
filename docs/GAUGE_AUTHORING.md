@@ -113,7 +113,7 @@ same way without the alert properties.
 | `critAbove`, `critBelow` | real | `NaN` | Critical at or past this value; critical wins over warning. |
 | `alertFlash` | bool | `false` | Blink the value (400 ms on, 400 ms off) while critical. |
 | `warnColor`, `critColor` | color | `statusWarning` (amber), `statusDanger` (red) | |
-| `alertHysteresis` | real | `NaN` | The hold, in the display unit: how far back inside a limit the value must come before the level drops. `NaN` = 1 % of `max - min`, and at least one step of the readout (`10^-decimals`); `0` = no hold. |
+| `alertHysteresis` | real | `NaN` | The hold, in the display unit: how far back inside a limit the value must come before the level drops. `NaN` = 1 % of `max - min` (0.01 V on a 0 to 1 V sensor; one step of the PID's readout only for a gauge with no usable range); `0` = no hold. In a dashboard spec the number is in the PID's own unit, like the limits, and is converted as a difference (5 °C holds 9 °F). |
 | `alertLevel` | int (read-only) | | 0 normal, 1 warning, 2 critical; always 0 without a reading. |
 
 A level is entered at its limit and left only once the value is back inside
@@ -123,8 +123,9 @@ reading sitting on a limit changed level on every sample, so the colour
 flickered, the flash restarted and the dashboard's red banner (§5.1,
 `alertBanner`) popped in and out; the banner uses the same hold. Changing a
 limit starts from the plain rule, so an edit shows at once. `WarningLight`
-holds its lamp the same way (`alertHysteresis`, default 1 % of the range and
-at least 1).
+holds its lamp the same way (`alertHysteresis`, default 1 % of the range).
+The banner computes its hold exactly as the gauge does (same range, same
+unit), so the two enter and leave critical at the same reading.
 
 At a warning or critical level the value text and the fill (arc, bar, line,
 lit segments) take that level's colour. Circular and Arc also draw each band
@@ -624,6 +625,9 @@ is needed. `dashboardManager.refresh()` forces an immediate rescan.
   `OBDParameterModel.toDisplay`, and the properties panel shows and stores
   them converted, so `sport.json`'s `critAbove: 105` on coolant means 221 °F
   for a °F user. A new threshold prop in parameter units needs the flag.
+  `alertHysteresis` is in the PID's own unit too, but it is a difference, so
+  `CellProps` converts it with the scale alone
+  (`OBDParameterModel.toDisplayDelta`).
 - **Gate.** `OBDParameterModel` mirrors `obdManager.vehicleSupportedParameters`
   / `vehicleScanComplete` — this session's scan only, cleared on disconnect —
   as `vehicleKnown`, `vehicleSupportedParameters`, `vehicleParameters` (the

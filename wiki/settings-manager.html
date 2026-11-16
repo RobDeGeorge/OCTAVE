@@ -459,7 +459,7 @@ reg[QStringLiteral(<span class="str">"theme_setting"</span>)] = entry(<span clas
             <tr><th>Method</th><th>Description</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>save_obd_parameter_enabled(parameter, enabled)</code></td><td>Slot. Updates the in-memory map immediately and restarts the 800&nbsp;ms debounce timer. Retained for compatibility and <code>enable_all_supported()</code>; the current UI does not use it to select polled parameters.</td></tr>
+            <tr><td><code>save_obd_parameter_enabled(parameter, enabled)</code></td><td>Slot. Updates the in-memory map immediately and restarts the 800&nbsp;ms debounce timer. Retained for compatibility and <code>enableAllSupported()</code>; the current UI does not use it to select polled parameters.</td></tr>
             <tr><td><code>flushObdParameters()</code> (private)</td><td>Timer target. Copies the map into the settings object (one write) and emits <code>obdParametersChanged</code> once. It no longer drives polling: the managers refresh their poll lists from <code>setParameterDemand()</code> and the current vehicle scan.</td></tr>
             <tr><td><code>get_obd_parameter_enabled(parameter, defaultVal = true)</code></td><td>Invokable. Returns the state from memory; an unknown PID is cached with <code>default</code> as a side effect (so the next flush persists it).</td></tr>
             <tr><td><code>save_supported_obd_parameters(list)</code> / <code>get_supported_obd_parameters()</code></td><td>Persist and read the last vehicle-scan result; <code>OBDManager</code> writes it as a historical scan result; live polling uses the new connection’s scan rather than trusting this persisted list. Emits <code>supportedOBDParametersChanged</code>.</td></tr>
@@ -840,6 +840,8 @@ property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span 
             <tr><td><code>fuelTankCapacity</code></td><td>Property and slot exist but nothing reads or writes them (no QML, no OBD manager use)</td></tr>
           </tbody>
         </table>
+
+        <p><strong>Method names:</strong> this page uses the camelCase names of the manager methods (<code>nextTrack</code>). The older snake_case name of each (<code>next_track</code>) still works through protocol&nbsp;4 and goes in protocol&nbsp;5; the <a href="api-reference.html">API reference</a> lists them.</p>
 
         <!-- Related Pages -->
         <div class="related-pages" id="related">

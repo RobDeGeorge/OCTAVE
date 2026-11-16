@@ -43,7 +43,7 @@ Item {
     property real triggerBelow: NaN
     // Once lit, the light stays lit until the value is back inside the
     // threshold by this much (display unit), so a reading hovering at the
-    // threshold does not blink it. NaN = 1 % of the range, at least 1.
+    // threshold does not blink it. NaN = 1 % of the range.
     property real alertHysteresis: NaN
     property var _memo: ({ "level": 0, "key": "" })   // see ValueGaugeBase._alertMemo
 
@@ -64,7 +64,7 @@ Item {
     // ── Computed ────────────────────────────────────────────────────
     readonly property bool _active:
         Alerts.track(_memo, value, NaN, NaN, triggerAbove, triggerBelow,
-                     Alerts.margin(min, max, 0, alertHysteresis)) === 2
+                     Alerts.margin(min, max, App.OBDParameterModel.decimalsFor(paramId), alertHysteresis)) === 2
 
     // ── Light ───────────────────────────────────────────────────────
     Rectangle {

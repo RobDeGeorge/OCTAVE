@@ -41,10 +41,11 @@ Item {
     property color warnColor: App.Style.statusWarning
     property color critColor: App.Style.statusDanger
     // How far back inside a limit the value must come before the level
-    // drops (display unit). NaN = 1 % of the range, at least one step of
-    // the readout; 0 = no hold.
+    // drops (display unit). NaN = 1 % of the range (one step of the PID's
+    // readout for a gauge with no range); 0 = no hold.
     property real alertHysteresis: NaN
-    readonly property real _alertMargin: Alerts.margin(min, max, decimals, alertHysteresis)
+    readonly property real _alertMargin:
+        Alerts.margin(min, max, App.OBDParameterModel.decimalsFor(paramId), alertHysteresis)
     // The level shown last, for the hold. A plain object written inside the
     // alertLevel binding: it does not notify, so there is no binding loop.
     property var _alertMemo: ({ "level": 0, "key": "" })

@@ -224,7 +224,13 @@ m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>
           not arrived as "Unknown Album" / "Unknown Artist": neither opens a file on the GUI thread, so a view
           should listen to the three signals and sort again when they come (<span class="file-path">MediaPlayer.qml</span>
           does). A playlist change or a rescan abandons the pass under way. On mobile builds without TagLib the tags
-          come from the platform and are still read in place.
+          come from the platform and are still read in place. The pass delivers in batches of 50 tracks, each merged
+          into the map and the tag store as it arrives; the store is written about 2 s after the first batch, every 30 s
+          while the pass runs, at its end and when the manager is destroyed, so a library too big to read within one drive
+          resumes where it stopped. While the pass is reading a playlist the per-row getters (<code>getBand()</code>,
+          <code>getAlbum()</code>, <code>getFormattedDuration()</code>) return placeholders for tracks not yet read and
+          open no file; <span class="file-path">MediaPlayer.qml</span> re-reads its visible rows once a second until
+          <code>totalDurationChanged</code> arrives.
         </p>
         <p>
           Behind it sits the <strong>persistent tag store</strong> <code>&lt;app data&gt;/metadata_cache.json</code>

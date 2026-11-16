@@ -66,6 +66,12 @@ func Int(v int) *int { return &v }
 // ErrClosed is returned once the connection is gone.
 var ErrClosed = errors.New("octave: connection closed")
 
+// ErrTimeout is wrapped by the error of a request the service did not answer
+// within the client's timeout (errors.Is). The connection is still open, and
+// the service may have carried the request out all the same: a pair that
+// times out can have used up its code.
+var ErrTimeout = errors.New("no reply in time")
+
 // Event is a message with an `event` key, as the server sent it. Kind is the
 // event name (EventProperty, ...); Decode fills the matching generated
 // struct (PropertyEvent, ParamsEvent, ModelEvent, SignalEvent, ...).
@@ -306,7 +312,7 @@ func (c *Client) RequestContext(ctx context.Context, op string, args any, out an
 		return ctx.Err()
 	case <-timer.C:
 		forget()
-		return fmt.Errorf("octave: %s: no reply within %s", op, c.timeout)
+		return fmt.Errorf("octave: %s: no reply within %s: %w", op, c.timeout, ErrTimeout)
 	}
 }
 

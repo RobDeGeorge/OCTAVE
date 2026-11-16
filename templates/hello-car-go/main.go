@@ -171,6 +171,13 @@ func connectWith(addr, tokenFile string, stdin io.Reader, out io.Writer) (*octav
 		}
 		tok, err := c.Pair(code, name, "media") // play / pause only; readings are always allowed
 		var refused *octave.Error
+		if errors.Is(err, octave.ErrTimeout) {
+			// The link is up and OCTAVE was slow. It may have paired all the same,
+			// and the code is spent either way: dialling again to pair with it
+			// would be refused and would hide what happened
+			c.Close()
+			return nil, fmt.Errorf("%w; if %q now shows under Settings > Service on OCTAVE, remove it there, then run this again with a new code", err, name)
+		}
 		if err != nil && !errors.As(err, &refused) {
 			// Not a refusal: the connection is gone. OCTAVE closes one that has not
 			// paired after a minute without a word from it, and fetching the code can

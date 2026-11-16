@@ -141,7 +141,7 @@ Item {
             var above = _limit(p.critAbove), below = _limit(p.critBelow)
             if (!isFinite(above) && !isFinite(below)) continue
             out.push({ "paramId": c.paramId, "critAbove": above, "critBelow": below, "title": p.title || "",
-                       "decimals": p.decimals, "min": _limit(p.min), "max": _limit(p.max),
+                       "min": _limit(p.min), "max": _limit(p.max),
                        "hold": _limit(p.alertHysteresis) })
         }
         return out
@@ -160,22 +160,26 @@ Item {
         for (var i = 0; i < _alertCells.length; i++) {
             var a = _alertCells[i]
             if (seen[a.paramId]) continue
-            var v = App.OBDParameterModel.rawValue(a.paramId)
+            var raw = App.OBDParameterModel.rawValue(a.paramId)
             var memo = _alertMemo[a.paramId] || (_alertMemo[a.paramId] = { "level": 0, "key": "" })
-            if (typeof v !== "number") { memo.level = 0; continue }
-            // Limits and value are in the PID's own unit here, so is the hold
-            var pidInfo = App.OBDParameterModel.nativeInfo(a.paramId)
-            var hold = AlertLevel.margin(isFinite(a.min) ? a.min : (pidInfo ? pidInfo.min : NaN),
-                                         isFinite(a.max) ? a.max : (pidInfo ? pidInfo.max : NaN),
-                                         a.decimals !== undefined ? Number(a.decimals)
-                                                                  : App.OBDParameterModel.decimalsFor(a.paramId),
-                                         a.hold)
-            if (AlertLevel.track(memo, v, NaN, NaN, a.critAbove, a.critBelow, hold) !== 2) continue
+            if (typeof raw !== "number") { memo.level = 0; continue }
+            // Exactly what the cell's gauge does (ValueGaugeBase): the spec's
+            // limits, range and hold are in the PID's own unit and reach the
+            // gauge in the display unit (CellProps), where it compares, so
+            // the strip and the gauge enter and leave critical together
+            var m = App.OBDParameterModel
+            var shownInfo = m.displayInfo(a.paramId)
+            var v = m.toDisplay(a.paramId, raw)
+            var hold = AlertLevel.margin(isFinite(a.min) ? m.toDisplay(a.paramId, a.min) : (shownInfo ? shownInfo.min : NaN),
+                                         isFinite(a.max) ? m.toDisplay(a.paramId, a.max) : (shownInfo ? shownInfo.max : NaN),
+                                         m.decimalsFor(a.paramId),
+                                         m.toDisplayDelta(a.paramId, a.hold))
+            if (AlertLevel.track(memo, v, NaN, NaN, m.toDisplay(a.paramId, a.critAbove),
+                                 m.toDisplay(a.paramId, a.critBelow), hold) !== 2) continue
             seen[a.paramId] = true
             var info = App.OBDParameterModel.getParamInfo(a.paramId)
-            var shown = App.OBDParameterModel.toDisplay(a.paramId, v)
             out.push({ "paramId": a.paramId,
-                       "text": (a.title || info.title) + " " + Number(shown).toFixed(App.OBDParameterModel.decimalsFor(a.paramId))
+                       "text": (a.title || info.title) + " " + Number(v).toFixed(App.OBDParameterModel.decimalsFor(a.paramId))
                                + (info.unit ? " " + info.unit : "") })
         }
         return out

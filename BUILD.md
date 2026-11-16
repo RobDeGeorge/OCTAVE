@@ -34,6 +34,12 @@ config, plus the dev overlay) and `--profile` (perf monitor + command server on 
 for the MCP / screenshot / perf tooling) and links Qt Test. The simulated car itself (`--sim`,
 `src/sim/`) is in every build. See `wiki/development.html`.
 
+OCTAVE's own targets (not `third_party/`) compile with `-Wall -Wextra -Wshadow -Wnon-virtual-dtor`.
+Two options go further, both off by default: `-DOCTAVE_WERROR=ON` turns those warnings into
+errors, and `-DOCTAVE_SANITIZE=address,undefined` (any `-fsanitize=` list; GCC and Clang, not
+the browser build) builds the app and its tests with sanitizers. Use a separate build directory
+for a sanitizer build and run it from the repository, as the app finds `frontend/` beside it.
+
 ---
 
 ## Desktop builds (Linux / macOS / Windows)

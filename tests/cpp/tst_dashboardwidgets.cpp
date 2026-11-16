@@ -198,6 +198,68 @@ private slots:
         QTRY_COMPARE(root->property("_alertOpacity").toDouble(), 1.0);
     }
 
+    // The hold: a level is left once the value is back inside its limit by
+    // 1 % of the gauge's range, whatever that range is. It was "at least one
+    // whole unit" for a gauge that sets no decimals, so a lamp on a 0 to 1 V
+    // sensor never went out again.
+    void alertHoldScalesWithTheRange()
+    {
+        // A lamp on an oxygen sensor (0 to 1 V): the hold is 0.01 V
+        QVERIFY(load("gauges/WarningLight.qml"));
+        root->setProperty("paramId", "O2_B1S1");
+        root->setProperty("triggerAbove", 0.8);
+        root->setProperty("value", 0.5);
+        QVERIFY(!root->property("_active").toBool());
+        root->setProperty("value", 0.8);
+        QVERIFY(root->property("_active").toBool());
+        root->setProperty("value", 0.795);   // back under the limit, inside the hold
+        QVERIFY(root->property("_active").toBool());
+        root->setProperty("value", 0.78);    // under 0.8 - 0.01
+        QVERIFY(!root->property("_active").toBool());
+
+        // A readout of the system voltage (10 to 15 V): the hold is 0.05 V
+        QVERIFY(load("gauges/DigitalReadout.qml"));
+        root->setProperty("paramId", "CONTROL_MODULE_VOLTAGE");
+        root->setProperty("critBelow", 11.5);
+        root->setProperty("value", 12.0);
+        QCOMPARE(root->property("alertLevel").toInt(), 0);
+        root->setProperty("value", 11.4);
+        QCOMPARE(root->property("alertLevel").toInt(), 2);
+        root->setProperty("value", 11.53);   // over the limit, inside the hold
+        QCOMPARE(root->property("alertLevel").toInt(), 2);
+        root->setProperty("value", 11.6);    // over 11.5 + 0.05
+        QCOMPARE(root->property("alertLevel").toInt(), 0);
+        // alertHysteresis still wins, and 0 turns the hold off
+        root->setProperty("alertHysteresis", 0.0);
+        root->setProperty("value", 11.4);
+        QCOMPARE(root->property("alertLevel").toInt(), 2);
+        root->setProperty("value", 11.51);
+        QCOMPARE(root->property("alertLevel").toInt(), 0);
+
+        // The dashboard's red strip and the gauge it names leave critical at
+        // the same reading
+        QVERIFY(load("dashboards/DashboardRenderer.qml"));
+        const QVariantList cells{QVariantMap{{"type", "SegmentedGauge"}, {"paramId", "CONTROL_MODULE_VOLTAGE"},
+            {"col", 0}, {"row", 0}, {"colSpan", 6}, {"rowSpan", 2}, {"props", QVariantMap{{"critBelow", 11.5}}}}};
+        root->setProperty("spec", QVariantMap{{"schema", 1}, {"cells", cells}});
+        auto *item = qobject_cast<QQuickItem *>(root.get());
+        QVERIFY(item);
+        QTRY_VERIFY(findVisual(item, "segmentedValue"));
+        auto *gauge = findVisual(item, "segmentedValue")->parentItem()->parentItem();
+        const auto strip = [this] { return root->property("activeAlerts").toList().size(); };
+        store->ingest("CONTROL_MODULE_VOLTAGE", 11.4f);
+        QTRY_COMPARE(gauge->property("alertLevel").toInt(), 2);
+        QTRY_COMPARE(strip(), 1);
+        store->ingest("CONTROL_MODULE_VOLTAGE", 11.53f);
+        QTRY_VERIFY(qAbs(gauge->property("value").toDouble() - 11.53) < 1e-3);
+        QCOMPARE(gauge->property("alertLevel").toInt(), 2);
+        QCOMPARE(strip(), 1);
+        store->ingest("CONTROL_MODULE_VOLTAGE", 11.6f);
+        QTRY_VERIFY(qAbs(gauge->property("value").toDouble() - 11.6) < 1e-3);
+        QCOMPARE(gauge->property("alertLevel").toInt(), 0);
+        QCOMPARE(strip(), 0);
+    }
+
     void missingIsNotZero()
     {
         QFETCH(QString, file);

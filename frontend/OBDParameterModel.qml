@@ -124,6 +124,12 @@ QtObject {
         var c = _conversion[paramId];
         return (c && typeof v === "number") ? v * c[0] + c[1] : v;
     }
+    // A difference (a tolerance, a hold margin) of paramId from its own unit
+    // to the gauges': the scale without the offset, so 5 °C is 9 °F
+    function toDisplayDelta(paramId, d) {
+        var c = _conversion[paramId];
+        return (c && typeof d === "number") ? d * Math.abs(c[0]) : d;
+    }
     function fromDisplay(paramId, v) {
         var c = _conversion[paramId];
         return (c && typeof v === "number") ? Math.round((v - c[1]) / c[0] * 1e6) / 1e6 : v;

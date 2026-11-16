@@ -27,6 +27,11 @@ function unitBinding(model, paramId, v) {
     return Qt.binding(function() { return model.toDisplay(paramId, v) })
 }
 
+// A hold margin is a difference in the PID's own unit: the scale only
+function deltaBinding(model, paramId, v) {
+    return Qt.binding(function() { return model.toDisplayDelta(paramId, v) })
+}
+
 // item: the loaded widget; props: the cell's `props` object;
 // catalog: App.WidgetCatalog; model: App.OBDParameterModel;
 // who: the caller's name, for the log
@@ -50,6 +55,8 @@ function apply(item, typeName, paramId, props, catalog, model, who) {
             var v = coerce(props[key])
             if (unitKeys.indexOf(key) !== -1)
                 item[key] = unitBinding(model, paramId, v)
+            else if (key === "alertHysteresis" && paramId && typeof v === "number")
+                item[key] = deltaBinding(model, paramId, v)
             else
                 item[key] = v
         } catch (e) {

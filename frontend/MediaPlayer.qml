@@ -385,6 +385,23 @@ Item {
         repeat: false
         onTriggered: {
             playlistRefreshCounter++  // Force delegates to re-evaluate albumArtSource
+            tagRefreshTimer.ticksLeft = 30
+            tagRefreshTimer.restart()
+        }
+    }
+
+    // The tags of a playlist are read in the background and the rows show
+    // placeholders meanwhile: re-evaluate the rows on screen once a second
+    // until the pass reports (onTotalDurationChanged), half a minute at most
+    Timer {
+        id: tagRefreshTimer
+        property int ticksLeft: 0
+        interval: 1000
+        repeat: true
+        onTriggered: {
+            playlistRefreshCounter++
+            if (--ticksLeft <= 0)
+                stop()
         }
     }
 
@@ -1811,6 +1828,8 @@ Item {
         // Statistics updates
         function onTotalDurationChanged(duration) {
             totalDurationText.text = duration
+            tagRefreshTimer.stop()
+            playlistRefreshCounter++   // the rows read their tags again
             // The tags of this playlist are in (they are read in the
             // background): an album / artist order made before that was
             // sorted on "Unknown ..." for the tracks still to come
