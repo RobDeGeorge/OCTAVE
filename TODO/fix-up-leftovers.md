@@ -64,6 +64,8 @@ The branch compiles for the browser (2026-11-15, `packaging/wasm/build.sh` with 
 | The UI watchdog can block before it aborts: its earlier warnings go through the message handler, which writes to stderr (stdio lock, blocking `write`) before the timed log lock; a GUI thread stuck in a stderr write to a stalled launcher pipe takes the watchdog with it. Check how the car's launcher wires stderr first | `src/util/uiwatchdog.cpp:127-154`, `src/util/logger.cpp:130` | S–M |
 | The trip database is called damaged only when the schema statements fail: a corrupt page inside `samples` or `trips` opens as healthy and every later insert fails. Run `PRAGMA quick_check` at open (measure it on a large database on the Pi first), and prune old `.damaged-*` copies | `src/managers/tripstore.cpp:283-320` | M |
 | The first scan of a library reads each new file's tags and cover on the GUI thread (`_auto_strip_display_names` → `_strip_single_filename` → `_cache_metadata`; 300 files, 300 reads) | `src/managers/mediamanager.cpp` | M |
+| On Windows the media manager builds paths with the native separator onto a Qt path (`C:/Users/x/Music\\Playlist\\song.mp3` in the log). Harmless since the library check was fixed; join with `/` and check on the Windows VM | `src/managers/mediamanager.cpp` (`_get_file_path` and the other `QDir::separator()` joins) | S |
+| At exit the gesture, IMU and ESP32 managers log "cleaning up..." twice about a second apart (`AppCore::shutdown()` and then their destructors): make the second a no-op | `src/appcore.cpp`, the three managers | S |
 
 ## 6. Refactors, one at a time, after the above
 
