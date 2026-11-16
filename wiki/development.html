@@ -362,6 +362,19 @@ build/octave --dev --profile           <span class="cmt"># simulator; drop --dev
 
         <h3>Test suite (QtTest, ctest)</h3>
         <p><span class="file-path">tests/cpp/</span> is the test suite. It is built when <code>OCTAVE_BUILD_TESTS</code> is on (the default for <code>-DCMAKE_BUILD_TYPE=Debug</code> desktop builds) and runs headless on the offscreen platform:</p>
+        <p>
+          <strong>Test against the release Qt.</strong> Releases and CI build with Qt 6.7.3. When the Qt on your machine
+          is newer, a change can pass every local check and still fail there: on 2026-11-15 a QML variable named
+          <code>native</code>, a reserved word to the 6.7 parser only, kept every dashboard from loading. Before a push
+          that matters, lint the QML with a 6.7 <code>qmllint</code>
+          (<code>~/Qt/6.7.3/gcc_64/bin/qmllint -I frontend &lt;files&gt;</code>) or build and run the suite against the
+          6.7.3 kit, with the modules CI installs (<code>qtmultimedia qtserialport qtconnectivity qt5compat qtquick3d
+          qtshadertools qtquicktimeline qtwebview</code>):
+        </p>
+        <pre><code>Q=~/Qt/6.7.3/gcc_64
+cmake -S . -B build-qt673 -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH=$Q
+cmake --build build-qt673 -j8
+LD_LIBRARY_PATH=$Q/lib QT_PLUGIN_PATH=$Q/plugins QML2_IMPORT_PATH=$Q/qml ctest --test-dir build-qt673</code></pre>
         <pre><code>cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build -j
 ctest --test-dir build --output-on-failure        <span class="cmt"># or run one: build/tests/cpp/tst_obdsim</span></code></pre>
