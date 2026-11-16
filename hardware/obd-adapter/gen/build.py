@@ -120,6 +120,10 @@ def pcb():
         r = fps[ref].Reference()
         r.SetPosition(pcbnew.VECTOR2I(pcbnew.FromMM(x), pcbnew.FromMM(y)))
         r.SetTextAngleDegrees(angle)
+    # what things are: names on the front where there is room, the map of the circuits on the back
+    import silk
+    if silk.check(board, fps, *silk.apply(board, fps, d, REV)):
+        print("silk: move those in gen/silk.py")
     import mklib
     yc = layout.PLUG[1]
     pcbgen.outline(board, layout.X0, 0, layout.W, layout.H,

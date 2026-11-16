@@ -195,6 +195,9 @@ The $20 ELM327 clones work, and they are the slow part of the system: every read
   <img src="frontend/assets/readme/obd_adapter_plug.png" alt="The small J1962 plug board that goes into the car's socket" width="38%">
 </p>
 
+<p align="center"><img src="frontend/assets/readme/obd_adapter_back.png" alt="The back of the adapter board: a silkscreen map of the circuits on the other side, the signal of every plug pin, a small wizard and a line of Gandalf's" width="760"></p>
+<p align="center"><sub>The parts side names each circuit; the back is a map of it, with every pin's signal. And a wizard, who arrives precisely when he means to.</sub></p>
+
 > **Where it stands:** Rev 0 is a bring-up board for the bench and the Jeep, not the final dongle. It is designed and routed, the fab files are generated, and bring-up firmware is started (it builds and passes its host tests; it has never run on hardware). **Nobody else has reviewed the board, and it has not been ordered or built.** Read it, learn from it, tell me what is wrong with it, but do not send it to a fab yet. Plan and background: [`TODO/diy-obd-adapter.md`](TODO/diy-obd-adapter.md). Nothing in OCTAVE depends on it: the ELM327 adapters above keep working.
 
 ---

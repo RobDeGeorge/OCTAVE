@@ -1,31 +1,11 @@
 ** Drc report for obd-adapter.kicad_pcb **
-** Created on 2026-11-10T21:29:41 **
+** Created on 2026-11-16T11:40:13 **
 ** Report includes: Errors, Warnings, Exclusions **
 
-** Found 8 DRC violations **
-[silk_overlap]: Silkscreen clearance
-    Rule: board setup constraints silk; warning
-    @(19.7500 mm, 54.3236 mm): Reference field of R54
-    @(17.5729 mm, 53.7350 mm): Segment of R54 on F.Silkscreen
-[silk_overlap]: Silkscreen clearance
-    Rule: board setup constraints silk; warning
-    @(82.0000 mm, 58.3136 mm): Reference field of C45
-    @(81.8594 mm, 57.7250 mm): Segment of C45 on F.Silkscreen
-[silk_overlap]: Silkscreen clearance
-    Rule: board setup constraints silk; warning
-    @(95.8594 mm, 58.0450 mm): Segment of C44 on F.Silkscreen
-    @(96.0000 mm, 58.6336 mm): Reference field of C44
+** Found 5 DRC violations **
 [lib_footprint_mismatch]: Footprint 'ESP32-WROOM-32E' does not match copy in library 'RF_Module'
     Local override; warning
     @(93.4400 mm, 35.0000 mm): Footprint U4
-[silk_edge_clearance]: Silkscreen clipped by board edge
-    Rule: board setup constraints silk; warning
-    @(100.0000 mm, 70.0000 mm): Segment on Edge.Cuts
-    @(89.3000 mm, 68.6500 mm): Segment of J7 on F.Silkscreen
-[silk_edge_clearance]: Silkscreen clipped by board edge
-    Rule: board setup constraints silk; warning
-    @(100.0000 mm, 70.0000 mm): Segment on Edge.Cuts
-    @(98.7000 mm, 68.6500 mm): Segment of J7 on F.Silkscreen
 [silk_edge_clearance]: Silkscreen clipped by board edge
     Rule: board setup constraints silk; warning
     @(0.0000 mm, 0.0000 mm): Segment on Edge.Cuts
@@ -34,6 +14,14 @@
     Rule: board setup constraints silk; warning
     @(0.0000 mm, 0.0000 mm): Segment on Edge.Cuts
     @(98.7000 mm, 1.3500 mm): Segment of J2 on F.Silkscreen
+[silk_edge_clearance]: Silkscreen clipped by board edge
+    Rule: board setup constraints silk; warning
+    @(100.0000 mm, 70.0000 mm): Segment on Edge.Cuts
+    @(89.3000 mm, 68.6500 mm): Segment of J7 on F.Silkscreen
+[silk_edge_clearance]: Silkscreen clipped by board edge
+    Rule: board setup constraints silk; warning
+    @(100.0000 mm, 70.0000 mm): Segment on Edge.Cuts
+    @(98.7000 mm, 68.6500 mm): Segment of J7 on F.Silkscreen
 
 ** Found 0 unconnected pads **
 
