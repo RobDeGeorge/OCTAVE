@@ -1,8 +1,16 @@
 name: Build OCTAVE
 
 on:
-  # Manual trigger from GitHub UI
+  # Manual trigger (GitHub UI, or `gh workflow run build.yml --ref <branch> -f platforms=windows+linux`).
+  # `platforms` picks which installers to build after lint + tests: a check of
+  # one fix on the test VMs does not need all five.
   workflow_dispatch:
+    inputs:
+      platforms:
+        description: Which platform builds to run
+        type: choice
+        default: all
+        options: [all, windows+linux, windows, linux, linux-arm64, macos, android]
 
   # Lint + C++ build and tests on every push and PR to main
   push:
@@ -244,7 +252,7 @@ jobs:
 
   cpp-build-windows:
     needs: [lint, cpp-compile-check]
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && contains(fromJSON('["all","windows+linux","windows"]'), inputs.platforms))
     runs-on: windows-latest
     steps:
       - name: Checkout code
@@ -428,7 +436,7 @@ jobs:
 
   cpp-build-macos:
     needs: [lint, cpp-compile-check]
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && contains(fromJSON('["all","macos"]'), inputs.platforms))
     # macos-15: GitHub retired the macos-14 image on 2026-11-02. Qt 6.7.3's
     # OpenGL support links the AGL framework, which newer SDKs lack ("ld:
     # framework 'AGL' not found"); cmake/FindWrapOpenGL.cmake leaves it out,
@@ -516,7 +524,7 @@ jobs:
 
   cpp-build-linux:
     needs: [lint, cpp-compile-check]
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && contains(fromJSON('["all","windows+linux","linux"]'), inputs.platforms))
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
@@ -585,7 +593,7 @@ jobs:
   # ---------------------------------------------------------------------------
   cpp-build-linux-arm64:
     needs: [lint, cpp-compile-check]
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && contains(fromJSON('["all","linux-arm64"]'), inputs.platforms))
     runs-on: ubuntu-22.04-arm
     steps:
       - name: Checkout code
@@ -656,7 +664,7 @@ jobs:
 
   cpp-build-android:
     needs: [lint, cpp-compile-check]
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && contains(fromJSON('["all","android"]'), inputs.platforms))
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout code

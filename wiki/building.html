@@ -206,7 +206,7 @@ bash packaging/linux/build-appimage.sh
         <h3>Triggers</h3>
         <ul>
           <li><strong>Every push / PR to <code>main</code>:</strong> <code>lint</code>, <code>cpp-compile-check</code> and <code>phone-server</code> (independent of each other)</li>
-          <li><strong>Version tags <code>v*</code> or manual <code>workflow_dispatch</code>:</strong> the five <code>cpp-build-*</code> jobs, each gated on <code>lint</code> and <code>cpp-compile-check</code> (so a failing ctest blocks a release); the desktop ones smoke-test their packaged artifact with <code>--headless --sim --smoke</code> before uploading it</li>
+          <li><strong>Version tags <code>v*</code> or manual <code>workflow_dispatch</code>:</strong> the five <code>cpp-build-*</code> jobs, each gated on <code>lint</code> and <code>cpp-compile-check</code> (so a failing ctest blocks a release); the desktop ones smoke-test their packaged artifact with <code>--headless --sim --smoke</code> before uploading it A manual run takes a <code>platforms</code> choice (<code>all</code>, <code>windows+linux</code>, or one platform), so a check of one fix on the test machines builds only the installers it needs: <code>gh workflow run build.yml --ref &lt;branch&gt; -f platforms=windows+linux</code>.</li>
           <li><strong>Version tags only:</strong> <code>release</code>, which needs all five build jobs</li>
         </ul>
 
