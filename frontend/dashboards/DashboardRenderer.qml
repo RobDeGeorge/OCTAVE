@@ -164,9 +164,9 @@ Item {
             var memo = _alertMemo[a.paramId] || (_alertMemo[a.paramId] = { "level": 0, "key": "" })
             if (typeof v !== "number") { memo.level = 0; continue }
             // Limits and value are in the PID's own unit here, so is the hold
-            var native = App.OBDParameterModel.nativeInfo(a.paramId)
-            var hold = AlertLevel.margin(isFinite(a.min) ? a.min : (native ? native.min : NaN),
-                                         isFinite(a.max) ? a.max : (native ? native.max : NaN),
+            var pidInfo = App.OBDParameterModel.nativeInfo(a.paramId)
+            var hold = AlertLevel.margin(isFinite(a.min) ? a.min : (pidInfo ? pidInfo.min : NaN),
+                                         isFinite(a.max) ? a.max : (pidInfo ? pidInfo.max : NaN),
                                          a.decimals !== undefined ? Number(a.decimals)
                                                                   : App.OBDParameterModel.decimalsFor(a.paramId),
                                          a.hold)

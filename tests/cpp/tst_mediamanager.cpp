@@ -373,8 +373,9 @@ private:
         QString file, title, artist, album;
     };
 
-    // One second of silence as a WAV, with title / artist / album in a RIFF
-    // INFO chunk (what TagLib reads from a .wav)
+    // One second of silence as a WAV, with title / artist / album in an
+    // ID3v2.4 chunk. Not a RIFF INFO chunk: TagLib 1.x (Ubuntu 22.04, the
+    // release builds) reads only ID3v2 from a .wav through FileRef
     static QByteArray wav(const Song &song)
     {
         auto le32 = [](quint32 v) { QByteArray b(4, '\0'); qToLittleEndian(v, b.data()); return b; };
@@ -385,12 +386,22 @@ private:
                 c += '\0';
             return c;
         };
-        auto text = [&chunk](const char *id, const QString &value) { return chunk(id, value.toUtf8() + '\0'); };
+        // ID3v2 sizes are "syncsafe": four bytes of seven bits each
+        auto syncsafe = [](quint32 v) {
+            QByteArray b(4, '\0');
+            for (int i = 3; i >= 0; --i, v >>= 7)
+                b[i] = char(v & 0x7f);
+            return b;
+        };
+        auto frame = [&syncsafe](const char *id, const QString &value) {
+            const QByteArray data = QByteArray(1, '\x03') + value.toUtf8();   // 3 = UTF-8
+            return QByteArray(id, 4) + syncsafe(quint32(data.size())) + QByteArray(2, '\0') + data;
+        };
+        const QByteArray frames = frame("TIT2", song.title) + frame("TPE1", song.artist) + frame("TALB", song.album);
+        const QByteArray id3 = QByteArray("ID3\x04\x00\x00", 6) + syncsafe(quint32(frames.size())) + frames;
         const QByteArray fmt = le16(1) + le16(1) + le32(8000) + le32(8000) + le16(1) + le16(8);
-        const QByteArray info = QByteArray("INFO") + text("INAM", song.title) + text("IART", song.artist)
-                                + text("IPRD", song.album);
         const QByteArray body = QByteArray("WAVE") + chunk("fmt ", fmt) + chunk("data", QByteArray(8000, '\x80'))
-                                + chunk("LIST", info);
+                                + chunk("id3 ", id3);
         return QByteArray("RIFF") + le32(quint32(body.size())) + body;
     }
 
