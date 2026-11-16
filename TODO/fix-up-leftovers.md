@@ -54,7 +54,7 @@ The branch compiles for the browser (2026-11-15, `packaging/wasm/build.sh` with 
 
 | Item | Where | Effort |
 |---|---|---|
-| Shutdown is serial on the GUI thread (30 s seen in the log); managers die while QML is alive (TypeErrors at exit) | `src/appcore.cpp:437-457`, `src/main.cpp:796, 836` | M |
+| Shutdown is serial on the GUI thread (30 s seen in the log) | `src/appcore.cpp:437-457`, `src/main.cpp:796, 836` | M |
 | The diagnostics export copies its files on the GUI thread | `src/managers/diagnosticsmanager.cpp:54, 100-125` | S |
 | The simulator: the throttle control is overwritten by the model and the autopilot (a gear chosen by hand stays since 2026-11-15) | `src/sim/carsim.cpp:72-77`, `demodrive.cpp` | S |
 | With headers off, two ECUs waiting for the same sequence digit cannot be told apart (the earlier-opened message takes the first frame). Reading trouble codes with headers on (`ATH1`, reassembly per ECU id) would end the guess; the simulator prints headed multi-frame replies to test it against | `src/managers/elm327protocol.cpp` (`splitMessages`), `obdconnectionworker.cpp` | M |

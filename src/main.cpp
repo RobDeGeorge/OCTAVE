@@ -797,7 +797,12 @@ int main(int argc, char *argv[])
     // Outlives the engine: bindings that format times still run while it
     // tears down (declared after it, it went first and they read null)
     Units units;
-    QQmlApplicationEngine engine;
+    // On the heap so that it can go before the managers (engineOwner.reset()
+    // after exec()): as a local it outlived `core`, declared below, and every
+    // binding on a manager re-ran against null on the way out (a TypeError
+    // per binding in the error log at each exit)
+    auto engineOwner = std::make_unique<QQmlApplicationEngine>();
+    QQmlApplicationEngine &engine = *engineOwner;
 
     // ---- Auto-detect screen scale ----
     // Scale off the SHORTER axis so the factor is the same whether the
@@ -1030,11 +1035,14 @@ int main(int argc, char *argv[])
         app.quit();
     });
     const int code = app.exec();
+    engineOwner.reset();   // the QML tree goes while every manager it binds to is alive
     if (restart)
         startAgain(app.arguments(), Relaunch::AsChosen);
     return code;
 #else
-    return app.exec();
+    const int code = app.exec();
+    engineOwner.reset();
+    return code;
 #endif
 }
 
