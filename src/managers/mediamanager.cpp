@@ -368,7 +368,12 @@ bool MediaManager::_is_safe_path(const QString &basePath, const QString &targetP
     const QString target = targetInfo.canonicalFilePath().isEmpty()
                                ? QDir::cleanPath(QFileInfo(targetPath).absoluteFilePath())
                                : targetInfo.canonicalFilePath();
-    return target.startsWith(base + QDir::separator()) || target == base;
+    // Both are Qt paths, which use '/' on every system. Comparing against
+    // QDir::separator() ('\\' on Windows) refused every file there: nothing in
+    // a library folder played and no tag was read
+    if (base.isEmpty())
+        return false;
+    return target == base || target.startsWith(base.endsWith(QLatin1Char('/')) ? base : base + QLatin1Char('/'));
 }
 
 QString MediaManager::_sanitize_metadata(const QString &text, int maxLength)
@@ -2384,8 +2389,10 @@ QStringList MediaManager::get_current_song_list()
 QString MediaManager::_get_file_path(const QString &filename)
 {
     // Reject path traversal
-    if (filename.contains(QDir::separator() + QStringLiteral(".."))
-        || filename.startsWith(QStringLiteral("..") + QDir::separator())
+    if (filename.contains(QStringLiteral("/.."))
+        || filename.contains(QStringLiteral("\\.."))
+        || filename.startsWith(QStringLiteral("../"))
+        || filename.startsWith(QStringLiteral("..\\"))
         || filename == QStringLiteral("..")
         || filename.startsWith(QLatin1Char('/'))
         || filename.startsWith(QLatin1Char('\\'))) {

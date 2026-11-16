@@ -235,6 +235,27 @@ private slots:
         QFile::remove(cover);
     }
 
+    // The library check compares Qt paths ('/' on every system). It used the
+    // native separator and so refused every file on Windows
+    void aFileInTheLibraryIsInsideIt()
+    {
+        QTemporaryDir lib;
+        QVERIFY(QDir(lib.path()).mkpath("Road"));
+        QVERIFY(QDir(lib.path() + "2").mkpath("."));
+        const QString song = lib.path() + "/Road/a.mp3";
+        QFile f(song);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.close();
+        QVERIFY(MediaManager::_is_safe_path(lib.path(), song));
+        QVERIFY(MediaManager::_is_safe_path(lib.path(), lib.path() + QDir::separator() + "Road" + QDir::separator() + "a.mp3"));
+        QVERIFY(MediaManager::_is_safe_path(lib.path(), lib.path() + "/Road/not-there-yet.mp3"));
+        QVERIFY(MediaManager::_is_safe_path(lib.path(), lib.path()));
+        QVERIFY(!MediaManager::_is_safe_path(lib.path(), lib.path() + "2/a.mp3"));   // a sibling that shares the prefix
+        QVERIFY(!MediaManager::_is_safe_path(lib.path(), lib.path() + "/Road/../../etc/passwd"));
+        QVERIFY(!MediaManager::_is_safe_path(lib.path() + "/missing", song));
+        QDir(lib.path() + "2").removeRecursively();
+    }
+
     // The playlist statistics: asking returns at once with nothing read on
     // this thread; the tags are read in the background and the three
     // signals carry the result
