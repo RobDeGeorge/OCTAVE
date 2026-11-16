@@ -240,6 +240,7 @@ public:
     struct Limits {
         int maxConnections = 64;            // all clients at once
         int maxPerAddress = 8;              // per address that isn't loopback
+        int loopbackReserve = 8;            // of maxConnections, kept for this device: the network gets the rest
         int firstByteMs = 10000;            // a connection that says nothing is closed
         int untrustedIdleMs = 60000;        // an untrusted connection idle this long is closed
         qint64 maxLineBytes = 1 << 20;      // a JSON line longer than this closes the connection
@@ -256,6 +257,12 @@ public:
     };
     void setLimits(const Limits &limits) { m_limits = limits; }
     const Limits &limits() const { return m_limits; }
+    // Whose connection slot a peer takes: this device's (loopback) or the
+    // network's. Tests replace the rule, since every address they can
+    // connect from is loopback; it decides slots only, never trust
+    using SlotPeerCheck = std::function<bool(const QHostAddress &)>;
+    void setSlotPeerCheck(SlotPeerCheck isLocal) { m_slotIsLocal = std::move(isLocal); }
+    bool slotIsLocal(const QHostAddress &peer) const { return m_slotIsLocal ? m_slotIsLocal(peer) : peer.isLoopback(); }
     bool trusted(const Connection &c) const { return !m_trusted || m_trusted(c); }
 
     // Close every connection that presented paired device `tokenId` (its
@@ -276,6 +283,7 @@ private:
     QString m_webRoot;
     TrustCheck m_trusted;
     Limits m_limits;
+    SlotPeerCheck m_slotIsLocal;
     HttpTrustCheck m_httpTrusted;
     QStringList m_openOps;
     TrustCheck m_actionTrust;

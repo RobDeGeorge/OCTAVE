@@ -54,13 +54,11 @@ The branch compiles for the browser (2026-11-15, `packaging/wasm/build.sh` with 
 
 | Item | Where | Effort |
 |---|---|---|
-| Unpaired peers at eight addresses can hold all 64 connection slots: keep slots for loopback | `src/service/commandserver.cpp:111` | M |
-| A test for the limited-browser trust tier at the bridge (needs a WebSocket client in `tst_servicebridge`) | `tests/cpp/tst_servicebridge.cpp` | M |
 | Shutdown is serial on the GUI thread (30 s seen in the log); managers die while QML is alive (TypeErrors at exit) | `src/appcore.cpp:437-457`, `src/main.cpp:796, 836` | M |
-| The watchdog's abort path logs through the mutex a stuck GUI thread may hold; crash handlers use `signal()` with no alternate stack | `src/util/uiwatchdog.cpp`, `src/util/logger.cpp` | S–M |
-| Diagnostics export misses `hang-*.txt` and still picks up the Python-era `octave.log`; the copy runs on the GUI thread | `src/managers/diagnosticsmanager.cpp:54, 100-125` | S |
-| The simulator: gear and throttle controls are overwritten by the model and the autopilot; multi-frame replies ignore `ATH1` | `src/sim/carsim.cpp:72-77`, `demodrive.cpp`, `simelm327.cpp` | S |
-| Interleaved multi-ECU frames with headers off can be spliced into one message | `src/managers/elm327protocol.cpp:592-631` | M |
+| The diagnostics export copies its files on the GUI thread | `src/managers/diagnosticsmanager.cpp:54, 100-125` | S |
+| The simulator: the throttle control is overwritten by the model and the autopilot (a gear chosen by hand stays since 2026-11-15) | `src/sim/carsim.cpp:72-77`, `demodrive.cpp` | S |
+| With headers off, two ECUs waiting for the same sequence digit cannot be told apart (the earlier-opened message takes the first frame). Reading trouble codes with headers on (`ATH1`, reassembly per ECU id) would end the guess; the simulator prints headed multi-frame replies to test it against | `src/managers/elm327protocol.cpp` (`splitMessages`), `obdconnectionworker.cpp` | M |
+| Crash handlers have their own stack on the GUI thread only: a stack overflow on a worker thread still leaves nothing in the log | `src/util/logger.cpp` (`installCrashHandlers`) | S |
 | `networkmanager.cpp` (1,254 lines) and `androidautomanager.cpp` have no test | `tests/cpp/` | M |
 
 ## 6. Refactors, one at a time, after the above

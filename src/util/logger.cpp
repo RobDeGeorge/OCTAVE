@@ -31,6 +31,8 @@ namespace {
 // The crash handler's own descriptor follows the error log through a
 // rotation (defined with the handlers below)
 void reopenCrashFd(const QString &rotatedPath);
+// One line to that descriptor: no lock, no Qt, no buffering
+void writeToCrashFd(const char *text, size_t length);
 
 // One log file, rotated at maxBytes into `backups` numbered copies
 struct RotatingFile {
@@ -81,8 +83,9 @@ RotatingFile g_debug;   // everything, --debug only 10 MB x 2
 bool g_debugEnabled = false;
 bool g_installed = false;
 QString g_logDir;
+constexpr int kLockWaitMs = 2000;
 int g_crashFd = -1;     // raw descriptor of the error log for the signal path
-QtMessageHandler g_previous = nullptr;
+[[maybe_unused]] QtMessageHandler g_previous = nullptr;   // used where stderr goes nowhere (phones)
 
 const char *levelName(QtMsgType t)
 {
@@ -128,14 +131,20 @@ void handler(QtMsgType type, const QMessageLogContext &ctx, const QString &msg)
     std::fflush(stderr);
 #endif
 
-    {
-        QMutexLocker<QRecursiveMutex> lock(&g_mutex);
+    // The lock is held across file writes. A thread stuck in one (a dying
+    // SD card) must not take every other thread that logs with it, the UI
+    // watchdog first of all: after kLockWaitMs the line goes straight to the
+    // error log's own descriptor instead
+    if (g_mutex.tryLock(kLockWaitMs)) {
         if (g_debugEnabled)
             g_debug.write(line);
         if (type != QtDebugMsg)
             g_main.write(line);
         if (type == QtWarningMsg || type == QtCriticalMsg || type == QtFatalMsg)
             g_error.write(line);
+        g_mutex.unlock();
+    } else if (type != QtDebugMsg) {
+        writeToCrashFd(line.constData(), size_t(line.size()));
     }
     // Qt aborts after a fatal message returns (SIGABRT -> crashHandler below
     // appends the backtrace), so make sure everything is on disk first.
@@ -148,6 +157,12 @@ void writeRaw(int fd, const char *s)
 {
     if (fd >= 0)
         (void)::write(fd, s, std::strlen(s));
+}
+
+void writeToCrashFd(const char *text, size_t length)
+{
+    if (g_crashFd >= 0)
+        (void)::write(g_crashFd, text, length);
 }
 
 // Async-signal-safe as far as practical: raw write() of a fixed line plus
@@ -182,6 +197,9 @@ void crashHandler(int sig)
     writeRaw(g_crashFd, "(no backtrace support on this platform)\n");
 #endif
     writeRaw(g_crashFd, "==== end ====\n");
+    // The default action again, then the same signal: it is delivered when
+    // this handler returns (it is blocked meanwhile), so the OS still
+    // writes its core / tombstone
     ::signal(sig, SIG_DFL);
     ::raise(sig);
 }
@@ -206,8 +224,39 @@ void installCrashHandlers()
     // A separate descriptor so the signal path never touches Qt
     g_crashFd = ::open((g_logDir + QStringLiteral("/octave-cpp-error.log")).toLocal8Bit().constData(),
                        O_WRONLY | O_APPEND | O_CREAT, 0644);
+#ifdef OCTAVE_HAVE_BACKTRACE
+    // backtrace() loads its unwinder on the first call (dlopen, malloc):
+    // have that happen now, not inside a signal handler
+    void *warm[2];
+    (void)backtrace(warm, 2);
+#endif
+#if defined(OCTAVE_WASM)
     for (int sig : {SIGSEGV, SIGABRT, SIGFPE, SIGILL, SIGBUS})
         ::signal(sig, crashHandler);
+#else
+    // A stack of the handler's own for this (the GUI) thread. A stack
+    // overflow, runaway recursion in QML or C++, is a SIGSEGV with no room
+    // left on the thread's stack: without this the handler could not run
+    // and the process died with nothing in the log. Other threads have no
+    // alternate stack, so there the handler runs on the thread's own, as
+    // it always did (SA_ONSTACK means "if there is one")
+    static char *altStack = nullptr;
+    const size_t altSize = qMax<size_t>(size_t(SIGSTKSZ), 64 * 1024);
+    if (!altStack) {
+        altStack = new char[altSize];   // for the life of the process
+        stack_t ss{};
+        ss.ss_sp = altStack;
+        ss.ss_size = altSize;
+        ss.ss_flags = 0;
+        (void)::sigaltstack(&ss, nullptr);
+    }
+    struct sigaction action{};
+    action.sa_handler = crashHandler;
+    sigemptyset(&action.sa_mask);
+    action.sa_flags = SA_ONSTACK;
+    for (int sig : {SIGSEGV, SIGABRT, SIGFPE, SIGILL, SIGBUS})
+        (void)::sigaction(sig, &action, nullptr);
+#endif
 }
 #elif defined(Q_OS_WIN)
 LONG WINAPI crashFilter(EXCEPTION_POINTERS *info)
@@ -230,6 +279,12 @@ LONG WINAPI crashFilter(EXCEPTION_POINTERS *info)
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
+void writeToCrashFd(const char *text, size_t length)
+{
+    if (g_crashFd >= 0)
+        _write(g_crashFd, text, static_cast<unsigned int>(length));
+}
+
 void reopenCrashFd(const QString &rotatedPath)
 {
     if (g_crashFd < 0 || !rotatedPath.endsWith(QLatin1String("/octave-cpp-error.log")))
@@ -250,6 +305,7 @@ void installCrashHandlers()
 }
 #else
 void reopenCrashFd(const QString &) {}
+void writeToCrashFd(const char *, size_t) {}
 void installCrashHandlers() {}
 #endif
 
@@ -285,6 +341,17 @@ void install(bool debug)
 }
 
 QString logDir() { return g_logDir; }
+
+void writeDirect(const char *line)
+{
+    const size_t length = std::strlen(line);
+    writeToCrashFd(line, length);
+#if defined(Q_OS_UNIX)
+    (void)::write(2, line, length);
+#else
+    std::fputs(line, stderr);
+#endif
+}
 
 void flush()
 {

@@ -288,7 +288,8 @@ qint64 SimElm327Device::writeData(const char *data, qint64 size)
                             });
         if (m_headersOn && !asked.startsWith("AT") && hex) {
             const QByteArray length = "0" + QByteArray::number(digits.size() / 2, 16).toUpper();
-            reply.prepend(m_spaces ? "7E8 " + length + " " : "7E8" + length);
+            const QByteArray id = replyId();
+            reply.prepend(m_spaces ? id + " " + length + " " : id + length);
         }
         if (echoed)
             reply.prepend(command + "\r");
@@ -322,12 +323,44 @@ int SimElm327Device::latencyMs(const QByteArray &command) const
     return static_cast<int>(uniform(35, 70));   // a Bluetooth SPP round trip
 }
 
+// The id a reply comes back under with headers on: the engine ECU's, or the
+// one a physical request header (ATSH 7E0 ... 7E7) addressed, plus 8
+QByteArray SimElm327Device::replyId() const
+{
+    bool ok = false;
+    const int asked = m_header.toInt(&ok, 16);
+    if (ok && m_header.size() == 3 && asked >= 0x7E0 && asked <= 0x7E7)
+        return QByteArray::number(asked + 8, 16).toUpper();
+    return QByteArrayLiteral("7E8");
+}
+
 QByteArray SimElm327Device::formatMessage(const QByteArray &payload) const
 {
     const char sep = m_spaces ? ' ' : '\0';   // toHex() leaves '\0' out
     auto hex = [sep](const QByteArray &b) { return b.toHex(sep).toUpper(); };
     if (payload.size() <= 7)
         return hex(payload);
+    if (m_headersOn) {
+        // Headers on: the frames as they are on the bus, each behind the
+        // answering ECU's id. A first frame (1L LL, 6 bytes), then
+        // consecutive frames (21, 22 ... 2F, 20 ..., 7 bytes, the last one
+        // padded)
+        const QByteArray id = replyId();
+        const auto frame = [&](const QByteArray &bytes) {
+            return m_spaces ? id + " " + hex(bytes) : id + hex(bytes);
+        };
+        QByteArray first;
+        first.append(static_cast<char>(0x10 | ((payload.size() >> 8) & 0x0F)));
+        first.append(static_cast<char>(payload.size() & 0xFF));
+        QByteArray out = frame(first + payload.left(6));
+        int index = 1;
+        for (int pos = 6; pos < payload.size(); pos += 7, ++index) {
+            QByteArray next(1, static_cast<char>(0x20 | (index % 16)));
+            next += payload.mid(pos, 7);
+            out += "\r" + frame(next.leftJustified(8, '\0'));
+        }
+        return out;
+    }
     // CAN multi-frame (ISO 15765-4, headers off): byte count, then frames of
     // 6 and 7 bytes numbered 0-F
     QByteArray out = QByteArray::number(payload.size(), 16).toUpper().rightJustified(3, '0');

@@ -261,6 +261,10 @@ private:
     // DTC prefix lookup
     static QChar dtcPrefix(int code);
     static QString decodeDtc(int byte1, int byte2);
+
+public:
+    // One hex string per ECU message of a reply read with headers off;
+    // multi-frame replies joined, each frame to the message waiting for it
     static QStringList splitMessages(const QStringList &lines, bool *isMultiFrame = nullptr);
 };
 

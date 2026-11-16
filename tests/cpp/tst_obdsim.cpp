@@ -6,6 +6,7 @@
 //
 // The slots share one manager and run in declaration order.
 
+#include <QElapsedTimer>
 #include <QFile>
 #include <QRegularExpression>
 #include <QSignalSpy>
@@ -419,6 +420,68 @@ private slots:
         QVERIFY2(c > 40.0f && c < 130.0f, qPrintable(QString::number(c)));
         m_obd->setParameterDemand("pieces", {});
         m_sim->state()->updateLink([](LinkSettings &l) { l.chunkBytes = 0; });
+    }
+
+    // Headers on (ATH1): a reply of several frames comes as the frames on
+    // the bus, each behind the ECU's id, not as the headers-off "014 / 0: /
+    // 1:" form. The worker reads its diagnostics with headers off, so this
+    // talks to the simulated adapter itself, as a terminal would
+    void headersOnMultiFrameRepliesCarryTheEcuId()
+    {
+        CarSim sim;
+        sim.setRealisticMode(false);
+        SimElm327Device elm(sim.state());
+        QVERIFY(elm.open(QIODevice::ReadWrite));
+        const auto ask = [&elm](const QByteArray &command) {
+            elm.write(command + "\r");
+            QByteArray in;
+            QElapsedTimer t;
+            t.start();
+            while (!in.contains('>') && t.elapsed() < 3000) {
+                if (elm.waitForReadyRead(50))
+                    in += elm.readAll();
+            }
+            QStringList lines;
+            for (const QByteArray &line : in.split('\r'))
+                if (!line.trimmed().isEmpty() && line.trimmed() != ">")
+                    lines.append(QString::fromLatin1(line.trimmed()));
+            return lines;
+        };
+        ask("ATZ");
+        ask("ATE0");
+        QCOMPARE(ask("ATH1"), QStringList{"OK"});
+
+        // The VIN: 20 bytes, a first frame and two consecutive ones
+        const QStringList vin = ask("0902");
+        QCOMPARE(vin.size(), 3);
+        QCOMPARE(vin.at(0).left(18), QStringLiteral("7E8 10 14 49 02 01"));
+        QVERIFY2(vin.at(1).startsWith("7E8 21 "), qPrintable(vin.at(1)));
+        QVERIFY2(vin.at(2).startsWith("7E8 22 "), qPrintable(vin.at(2)));
+        QByteArray payload;
+        for (int i = 0; i < vin.size(); ++i) {
+            const QByteArray frame = QByteArray::fromHex(vin.at(i).mid(4).toLatin1());
+            QCOMPARE(frame.size(), 8);   // a whole CAN frame each, the last one padded
+            payload += frame.mid(i == 0 ? 2 : 1);
+        }
+        QCOMPARE(payload.left(20).mid(3), QByteArray("1J4FA49S03P123456"));
+
+        // One frame: id, length, data. An addressed ECU answers under its own id
+        const QStringList rpm = ask("010C");
+        QCOMPARE(rpm.size(), 1);
+        QVERIFY2(rpm.at(0).startsWith("7E8 04 41 0C "), qPrintable(rpm.at(0)));
+        ask("ATSH7E1");
+        const QStringList trans = ask("221940");
+        QCOMPARE(trans.size(), 1);
+        QVERIFY2(trans.at(0).startsWith("7E9 04 62 19 40 "), qPrintable(trans.at(0)));
+        ask("ATSH7DF");
+
+        // Spaces off, and headers off again: the byte-count form is back
+        ask("ATS0");
+        QCOMPARE(ask("0902").at(0).left(15), QStringLiteral("7E8101449020131"));
+        QCOMPARE(ask("ATH0"), QStringList{"OK"});
+        const QStringList plain = ask("0902");
+        QCOMPARE(plain.at(0), QStringLiteral("014"));
+        QVERIFY(plain.at(1).startsWith("0:490201"));
     }
 
 private:

@@ -46,6 +46,9 @@ octave_add_test(tst_licensetexts SOURCES util/licensetexts.h util/licensetexts.c
 octave_add_license_texts(tst_licensetexts)
 octave_add_test(tst_adaptivebitrate)
 octave_add_test(tst_settingsmanager SOURCES managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
+if(UNIX)   # the crash path it tests is the POSIX one (signals); each case re-runs the binary as a child
+    octave_add_test(tst_logger SOURCES util/logger.h util/logger.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
+endif()
 octave_add_test(tst_volumecontroller SOURCES managers/volumecontroller.h managers/volumecontroller.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
 octave_add_test(tst_shiftlightmanager SOURCES managers/shiftlightmanager.h managers/shiftlightmanager.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
 octave_add_test(tst_parametercatalog

@@ -39,7 +39,9 @@ public:
     bool waitForReadyRead(int msecs) override;
 
     // Reply text for one command (no prompt), as the adapter would print it
-    // with echo, spaces and headers off. Public for tests.
+    // with echo off. A reply of several frames comes with its ids when
+    // headers are on (ATH1); writeData() adds the id to a one-line reply.
+    // Public for tests.
     QByteArray respond(const QByteArray &command);
 
 protected:
@@ -55,6 +57,7 @@ private:
     int latencyMs(const QByteArray &command) const;
     QByteArray mode01(int pid);
     QByteArray formatMessage(const QByteArray &payload) const;
+    QByteArray replyId() const;
     bool dropLink();
 
     std::shared_ptr<CarState> m_state;

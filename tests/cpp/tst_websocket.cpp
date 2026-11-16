@@ -390,6 +390,92 @@ private slots:
         server.stop();
     }
 
+    // The network can fill every slot but the reserve: this device still
+    // gets in. Every address a test can connect from is loopback, so the
+    // slot rule is told that 127.0.0.2 is "the network"
+    void theNetworkCannotTakeTheDevicesSlots()
+    {
+        CommandServer server(0);
+        CommandServer::Limits limits;
+        limits.maxConnections = 5;
+        limits.loopbackReserve = 2;
+        server.setLimits(limits);
+        const QHostAddress network(QStringLiteral("127.0.0.2"));
+        server.setSlotPeerCheck([network](const QHostAddress &peer) { return !peer.isEqual(network); });
+        QVERIFY(server.start());
+
+        const auto open = [&server](const QHostAddress &from) {
+            auto *s = new QTcpSocket;
+            if (!from.isNull() && !s->bind(from)) {
+                delete s;
+                return static_cast<QTcpSocket *>(nullptr);
+            }
+            s->connectToHost(QHostAddress::LocalHost, server.port());
+            if (s->waitForConnected(3000))
+                s->write("{\"op\": \"hello\"}\n");   // past the first-byte rule
+            return s;
+        };
+        // Served: an answer arrives. Refused: closed with none
+        const auto served = [](QTcpSocket *s) {
+            QByteArray in;
+            QElapsedTimer t;
+            t.start();
+            while (t.elapsed() < 3000 && !in.contains('\n')) {
+                if (s->waitForReadyRead(50))
+                    in += s->readAll();
+                else if (s->state() == QAbstractSocket::UnconnectedState)
+                    break;
+            }
+            return in.contains("\"ok\"");
+        };
+
+        QList<QTcpSocket *> held;
+        QTcpSocket *first = open(network);
+        if (!first) {
+            server.stop();
+            QSKIP("this system cannot connect from 127.0.0.2");
+        }
+        held.append(first);
+        QVERIFY(served(first));
+        // The network's share is 5 - 2 = 3
+        for (int i = 0; i < 2; ++i) {
+            held.append(open(network));
+            QVERIFY(held.last());
+            QVERIFY(served(held.last()));
+        }
+        QTcpSocket *fourth = open(network);
+        QVERIFY(fourth);
+        QVERIFY(!served(fourth));
+        delete fourth;
+        // The device still gets its two, and the cap still holds for it
+        for (int i = 0; i < 2; ++i) {
+            held.append(open(QHostAddress()));
+            QVERIFY(served(held.last()));
+        }
+        QTcpSocket *sixth = open(QHostAddress());
+        QVERIFY(!served(sixth));
+        delete sixth;
+        // A network client that leaves frees a network slot
+        delete held.takeFirst();
+        // (once its thread has ended: a moment after the socket closes)
+        bool gotIn = false;
+        QElapsedTimer waited;
+        waited.start();
+        while (!gotIn && waited.elapsed() < 5000) {
+            QTcpSocket *again = open(network);
+            gotIn = again && served(again);
+            if (gotIn)
+                held.append(again);
+            else
+                delete again;
+            if (!gotIn)
+                QTest::qWait(50);
+        }
+        QVERIFY(gotIn);
+        qDeleteAll(held);
+        server.stop();
+    }
+
     // Step 7's limits hold for WebSocket clients too (the line protocol's
     // tests are in tst_servicebridge)
     void rateLimitedOverFrames()
