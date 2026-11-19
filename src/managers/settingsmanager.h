@@ -391,6 +391,8 @@ public:
     bool blackBoxSweepAll() const;
     int blackBoxMaxMB() const;
     QVariantList homeOBDParameters() const;
+    // No settings file was here at start: a fresh install (not for QML or the service)
+    bool createdThisRun() const { return m_createdThisRun; }
     bool homeVehicleCard() const;
     static constexpr int kMaxHomeObdParameters = 8;
     // Saved window size range: the window's own minimum up to 8K (a bigger
@@ -878,6 +880,7 @@ private:
     QTimer m_saveTimer;
     bool m_savePending = false;
     bool m_settingsLoaded = false;
+    bool m_createdThisRun = false;
     bool m_backupDone = false;
     QJsonObject readSettingsFromDisk();
     void writeSettingsToDisk(const QJsonObject &settings);

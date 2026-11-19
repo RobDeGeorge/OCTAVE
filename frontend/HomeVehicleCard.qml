@@ -31,7 +31,8 @@ Rectangle {
     border.width: 1
     radius: 3
 
-    // An added model has no picture until Settings > Device > Vehicle has shown it
+    // No vehicle chosen yet (the tap opens the chooser), or an added model
+    // whose picture Settings > Device > Vehicle has not rendered yet
     Text {
         anchors.centerIn: picture
         width: picture.width
@@ -39,7 +40,7 @@ Rectangle {
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
         textFormat: Text.PlainText
-        text: picture.spec ? picture.spec.name : ""
+        text: !picture.spec ? "" : picture.spec.id === "" ? "Choose your vehicle" : picture.spec.name
         color: App.Style.secondaryTextColor
         font.pixelSize: App.Spacing.mainMenuOBDTextSize
         font.family: App.Style.fontFamily

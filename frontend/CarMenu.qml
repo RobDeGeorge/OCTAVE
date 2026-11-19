@@ -38,6 +38,11 @@ Item {
     property alias cameraPitch: view.cameraPitch
     property alias cameraZoom: view.cameraZoom
 
+    // The menu's "Change vehicle" is up (VehicleChooser over the car)
+    property bool choosing: false
+    readonly property bool hasManager: typeof vehicleManager !== "undefined" && !!vehicleManager
+    onVisibleChanged: if (!visible) choosing = false
+
     // The rig's test controls. Off for a driver; the menu offers them in a
     // --dev run, and tools/vehicle/check_jeep_view.py sets this.
     property bool rigControls: false
@@ -117,7 +122,7 @@ Item {
 
     Text {
         anchors.centerIn: parent
-        visible: !view.ready
+        visible: view.hasVehicle && !view.ready && !chooserLoader.active
         text: view.error ? "Unable to load the vehicle: " + view.error : "Loading…"
         color: App.Style.secondaryTextColor
         font.pixelSize: App.Spacing.overallText
@@ -153,7 +158,7 @@ Item {
     Text {
         objectName: "carHeading"
         anchors { top: parent.top; horizontalCenter: parent.horizontalCenter; topMargin: dp(20) }
-        visible: carMenu.imuConnected && !rigPanel.active
+        visible: carMenu.imuConnected && !rigPanel.active && !chooserLoader.active
         // (null-guarded: at shutdown the backend drops units before the page dies)
         text: (units ? units.cardinal(currentHeading) + "  " : "") + degrees(currentHeading)
         color: App.Style.secondaryTextColor
@@ -165,7 +170,7 @@ Item {
     Readout {
         objectName: "carPitch"
         anchors { left: parent.left; bottom: parent.bottom; leftMargin: dp(40); bottomMargin: dp(28) }
-        visible: carMenu.attitudeKnown
+        visible: carMenu.attitudeKnown && !chooserLoader.active
         label: "PITCH"
         value: degrees(currentPitch)
     }
@@ -173,14 +178,14 @@ Item {
     Readout {
         objectName: "carRoll"
         anchors { right: parent.right; bottom: parent.bottom; rightMargin: dp(40); bottomMargin: dp(28) }
-        visible: carMenu.attitudeKnown
+        visible: carMenu.attitudeKnown && !chooserLoader.active
         label: "ROLL"
         value: degrees(currentRoll)
     }
 
     Text {
         anchors { bottom: parent.bottom; horizontalCenter: parent.horizontalCenter; bottomMargin: dp(28) }
-        visible: !carMenu.attitudeKnown && view.ready
+        visible: !carMenu.attitudeKnown && view.ready && !chooserLoader.active
         text: "No motion sensor"
         color: App.Style.secondaryTextColor
         font.pixelSize: dp(13)
@@ -193,7 +198,8 @@ Item {
         id: menuButton
         objectName: "carMenuButton"
         anchors { top: parent.top; right: parent.right; margins: dp(12) }
-        visible: carMenu.imuConnected || (carMenu.devRun && view.rigged)
+        // Nothing to offer before a vehicle is chosen: the chooser is the page then
+        visible: view.hasVehicle && !chooserLoader.active
         width: dp(48); height: width; radius: width / 2
         color: menuMouse.pressed || menu.opened
             ? Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.22) : "transparent"
@@ -227,6 +233,7 @@ Item {
         contentItem: Column {
             Repeater {
                 model: [
+                    { name: "changeVehicle", label: "Change vehicle", shown: carMenu.hasManager },
                     { name: "imuZero", label: "Set level here", shown: carMenu.imuConnected },
                     { name: "imuReset", label: "Reset level", shown: carMenu.imuConnected },
                     { name: "rigControlsToggle", label: carMenu.rigControls ? "Hide test controls" : "Test controls", shown: carMenu.devRun && view.rigged }
@@ -252,7 +259,8 @@ Item {
                         anchors.fill: parent
                         onClicked: {
                             menu.close()
-                            if (row.modelData.name === "imuZero") berryIMU.calibrateTare()
+                            if (row.modelData.name === "changeVehicle") carMenu.choosing = true
+                            else if (row.modelData.name === "imuZero") berryIMU.calibrateTare()
                             else if (row.modelData.name === "imuReset") berryIMU.resetTare()
                             else carMenu.rigControls = !carMenu.rigControls
                         }
@@ -260,6 +268,26 @@ Item {
                 }
             }
         }
+    }
+
+    // Which vehicle: the whole page while none is chosen (a fresh install),
+    // and over the car when the menu's "Change vehicle" asks
+    Rectangle {
+        anchors.fill: parent
+        visible: chooserLoader.active && view.hasVehicle
+        color: Qt.rgba(App.Style.backgroundColor.r, App.Style.backgroundColor.g, App.Style.backgroundColor.b, 0.94)
+        MouseArea { anchors.fill: parent; onClicked: carMenu.choosing = false }   // beside the tiles: keep the vehicle
+    }
+    Loader {
+        id: chooserLoader
+        objectName: "vehicleChooserLoader"
+        anchors.fill: parent
+        active: carMenu.hasManager && (!view.hasVehicle || carMenu.choosing)
+        source: "VehicleChooser.qml"
+    }
+    Connections {
+        target: chooserLoader.item
+        function onChosen() { carMenu.choosing = false }
     }
 
     Loader {

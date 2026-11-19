@@ -155,7 +155,8 @@ AppCore::AppCore(const QDir &frontendDir, Units *units)
     expose("frontendManager", &frontendManager);
 
     // The 3D vehicle: the built-in rig or one of the user's own models
-    vehicleManager.setRoot(SettingsManager::getAppDataDir() + QStringLiteral("/vehicles"));
+    vehicleManager.setRoot(SettingsManager::getAppDataDir() + QStringLiteral("/vehicles"),
+                           !settingsManager.createdThisRun());
     expose("vehicleManager", &vehicleManager);
 
     wireInputs();

@@ -15,7 +15,7 @@ Breaking:
 Settings: `downloadSubfolder`, `downloadFormat` and `downloadBitrate` are gone, and are dropped from an existing settings file at start-up.
 
 Added:
-- Object `vehicleManager` (experimental): the vehicle the 3D view and Home show, the built-in Jeep or a `.glb` of the user's own under `<config>/vehicles/` (`vehicles`, `activeId`, `active`, `importModel`, `select`, `remove`, `rename`, `setOrientation`). Guide: `docs/VEHICLES.md`.
+- Object `vehicleManager` (experimental): the vehicle the 3D view and Home show: none on a fresh install (`activeId` `""`), then one of the bundled vehicles (`jeep-tj`, `bmw-e46-330i-zhp`) or a `.glb` of the user's own under `<config>/vehicles/` (`vehicles`, `activeId`, `active`, `importModel`, `select`, `remove`, `rename`, `setOrientation`). Guide: `docs/VEHICLES.md`.
 - `settingsManager.homeVehicleCard` / `homeVehicleCardChanged` / `setHomeVehicleCard`: the vehicle's picture as a card beside the Home readings (off by default).
 - `dashboardManager.arrange` (experimental): moves or resizes a cell, the cells it lands on swapping with it or moving to the nearest free space; `{ok, cells, moved, swapped, reason}`.
 - `dashboardManager.minSpan` / `sizeOptions` (experimental): a widget type's smallest readable span and its S / M / L spans on a given grid. The widget catalog gains `minSize` (`{w, h}` dp) and `aspect` on every widget, and the `editableProps` `BarGauge.maxThickness` and `WarningLight.maxSize`.

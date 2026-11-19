@@ -41,15 +41,23 @@ Item {
     property real fitRadius: vehicle && vehicle.anyOpenRequested ? vehicle.sweptRadius : closedRadius
     Behavior on fitRadius { NumberAnimation { duration: 450; easing.type: Easing.InOutCubic } }
 
-    // Which vehicle: vehicleManager's active one ({rigged, modelUrl, yaw,
-    // tilt, ...}), or the built-in rig where there is no manager (the
-    // tools that load this file alone)
+    // Which vehicle: vehicleManager's active one ({id, rigged, asset,
+    // modelUrl, yaw, tilt, ...}), or the built-in rig where there is no
+    // manager (the tools that load this file alone)
     property var spec: (typeof vehicleManager !== "undefined" && vehicleManager) ? vehicleManager.active : ({ rigged: true })
     readonly property bool rigged: !spec || spec.rigged !== false
+    // False while no vehicle is chosen (id ""): nothing is loaded then
+    readonly property bool hasVehicle: !spec || spec.id !== ""
+    // The model file of an unrigged vehicle: one that ships with the
+    // frontend comes through assetStore (a real file, extracted from the APK
+    // on Android), the user's own is already a file: URL
+    readonly property url modelSource: !spec || rigged ? ""
+        : spec.asset ? ((typeof assetStore !== "undefined" && assetStore) ? assetStore.localUrl(spec.asset) : "")
+        : (spec.modelUrl || "")
 
     // The JeepVehicle (the built-in rig) or GenericVehicle (a model of the
     // user's): both offer the members used here. Null for a moment while
-    // the vehicle is being swapped.
+    // the vehicle is being swapped, and while none is chosen.
     readonly property var vehicle: vehicleLoader.item
     readonly property bool ready: !!vehicle && vehicle.ready
     readonly property string error: vehicle ? vehicle.error : ""
@@ -61,7 +69,7 @@ Item {
         id: modelComponent
         GenericVehicle {
             active: root.active
-            source: root.spec && root.spec.modelUrl ? root.spec.modelUrl : ""
+            source: root.modelSource
             yaw: root.spec ? Number(root.spec.yaw) || 0 : 0
             tilt: root.spec ? Number(root.spec.tilt) || 0 : 0
         }
@@ -177,7 +185,7 @@ Item {
 
             Loader3D {
                 id: vehicleLoader
-                sourceComponent: root.rigged ? rigComponent : modelComponent
+                sourceComponent: !root.hasVehicle ? null : root.rigged ? rigComponent : modelComponent
             }
         }
     }

@@ -6,6 +6,8 @@ frontend/VehicleView.qml at its default camera, no level ring, on a transparent 
 cropped to the vehicle. Run it again after the model or the view's lighting changes.
 
 Run from the checkout: QT_QPA_PLATFORM=xcb xvfb-run -a venv/bin/python tools/vehicle/render_preview.py
+With a bundled model's id (render_preview.py bmw-e46-330i-zhp) it renders that model's picture,
+frontend/assets/vehicles/<id>/preview.png, from its model.glb.
 Requires PySide6 with Quick3D (pip install PySide6; not in requirements.txt), as check_jeep_view.py does.
 """
 
@@ -20,7 +22,10 @@ from PySide6.QtQuick import QQuickItem
 from PySide6.QtTest import QTest
 
 ROOT = Path(__file__).resolve().parents[2]
-OUT = ROOT / "frontend/assets/jeep_tj/preview.png"
+# With an argument, a bundled model: frontend/assets/vehicles/<id>/model.glb -> its preview.png
+BUNDLED = next((a for a in sys.argv[1:] if not a.startswith("-")), "")
+OUT = ROOT / (f"frontend/assets/vehicles/{BUNDLED}/preview.png" if BUNDLED else "frontend/assets/jeep_tj/preview.png")
+SPEC = ('spec: ({ rigged: false, modelUrl: "' + (OUT.parent / "model.glb").as_uri() + '", yaw: 0, tilt: 0 }); ') if BUNDLED else ""
 WIDTH = 900  # pixels, the long side of the saved picture
 
 
@@ -43,7 +48,7 @@ engine.loadData(
 import QtQuick.Window
 import "{(ROOT / "frontend").as_uri()}" as App
 Window {{ width: 1600; height: 1200; visible: true; color: "transparent"
-App.VehicleView {{ objectName: "view"; anchors.fill: parent; showLevelRing: false; interactive: false }}
+App.VehicleView {{ objectName: "view"; anchors.fill: parent; {SPEC}showLevelRing: false; interactive: false }}
 }}'''.encode()
 )
 assert engine.rootObjects(), "Component failed to load"

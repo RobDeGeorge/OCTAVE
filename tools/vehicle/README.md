@@ -450,3 +450,15 @@ reduced the pad's upper extent from 106 to 62 mm above the wheel center,
 widened its shoulders, and lowered the spoke/button assemblies. This restores
 the larger upper opening seen in reference 048. Mounting position is unchanged.
 These dimensions describe the model revision, not measured TJ factory values.
+
+## Other vehicles
+
+`build_bmw_e46.py` builds a BMW E46 330i ZHP sedan as a static model,
+`frontend/assets/vehicles/bmw-e46-330i-zhp/model.glb`, one of the vehicles the app ships with
+(`blender -b -P tools/vehicle/build_bmw_e46.py`, add `-- --render DIR` for check pictures; then
+`render_preview.py bmw-e46-330i-zhp` for its `preview.png`). It is not rigged: the app shows it
+whole, as it does any model added in Settings > Device > Vehicle (`docs/VEHICLES.md`). To ship
+another, add its folder under `frontend/assets/vehicles/` and a row to `kBuiltIns` in
+`src/managers/vehiclemanager.cpp`. The body is one shell lofted through cross-sections along the car, from the
+E46's published dimensions; glass, lamps, grilles and shut lines are 2D outlines projected onto it.
+The wheels are separate objects with their origin on the axle, for a later rig.

@@ -1,7 +1,8 @@
-// The vehicle the app shows (src/managers/vehiclemanager.h): the built-in
-// one is always there and can't be removed, a .glb is copied in whole or not
-// at all, a hand-made folder is listed only when its manifest stays inside
-// it, and the active choice falls back to the built-in vehicle.
+// The vehicle the app shows (src/managers/vehiclemanager.h): a fresh install
+// has none, the built-in ones are always listed and can't be removed, an
+// install from before the choice keeps the Jeep, a .glb is copied in whole
+// or not at all, a hand-made folder is listed only when its manifest stays
+// inside it, and a choice that is gone is no vehicle.
 
 #include "managers/vehiclemanager.h"
 
@@ -28,6 +29,8 @@ QByteArray glb(int size = 64)
     return QByteArray("glTF") + QByteArray(size - 4, '\x01');
 }
 
+const QStringList kBuiltIns{QStringLiteral("jeep-tj"), QStringLiteral("bmw-e46-330i-zhp")};
+
 QStringList ids(const VehicleManager &m)
 {
     QStringList out;
@@ -50,19 +53,53 @@ private slots:
         m_root = m_tmp.filePath(QStringLiteral("vehicles%1").arg(++m_case));
     }
 
-    void theBuiltInVehicleIsThereAndActive()
+    void aFreshInstallHasNoVehicleAndListsTheBuiltIns()
     {
         VehicleManager m;
-        QCOMPARE(m.activeId(), VehicleManager::kBuiltInId);   // even before a root is set
+        QVERIFY(m.activeId().isEmpty());   // even before a root is set
         m.setRoot(m_root);
-        QCOMPARE(ids(m), QStringList{VehicleManager::kBuiltInId});
-        const QVariantMap a = m.active();
+        QCOMPARE(ids(m), kBuiltIns);
+        QVERIFY(m.activeId().isEmpty());
+        QVERIFY(m.active().value("id").toString().isEmpty());
+        QVERIFY(!m.active().value("rigged").toBool());
+
+        QSignalSpy activeSpy(&m, &VehicleManager::activeChanged);
+        QVERIFY(m.select(VehicleManager::kBuiltInId));
+        QCOMPARE(activeSpy.count(), 1);
+        QVariantMap a = m.active();
         QVERIFY(a.value("builtIn").toBool());
         QVERIFY(a.value("rigged").toBool());
+        QVERIFY(a.value("asset").toString().isEmpty());            // the rig has no single model file
+        QCOMPARE(a.value("pictureAsset").toString(), QStringLiteral("jeep_tj/preview.png"));
+
+        QVERIFY(m.select("bmw-e46-330i-zhp"));
+        a = m.active();
+        QVERIFY(a.value("builtIn").toBool());
+        QVERIFY(!a.value("rigged").toBool());
+        QCOMPARE(a.value("asset").toString(), QStringLiteral("vehicles/bmw-e46-330i-zhp/model.glb"));
         QVERIFY(a.value("modelUrl").toString().isEmpty());
-        QVERIFY(!m.remove(VehicleManager::kBuiltInId));
-        QVERIFY(!m.lastError().isEmpty());
-        QVERIFY(m.picturePath(VehicleManager::kBuiltInId).isEmpty());
+
+        for (const QString &id : kBuiltIns) {
+            QVERIFY(!m.remove(id));
+            QVERIFY(!m.lastError().isEmpty());
+            QVERIFY(m.picturePath(id).isEmpty());
+        }
+        // Back to none
+        QVERIFY(m.select(""));
+        QVERIFY(m.activeId().isEmpty());
+        QVERIFY(!QFileInfo::exists(m_root + "/ACTIVE"));
+    }
+
+    void anInstallFromBeforeTheChoiceKeepsTheJeep()
+    {
+        VehicleManager m;
+        m.setRoot(m_root, true);
+        QCOMPARE(m.activeId(), VehicleManager::kBuiltInId);
+        // Only the first time: choosing none afterwards stays none
+        QVERIFY(m.select(""));
+        VehicleManager again;
+        again.setRoot(m_root, true);
+        QVERIFY(again.activeId().isEmpty());
     }
 
     void aGlbIsCopiedInAndBecomesActive()
@@ -88,7 +125,7 @@ private slots:
         // The same file again is a second vehicle, and a plain path works too
         QCOMPARE(m.importModel(src, QStringLiteral("  Track   car ")), QStringLiteral("track-car"));
         QCOMPARE(m.importModel(src), QStringLiteral("my-civic-final-2"));
-        QCOMPARE(ids(m), (QStringList{VehicleManager::kBuiltInId, "my-civic-final", "my-civic-final-2", "track-car"}));
+        QCOMPARE(ids(m), (kBuiltIns + QStringList{"my-civic-final", "my-civic-final-2", "track-car"}));
 
         // The choice outlives the manager
         VehicleManager again;
@@ -105,9 +142,9 @@ private slots:
         QVERIFY(m.importModel(notModel).isEmpty());
         QVERIFY(m.lastError().contains(".glb"));
         QVERIFY(m.importModel(m_tmp.filePath("missing.glb")).isEmpty());
-        QCOMPARE(ids(m), QStringList{VehicleManager::kBuiltInId});
+        QCOMPARE(ids(m), kBuiltIns);
         QCOMPARE(QDir(m_root).entryList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden), QStringList());
-        QCOMPARE(m.activeId(), VehicleManager::kBuiltInId);
+        QVERIFY(m.activeId().isEmpty());
 
         // An error clears with the next success
         const QString good = m_tmp.filePath("good.glb");
@@ -130,13 +167,15 @@ private slots:
         write(m_root + "/no-model/vehicle.json", manifest("car.glb"));
         write(m_root + "/Bad Name/vehicle.json", manifest("car.glb"));
         write(m_root + "/Bad Name/car.glb", glb());
-        write(m_root + "/jeep-tj/vehicle.json", manifest("car.glb"));   // the built-in id is taken
+        write(m_root + "/jeep-tj/vehicle.json", manifest("car.glb"));   // a built-in id is taken
         write(m_root + "/jeep-tj/car.glb", glb());
+        write(m_root + "/bmw-e46-330i-zhp/vehicle.json", manifest("car.glb"));
+        write(m_root + "/bmw-e46-330i-zhp/car.glb", glb());
         write(m_root + "/no-manifest/car.glb", glb());
 
         VehicleManager m;
         m.setRoot(m_root);
-        QCOMPARE(ids(m), (QStringList{VehicleManager::kBuiltInId, "good"}));
+        QCOMPARE(ids(m), (kBuiltIns + QStringList{"good"}));
         QVERIFY(m.select("good"));
         QCOMPARE(m.active().value("yaw").toDouble(), 90.0);   // 450 wrapped
         QVERIFY(!m.select("escapes"));
@@ -187,7 +226,7 @@ private slots:
         QVERIFY(url.hasQuery());
     }
 
-    void removingTheActiveVehicleGoesBackToTheBuiltIn()
+    void removingTheActiveVehicleLeavesNone()
     {
         const QString src = m_tmp.filePath("kart.glb");
         write(src, glb());
@@ -197,16 +236,18 @@ private slots:
         QSignalSpy activeSpy(&m, &VehicleManager::activeChanged);
         QVERIFY(m.remove(id));
         QCOMPARE(activeSpy.count(), 1);
-        QCOMPARE(m.activeId(), VehicleManager::kBuiltInId);
+        QVERIFY(m.activeId().isEmpty());
         QVERIFY(!QFileInfo::exists(m_root + "/kart"));
         QVERIFY(!m.remove(id));
         QVERIFY(!m.remove("../outside"));
 
-        // A stale ACTIVE (its folder deleted by hand) is the built-in vehicle
+        // A stale ACTIVE (its folder deleted by hand) is no vehicle
         write(m_root + "/ACTIVE", "gone");
-        QCOMPARE(m.activeId(), VehicleManager::kBuiltInId);
-        QVERIFY(m.select(""));
-        QVERIFY(!QFileInfo::exists(m_root + "/ACTIVE"));
+        QVERIFY(m.activeId().isEmpty());
+        // A model named like a built-in vehicle gets another id
+        const QString clash = m_tmp.filePath("Jeep TJ.glb");
+        write(clash, glb());
+        QCOMPARE(m.importModel(clash), QStringLiteral("vehicle"));
     }
 };
 

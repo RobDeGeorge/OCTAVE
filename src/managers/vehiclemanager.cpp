@@ -19,12 +19,44 @@ namespace {
 const QString kManifest = QStringLiteral("vehicle.json");
 const QString kPicture = QStringLiteral("preview.png");
 const QString kActiveFile = QStringLiteral("ACTIVE");
-const QString kBuiltInName = QStringLiteral("Jeep TJ");
+// The vehicles that ship with the frontend. `asset` and `picture` are paths
+// under frontend/assets/; the rig has no single model file (JeepVehicle.qml
+// assembles it from frontend/assets/jeep_tj/).
+struct BuiltIn {
+    const char *id;
+    const char *name;
+    bool rigged;
+    const char *asset;
+    const char *picture;
+};
+const BuiltIn kBuiltIns[] = {
+    {"jeep-tj", "Jeep TJ", true, "", "jeep_tj/preview.png"},
+    {"bmw-e46-330i-zhp", "BMW 330i ZHP", false, "vehicles/bmw-e46-330i-zhp/model.glb",
+     "vehicles/bmw-e46-330i-zhp/preview.png"},
+};
 
+const BuiltIn *builtIn(const QString &id)
+{
+    for (const BuiltIn &b : kBuiltIns) {
+        if (id == QLatin1String(b.id))
+            return &b;
+    }
+    return nullptr;
+}
+
+QVariantMap describeBuiltIn(const BuiltIn &b)
+{
+    return {{"id", QString::fromLatin1(b.id)}, {"name", QString::fromLatin1(b.name)}, {"builtIn", true},
+            {"rigged", b.rigged}, {"modelUrl", QString()}, {"pictureUrl", QString()},
+            {"asset", QString::fromLatin1(b.asset)}, {"pictureAsset", QString::fromLatin1(b.picture)},
+            {"yaw", 0.0}, {"tilt", 0.0}};
+}
+
+// An added vehicle's folder name
 bool validId(const QString &id)
 {
     static const QRegularExpression re(QStringLiteral("^[a-z0-9][a-z0-9-]{0,47}$"));
-    return re.match(id).hasMatch() && id != VehicleManager::kBuiltInId;
+    return re.match(id).hasMatch() && !builtIn(id);
 }
 
 // A model's file name as a manifest may give it: a plain name in the
@@ -102,11 +134,23 @@ VehicleManager::VehicleManager(QObject *parent)
 {
 }
 
-void VehicleManager::setRoot(const QString &dir)
+bool VehicleManager::isBuiltIn(const QString &id)
+{
+    return builtIn(id) != nullptr;
+}
+
+void VehicleManager::setRoot(const QString &dir, bool existingInstall)
 {
     m_root = dir;
-    if (!m_root.isEmpty())
+    if (!m_root.isEmpty()) {
+        const bool firstTime = !QFileInfo::exists(m_root);
         QDir().mkpath(m_root);
+        if (firstTime && existingInstall) {
+            QSaveFile f(m_root + QLatin1Char('/') + kActiveFile);
+            if (f.open(QIODevice::WriteOnly) && f.write(kBuiltInId.toUtf8()) > 0)
+                f.commit();
+        }
+    }
     emit vehiclesChanged();
     emit activeChanged();
 }
@@ -196,38 +240,48 @@ QVariantMap VehicleManager::describe(const Entry &e) const
 {
     return {{"id", e.id}, {"name", e.name}, {"builtIn", false}, {"rigged", false},
             {"modelUrl", QUrl::fromLocalFile(dirOf(e.id) + QLatin1Char('/') + e.model).toString()},
-            {"pictureUrl", pictureUrlOf(e.id)}, {"yaw", e.yaw}, {"tilt", e.tilt}};
+            {"pictureUrl", pictureUrlOf(e.id)}, {"asset", QString()}, {"pictureAsset", QString()},
+            {"yaw", e.yaw}, {"tilt", e.tilt}};
 }
 
 QString VehicleManager::activeId() const
 {
     if (m_root.isEmpty())
-        return kBuiltInId;
+        return {};
     QFile f(m_root + QLatin1Char('/') + kActiveFile);
     if (f.size() > 256 || !f.open(QIODevice::ReadOnly))
-        return kBuiltInId;
+        return {};
     const QString id = QString::fromUtf8(f.readAll()).trimmed();
-    return validId(id) && find(id, nullptr) ? id : kBuiltInId;
+    return builtIn(id) || (validId(id) && find(id, nullptr)) ? id : QString();
 }
 
 QVariantMap VehicleManager::active() const
 {
+    const QString id = activeId();
+    if (const BuiltIn *b = builtIn(id))
+        return describeBuiltIn(*b);
     Entry e;
-    if (find(activeId(), &e))
+    if (!id.isEmpty() && find(id, &e))
         return describe(e);
-    return {{"id", kBuiltInId}, {"name", kBuiltInName}, {"builtIn", true}, {"rigged", true},
-            {"modelUrl", QString()}, {"pictureUrl", QString()}, {"yaw", 0.0}, {"tilt", 0.0}};
+    return {{"id", QString()}, {"name", QString()}, {"builtIn", false}, {"rigged", false},
+            {"modelUrl", QString()}, {"pictureUrl", QString()}, {"asset", QString()}, {"pictureAsset", QString()},
+            {"yaw", 0.0}, {"tilt", 0.0}};
 }
 
 QVariantList VehicleManager::vehicles() const
 {
     const QString current = activeId();
     QVariantList out;
-    out.append(QVariantMap{{"id", kBuiltInId}, {"name", kBuiltInName}, {"builtIn", true}, {"rigged", true},
-                           {"active", current == kBuiltInId}, {"pictureUrl", QString()}});
+    for (const BuiltIn &b : kBuiltIns) {
+        const QString id = QString::fromLatin1(b.id);
+        out.append(QVariantMap{{"id", id}, {"name", QString::fromLatin1(b.name)}, {"builtIn", true},
+                               {"rigged", b.rigged}, {"active", current == id}, {"pictureUrl", QString()},
+                               {"pictureAsset", QString::fromLatin1(b.picture)}});
+    }
     for (const Entry &e : installed())
         out.append(QVariantMap{{"id", e.id}, {"name", e.name}, {"builtIn", false}, {"rigged", false},
-                               {"active", current == e.id}, {"pictureUrl", pictureUrlOf(e.id)}});
+                               {"active", current == e.id}, {"pictureUrl", pictureUrlOf(e.id)},
+                               {"pictureAsset", QString()}});
     return out;
 }
 
@@ -282,7 +336,7 @@ QString VehicleManager::importModel(const QString &path, const QString &name)
     if (e.name.isEmpty())
         e.name = QStringLiteral("My vehicle");
     e.model = QStringLiteral("model.glb");
-    const QString base = slugOf(e.name) == kBuiltInId ? QStringLiteral("vehicle") : slugOf(e.name);
+    const QString base = builtIn(slugOf(e.name)) ? QStringLiteral("vehicle") : slugOf(e.name);
     e.id = base;
     for (int n = 2; QFileInfo::exists(dirOf(e.id)); ++n)
         e.id = QStringLiteral("%1-%2").arg(base).arg(n);
@@ -317,8 +371,8 @@ QString VehicleManager::importModel(const QString &path, const QString &name)
 
 bool VehicleManager::remove(const QString &id)
 {
-    if (id == kBuiltInId)
-        return fail(QStringLiteral("The built-in vehicle can't be removed."));
+    if (builtIn(id))
+        return fail(QStringLiteral("A built-in vehicle can't be removed."));
     if (!validId(id) || !QFileInfo(dirOf(id)).isDir())
         return fail(QStringLiteral("There is no vehicle named %1.").arg(id));
     const bool wasActive = activeId() == id;
@@ -335,18 +389,17 @@ bool VehicleManager::remove(const QString &id)
 
 bool VehicleManager::select(const QString &id)
 {
-    const QString want = id.isEmpty() ? kBuiltInId : id;
-    if (want != kBuiltInId && !find(want, nullptr))
+    if (!id.isEmpty() && !builtIn(id) && !find(id, nullptr))
         return fail(QStringLiteral("There is no vehicle named %1.").arg(id));
     if (m_root.isEmpty())
-        return want == kBuiltInId || fail(QStringLiteral("The vehicles folder is not set."));
-    const bool changed = activeId() != want;
+        return id.isEmpty() || fail(QStringLiteral("The vehicles folder is not set."));
+    const bool changed = activeId() != id;
     const QString file = m_root + QLatin1Char('/') + kActiveFile;
-    if (want == kBuiltInId) {
+    if (id.isEmpty()) {
         QFile::remove(file);
     } else {
         QSaveFile f(file);
-        if (!f.open(QIODevice::WriteOnly) || f.write(want.toUtf8()) < 0 || !f.commit())
+        if (!f.open(QIODevice::WriteOnly) || f.write(id.toUtf8()) < 0 || !f.commit())
             return fail(QStringLiteral("The choice could not be saved."));
     }
     ok();

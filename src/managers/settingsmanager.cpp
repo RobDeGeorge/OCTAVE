@@ -951,6 +951,7 @@ QJsonObject SettingsManager::loadSettings()
 QJsonObject SettingsManager::readSettingsFromDisk()
 {
     if (!QFile::exists(m_settingsFile)) {
+        m_createdThisRun = true;
         writeSettingsToDisk(m_defaultSettings);
         return m_defaultSettings;
     }

@@ -23,7 +23,9 @@ Node {
     property real engineRpm: 0
     property real wheelSpeedKph: 0
 
-    readonly property bool ready: loader.status === RuntimeLoader.Success
+    // Loaded, and measured (see _measure): only then is it the right size and in the middle
+    readonly property bool loaded: loader.status === RuntimeLoader.Success
+    readonly property bool ready: loaded && _measured && _steady >= 2
     readonly property string error: loader.status === RuntimeLoader.Error ? loader.errorString : ""
 
     // The radius every model is scaled to, in the scene's metres: the built-in Jeep's
@@ -34,13 +36,64 @@ Node {
     readonly property real groundY: _fit.groundY
     function toggle(key) {}
 
+    // The loaded model's box, in the model's own space (before yaw / tilt).
+    // RuntimeLoader.bounds is no use for this: it is worked out once, when the
+    // load finishes, and the parts' meshes have no bounds until a frame or two
+    // later, so it comes out as the box of the parts' origins (Qt 6.11). So
+    // the box is measured here from every Model's own bounds, again and again
+    // for a moment after the load, until it stops changing.
+    property vector3d _lo
+    property vector3d _hi
+    property bool _measured: false
+    property int _steady: 0
+    function _measure() {
+        var lo = Qt.vector3d(Infinity, Infinity, Infinity), hi = Qt.vector3d(-Infinity, -Infinity, -Infinity)
+        var found = false
+        var walk = function(node) {
+            var kids = node.children
+            for (var i = 0; i < kids.length; ++i) {
+                var m = kids[i]
+                if (m.geometry !== undefined && m.bounds !== undefined
+                        && m.bounds.maximum.minus(m.bounds.minimum).length() > 0) {
+                    var a = m.bounds.minimum, b = m.bounds.maximum
+                    for (var c = 0; c < 8; ++c) {
+                        var p = turn.mapPositionFromScene(m.mapPositionToScene(
+                            Qt.vector3d(c & 1 ? b.x : a.x, c & 2 ? b.y : a.y, c & 4 ? b.z : a.z)))
+                        lo = Qt.vector3d(Math.min(lo.x, p.x), Math.min(lo.y, p.y), Math.min(lo.z, p.z))
+                        hi = Qt.vector3d(Math.max(hi.x, p.x), Math.max(hi.y, p.y), Math.max(hi.z, p.z))
+                    }
+                    found = true
+                }
+                walk(m)
+            }
+        }
+        walk(loader)
+        if (!found)
+            return
+        var same = _measured && lo.minus(_lo).length() < 1e-4 && hi.minus(_hi).length() < 1e-4
+        _steady = same ? _steady + 1 : 0
+        if (!same) {
+            _lo = lo
+            _hi = hi
+            _measured = true
+        }
+    }
+    Timer {
+        property int ticks: 0
+        interval: 100
+        repeat: true
+        running: vehicle.loaded && vehicle._steady < 5 && ticks < 100
+        onRunningChanged: if (!running && !vehicle.loaded) ticks = 0
+        onTriggered: { ticks += 1; vehicle._measure() }
+    }
+
     // The model's box once turned by yaw / tilt: the scale that brings its
     // half-diagonal to closedRadius, its centre, and its underside
     readonly property var _fit: {
         var none = { scale: 1, centre: Qt.vector3d(0, 0, 0), groundY: -1 }
-        if (!ready)
+        if (!loaded || !_measured)
             return none
-        var lo = loader.bounds.minimum, hi = loader.bounds.maximum
+        var lo = _lo, hi = _hi
         var q = turn.rotation
         var min = Qt.vector3d(Infinity, Infinity, Infinity), max = Qt.vector3d(-Infinity, -Infinity, -Infinity)
         for (var i = 0; i < 8; ++i) {
@@ -64,7 +117,13 @@ Node {
             RuntimeLoader {
                 id: loader
                 source: vehicle.source
-                onStatusChanged: if (status === RuntimeLoader.Error) console.warn("Vehicle model:", source, errorString)
+                onStatusChanged: {
+                    if (status === RuntimeLoader.Error)
+                        console.warn("Vehicle model:", source, errorString)
+                    // A new model: measure it afresh
+                    vehicle._measured = false
+                    vehicle._steady = 0
+                }
             }
         }
     }

@@ -2,9 +2,11 @@
 #define VEHICLEMANAGER_H
 
 // The vehicle the app shows: the 3D view (frontend/VehicleView.qml), the
-// Home card and the "No vehicle connected" picture. The built-in one is the
-// rigged Jeep TJ (frontend/assets/jeep_tj, id kBuiltInId). Anyone can add
-// their own model: each is a folder <config>/vehicles/<id>/ holding
+// Home card and the "No vehicle connected" picture. A fresh install has
+// none: the 3D view asks which one (frontend/VehicleChooser.qml). The choice
+// is one of the vehicles that ship with the frontend (the rigged Jeep TJ,
+// id kBuiltInId, and models under frontend/assets/vehicles/), or a model of
+// the user's own: each of those is a folder <config>/vehicles/<id>/ holding
 //
 //   vehicle.json   {"name": "...", "model": "model.glb", "yaw": 0, "tilt": 0}
 //   model.glb      the model (glTF binary; a .gltf with its files beside it
@@ -21,7 +23,8 @@
 // importModel() copies one .glb into a new folder. A folder dropped in by
 // hand is listed too, when its manifest names a model file that is inside
 // the folder. The file ACTIVE under <config>/vehicles/ holds the active id
-// (absent = the built-in vehicle).
+// (absent = no vehicle chosen). An install that predates the choice keeps
+// the Jeep it always showed (setRoot).
 //
 // Service object `vehicleManager` (experimental).
 
@@ -36,13 +39,16 @@ class VehicleManager : public QObject
     Q_CLASSINFO("octave.scope", "settings")
     Q_CLASSINFO("octave.scope.files", "importModel")
     Q_CLASSINFO("octave.scope.read", "picturePath")
-    // [{id, name, builtIn, rigged, active, pictureUrl}], the built-in first
+    // [{id, name, builtIn, rigged, active, pictureUrl, pictureAsset}], the
+    // built-in ones first
     Q_PROPERTY(QVariantList vehicles READ vehicles NOTIFY vehiclesChanged)
-    // The vehicle shown; kBuiltInId when none is chosen or the chosen one is gone
+    // The vehicle shown; "" when none is chosen or the chosen one is gone
     Q_PROPERTY(QString activeId READ activeId WRITE select NOTIFY activeChanged)
-    // {id, name, builtIn, rigged, modelUrl, pictureUrl, yaw, tilt}. modelUrl
-    // is "" for the built-in rig; pictureUrl is "" until a picture exists
-    // (the built-in vehicle's picture ships with the frontend)
+    // {id, name, builtIn, rigged, modelUrl, pictureUrl, asset, pictureAsset,
+    // yaw, tilt}; id "" when no vehicle is chosen. A built-in vehicle names
+    // its files under frontend/assets/ (asset: the model, "" for the rig;
+    // pictureAsset); an added one gives URLs (modelUrl; pictureUrl, "" until
+    // the app has rendered its picture)
     Q_PROPERTY(QVariantMap active READ active NOTIFY activeChanged)
     // False where a model can't be picked from a file (the browser build)
     Q_PROPERTY(bool canImport READ canImport CONSTANT)
@@ -56,8 +62,11 @@ public:
 
     explicit VehicleManager(QObject *parent = nullptr);
 
-    // <config>/vehicles (AppCore); made if missing
-    void setRoot(const QString &dir);
+    // <config>/vehicles (AppCore); made if missing. `existingInstall`: the
+    // app has run here before. Such an install without this folder predates
+    // the choice of vehicle, and keeps the Jeep it has always shown
+    void setRoot(const QString &dir, bool existingInstall = false);
+    static bool isBuiltIn(const QString &id);
     QString root() const { return m_root; }
 
     QVariantList vehicles() const;
@@ -70,9 +79,9 @@ public:
     // a path or the URL a file picker gives; `name` defaults to the file's
     // name. The new id, or "" (lastError says why)
     Q_INVOKABLE QString importModel(const QString &path, const QString &name = QString());
-    // Delete an added vehicle; the built-in one can't be removed
+    // Delete an added vehicle; a built-in one can't be removed
     Q_INVOKABLE bool remove(const QString &id);
-    // "" or kBuiltInId = the built-in vehicle
+    // "" = no vehicle
     Q_INVOKABLE bool select(const QString &id);
     Q_INVOKABLE bool rename(const QString &id, const QString &name);
     // Degrees about the up axis (yaw) and the side axis (tilt)

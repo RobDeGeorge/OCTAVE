@@ -262,7 +262,7 @@ Flickable {
         { cardId: "device_vehicle", title: "Vehicle", component: vehicleContent,
           summary: function() {
               var v = pageRoot._vehicles
-              return v ? { state: v.active.name } : {}
+              return v ? { state: v.active.name || "Not chosen" } : {}
           } },
         { cardId: "device_diagnostics", title: "Diagnostics", component: diagnosticsContent,
           summary: function() {
@@ -721,9 +721,9 @@ Flickable {
             readonly property bool own: !!current.id && !current.builtIn
 
             SettingDescription {
-                text: "The vehicle in the 3D view and on the Home screen. Add your own: any model exported as glTF binary "
-                      + "(.glb) works. It is shown whole and tilts with the motion sensor; opening doors and turning "
-                      + "wheels are the built-in Jeep's alone. If a model comes in sideways or lying down, turn it here."
+                text: "The vehicle in the 3D view and on the Home screen. Pick one, or add your own: any model exported as "
+                      + "glTF binary (.glb) works. A model is shown whole and tilts with the motion sensor; opening doors "
+                      + "and turning wheels are the Jeep's alone. If a model comes in sideways or lying down, turn it here."
             }
 
             Item {
@@ -745,7 +745,7 @@ Flickable {
                     onLoaded: {
                         item.showLevelRing = false
                         item.interactive = false
-                        item.cameraZoom = 1.3
+                        item.cameraZoom = 1.5
                     }
                     readonly property bool sceneReady: status === Loader.Ready && item.ready
                 }
@@ -759,7 +759,8 @@ Flickable {
                     visible: text !== ""
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.WordWrap
-                    text: !pageRoot._has3D ? (vehicleCard.own && !vehicleCard.current.pictureUrl ? "This build has no 3D view to show the model in." : "")
+                    text: !vehicleCard.current.id ? "No vehicle chosen. Tap one below."
+                        : !pageRoot._has3D ? (vehicleCard.own && !vehicleCard.current.pictureUrl ? "This build has no 3D view to show the model in." : "")
                         : vehiclePreview.status !== Loader.Ready ? ""
                         : vehiclePreview.item.error ? "This model could not be loaded: " + vehiclePreview.item.error
                         : !vehiclePreview.item.ready ? "Loading\u2026" : ""
@@ -869,6 +870,14 @@ Flickable {
                         pictureTimer.tries = 0
                         pictureTimer.stale = true
                     }
+                }
+                SettingsButton {
+                    objectName: "noVehicle"
+                    visible: !!vehicleCard.current.id
+                    text: "No vehicle"
+                    height: pageRoot.dp(30)
+                    width: Layout.preferredWidth
+                    onClicked: vehicleCard.vm.select("")
                 }
                 SettingsButton {
                     objectName: "removeVehicleModel"
