@@ -419,7 +419,6 @@ Item {
                                 compact: true
                                 Layout.preferredWidth: studio.dp(104)
                                 Layout.minimumWidth: studio.dp(104)
-                                text: checked ? "On" : "Off"
                                 checked: settingsManager ? settingsManager.showAlbumArtShadow : true
                                 activeColor: App.Style.accent
                                 inactiveColor: App.Style.hoverColor
@@ -449,7 +448,6 @@ Item {
                                 compact: true
                                 Layout.preferredWidth: studio.dp(104)
                                 Layout.minimumWidth: studio.dp(104)
-                                text: checked ? "On" : "Off"
                                 checked: settingsManager ? settingsManager.vinylRecordMode : false
                                 activeColor: App.Style.accent
                                 inactiveColor: App.Style.hoverColor
@@ -464,7 +462,6 @@ Item {
                                 compact: true
                                 Layout.preferredWidth: studio.dp(104)
                                 Layout.minimumWidth: studio.dp(104)
-                                text: checked ? "On" : "Off"
                                 checked: settingsManager ? settingsManager.showWaveformVisualizer : true
                                 activeColor: App.Style.accent
                                 inactiveColor: App.Style.hoverColor

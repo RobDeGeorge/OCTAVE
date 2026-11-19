@@ -70,14 +70,7 @@ Item {
                        status: brief === "Connected" ? App.Style.statusConnected
                              : brief === "Connecting" ? App.Style.statusWarning : App.Style.statusDisconnected }
           } },
-        { cardId: "obd_adapters", title: "Adapters", component: adaptersContent,
-          summary: function() {
-              if (!settingsManager) return {}
-              var saved = settingsManager.obdSavedAdapters
-              if (saved.length === 0) return {}
-              return { state: saved.length === 1 ? (saved[0].name || "1 saved") : saved.length + " saved" }
-          } },
-        { cardId: "obd_parameters", title: "Parameters", component: parametersContent,
+        { cardId: "obd_parameters", title: "Home Gauges", component: parametersContent,
           summary: function() {
               if (!settingsManager) return {}
               var n = (settingsManager.homeOBDParameters || []).length
@@ -92,22 +85,37 @@ Item {
               var n = tripRecorder.trips.length
               return { state: n + (n === 1 ? " drive" : " drives") }
           } },
-        { cardId: "obd_custom_pids", title: "Custom PIDs", component: customPidsContent,
+        { cardId: "obd_advanced", title: "Advanced", component: advancedContent,
           summary: function() {
+              if (typeof busMonitor !== "undefined" && busMonitor && busMonitor.active)
+                  return { state: "Listening", active: true, status: App.Style.statusConnected }
               if (typeof customPids === "undefined" || !customPids) return {}
               var n = customPids.pids.length
               if (customPids.errors.length > 0)
-                  return { state: n + " loaded, " + customPids.errors.length + " skipped", status: App.Style.statusWarning }
-              return { state: n === 0 ? "None" : n + (n === 1 ? " reading" : " readings") }
-          } },
-        { cardId: "obd_bus_monitor", title: "Bus Monitor", component: busMonitorContent,
-          summary: function() {
-              if (typeof busMonitor === "undefined" || !busMonitor) return {}
-              if (busMonitor.active)
-                  return { state: "Listening", active: true, status: App.Style.statusConnected }
-              return { state: "Off" }
+                  return { state: n + " custom, " + customPids.errors.length + " skipped", status: App.Style.statusWarning }
+              return n === 0 ? {} : { state: n + (n === 1 ? " custom reading" : " custom readings") }
           } }
     ]
+
+    // ── Advanced: the two tools few people need, one card under the other
+    Component {
+        id: advancedContent
+        ColumnLayout {
+            width: parent ? parent.width : 0
+            spacing: App.Spacing.sectionSpacing
+
+            SettingsCard {
+                // A card with no cardId is always open and draws no header
+                SettingLabel { text: "Custom PIDs"; font.pixelSize: App.Spacing.overallText * 1.5; font.bold: true }
+                Loader { Layout.fillWidth: true; sourceComponent: customPidsContent }
+            }
+            SettingsCard {
+                // A card with no cardId is always open and draws no header
+                SettingLabel { text: "Bus Monitor"; font.pixelSize: App.Spacing.overallText * 1.5; font.bold: true }
+                Loader { Layout.fillWidth: true; sourceComponent: busMonitorContent }
+            }
+        }
+    }
 
     // ── Bus monitor card ──────────────────────────────────────────────
     // What the adapter hears on the vehicle bus while it only listens
@@ -125,7 +133,7 @@ Item {
             readonly property real cell: App.Spacing.overallText * 1.7
 
             SettingDescription {
-                text: "Shows the raw messages on the car's network as they go by. OCTAVE only listens here and never sends anything. Live gauges and drive recording pause while it listens."
+                text: "The raw messages on the car's network. OCTAVE only listens; gauges and drive recording pause meanwhile."
                 wrapMode: Text.WordWrap
             }
 
@@ -136,7 +144,7 @@ Item {
                     id: busFilterField
                     Layout.fillWidth: true
                     enabled: busColumn.ready && !busMonitor.active
-                    placeholderText: "Only this message id (7E8, 0CX); empty for all"
+                    placeholderText: "Message id (7E8, 0CX), or empty for all"
                 }
                 SettingsButton {
                     Layout.preferredHeight: dp(44)
@@ -267,7 +275,7 @@ Item {
             property bool created: false
 
             SettingDescription {
-                text: "Readings your car has beyond standard OBD2, such as transmission temperature, from a file you edit. OCTAVE only ever asks the car to read them. They appear under Custom when you pick what a gauge shows, and are recorded with every drive."
+                text: "Readings beyond standard OBD2, such as transmission temperature, from a file you edit. Read only. They show under Custom in the gauge picker."
                 wrapMode: Text.WordWrap
             }
 
@@ -323,8 +331,6 @@ Item {
             spacing: App.Spacing.rowSpacing
 
             readonly property bool recorderReady: typeof tripRecorder !== "undefined" && tripRecorder !== null
-            property bool clearArmed: false
-
             function fmtBytes(b) {
                 b = b || 0
                 if (b >= 1024 * 1024) return (b / (1024 * 1024)).toFixed(1) + " MB"
@@ -341,13 +347,13 @@ Item {
                 onToggled: function(checked) { if (settingsManager) settingsManager.save_black_box_enabled(checked) }
             }
             SettingDescription {
-                text: "Every OBD reading of every drive goes into the black box database, and each drive is written out as a CSV + JSON file when it ends"
+                text: "Every reading, kept in the black box and as one CSV per drive"
             }
 
             SettingsDivider {}
 
             SettingsToggle {
-                text: "Record all supported PIDs"
+                text: "Record everything the car reports"
                 compact: true
                 Layout.fillWidth: false
                 Layout.alignment: Qt.AlignLeft
@@ -355,7 +361,7 @@ Item {
                 onToggled: function(checked) { if (settingsManager) settingsManager.save_black_box_sweep_all(checked) }
             }
             SettingDescription {
-                text: "Also polls parameters that are not on screen, one per pass of the live gauges, so the record is complete without slowing them"
+                text: "Also reads what is not on screen, without slowing the gauges"
             }
 
             SettingsDivider {}
@@ -385,7 +391,7 @@ Item {
                 }
             }
             SettingDescription {
-                text: "The oldest drives are deleted first once the database and trip files pass this size"
+                text: "The oldest drives are deleted first"
             }
 
             SettingsDivider {}
@@ -416,7 +422,8 @@ Item {
             }
             Text {
                 Layout.fillWidth: true
-                visible: parent.recorderReady
+                // Open folder says where, when there is a file manager to open
+                visible: parent.recorderReady && !tripRecorder.canOpenFolder
                 text: parent.recorderReady ? tripRecorder.tripsDir : ""
                 color: App.Style.secondaryTextColor
                 font.pixelSize: App.Spacing.overallText * 0.7
@@ -451,22 +458,13 @@ Item {
                     visible: parent.parent.recorderReady && tripRecorder.canOpenFolder
                     onClicked: tripRecorder.openHistoryFolder()
                 }
-                SettingsButton {
+                ConfirmButton {
                     Layout.preferredHeight: dp(44)
-                    text: parent.parent.clearArmed ? "Tap again to clear" : "Clear history"
-                    buttonColor: parent.parent.clearArmed ? App.Style.statusDisconnected : App.Style.accent
+                    label: "Clear history"
+                    confirmLabel: "Confirm clear"
                     enabled: parent.parent.recorderReady && tripRecorder.trips.length > 0
-                    onClicked: {
-                        if (parent.parent.clearArmed) {
-                            tripRecorder.clearHistory()
-                            parent.parent.clearArmed = false
-                        } else {
-                            parent.parent.clearArmed = true
-                            clearArmTimer.restart()
-                        }
-                    }
+                    onConfirmed: tripRecorder.clearHistory()
                 }
-                Timer { id: clearArmTimer; interval: 4000; onTriggered: blackBoxColumn.clearArmed = false }
             }
         }
     }
@@ -479,10 +477,6 @@ Item {
         ColumnLayout {
             width: parent ? parent.width : 0
             spacing: App.Spacing.rowSpacing
-
-            SettingLabel {
-                text: "Connection Status"
-            }
 
             Rectangle {
                 id: connectionStatusRect
@@ -682,8 +676,11 @@ Item {
                 }
             }
 
-            SettingDescription {
-                text: "Tap status bar to reconnect"
+            SettingsButton {
+                text: "Reconnect"
+                Layout.preferredHeight: dp(44)
+                enabled: !!obdManager
+                onClicked: obdManager.resetConnection()
             }
 
             // ── Vehicle identity (VIN read at connect, Mode 09 PID 02) ──
@@ -713,16 +710,20 @@ Item {
 
             SettingsDivider {}
 
-            // Fast Mode Toggle
-            ColumnLayout {
+            // The adapter: find one, pick a saved one, or type an address
+            Loader {
                 Layout.fillWidth: true
-                spacing: App.Spacing.rowSpacing
+                sourceComponent: adaptersContent
+            }
 
-                SettingsToggle {
-                    text: "Fast mode"
+            SettingsDivider {}
+
+            SettingCategory {
+                title: "Fast Polling"
+                description: "Not every vehicle keeps up."
+
+                inlineContent: SettingsToggle {
                     compact: true
-                    Layout.fillWidth: false
-                    Layout.alignment: Qt.AlignLeft
                     checked: settingsManager ? settingsManager.obdFastMode : true
 
                     onToggled: function(checked) {
@@ -732,35 +733,35 @@ Item {
                     }
                 }
 
-                SettingDescription {
-                    text: "Faster polling, may not work with all vehicles"
-                }
             }
 
-            SettingsDivider {}
+            // Reconnect after a drop. The setting is a count of attempts
+            // (0 = off); a slider that appears while it is on picks it.
+            SettingCategory {
+                title: "Auto Reconnect"
 
-            // Auto-Reconnect Attempts
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: App.Spacing.rowSpacing
-
-                SettingLabel {
-                    text: "Reconnect Retries"
+                inlineContent: SettingsToggle {
+                    compact: true
+                    checked: settingsManager ? settingsManager.obdAutoReconnectAttempts > 0 : false
+                    onToggled: function(checked) {
+                        if (settingsManager) settingsManager.save_obd_auto_reconnect_attempts(checked ? 3 : 0)
+                    }
                 }
 
                 RowLayout {
+                    visible: settingsManager ? settingsManager.obdAutoReconnectAttempts > 0 : false
                     Layout.fillWidth: true
                     spacing: App.Spacing.overallSpacing
 
                     SettingsSlider {
                         id: autoReconnectSlider
                         Layout.fillWidth: true
-                        from: 0
+                        from: 1
                         to: 10
                         stepSize: 1
-                        value: settingsManager ? settingsManager.obdAutoReconnectAttempts : 0
+                        value: settingsManager ? Math.max(1, settingsManager.obdAutoReconnectAttempts) : 3
 
-                        valueDisplay: value === 0 ? "Off" : value.toString()
+                        valueDisplay: value.toString()
 
                         onMoved: {
                             if (settingsManager) {
@@ -770,32 +771,30 @@ Item {
                     }
 
                     Text {
-                        text: autoReconnectSlider.value === 0 ? "Off" : autoReconnectSlider.value.toString()
+                        text: autoReconnectSlider.value.toString() + (autoReconnectSlider.value === 1 ? " try" : " tries")
                         color: App.Style.primaryTextColor
                         font.pixelSize: App.Spacing.overallText
                         font.family: App.Style.fontFamily
                         font.bold: true
-                        Layout.preferredWidth: dp(30)
+                        Layout.preferredWidth: dp(60)
                         horizontalAlignment: Text.AlignRight
                     }
                 }
-
-                SettingDescription {
-                    text: "Retry attempts after disconnect (0 = off)"
-                }
             }
 
-            SettingsDivider {}
-
-            // ── Live OBD log ──────────────────────────────────
-            SettingLabel {
-                text: "Connection Log"
+            // ── Live OBD log, closed until asked for ──────────
+            SettingsButton {
+                id: logButton
+                property bool open: false
+                text: open ? "Hide Log" : "Show Log"
+                Layout.preferredHeight: dp(44)
                 visible: pageRoot.connectionLog.length > 0
+                onClicked: open = !open
             }
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: dp(180)
-                visible: pageRoot.connectionLog.length > 0
+                visible: logButton.open && pageRoot.connectionLog.length > 0
                 radius: dpMin(6, 2)
                 color: "#0d0d10"
                 border.color: "#22ff88"
@@ -879,8 +878,13 @@ Item {
             onVisibleChanged: if (visible) tapsAllowedAt = Date.now() + 600
 
             SettingLabel {
-                text: "OBD Adapter"
+                text: "Adapter"
             }
+
+            // Typing an address is the fallback where there is nothing to
+            // scan with; it stays closed while the finder can do the job
+            property bool manualOpen: !(typeof obdAdapterFinder !== "undefined" && obdAdapterFinder
+                                        && obdAdapterFinder.canScan)
 
             // Scan, pair and connect without knowing the MAC (OBDAdapterSheet)
             Rectangle {
@@ -989,15 +993,22 @@ Item {
             // /dev/... path, or a COM port. The manager classifies and
             // dispatches accordingly. Not in the browser, which can only
             // reach the adapter through its own Bluetooth chooser.
+            SettingsButton {
+                text: "Enter Address Manually"
+                Layout.preferredHeight: dp(44)
+                visible: Qt.platform.os !== "wasm" && !adaptersColumn.manualOpen
+                onClicked: adaptersColumn.manualOpen = true
+            }
+
             RowLayout {
                 Layout.fillWidth: true
-                visible: Qt.platform.os !== "wasm"
+                visible: Qt.platform.os !== "wasm" && adaptersColumn.manualOpen
                 spacing: dp(8)
 
                 SettingsTextField {
                     id: manualMacField
                     Layout.fillWidth: true
-                    placeholderText: "MAC address, rfcomm://MAC, /dev path, or COM port"
+                    placeholderText: "MAC address, /dev path or COM port"
                     text: settingsManager ? settingsManager.obdBluetoothPort : ""
 
                     // Typing (and the taps above) replace the binding; keep
@@ -1180,6 +1191,7 @@ Item {
             // Per-OS hint — the *only* place this page knows about
             // platform variation. Drives copy, never structure.
             SettingDescription {
+                visible: Qt.platform.os === "wasm" || adaptersColumn.manualOpen
                 text: {
                     if (Qt.platform.os === "wasm")
                         return "In the browser, Find Bluetooth Adapters connects a Bluetooth LE OBD2 adapter "
@@ -1189,9 +1201,8 @@ Item {
                     if (hint === "android")
                         return "Pair your ELM327 in Android Settings first, then enter its MAC here and press Go."
                     if (hint === "linux")
-                        return "Enter the adapter's MAC and press Direct to connect over Bluetooth straight away " +
-                               "(most reliable; retries every 10 s while the adapter is off). Go binds /dev/rfcomm0 instead. " +
-                               "USB ELM327 also works (/dev/ttyUSB0). See Connection Log for errors."
+                        return "Direct connects to a MAC over Bluetooth and is the most reliable. Go uses /dev/rfcomm0. " +
+                               "A USB adapter is /dev/ttyUSB0."
                     if (hint === "windows")
                         return "Enter the COM port assigned to your paired ELM327 (e.g. COM5), or its MAC."
                     if (hint === "macos")
@@ -1258,95 +1269,6 @@ Item {
                 if (typeof obdManager !== "undefined" && obdManager && obdManager.setParameterDemand)
                     obdManager.setParameterDemand("settings", []);
             }
-
-            // OBD Card Style
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: App.Spacing.rowSpacing
-
-                SettingsToggle {
-                    id: obdCardStyleToggle
-                    compact: true
-                    Layout.fillWidth: false
-                    Layout.alignment: Qt.AlignLeft
-                    text: "Circular gauges"
-                    checked: settingsManager ? settingsManager.obdCardStyleCircular : false
-                    activeColor: App.Style.accent
-                    inactiveColor: App.Style.hoverColor
-
-                    onToggled: function(checked) {
-                        if (settingsManager) {
-                            settingsManager.save_obd_card_style_circular(checked)
-                        }
-                    }
-                }
-
-                SettingDescription {
-                    text: "Square cards or circular gauges (OBD page only)"
-                }
-            }
-
-            // The vehicle's picture beside the Home readings
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: App.Spacing.rowSpacing
-
-                SettingsToggle {
-                    objectName: "homeVehicleCardToggle"
-                    compact: true
-                    Layout.fillWidth: false
-                    Layout.alignment: Qt.AlignLeft
-                    text: "Vehicle on Home"
-                    checked: settingsManager ? settingsManager.homeVehicleCard : false
-                    activeColor: App.Style.accent
-                    inactiveColor: App.Style.hoverColor
-                    onToggled: function(checked) { if (settingsManager) settingsManager.homeVehicleCard = checked }
-                }
-
-                SettingDescription {
-                    text: "Show the vehicle beside the Home readings, with pitch and roll under it while a motion sensor is connected. Tap it for the 3D view"
-                }
-            }
-
-            // Units the gauges and dashboards show (the Sensors page has its own)
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: App.Spacing.rowSpacing
-
-                SettingsToggle {
-                    objectName: "gaugeTempFToggle"
-                    compact: true
-                    Layout.fillWidth: false
-                    Layout.alignment: Qt.AlignLeft
-                    text: "Temperatures in °F"
-                    checked: settingsManager ? settingsManager.gaugeTempUnit === "F" : false
-                    activeColor: App.Style.accent
-                    inactiveColor: App.Style.hoverColor
-                    onToggled: function(checked) {
-                        if (settingsManager) settingsManager.save_gauge_temp_unit(checked ? "F" : "C")
-                    }
-                }
-
-                SettingsToggle {
-                    objectName: "gaugeSpeedKmhToggle"
-                    compact: true
-                    Layout.fillWidth: false
-                    Layout.alignment: Qt.AlignLeft
-                    text: "Speed in km/h"
-                    checked: settingsManager ? settingsManager.gaugeSpeedUnit === "km/h" : false
-                    activeColor: App.Style.accent
-                    inactiveColor: App.Style.hoverColor
-                    onToggled: function(checked) {
-                        if (settingsManager) settingsManager.save_gauge_speed_unit(checked ? "km/h" : "mph")
-                    }
-                }
-
-                SettingDescription {
-                    text: "Units on the OBD cards and dashboards. Trip History keeps the recorded units; altitude follows the Sensors setting."
-                }
-            }
-
-            SettingsDivider {}
 
             // ── Parameter count ──────────────────────────────────
             Text {
@@ -2107,7 +2029,7 @@ Item {
 
             Text {
                 Layout.fillWidth: true
-                text: "Drag sideways to add to the home grid. Reorder by dragging within the grid. OCTAVE polls only the parameters on screen, so there is nothing to enable here."
+                text: "Drag sideways to add to the home grid. Drag within the grid to reorder."
                 color: Qt.rgba(App.Style.secondaryTextColor.r, App.Style.secondaryTextColor.g, App.Style.secondaryTextColor.b, 0.7)
                 font.pixelSize: App.Spacing.overallText * 0.85
                 font.family: App.Style.fontFamily

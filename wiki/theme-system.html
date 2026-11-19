@@ -315,8 +315,8 @@
         <p><code>colorTransitionMs</code> (default 1000, persisted as <code>settingsManager.colorTransitionMs</code> and loaded by Main.qml at startup) is the duration of every token's <code>ColorAnimation</code>. In practice it only governs album-art driven shifts on song change: startup and manual theme picks go through <code>setThemeInstant()</code>, and the first paint after entering Album Art Capture is forced instant by <code>_firstAlbumArtUpdate</code>.</p>
 
         <ul>
-          <li><strong>Transition Speed</strong> slider (Display &rarr; Appearance &rarr; Album Art Capture): 0&ndash;2000&nbsp;ms in steps of 50, "0 = instant". Moves are debounced 100&nbsp;ms before <code>save_color_transition_ms()</code> and <code>App.Style.colorTransitionMs</code> are updated.</li>
-          <li><strong>Match Song Length</strong> toggle (<code>songLengthTransition</code>): Main.qml's <code>Connections</code> on <code>mediaManager.durationChanged</code> sets <code>colorTransitionMs = durationMs</code>, so the palette drifts across the whole track. Turning it off restores the saved value from <code>settingsManager.colorTransitionMs</code>.</li>
+          <li><strong>Fade Time</strong> slider (Display &rarr; Appearance &rarr; Album Art Capture): 0&ndash;2000&nbsp;ms in steps of 50, 0 being instant. Moves are debounced 100&nbsp;ms before <code>save_color_transition_ms()</code> and <code>App.Style.colorTransitionMs</code> are updated.</li>
+          <li><strong>Fade Over the Whole Song</strong> toggle (<code>songLengthTransition</code>): Main.qml's <code>Connections</code> on <code>mediaManager.durationChanged</code> sets <code>colorTransitionMs = durationMs</code>, so the palette drifts across the whole track. Turning it off restores the saved value from <code>settingsManager.colorTransitionMs</code>.</li>
         </ul>
 
         <div class="info-box warning">

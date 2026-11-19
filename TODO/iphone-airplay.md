@@ -5,7 +5,7 @@
 
 **Goal:** an iPhone mirrors to OCTAVE and is driven from OCTAVE's screen, with no app, no developer mode and no extra hardware.
 
-What exists: `airPlayManager` (`src/managers/airplaymanager.{h,cpp}`), the receiver over UxPlay's library (`src/airplay/airplayreceiver.{h,cpp}`, `third_party/uxplay/`), the Bluetooth LE mouse (`src/platform/bluezhidmouse.{h,cpp}`), the pointer path (`src/airplay/pointerpath.{h,cpp}`), `frontend/AirPlayView.qml`, the iPhone card in Settings > Accessories > Phone Dock. Wiki: `wiki/phone-mirror-android-auto.html#airplay`. Checked without a phone: mDNS answers for `_airplay._tcp` / `_raop._tcp`, RTSP `/info` (also in `tst_airplay`), the page and settings screenshots, the mouse registering with bluetoothd and leaving the adapter as it was.
+What exists: `airPlayManager` (`src/managers/airplaymanager.{h,cpp}`), the receiver over UxPlay's library (`src/airplay/airplayreceiver.{h,cpp}`, `third_party/uxplay/`), the Bluetooth LE mouse (`src/platform/bluezhidmouse.{h,cpp}`), the pointer path (`src/airplay/pointerpath.{h,cpp}`), `frontend/AirPlayView.qml`, the iPhone card in Settings > Phone. Wiki: `wiki/phone-mirror-android-auto.html#airplay`. Checked without a phone: mDNS answers for `_airplay._tcp` / `_raop._tcp`, RTSP `/info` (also in `tst_airplay`), the page and settings screenshots, the mouse registering with bluetoothd and leaving the adapter as it was.
 
 Why parked here: every step below needs an iPhone on the same network as the desktop (and later the Pi).
 

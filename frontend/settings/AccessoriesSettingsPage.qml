@@ -66,25 +66,6 @@ Flickable {
           summary: function() {
               return pageRoot._device(settingsManager && settingsManager.gestureSensorEnabled,
                   typeof gestureSensor !== "undefined" && gestureSensor ? gestureSensor.connectionStatus === "Connected" : false)
-          } },
-        { cardId: "accessories_phone_dock", title: "Phone Dock", component: phoneDockContent,
-          summary: function() {
-              if (!settingsManager) return {}
-              var ap = typeof airPlayManager !== "undefined" ? airPlayManager : null
-              if (!settingsManager.phoneMirrorEnabled) {
-                  if (!ap || !ap.enabled) return { state: "Off" }
-                  var playing = ap.state === "mirroring" || ap.state === "audio"
-                  return { state: ap.state === "mirroring" ? "AirPlay · mirroring" : ap.state === "audio" ? "AirPlay · audio"
-                                : ap.state === "error" ? "AirPlay · error" : "AirPlay · waiting",
-                           active: playing,
-                           status: playing ? App.Style.statusConnected
-                                 : ap.state === "error" ? App.Style.statusError : App.Style.statusWarning }
-              }
-              var pm = typeof phoneMirrorManager !== "undefined" ? phoneMirrorManager : null
-              var running = !!(pm && pm.isRunning)
-              return { state: running ? "Mirror · " + (pm.connectionType === "wifi" ? "Wi-Fi" : "USB") : "Mirror · waiting",
-                       active: running,
-                       status: running ? App.Style.statusConnected : App.Style.statusWarning }
           } }
     ]
 
@@ -194,134 +175,26 @@ Flickable {
                         }
                     }
 
-                    // Port chips using Flow layout
-                    Flow {
-                        Layout.fillWidth: true
-                        spacing: App.Spacing.overallSpacing
-
-                        Repeater {
-                            model: pageRoot.portsModel
-
-                            Item {
-                                id: portChipWrapper
-                                width: portChipRect.width
-                                height: portChipRect.height
-
-                                property bool isSelected: settingsManager && settingsManager.esp32VolumePort === modelData.port
-
-                                Rectangle {
-                                    anchors.centerIn: portChipRect
-                                    width: portChipRect.width + 4
-                                    height: portChipRect.height + 4
-                                    radius: portChipRect.radius + 2
-                                    color: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.25)
-                                    visible: App.EnvironmentTheme.active.chipAccentBorder && portChipWrapper.isSelected
-                                }
-
-                                Rectangle {
-                                    id: portChipRect
-                                    width: portChipContent.width + App.Spacing.overallSpacing * 3
-                                    height: App.Spacing.formElementHeight * 0.9
-                                    radius: App.EnvironmentTheme.active.chipRadius === -1
-                                        ? height / 2 : pageRoot.dpMin(App.EnvironmentTheme.active.chipRadius, 2)
-
-                                    color: portChipWrapper.isSelected ? App.Style.accent : App.Style.hoverColor
-
-                                    border.width: App.EnvironmentTheme.active.chipAccentBorder
-                                        ? 1
-                                        : (portChipWrapper.isSelected ? 0 : 1)
-                                    border.color: App.EnvironmentTheme.active.chipAccentBorder
-                                        ? (portChipWrapper.isSelected
-                                            ? Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.8)
-                                            : Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.3))
-                                        : Qt.rgba(App.Style.primaryTextColor.r,
-                                                  App.Style.primaryTextColor.g,
-                                                  App.Style.primaryTextColor.b, 0.1)
-
-                                    Row {
-                                        id: portChipContent
-                                        anchors.centerIn: parent
-                                        spacing: pageRoot.dp(6)
-
-                                        Text {
-                                            visible: modelData.isEsp32S3
-                                            text: "★"
-                                            color: portChipWrapper.isSelected ? "white" : App.Style.accent
-                                            font.pixelSize: App.Spacing.overallText * 0.9
-                                            anchors.verticalCenter: parent.verticalCenter
-                                        }
-
-                                        Text {
-                                            text: modelData.port
-                                            color: portChipWrapper.isSelected ? "white" : App.Style.primaryTextColor
-                                            font.pixelSize: App.Spacing.overallText
-                                            font.family: App.Style.fontFamily
-                                            font.bold: modelData.isEsp32S3
-                                            anchors.verticalCenter: parent.verticalCenter
-                                        }
-                                    }
-
-                                    MouseArea {
-                                        id: portChipArea
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        onClicked: {
-                                            if (settingsManager) {
-                                                settingsManager.save_esp32_volume_port(modelData.port)
-                                                if (!settingsManager.esp32VolumeEnabled) {
-                                                    settingsManager.save_esp32_volume_enabled(true)
-                                                }
-                                                if (esp32VolumeManager) {
-                                                    esp32VolumeManager.resetReconnectAttempts()
-                                                    esp32VolumeManager.connectDevice()
-                                                }
-                                            }
-                                        }
-                                        onEntered: portChipRect.scale = 1.03
-                                        onExited: portChipRect.scale = 1.0
-                                    }
-
-                                    layer.enabled: !App.EnvironmentTheme.active.chipAccentBorder && portChipWrapper.isSelected
-                                    layer.effect: DropShadow {
-                                        horizontalOffset: 0
-                                        verticalOffset: 2
-                                        radius: 4.0
-                                        samples: 9
-                                        color: Qt.rgba(0, 0, 0, 0.2)
-                                    }
-
-                                    Behavior on scale {
-                                        NumberAnimation {
-                                            duration: 100
-                                            easing.type: Easing.OutCubic
-                                        }
-                                    }
-                                }
-                            }
+                    // One chip per port, an ESP32-S3 (the knob's receiver) starred
+                    SettingsChips {
+                        id: portChips
+                        function label(p) { return (p.isEsp32S3 ? "\u2605 " : "") + p.port }
+                        options: pageRoot.portsModel.map(function(p) { return portChips.label(p) })
+                        currentValue: {
+                            var port = settingsManager ? settingsManager.esp32VolumePort : ""
+                            for (var i = 0; i < pageRoot.portsModel.length; i++)
+                                if (pageRoot.portsModel[i].port === port) return portChips.label(pageRoot.portsModel[i])
+                            return ""
                         }
-
-                        // "No ports" message chip
-                        Rectangle {
-                            visible: pageRoot.portsModel.length === 0
-                            width: noPortsText.width + App.Spacing.overallSpacing * 3
-                            height: App.Spacing.formElementHeight * 0.9
-                            radius: App.EnvironmentTheme.active.chipRadius === -1
-                                ? height / 2 : pageRoot.dpMin(App.EnvironmentTheme.active.chipRadius, 2)
-                            color: "transparent"
-                            border.width: 1
-                            border.color: App.EnvironmentTheme.active.chipAccentBorder
-                                ? Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.3)
-                                : Qt.rgba(App.Style.primaryTextColor.r,
-                                          App.Style.primaryTextColor.g,
-                                          App.Style.primaryTextColor.b, 0.2)
-
-                            Text {
-                                id: noPortsText
-                                text: "No ports found - click Refresh"
-                                anchors.centerIn: parent
-                                color: App.Style.secondaryTextColor
-                                font.pixelSize: App.Spacing.overallText
-                                font.family: App.Style.fontFamily
+                        onSelected: function(value) {
+                            if (!settingsManager) return
+                            var port = value.replace("\u2605 ", "")
+                            settingsManager.save_esp32_volume_port(port)
+                            if (!settingsManager.esp32VolumeEnabled)
+                                settingsManager.save_esp32_volume_enabled(true)
+                            if (esp32VolumeManager) {
+                                esp32VolumeManager.resetReconnectAttempts()
+                                esp32VolumeManager.connectDevice()
                             }
                         }
                     }
@@ -351,7 +224,7 @@ Flickable {
 
             // ── Configuration ──
             SettingCategory {
-                title: "Configuration"
+                title: "Volume Step"
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -361,7 +234,7 @@ Flickable {
                         Layout.fillWidth: true
 
                         SettingLabel {
-                            text: "Volume Step Size"
+                            text: "Change per Click"
                             Layout.fillWidth: true
                         }
 
@@ -370,114 +243,11 @@ Flickable {
                         }
                     }
 
-                    SettingDescription {
-                        text: "Volume change per encoder tick"
-                    }
-
-                    SettingsSlider {
-                        id: vkVolumeStepSlider
-                        from: 0.25
-                        to: 10.0
-                        stepSize: 0.25
-                        value: settingsManager ? settingsManager.esp32VolumeStepSize : 1.0
-
-                        onMoved: {
-                            if (settingsManager) {
-                                settingsManager.save_esp32_volume_step_size(value)
-                            }
-                        }
-
-                        Connections {
-                            target: settingsManager
-                            function onEsp32VolumeStepSizeChanged(size) {
-                                vkVolumeStepSlider.value = size
-                            }
-                        }
-                    }
-
-                    // Quick preset chips
-                    Flow {
-                        Layout.fillWidth: true
-                        spacing: App.Spacing.overallSpacing * 0.8
-
-                        Repeater {
-                            model: [0.25, 0.5, 1.0, 2.0, 5.0]
-
-                            Item {
-                                id: presetChipWrapper
-                                width: presetChipRect.width
-                                height: presetChipRect.height
-
-                                property bool isSelected: settingsManager && Math.abs(settingsManager.esp32VolumeStepSize - modelData) < 0.01
-
-                                Rectangle {
-                                    anchors.centerIn: presetChipRect
-                                    width: presetChipRect.width + 4
-                                    height: presetChipRect.height + 4
-                                    radius: presetChipRect.radius + 2
-                                    color: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.25)
-                                    visible: App.EnvironmentTheme.active.chipAccentBorder && presetChipWrapper.isSelected
-                                }
-
-                                Rectangle {
-                                    id: presetChipRect
-                                    width: presetText.width + App.Spacing.overallSpacing * 2
-                                    height: App.Spacing.formElementHeight * 0.7
-                                    radius: App.EnvironmentTheme.active.chipRadius === -1
-                                        ? height / 2 : pageRoot.dpMin(App.EnvironmentTheme.active.chipRadius, 2)
-
-                                    color: presetChipWrapper.isSelected ? App.Style.accent : App.Style.hoverColor
-
-                                    border.width: App.EnvironmentTheme.active.chipAccentBorder
-                                        ? 1
-                                        : (presetChipWrapper.isSelected ? 0 : 1)
-                                    border.color: App.EnvironmentTheme.active.chipAccentBorder
-                                        ? (presetChipWrapper.isSelected
-                                            ? Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.8)
-                                            : Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.3))
-                                        : Qt.rgba(App.Style.primaryTextColor.r,
-                                                  App.Style.primaryTextColor.g,
-                                                  App.Style.primaryTextColor.b, 0.1)
-
-                                    Text {
-                                        id: presetText
-                                        anchors.centerIn: parent
-                                        text: modelData + "%"
-                                        color: presetChipWrapper.isSelected ? "white" : App.Style.primaryTextColor
-                                        font.pixelSize: App.Spacing.overallText * 0.9
-                                        font.family: App.Style.fontFamily
-                                    }
-
-                                    MouseArea {
-                                        id: presetArea
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        onClicked: {
-                                            if (settingsManager) {
-                                                settingsManager.save_esp32_volume_step_size(modelData)
-                                            }
-                                        }
-                                        onEntered: presetChipRect.scale = 1.05
-                                        onExited: presetChipRect.scale = 1.0
-                                    }
-
-                                    layer.enabled: !App.EnvironmentTheme.active.chipAccentBorder && presetChipWrapper.isSelected
-                                    layer.effect: DropShadow {
-                                        horizontalOffset: 0
-                                        verticalOffset: 2
-                                        radius: 4.0
-                                        samples: 9
-                                        color: Qt.rgba(0, 0, 0, 0.2)
-                                    }
-
-                                    Behavior on scale {
-                                        NumberAnimation {
-                                            duration: 100
-                                            easing.type: Easing.OutCubic
-                                        }
-                                    }
-                                }
-                            }
+                    SettingsChips {
+                        options: ["0.25%", "0.5%", "1%", "2%", "5%"]
+                        currentValue: settingsManager ? settingsManager.esp32VolumeStepSize + "%" : "1%"
+                        onSelected: function(value) {
+                            if (settingsManager) settingsManager.save_esp32_volume_step_size(parseFloat(value))
                         }
                     }
                 }
@@ -485,8 +255,7 @@ Flickable {
 
             // ── LED Indicator ──
             SettingCategory {
-                title: "LED Indicator"
-                description: "RGB LED indicator on the ESP32-S3 receiver"
+                title: "LED"
 
                 SettingsToggle {
                     id: ledSleepToggle
@@ -506,7 +275,7 @@ Flickable {
                 }
 
                 SettingDescription {
-                    text: "Stay on while OCTAVE runs (off = sleep after 5s idle)"
+                    text: "Off: the LEDs sleep after 5 seconds idle"
                 }
 
                 ColumnLayout {
@@ -515,10 +284,6 @@ Flickable {
 
                     SettingLabel {
                         text: "Color Mode"
-                    }
-
-                    SettingDescription {
-                        text: "Album art accent colors or a fixed color"
                     }
 
                     Flow {
@@ -865,7 +630,7 @@ Flickable {
             // ── Connection ──
             SettingCategory {
                 title: "Connection"
-                description: "BerryIMU v3 accelerometer, gyroscope, magnetometer, and barometer on I2C bus 2"
+                description: "BerryIMU v3 on I2C bus 2"
 
                 RowLayout {
                     Layout.fillWidth: true
@@ -921,8 +686,7 @@ Flickable {
 
             // ── Display ──
             SettingCategory {
-                title: "Display"
-                description: "How sensor values are formatted and which cards appear in the sensor view"
+                title: "Sensors Page"
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -952,35 +716,6 @@ Flickable {
                         }
                     }
 
-                    SettingsToggle {
-                        compact: true
-                        Layout.fillWidth: false
-                        Layout.alignment: Qt.AlignLeft
-                        text: "Temperature in °F"
-                        checked: settingsManager ? settingsManager.sensorTempUnit === "F" : true
-                        activeColor: App.Style.accent
-                        inactiveColor: App.Style.hoverColor
-                        onToggled: function(checked) {
-                            if (settingsManager) {
-                                settingsManager.save_sensor_temp_unit(checked ? "F" : "C")
-                            }
-                        }
-                    }
-
-                    SettingsToggle {
-                        compact: true
-                        Layout.fillWidth: false
-                        Layout.alignment: Qt.AlignLeft
-                        text: "Altitude in Feet"
-                        checked: settingsManager ? settingsManager.sensorAltitudeUnit === "ft" : false
-                        activeColor: App.Style.accent
-                        inactiveColor: App.Style.hoverColor
-                        onToggled: function(checked) {
-                            if (settingsManager) {
-                                settingsManager.save_sensor_altitude_unit(checked ? "ft" : "m")
-                            }
-                        }
-                    }
                 }
 
                 ColumnLayout {
@@ -1002,7 +737,7 @@ Flickable {
                     }
 
                     SettingDescription {
-                        text: "How often the IMU emits new readings (higher = smoother, more CPU)"
+                        text: "Higher is smoother and uses more CPU"
                     }
 
                     SettingsSlider {
@@ -1035,9 +770,6 @@ Flickable {
                         text: "Visible Cards"
                     }
 
-                    SettingDescription {
-                        text: "Show or hide individual readouts on the Sensors page"
-                    }
 
                     Repeater {
                         model: [
@@ -1078,7 +810,7 @@ Flickable {
             // ── Connection ──
             SettingCategory {
                 title: "Connection"
-                description: "PAJ7620U2 infrared gesture recognition on I2C bus 2"
+                description: "PAJ7620U2 on I2C bus 2"
 
                 RowLayout {
                     Layout.fillWidth: true
@@ -1134,7 +866,7 @@ Flickable {
 
             // ── Settings ──
             SettingCategory {
-                title: "Settings"
+                title: "Volume and Timing"
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -1144,7 +876,7 @@ Flickable {
                         Layout.fillWidth: true
 
                         SettingLabel {
-                            text: "Volume Step"
+                            text: "Volume per Swipe"
                             Layout.fillWidth: true
                         }
 
@@ -1155,10 +887,6 @@ Flickable {
                             font.family: App.Style.fontFamily
                             font.bold: true
                         }
-                    }
-
-                    SettingDescription {
-                        text: "Volume change per gesture (up/down)"
                     }
 
                     Slider {
@@ -1250,7 +978,7 @@ Flickable {
                         Layout.fillWidth: true
 
                         SettingLabel {
-                            text: "Gesture Cooldown"
+                            text: "Pause Between Gestures"
                             Layout.fillWidth: true
                         }
 
@@ -1261,10 +989,6 @@ Flickable {
                             font.family: App.Style.fontFamily
                             font.bold: true
                         }
-                    }
-
-                    SettingDescription {
-                        text: "Minimum time between consecutive gestures"
                     }
 
                     Slider {
@@ -1353,7 +1077,6 @@ Flickable {
             // ── Mapping ──
             SettingCategory {
                 title: "Mapping"
-                description: "Choose which action each gesture triggers"
 
                 Repeater {
                     model: pageRoot.gestureNames
@@ -1386,87 +1109,17 @@ Flickable {
                             text: gestureRow.gestureName
                         }
 
-                        Flow {
-                            Layout.fillWidth: true
-                            spacing: App.Spacing.overallSpacing
-
-                            Repeater {
-                                model: pageRoot.actionOptions
-
-                                Item {
-                                    id: actionChipWrapper
-                                    width: actionChipRect.width
-                                    height: actionChipRect.height
-
-                                    property string actionKey: modelData
-                                    property bool isSelected: gestureRow.currentAction === actionKey
-
-                                    Rectangle {
-                                        anchors.centerIn: actionChipRect
-                                        width: actionChipRect.width + pageRoot.dp(4)
-                                        height: actionChipRect.height + pageRoot.dp(4)
-                                        radius: actionChipRect.radius + 2
-                                        color: Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.25)
-                                        visible: App.EnvironmentTheme.active.chipAccentBorder && actionChipWrapper.isSelected
-                                    }
-
-                                    Rectangle {
-                                        id: actionChipRect
-                                        width: actionChipText.width + App.Spacing.overallSpacing * 3
-                                        height: App.Spacing.formElementHeight * 0.8
-                                        radius: App.EnvironmentTheme.active.chipRadius === -1
-                                            ? height / 2 : pageRoot.dpMin(App.EnvironmentTheme.active.chipRadius, 2)
-
-                                        color: actionChipWrapper.isSelected ? App.Style.accent : App.Style.hoverColor
-
-                                        border.width: App.EnvironmentTheme.active.chipAccentBorder
-                                            ? 1
-                                            : (actionChipWrapper.isSelected ? 0 : 1)
-                                        border.color: App.EnvironmentTheme.active.chipAccentBorder
-                                            ? (actionChipWrapper.isSelected
-                                                ? Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.8)
-                                                : Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.3))
-                                            : Qt.rgba(App.Style.primaryTextColor.r,
-                                                      App.Style.primaryTextColor.g,
-                                                      App.Style.primaryTextColor.b, 0.1)
-
-                                        Text {
-                                            id: actionChipText
-                                            anchors.centerIn: parent
-                                            text: pageRoot.actionLabels[actionChipWrapper.actionKey] || actionChipWrapper.actionKey
-                                            color: actionChipWrapper.isSelected ? "white" : App.Style.primaryTextColor
-                                            font.pixelSize: App.Spacing.overallText
-                                            font.family: App.Style.fontFamily
-                                        }
-
-                                        MouseArea {
-                                            id: actionChipArea
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            onClicked: {
-                                                if (typeof gestureSensor !== "undefined" && gestureSensor) {
-                                                    gestureSensor.setGestureAction(gestureRow.gestureName, actionChipWrapper.actionKey)
-                                                }
-                                            }
-                                            onEntered: actionChipRect.scale = 1.05
-                                            onExited: actionChipRect.scale = 1.0
-                                        }
-
-                                        layer.enabled: !App.EnvironmentTheme.active.chipAccentBorder && actionChipWrapper.isSelected
-                                        layer.effect: DropShadow {
-                                            horizontalOffset: 0
-                                            verticalOffset: 2
-                                            radius: 4.0
-                                            samples: 9
-                                            color: Qt.rgba(0, 0, 0, 0.2)
-                                        }
-
-                                        Behavior on scale {
-                                            NumberAnimation {
-                                                duration: 100
-                                                easing.type: Easing.OutCubic
-                                            }
-                                        }
+                        // The chips show the actions' labels; the mapping stores their keys
+                        SettingsChips {
+                            options: pageRoot.actionOptions.map(function(k) { return pageRoot.actionLabels[k] || k })
+                            currentValue: pageRoot.actionLabels[gestureRow.currentAction] || gestureRow.currentAction
+                            onSelected: function(label) {
+                                if (typeof gestureSensor === "undefined" || !gestureSensor) return
+                                var keys = pageRoot.actionOptions
+                                for (var i = 0; i < keys.length; i++) {
+                                    if ((pageRoot.actionLabels[keys[i]] || keys[i]) === label) {
+                                        gestureSensor.setGestureAction(gestureRow.gestureName, keys[i])
+                                        return
                                     }
                                 }
                             }
@@ -1496,7 +1149,7 @@ Flickable {
                         spacing: pageRoot.dp(6)
 
                         Text {
-                            text: resetArea.armed ? "Tap again to reset" : "Reset to Defaults"
+                            text: resetArea.armed ? "Confirm reset" : "Reset to Defaults"
                             color: resetArea.armed ? App.Style.statusDanger : App.Style.primaryTextColor
                             font.pixelSize: App.Spacing.overallText
                             font.family: App.Style.fontFamily
@@ -1527,789 +1180,6 @@ Flickable {
                             if (settingsManager) {
                                 settingsManager.reset_gesture_mapping()
                             }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // ─────────────────────────────────────────── Phone Dock
-    Component {
-        id: phoneDockContent
-        ColumnLayout {
-            width: parent ? parent.width : 0
-            spacing: App.Spacing.sectionSpacing
-
-            // ── Phone Mirror ──
-            SettingCategory {
-                title: "Phone Mirror"
-                description: "Mirror your phone over USB or Wi-Fi. Nothing to install: enable USB debugging on the phone and plug it in, or pair it over Wi-Fi below."
-
-                SettingsToggle {
-                    id: phoneMirrorEnabledToggle
-                    compact: true
-                    Layout.fillWidth: false
-                    Layout.alignment: Qt.AlignLeft
-                    text: "Show in nav bar"
-                    checked: settingsManager ? settingsManager.phoneMirrorEnabled : false
-                    activeColor: App.Style.accent
-                    inactiveColor: App.Style.hoverColor
-
-                    onToggled: function(checked) {
-                        if (settingsManager) {
-                            settingsManager.save_phone_mirror_enabled(checked)
-                        }
-                    }
-                }
-
-                // Wi-Fi: QR pairing (Android 11+ Wireless debugging). The manager
-                // remembers the phone and reconnects to it on its own.
-                ColumnLayout {
-                    id: wirelessSection
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.rowSpacing
-                    visible: typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null
-                             && phoneMirrorManager.nativeAvailable
-
-                    readonly property string remembered: phoneMirrorManager ? phoneMirrorManager.wirelessAddress : ""
-                    property string resultText: ""
-                    property bool resultOk: true
-                    // This page started the pairing now on screen. The page is
-                    // pre-built and stays alive hidden, so without this its modal
-                    // also popped up over Phone Mirror's own QR screen.
-                    property bool pairingFromHere: false
-
-                    Connections {
-                        target: typeof phoneMirrorManager !== "undefined" ? phoneMirrorManager : null
-                        function onWirelessResult(ok, message) {
-                            wirelessSection.resultOk = ok
-                            wirelessSection.resultText = message
-                            wirelessSection.pairingFromHere = false
-                            qrPopup.sync()
-                        }
-                    }
-                    Connections {
-                        target: typeof phoneMirrorManager !== "undefined" ? phoneMirrorManager : null
-                        ignoreUnknownSignals: true   // the mobile stand-in has no QR pairing
-                        function onQrPairingChanged() {
-                            if (!phoneMirrorManager.qrPairingActive)
-                                wirelessSection.pairingFromHere = false   // cancelled, timed out or done
-                            qrPopup.sync()
-                        }
-                    }
-
-                    SettingLabel {
-                        text: "Wireless"
-                    }
-
-                    SettingDescription {
-                        text: wirelessSection.remembered !== ""
-                            ? "Remembered phone: " + wirelessSection.remembered + ". OCTAVE reconnects to it whenever it is on "
-                              + "the same Wi-Fi network with Wireless debugging on"
-                              + (phoneMirrorManager && phoneMirrorManager.connectionType === "wifi" ? " (mirroring over Wi-Fi now)." : ".")
-                              + " A USB cable is used instead while one is plugged in."
-                            : "Mirror without a cable (Android 11+): tap Connect phone and scan the QR code from the phone's "
-                              + "Developer options > Wireless debugging > Pair device with QR code. Phone Mirror shows the same "
-                              + "code when no phone is connected."
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: App.Spacing.rowSpacing
-
-                        SettingsButton {
-                            objectName: "phoneMirrorQrButton"
-                            text: wirelessSection.remembered !== "" ? "Connect a different phone" : "Connect phone"
-                            Layout.preferredHeight: pageRoot.dp(56)
-                            enabled: phoneMirrorManager ? !phoneMirrorManager.wirelessBusy : false
-                            opacity: enabled ? 1.0 : 0.6
-                            onClicked: {
-                                wirelessSection.resultText = ""
-                                wirelessSection.pairingFromHere = true
-                                qrPanel.start()
-                                qrPopup.sync()
-                            }
-                        }
-
-                        Item { Layout.fillWidth: true }
-
-                        ConfirmButton {
-                            label: "Forget"
-                            confirmLabel: "Confirm forget"
-                            idleColor: App.Style.statusError
-                            Layout.preferredHeight: pageRoot.dp(56)
-                            visible: wirelessSection.remembered !== ""
-                            onConfirmed: {
-                                wirelessSection.resultOk = true
-                                wirelessSection.resultText = "Forgot " + wirelessSection.remembered
-                                    + ". To revoke it completely, remove OCTAVE from the phone's paired devices."
-                                phoneMirrorManager.forgetWireless()
-                            }
-                        }
-                    }
-
-                    SettingDescription {
-                        visible: wirelessSection.resultText !== ""
-                        text: wirelessSection.resultText
-                        color: wirelessSection.resultOk ? App.Style.secondaryTextColor : App.Style.statusError
-                    }
-
-                    // The code in a centred modal (the card may be scrolled anywhere)
-                    Popup {
-                        id: qrPopup
-                        parent: Overlay.overlay
-                        anchors.centerIn: parent
-                        modal: true
-                        dim: true
-                        closePolicy: Popup.NoAutoClose
-                        padding: App.Spacing.overallSpacing * 1.5
-                        // Opened and closed by sync(), not bound to `visible`: the
-                        // binding's onClosed cleared pairingFromHere, which the
-                        // binding was reading at that moment ("Binding loop
-                        // detected for property visible" at every Cancel)
-                        function sync() {
-                            if (wirelessSection.pairingFromHere
-                                    && (phoneMirrorManager ? phoneMirrorManager.qrPairingActive : false))
-                                open()
-                            else
-                                close()
-                        }
-                        width: parent ? parent.width * 0.75 : pageRoot.dp(900)
-
-                        background: Rectangle {
-                            color: App.Style.contentColor
-                            radius: pageRoot.dpMin(12, 2)
-                            border.color: App.Style.accent
-                            border.width: 1
-                        }
-
-                        contentItem: App.PhoneQrPairingPanel {
-                            id: qrPanel
-                            qrSize: qrPopup.parent ? Math.round(qrPopup.parent.height * 0.55) : pageRoot.dp(380)
-                        }
-                    }
-                }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.rowSpacing
-
-
-                    SettingLabel {
-                        text: "Display Mode"
-                    }
-
-                    SettingDescription {
-                        text: scrcpyModeControl.currentValue === "Mirror Phone"
-                              ? "Shows exactly what is on the phone's screen, in the phone's own shape, with Back/Home/Recents buttons."
-                              : "The phone draws its apps on a separate desktop-style display made for OCTAVE (Android 11+; Samsung phones show DeX). "
-                                + "Fit to screen sizes it to the mirror view, so the picture fills the screen pixel for pixel. Turn it off to pick a size."
-                    }
-
-                    SettingsSegmentedControl {
-                        id: scrcpyModeControl
-                        Layout.fillWidth: true
-                        options: ["Mirror Phone", "Desktop (DeX)"]
-                        currentValue: settingsManager && settingsManager.scrcpyDisplaySize === "" ? "Mirror Phone" : "Desktop (DeX)"
-
-                        onSelected: function(value) {
-                            if (!settingsManager || value === currentValue) return
-                            var size = value === "Mirror Phone" ? "" : "auto"
-                            settingsManager.save_scrcpy_display_size(size)
-                            if (phoneMirrorManager) phoneMirrorManager.setDisplaySize(size)
-                        }
-                    }
-
-                    SettingsToggle {
-                        id: scrcpyFitToggle
-                        visible: scrcpyModeControl.currentValue !== "Mirror Phone"
-                        compact: true
-                        Layout.fillWidth: false
-                        Layout.alignment: Qt.AlignLeft
-                        text: "Fit to screen"
-                        checked: settingsManager ? settingsManager.scrcpyDisplaySize === "auto" : true
-                        activeColor: App.Style.accent
-                        inactiveColor: App.Style.hoverColor
-
-                        onToggled: function(checked) {
-                            if (!settingsManager) return
-                            var size = checked ? "auto" : "1280x800"
-                            settingsManager.save_scrcpy_display_size(size)
-                            if (phoneMirrorManager) phoneMirrorManager.setDisplaySize(size)
-                        }
-                    }
-
-                    SettingsTextField {
-                        id: scrcpyDisplaySizeField
-                        Layout.fillWidth: true
-                        visible: scrcpyFitToggle.visible && !scrcpyFitToggle.checked
-                        text: settingsManager && settingsManager.scrcpyDisplaySize !== "auto" ? settingsManager.scrcpyDisplaySize : ""
-                        placeholderText: "e.g. 1280x800"
-
-                        onEditingFinished: {
-                            if (settingsManager) {
-                                settingsManager.save_scrcpy_display_size(text)
-                                if (phoneMirrorManager) {
-                                    phoneMirrorManager.setDisplaySize(text)
-                                    // Manager may have snapped the dimensions to multiples of 8
-                                    if (phoneMirrorManager.displaySize !== text) {
-                                        settingsManager.save_scrcpy_display_size(phoneMirrorManager.displaySize)
-                                    }
-                                }
-                            }
-                        }
-
-                        Connections {
-                            target: settingsManager
-                            function onScrcpyDisplaySizeChanged() {
-                                if (settingsManager.scrcpyDisplaySize !== "auto")
-                                    scrcpyDisplaySizeField.text = settingsManager.scrcpyDisplaySize
-                            }
-                        }
-                    }
-                }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.rowSpacing
-                    // Density only applies to the desktop display
-                    visible: scrcpyModeControl.currentValue !== "Mirror Phone"
-
-                    SettingLabel {
-                        text: "Text Size"
-                    }
-
-                    SettingDescription {
-                        text: "Density of the phone's display for OCTAVE: higher makes text and buttons bigger, lower fits more on screen. Auto scales the phone's own density."
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: App.Spacing.overallSpacing
-
-                        // 0 = Auto, otherwise dpi in steps of 20
-                        SettingsSlider {
-                            id: scrcpyDpiSlider
-                            from: 100
-                            to: 400
-                            stepSize: 20
-                            value: settingsManager && settingsManager.scrcpyDisplayDpi > 0 ? settingsManager.scrcpyDisplayDpi : 100
-                            Layout.fillWidth: true
-                            onPressedChanged: {
-                                if (!pressed && settingsManager)
-                                    settingsManager.save_scrcpy_display_dpi(value <= 100 ? 0 : value)
-                            }
-                            Connections {
-                                target: settingsManager
-                                function onScrcpyDisplayDpiChanged() {
-                                    scrcpyDpiSlider.value = settingsManager.scrcpyDisplayDpi > 0 ? settingsManager.scrcpyDisplayDpi : 100
-                                }
-                            }
-                        }
-
-                        ValueDisplay {
-                            text: scrcpyDpiSlider.value <= 100 ? "Auto" : scrcpyDpiSlider.value.toFixed(0) + " dpi"
-                            Layout.fillWidth: false
-                        }
-                    }
-                }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.rowSpacing
-
-                    SettingLabel {
-                        text: "Picture Quality"
-                    }
-
-                    SettingDescription {
-                        text: scrcpyBitRateAutoToggle.checked
-                              ? "OCTAVE adjusts the video bit rate as it goes: as sharp as the link allows, backing off the moment frames start arriving late (weak Wi-Fi, a busy decoder). The sliders set the most it will use."
-                              : "Video bit rate. Higher is sharper in motion (maps, scrolling) but needs a steadier link. Wi-Fi is usually happiest around 8 Mbps."
-                    }
-
-                    SettingsToggle {
-                        id: scrcpyBitRateAutoToggle
-                        compact: true
-                        Layout.fillWidth: false
-                        Layout.alignment: Qt.AlignLeft
-                        text: "Automatic"
-                        checked: settingsManager ? settingsManager.scrcpyBitRateAuto : true
-                        activeColor: App.Style.accent
-                        inactiveColor: App.Style.hoverColor
-
-                        onToggled: function(checked) {
-                            if (settingsManager)
-                                settingsManager.save_scrcpy_bit_rate_auto(checked)
-                        }
-                    }
-
-                    SettingDescription {
-                        readonly property int bps: phoneMirrorManager ? phoneMirrorManager.currentBitRate : 0
-                        visible: bps > 0
-                        text: "Now: " + (bps / 1000000).toFixed(1) + " Mbps over "
-                              + (phoneMirrorManager && phoneMirrorManager.connectionType === "wifi" ? "Wi-Fi" : "USB")
-                        color: App.Style.accent
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: App.Spacing.overallSpacing
-
-                        SettingDescription {
-                            text: scrcpyBitRateAutoToggle.checked ? "USB max" : "USB"
-                            Layout.fillWidth: false
-                            Layout.preferredWidth: pageRoot.dp(96)
-                        }
-
-                        SettingsSlider {
-                            id: scrcpyBitRateUsbSlider
-                            from: 4
-                            to: 32
-                            stepSize: 2
-                            value: settingsManager ? settingsManager.scrcpyBitRateUsb : 16
-                            Layout.fillWidth: true
-                            onPressedChanged: {
-                                if (!pressed && settingsManager)
-                                    settingsManager.save_scrcpy_bit_rate_usb(value)
-                            }
-                            Connections {
-                                target: settingsManager
-                                function onScrcpyBitRateUsbChanged() {
-                                    scrcpyBitRateUsbSlider.value = settingsManager.scrcpyBitRateUsb
-                                }
-                            }
-                        }
-
-                        ValueDisplay {
-                            text: scrcpyBitRateUsbSlider.value.toFixed(0) + " Mbps"
-                            Layout.fillWidth: false
-                        }
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: App.Spacing.overallSpacing
-
-                        SettingDescription {
-                            text: scrcpyBitRateAutoToggle.checked ? "Wi-Fi max" : "Wi-Fi"
-                            Layout.fillWidth: false
-                            Layout.preferredWidth: pageRoot.dp(96)
-                        }
-
-                        SettingsSlider {
-                            id: scrcpyBitRateWifiSlider
-                            from: 2
-                            to: 20
-                            stepSize: 1
-                            value: settingsManager ? settingsManager.scrcpyBitRateWifi : 8
-                            Layout.fillWidth: true
-                            onPressedChanged: {
-                                if (!pressed && settingsManager)
-                                    settingsManager.save_scrcpy_bit_rate_wifi(value)
-                            }
-                            Connections {
-                                target: settingsManager
-                                function onScrcpyBitRateWifiChanged() {
-                                    scrcpyBitRateWifiSlider.value = settingsManager.scrcpyBitRateWifi
-                                }
-                            }
-                        }
-
-                        ValueDisplay {
-                            text: scrcpyBitRateWifiSlider.value.toFixed(0) + " Mbps"
-                            Layout.fillWidth: false
-                        }
-                    }
-                }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.rowSpacing
-
-                    SettingLabel {
-                        text: "Wi-Fi Without Re-pairing"
-                    }
-
-                    SettingDescription {
-                        text: "Each time the phone is mirrored over USB, OCTAVE turns on adb over Wi-Fi on it and remembers its address. Later it connects without a cable and without the Wireless debugging toggle, until the phone restarts. The phone and OCTAVE must be on the same Wi-Fi network; no internet is needed. Until the phone restarts, adb on it accepts connections from any network it joins, so only turn this on if you mirror on networks you trust. QR pairing is the safer way to go wireless."
-                    }
-
-                    SettingsToggle {
-                        id: scrcpyAutoWifiToggle
-                        compact: true
-                        Layout.fillWidth: false
-                        Layout.alignment: Qt.AlignLeft
-                        text: "Enable Wi-Fi when plugged in"
-                        checked: settingsManager ? settingsManager.scrcpyAutoWifi : false
-                        activeColor: App.Style.accent
-                        inactiveColor: App.Style.hoverColor
-
-                        onToggled: function(checked) {
-                            if (settingsManager)
-                                settingsManager.save_scrcpy_auto_wifi(checked)
-                        }
-                    }
-                }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.rowSpacing
-
-                    SettingLabel {
-                        text: "Phone Screen"
-                    }
-
-                    SettingDescription {
-                        text: "Keep the phone's own screen dark while it is mirrored (off by default: some phones only dim instead of switching off). The mirror and touch keep working, and the phone's screen comes back when you close the mirror. If the phone is locked with its power button during a session, OCTAVE wakes it again so the mirror does not go black."
-                    }
-
-                    SettingsToggle {
-                        id: scrcpyPhoneScreenOffToggle
-                        compact: true
-                        Layout.fillWidth: false
-                        Layout.alignment: Qt.AlignLeft
-                        text: "Phone screen off while mirroring"
-                        checked: settingsManager ? settingsManager.scrcpyPhoneScreenOff : false
-                        activeColor: App.Style.accent
-                        inactiveColor: App.Style.hoverColor
-
-                        onToggled: function(checked) {
-                            if (settingsManager) {
-                                settingsManager.save_scrcpy_phone_screen_off(checked)
-                            }
-                        }
-                    }
-                }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.rowSpacing
-
-                    SettingLabel {
-                        text: "Phone Audio Level"
-                    }
-
-                    SettingDescription {
-                        text: "Phone audio plays through OCTAVE while mirroring (Android 11+) and follows its volume and mute. Boost or trim it before OCTAVE's volume: phones capture at their own media level, usually quieter than local music."
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: App.Spacing.overallSpacing
-
-                        SettingsSlider {
-                            id: scrcpyAudioGainSlider
-                            from: -12
-                            to: 18
-                            stepSize: 1
-                            value: settingsManager ? Math.round(settingsManager.scrcpyAudioGainDb) : 6
-                            Layout.fillWidth: true
-                            onPressedChanged: {
-                                if (!pressed && settingsManager) {
-                                    settingsManager.save_scrcpy_audio_gain_db(value)
-                                }
-                            }
-                            Connections {
-                                target: settingsManager
-                                function onScrcpyAudioGainChanged() {
-                                    scrcpyAudioGainSlider.value = Math.round(settingsManager.scrcpyAudioGainDb)
-                                }
-                            }
-                        }
-
-                        ValueDisplay {
-                            text: (scrcpyAudioGainSlider.value >= 0 ? "+" : "") + scrcpyAudioGainSlider.value.toFixed(0) + " dB"
-                            Layout.fillWidth: false
-                        }
-                    }
-                }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.rowSpacing
-
-                    SettingLabel {
-                        text: "Duck Local Music"
-                    }
-
-                    SettingDescription {
-                        text: "Turn OCTAVE's own music down while the phone is making sound, so navigation prompts, videos and calls come through. Music returns about a second and a half after the phone goes quiet."
-                    }
-
-                    SettingsToggle {
-                        id: scrcpyAudioDuckEnabledToggle
-                        compact: true
-                        Layout.fillWidth: false
-                        Layout.alignment: Qt.AlignLeft
-                        text: "Duck local music for phone audio"
-                        checked: settingsManager ? settingsManager.scrcpyAudioDuckEnabled : true
-                        activeColor: App.Style.accent
-                        inactiveColor: App.Style.hoverColor
-
-                        onToggled: function(checked) {
-                            if (settingsManager) {
-                                settingsManager.save_scrcpy_audio_duck_enabled(checked)
-                            }
-                        }
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: App.Spacing.overallSpacing
-                        enabled: scrcpyAudioDuckEnabledToggle.checked
-                        opacity: enabled ? 1.0 : 0.5
-
-                        SettingsSlider {
-                            id: scrcpyAudioDuckLevelSlider
-                            from: -40
-                            to: -6
-                            stepSize: 1
-                            value: settingsManager ? Math.round(settingsManager.scrcpyAudioDuckLevelDb) : -20
-                            Layout.fillWidth: true
-                            onPressedChanged: {
-                                if (!pressed && settingsManager) {
-                                    settingsManager.save_scrcpy_audio_duck_level_db(value)
-                                }
-                            }
-                            Connections {
-                                target: settingsManager
-                                function onScrcpyAudioDuckLevelChanged() {
-                                    scrcpyAudioDuckLevelSlider.value = Math.round(settingsManager.scrcpyAudioDuckLevelDb)
-                                }
-                            }
-                        }
-
-                        ValueDisplay {
-                            text: scrcpyAudioDuckLevelSlider.value.toFixed(0) + " dB"
-                            Layout.fillWidth: false
-                        }
-                    }
-                }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.rowSpacing
-
-                    SettingLabel {
-                        text: "Status"
-                    }
-
-                    SettingDescription {
-                        text: phoneMirrorManager && phoneMirrorManager.nativeAvailable
-                            ? "Built-in mirror client ready (scrcpy server " + phoneMirrorManager.serverVersion + ", adb: " + phoneMirrorManager.adbPath + ")"
-                            : (phoneMirrorManager ? phoneMirrorManager.getInstallInstructions() : "Phone mirror manager not available")
-                        color: phoneMirrorManager && phoneMirrorManager.nativeAvailable
-                            ? App.Style.statusConnected
-                            : App.Style.statusError
-                    }
-                }
-            }
-
-            // ── Android Auto ──
-            SettingCategory {
-                id: androidAutoCategory
-                readonly property var aa: typeof androidAutoManager !== "undefined" ? androidAutoManager : null
-                title: "Android Auto"
-                description: "Real Android Auto from the phone, with OCTAVE as the car's screen. Built-in needs no extra software: "
-                             + "turn on Android Auto's developer mode on the phone, start its head unit server, and give OCTAVE a "
-                             + "head-unit certificate (see the Android Auto page in the wiki)."
-
-                SettingsToggle {
-                    id: androidAutoEnabledToggle
-                    compact: true
-                    Layout.fillWidth: false
-                    Layout.alignment: Qt.AlignLeft
-                    text: "Show in nav bar"
-                    checked: settingsManager ? settingsManager.androidAutoEnabled : false
-                    activeColor: App.Style.accent
-                    inactiveColor: App.Style.hoverColor
-
-                    onToggled: function(checked) {
-                        if (settingsManager) settingsManager.save_android_auto_enabled(checked)
-                    }
-                }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.rowSpacing
-                    visible: androidAutoCategory.aa ? androidAutoCategory.aa.nativeAvailable : false
-
-                    SettingLabel { text: "Head unit" }
-                    SettingDescription {
-                        text: "Built-in: OCTAVE talks to Android Auto itself (beta). Google DHU: runs Google's Desktop Head Unit "
-                              + "from the Android SDK and shows its window."
-                    }
-                    SettingsSegmentedControl {
-                        Layout.fillWidth: true
-                        options: ["Built-in", "Google DHU"]
-                        currentValue: androidAutoCategory.aa && androidAutoCategory.aa.backend === "native" ? "Built-in" : "Google DHU"
-                        onSelected: function(value) {
-                            if (settingsManager)
-                                settingsManager.save_setting("androidAutoBackend", value === "Built-in" ? "native" : "dhu")
-                        }
-                    }
-                }
-
-                ColumnLayout {
-                    id: androidAutoResolution
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.rowSpacing
-                    visible: androidAutoCategory.aa ? androidAutoCategory.aa.backend === "native" : false
-                    property string value: settingsManager
-                        ? settingsManager.get_setting_with_default("androidAutoResolution", "1280x720") : "1280x720"
-
-                    SettingLabel { text: "Video size" }
-                    SettingDescription {
-                        text: "What the phone draws Android Auto at. Takes effect on the next connection."
-                    }
-                    SettingsSegmentedControl {
-                        Layout.fillWidth: true
-                        options: ["800x480", "1280x720", "1920x1080"]
-                        currentValue: androidAutoResolution.value
-                        onSelected: function(value) {
-                            if (!settingsManager) return
-                            settingsManager.save_setting("androidAutoResolution", value)
-                            androidAutoResolution.value = value
-                        }
-                    }
-                }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.rowSpacing
-                    visible: androidAutoCategory.aa ? androidAutoCategory.aa.backend === "native" : false
-
-                    SettingLabel { text: "Status" }
-                    SettingDescription {
-                        readonly property string st: androidAutoCategory.aa ? androidAutoCategory.aa.nativeState : "idle"
-                        text: st === "idle"
-                              ? "Not connected. Open Android Auto from the nav bar to connect."
-                              : androidAutoCategory.aa.nativeStatus
-                        color: st === "running" ? App.Style.statusConnected
-                             : (st === "error" || st === "needsCertificate") ? App.Style.statusError
-                             : App.Style.secondaryTextColor
-                    }
-                    SettingDescription {
-                        text: "Certificate folder: " + (androidAutoCategory.aa ? androidAutoCategory.aa.certificateDir : "")
-                    }
-                }
-            }
-
-            // ── iPhone (AirPlay) ──
-            SettingCategory {
-                id: airPlayCategory
-                readonly property var ap: typeof airPlayManager !== "undefined" ? airPlayManager : null
-                visible: ap ? ap.available : false
-                title: "iPhone (AirPlay)"
-                description: "An iPhone mirrors its screen to OCTAVE, or plays its music through it, over AirPlay: "
-                             + "Control Center > Screen Mirroring > " + (ap ? ap.receiverName : "OCTAVE")
-                             + ". The iPhone has to be on the same Wi-Fi. Touch goes back through OCTAVE acting as a "
-                             + "Bluetooth mouse (pair it once, and turn on AssistiveTouch on the iPhone)."
-
-                SettingsToggle {
-                    objectName: "airPlayEnabledToggle"
-                    compact: true
-                    Layout.fillWidth: false
-                    Layout.alignment: Qt.AlignLeft
-                    text: "AirPlay receiver"
-                    checked: airPlayCategory.ap ? airPlayCategory.ap.enabled : false
-                    activeColor: App.Style.accent
-                    inactiveColor: App.Style.hoverColor
-                    onToggled: function(checked) { if (airPlayCategory.ap) airPlayCategory.ap.setEnabled(checked) }
-                }
-
-                SettingsToggle {
-                    compact: true
-                    Layout.fillWidth: false
-                    Layout.alignment: Qt.AlignLeft
-                    visible: airPlayCategory.ap ? airPlayCategory.ap.enabled : false
-                    text: "Ask new iPhones for a PIN"
-                    checked: settingsManager ? settingsManager.get_setting_with_default("airPlayRequirePin", true) : true
-                    activeColor: App.Style.accent
-                    inactiveColor: App.Style.hoverColor
-                    onToggled: function(checked) { if (settingsManager) settingsManager.save_setting("airPlayRequirePin", checked) }
-                }
-
-                SettingsToggle {
-                    compact: true
-                    Layout.fillWidth: false
-                    Layout.alignment: Qt.AlignLeft
-                    visible: airPlayCategory.ap ? airPlayCategory.ap.enabled && airPlayCategory.ap.touchAvailable : false
-                    text: "Touch through Bluetooth"
-                    checked: airPlayCategory.ap ? airPlayCategory.ap.touchEnabled : true
-                    activeColor: App.Style.accent
-                    inactiveColor: App.Style.hoverColor
-                    onToggled: function(checked) { if (airPlayCategory.ap) airPlayCategory.ap.setTouchEnabled(checked) }
-                }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.rowSpacing
-                    visible: airPlayCategory.ap ? airPlayCategory.ap.enabled : false
-
-                    SettingLabel { text: "Name" }
-                    SettingDescription { text: "What the iPhone lists under Screen Mirroring." }
-                    SettingsTextField {
-                        Layout.fillWidth: true
-                        text: airPlayCategory.ap ? airPlayCategory.ap.receiverName : "OCTAVE"
-                        placeholderText: "OCTAVE"
-                        onEditingFinished: if (settingsManager) settingsManager.save_setting("airPlayName", text.trim())
-                    }
-                }
-
-                ColumnLayout {
-                    id: airPlayResolution
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.rowSpacing
-                    visible: airPlayCategory.ap ? airPlayCategory.ap.enabled : false
-                    property string value: settingsManager
-                        ? settingsManager.get_setting_with_default("airPlayResolution", "1280x720") : "1280x720"
-
-                    SettingLabel { text: "Video size" }
-                    SettingDescription { text: "The screen size offered to the iPhone. Larger is sharper and costs more CPU." }
-                    SettingsSegmentedControl {
-                        Layout.fillWidth: true
-                        options: ["1280x720", "1920x1080"]
-                        currentValue: airPlayResolution.value
-                        onSelected: function(value) {
-                            if (!settingsManager) return
-                            settingsManager.save_setting("airPlayResolution", value)
-                            airPlayResolution.value = value
-                        }
-                    }
-                }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.rowSpacing
-                    visible: airPlayCategory.ap ? airPlayCategory.ap.enabled : false
-
-                    SettingLabel { text: "Status" }
-                    SettingDescription {
-                        text: airPlayCategory.ap ? airPlayCategory.ap.status : ""
-                        color: airPlayCategory.ap && airPlayCategory.ap.state === "error" ? App.Style.statusError
-                             : airPlayCategory.ap && (airPlayCategory.ap.state === "mirroring" || airPlayCategory.ap.state === "audio")
-                               ? App.Style.statusConnected : App.Style.secondaryTextColor
-                    }
-                    SettingDescription {
-                        visible: airPlayCategory.ap ? airPlayCategory.ap.touchAvailable && airPlayCategory.ap.touchEnabled : false
-                        text: "Touch: " + (airPlayCategory.ap ? airPlayCategory.ap.touchStatus : "")
-                    }
-                    RowLayout {
-                        spacing: App.Spacing.rowSpacing
-                        SettingsButton {
-                            visible: airPlayCategory.ap ? airPlayCategory.ap.touchState === "waiting" : false
-                            text: airPlayCategory.ap && airPlayCategory.ap.touchPairing ? "Stop pairing" : "Pair touch"
-                            Layout.preferredHeight: pageRoot.dp(48)
-                            onClicked: airPlayCategory.ap.pairTouch(!airPlayCategory.ap.touchPairing)
-                        }
-                        ConfirmButton {
-                            label: "Forget paired iPhones"
-                            confirmLabel: "Confirm: forget all"
-                            Layout.preferredHeight: pageRoot.dp(48)
-                            onConfirmed: if (airPlayCategory.ap) airPlayCategory.ap.forgetDevices()
                         }
                     }
                 }

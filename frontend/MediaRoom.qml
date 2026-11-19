@@ -113,19 +113,6 @@ Item {
     property int localSongCount: 0
     property bool playlistEmpty: !useRemote && localSongCount === 0
 
-    // Library folder picked from the empty-playlist message (same rules and
-    // wording as the settings page's Browse)
-    property string _folderError: ""
-    FolderDialog {
-        id: emptyFolderDialog
-        title: "Select Music Library Folder"
-        onAccepted: {
-            if (!settingsManager) return
-            mediaRoom._folderError = settingsManager.save_media_folder_url(selectedFolder)
-                ? "" : "That folder can't be used as the music library: pick one on the device's storage or SD card."
-        }
-    }
-
     // Track info from nowPlaying (the phone while it has the controls, else
     // local media); this page only picks the wording
     property string currentTrackName: !_np ? "" : (_np.hasTrack ? _np.title : (useRemote ? remoteName : ""))
@@ -1060,55 +1047,15 @@ Item {
 
         }
 
-        // Empty playlist message, with the library folder picker from
-        // Settings > Media > Library & Playback so an empty library is one
-        // tap from music (the manager rescans when the folder changes)
-        Column {
+        // No music: the prompt Home's music card shows, so an empty library
+        // is one tap from music (the manager rescans when the folder changes)
+        App.MusicEmptyPrompt {
             visible: playlistEmpty
             anchors.centerIn: parent
-            spacing: dp(14)
-
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: "No songs in this playlist yet"
-                color: App.Style.metadataColor
-                font.pixelSize: dp(16)
-                font.family: mediaRoom.globalFont
-                opacity: 0.6
-            }
-
-            Row {
-                anchors.horizontalCenter: parent.horizontalCenter
-                spacing: dp(12)
-
-                Settings.SettingsButton {
-                    width: dp(120)
-                    height: dp(40)
-                    text: "Browse"
-                    // the browser demo opens the browser's own folder picker instead
-                    onClicked: if (!mediaManager || !mediaManager.pickBrowserLibrary()) emptyFolderDialog.open()
-                }
-
-                Settings.SettingsButton {
-                    objectName: "emptySpotifyButton"
-                    visible: typeof spotifyManager !== "undefined" && !!spotifyManager
-                    width: dp(120)
-                    height: dp(40)
-                    text: "Spotify"
-                    onClicked: if (mediaRoom.mainWindow) mediaRoom.mainWindow.openSpotify()
-                }
-            }
-
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                width: Math.min(implicitWidth, mediaRoom.width - dp(32))
-                visible: mediaRoom._folderError !== ""
-                text: mediaRoom._folderError
-                color: App.Style.statusDanger
-                font.pixelSize: dp(13)
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.Wrap
-            }
+            width: Math.min(parent.width - dp(32), dp(560))
+            stackView: mediaRoom.stackView
+            mainWindow: mediaRoom.mainWindow
+            fontFamily: mediaRoom.globalFont
         }
 
         // Waveform Visualizer

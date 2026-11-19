@@ -89,7 +89,7 @@ Flickable {
 
             SettingCategory {
                 title: "Library Folder"
-                description: "Subfolders become playlists. Root MP3s go to 'Unsorted'."
+                description: "Each subfolder is a playlist."
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -135,7 +135,7 @@ Flickable {
                         }
 
                         SettingsButton {
-                            text: "Strip"
+                            text: "Clean Titles"
                             Layout.preferredHeight: mediaFolderField.height
                             onClicked: {
                                 if (mediaManager) mediaManager.stripFilenames()
@@ -154,7 +154,6 @@ Flickable {
 
             SettingCategory {
                 title: "Startup Volume"
-                description: "Volume level applied when the app launches."
 
                 RowLayout {
                     Layout.fillWidth: true
@@ -247,14 +246,10 @@ Flickable {
 
             SettingCategory {
                 title: "Autoplay on Startup"
-                description: "Resume the last track automatically when the app launches."
 
-                SettingsToggle {
+                inlineContent: SettingsToggle {
                     id: autoPlayToggle
                     compact: true
-                    Layout.fillWidth: false
-                    Layout.alignment: Qt.AlignLeft
-                    text: checked ? "On" : "Off"
                     checked: settingsManager ? settingsManager.autoPlayOnStartup : false
                     activeColor: App.Style.accent
                     inactiveColor: App.Style.hoverColor
@@ -266,15 +261,11 @@ Flickable {
             }
 
             SettingCategory {
-                title: "Remember Shuffle State"
-                description: "Persist shuffle on/off across app restarts."
+                title: "Remember Shuffle"
 
-                SettingsToggle {
+                inlineContent: SettingsToggle {
                     id: persistShuffleToggle
                     compact: true
-                    Layout.fillWidth: false
-                    Layout.alignment: Qt.AlignLeft
-                    text: checked ? "On" : "Off"
                     checked: settingsManager ? settingsManager.persistShuffleState : false
                     activeColor: App.Style.accent
                     inactiveColor: App.Style.hoverColor
@@ -286,15 +277,11 @@ Flickable {
             }
 
             SettingCategory {
-                title: "Default to Library View"
-                description: "When opening Music, show the library list instead of the now-playing screen."
+                title: "Open Music to the Library"
 
-                SettingsToggle {
+                inlineContent: SettingsToggle {
                     id: musicButtonDefaultPageToggle
                     compact: true
-                    Layout.fillWidth: false
-                    Layout.alignment: Qt.AlignLeft
-                    text: checked ? "On" : "Off"
                     checked: settingsManager ? settingsManager.musicButtonDefaultPage === "mediaPlayer" : false
                     activeColor: App.Style.accent
                     inactiveColor: App.Style.hoverColor
@@ -308,15 +295,11 @@ Flickable {
             }
 
             SettingCategory {
-                title: "Return to Library After Playing"
-                description: "Bounce back to the library list once a track has been queued from it."
+                title: "Return to Library After Picking a Song"
 
-                SettingsToggle {
+                inlineContent: SettingsToggle {
                     id: returnToLibraryToggle
                     compact: true
-                    Layout.fillWidth: false
-                    Layout.alignment: Qt.AlignLeft
-                    text: checked ? "On" : "Off"
                     checked: settingsManager ? settingsManager.returnToLibraryAfterSelection : false
                     activeColor: App.Style.accent
                     inactiveColor: App.Style.hoverColor
@@ -332,11 +315,15 @@ Flickable {
                 id: scanTerminal
                 Layout.fillWidth: true
                 Layout.preferredHeight: pageRoot.dp(300)
-                title: "Library Scan Terminal Output"
+                title: "Scan Log"
+                // Nothing to show until Scan or Clean Titles has run
+                property int lineCount: 0
+                visible: lineCount > 0
 
                 Connections {
                     target: mediaManager
                     function onScanProgress(message) {
+                        scanTerminal.lineCount++
                         scanTerminal.appendLine(message)
                     }
                 }
@@ -493,12 +480,9 @@ Flickable {
                         title: "Rounded Album Art"
                         description: "Soft corners on the current track's album art."
 
-                        SettingsToggle {
+                        inlineContent: SettingsToggle {
                             id: roundedToggle
                             compact: true
-                            Layout.fillWidth: false
-                            Layout.alignment: Qt.AlignLeft
-                            text: checked ? "On" : "Off"
                             checked: settingsManager ? settingsManager.roundedAlbumArt : true
                             activeColor: App.Style.accent
                             inactiveColor: App.Style.hoverColor
@@ -539,12 +523,9 @@ Flickable {
                         title: "Album Art Shadow"
                         description: "Drop shadow behind the current track's album art."
 
-                        SettingsToggle {
+                        inlineContent: SettingsToggle {
                             id: shadowToggle
                             compact: true
-                            Layout.fillWidth: false
-                            Layout.alignment: Qt.AlignLeft
-                            text: checked ? "On" : "Off"
                             checked: settingsManager ? settingsManager.showAlbumArtShadow : true
                             activeColor: App.Style.accent
                             inactiveColor: App.Style.hoverColor
@@ -571,12 +552,9 @@ Flickable {
                         title: "Vinyl Record Mode"
                         description: "Swap album art for a spinning vinyl while playing."
 
-                        SettingsToggle {
+                        inlineContent: SettingsToggle {
                             id: vinylToggle
                             compact: true
-                            Layout.fillWidth: false
-                            Layout.alignment: Qt.AlignLeft
-                            text: checked ? "On" : "Off"
                             checked: settingsManager ? settingsManager.vinylRecordMode : false
                             activeColor: App.Style.accent
                             inactiveColor: App.Style.hoverColor
@@ -588,12 +566,9 @@ Flickable {
                         title: "Waveform Visualizer"
                         description: "FFT bars reacting to the playing audio."
 
-                        SettingsToggle {
+                        inlineContent: SettingsToggle {
                             id: waveformToggle
                             compact: true
-                            Layout.fillWidth: false
-                            Layout.alignment: Qt.AlignLeft
-                            text: checked ? "On" : "Off"
                             checked: settingsManager ? settingsManager.showWaveformVisualizer : true
                             activeColor: App.Style.accent
                             inactiveColor: App.Style.hoverColor
@@ -605,12 +580,9 @@ Flickable {
                         title: "3D Album Preview"
                         description: "Tilted side cards flanking the current track."
 
-                        SettingsToggle {
+                        inlineContent: SettingsToggle {
                             id: preview3dToggle
                             compact: true
-                            Layout.fillWidth: false
-                            Layout.alignment: Qt.AlignLeft
-                            text: checked ? "On" : "Off"
                             checked: settingsManager ? settingsManager.show3DAlbumPreview : false
                             activeColor: App.Style.accent
                             inactiveColor: App.Style.hoverColor
@@ -707,12 +679,9 @@ Flickable {
                         title: "3D Button Tilt"
                         description: "Press effect on the playback control buttons."
 
-                        SettingsToggle {
+                        inlineContent: SettingsToggle {
                             id: tiltToggle
                             compact: true
-                            Layout.fillWidth: false
-                            Layout.alignment: Qt.AlignLeft
-                            text: checked ? "On" : "Off"
                             checked: settingsManager ? settingsManager.show3DButtonTilt : false
                             activeColor: App.Style.accent
                             inactiveColor: App.Style.hoverColor

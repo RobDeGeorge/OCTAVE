@@ -131,7 +131,7 @@ thickness: isVertical
           </tbody>
         </table>
 
-        <p>The ideal unit comes from the bar's thickness (68&nbsp;% of a horizontal bar's height; the side bar's width / 1.4) times the UI scale. The side bar sets prev / play / next on one row, so their unit is also capped by the bar's width. Along the bar's length the controls are fitted in steps:</p>
+        <p>The ideal unit comes from the bar's thickness (75&nbsp;% of a horizontal bar's height, 68&nbsp;% until the buttons grew on 2026-11-19 to fill the bar more, the bar itself no thicker; the side bar's width / 1.4, times 1.1) times the UI scale. The side bar sets prev / play / next on one row, so their unit is also capped by the bar's width. Along the bar's length the controls are fitted in steps:</p>
 
         <ol>
           <li>At the ideal unit with comfortable gaps. The nav group sits at the bar's centre whenever the media and clock groups leave room for that, otherwise between them.</li>
@@ -264,7 +264,7 @@ thickness: isVertical
             </tr>
             <tr>
               <td>Media</td><td><code>media_button.svg</code> / <code>bottomBarMediaButton</code></td>
-              <td><code>openMediaSection()</code>: on <code>mediaRoom</code> opens <code>MediaPlayer.qml</code>; on <code>mediaPlayer</code> opens <code>MediaRoom.qml</code>; otherwise opens the page named by <code>settingsManager.musicButtonDefaultPage</code> (<code>"mediaRoom"</code> or <code>"mediaPlayer"</code>, the "Default to Library View" toggle in Media settings).</td>
+              <td><code>openMediaSection()</code>: on <code>mediaRoom</code> opens <code>MediaPlayer.qml</code>; on <code>mediaPlayer</code> opens <code>MediaRoom.qml</code>; otherwise opens the page named by <code>settingsManager.musicButtonDefaultPage</code> (<code>"mediaRoom"</code> or <code>"mediaPlayer"</code>, the "Open Music to the Library" toggle in Media settings).</td>
             </tr>
             <tr>
               <td>Sensor</td><td><code>sensor_button.svg</code> / <code>bottomBarSensorButton</code></td>

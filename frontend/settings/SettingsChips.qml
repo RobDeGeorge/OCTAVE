@@ -37,6 +37,45 @@ Flow {
         return result
     }
 
+    // ── Text chips sit on a grid ─────────────────────────────────
+    // Every text chip of one control is the same width, and the columns
+    // share the full width, so rows line up under each other instead of
+    // each chip being as wide as its own word. The column count is what
+    // the widest label allows, then evened out over the rows it takes
+    // (ten chips that fit seven across become five and five).
+    FontMetrics {
+        id: chipMetrics
+        font.pixelSize: App.Spacing.overallText
+        font.family: App.Style.fontFamily
+    }
+    readonly property var gridOptions: {
+        var result = []
+        for (var i = 0; i < textOptions.length; i++) {
+            var o = textOptions[i]
+            var palette = chipPalettes && chipPalettes[o] && chipPalettes[o].length > 0
+            var font = chipFonts && chipFonts[o] !== undefined
+            if (!palette && !font) result.push(o)
+        }
+        return result
+    }
+    readonly property real widestChip: {
+        var w = 0
+        for (var i = 0; i < gridOptions.length; i++) {
+            var extra = deletableItems.indexOf(gridOptions[i]) !== -1 ? dp(40) : 0
+            w = Math.max(w, chipMetrics.advanceWidth(String(gridOptions[i])) + extra)
+        }
+        return Math.ceil(w + App.Spacing.overallSpacing * 3)
+    }
+    readonly property int gridColumns: {
+        var n = gridOptions.length
+        if (n === 0 || width <= 0) return 1
+        var fit = Math.max(1, Math.floor((width + spacing) / (widestChip + spacing)))
+        var rows = Math.ceil(n / fit)
+        return Math.ceil(n / rows)
+    }
+    readonly property real gridCellWidth: width > 0
+        ? Math.floor((width - spacing * (gridColumns - 1)) / gridColumns) : widestChip
+
     // Shared delete-confirmation popup (one instance for all chips)
     Popup {
         id: deletePopup
@@ -168,12 +207,12 @@ Flow {
                 id: chipRect
                 // Image and palette chips are square; font chips are wider
                 // rectangles so the font name has room to render legibly;
-                // plain text chips size to their content.
+                // plain text chips take a cell of the control's grid.
                 width: chipWrapper.hasFont
                     ? App.Spacing.formElementHeight * 4.0
                     : (chipWrapper.hasImage || chipWrapper.hasPalette)
                         ? height
-                        : chipText.width + App.Spacing.overallSpacing * 3 + (chipWrapper.isDeletable ? textDeleteBtn.width + dp(4) : 0)
+                        : control.gridCellWidth
                 height: (chipWrapper.hasImage || chipWrapper.hasPalette || chipWrapper.hasFont)
                     ? App.Spacing.formElementHeight * 2.4
                     : App.Spacing.formElementHeight * 0.8
@@ -295,6 +334,10 @@ Flow {
                         id: chipText
                         anchors.verticalCenter: parent.verticalCenter
                         text: modelData
+                        // A label wider than its cell (one column left) is cut short
+                        width: Math.min(implicitWidth, chipRect.width - App.Spacing.overallSpacing * 2
+                                                       - (chipWrapper.isDeletable ? textDeleteBtn.width + dp(4) : 0))
+                        elide: Text.ElideRight
                         visible: !chipWrapper.hasImage && !chipWrapper.hasPalette && !chipWrapper.hasFont
                         color: modelData === control.currentValue ? "white" : ((control.chipColors && control.chipColors[modelData]) || App.Style.primaryTextColor)
                         font.pixelSize: App.Spacing.overallText

@@ -6,7 +6,7 @@ OCTAVE only reads. The request is always a read-by-identifier (mode 22 or 21) th
 
 ## The file
 
-`custom-pids.json` in the OCTAVE config folder (Linux `~/.config/OCTAVE/`, Windows `%APPDATA%/OCTAVE/`, macOS `~/Library/Application Support/OCTAVE/`). Settings > OBD > Custom PIDs shows where it is, what was loaded and what was skipped, and writes a starter file if there is none. The file is read when OCTAVE starts: restart after editing.
+`custom-pids.json` in the OCTAVE config folder (Linux `~/.config/OCTAVE/`, Windows `%APPDATA%/OCTAVE/`, macOS `~/Library/Application Support/OCTAVE/`). Settings > OBD > Advanced > Custom PIDs shows where it is, what was loaded and what was skipped, and writes a starter file if there is none. The file is read when OCTAVE starts: restart after editing.
 
 ```json
 {
@@ -42,7 +42,7 @@ OCTAVE only reads. The request is always a read-by-identifier (mode 22 or 21) th
 | `kind` | no | `numeric` (default), `percentage`, `temperature`, `voltage`, `pressure` or `bidirectional`: which widgets offer it. Give a `temperature` in °C; OCTAVE converts to °F when that is the display unit. |
 | `decimals` | no | 0 to 4 (default 1). |
 
-Up to 64 entries. An entry with a mistake is skipped and named in Settings > OBD > Custom PIDs and in the log; the others still load.
+Up to 64 entries. An entry with a mistake is skipped and named in Settings > OBD > Advanced > Custom PIDs and in the log; the others still load.
 
 ## Formulas
 

@@ -436,7 +436,7 @@ ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
           <code>OBDAdapterFinder</code> (QML <code>obdAdapterFinder</code>, <span class="file-path">src/managers/obdadapterfinder.{h,cpp}</span>,
           with BlueZ pairing in <span class="file-path">src/platform/bluezpairer.{h,cpp}</span>) lets someone connect an adapter without knowing its MAC or
           pairing it in the OS first. The "Connect Bluetooth OBD2" button on the empty Parameter Cards page and "Find Bluetooth
-          Adapters" in Settings &rarr; OBD &rarr; Adapters both open <span class="file-path">frontend/OBDAdapterSheet.qml</span>, which starts a scan.
+          Adapters" in Settings &rarr; OBD &rarr; Connection both open <span class="file-path">frontend/OBDAdapterSheet.qml</span>, which starts a scan.
           Phase 1 of <span class="file-path">TODO/obd-adapter-discovery.md</span>: the full flow runs on desktop Linux (Pi / Orange Pi included).
           On every other platform <code>supported</code> is false and the sheet lists <code>obdManager.availableAdapters</code> instead
           (the ports and paired devices the OS already knows), with an "OBD Settings" shortcut.
@@ -718,7 +718,7 @@ QTimer::singleShot(delay * <span class="num">1000</span>, <span class="kw">this<
           <li>The value goes out as <code>extendedDataReceived</code> &rarr; <code>obdParameterChanged(id, value)</code> + <code>parameterSampled</code>, the path of the multi-value PIDs, so <code>paramStore</code>, every gauge and the black box take it unchanged.</li>
           <li>An entry unanswered three times in a row (<code>kCustomMissLimit</code>) is tried once every 30 s (<code>kCustomRetryMs</code>) from then on, with a line in the connection log.</li>
           <li>The simulated car (<span class="file-path">src/sim/simelm327.cpp</span>) tracks <code>ATSH</code>: its transmission ECU at <code>7E1</code> answers <code>22 1940</code> (fluid temperature, one byte, &deg;C + 40), its engine ECU answers <code>22 2000</code> (battery millivolts) and is silent while another ECU is addressed, which is how <span class="file-path">tests/cpp/tst_obdsim.cpp</span> proves the header goes back. <span class="file-path">tests/cpp/tst_custompids.cpp</span> covers the formulas, the file and the request / reply helpers.</li>
-          <li>Not on the Android BLE path (<code>rebuildAndroidPollList()</code> drops the custom keys). UI: Settings &gt; OBD &gt; Custom PIDs, and group Custom in the dashboard editor's PID picker.</li>
+          <li>Not on the Android BLE path (<code>rebuildAndroidPollList()</code> drops the custom keys). UI: Settings &gt; OBD &gt; Advanced &gt; Custom PIDs, and group Custom in the dashboard editor's PID picker.</li>
         </ul>
 
         <!-- Bus monitor -->
@@ -728,7 +728,7 @@ QTimer::singleShot(delay * <span class="num">1000</span>, <span class="kw">this<
           <code>busMonitor</code>, experimental) shows every message the adapter hears on the vehicle bus as a table
           with one row per message id: how often it comes, its latest bytes, and which of them changed within the last
           second. It is for finding out which message carries what (press the brake, see which byte moves). The user
-          guide is <span class="file-path">docs/BUS_MONITOR.md</span>; the card is Settings &gt; OBD &gt; Bus Monitor.
+          guide is <span class="file-path">docs/BUS_MONITOR.md</span>; the card is Settings &gt; OBD &gt; Advanced &gt; Bus Monitor.
         </p>
         <p>
           Listen only: the adapter is put in its monitor mode (<code>ATMA</code>), in which it transmits nothing and on

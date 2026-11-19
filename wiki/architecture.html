@@ -186,7 +186,7 @@
           </thead>
           <tbody>
             <tr><td>SettingsManager</td><td><code>settingsmanager.{h,cpp}</code></td><td><code>settingsManager</code></td><td>Central settings store, JSON persistence, <code>getAppDataDir()</code></td></tr>
-            <tr><td>DiagnosticsManager</td><td><code>diagnosticsmanager.{h,cpp}</code></td><td><code>diagnosticsManager</code></td><td>Read / copy / export the log files from the head unit (Settings &rarr; Device &rarr; Diagnostics)</td></tr>
+            <tr><td>DiagnosticsManager</td><td><code>diagnosticsmanager.{h,cpp}</code></td><td><code>diagnosticsManager</code></td><td>Read / copy / export the log files from the head unit (Settings &rarr; Device &rarr; Developer &rarr; Diagnostics)</td></tr>
             <tr><td>Clock</td><td><code>clock.{h,cpp}</code></td><td><code>clock</code></td><td>Real-time clock, format from settings</td></tr>
             <tr><td>NetworkManager</td><td><code>networkmanager.{h,cpp}</code></td><td><code>networkManager</code></td><td>WiFi status, GitHub update check, git-based self-update + restart</td></tr>
             <tr><td>VolumeController</td><td><code>volumecontroller.{h,cpp}</code></td><td><code>volumeController</code></td><td>Single entry point for the quadratic volume curve</td></tr>
@@ -210,7 +210,7 @@
             <tr><td>Simulator</td><td><code>src/sim/simulator.{h,cpp}</code> (+ <code>carsim</code>, <code>simelm327</code>, <code>imufeed</code>, <code>simconfig</code>)</td><td><code>sim</code> (experimental)</td><td>The simulated car behind the real OBD stack, IMU motion, a test video and pairing codes; every build, inert unless <code>--sim</code> / <code>--dev</code> / the browser demo starts it</td></tr>
             <tr><td>VehicleManager</td><td><code>vehiclemanager.{h,cpp}</code></td><td><code>vehicleManager</code></td><td>The vehicle the 3D view and Home show: the built-in rigged Jeep or a model of the user's own under <code>&lt;config&gt;/vehicles/</code> (import a <code>.glb</code>, select, turn, remove)</td></tr>
             <tr><td>FrontendManager (+ FrontendSupervisor)</td><td><code>frontendmanager.{h,cpp}</code>, <code>frontendmanifest.{h,cpp}</code>, <code>frontendsupervisor.{h,cpp}</code></td><td><code>frontendManager</code></td><td>Installable frontends: install from a folder or zip, remove, pick the active screen; the supervisor runs an exec frontend, restarts it with back-off and falls back to QML</td></tr>
-            <tr><td>ServicePairing</td><td><code>src/service/servicepairing.{h,cpp}</code></td><td><code>servicePairing</code> (QML only, not a service object)</td><td>Pairing codes, paired devices and their scopes, revoking; Settings &gt; Device &gt; Service</td></tr>
+            <tr><td>ServicePairing</td><td><code>src/service/servicepairing.{h,cpp}</code></td><td><code>servicePairing</code> (QML only, not a service object)</td><td>Pairing codes, paired devices and their scopes, revoking; Settings &gt; Device &gt; Developer &gt; Service</td></tr>
             <tr><td>UiWatchdog</td><td><code>src/util/uiwatchdog.{h,cpp}</code></td><td><em>none</em> (internal)</td><td>Logs a blocked GUI thread</td></tr>
             <tr><td>FontCatalog</td><td><code>src/util/fontcatalog.{h,cpp}</code></td><td><code>fontCatalog</code></td><td>Registers the bundled UI and icon fonts at startup; the font picker's list</td></tr>
             <tr><td>ThemeCatalog</td><td><code>src/managers/themecatalog.{h,cpp}</code></td><td><code>themeCatalog</code></td><td>The built-in colour themes from <code>frontend/themes.json</code> (Style.qml binds them) and <code>activeTheme</code>, the palette in force for any frontend</td></tr>
@@ -696,7 +696,7 @@ Component.onCompleted: <span class="kw">if</span> (phoneMirrorManager) phoneMirr
 
         <h3>Getting logs out of the vehicle &mdash; <code>DiagnosticsManager</code></h3>
         <p>
-          Settings &rarr; Device &rarr; Diagnostics (<code>frontend/settings/DeviceSettingsPage.qml</code>) is backed by
+          Settings &rarr; Device &rarr; Developer &rarr; Diagnostics (<code>frontend/settings/DeviceSettingsPage.qml</code>) is backed by
           <code>diagnosticsManager</code>: <code>recentLogLines(200)</code> shows the tail of the
           main log followed by the error log; <code>copyLogsToClipboard(400)</code> prepends a
           version/device header; <code>exportLogs()</code> copies every current and rotated log file plus a
@@ -721,12 +721,12 @@ Component.onCompleted: <span class="kw">if</span> (phoneMirrorManager) phoneMirr
         </p>
         <ul>
           <li><strong>Off unless asked for</strong>: <code>--service [PORT]</code>, the <code>serviceEnabled</code> setting, <code>--headless</code>, or <code>--profile</code> in a developer build; loopback only unless <code>--service-bind</code>.</li>
-          <li><strong>Who may use it</strong> (protocol 2): everything on this device is trusted by default; anything else pairs with a 6-digit code from Settings &gt; Device &gt; Service and gets a token whose scopes (<code>read</code>, <code>media</code>, <code>vehicle</code>, &hellip;, <code>full</code>) decide what it may change. Each connection has limits (ops and new connections a second, a reader that stays behind), so one client cannot slow the car, the screen or the others (<a href="utilities.html#many-clients">Many clients</a>).</li>
+          <li><strong>Who may use it</strong> (protocol 2): everything on this device is trusted by default; anything else pairs with a 6-digit code from Settings &gt; Device &gt; Developer &gt; Service and gets a token whose scopes (<code>read</code>, <code>media</code>, <code>vehicle</code>, &hellip;, <code>full</code>) decide what it may change. Each connection has limits (ops and new connections a second, a reader that stays behind), so one client cannot slow the car, the screen or the others (<a href="utilities.html#many-clients">Many clients</a>).</li>
           <li><strong>The contract</strong>: <code>protocolVersion</code> 3; <span class="file-path">tools/api/check_compat.py</span> in CI fails a breaking change without a version bump and a <span class="file-path">docs/api/CHANGELOG.md</span> entry; members marked experimental or deprecated say so in <code>describe</code>; <span class="file-path">docs/api/protocol.json</span> describes the envelope (ops, errors, events, stream records) as JSON Schema.</li>
           <li><strong><code>--headless</code></strong>: the managers and the service with no QML engine and no window (about a fifth less memory on the desktop). Another program is the UI.</li>
           <li><strong>Streams</strong>: the <code>stream</code> op sends the phone mirror's H.264 and Android Auto's frames as binary records on the same connection; <code>GET /art</code> serves covers.</li>
           <li><strong><code>--sim</code></strong> (every build): a simulated car, IMU motion and test tracks on a throwaway config, driven through the experimental <code>sim</code> object, so a frontend can be written without a car.</li>
-          <li><strong>Installable frontends</strong> (<code>FrontendManager</code>, Settings &gt; Device &gt; Frontends): a folder or zip with an <code>octave-frontend.json</code> manifest, either web (served at <code>GET /</code>) or a program OCTAVE runs headless, restarts with back-off and falls back to QML from.</li>
+          <li><strong>Installable frontends</strong> (<code>FrontendManager</code>, Settings &gt; Device &gt; Developer &gt; Frontends): a folder or zip with an <code>octave-frontend.json</code> manifest, either web (served at <code>GET /</code>) or a program OCTAVE runs headless, restarts with back-off and falls back to QML from.</li>
           <li><strong>Clients</strong>: <span class="file-path">sdk/python</span> (stdlib only), <span class="file-path">sdk/web</span> (the reference page the app serves at <code>http://127.0.0.1:9876/</code>), <span class="file-path">sdk/typescript</span> and <span class="file-path">sdk/go</span> (generated from <span class="file-path">docs/api/</span>); starter projects in <span class="file-path">templates/</span> (JavaScript, Python, Go); <span class="file-path">tools/api/fake_server.py</span> for testing a new SDK without the app. <a href="writing-a-frontend.html">Writing a Frontend</a> is the walkthrough.</li>
         </ul>
 

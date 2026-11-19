@@ -65,7 +65,7 @@ const QList<QPair<QString, QString>> kPages = {
 };
 
 const QStringList kSettingsSections = {
-    "displaySettings", "mediaSettings", "obdSettings", "accessoriesSettings", "deviceSettings", "about",
+    "displaySettings", "mediaSettings", "obdSettings", "phoneSettings", "accessoriesSettings", "deviceSettings", "about",
 };
 
 // toggle key -> (save slot, property)

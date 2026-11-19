@@ -193,7 +193,7 @@ Flickable {
                     spacing: App.Spacing.overallSpacing * 0.5
 
                     Text {
-                        text: "Latest Build"
+                        text: "This Build"
                         color: App.Style.accent
                         font.pixelSize: App.Spacing.overallText * 0.9
                         font.family: App.Style.fontFamily
@@ -236,181 +236,6 @@ Flickable {
                         }
                     }
 
-                    Text {
-                        text: settingsManager ? settingsManager.get_git_commit_message() : ""
-                        color: App.Style.secondaryTextColor
-                        font.pixelSize: App.Spacing.overallText * 0.8
-                        font.family: App.Style.fontFamily
-                        font.italic: true
-                        wrapMode: Text.WordWrap
-                        Layout.fillWidth: true
-                        visible: text !== ""
-                    }
-                }
-            }
-
-            SettingsCard {
-                Layout.fillWidth: true
-                title: "Documentation"
-
-                Text {
-                    Layout.fillWidth: true
-                    // Builds with no web view (the browser demo, a desktop
-                    // build without Qt WebEngine) open the published wiki in
-                    // the browser instead of the reader
-                    readonly property bool external: !(typeof wikiViewerAvailable !== "undefined" && wikiViewerAvailable)
-                                                     && typeof wikiHomeUrl !== "undefined" && String(wikiHomeUrl) !== ""
-                    text: external ? (Qt.platform.os === "wasm"
-                                      ? "Explore the guides, features, and settings. Opens in a new tab."
-                                      : "Explore the guides, features, and settings. Opens in your browser.")
-                                   : "Explore the guides, features, and settings without leaving OCTAVE."
-                    color: App.Style.secondaryTextColor
-                    font.pixelSize: App.Spacing.overallText * 0.9
-                    font.family: App.Style.fontFamily
-                    wrapMode: Text.WordWrap
-                }
-
-                SettingsButton {
-                    objectName: "openWikiButton"
-                    text: "Open Wiki"
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: aboutPage.dp(44)
-                    onClicked: {
-                        if (!(typeof wikiViewerAvailable !== "undefined" && wikiViewerAvailable)
-                                && typeof wikiHomeUrl !== "undefined" && String(wikiHomeUrl) !== "")
-                            Qt.openUrlExternally(wikiHomeUrl)
-                        else
-                            wikiPopup.open()
-                    }
-                }
-            }
-
-            // ─── Open-source licenses ───
-            // What this build bundles, with each license, and the full texts:
-            // OCTAVE's own license and NOTICE and each component's license
-            // (compiled in; see octave_add_license_texts in CMakeLists.txt).
-            SettingsCard {
-                id: licensesCard
-                objectName: "licensesCard"
-                Layout.fillWidth: true
-                title: "Open-Source Licenses"
-
-                readonly property bool isAndroid: Qt.platform.os === "android"
-                readonly property bool isBrowser: Qt.platform.os === "wasm"
-                // Null while the app quits: the context properties go before the page
-                readonly property bool hasAirPlay: typeof airPlayManager !== "undefined" && airPlayManager !== null
-                                                   && airPlayManager.available
-                readonly property bool hasNativeAndroidAuto: typeof androidAutoManager !== "undefined" && androidAutoManager !== null
-                                                             && androidAutoManager.nativeAvailable
-                // texts: the license texts (licenseTexts below, by file) a component is under
-                readonly property var components: {
-                    var all = [
-                        { name: "Qt 6", license: "LGPL-3.0; GPL-3.0 for Qt Quick 3D and Qt Quick Timeline", use: "The whole application", texts: ["LGPL-3.0", "LICENSE"] },
-                        { name: "QR Code generator library (Project Nayuki)", license: "MIT", use: "The phone-pairing QR code", texts: ["MIT"] },
-                        { name: "scrcpy server (fork)", license: "Apache-2.0", use: "The program that runs on the phone during mirroring", texts: ["Apache-2.0"] },
-                        { name: "SQLite", license: "Public domain", use: "The black box's trip store", texts: [] },
-                        { name: "Google Sans", license: "OFL-1.1", use: "UI text (selectable font)", texts: ["OFL-1.1"] },
-                        { name: "JetBrains Mono", license: "OFL-1.1", use: "UI text (selectable font)", texts: ["OFL-1.1"] },
-                        { name: "OCTAVE Symbols (subset of Noto Sans Symbols / Symbols 2)", license: "OFL-1.1", use: "Icon glyphs", texts: ["OFL-1.1"] }
-                    ]
-                    if (isBrowser) {
-                        all.push({ name: "TagLib", license: "LGPL-2.1 / MPL-1.1", use: "Song tags and embedded album art", texts: ["LGPL-2.1", "MPL-1.1"] })
-                        all.push({ name: "coi-serviceworker", license: "MIT", use: "Lets the page run OCTAVE's threads", texts: ["MIT"] })
-                    } else if (!isAndroid) {
-                        all.push({ name: "TagLib", license: "LGPL-2.1 / MPL-1.1", use: "Song tags and embedded album art", texts: ["LGPL-2.1", "MPL-1.1"] })
-                        all.push({ name: "FFmpeg (libavcodec, libavutil; H.264, AAC and ALAC decoders)", license: "LGPL-2.1+", use: "Decoding the phone mirror's video and AirPlay's video and audio", texts: ["LGPL-2.1"] })
-                        if (hasAirPlay) {
-                            all.push({ name: "UxPlay (AirPlay library)", license: "GPL-3.0; parts LGPL-2.1+ and MIT", use: "The AirPlay receiver", texts: ["LICENSE", "LGPL-2.1", "MIT"] })
-                            all.push({ name: "libplist", license: "LGPL-2.1+", use: "AirPlay's property lists", texts: ["LGPL-2.1"] })
-                        }
-                        if (hasNativeAndroidAuto || hasAirPlay)
-                            all.push({ name: "OpenSSL", license: "Apache-2.0", use: "The built-in Android Auto receiver's encryption, and AirPlay's", texts: ["Apache-2.0"] })
-                        all.push({ name: "FFmpeg (inside Qt Multimedia)", license: "LGPL-2.1+; GPL-2.0+ in the aarch64 AppImage (Ubuntu's build)", use: "Playing local music", texts: ["LGPL-2.1", "GPL-2.0"] })
-                        all.push({ name: "Android platform-tools (adb)", license: "Apache-2.0", use: "Talking to the phone (bundled in releases)", texts: ["Apache-2.0"] })
-                    } else {
-                        all.push({ name: "OpenSSL 3", license: "Apache-2.0", use: "HTTPS", texts: ["Apache-2.0"] })
-                    }
-                    return all
-                }
-                // Every text diagnosticsManager.licenseText() serves, in button
-                // order (tst_licensetexts reads the file names from here)
-                readonly property var licenseTexts: [
-                    { file: "LICENSE", label: "GPL-3.0", title: "GNU General Public License v3" },
-                    { file: "LGPL-3.0", label: "LGPL-3.0", title: "GNU Lesser General Public License v3" },
-                    { file: "LGPL-2.1", label: "LGPL-2.1", title: "GNU Lesser General Public License v2.1" },
-                    { file: "GPL-2.0", label: "GPL-2.0", title: "GNU General Public License v2" },
-                    { file: "MPL-1.1", label: "MPL-1.1", title: "Mozilla Public License 1.1" },
-                    { file: "Apache-2.0", label: "Apache-2.0", title: "Apache License 2.0" },
-                    { file: "MIT", label: "MIT", title: "MIT License: the components' notices" },
-                    { file: "OFL-1.1", label: "OFL-1.1", title: "SIL Open Font License 1.1" },
-                    { file: "NOTICE", label: "Notices", title: "Copyright and third-party notices" }
-                ]
-                // The ones a component of this build is under, plus OCTAVE's own two
-                readonly property var shownTexts: licenseTexts.filter(function(t) {
-                    return t.file === "LICENSE" || t.file === "NOTICE"
-                        || components.some(function(c) { return c.texts.indexOf(t.file) >= 0 })
-                })
-
-                Text {
-                    Layout.fillWidth: true
-                    text: "OCTAVE is free software under the GNU General Public License, version 3 or later. "
-                          + "Its source code is at github.com/RobDeGeorge/OCTAVE. This build includes:"
-                    color: App.Style.secondaryTextColor
-                    font.pixelSize: App.Spacing.overallText * 0.9
-                    font.family: App.Style.fontFamily
-                    wrapMode: Text.WordWrap
-                }
-
-                Repeater {
-                    model: licensesCard.components
-                    delegate: ColumnLayout {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        spacing: 0
-                        Text {
-                            Layout.fillWidth: true
-                            text: modelData.name + "  \u2014  " + modelData.license
-                            color: App.Style.primaryTextColor
-                            font.pixelSize: App.Spacing.overallText * 0.85
-                            font.family: App.Style.fontFamily
-                            font.bold: true
-                            wrapMode: Text.WordWrap
-                        }
-                        Text {
-                            Layout.fillWidth: true
-                            text: modelData.use
-                            color: App.Style.secondaryTextColor
-                            font.pixelSize: App.Spacing.overallText * 0.75
-                            font.family: App.Style.fontFamily
-                            wrapMode: Text.WordWrap
-                        }
-                    }
-                }
-
-                // One button per license text: as many in a row as fit, then
-                // the rows evened out (nine in rows of seven is 5 + 4, not 7 + 2)
-                GridLayout {
-                    readonly property int fit: Math.max(2, Math.floor(licensesCard.width / aboutPage.dp(140)))
-                    readonly property int count: Math.max(1, licensesCard.shownTexts.length)
-                    Layout.fillWidth: true
-                    columns: Math.ceil(count / Math.ceil(count / fit))
-                    columnSpacing: aboutPage.dp(8)
-                    rowSpacing: aboutPage.dp(8)
-                    Repeater {
-                        model: licensesCard.shownTexts
-                        delegate: SettingsButton {
-                            required property var modelData
-                            objectName: modelData.file === "LICENSE" ? "showLicenseButton"
-                                      : modelData.file === "NOTICE" ? "showNoticeButton"
-                                      : "showLicenseText_" + modelData.file
-                            text: modelData.label
-                            Layout.fillWidth: true
-                            // The same for all, so the columns come out equal
-                            Layout.preferredWidth: aboutPage.dp(110)
-                            Layout.preferredHeight: aboutPage.dp(44)
-                            onClicked: licenseTextPopup.showFile(modelData.file, modelData.title)
-                        }
-                    }
                 }
             }
 
@@ -577,7 +402,7 @@ Flickable {
                                 }
 
                                 Text {
-                                    text: "Uncommitted changes in the working tree — commit or stash them to enable updating"
+                                    text: "This copy has uncommitted changes. Commit or stash them to update."
                                     color: "#FF9800"
                                     font.pixelSize: App.Spacing.overallText * 0.75
                                     font.family: App.Style.fontFamily
@@ -785,17 +610,166 @@ Flickable {
                 }
             }
 
-            Text {
-                id: descriptionText
-                text: "Welcome to OCTAVE, an open-source, cross-platform telematics system for an augmented vehicle experience. Developed by Rob DeGeorge.
-
-This software is designed to provide a seamless interface for vehicle systems, media playback, navigation, and more."
-                wrapMode: Text.WordWrap
-                color: App.Style.primaryTextColor
-                font.pixelSize: App.Spacing.overallText
-                font.family: App.Style.fontFamily
+            SettingsCard {
                 Layout.fillWidth: true
-                Layout.topMargin: App.Spacing.overallSpacing
+                title: "Documentation"
+
+                Text {
+                    Layout.fillWidth: true
+                    // Builds with no web view (the browser demo, a desktop
+                    // build without Qt WebEngine) open the published wiki in
+                    // the browser instead of the reader
+                    readonly property bool external: !(typeof wikiViewerAvailable !== "undefined" && wikiViewerAvailable)
+                                                     && typeof wikiHomeUrl !== "undefined" && String(wikiHomeUrl) !== ""
+                    visible: external
+                    text: Qt.platform.os === "wasm" ? "Opens in a new tab." : "Opens in your browser."
+                    color: App.Style.secondaryTextColor
+                    font.pixelSize: App.Spacing.overallText * 0.9
+                    font.family: App.Style.fontFamily
+                    wrapMode: Text.WordWrap
+                }
+
+                SettingsButton {
+                    objectName: "openWikiButton"
+                    text: "Open Wiki"
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: aboutPage.dp(44)
+                    onClicked: {
+                        if (!(typeof wikiViewerAvailable !== "undefined" && wikiViewerAvailable)
+                                && typeof wikiHomeUrl !== "undefined" && String(wikiHomeUrl) !== "")
+                            Qt.openUrlExternally(wikiHomeUrl)
+                        else
+                            wikiPopup.open()
+                    }
+                }
+            }
+
+            // ─── Open-source licenses ───
+            // What this build bundles, with each license, and the full texts:
+            // OCTAVE's own license and NOTICE and each component's license
+            // (compiled in; see octave_add_license_texts in CMakeLists.txt).
+            SettingsCard {
+                id: licensesCard
+                objectName: "licensesCard"
+                Layout.fillWidth: true
+                title: "Open-Source Licenses"
+
+                readonly property bool isAndroid: Qt.platform.os === "android"
+                readonly property bool isBrowser: Qt.platform.os === "wasm"
+                // Null while the app quits: the context properties go before the page
+                readonly property bool hasAirPlay: typeof airPlayManager !== "undefined" && airPlayManager !== null
+                                                   && airPlayManager.available
+                readonly property bool hasNativeAndroidAuto: typeof androidAutoManager !== "undefined" && androidAutoManager !== null
+                                                             && androidAutoManager.nativeAvailable
+                // texts: the license texts (licenseTexts below, by file) a component is under
+                readonly property var components: {
+                    var all = [
+                        { name: "Qt 6", license: "LGPL-3.0; GPL-3.0 for Qt Quick 3D and Qt Quick Timeline", use: "The whole application", texts: ["LGPL-3.0", "LICENSE"] },
+                        { name: "QR Code generator library (Project Nayuki)", license: "MIT", use: "The phone-pairing QR code", texts: ["MIT"] },
+                        { name: "scrcpy server (fork)", license: "Apache-2.0", use: "The program that runs on the phone during mirroring", texts: ["Apache-2.0"] },
+                        { name: "SQLite", license: "Public domain", use: "The black box's trip store", texts: [] },
+                        { name: "Google Sans", license: "OFL-1.1", use: "UI text (selectable font)", texts: ["OFL-1.1"] },
+                        { name: "JetBrains Mono", license: "OFL-1.1", use: "UI text (selectable font)", texts: ["OFL-1.1"] },
+                        { name: "OCTAVE Symbols (subset of Noto Sans Symbols / Symbols 2)", license: "OFL-1.1", use: "Icon glyphs", texts: ["OFL-1.1"] }
+                    ]
+                    if (isBrowser) {
+                        all.push({ name: "TagLib", license: "LGPL-2.1 / MPL-1.1", use: "Song tags and embedded album art", texts: ["LGPL-2.1", "MPL-1.1"] })
+                        all.push({ name: "coi-serviceworker", license: "MIT", use: "Lets the page run OCTAVE's threads", texts: ["MIT"] })
+                    } else if (!isAndroid) {
+                        all.push({ name: "TagLib", license: "LGPL-2.1 / MPL-1.1", use: "Song tags and embedded album art", texts: ["LGPL-2.1", "MPL-1.1"] })
+                        all.push({ name: "FFmpeg (libavcodec, libavutil; H.264, AAC and ALAC decoders)", license: "LGPL-2.1+", use: "Decoding the phone mirror's video and AirPlay's video and audio", texts: ["LGPL-2.1"] })
+                        if (hasAirPlay) {
+                            all.push({ name: "UxPlay (AirPlay library)", license: "GPL-3.0; parts LGPL-2.1+ and MIT", use: "The AirPlay receiver", texts: ["LICENSE", "LGPL-2.1", "MIT"] })
+                            all.push({ name: "libplist", license: "LGPL-2.1+", use: "AirPlay's property lists", texts: ["LGPL-2.1"] })
+                        }
+                        if (hasNativeAndroidAuto || hasAirPlay)
+                            all.push({ name: "OpenSSL", license: "Apache-2.0", use: "The built-in Android Auto receiver's encryption, and AirPlay's", texts: ["Apache-2.0"] })
+                        all.push({ name: "FFmpeg (inside Qt Multimedia)", license: "LGPL-2.1+; GPL-2.0+ in the aarch64 AppImage (Ubuntu's build)", use: "Playing local music", texts: ["LGPL-2.1", "GPL-2.0"] })
+                        all.push({ name: "Android platform-tools (adb)", license: "Apache-2.0", use: "Talking to the phone (bundled in releases)", texts: ["Apache-2.0"] })
+                    } else {
+                        all.push({ name: "OpenSSL 3", license: "Apache-2.0", use: "HTTPS", texts: ["Apache-2.0"] })
+                    }
+                    return all
+                }
+                // Every text diagnosticsManager.licenseText() serves, in button
+                // order (tst_licensetexts reads the file names from here)
+                readonly property var licenseTexts: [
+                    { file: "LICENSE", label: "GPL-3.0", title: "GNU General Public License v3" },
+                    { file: "LGPL-3.0", label: "LGPL-3.0", title: "GNU Lesser General Public License v3" },
+                    { file: "LGPL-2.1", label: "LGPL-2.1", title: "GNU Lesser General Public License v2.1" },
+                    { file: "GPL-2.0", label: "GPL-2.0", title: "GNU General Public License v2" },
+                    { file: "MPL-1.1", label: "MPL-1.1", title: "Mozilla Public License 1.1" },
+                    { file: "Apache-2.0", label: "Apache-2.0", title: "Apache License 2.0" },
+                    { file: "MIT", label: "MIT", title: "MIT License: the components' notices" },
+                    { file: "OFL-1.1", label: "OFL-1.1", title: "SIL Open Font License 1.1" },
+                    { file: "NOTICE", label: "Notices", title: "Copyright and third-party notices" }
+                ]
+                // The ones a component of this build is under, plus OCTAVE's own two
+                readonly property var shownTexts: licenseTexts.filter(function(t) {
+                    return t.file === "LICENSE" || t.file === "NOTICE"
+                        || components.some(function(c) { return c.texts.indexOf(t.file) >= 0 })
+                })
+
+                Text {
+                    Layout.fillWidth: true
+                    text: "OCTAVE is free software under the GNU GPL, version 3 or later. This build includes:"
+                    color: App.Style.secondaryTextColor
+                    font.pixelSize: App.Spacing.overallText * 0.9
+                    font.family: App.Style.fontFamily
+                    wrapMode: Text.WordWrap
+                }
+
+                Repeater {
+                    model: licensesCard.components
+                    delegate: ColumnLayout {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        spacing: 0
+                        Text {
+                            Layout.fillWidth: true
+                            text: modelData.name + "  \u2014  " + modelData.license
+                            color: App.Style.primaryTextColor
+                            font.pixelSize: App.Spacing.overallText * 0.85
+                            font.family: App.Style.fontFamily
+                            font.bold: true
+                            wrapMode: Text.WordWrap
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: modelData.use
+                            color: App.Style.secondaryTextColor
+                            font.pixelSize: App.Spacing.overallText * 0.75
+                            font.family: App.Style.fontFamily
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                }
+
+                // One button per license text: as many in a row as fit, then
+                // the rows evened out (nine in rows of seven is 5 + 4, not 7 + 2)
+                GridLayout {
+                    readonly property int fit: Math.max(2, Math.floor(licensesCard.width / aboutPage.dp(140)))
+                    readonly property int count: Math.max(1, licensesCard.shownTexts.length)
+                    Layout.fillWidth: true
+                    columns: Math.ceil(count / Math.ceil(count / fit))
+                    columnSpacing: aboutPage.dp(8)
+                    rowSpacing: aboutPage.dp(8)
+                    Repeater {
+                        model: licensesCard.shownTexts
+                        delegate: SettingsButton {
+                            required property var modelData
+                            objectName: modelData.file === "LICENSE" ? "showLicenseButton"
+                                      : modelData.file === "NOTICE" ? "showNoticeButton"
+                                      : "showLicenseText_" + modelData.file
+                            text: modelData.label
+                            Layout.fillWidth: true
+                            // The same for all, so the columns come out equal
+                            Layout.preferredWidth: aboutPage.dp(110)
+                            Layout.preferredHeight: aboutPage.dp(44)
+                            onClicked: licenseTextPopup.showFile(modelData.file, modelData.title)
+                        }
+                    }
+                }
             }
 
             Rectangle {
@@ -804,15 +778,6 @@ This software is designed to provide a seamless interface for vehicle systems, m
                 color: App.Style.hoverColor
                 Layout.topMargin: App.Spacing.overallSpacing
                 Layout.bottomMargin: App.Spacing.overallSpacing
-            }
-
-            Text {
-                text: "GitHub Repository"
-                color: App.Style.primaryTextColor
-                font.pixelSize: App.Spacing.overallText * 1.2
-                font.family: App.Style.fontFamily
-                font.bold: true
-                Layout.fillWidth: true
             }
 
             Text {

@@ -53,7 +53,7 @@ Rectangle {
         offerSettings: true
         onSettingsRequested: {
             if (obdConnectButton.mainWindow && typeof obdConnectButton.mainWindow.navigateToSettings === "function")
-                obdConnectButton.mainWindow.navigateToSettings("obdSettings", "obd_adapters")
+                obdConnectButton.mainWindow.navigateToSettings("obdSettings", "obd_connection")
         }
     }
 }

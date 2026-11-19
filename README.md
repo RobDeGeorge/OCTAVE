@@ -149,7 +149,7 @@ Pitch, roll, heading, a G-force plot with a trail, altitude and temperature, sam
 <td width="38%" align="center"><img src="frontend/assets/readme/webclient_phone.png" alt="OCTAVE's web client on a phone: live engine gauges, now playing with controls, volume" width="280"></td>
 <td>
 
-Everything the touch screen can do is open to other programs over a small JSON API. Start OCTAVE with `--service --service-bind 0.0.0.0` and open **`http://<head-unit-ip>:9876/`** on your phone, enter the pairing code from Settings > Device > Service: live gauges, now playing, volume. Or run it with **no screen at all** (`--headless`) and make your own UI.
+Everything the touch screen can do is open to other programs over a small JSON API. Start OCTAVE with `--service --service-bind 0.0.0.0` and open **`http://<head-unit-ip>:9876/`** on your phone, enter the pairing code from Settings > Device > Developer > Service: live gauges, now playing, volume. Or run it with **no screen at all** (`--headless`) and make your own UI.
 
 ```python
 from octave_client import Client
@@ -161,7 +161,7 @@ with Client() as octave:
         print(event["values"])        # {'RPM': 2210, 'SPEED': 41}
 ```
 
-[SDKs](sdk/) for Python, TypeScript and Go, a no-build [web client](sdk/web/index.html), [starter projects](templates/) to copy, the full [API reference](https://robdegeorge.com/OCTAVE/wiki/api-reference.html), and a walkthrough: **[Writing a Frontend](https://robdegeorge.com/OCTAVE/wiki/writing-a-frontend.html)**. Install your frontend as the head unit's screen from Settings > Device > Frontends; *Try* gives it two minutes, and five presses of mute always bring the built-in screen back.
+[SDKs](sdk/) for Python, TypeScript and Go, a no-build [web client](sdk/web/index.html), [starter projects](templates/) to copy, the full [API reference](https://robdegeorge.com/OCTAVE/wiki/api-reference.html), and a walkthrough: **[Writing a Frontend](https://robdegeorge.com/OCTAVE/wiki/writing-a-frontend.html)**. Install your frontend as the head unit's screen from Settings > Device > Developer > Frontends; *Try* gives it two minutes, and five presses of mute always bring the built-in screen back.
 
 **[Try a frontend in your browser](https://robdegeorge.com/OCTAVE/playground.html)** against the real core and a simulated car, or browse the **[frontend gallery](https://robdegeorge.com/OCTAVE/wiki/frontend-gallery.html)**: five complete examples in Svelte, Textual, Gio, SDL2 and egui (`examples/frontends/`, MIT). Built one? See [CONTRIBUTING.md](CONTRIBUTING.md).
 

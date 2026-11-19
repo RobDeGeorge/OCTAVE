@@ -1777,14 +1777,14 @@ Item {
                 }
             }
 
-            // Empty state message
-            Text {
+            // Nothing in the library: the prompt Home's music card shows
+            App.MusicEmptyPrompt {
                 anchors.centerIn: parent
-                text: "No songs found in media folder"
-                color: App.Style.primaryTextColor
-                font.pixelSize: App.Spacing.mediaPlayerTextSize * 1.3
-                font.family: mediaPlayer.globalFont
+                width: Math.min(parent.width - mediaPlayer.dp(32), mediaPlayer.dp(560))
                 visible: mediaListView.count === 0 && !mediaPlayer.phoneQueueShown && !mediaPlayer.spotifyShown
+                stackView: mediaPlayer.stackView
+                mainWindow: mediaPlayer.mainWindow
+                fontFamily: mediaPlayer.globalFont
             }
         }
     }

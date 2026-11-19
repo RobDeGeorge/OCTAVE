@@ -7,7 +7,7 @@ import "." as App
 // and phoneMirrorManager pairs and connects once the phone shows up over
 // mDNS (startQrPairing). Shows the code while qrPairingActive, otherwise a
 // button for a new one. Used by PhoneMirrorView (no phone yet) and the
-// Phone Dock settings card.
+// Phone Mirror settings card.
 RowLayout {
     // Local dp/dpMin wrappers — work around Qt Android singleton-function bug.
     function dp(size) { return Math.round(size * (App.Spacing.effectiveScale || 1.0)) }

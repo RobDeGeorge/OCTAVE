@@ -200,7 +200,19 @@ Item {
         // the popup's zoom-from-tile transition.
         property rect originRect: Qt.rect(0, 0, 0, 0)
 
+        // A card that became a section of another tile, or was merged
+        // into one: open that tile.
+        readonly property var movedCards: ({
+            "obd_adapters": "obd_connection",
+            "obd_custom_pids": "obd_advanced", "obd_bus_monitor": "obd_advanced",
+            "device_frontends": "device_developer", "device_service": "device_developer",
+            "device_diagnostics": "device_developer",
+            "accessories_phone_dock": "phone_mirror"
+        })
+
         function openTile(cardId, rect) {
+            if (movedCards[cardId] !== undefined)
+                cardId = movedCards[cardId]
             var tm = sidebarLayout.allTiles
             for (var i = 0; i < tm.length; i++) {
                 if (tm[i].cardId === cardId) {

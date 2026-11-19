@@ -67,7 +67,7 @@ Both should feed the same QML view and decode path. Build whichever ships first 
 
 - `src/android_auto/`: `aapproto` (hand-encoded protobuf, no libprotobuf), `aapframer` (frames, per-frame decryption order, per-channel reassembly), `aaptls` (OpenSSL TLS 1.2 client over a memory BIO pair), `aapsession` (the state machine, no I/O), `aapconnection` (socket + session + decoder on a worker thread; frames, audio and mic on the GUI thread). Built when OpenSSL and FFmpeg are found (`OCTAVE_HAVE_NATIVE_AA`, desktop only; CI's Linux job has both, so `tst_androidauto` runs there).
 - `androidAutoManager` native mode (experimental API members): `backend`, `nativeState` / `nativeStatus`, `videoSink`, `startNative` / `stopNative`, `injectTouch`, `setViewVisible`; retries while the page wants Android Auto; volume, mute, output device and night mode wired in `AppCore`.
-- Settings (generic keys): `androidAutoBackend` (`"dhu"` | `"native"`), `androidAutoCertPath` (empty = `<config>/android-auto/headunit.{crt,key}`), `androidAutoResolution`, `androidAutoFps`, `androidAutoDpi`. UI in Settings > Accessories > Phone Dock > Android Auto; the nav-bar button follows `androidAutoEnabled`.
+- Settings (generic keys): `androidAutoBackend` (`"dhu"` | `"native"`), `androidAutoCertPath` (empty = `<config>/android-auto/headunit.{crt,key}`), `androidAutoResolution`, `androidAutoFps`, `androidAutoDpi`. UI in Settings > Phone > Android Auto; the nav-bar button follows `androidAutoEnabled`.
 
 ## Risks
 

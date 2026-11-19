@@ -56,6 +56,11 @@ Flickable {
               var theme = settingsManager.themeSetting
               return { state: theme === "Album Art Capture" ? "Album art" : theme }
           } },
+        { cardId: "display_units", title: "Units", component: unitsContent,
+          summary: function() {
+              if (!settingsManager) return {}
+              return { state: "\u00B0" + settingsManager.gaugeTempUnit + " \u00B7 " + settingsManager.gaugeSpeedUnit }
+          } },
         { cardId: "display_clock", title: "Clock", component: clockContent,
           summary: function() {
               if (!settingsManager) return {}
@@ -139,8 +144,7 @@ Flickable {
             spacing: App.Spacing.sectionSpacing
 
             SettingCategory {
-                title: "UI Scaling"
-                description: "Adjusts the overall size of UI elements. 100% = default."
+                title: "UI Scale"
 
                 RowLayout {
                     Layout.fillWidth: true
@@ -289,7 +293,6 @@ Flickable {
 
             SettingCategory {
                 title: "Nav Bar Position"
-                description: "Bottom or side placement"
 
                 SettingsSegmentedControl {
                     id: bottomBarOrientation
@@ -306,14 +309,10 @@ Flickable {
 
             SettingCategory {
                 title: "Nav Bar Media Controls"
-                description: "Show play/pause and track skip buttons in the navigation bar."
 
-                SettingsToggle {
+                inlineContent: SettingsToggle {
                     id: bottomBarMediaControlsToggle
                     compact: true
-                    Layout.fillWidth: false
-                    Layout.alignment: Qt.AlignLeft
-                    text: checked ? "On" : "Off"
                     checked: settingsManager ? settingsManager.showBottomBarMediaControls : false
                     activeColor: App.Style.accent
                     inactiveColor: App.Style.hoverColor
@@ -438,7 +437,7 @@ Flickable {
                     Layout.fillWidth: true
                     Layout.topMargin: App.Spacing.rowSpacing
                     title: "Album Art Capture"
-                    description: "Pull a live color palette from the current song's album art."
+                    description: "Colors from the current song's album art."
                     togglable: true
                     checked: settingsManager && settingsManager.themeSetting === "Album Art Capture"
 
@@ -458,11 +457,7 @@ Flickable {
                     }
 
                     SettingLabel {
-                        text: "Transition Speed"
-                    }
-
-                    SettingDescription {
-                        text: "How long album art colors fade when the song changes. 0 = instant."
+                        text: "Fade Time"
                     }
 
                     SettingsSlider {
@@ -500,27 +495,27 @@ Flickable {
                         text: Math.round(colorTransitionSlider.value) + "ms"
                     }
 
-                    SettingLabel {
-                        text: "Match Song Length"
-                        Layout.topMargin: App.Spacing.rowSpacing * 1.5
-                    }
-
-                    SettingDescription {
-                        text: "Colors transition over the full length of the current song."
-                    }
-
-                    SettingsToggle {
-                        id: songLengthTransitionToggle
-                        compact: true
+                    RowLayout {
                         Layout.fillWidth: true
-                        text: checked ? "On" : "Off"
-                        checked: settingsManager ? settingsManager.songLengthTransition : false
-                        activeColor: App.Style.accent
-                        inactiveColor: App.Style.hoverColor
+                        Layout.topMargin: App.Spacing.rowSpacing * 1.5
+                        spacing: App.Spacing.overallSpacing
 
-                        onToggled: function(checked) {
-                            if (settingsManager) {
-                                settingsManager.save_song_length_transition(checked)
+                        SettingLabel {
+                            text: "Fade Over the Whole Song"
+                        }
+
+                        SettingsToggle {
+                            id: songLengthTransitionToggle
+                            compact: true
+                            Layout.fillWidth: false
+                            checked: settingsManager ? settingsManager.songLengthTransition : false
+                            activeColor: App.Style.accent
+                            inactiveColor: App.Style.hoverColor
+
+                            onToggled: function(checked) {
+                                if (settingsManager) {
+                                    settingsManager.save_song_length_transition(checked)
+                                }
                             }
                         }
                     }
@@ -558,6 +553,64 @@ Flickable {
         }
     }
 
+    // Units for the whole app. Temperature is one choice: it writes both
+    // the gauges' setting and the Sensors page's, which used to be apart.
+    Component {
+        id: unitsContent
+        ColumnLayout {
+            width: parent ? parent.width : 0
+            spacing: App.Spacing.sectionSpacing
+
+            SettingCategory {
+                title: "Temperature"
+
+                SettingsSegmentedControl {
+                    objectName: "tempUnitControl"
+                    Layout.fillWidth: true
+                    options: ["\u00B0C", "\u00B0F"]
+                    currentValue: settingsManager && settingsManager.gaugeTempUnit === "F" ? "\u00B0F" : "\u00B0C"
+                    onSelected: function(value) {
+                        if (!settingsManager) return
+                        var unit = value === "\u00B0F" ? "F" : "C"
+                        settingsManager.save_gauge_temp_unit(unit)
+                        settingsManager.save_sensor_temp_unit(unit)
+                    }
+                }
+            }
+
+            SettingCategory {
+                title: "Speed"
+
+                SettingsSegmentedControl {
+                    objectName: "speedUnitControl"
+                    Layout.fillWidth: true
+                    options: ["mph", "km/h"]
+                    currentValue: settingsManager && settingsManager.gaugeSpeedUnit === "km/h" ? "km/h" : "mph"
+                    onSelected: function(value) {
+                        if (settingsManager) settingsManager.save_gauge_speed_unit(value)
+                    }
+                }
+            }
+
+            SettingCategory {
+                title: "Altitude"
+
+                SettingsSegmentedControl {
+                    Layout.fillWidth: true
+                    options: ["m", "ft"]
+                    currentValue: settingsManager && settingsManager.sensorAltitudeUnit === "ft" ? "ft" : "m"
+                    onSelected: function(value) {
+                        if (settingsManager) settingsManager.save_sensor_altitude_unit(value)
+                    }
+                }
+            }
+
+            SettingDescription {
+                text: "Trip History keeps the units each drive was recorded in."
+            }
+        }
+    }
+
     Component {
         id: clockContent
         ColumnLayout {
@@ -566,13 +619,9 @@ Flickable {
 
             SettingCategory {
                 title: "Show Clock"
-                description: "Display the current time on screen."
 
-                SettingsToggle {
+                inlineContent: SettingsToggle {
                     compact: true
-                    Layout.fillWidth: false
-                    Layout.alignment: Qt.AlignLeft
-                    text: checked ? "On" : "Off"
                     checked: settingsManager ? settingsManager.showClock : true
 
                     onToggled: function(checked) {
@@ -584,15 +633,13 @@ Flickable {
             }
 
             SettingCategory {
+                // The rest only matter while the clock shows
+                visible: settingsManager ? settingsManager.showClock : true
                 title: "Show Seconds"
-                description: "Append seconds to the clock display."
 
-                SettingsToggle {
+                inlineContent: SettingsToggle {
                     id: clockShowSecondsToggle
                     compact: true
-                    Layout.fillWidth: false
-                    Layout.alignment: Qt.AlignLeft
-                    text: checked ? "On" : "Off"
                     checked: settingsManager ? settingsManager.clockShowSeconds : false
 
                     onToggled: function(checked) {
@@ -604,14 +651,15 @@ Flickable {
             }
 
             SettingCategory {
+                visible: settingsManager ? settingsManager.showClock : true
                 title: "Time Format"
 
                 SettingsSegmentedControl {
                     id: timeFormatControl
                     Layout.fillWidth: true
-                    options: ["24-hour", "12-hour (AM/PM)"]
+                    options: ["24-hour", "12-hour"]
                     currentValue: settingsManager ?
-                                (settingsManager.clockFormat24Hour ? "24-hour" : "12-hour (AM/PM)") :
+                                (settingsManager.clockFormat24Hour ? "24-hour" : "12-hour") :
                                 "24-hour"
 
                     onSelected: function(value) {
@@ -623,14 +671,12 @@ Flickable {
             }
 
             SettingCategory {
+                visible: settingsManager ? settingsManager.showClock : true
                 title: "Clock Size"
-                description: "Auto fits the clock to the nav bar. Turn it off to set the size by hand."
 
-                SettingsToggle {
+                inlineContent: SettingsToggle {
                     id: clockSizeAutoToggle
                     compact: true
-                    Layout.fillWidth: false
-                    Layout.alignment: Qt.AlignLeft
                     text: "Auto"
                     checked: settingsManager ? settingsManager.clockSizeAuto : true
 

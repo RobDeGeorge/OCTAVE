@@ -34,6 +34,9 @@ var CLOCK_DIGITS_MIN = 0.45  // ...and as far as it may give way
 var CLOCK_PAD = 0.3          // around the clock text (its tap area)
 var VOLUME_PAD = 0.1
 var SIDE_NAV_ASPECT = 1.4    // side bar: nav buttons are wider than tall
+var BUTTON_FILL = 0.75       // a button's share of the bar's thickness at scale 1 (0.68 until 2026-11-19;
+                             // grown twice by 5% to fill the bar more, the bar itself no thicker)
+var SIDE_GROW = 1.1          // the side bar's buttons, grown by the same
 
 // [preferred, minimum] gaps in units
 var MARGIN = [0.3, 0.12], GROUP_GAP = [0.6, 0.2], NAV_GAP = [0.3, 0.1]   // NAV_GAP between media buttons too
@@ -134,7 +137,7 @@ function _hits(faces, barW, barH, padX, padY) {
 // The horizontal bar: [media] ... [nav, centred on the bar] ... [clock]
 function _horizontal(p, on) {
     var L = p.width, t = p.height
-    var u = Math.min(0.68 * t * p.scale, 0.85 * t)
+    var u = Math.min(BUTTON_FILL * t * p.scale, 0.85 * t)
     var volPx = VOLUME_FONT * u
     var clockCap = 0.8 * t / p.clockHeightPerPx      // text no taller than 80% of the bar
     var clockPref = Math.min(p.clockAuto ? CLOCK_DIGITS * u / p.clockDigitHeightPerPx : p.clockPx, clockCap)
@@ -218,7 +221,7 @@ function _horizontal(p, on) {
 function _vertical(p, on) {
     var L = p.height, t = p.width
     var mx = 0.08 * t, w = t - 2 * mx
-    var u = Math.min(w / SIDE_NAV_ASPECT * p.scale, w)
+    var u = Math.min(w / SIDE_NAV_ASPECT * SIDE_GROW * p.scale, w)
     // prev / play / next share one row, so the media unit is set by the width
     var rowUnits = 3 * MEDIA + 2 * NAV_GAP[1]
     var um = Math.min(u, w / rowUnits)
@@ -347,8 +350,8 @@ function compute(p) {
     var on = { media: p.showMedia, shuffle: p.showMedia, mute: p.showMedia, volume: p.showMedia, clock: p.showClock }
     var dropped = []
     var build = p.vertical ? _vertical : _horizontal
-    var idealUnit = p.vertical ? Math.min((p.width * 0.84) / SIDE_NAV_ASPECT * p.scale, p.width * 0.84)
-                               : Math.min(0.68 * p.height * p.scale, 0.85 * p.height)
+    var idealUnit = p.vertical ? Math.min((p.width * 0.84) / SIDE_NAV_ASPECT * SIDE_GROW * p.scale, p.width * 0.84)
+                               : Math.min(BUTTON_FILL * p.height * p.scale, 0.85 * p.height)
     var g = build(p, on)
     for (var what = _toDrop(g, on, p.minUnit, idealUnit); what !== ""; what = _toDrop(g, on, p.minUnit, idealUnit)) {
         on[what] = false

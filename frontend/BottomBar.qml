@@ -93,7 +93,7 @@ Rectangle {
     // The nav buttons shown, in order
     readonly property var navSections: {
         var s = ["home", "obd", "media", "sensor", "settings"]
-        if (settingsManager && settingsManager.androidAutoEnabled)   // Settings > Accessories > Phone Dock > Android Auto
+        if (settingsManager && settingsManager.androidAutoEnabled)   // Settings > Phone > Android Auto
             s.push("androidAuto")
         if (typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null && phoneMirrorManager.nativeAvailable
                 && settingsManager && settingsManager.phoneMirrorEnabled)
@@ -879,6 +879,7 @@ Rectangle {
                             { name: "Media", section: "mediaSettings" },
                             { name: "Display", section: "displaySettings" },
                             { name: "OBD", section: "obdSettings" },
+                            { name: "Phone", section: "phoneSettings" },
                             { name: "Accessories", section: "accessoriesSettings" },
                             { name: "About", section: "about" }
                         ]

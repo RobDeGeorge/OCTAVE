@@ -58,7 +58,7 @@
             <tr><td><code>SensorCard</code>, <code>GForceDisplay</code></td><td><code>Rectangle</code></td><td><span class="file-path">SensorMenu.qml</span></td></tr>
             <tr><td><code>HomeOBDView</code></td><td><code>Item</code></td><td><span class="file-path">MainMenu.qml</span></td></tr>
             <tr><td><code>ErrorToast</code></td><td><code>Item</code></td><td><span class="file-path">Main.qml</span> (once, last child of the window)</td></tr>
-            <tr><td><code>OBDAdapterSheet</code></td><td><code>Popup</code></td><td><span class="file-path">OBDConnectButton.qml</span>, <span class="file-path">settings/OBDSettingsPage.qml</span> (Adapters card)</td></tr>
+            <tr><td><code>OBDAdapterSheet</code></td><td><code>Popup</code></td><td><span class="file-path">OBDConnectButton.qml</span>, <span class="file-path">settings/OBDSettingsPage.qml</span> (Connection card)</td></tr>
             <tr><td><code>OBDConnectButton</code></td><td><code>Rectangle</code></td><td><span class="file-path">OBDHome.qml</span> and <span class="file-path">OBDMenu.qml</span> (the "No vehicle connected" prompt)</td></tr>
             <tr><td><code>OBDParameterModel</code></td><td><code>QtObject</code> singleton</td><td>every OBD view, the gauges, the dashboard editor, Main.qml's IMU gating</td></tr>
             <tr><td><code>JeepVehicle</code>, <code>JeepHinge</code>, <code>JeepLamp</code>, <code>JeepLink</code></td><td>Quick3D <code>Node</code></td><td><span class="file-path">VehicleView.qml</span></td></tr>
@@ -217,7 +217,7 @@
 
         <h2 id="terminal-feedback">TerminalFeedback</h2>
 
-        <p><span class="file-path">frontend/TerminalFeedback.qml</span> is a "reusable terminal-style feedback component for displaying backend progress" &mdash; a dark <code>Rectangle</code> with a header bar, a touch-friendly <code>Flickable</code> log and a custom scroll indicator. Its one consumer is "Library Scan Terminal Output" in <span class="file-path">settings/MediaSettingsPage.qml</span>, fed by <code>mediaManager.scanProgress</code>. <a href="pages.html#obddiagnostics">OBDDiagnostics</a> does <em>not</em> use it &mdash; that page carries an older inline <code>QtObject</code> terminal with the same <code>appendLine()</code> / <code>clear()</code> API and prefix colouring, plus a blinking cursor and a scanline canvas.</p>
+        <p><span class="file-path">frontend/TerminalFeedback.qml</span> is a "reusable terminal-style feedback component for displaying backend progress" &mdash; a dark <code>Rectangle</code> with a header bar, a touch-friendly <code>Flickable</code> log and a custom scroll indicator. Its one consumer is "Scan Log" in <span class="file-path">settings/MediaSettingsPage.qml</span>, fed by <code>mediaManager.scanProgress</code>. <a href="pages.html#obddiagnostics">OBDDiagnostics</a> does <em>not</em> use it &mdash; that page carries an older inline <code>QtObject</code> terminal with the same <code>appendLine()</code> / <code>clear()</code> API and prefix colouring, plus a blinking cursor and a scanline canvas.</p>
 
         <pre><code><span class="prop">property int</span> maxLines: <span class="num">50</span>
 <span class="prop">property bool</span> autoScroll: <span class="kw">true</span>
@@ -244,7 +244,7 @@
 
         <pre><code>App.<span class="cls">TerminalFeedback</span> {
     <span class="prop">id</span>: scanTerminal
-    <span class="prop">title</span>: <span class="str">"Library Scan Terminal Output"</span>
+    <span class="prop">title</span>: <span class="str">"Scan Log"</span>
     Layout.fillWidth: <span class="kw">true</span>
 }
 scanTerminal.<span class="fn">appendLine</span>(<span class="str">"[SCAN] Scanning ~/Music ..."</span>)
@@ -311,7 +311,7 @@ scanTerminal.<span class="fn">appendLine</span>(<span class="str">"[DONE] 412 fi
           </tbody>
         </table>
         <p>Used twice: by <a href="pages.html#phonemirror">PhoneMirrorView</a> as its no-phone screen (it calls <code>start()</code> when
-          that screen appears and <code>cancel()</code> when it goes away), and inside a centred modal <code>Popup</code> on the Phone Dock
+          that screen appears and <code>cancel()</code> when it goes away), and inside a centred modal <code>Popup</code> on the Phone Mirror
           settings card ("Connect phone").</p>
 
         <!-- HomeOBDView -->

@@ -219,7 +219,7 @@ build/octave --dump-api docs/api         <span class="cmt"># regenerate the publ
         <pre><code>home, media_room, media_player, obd, obd_home, obd_diagnostics, trip_history, sensor_home,
 settings, phone_mirror, android_auto, airplay, sensors, car, clock
 <span class="cmt"># settings sections for open_settings:</span>
-displaySettings, mediaSettings, obdSettings, accessoriesSettings, deviceSettings, about
+displaySettings, mediaSettings, obdSettings, phoneSettings, accessoriesSettings, deviceSettings, about
 <span class="cmt"># and its optional "tile", a card id (the cardId in frontend/settings/*Page.qml):</span>
 display_appearance, media_library, media_spotify, obd_connection, obd_black_box, device_service, device_frontends, ...</code></pre>
         <p><code>open_settings</code> calls Main.qml&rsquo;s <code>navigateToSettings(section, tile)</code> with both arguments every time (<code>invokeByName()</code> matches the argument count), so <code>{"section": "deviceSettings", "tile": "device_frontends"}</code> lands on the Frontends card and a call without <code>tile</code> on the section.</p>

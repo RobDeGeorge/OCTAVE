@@ -6,7 +6,7 @@ OCTAVE only listens here. The adapter is put in its monitor mode, in which it tr
 
 ## Using it
 
-Settings > OBD > Bus Monitor, with a vehicle connected. **Listen** starts it, **Stop** ends it.
+Settings > OBD > Advanced > Bus Monitor, with a vehicle connected. **Listen** starts it, **Stop** ends it.
 
 Each row is one message id:
 

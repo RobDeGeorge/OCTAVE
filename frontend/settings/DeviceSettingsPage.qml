@@ -245,34 +245,52 @@ Flickable {
               return { state: settingsManager ? (settingsManager.deviceName || "OCTAVE") : "OCTAVE",
                        status: on ? App.Style.statusConnected : App.Style.statusDisconnected }
           } },
-        { cardId: "device_service", title: "Service", component: serviceContent,
-          summary: function() {
-              var sp = pageRoot._pairing
-              if (!sp) return {}
-              var n = sp.devices.length
-              return { state: (sp.serviceEnabled ? "On" : "Off") + (n ? " \u2022 " + n + " paired" : ""),
-                       status: sp.serviceEnabled ? App.Style.statusConnected : App.Style.statusDisconnected }
-          } },
-        { cardId: "device_frontends", title: "Frontends", component: frontendsContent,
-          summary: function() {
-              var f = pageRoot._frontends
-              if (!f) return {}
-              return { state: f.forcedQml ? "Built-in (forced)" : pageRoot.frontendName(f.activeId) }
-          } },
         { cardId: "device_vehicle", title: "Vehicle", component: vehicleContent,
           summary: function() {
               var v = pageRoot._vehicles
               return v ? { state: v.active.name || "Not chosen" } : {}
           } },
-        { cardId: "device_diagnostics", title: "Diagnostics", component: diagnosticsContent,
+        { cardId: "device_developer", title: "Developer", component: developerContent,
           summary: function() {
-              var d = pageRoot._diag
-              return d && d.lastExportPath ? { state: "Logs exported" } : {}
+              var f = pageRoot._frontends
+              if (f && (f.forcedQml || f.activeId !== ""))
+                  return { state: f.forcedQml ? "Built-in (forced)" : pageRoot.frontendName(f.activeId) }
+              var sp = pageRoot._pairing
+              if (!sp) return {}
+              var n = sp.devices.length
+              return { state: "Service " + (sp.serviceEnabled ? "on" : "off") + (n ? " \u2022 " + n + " paired" : ""),
+                       status: sp.serviceEnabled ? App.Style.statusConnected : App.Style.statusDisconnected }
           } }
     ]
 
     // ── Card body components — shared between the Flickable rendering (below)
     //    and the SettingsCardPopup in the Sidebar layout.
+
+    // Developer: other screens, the service other programs use, and the
+    // logs, one card under the other.
+    Component {
+        id: developerContent
+        ColumnLayout {
+            width: parent ? parent.width : 0
+            spacing: App.Spacing.sectionSpacing
+
+            SettingsCard {
+                // A card with no cardId is always open and draws no header
+                SettingLabel { text: "Frontends"; font.pixelSize: App.Spacing.overallText * 1.5; font.bold: true }
+                Loader { Layout.fillWidth: true; sourceComponent: frontendsContent }
+            }
+            SettingsCard {
+                // A card with no cardId is always open and draws no header
+                SettingLabel { text: "Service"; font.pixelSize: App.Spacing.overallText * 1.5; font.bold: true }
+                Loader { Layout.fillWidth: true; sourceComponent: serviceContent }
+            }
+            SettingsCard {
+                // A card with no cardId is always open and draws no header
+                SettingLabel { text: "Diagnostics"; font.pixelSize: App.Spacing.overallText * 1.5; font.bold: true }
+                Loader { Layout.fillWidth: true; sourceComponent: diagnosticsContent }
+            }
+        }
+    }
 
     Component {
         id: deviceContent
@@ -353,55 +371,13 @@ Flickable {
 
             SettingCategory {
                 title: "Power"
-                description: "Shut down OCTAVE and power off the device."
+                description: "Powers off the device."
 
-                RowLayout {
-                    id: shutdownRow
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.overallSpacing
-
-                    property bool confirmingShutdown: false
-
-                    // Reset confirmation after 5 seconds
-                    Timer {
-                        id: shutdownResetTimer
-                        interval: 5000
-                        onTriggered: shutdownRow.confirmingShutdown = false
-                    }
-
-                    SettingsButton {
-                        text: shutdownRow.confirmingShutdown ? "Confirm Shutdown" : "Shut Down"
-                        buttonColor: shutdownRow.confirmingShutdown ? App.Style.statusDanger : App.Style.accent
-                        height: pageRoot.dp(44)
-                        onClicked: {
-                            if (shutdownRow.confirmingShutdown) {
-                                if (networkManager)
-                                    networkManager.shutdownDevice()
-                            } else {
-                                shutdownRow.confirmingShutdown = true
-                                shutdownResetTimer.restart()
-                            }
-                        }
-                    }
-
-                    Text {
-                        text: "Press again to confirm"
-                        color: "#F44336"
-                        font.pixelSize: App.Spacing.overallText * 0.8
-                        font.family: App.Style.fontFamily
-                        visible: shutdownRow.confirmingShutdown
-                        Layout.alignment: Qt.AlignVCenter
-
-                        // Bound to shutdownRow by id: the previous parent.parent
-                        // chain resolved to undefined and logged a binding warning
-                        // every time the Device page loaded.
-                        SequentialAnimation on opacity {
-                            running: shutdownRow.confirmingShutdown && shutdownRow.visible  // visible includes hidden pages/sections
-                            loops: Animation.Infinite
-                            NumberAnimation { from: 1.0; to: 0.4; duration: 800 }
-                            NumberAnimation { from: 0.4; to: 1.0; duration: 800 }
-                        }
-                    }
+                ConfirmButton {
+                    label: "Shut Down"
+                    confirmLabel: "Confirm Shutdown"
+                    Layout.preferredHeight: pageRoot.dp(44)
+                    onConfirmed: if (networkManager) networkManager.shutdownDevice()
                 }
             }
         }
@@ -415,9 +391,8 @@ Flickable {
             spacing: App.Spacing.rowSpacing
 
             SettingDescription {
-                text: "Lets other programs on this device, and devices you pair on your network, read and control OCTAVE "
-                      + "(the service protocol: other dashboards, phones, scripts). Anything paired can change settings, "
-                      + "play music and see the mirrored phone. Changes to the switch take effect at the next start."
+                text: "Lets other programs on this device, and devices you pair, read and control OCTAVE. "
+                      + "The switch applies at the next start."
             }
 
             SettingsToggle {
@@ -544,18 +519,13 @@ Flickable {
 
             SettingDescription {
                 visible: pageRoot._inBrowser
-                text: "Other screens for OCTAVE, made by anyone with the service API, running on this same car. "
-                      + "Tap one to see it in place of this screen; its OCTAVE button, or mute pressed five times "
-                      + "within four seconds, brings this screen back. More in the frontend gallery on the wiki."
+                text: "Other screens for OCTAVE on this same car. Tap one to see it; its OCTAVE button, or mute "
+                      + "five times within four seconds, brings this screen back."
             }
             SettingDescription {
                 visible: !pageRoot._inBrowser
-                text: "Other screens for OCTAVE, made by anyone with the service API. A web frontend is served to "
-                      + "browsers; a program frontend replaces this screen. Tap one to make it the screen from the next "
-                      + "start, or Try a program for two minutes and this screen "
-                      + "comes back by itself (so does turning the car off and on). To get this screen back at any "
-                      + "time: press mute five times within four seconds (the knob, a gesture or the frontend's own "
-                      + "button), start with --qml, or put a file named USE_QML in the frontends folder."
+                text: "Other screens for OCTAVE. Tap one to use it from the next start. To get this screen back: "
+                      + "press mute five times within four seconds."
             }
 
             Text {
@@ -721,9 +691,20 @@ Flickable {
             readonly property bool own: !!current.id && !current.builtIn
 
             SettingDescription {
-                text: "The vehicle in the 3D view and on the Home screen. Pick one, or add your own: any model exported as "
-                      + "glTF binary (.glb) works. A model is shown whole and tilts with the motion sensor; opening doors "
-                      + "and turning wheels are the Jeep's alone. If a model comes in sideways or lying down, turn it here."
+                text: "Pick one, or add your own as a .glb file. Turn it here if it comes in sideways."
+            }
+
+            // The vehicle's picture beside the Home readings
+            SettingCategory {
+                title: "Show on Home"
+                description: "Beside the readings. Tap it there for the 3D view."
+
+                inlineContent: SettingsToggle {
+                    objectName: "homeVehicleCardToggle"
+                    compact: true
+                    checked: settingsManager ? settingsManager.homeVehicleCard : true
+                    onToggled: function(checked) { if (settingsManager) settingsManager.homeVehicleCard = checked }
+                }
             }
 
             Item {
@@ -879,14 +860,15 @@ Flickable {
                     width: Layout.preferredWidth
                     onClicked: vehicleCard.vm.select("")
                 }
-                SettingsButton {
+                ConfirmButton {
                     objectName: "removeVehicleModel"
                     visible: vehicleCard.own
-                    text: "Remove"
-                    buttonColor: App.Style.statusDanger
+                    label: "Remove"
+                    confirmLabel: "Confirm remove"
+                    idleColor: App.Style.statusDanger
                     height: pageRoot.dp(30)
                     width: Layout.preferredWidth
-                    onClicked: vehicleCard.vm.remove(vehicleCard.current.id)
+                    onConfirmed: vehicleCard.vm.remove(vehicleCard.current.id)
                 }
             }
 

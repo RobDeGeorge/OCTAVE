@@ -583,7 +583,7 @@
             <li><strong>Where the code appears</strong>: <code>PhoneMirrorView</code> becomes the QR screen whenever no phone is connected
               and none is remembered (<code>noPhone</code>: the error text starts with "No Android device"); it starts pairing on its own
               and cancels when the view is left or mirroring starts. With a remembered phone the page says "Waiting for your phone" and
-              offers "Connect a different phone". In Settings &rarr; Accessories &rarr; Phone Dock the "Connect phone" button opens the same
+              offers "Connect a different phone". In Settings &rarr; Phone the "Connect phone" button opens the same
               panel in a centred modal. Both use <span class="file-path">frontend/PhoneQrPairingPanel.qml</span>: the code on a
               <code>Canvas</code>, black on white with a 4-module quiet zone, sized from the screen height (55 %) so it scans from arm's
               length, the three steps, the result line and Cancel / "Show QR code".</li>
@@ -662,7 +662,7 @@
             <li><strong>Phone side</strong>: <code>OCTAVE_SET_BIT_RATE</code> &rarr; <code>VideoBitRate.set()</code> &rarr;
               <code>MediaCodec.setParameters(PARAMETER_KEY_VIDEO_BITRATE)</code> on the running encoder, no restart and no key frame.
               Encoders that ignore live changes keep their rate; the cut still helps once the encoder is recreated.</li>
-            <li><strong>Visible</strong>: <code>currentBitRate</code> (bps, 0 when idle) follows every change; the Phone Dock card shows
+            <li><strong>Visible</strong>: <code>currentBitRate</code> (bps, 0 when idle) follows every change; the Phone Mirror settings card shows
               "Now: … Mbps over USB / Wi-Fi", and each change is logged with its queueing delay.</li>
           </ul>
         </section>
@@ -829,7 +829,7 @@
           <p>
             Android Auto has two backends behind one manager (<code>androidAutoManager</code>) and one page
             (<span class="file-path">frontend/AndroidAutoView.qml</span>), picked by the <code>androidAutoBackend</code> setting
-            (Settings &rarr; Accessories &rarr; Phone Dock &rarr; Android Auto &rarr; <em>Head unit</em>):
+            (Settings &rarr; Phone &rarr; Android Auto &rarr; <em>Head unit</em>):
           </p>
           <ul>
             <li><strong>Built-in</strong> (<code>"native"</code>, beta): OCTAVE is the head unit and speaks the Android Auto Protocol to the
@@ -856,7 +856,7 @@
           </table>
           <p>Logging: categories <code>octave.androidauto</code> (the manager), <code>octave.androidauto.session</code> and
             <code>octave.androidauto.connection</code> (the built-in receiver), and <code>octave.embeddeddhu</code>. The bottom-bar button is
-            shown when setting <code>androidAutoEnabled</code> is on (Settings &rarr; Accessories &rarr; Phone Dock &rarr; Android Auto &rarr;
+            shown when setting <code>androidAutoEnabled</code> is on (Settings &rarr; Phone &rarr; Android Auto &rarr;
             <em>Show in nav bar</em>).</p>
         </section>
 
@@ -900,7 +900,7 @@
           </div>
           <h4>In OCTAVE</h4>
           <ol class="steps">
-            <li>Settings &rarr; Accessories &rarr; Phone Dock &rarr; <strong>Android Auto</strong>: turn on <em>Show in nav bar</em>
+            <li>Settings &rarr; Phone &rarr; <strong>Android Auto</strong>: turn on <em>Show in nav bar</em>
               (<code>androidAutoEnabled</code>).</li>
             <li>Under <em>Head unit</em>, pick <strong>Built-in</strong> (<code>androidAutoBackend = "native"</code>). Only shown when the
               build has the built-in receiver.</li>
@@ -1235,7 +1235,7 @@ dpi = 160</code></pre>
         <section id="airplay-setup">
           <h3>Setting it up</h3>
           <ol>
-            <li>Settings &gt; Accessories &gt; Phone Dock &gt; <em>iPhone (AirPlay)</em>: turn on <strong>AirPlay receiver</strong>
+            <li>Settings &gt; Phone &gt; <em>iPhone (AirPlay)</em>: turn on <strong>AirPlay receiver</strong>
               (<code>airPlayEnabled</code>, off by default: it advertises OCTAVE on the local network). The iPhone page
               (<span class="file-path">frontend/AirPlayView.qml</span>, also reached from Phone Mirror's "Using an iPhone?" button) has the same switch.</li>
             <li>Put the iPhone on the same network as OCTAVE (the page lists OCTAVE's addresses). In the car that means the head unit

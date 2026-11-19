@@ -43,12 +43,12 @@ Item {
         anchors.fill: parent
         visible: control.compact
         implicitWidth: compactIndicator.width + compactLabel.implicitWidth + App.Spacing.overallSpacing * 0.5
-        implicitHeight: dp(26)
+        implicitHeight: dp(36)
 
         Item {
             id: compactIndicator
-            width: dp(48)
-            height: dp(26)
+            width: dp(68)
+            height: dp(36)
             anchors.verticalCenter: parent.verticalCenter
 
             // Glow behind track (spacecraft, when checked)
@@ -73,9 +73,9 @@ Item {
                 Behavior on color { ColorAnimation { duration: 150 } }
 
                 Rectangle {
-                    x: control.checked ? parent.width - width - dp(3) : dp(3)
-                    width: dp(20)
-                    height: dp(20)
+                    x: control.checked ? parent.width - width - dp(4) : dp(4)
+                    width: dp(28)
+                    height: dp(28)
                     radius: dpMin(App.EnvironmentTheme.active.switchKnobRadius, 2)
                     anchors.verticalCenter: parent.verticalCenter
                     color: "white"
@@ -98,7 +98,7 @@ Item {
         }
 
         MouseArea {
-            // The switch is drawn dp(26) tall; the touch target is never
+            // The switch is drawn dp(36) tall; the touch target is never
             // under dp(44), reaching past it above and below
             anchors.fill: parent
             anchors.topMargin: -Math.max(0, (dp(44) - parent.height) / 2)

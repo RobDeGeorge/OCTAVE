@@ -560,9 +560,10 @@ reg[QStringLiteral(<span class="str">"theme_setting"</span>)] = entry(<span clas
           The toggles live in the <code>settingsVisibilityPopup</code> defined in
           <span class="file-path">frontend/BottomBar.qml</span>, opened by a press-and-hold on the settings navigation
           button (a tap navigates as before), and <span class="file-path">frontend/SettingsMenu.qml</span> filters its page model through
-          <code>is_settings_section_visible()</code>. The default visibility keys are the menu's six sections:
+          <code>is_settings_section_visible()</code>. The default visibility keys are the menu's seven sections:
           <code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>,
-          <code>accessoriesSettings</code> (Volume Knob, IMU, Gesture and Phone Dock sub-sections; desktop only),
+          <code>phoneSettings</code> (Phone Mirror, Android Auto, iPhone; desktop only),
+          <code>accessoriesSettings</code> (Volume Knob, IMU and Gesture sub-sections; desktop only),
           <code>deviceSettings</code> and <code>about</code>, all <code>true</code>. A file written by an older build
           may still carry the retired per-feature keys (<code>androidAutoSettings</code>, <code>phoneMirrorSettings</code>,
           <code>volumeKnobSettings</code>, <code>gestureSensorSettings</code>); they are kept but nothing reads them, and any
@@ -837,7 +838,7 @@ property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span 
             <tr><td><code>save_obd_saved_adapters</code> (private)</td><td>stores the string as given; only an empty string becomes <code>"[]"</code></td></tr>
             <tr><td><code>add_obd_saved_adapter</code></td><td>keeps an <code>rfcomm://</code> scheme lower-case while upper-casing the MAC; a missing name defaults to the MAC</td></tr>
             <tr><td><code>reset_to_defaults()</code></td><td>Writes the full default object (the four service keys keep what the file says), reloads everything (<code>populateMembers()</code>) and emits the signal of each setting whose value changed, and <code>genericSettingChanged(key)</code> for each changed key that has no property. Nothing is emitted for a value that was already the default. No caller exists today</td></tr>
-            <tr><td><code>set_last_settings_section()</code></td><td>Whitelists the six current section IDs (<code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>, <code>accessoriesSettings</code>, <code>deviceSettings</code>, <code>about</code>) plus the four legacy per-feature IDs an older file may carry; saves and emits only when the section changes</td></tr>
+            <tr><td><code>set_last_settings_section()</code></td><td>Whitelists the seven current section IDs (<code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>, <code>phoneSettings</code>, <code>accessoriesSettings</code>, <code>deviceSettings</code>, <code>about</code>) plus the four legacy per-feature IDs an older file may carry; saves and emits only when the section changes</td></tr>
             <tr><td><code>fuelTankCapacity</code></td><td>Property and slot exist but nothing reads or writes them (no QML, no OBD manager use)</td></tr>
           </tbody>
         </table>

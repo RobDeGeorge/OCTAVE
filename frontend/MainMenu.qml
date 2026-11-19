@@ -67,70 +67,16 @@ Item {
     readonly property bool obdConnected: typeof obdManager !== "undefined" && !!obdManager
                                          && obdManager.connectionState === OBDManager.Connected
     // The vehicle's picture beside the readings (the homeVehicleCard setting)
-    readonly property bool vehicleCardShown: obdConnected && !!settingsManager && settingsManager.homeVehicleCard
+    // There with or without an adapter and with or without a vehicle
+    // chosen, as the media and OBD cards are there with nothing to show
+    readonly property bool vehicleCardShown: !!settingsManager && settingsManager.homeVehicleCard
     // The active playlist's length (not a raw directory scan, which misses
     // "All Music"); the phone or Android Auto counts as music
     property int localSongCount: 0
     readonly property bool musicEmpty: !useRemote && localSongCount === 0
-    readonly property bool spotifyOffered: typeof spotifyManager !== "undefined" && !!spotifyManager
-    readonly property bool phoneOffered: (!!settingsManager && settingsManager.phoneMirrorEnabled)
-                                         || (typeof airPlayManager !== "undefined" && !!airPlayManager
-                                             && airPlayManager.available && airPlayManager.enabled)
-    function openPhone() {
-        if (settingsManager && settingsManager.phoneMirrorEnabled)
-            stackView.openPage("PhoneMirrorView.qml")
-        else
-            stackView.openPage("AirPlayView.qml")
-    }
-
-    // Library folder picker (same rules and wording as Media Room's Browse)
-    property string _folderError: ""
-    FolderDialog {
-        id: homeFolderDialog
-        title: "Select Music Library Folder"
-        onAccepted: {
-            if (!settingsManager) return
-            mainMenu._folderError = settingsManager.save_media_folder_url(selectedFolder)
-                ? "" : "That folder can't be used as the music library: pick one on the device's storage or SD card."
-        }
-    }
     Connections {
         target: typeof mediaManager !== "undefined" ? mediaManager : null
         function onMediaListChanged(files) { mainMenu.localSongCount = files.length }
-    }
-
-    // Outlined accent button, the look of OBDConnectButton
-    component PromptButton: Rectangle {
-        id: promptButton
-        property string text: ""
-        signal clicked()
-        height: App.Spacing.bottomBarNavButtonHeight
-        width: Math.min(promptLabel.implicitWidth + mainMenu.dp(32), mediaSection.width - mainMenu.dp(24))
-        radius: mainMenu.dpMin(8, 2)
-        color: "transparent"
-        border.color: App.Style.accent
-        border.width: 1
-        scale: promptMouse.pressed ? 0.9 : 1.0
-        Behavior on scale {
-            NumberAnimation { duration: 200; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
-        }
-        Text {
-            id: promptLabel
-            anchors.centerIn: parent
-            width: Math.min(implicitWidth, parent.width - mainMenu.dp(12))
-            elide: Text.ElideRight
-            text: promptButton.text
-            color: App.Style.accent
-            font.pixelSize: App.Spacing.overallText
-            font.bold: true
-            font.family: mainMenu.globalFont
-        }
-        MouseArea {
-            id: promptMouse
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: promptButton.clicked()
-        }
     }
 
     // Dark background with subtle gradient
@@ -511,76 +457,15 @@ Item {
             }
 
             // No music yet: pick the library folder or bring the phone
-            Column {
+            // (the same prompt as the music screens)
+            App.MusicEmptyPrompt {
                 objectName: "homeMusicPrompt"
                 visible: mainMenu.musicEmpty
                 anchors.centerIn: parent
                 width: parent.width - dp(24)
-                spacing: dp(16)
-
-                Text {
-                    width: parent.width
-                    horizontalAlignment: Text.AlignHCenter
-                    wrapMode: Text.WordWrap
-                    text: "No music yet"
-                    color: App.Style.metadataColor
-                    font.pixelSize: App.Spacing.overallText * 1.2
-                    font.bold: true
-                    font.family: mainMenu.globalFont
-                }
-                Text {
-                    width: parent.width
-                    horizontalAlignment: Text.AlignHCenter
-                    wrapMode: Text.WordWrap
-                    text: mainMenu.phoneOffered && mainMenu.spotifyOffered ? "Pick a music folder, or connect your phone or Spotify"
-                          : mainMenu.phoneOffered ? "Pick a music folder or connect your phone"
-                          : mainMenu.spotifyOffered ? "Pick a music folder or connect Spotify"
-                          : "Pick the folder your music is in"
-                    color: App.Style.secondaryTextColor
-                    font.pixelSize: App.Spacing.overallText * 0.9
-                    font.family: mainMenu.globalFont
-                }
-                // Side by side when both fit: this panel is a third of the
-                // screen, and narrower still at a large UI scale
-                Grid {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    columns: homeMusicBrowse.width + homeMusicSpotify.width + spacing <= parent.width ? 2 : 1
-                    spacing: dp(12)
-                    horizontalItemAlignment: Grid.AlignHCenter
-
-                    PromptButton {
-                        id: homeMusicBrowse
-                        objectName: "homeMusicBrowseButton"
-                        text: "Browse Music"
-                        // the browser demo opens the browser's own folder picker instead
-                        onClicked: if (typeof mediaManager === "undefined" || !mediaManager
-                                       || !mediaManager.pickBrowserLibrary()) homeFolderDialog.open()
-                    }
-                    PromptButton {
-                        id: homeMusicSpotify
-                        objectName: "homeSpotifyButton"
-                        visible: mainMenu.spotifyOffered
-                        text: "Spotify"
-                        onClicked: if (mainMenu.mainWindow) mainMenu.mainWindow.openSpotify()
-                    }
-                }
-                PromptButton {
-                    objectName: "homeConnectPhoneButton"
-                    visible: mainMenu.phoneOffered
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: "Connect Phone"
-                    onClicked: mainMenu.openPhone()
-                }
-                Text {
-                    width: parent.width
-                    visible: mainMenu._folderError !== ""
-                    horizontalAlignment: Text.AlignHCenter
-                    wrapMode: Text.WordWrap
-                    text: mainMenu._folderError
-                    color: App.Style.statusDanger
-                    font.pixelSize: App.Spacing.overallText * 0.8
-                    font.family: mainMenu.globalFont
-                }
+                stackView: mainMenu.stackView
+                mainWindow: mainMenu.mainWindow
+                fontFamily: mainMenu.globalFont
             }
         }
 
@@ -628,8 +513,11 @@ Item {
             Column {
                 objectName: "homeOBDPrompt"
                 visible: !mainMenu.obdConnected
+                // Centred in what the vehicle card leaves of the panel
+                readonly property real taken: mainMenu.vehicleCardShown ? vehicleCard.width + dp(15) : 0
                 anchors.centerIn: parent
-                width: Math.min(parent.width - dp(40), dp(560))
+                anchors.horizontalCenterOffset: -taken / 2
+                width: Math.min(parent.width - taken - dp(40), dp(560))
                 spacing: dp(16)
 
                 // The vehicle, while the panel has the height for it
@@ -637,7 +525,8 @@ Item {
                     objectName: "homeVehiclePicture"
                     width: parent.width
                     height: Math.round(obdSection.height * 0.42)
-                    visible: hasPicture && obdSection.height >= dp(360)
+                    // (the vehicle card beside this shows it instead)
+                    visible: hasPicture && obdSection.height >= dp(360) && !mainMenu.vehicleCardShown
                 }
 
                 Text {

@@ -17,7 +17,7 @@ A release build has the simulated car too: `octave --headless --sim` works every
 `octave-frontend.json` beside `index.html` makes the folder an installable frontend: a web frontend (`"web": {"root": "."}`) that asks for the **media** permission. Install it on the head unit and choose it:
 
 ```bash
-# on the head unit: Settings > Device > Frontends > Install from folder, then Use; or over the service:
+# on the head unit: Settings > Device > Developer > Frontends > Install from folder, then Use; or over the service:
 python3 -c 'import sys; sys.path.insert(0, "sdk/python"); from octave_client import Client
 c = Client(); i = c.call("frontendManager", "installFromFolder", sys.argv[1]); print(i, c.call("frontendManager", "setActive", i))' templates/hello-car-js
 ```
