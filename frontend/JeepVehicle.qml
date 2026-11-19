@@ -20,6 +20,12 @@ Node {
     readonly property bool hasRearGlass: Rig.parts.rear_glass !== undefined
     // Body-mounted lamps rise with the lifted body (lifted twin rig only).
     readonly property real bodyLift: Rig.bodyLift !== undefined ? Rig.bodyLift : 0
+    // Height of the ground under the tyres, in the rig's metres (0 is the chassis centre).
+    readonly property real groundY: Rig.parts.driver_rear_spin.pivot[1] - 0.3937
+    readonly property real closedRadius: Rig.bounds.closedRadius
+    readonly property real sweptRadius: Rig.bounds.sweptRadius
+    // Whether any panel is asked open (true from the tap, before the hinge has moved)
+    readonly property bool anyOpenRequested: driverDoorOpen || passengerDoorOpen || rearGlassOpen || tailgateOpen || hoodOpen
     property real wheelSpeedKph: 0
     property real wheelSpinAngle: 0
     readonly property real wheelDegreesPerSecond: Math.max(-30, Math.min(30, wheelSpeedKph)) / 3.6 / 0.3937 * 180 / Math.PI
@@ -83,6 +89,11 @@ Node {
         rearGlassOpen = hasRearGlass
         tailgateOpen = true
     }
+    // The panels a tap on the model opens and closes (JeepHinge.tapKey).
+    function toggle(key) {
+        if (["driverDoorOpen", "passengerDoorOpen", "tailgateOpen", "hoodOpen"].indexOf(key) >= 0)
+            vehicle[key] = !vehicle[key]
+    }
     function closeAll() {
         driverDoorOpen = false
         passengerDoorOpen = false
@@ -90,17 +101,19 @@ Node {
         rearGlassOpen = false
         hoodOpen = false
     }
-    JeepHinge { id: body; part: Rig.parts.body }
-    JeepHinge { id: driver; objectName: "driverHinge"; part: Rig.parts.driver_door; open: vehicle.driverDoorOpen }
-    JeepHinge { id: passenger; objectName: "passengerHinge"; part: Rig.parts.passenger_door; open: vehicle.passengerDoorOpen }
+    JeepHinge { id: body; part: Rig.parts.body; tappable: true }
+    JeepHinge { id: driver; objectName: "driverHinge"; part: Rig.parts.driver_door; open: vehicle.driverDoorOpen; tappable: true; tapKey: "driverDoorOpen" }
+    JeepHinge { id: passenger; objectName: "passengerHinge"; part: Rig.parts.passenger_door; open: vehicle.passengerDoorOpen; tappable: true; tapKey: "passengerDoorOpen" }
     // Without rear glass this stays an empty, closed node (no file to load).
     JeepHinge {
         id: glass; objectName: "glassHinge"
+        tappable: vehicle.hasRearGlass; tapKey: "tailgateOpen"
         part: vehicle.hasRearGlass ? Rig.parts.rear_glass : ({file: "", pivot: [0, 0, 0], axis: "X", openAngle: 0})
         open: vehicle.hasRearGlass && vehicle.rearGlassOpen && gate.opened
     }
     JeepHinge {
         id: gate; objectName: "gateHinge"; part: Rig.parts.tailgate
+        tappable: true; tapKey: "tailgateOpen"
         open: vehicle.tailgateOpen || !glass.closed
         // The high brake lamp is mounted on the spare carrier and follows the gate.
         JeepLamp {
@@ -112,7 +125,7 @@ Node {
             beamBrightness: 0.5; beamAngle: 110; beamInnerAngle: 65
         }
     }
-    JeepHinge { id: hood; objectName: "hoodHinge"; part: Rig.parts.hood; open: vehicle.hoodOpen }
+    JeepHinge { id: hood; objectName: "hoodHinge"; part: Rig.parts.hood; open: vehicle.hoodOpen; tappable: true; tapKey: "hoodOpen" }
 
     JeepHinge {
         id: driverWheel; objectName: "driverWheel"

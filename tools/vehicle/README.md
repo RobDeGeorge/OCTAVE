@@ -346,7 +346,7 @@ give `axis: "Z"` plus an `orient` quaternion `[w, x, y, z]` (Qt coordinates), an
 `JeepHinge` composes `orient × spin`. `JeepVehicle` turns the driveshafts at
 wheel speed × `axleRatio` (3.73) and the crank and fan at `engineRpm`, slowed 60×
 so a 7-blade fan does not strobe at display frame rates. Both rotate clockwise
-seen from the front. CarMenu's Engine slider sets `engineRpm`; with OBD
+seen from the front. The test panel's Engine slider sets `engineRpm`; with OBD
 connected, live RPM and SPEED drive it instead. Belt and accessory pulleys other
 than the crank and water pump are static.
 

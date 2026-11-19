@@ -33,6 +33,7 @@
             <li><a href="#error-toast">ErrorToast</a></li>
             <li><a href="#obd-adapter-sheet">OBDAdapterSheet</a></li>
             <li><a href="#obd-parameter-model">OBDParameterModel</a></li>
+            <li><a href="#vehicle-view">VehicleView</a></li>
             <li><a href="#jeep-rig">The Jeep TJ Rig</a></li>
             <li><a href="#design-decisions">Design Decisions</a></li>
           </ul>
@@ -59,7 +60,9 @@
             <tr><td><code>OBDAdapterSheet</code></td><td><code>Popup</code></td><td><span class="file-path">OBDConnectButton.qml</span>, <span class="file-path">settings/OBDSettingsPage.qml</span> (Adapters card)</td></tr>
             <tr><td><code>OBDConnectButton</code></td><td><code>Rectangle</code></td><td><span class="file-path">OBDHome.qml</span> and <span class="file-path">OBDMenu.qml</span> (the "No vehicle connected" prompt)</td></tr>
             <tr><td><code>OBDParameterModel</code></td><td><code>QtObject</code> singleton</td><td>every OBD view, the gauges, the dashboard editor, Main.qml's IMU gating</td></tr>
-            <tr><td><code>JeepVehicle</code>, <code>JeepHinge</code>, <code>JeepLamp</code>, <code>JeepLink</code></td><td>Quick3D <code>Node</code></td><td><span class="file-path">CarMenu.qml</span></td></tr>
+            <tr><td><code>JeepVehicle</code>, <code>JeepHinge</code>, <code>JeepLamp</code>, <code>JeepLink</code></td><td>Quick3D <code>Node</code></td><td><span class="file-path">VehicleView.qml</span></td></tr>
+            <tr><td><code>VehicleView</code></td><td><code>Item</code></td><td><span class="file-path">CarMenu.qml</span></td></tr>
+            <tr><td><code>VehicleRigPanel</code></td><td><code>Rectangle</code></td><td><span class="file-path">CarMenu.qml</span> (test controls, on request)</td></tr>
           </tbody>
         </table>
 
@@ -383,6 +386,25 @@ scanTerminal.<span class="fn">appendLine</span>(<span class="str">"[DONE] 412 fi
         <p><code>simulationActive</code> switches the singleton to "pure-QML fake data so dashboards can be built/tested without a live OBD connection": every parameter sweeps a sine between its <code>min</code> and <code>max</code> with a 4&ndash;16&nbsp;s period and a per-parameter phase (so the screen "doesn't pulse in lockstep"), driven by a 100&nbsp;ms timer; big-range values are rounded to integers. While active, <code>liveValue()</code> serves the sweep instead of the store; on deactivation it reads the store again, so the fake readings go and the real ones come back at once. The dashboard editor toggles this (see <a href="gauges-dashboards.html#editor">Gauges &amp; Dashboards &rarr; Editor</a>).</p>
 
         <!-- Jeep rig -->
+        <h2 id="vehicle-view">VehicleView</h2>
+
+        <p><span class="file-path">frontend/VehicleView.qml</span> is the 3D vehicle as a component: the <code>View3D</code> (<code>objectName: "jeepScene"</code>), its light probe and two lights, the orbit camera (<code>jeepCamera</code>, fitted to the rig's radius and the view's aspect), the gestures and the <a href="#jeep-rig">rig</a> itself. A page gives it a size and adds whatever it wants around it; <a href="pages.html#carmenu">CarMenu</a> is the first user. Use one at a time: a Quick3D scene is the most expensive thing the app draws, and on a machine without a GPU building one stalls for seconds.</p>
+
+        <table>
+          <thead><tr><th>Member</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><code>attitude</code> (quaternion)</td><td>Orientation of the vehicle in the scene's frame (+Y up, +Z forward). Identity is level.</td></tr>
+            <tr><td><code>active</code></td><td>Whether the view is on screen; stops the rig's spin timer when false. Bind it to the page's <code>visible</code>.</td></tr>
+            <tr><td><code>interactive</code></td><td>Drag to orbit, pinch / wheel to zoom, tap a panel, double-tap to restore the view. Set false for a picture that should not take touches.</td></tr>
+            <tr><td><code>showLevelRing</code></td><td>The accent-coloured ring on the ground (<code>levelRing</code>) that stays level while the vehicle tilts.</td></tr>
+            <tr><td><code>cameraYaw</code>, <code>cameraPitch</code>, <code>cameraZoom</code></td><td>The orbit, in degrees (defaults &minus;35 / &minus;25), and zoom (1 = fitted; 0.4..3). <code>resetView()</code> animates back to the defaults.</td></tr>
+            <tr><td><code>vehicle</code> (read-only)</td><td>The <code>JeepVehicle</code>, for a host that drives <code>engineRpm</code>, <code>wheelSpeedKph</code> or the panels.</td></tr>
+            <tr><td><code>ready</code>, <code>error</code></td><td>The rig's load state.</td></tr>
+          </tbody>
+        </table>
+
+        <p>The scene background is transparent, so the vehicle sits on whatever the page draws behind it. The ring is a flat <code>#Rectangle</code> carrying a 2D circle as its texture (Quick3D has no ring mesh), unlit and alpha-blended.</p>
+
         <h2 id="jeep-rig">The Jeep TJ Rig</h2>
 
         <p>The 3D vehicle shown on <a href="pages.html#carmenu">CarMenu</a> is not one mesh but a small rig of Quick3D components at the top of <span class="file-path">frontend/</span>, assembled from part-local GLB files in <span class="file-path">frontend/assets/jeep_tj/</span>. Every file uses unversioned Qt 6 imports (<code>import QtQuick</code>, <code>import QtQuick3D</code>), so they only load when the optional QtQuick3D module is installed &mdash; <code>SensorHome</code> probes <code>CarMenu.qml</code> for exactly this reason.</p>
@@ -442,7 +464,7 @@ scanTerminal.<span class="fn">appendLine</span>(<span class="str">"[DONE] 412 fi
 
         <div class="info-box info">
           <div class="info-box-title">IMU drives the whole body only</div>
-          CarMenu applies the BerryIMU quaternion to the parent <code>carModel</code> node (scaled 30&times;, "metre-scale TJ, +Z forward / +Y up, pivot at chassis centre"); doors, hood, tailgate, lights and steering are manual controls. CarMenu feeds RPM and speed into the rig while OBD is connected or model simulation is active; otherwise wheel and engine motion use the manual sliders. The rig itself reads no backend manager.
+          CarMenu applies the BerryIMU quaternion to the parent <code>carModel</code> node (scaled 30&times;, "metre-scale TJ, +Z forward / +Y up, pivot at chassis centre"); doors, hood and tailgate open on a tap (a <code>JeepHinge</code> with <code>tappable: true</code> marks its part's Models pickable and names in <code>tapKey</code> the property <code>JeepVehicle.toggle(key)</code> flips; the body is tappable with an empty key, so it hides the panels behind it), and lights and steering are driven from the test panel. CarMenu feeds RPM and speed into the rig while OBD is connected or model simulation is active; otherwise wheel and engine motion use the test panel's sliders. The rig itself reads no backend manager. <code>JeepVehicle.groundY</code> (the ground under the tyres) and <code>closedRadius</code> place the level ring.
         </div>
 
         <!-- Design decisions -->

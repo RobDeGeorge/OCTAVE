@@ -712,16 +712,17 @@ tz = yw*qz - yz*qw</code></pre>
               <tr>
                 <td><span class="file-path">frontend/CarMenu.qml</span></td>
                 <td>
-                  <code>onOrientationChanged(w, x, y, z)</code> &rarr; <code>carModel.rotation = Qt.quaternion(w, y, z, x)</code>
+                  <code>onOrientationChanged(w, x, y, z)</code> &rarr; <code>view.attitude = Qt.quaternion(w, y, z, x)</code>
                   &mdash; the sensor's Z-up frame is remapped to Qt Quick 3D's Y-up frame by rotating the vector components.
-                  Pitch, roll, heading (with a cardinal lookup <code>dirs[Math.round(h/45) % 8]</code>), altitude, G magnitude and
-                  baro temperature are shown as text. <code>imuConnected</code> is seeded from <code>berryIMU.connected</code> on
-                  completion and updated by <code>connectionStatusChanged === "Connected"</code>. While <em>not</em> connected a
-                  50 ms timer animates a demo attitude with sine/cosine pitch and roll. ZERO / RESET buttons as above.
-                  <br><strong>Steering is not an IMU input:</strong> the Jeep's front wheels follow a manual slider
-                  (<code>objectName: "jeepSteering"</code>, &minus;1&hellip;1 &rarr; <code>jeep.steeringInput</code>), with
-                  "Center wheels" and "Spin wheels" controls; doors, hood, tailgate and lights are likewise manual toggles on
-                  <code>JeepVehicle.qml</code>. The IMU supplies whole-body rotation; when OBD is connected, RPM and SPEED also drive the engine and wheels. Those two controls are manual when live OBD drive is inactive.
+                  Pitch and roll are the page's two readouts, with the heading and its compass point (<code>units.cardinal()</code>)
+                  above the car. <code>imuConnected</code> is seeded from <code>berryIMU.connected</code> on
+                  completion and updated by <code>connectionStatusChanged === "Connected"</code>. While <em>not</em> connected the
+                  car sits level and the page reads "No motion sensor". "Set level here" / "Reset level" in the page's menu are
+                  ZERO / RESET as above.
+                  <br><strong>Steering is not an IMU input:</strong> the Jeep's front wheels follow a slider on the test panel
+                  (<code>objectName: "jeepSteering"</code>, &minus;1&hellip;1 &rarr; <code>steeringInput</code>); doors, hood and
+                  tailgate open on a tap, and the lights are test-panel toggles on
+                  <code>JeepVehicle.qml</code>. The IMU supplies whole-body rotation; when OBD is connected, RPM and SPEED also drive the engine and wheels.
                 </td>
               </tr>
               <tr>

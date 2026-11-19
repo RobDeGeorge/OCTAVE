@@ -7,6 +7,20 @@ Node {
     required property var part
     property bool open: false
     property bool animate: true
+    // A tap on the model is resolved by View3D.pick(), which sees only
+    // pickable Models. A tappable hinge marks the Models of its part so, and
+    // names in tapKey the JeepVehicle property the tap toggles ("" for a part
+    // that only hides what is behind it, such as the body).
+    property bool tappable: false
+    property string tapKey: ""
+    function _markPickable(node) {
+        var kids = node.children
+        for (var i = 0; i < kids.length; ++i) {
+            if (kids[i].pickable !== undefined)
+                kids[i].pickable = true
+            _markPickable(kids[i])
+        }
+    }
     readonly property real angle: animatedAngle
     property real animatedAngle: open ? part.openAngle : 0
     readonly property bool moving: hingeAnimation.running
@@ -29,6 +43,11 @@ Node {
         // assetStore hands Assimp a real file (extracted from the APK on Android)
         // (null-guarded: at shutdown the backend drops assetStore before the scene dies)
         source: assetStore && hinge.part.file ? assetStore.localUrl("jeep_tj/" + hinge.part.file) : ""
-        onStatusChanged: if (status === RuntimeLoader.Error) console.warn("Jeep asset:", source, errorString)
+        onStatusChanged: {
+            if (status === RuntimeLoader.Error)
+                console.warn("Jeep asset:", source, errorString)
+            else if (status === RuntimeLoader.Success && hinge.tappable)
+                hinge._markPickable(loader)
+        }
     }
 }

@@ -638,8 +638,9 @@ Component.onCompleted: <span class="kw">if</span> (phoneMirrorManager) phoneMirr
         <h2 id="vehicle-3d">The 3D Vehicle (CarMenu)</h2>
         <p>
           <code>frontend/CarMenu.qml</code> shows a rigged, lifted soft-top 2003 Jeep TJ (<code>frontend/JeepVehicle.qml</code>) in a
-          Qt Quick 3D scene, rolled and pitched live by <code>berryIMU</code>, with working doors, hood,
-          tailgate, lights, steering and spinning wheels. The model is an original reconstruction: the full
+          Qt Quick 3D scene (<code>frontend/VehicleView.qml</code>, a component other pages can place), rolled and pitched live by
+          <code>berryIMU</code> against a level ring, with pitch and roll as the page's two readouts. Doors, hood and tailgate open on a
+          tap; lights, steering and the other rig controls are a test panel (<code>frontend/VehicleRigPanel.qml</code>) a <code>--dev</code> run can open. The model is an original reconstruction: the full
           per-part GLBs under <code>frontend/assets/jeep_tj/</code> (the full reference model is <code>tools/vehicle/reference/jeep_tj_2003.glb</code>, not shipped)
           with generated <code>Rig.js</code> / <code>rig.json</code> pivot metadata, built by
           <code>tools/vehicle/build_jeep_tj.py</code> and <code>build_jeep_twin.py</code>, then exported by

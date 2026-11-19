@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QPoint, QPointF, Property, QMetaObject, Qt, QTimer, QUrl, Signal, Slot
 from PySide6.QtGui import QGuiApplication, QInputDevice, QPointingDevice, QVector3D, QWheelEvent
-from PySide6.QtQml import QQmlApplicationEngine
+from PySide6.QtQml import QQmlApplicationEngine, QQmlPropertyMap
 from PySide6.QtQuick import QQuickItem, QQuickWindow
 from PySide6.QtTest import QTest
 
@@ -29,6 +29,22 @@ class IMU(QObject):
     @Property(bool, constant=True)
     def connected(self):
         return False
+
+    @Slot(str, bool)
+    def setDemand(self, consumer, wanted):
+        pass
+
+
+class Units(QObject):
+    """The two `units` conversions CarMenu calls."""
+
+    @Slot(float, result=float)
+    def mphToKph(self, mph):
+        return mph * 1.609344
+
+    @Slot(float, result=str)
+    def cardinal(self, heading):
+        return "N NE E SE S SW W NW".split()[round(heading / 45) % 8]
 
 
 class OBD(QObject):
@@ -79,6 +95,11 @@ assets = AssetStore(str(Path(__file__).resolve().parents[2] / "frontend/assets")
 engine.rootContext().setContextProperty("berryIMU", imu)
 engine.rootContext().setContextProperty("obdManager", obd)
 engine.rootContext().setContextProperty("assetStore", assets)
+# The live values CarMenu reads through OBDParameterModel (the C++ ParameterStore)
+param_store = QQmlPropertyMap()
+units = Units()
+engine.rootContext().setContextProperty("paramStore", param_store)
+engine.rootContext().setContextProperty("units", units)
 engine.rootContext().setContextProperty("width", 1280)
 engine.rootContext().setContextProperty("height", 800)
 frontend = Path(__file__).resolve().parents[2] / "frontend"
@@ -87,7 +108,7 @@ engine.loadData(
 import QtQuick.Window
 import "{frontend.as_uri()}" as App
 Window {{ width: 1280; height: 800; visible: true
-App.CarMenu {{ anchors.fill: parent; stackView: null }}
+App.CarMenu {{ anchors.fill: parent; stackView: null; rigControls: true }}
 }}'''.encode()
 )
 assert engine.rootObjects(), "Component failed to load"
@@ -484,8 +505,8 @@ def engine_driveline():
     assert vehicle.property("crankAngle") == stopped, "Stopped engine must hold its phase"
     # Live OBD takes over RPM and speed (MPH -> km/h) and locks the test sliders.
     obd.set_connected(True)
-    obd.rpmChanged.emit(1800.0)
-    obd.speedMPHChanged.emit(12.0)
+    param_store.insert("RPM", 1800.0)
+    param_store.insert("SPEED", 12.0)
     QTest.qWait(120)
     assert menu.property("liveDrive")
     assert vehicle.property("engineRpm") == 1800
