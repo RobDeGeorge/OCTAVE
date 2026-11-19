@@ -41,8 +41,8 @@ def project_files():
     # JLCPCB 4-layer capabilities, with a little margin
     rules = {"min_clearance": 0.15, "min_track_width": 0.15, "min_via_diameter": 0.45,
              "min_via_annular_width": 0.1, "min_through_hole_diameter": 0.2, "min_hole_to_hole": 0.25,
-             "min_copper_edge_clearance": 0.3, "min_silk_clearance": 0.0, "min_text_height": 0.8,
-             "min_text_thickness": 0.12, "min_hole_clearance": 0.2}
+             "min_copper_edge_clearance": 0.3, "min_silk_clearance": 0.0, "min_text_height": 1.0,
+             "min_text_thickness": 0.15, "min_hole_clearance": 0.2}
     pro = {"meta": {"filename": NAME + ".kicad_pro", "version": 3},
            "board": {"design_settings": {"rules": rules}}, "schematic": {}, "libraries": {},
            # signals may go to 0.15 / 0.15 mm (JLCPCB's floor is 0.09), for room round the LQFP-64;
@@ -108,8 +108,8 @@ def pcb():
     fps, nets = pcbgen.add_footprints(board, d, sch_name=NAME, sheets=schsheets.sheet_of(d))
     for fp in fps.values():
         r = fp.Reference()
-        r.SetTextSize(pcbnew.VECTOR2I(pcbnew.FromMM(0.8), pcbnew.FromMM(0.8)))
-        r.SetTextThickness(pcbnew.FromMM(0.12))
+        r.SetTextSize(pcbnew.VECTOR2I(pcbnew.FromMM(1.0), pcbnew.FromMM(1.0)))
+        r.SetTextThickness(pcbnew.FromMM(0.15))
     layout.place_all(board, d, fps)
     # the mounting holes (layout.KEEPOUTS kept their squares free of parts); labels keep off them too
     fps.update(pcbgen.add_holes(board, layout.HOLES, layout.HOLE_KEEP))
@@ -830,8 +830,8 @@ def plug():
     import pcbgen
     rules = {"min_clearance": 0.15, "min_track_width": 0.15, "min_via_diameter": 0.45,
              "min_via_annular_width": 0.1, "min_through_hole_diameter": 0.3, "min_hole_to_hole": 0.25,
-             "min_copper_edge_clearance": 0.2, "min_silk_clearance": 0.0, "min_text_height": 0.8,
-             "min_text_thickness": 0.12, "min_hole_clearance": 0.2}
+             "min_copper_edge_clearance": 0.2, "min_silk_clearance": 0.0, "min_text_height": 1.0,
+             "min_text_thickness": 0.15, "min_hole_clearance": 0.2}
     with open(os.path.join(PROJ, PLUG_NAME + ".kicad_pro"), "w") as f:
         json.dump({"meta": {"filename": PLUG_NAME + ".kicad_pro", "version": 3},
                    "board": {"design_settings": {"rules": rules}}, "schematic": {}, "libraries": {}}, f, indent=2)
@@ -860,8 +860,8 @@ def plug():
     t.SetText(f"OCTAVE J1962 adapter R{REV}")
     t.SetLayer(pcbnew.B_SilkS)
     t.SetMirrored(True)
-    t.SetTextSize(pcbnew.VECTOR2I(pcbnew.FromMM(0.8), pcbnew.FromMM(0.8)))
-    t.SetTextThickness(pcbnew.FromMM(0.12))
+    t.SetTextSize(pcbnew.VECTOR2I(pcbnew.FromMM(1.0), pcbnew.FromMM(1.0)))
+    t.SetTextThickness(pcbnew.FromMM(0.15))
     t.SetPosition(pcbnew.VECTOR2I(pcbnew.FromMM(cx), pcbnew.FromMM(cy + 7.7)))
     board.Add(t)
     board.Save(PLUG_PCB)

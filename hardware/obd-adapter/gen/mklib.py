@@ -155,9 +155,9 @@ def j1962_plug_adapter(pitch=4.0, row=8.6, slot=(2.6, 1.3), pad=(3.2, 2.0), join
     x1 = (4.5 - 1) * pitch
     for txt, x, y in (("1", x1, -row / 2), ("9", x1, row / 2), ("8", -x1, -row / 2), ("16", -x1, row / 2)):
         items.append(["fp_text", "user", Q(txt), ["at", x + (3.6 if x > 0 else -3.6), y, 0],      # past the row's end
-                      ["layer", Q("B.SilkS")], _font(0.8, mirror=True)])
+                      ["layer", Q("B.SilkS")], _font(1.0, mirror=True)])
         items.append(["fp_text", "user", Q(txt), ["at", x, y + (2.4 if y > 0 else -2.4), 0],      # outside its pad
-                      ["layer", Q("F.SilkS")], _font(0.8)])
+                      ["layer", Q("F.SilkS")], _font(1.0)])
     sh = _shroud(-0.6)
     for i, (a, b) in enumerate(zip(sh, sh[1:] + sh[:1])):
         if i in (2, 4):     # the sloping ends cross the tab slot's round ends: leave a gap there
@@ -170,7 +170,7 @@ def j1962_plug_adapter(pitch=4.0, row=8.6, slot=(2.6, 1.3), pad=(3.2, 2.0), join
     for txt, y, layer in (("WIDE SIDE  1-8", -6.9, "F.SilkS"), ("LATCH SIDE  9-16", 6.9, "F.SilkS"),
                           ("1-8: MAIN BOARD BOTTOM", -6.6, "B.SilkS"), ("9-16: MAIN BOARD TOP", 6.2, "B.SilkS")):
         items.append(["fp_text", "user", Q(txt), ["at", 0, y, 0], ["layer", Q(layer)],
-                      _font(0.8, mirror=layer[0] == "B")])
+                      _font(1.0, mirror=layer[0] == "B")])
     items.append(["fp_text", "user", Q("J1962 plug, mating face; wide side = pins 1-8"), ["at", 0, -6.5, 0],
                   ["layer", Q("F.Fab")], _font()])
     fp = ["footprint", Q(name), ["version", "20260206"], ["generator", Q("octave_gen")], ["layer", Q("F.Cu")],
@@ -211,9 +211,9 @@ def j1962_edge_joint(pitch=4.0, pad=(3.0, 2.5)):
     # goes is on the board itself (they were on the Fab layers only: REVIEW 52)
     for txt, y, layer, m in (("9", -14, "F.SilkS", False), ("16", 14, "F.SilkS", False),
                              ("1", -14, "B.SilkS", True), ("8", 14, "B.SilkS", True)):
-        items.append(["fp_text", "user", Q(txt), ["at", pad[0] + 1.1, y, 0], ["layer", Q(layer)], _font(0.8, mirror=m)])
-    items.append(["fp_text", "user", Q("+12V"), ["at", pad[0] / 2 + 0.4, 14 + pad[1] / 2 + 1.0, 0], ["layer", Q("F.SilkS")],
-                  _font(0.8)])
+        items.append(["fp_text", "user", Q(txt), ["at", pad[0] + 1.1, y, 0], ["layer", Q(layer)], _font(1.0, mirror=m)])
+    items.append(["fp_text", "user", Q("+12V"), ["at", pad[0] / 2 + 0.7, 14 + pad[1] / 2 + 1.0, 0], ["layer", Q("F.SilkS")],
+                  _font(1.0)])
     items.append(["fp_text", "user", Q("OBD-II plug (adapter + Jiatel CR-PG001)"), ["at", tip / 2, 0, 90],
                   ["layer", Q("F.Fab")], _font()])
     fp = ["footprint", Q(name), ["version", "20260206"], ["generator", Q("octave_gen")], ["layer", Q("F.Cu")],

@@ -25,12 +25,12 @@ import pcbnew
 
 import layout
 
-SMALL, NORMAL, TITLE, BIG = (0.8, 0.12), (1.0, 0.15), (1.2, 0.18), (1.5, 0.22)   # (height, stroke) mm
+SMALL, NORMAL, TITLE, BIG = (1.0, 0.15), (1.0, 0.15), (1.2, 0.18), (1.5, 0.22)   # (height, stroke) mm
 LINE = 0.15         # outline width
 
 # ref -> the text that takes its reference's place on the front
 NAMES = {
-    "SW6": "CONFIG", "SW1": "RESET", "SW3": "USER", "SW4": "ESP RST", "SW5": "ESP BOOT",
+    "SW6": "CONFIG", "SW1": "RESET", "SW3": "USER", "SW4": "ESP RST", "SW5": "BOOT",     # read together: ESP RST  BOOT
     "TP1": "VBAT", "TP2": "5V", "TP3": "3V3", "TP4": "GND", "TP5": "DLC",
     "TP6": "J+", "TP7": "J-", "TP8": "VJ", "TP9": "K", "TP10": "L",
     "U5": "ESP PWR",        # the ESP32's load switch, under the STM32's USB port
@@ -38,9 +38,12 @@ NAMES = {
 }
 # ... and where it goes when it is wider than the room the reference had (x, y, angle)
 NAME_AT = {
-    "J2": (93.1, 8.62, 0),      # between the pin-1 marks of U2 and U5
+    "J2": (85.0, 8.4, 0),       # in the pocket left of the port, over "USB" (FRONT): no room at the port itself
+    "J7": (96.4, 60.9, 0),      # above the port, right of U13's reference
+    "U5": (95.95, 13.42, 0),    # under U5, between U2 and the board edge
     "J8": (72.0, 19.3, 0),      # right of R14's label
 }
+TP_NAME_DY = -1.65  # a test point's name: this far above its pad (the lower row's names stand between the rows)
 
 # The small parts (R, C, D, Q ...) carry no reference on the front: their room goes to the circuits'
 # names and outlines. Chips keep theirs. (The placement file and the schematic say which part is which.)
@@ -62,14 +65,16 @@ FRONT = [
     ("SD CARD", 76.5, 57.6, 0, NORMAL),
     ("R", 60.5, 15.2, 0, SMALL), ("G", 64.0, 15.2, 0, SMALL), ("B", 67.5, 15.2, 0, SMALL),   # under D1 D2 D3
     ("CRYPTO", 61.6, 17.6, 0, SMALL),            # right of U16
-    ("ACCEL", 61.1, 24.9, 0, SMALL),             # right of U15 and its capacitor
+    ("ACCEL", 61.5, 24.9, 0, SMALL),             # right of U15 and its capacitor
     ("ESP32", 86.2, 24.4, 0, NORMAL),            # above the module
-    ("USB", 97.8, 50.3, 0, SMALL), ("UART", 97.8, 51.6, 0, SMALL),       # right of U14 and its reset pair
+    ("USB", 97.6, 50.3, 0, SMALL), ("UART", 97.6, 51.6, 0, SMALL),       # right of U14 and its reset pair
+    ("USB", 85.0, 9.9, 0, SMALL),                # under J2's name (NAME_AT): the STM32's USB port
 ]
-# front: a "1" beside pin 1 of each header (x, y)
-PIN1 = {"J5": (39.1, 67.6), "J8": (66.7, 22.0), "J1": (43.8, 19.7)}
-# front: the board's name and revision, one line each from (x, y) down, in the pocket left of the STM32's USB port
-BOARD = (85.0, 8.4, 1.5, ["OCTAVE", "OBD", "REV {rev}"])
+# front: a "1" beside pin 1 of each header (x, y). Not J5: at 1.0 mm nothing fits between it and J9, and its
+# own corner mark and square pad say which pin is 1 (the table on the back numbers them all)
+PIN1 = {"J8": (66.7, 22.0), "J1": (43.8, 19.7)}
+# front: the board's name and revision, one line each from (x, y) down, in the clear corner left of the buck
+BOARD = (7.2, 13.6, 1.5, ["OCTAVE", "OBD", "REV {rev}"])
 # back: where the board house prints its order number (JLCPCB: "Specify a location" when ordering)
 ORDER_NO = ("JLCJLCJLCJLC", 70.6, 9.6, 0, NORMAL)
 
@@ -96,7 +101,7 @@ LEGEND = (69.9, 11.2, 1.3, ["CONFIG", "1 ESP ON", "2 HS TERM", "3 MS TERM", "4 B
 # The plug's edge pads: 1-8 are on the back, 9-16 behind them on the front (pin n + 8 behind pin n)
 PLUG_PINS = ["NC", "J1850+", "MSCAN H", "GND", "GND", "HSCAN H", "K-LINE", "NC",
              "NC", "J1850-", "MSCAN L", "NC", "NC", "HSCAN L", "L-LINE", "+12V"]
-PIN_X = 5.3         # the pin names start here (the footprint's own "1" and "8" are at 4.1)
+PIN_X = 4.5         # the pin names start here (the pads end at 3.0)
 PIN_COL = (3.4, 19.3, 13.9, 50.7)   # their column: no outline crosses it
 
 # back: circuit -> (outline, [(text, x, y, angle, style)])
@@ -105,18 +110,18 @@ MAP = {
     "buck": ([(7.3, 1.2), (34.2, 1.2), (34.2, 22.6), (14.2, 22.6), (14.2, 19.0), (4.2, 19.0), (4.2, 7.4), (7.3, 7.4)],
              [("5V BUCK", 22.0, 5.2, 0, BIG), ("12V IN  5.3V OUT", 22.0, 7.6, 0, SMALL)]),
     "dlcsw": ([(34.6, 1.2), (45.0, 1.2), (45.0, 8.9), (43.4, 8.9), (43.4, 18.7), (34.6, 18.7)],
-              [("DLC SW", 39.2, 9.4, 0, TITLE), ("12V SWITCH", 39.0, 11.5, 0, SMALL), ("FOR K / L", 39.0, 12.8, 0, SMALL), ("AND J1850", 39.0, 14.1, 0, SMALL)]),
+              [("DLC SW", 39.2, 9.4, 0, TITLE), ("12V FEED", 39.0, 11.5, 0, SMALL), ("FOR K / L", 39.0, 13.0, 0, SMALL), ("AND J1850", 39.0, 14.5, 0, SMALL)]),
     "input": ([(14.2, 28.3), (24.3, 28.3), (24.3, 49.7), (14.2, 49.7)],
-              [("12V IN", 19.25, 35.6, 0, TITLE), ("FUSE  TVS", 19.25, 38.0, 0, SMALL), ("IDEAL DIODE", 19.25, 39.3, 0, SMALL)]),
+              [("12V IN", 19.25, 35.6, 0, TITLE), ("FUSE  TVS", 19.25, 38.0, 0, SMALL), ("IDEAL DIODE", 19.25, 39.5, 0, SMALL)]),
     "can": ([(14.2, 22.9), (33.6, 22.9), (33.6, 47.6), (24.6, 47.6), (24.6, 28.0), (14.2, 28.0)],
-            [("CAN FD", 29.1, 33.8, 0, TITLE), ("MS CAN", 29.1, 25.6, 0, NORMAL), ("PINS 3 / 11", 29.1, 27.2, 0, SMALL),
-             ("HS CAN", 29.1, 40.6, 0, NORMAL), ("PINS 6 / 14", 29.1, 42.2, 0, SMALL)]),
+            [("CAN FD", 29.1, 33.8, 0, TITLE), ("MS CAN", 29.1, 25.6, 0, NORMAL), ("PINS 3/11", 29.1, 27.2, 0, SMALL),
+             ("HS CAN", 29.1, 40.6, 0, NORMAL), ("PINS 6/14", 29.1, 42.2, 0, SMALL)]),
     "j1850": ([(33.9, 22.9), (52.4, 22.9), (52.4, 61.9), (24.6, 61.9), (24.6, 47.9), (33.9, 47.9)],
-              [("J1850", 43.15, 25.1, 0, BIG), ("VPW / PWM", 43.15, 27.5, 0, NORMAL), ("PINS 2 / 10", 43.15, 29.3, 0, SMALL)]),
+              [("J1850", 43.15, 25.1, 0, BIG), ("VPW / PWM", 43.15, 27.5, 0, NORMAL), ("PINS 2/10", 43.15, 29.3, 0, SMALL)]),
     "iso": ([(4.2, 51.0), (24.3, 51.0), (24.3, 62.4), (4.2, 62.4)],
             [("ISO 9141 / KWP", 14.25, 53.4, 0, NORMAL), ("K-LINE", 10.3, 56.6, 0, NORMAL), ("PIN 7", 10.3, 58.2, 0, SMALL),
              ("L-LINE", 19.6, 56.6, 0, NORMAL), ("PIN 15", 19.6, 58.2, 0, SMALL)]),
-    "tp": ([(6.9, 62.7), (24.3, 62.7), (24.3, _H - 0.5), (6.9, _H - 0.5)], []),      # names: _test_points
+    "tp": ([(6.5, 62.7), (24.3, 62.7), (24.3, _H - 0.5), (6.5, _H - 0.5)], []),      # names: _test_points
     "panic": ([(24.6, 62.7), (39.0, 62.7), (39.0, _H - 0.5), (24.6, _H - 0.5)],
               [("PANIC", 31.8, 65.3, 0, NORMAL), ("BUTTON", 31.8, 67.0, 0, NORMAL)]),
     "swd": ([(43.8, 12.2), (52.2, 12.2), (52.2, 21.6), (43.8, 21.6)], [("SWD", 48.0, 16.9, 0, TITLE)]),
@@ -125,7 +130,7 @@ MAP = {
     "ldo": ([(52.7, 42.6), (61.8, 42.6), (61.8, 50.2), (57.6, 50.2), (57.6, 62.3), (52.7, 62.3)],
             [("3V3 LDO", 57.25, 46.4, 0, NORMAL)]),
     "flash": ([(57.9, 50.5), (67.6, 50.5), (67.6, 56.5), (57.9, 56.5)], [("FLASH", 62.75, 53.5, 0, NORMAL)]),
-    "esp32": ([(80.2, 25.9), (99.6, 25.9), (99.6, 44.6), (80.2, 44.6)],
+    "esp32": ([(80.2, 26.3), (99.6, 26.3), (99.6, 44.6), (80.2, 44.6)],
               [("ESP32", 89.9, 29.0, 0, BIG), ("BT  BLE  WIFI", 89.9, 39.0, 0, NORMAL)]),
     "espusb": ([(80.6, 44.9), (99.6, 44.9), (99.6, 61.0), (80.6, 61.0)],
                [("USB UART", 90.1, 51.6, 0, TITLE), ("CH340C", 90.1, 53.6, 0, SMALL)]),
@@ -137,7 +142,7 @@ LOOSE = [
     ("ESP", 71.95, 4.9, 0, SMALL), ("RST", 71.95, 6.2, 0, SMALL), ("ESP", 78.25, 4.9, 0, SMALL), ("BOOT", 78.25, 6.2, 0, SMALL),
     ("USB", 94.0, 3.2, 0, NORMAL), ("STM32", 94.0, 4.8, 0, NORMAL),
     ("USB", 94.0, _H - 4.4, 0, NORMAL), ("ESP32", 94.0, _H - 2.8, 0, NORMAL),
-    ("CRYPTO", 55.8, 16.2, 0, SMALL), ("ACCEL", 54.7, 24.6, 0, SMALL),
+    ("CRYPTO", 55.8, 16.2, 0, SMALL), ("ACCEL", 55.0, 24.6, 0, SMALL),
     ("QWIIC", 77.0, 66.0, 0, NORMAL), ("I2C 3V3", 77.0, 67.6, 0, SMALL),
 ]
 # back, for the fun of it, both in the J1850 circuit's box (it is the roomiest): the wizard of the owner's
@@ -150,7 +155,7 @@ _SHADE = {" ": 0, ".": .12, ":": .18, "-": .22, "=": .3, "+": .38, "*": .48, "#"
 
 # The headers' pins come through the board. J8 (one row): each name under its pin, turned.
 # J5 (2 x 7): a table behind the card socket, as nothing fits round the pins.
-EXP_TABLE = (59.4, 57.4, 72.6, _H - 0.5)
+EXP_TABLE = (58.3, 57.4, 72.6, _H - 0.5)
 EXP_NAMES = {"3V3": "3V3", "5V": "5V", "GND": "GND", "EXP_TX": "TX", "EXP_RX": "RX", "EXP_PA5": "PA5",
              "EXP_PA10": "PA10", "PANIC_BTN": "PANIC", "EXP_PD2": "PD2", "I2C_SDA": "SDA", "I2C_SCL": "SCL",
              "EXP_PC10": "PC10"}
@@ -253,8 +258,9 @@ def _obstacles(fps):
                 if pad.IsOnLayer(cu) or pad.GetAttribute() == pcbnew.PAD_ATTRIB_NPTH:
                     obst[side].append((f"{ref} pad {pad.GetNumber()}", _box(pad)))
         c = fp.GetCourtyard(pcbnew.F_CrtYd)
-        if c.OutlineCount() and not fp.GetValue().startswith("ESP32") and not ref.startswith("J6"):
-            b = c.BBox()        # a label under a part cannot be read (the module and the plug hang over the edge)
+        if c.OutlineCount() and not fp.GetValue().startswith("ESP32") and not ref.startswith(("J6", "TP")):
+            b = c.BBox()        # a label under a part cannot be read (the module and the plug hang over the edge;
+            #                     a test point is a bare pad: its pad and its ring are what a label keeps off)
             obst[pcbnew.F_SilkS].append((f"{ref} body", (T(b.GetLeft()), T(b.GetTop()), T(b.GetRight()), T(b.GetBottom()))))
         for g in fp.GraphicalItems():
             if g.GetLayer() in obst and not (isinstance(g, pcbnew.PCB_TEXT) and not g.IsVisible()):
@@ -310,6 +316,9 @@ def apply(board, fps, design, rev):
         r = fps[ref].Reference()
         p = r.GetPosition()
         x, y, angle = NAME_AT.get(ref, (pcbnew.ToMM(p.x), pcbnew.ToMM(p.y), r.GetTextAngleDegrees()))
+        if ref.startswith("TP"):
+            x, y = _pads(fps, ref)["1"]
+            x, y, angle = x + (0.15 if ref == "TP1" else 0), y + TP_NAME_DY, 0     # VBAT: off the hole's keep-out
         t = _text(board, name, x, y, angle)
         t.own = ref
         front.append(t)
@@ -351,7 +360,7 @@ def apply(board, fps, design, rev):
         n = int(n)
         if n > 8:
             continue
-        for k, dy in ((n, -0.65), (n + 8, 0.65)):
+        for k, dy in ((n, -0.75), (n + 8, 0.75)):
             t = _text(board, f"{k} {PLUG_PINS[k - 1]}", PIN_X, y + dy, 0, SMALL, back=True)
             b = t.GetBoundingBox()     # mirrored: it reads from its right end
             t.Move(pcbnew.VECTOR2I(pcbnew.FromMM(PIN_X) - b.GetLeft(), 0))
@@ -366,15 +375,15 @@ def apply(board, fps, design, rev):
         name = nets["J8"][n].replace("ESP_", "").replace("3V3_ESP", "3V3")
         t = _text(board, name, x, y + 1.3, 90, SMALL, back=True)
         b = t.GetBoundingBox()
-        t.Move(pcbnew.VECTOR2I(0, pcbnew.FromMM(y + 1.25) - b.GetTop()))
+        t.Move(pcbnew.VECTOR2I(0, pcbnew.FromMM(y + 1.0) - b.GetTop()))
         back.append(t)
     # J5: the table, two pins a row as on the header (odd row nearest the edge)
     x0, y0, x1, y1 = EXP_TABLE
     lines += _outline(board, [(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
     back.append(_text(board, "EXP (J5)", (x0 + x1) / 2, y0 + 1.2, 0, NORMAL, back=True))
     for i in range(7):
-        y = y0 + 3.0 + i * 1.3
-        for k, x in ((2 * i + 1, x1 - 0.5), (2 * i + 2, x1 - 7.0)):   # as read from the back: odd on the left
+        y = y0 + 2.8 + i * 1.4
+        for k, x in ((2 * i + 1, x1 - 0.5), (2 * i + 2, x1 - 7.6)):   # as read from the back: odd on the left
             t = _text(board, f"{k} {EXP_NAMES[nets['J5'][str(k)]]}", x, y, 0, SMALL, back=True)
             b = t.GetBoundingBox()
             t.Move(pcbnew.VECTOR2I(pcbnew.FromMM(x) - b.GetRight(), 0))

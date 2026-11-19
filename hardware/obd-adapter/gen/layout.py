@@ -137,6 +137,8 @@ LABELS = {
     "J6": (2.2, H / 2 - 18.0, 0),      # the plug: its own outline is off the board
     "U4": (86.0, 28.6, 0),              # on the module, clear of its pads (round it is all taken)
     "U9": (31.6, 35.35, 0),             # right of its circuit's name (silk.FRONT)
+    "U14": (89.1, 46.9, 90),            # turned, between its pins and the reset pair (no room left of it at 1.0 mm)
+    "U6": (13.6, 38.8, 90),             # turned, between D5 and its own pins
     "C19": (13.6, 45.0, 90),            # the input chain is tight: under C19, turned
     "R19": (BX - 4.6, BY + 4.7, 90),
     "C27": (BX + 12.0, BY + 1.0, 0),

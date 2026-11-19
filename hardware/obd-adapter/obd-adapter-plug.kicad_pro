@@ -14,8 +14,8 @@
         "min_hole_to_hole": 0.25,
         "min_copper_edge_clearance": 0.2,
         "min_silk_clearance": 0.0,
-        "min_text_height": 0.8,
-        "min_text_thickness": 0.12,
+        "min_text_height": 1.0,
+        "min_text_thickness": 0.15,
         "min_hole_clearance": 0.2
       }
     }
