@@ -31,7 +31,7 @@ Rectangle {
     border.width: 1
     radius: 3
 
-    // Nothing to draw: no vehicle chosen yet (the tap opens the chooser),
+    // Nothing to draw: no vehicle chosen yet (the tap opens Settings > Device > Vehicle),
     // said the way the OBD card says "No vehicle connected"; or an added
     // model whose picture Settings > Device > Vehicle has not rendered yet,
     // which shows its name.

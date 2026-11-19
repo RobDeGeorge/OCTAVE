@@ -499,13 +499,14 @@ Item {
             }
 
             // The vehicle beside the readings; above the MouseArea, as its
-            // tap opens the 3D view (where the build has one), not the OBD page
+            // tap opens Settings > Device > Vehicle (pick or change the
+            // vehicle), not the OBD page
             App.HomeVehicleCard {
                 id: vehicleCard
                 visible: mainMenu.vehicleCardShown
                 anchors { top: parent.top; right: parent.right; bottom: parent.bottom; margins: dp(15) }
                 width: Math.round(parent.width * 0.36)
-                onClicked: stackView.openPage(typeof hasQuick3D !== "undefined" && hasQuick3D ? "CarMenu.qml" : "OBDMenu.qml")
+                onClicked: if (mainMenu.mainWindow) mainMenu.mainWindow.navigateToSettings("deviceSettings", "device_vehicle")
             }
 
             // No adapter: connect straight from Home (scan, pair, connect);

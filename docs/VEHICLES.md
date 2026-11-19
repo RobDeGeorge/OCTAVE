@@ -7,7 +7,7 @@ An install that was already in use before this choice existed keeps the Jeep it 
 ## Adding a model
 
 1. Get a 3D model of your vehicle as **glTF binary (`.glb`)**. Blender exports one with File > Export > glTF 2.0, format "glTF Binary"; most model sites offer a `.glb` download.
-2. Settings > Device > Vehicle > **Add a model** (or the "Add your own" tile of the chooser), and pick the file.
+2. Settings > Device > Vehicle > the **Add your own** tile (the 3D view's chooser has the same tile), and pick the file.
 3. If it comes in sideways or lying down, press **Turn 90°** or **Stand it up** until it sits like a parked car, nose towards you and to the right.
 
 That's all: the model is now the vehicle in the 3D view, and the picture on Home is taken from the preview on that card. Tap another name on the card to switch, **Remove** to delete the one selected, **No vehicle** to show none. The vehicles that come with the app are always listed.
@@ -43,7 +43,7 @@ vehicles/
 ```
 
 - The folder's name is the id: lower-case letters, digits and `-`, at most 48 characters.
-- `model` is a file in that folder, `.glb` or `.gltf` (a `.gltf` with its `.bin` and textures beside it works here, though not through Add a model, which copies one file).
+- `model` is a file in that folder, `.glb` or `.gltf` (a `.gltf` with its `.bin` and textures beside it works here, though not through the Add your own tile, which copies one file).
 - `yaw` and `tilt` are degrees: `yaw` turns the model about the vertical, `tilt` tips it about the side-to-side axis. The buttons change them by 90.
 
 A folder is listed at the next start, or the next time the list changes.

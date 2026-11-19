@@ -5,6 +5,9 @@
 // file. A fresh install has no vehicle, so the 3D view opens on this; the
 // view's menu brings it back to change the choice. A tap chooses
 // (vehicleManager.select) and emits chosen().
+//
+// Settings > Device > Vehicle shows the same tiles inside its card
+// (`embedded`: as tall as its content, at the top, scrolled by the card).
 import QtQuick
 import QtQuick.Dialogs
 import "." as App
@@ -18,6 +21,9 @@ Item {
 
     readonly property var vm: (typeof vehicleManager !== "undefined" && vehicleManager) ? vehicleManager : null
     signal chosen()
+    // Inside another scrolling page: no scrolling or centring of its own
+    property bool embedded: false
+    implicitHeight: content.implicitHeight
     // Here, not in the tile: choosing changes vehicleManager.vehicles, which
     // rebuilds the tiles, and the tapped one is gone before select() returns
     function choose(id) {
@@ -36,14 +42,15 @@ Item {
     Flickable {
         anchors.fill: parent
         contentWidth: width
-        contentHeight: Math.max(height, content.implicitHeight + chooser.dp(32))
-        clip: true
+        contentHeight: chooser.embedded ? height : Math.max(height, content.implicitHeight + chooser.dp(32))
+        interactive: !chooser.embedded
+        clip: !chooser.embedded
 
         Column {
             id: content
-            width: Math.min(parent.width - chooser.dp(32), chooser.dp(900))
+            width: chooser.embedded ? parent.width : Math.min(parent.width - chooser.dp(32), chooser.dp(900))
             anchors.horizontalCenter: parent.horizontalCenter
-            y: Math.max(chooser.dp(16), (parent.height - implicitHeight) / 2)
+            y: chooser.embedded ? 0 : Math.max(chooser.dp(16), (parent.height - implicitHeight) / 2)
             spacing: chooser.dp(20)
 
             Text {
