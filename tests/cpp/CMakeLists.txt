@@ -266,6 +266,8 @@ octave_add_test(tst_pathurl)
 octave_add_test(tst_frontendmanager
     SOURCES managers/frontendmanifest.h managers/frontendmanifest.cpp managers/frontendmanager.h managers/frontendmanager.cpp
     LIBS Qt6::CorePrivate)
+# The vehicle shown: the built-in rig, a .glb copied in, hand-made folders, the active choice
+octave_add_test(tst_vehiclemanager SOURCES managers/vehiclemanager.h managers/vehiclemanager.cpp)
 # Folder browsing for remote UIs: confined to its roots
 octave_add_test(tst_folderbrowser SOURCES util/folderbrowser.h util/folderbrowser.cpp)
 octave_add_test(tst_servicebridge

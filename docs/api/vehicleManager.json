@@ -1,0 +1,178 @@
+{
+    "class": "VehicleManager",
+    "methods": [
+        {
+            "kind": "invokable",
+            "name": "importModel",
+            "params": [
+                {
+                    "name": "path",
+                    "type": "QString"
+                },
+                {
+                    "name": "name",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString",
+            "scope": "files"
+        },
+        {
+            "kind": "invokable",
+            "name": "importModel",
+            "params": [
+                {
+                    "name": "path",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString",
+            "scope": "files"
+        },
+        {
+            "kind": "invokable",
+            "name": "remove",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool",
+            "scope": "settings"
+        },
+        {
+            "kind": "invokable",
+            "name": "select",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool",
+            "scope": "settings"
+        },
+        {
+            "kind": "invokable",
+            "name": "rename",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                },
+                {
+                    "name": "name",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool",
+            "scope": "settings"
+        },
+        {
+            "kind": "invokable",
+            "name": "setOrientation",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                },
+                {
+                    "name": "yaw",
+                    "type": "double"
+                },
+                {
+                    "name": "tilt",
+                    "type": "double"
+                }
+            ],
+            "returns": "bool",
+            "scope": "settings"
+        },
+        {
+            "kind": "invokable",
+            "name": "picturePath",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "QString",
+            "scope": "read"
+        },
+        {
+            "kind": "invokable",
+            "name": "pictureSaved",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "",
+            "scope": "settings"
+        }
+    ],
+    "object": "vehicleManager",
+    "properties": [
+        {
+            "constant": false,
+            "name": "vehicles",
+            "notify": "vehiclesChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "activeId",
+            "notify": "activeChanged",
+            "readable": true,
+            "scope": "settings",
+            "type": "QString",
+            "writable": true
+        },
+        {
+            "constant": false,
+            "name": "active",
+            "notify": "activeChanged",
+            "readable": true,
+            "type": "QVariantMap",
+            "writable": false
+        },
+        {
+            "constant": true,
+            "name": "canImport",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "lastError",
+            "notify": "lastErrorChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "vehiclesChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "activeChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "lastErrorChanged",
+            "params": [
+            ]
+        }
+    ],
+    "stability": "experimental"
+}

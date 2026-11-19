@@ -29,6 +29,7 @@
         "themeCatalog": "ThemeCatalog",
         "tripRecorder": "TripRecorder",
         "units": "Units",
+        "vehicleManager": "VehicleManager",
         "volumeController": "VolumeController"
     },
     "protocolVersion": 3

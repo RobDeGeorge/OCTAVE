@@ -193,7 +193,7 @@ Item {
         id: menuButton
         objectName: "carMenuButton"
         anchors { top: parent.top; right: parent.right; margins: dp(12) }
-        visible: carMenu.imuConnected || carMenu.devRun
+        visible: carMenu.imuConnected || (carMenu.devRun && view.rigged)
         width: dp(48); height: width; radius: width / 2
         color: menuMouse.pressed || menu.opened
             ? Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.22) : "transparent"
@@ -229,7 +229,7 @@ Item {
                 model: [
                     { name: "imuZero", label: "Set level here", shown: carMenu.imuConnected },
                     { name: "imuReset", label: "Reset level", shown: carMenu.imuConnected },
-                    { name: "rigControlsToggle", label: carMenu.rigControls ? "Hide test controls" : "Test controls", shown: carMenu.devRun }
+                    { name: "rigControlsToggle", label: carMenu.rigControls ? "Hide test controls" : "Test controls", shown: carMenu.devRun && view.rigged }
                 ]
                 delegate: Rectangle {
                     id: row
@@ -265,7 +265,8 @@ Item {
     Loader {
         id: rigPanel
         anchors { top: parent.top; left: parent.left; right: menuButton.left; margins: dp(12) }
-        active: carMenu.rigControls
+        // The panel drives the built-in rig; a model of the user's has no parts
+        active: carMenu.rigControls && view.rigged && !!view.vehicle
         sourceComponent: VehicleRigPanel {
             vehicle: view.vehicle
             liveDrive: carMenu.liveDrive

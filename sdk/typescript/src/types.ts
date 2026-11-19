@@ -2385,6 +2385,39 @@ export interface Units {
   }
 }
 
+/**
+ * vehicleManager (VehicleManager)
+ * @experimental not covered by the protocol version; may change or go in any release
+ */
+export interface VehicleManager {
+  properties: {
+    /** QVariantList, notify vehiclesChanged */
+    vehicles: unknown[]
+    /** QString, writable, notify activeChanged */
+    activeId: string
+    /** QVariantMap, notify activeChanged */
+    active: Record<string, unknown>
+    /** bool, constant */
+    canImport: boolean
+    /** QString, notify lastErrorChanged */
+    lastError: string
+  }
+  methods: {
+    importModel: { args: [path: string, name: string] | [path: string]; returns: string }
+    remove: { args: [id: string]; returns: boolean }
+    select: { args: [id: string]; returns: boolean }
+    rename: { args: [id: string, name: string]; returns: boolean }
+    setOrientation: { args: [id: string, yaw: number, tilt: number]; returns: boolean }
+    picturePath: { args: [id: string]; returns: string }
+    pictureSaved: { args: [id: string]; returns: void }
+  }
+  signals: {
+    vehiclesChanged: []
+    activeChanged: []
+    lastErrorChanged: []
+  }
+}
+
 /** volumeController (VolumeController) */
 export interface VolumeController {
   properties: {
@@ -2441,6 +2474,7 @@ export interface Objects {
   themeCatalog: ThemeCatalog
   tripRecorder: TripRecorder
   units: Units
+  vehicleManager: VehicleManager
   volumeController: VolumeController
 }
 

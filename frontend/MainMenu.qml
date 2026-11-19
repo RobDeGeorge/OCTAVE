@@ -637,7 +637,7 @@ Item {
                     objectName: "homeVehiclePicture"
                     width: parent.width
                     height: Math.round(obdSection.height * 0.42)
-                    visible: obdSection.height >= dp(360)
+                    visible: hasPicture && obdSection.height >= dp(360)
                 }
 
                 Text {

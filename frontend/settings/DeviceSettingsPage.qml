@@ -36,6 +36,10 @@ Flickable {
     readonly property var _pairing: typeof servicePairing !== "undefined" ? servicePairing : null
     // Installed frontends: other screens for OCTAVE (src/managers/frontendmanager.h)
     readonly property var _frontends: typeof frontendManager !== "undefined" ? frontendManager : null
+    // The vehicle shown in the 3D view and on Home (the Vehicle card)
+    readonly property var _vehicles: typeof vehicleManager !== "undefined" ? vehicleManager : null
+    readonly property bool _has3D: typeof hasQuick3D !== "undefined" && hasQuick3D
+                                   && typeof hasQuick3DAssetUtils !== "undefined" && hasQuick3DAssetUtils
     // The browser build: the site's web frontends, shown over this screen at once
     // (src/platform/wasm/webfrontends.h); nothing to install, nothing to restart
     readonly property bool _inBrowser: Qt.platform.os === "wasm"
@@ -66,6 +70,12 @@ Flickable {
         id: frontendFolderDialog
         title: "Install a frontend from a folder"
         onAccepted: pageRoot.finishFrontendInstall(pageRoot._frontends.installFromFolder(selectedFolder.toString()))
+    }
+    FileDialog {
+        id: vehicleModelDialog
+        title: "Add a 3D model of your vehicle"
+        nameFilters: ["glTF binary models (*.glb)", "All files (*)"]
+        onAccepted: pageRoot._vehicles.importModel(selectedFile.toString())
     }
     FileDialog {
         id: frontendZipDialog
@@ -248,6 +258,11 @@ Flickable {
               var f = pageRoot._frontends
               if (!f) return {}
               return { state: f.forcedQml ? "Built-in (forced)" : pageRoot.frontendName(f.activeId) }
+          } },
+        { cardId: "device_vehicle", title: "Vehicle", component: vehicleContent,
+          summary: function() {
+              var v = pageRoot._vehicles
+              return v ? { state: v.active.name } : {}
           } },
         { cardId: "device_diagnostics", title: "Diagnostics", component: diagnosticsContent,
           summary: function() {
@@ -688,6 +703,194 @@ Flickable {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // The vehicle in the 3D view and on Home: the built-in Jeep, or a model
+    // of the user's own (vehicleManager). The preview here is the live scene,
+    // and is also where an added model's picture is rendered from.
+    Component {
+        id: vehicleContent
+        ColumnLayout {
+            id: vehicleCard
+            width: parent ? parent.width : 0
+            spacing: App.Spacing.rowSpacing
+            readonly property var vm: pageRoot._vehicles
+            readonly property var current: vm ? vm.active : ({})
+            readonly property bool own: !!current.id && !current.builtIn
+
+            SettingDescription {
+                text: "The vehicle in the 3D view and on the Home screen. Add your own: any model exported as glTF binary "
+                      + "(.glb) works. It is shown whole and tilts with the motion sensor; opening doors and turning "
+                      + "wheels are the built-in Jeep's alone. If a model comes in sideways or lying down, turn it here."
+            }
+
+            Item {
+                Layout.fillWidth: true
+                Layout.preferredHeight: pageRoot.dp(320)
+
+                Loader {
+                    id: vehiclePreview
+                    objectName: "vehiclePreview"
+                    anchors.centerIn: parent
+                    // Drawn at the size of the picture saved from it, and
+                    // scaled down to the card
+                    width: 720
+                    height: 600
+                    scale: parent.height / height
+                    // The scene only where the build can draw one
+                    active: pageRoot._has3D
+                    source: Qt.resolvedUrl("../VehicleView.qml")
+                    onLoaded: {
+                        item.showLevelRing = false
+                        item.interactive = false
+                        item.cameraZoom = 1.3
+                    }
+                    readonly property bool sceneReady: status === Loader.Ready && item.ready
+                }
+                App.VehiclePicture {
+                    anchors.fill: parent
+                    visible: !pageRoot._has3D
+                }
+                Text {
+                    anchors.centerIn: parent
+                    width: parent.width - pageRoot.dp(24)
+                    visible: text !== ""
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                    text: !pageRoot._has3D ? (vehicleCard.own && !vehicleCard.current.pictureUrl ? "This build has no 3D view to show the model in." : "")
+                        : vehiclePreview.status !== Loader.Ready ? ""
+                        : vehiclePreview.item.error ? "This model could not be loaded: " + vehiclePreview.item.error
+                        : !vehiclePreview.item.ready ? "Loading\u2026" : ""
+                    color: App.Style.secondaryTextColor
+                    font.pixelSize: App.Spacing.overallText * 0.85
+                    font.family: App.Style.fontFamily
+                }
+
+                // The picture Home shows of an added model: this preview,
+                // saved a moment after it has drawn (and again after a turn)
+                // Runs while an added model is on screen without a picture
+                // of how it now stands (`stale`: it was just turned). A few
+                // tries, in case the folder can't be written.
+                Timer {
+                    id: pictureTimer
+                    property bool stale: false
+                    property int tries: 0
+                    property string triedFor: ""
+                    interval: 700
+                    repeat: true
+                    running: vehiclePreview.sceneReady && vehicleCard.own
+                             && (stale || !vehicleCard.current.pictureUrl)
+                             && !(triedFor === vehicleCard.current.id && tries >= 3)
+                    onTriggered: {
+                        var id = vehicleCard.current.id
+                        if (triedFor !== id) { triedFor = id; tries = 0 }
+                        tries += 1
+                        var path = vehicleCard.vm.picturePath(id)
+                        if (!path)
+                            return
+                        vehiclePreview.item.grabToImage(function(result) {
+                            if (result.saveToFile(path)) {
+                                pictureTimer.stale = false
+                                pictureTimer.tries = 0
+                                vehicleCard.vm.pictureSaved(id)
+                            }
+                        })
+                    }
+                }
+            }
+
+            Flow {
+                Layout.fillWidth: true
+                spacing: pageRoot.dp(8)
+                Repeater {
+                    model: vehicleCard.vm ? vehicleCard.vm.vehicles : []
+                    delegate: Rectangle {
+                        id: vehicleChip
+                        required property var modelData
+                        objectName: "vehicleChip_" + modelData.id
+                        width: chipLabel.implicitWidth + pageRoot.dp(28)
+                        height: pageRoot.dp(40)
+                        radius: pageRoot.dpMin(8, 2)
+                        color: modelData.active ? Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.22) : "transparent"
+                        border.width: modelData.active ? 2 : 1
+                        border.color: modelData.active ? App.Style.accent : App.Style.secondaryTextColor
+                        Text {
+                            id: chipLabel
+                            anchors.centerIn: parent
+                            text: vehicleChip.modelData.name
+                            textFormat: Text.PlainText
+                            color: App.Style.primaryTextColor
+                            font.pixelSize: App.Spacing.overallText * 0.9
+                            font.bold: vehicleChip.modelData.active
+                            font.family: App.Style.fontFamily
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: vehicleCard.vm.select(vehicleChip.modelData.id)
+                        }
+                    }
+                }
+            }
+
+            Flow {
+                Layout.fillWidth: true
+                spacing: pageRoot.dp(8)
+                SettingsButton {
+                    objectName: "addVehicleModel"
+                    visible: !!vehicleCard.vm && vehicleCard.vm.canImport
+                    text: "Add a model"
+                    height: pageRoot.dp(30)
+                    width: Layout.preferredWidth
+                    onClicked: vehicleModelDialog.open()
+                }
+                SettingsButton {
+                    objectName: "turnVehicleModel"
+                    visible: vehicleCard.own
+                    text: "Turn 90\u00B0"
+                    height: pageRoot.dp(30)
+                    width: Layout.preferredWidth
+                    onClicked: {
+                        vehicleCard.vm.setOrientation(vehicleCard.current.id, vehicleCard.current.yaw + 90, vehicleCard.current.tilt)
+                        pictureTimer.tries = 0
+                        pictureTimer.stale = true
+                    }
+                }
+                SettingsButton {
+                    objectName: "standVehicleModel"
+                    visible: vehicleCard.own
+                    text: "Stand it up"
+                    height: pageRoot.dp(30)
+                    width: Layout.preferredWidth
+                    onClicked: {
+                        vehicleCard.vm.setOrientation(vehicleCard.current.id, vehicleCard.current.yaw, vehicleCard.current.tilt + 90)
+                        pictureTimer.tries = 0
+                        pictureTimer.stale = true
+                    }
+                }
+                SettingsButton {
+                    objectName: "removeVehicleModel"
+                    visible: vehicleCard.own
+                    text: "Remove"
+                    buttonColor: App.Style.statusDanger
+                    height: pageRoot.dp(30)
+                    width: Layout.preferredWidth
+                    onClicked: vehicleCard.vm.remove(vehicleCard.current.id)
+                }
+            }
+
+            Text {
+                objectName: "vehicleError"
+                visible: !!vehicleCard.vm && vehicleCard.vm.lastError !== ""
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                textFormat: Text.PlainText
+                text: vehicleCard.vm ? vehicleCard.vm.lastError : ""
+                color: App.Style.statusDanger
+                font.pixelSize: App.Spacing.overallText * 0.85
+                font.family: App.Style.fontFamily
             }
         }
     }

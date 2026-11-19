@@ -38,12 +38,34 @@ Item {
     // hinges (same duration and curve as JeepHinge), starting with the tap in
     // both directions, so the camera glides with the panel and does not jump
     // when the last hinge comes to rest.
-    property real fitRadius: jeep.anyOpenRequested ? jeep.sweptRadius : jeep.closedRadius
+    property real fitRadius: vehicle && vehicle.anyOpenRequested ? vehicle.sweptRadius : closedRadius
     Behavior on fitRadius { NumberAnimation { duration: 450; easing.type: Easing.InOutCubic } }
 
-    readonly property alias vehicle: jeep
-    readonly property bool ready: jeep.ready
-    readonly property string error: jeep.error
+    // Which vehicle: vehicleManager's active one ({rigged, modelUrl, yaw,
+    // tilt, ...}), or the built-in rig where there is no manager (the
+    // tools that load this file alone)
+    property var spec: (typeof vehicleManager !== "undefined" && vehicleManager) ? vehicleManager.active : ({ rigged: true })
+    readonly property bool rigged: !spec || spec.rigged !== false
+
+    // The JeepVehicle (the built-in rig) or GenericVehicle (a model of the
+    // user's): both offer the members used here. Null for a moment while
+    // the vehicle is being swapped.
+    readonly property var vehicle: vehicleLoader.item
+    readonly property bool ready: !!vehicle && vehicle.ready
+    readonly property string error: vehicle ? vehicle.error : ""
+    readonly property real closedRadius: vehicle ? vehicle.closedRadius : 2.13
+    readonly property real groundY: vehicle ? vehicle.groundY : -1
+
+    Component { id: rigComponent; JeepVehicle { active: root.active } }
+    Component {
+        id: modelComponent
+        GenericVehicle {
+            active: root.active
+            source: root.spec && root.spec.modelUrl ? root.spec.modelUrl : ""
+            yaw: root.spec ? Number(root.spec.yaw) || 0 : 0
+            tilt: root.spec ? Number(root.spec.tilt) || 0 : 0
+        }
+    }
 
     function zoomCamera(factor) {
         if (isFinite(factor) && factor > 0)
@@ -125,12 +147,12 @@ Item {
         // tyres. A flat quad carrying a 2D ring, as Quick3D has no ring mesh.
         Model {
             objectName: "levelRing"
-            visible: root.showLevelRing && jeep.ready
+            visible: root.showLevelRing && root.ready
             source: "#Rectangle"
-            position: Qt.vector3d(0, jeep.groundY * 30, 0)
+            position: Qt.vector3d(0, root.groundY * 30, 0)
             eulerRotation.x: -90
             // "#Rectangle" is 100 units across
-            scale: Qt.vector3d(jeep.closedRadius * 0.6, jeep.closedRadius * 0.6, 1)
+            scale: Qt.vector3d(root.closedRadius * 0.6, root.closedRadius * 0.6, 1)
             materials: PrincipledMaterial {
                 lighting: PrincipledMaterial.NoLighting
                 alphaMode: PrincipledMaterial.Blend
@@ -147,13 +169,16 @@ Item {
             }
         }
 
-        // Metre-scale TJ, +Z forward / +Y up, pivot at chassis centre.
+        // Metre-scale vehicle, +Z forward / +Y up, pivot at its centre.
         Node {
             id: carModel
             scale: Qt.vector3d(30, 30, 30)
             rotation: root.attitude
 
-            JeepVehicle { id: jeep; active: root.active }
+            Loader3D {
+                id: vehicleLoader
+                sourceComponent: root.rigged ? rigComponent : modelComponent
+            }
         }
     }
 
@@ -191,12 +216,12 @@ Item {
         }
         TapHandler {
             onTapped: (eventPoint) => {
-                if (!jeep.ready)
+                if (!root.ready)
                     return
                 var hit = view3d.pick(eventPoint.position.x, eventPoint.position.y)
                 var key = root._tapKeyOf(hit.objectHit)
                 if (key !== "")
-                    jeep.toggle(key)
+                    root.vehicle.toggle(key)
                 else if (tapCount === 2)
                     root.resetView()
             }

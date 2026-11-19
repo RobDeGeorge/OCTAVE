@@ -31,7 +31,22 @@ Rectangle {
     border.width: 1
     radius: 3
 
+    // An added model has no picture until Settings > Device > Vehicle has shown it
+    Text {
+        anchors.centerIn: picture
+        width: picture.width
+        visible: !picture.hasPicture && !!picture.spec
+        horizontalAlignment: Text.AlignHCenter
+        wrapMode: Text.WordWrap
+        textFormat: Text.PlainText
+        text: picture.spec ? picture.spec.name : ""
+        color: App.Style.secondaryTextColor
+        font.pixelSize: App.Spacing.mainMenuOBDTextSize
+        font.family: App.Style.fontFamily
+    }
+
     App.VehiclePicture {
+        id: picture
         anchors {
             top: parent.top; left: parent.left; right: parent.right
             bottom: readouts.visible ? readouts.top : parent.bottom

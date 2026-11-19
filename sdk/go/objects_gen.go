@@ -4,7 +4,7 @@
 package octave
 
 // ObjectNames is every service object, as hello lists them.
-var ObjectNames = []string{"airPlayManager", "androidAutoManager", "audioAnalyzer", "berryIMU", "busMonitor", "clock", "customPids", "dashboardManager", "diagnosticsManager", "esp32VolumeManager", "fontCatalog", "frontendManager", "gestureSensor", "mediaManager", "networkManager", "nowPlaying", "obdAdapterFinder", "obdManager", "paramStore", "parameterCatalog", "phoneMirrorManager", "settingsManager", "shiftLightManager", "sim", "spotifyManager", "themeCatalog", "tripRecorder", "units", "volumeController"}
+var ObjectNames = []string{"airPlayManager", "androidAutoManager", "audioAnalyzer", "berryIMU", "busMonitor", "clock", "customPids", "dashboardManager", "diagnosticsManager", "esp32VolumeManager", "fontCatalog", "frontendManager", "gestureSensor", "mediaManager", "networkManager", "nowPlaying", "obdAdapterFinder", "obdManager", "paramStore", "parameterCatalog", "phoneMirrorManager", "settingsManager", "shiftLightManager", "sim", "spotifyManager", "themeCatalog", "tripRecorder", "units", "vehicleManager", "volumeController"}
 
 // AirPlayManager is the service object "airPlayManager" (C++ AirPlayManager); NewAirPlayManager(c) binds it to a client.
 type AirPlayManager struct{ c *Client }
@@ -7056,6 +7056,100 @@ func (o Units) LinearToDb(x float64) (v float64, err error) {
 func (o Units) DbToLinear(db float64) (v float64, err error) {
 	err = o.c.Call("units", "dbToLinear", &v, db)
 	return
+}
+
+// VehicleManager is the service object "vehicleManager" (C++ VehicleManager); NewVehicleManager(c) binds it to a client.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+type VehicleManager struct{ c *Client }
+
+// NewVehicleManager binds "vehicleManager" to c.
+func NewVehicleManager(c *Client) VehicleManager { return VehicleManager{c} }
+
+// Name is the object's name on the wire.
+func (VehicleManager) Name() string { return "vehicleManager" }
+
+// GetVehicles reads the property "vehicles" (QVariantList).
+func (o VehicleManager) GetVehicles() (v []any, err error) {
+	err = o.c.Get("vehicleManager", "vehicles", &v)
+	return
+}
+
+// GetActiveId reads the property "activeId" (QString, writable).
+func (o VehicleManager) GetActiveId() (v string, err error) {
+	err = o.c.Get("vehicleManager", "activeId", &v)
+	return
+}
+
+// SetActiveId writes the property "activeId" and returns the value read back.
+func (o VehicleManager) SetActiveId(value string) (v string, err error) {
+	err = o.c.Set("vehicleManager", "activeId", value, &v)
+	return
+}
+
+// GetActive reads the property "active" (QVariantMap).
+func (o VehicleManager) GetActive() (v map[string]any, err error) {
+	err = o.c.Get("vehicleManager", "active", &v)
+	return
+}
+
+// GetCanImport reads the property "canImport" (bool).
+func (o VehicleManager) GetCanImport() (v bool, err error) {
+	err = o.c.Get("vehicleManager", "canImport", &v)
+	return
+}
+
+// GetLastError reads the property "lastError" (QString).
+func (o VehicleManager) GetLastError() (v string, err error) {
+	err = o.c.Get("vehicleManager", "lastError", &v)
+	return
+}
+
+// ImportModel2 calls importModel(QString, QString) -> QString.
+func (o VehicleManager) ImportModel2(path string, name string) (v string, err error) {
+	err = o.c.Call("vehicleManager", "importModel", &v, path, name)
+	return
+}
+
+// ImportModel1 calls importModel(QString) -> QString.
+func (o VehicleManager) ImportModel1(path string) (v string, err error) {
+	err = o.c.Call("vehicleManager", "importModel", &v, path)
+	return
+}
+
+// Remove calls remove(QString) -> bool.
+func (o VehicleManager) Remove(id string) (v bool, err error) {
+	err = o.c.Call("vehicleManager", "remove", &v, id)
+	return
+}
+
+// Select calls select(QString) -> bool.
+func (o VehicleManager) Select(id string) (v bool, err error) {
+	err = o.c.Call("vehicleManager", "select", &v, id)
+	return
+}
+
+// Rename calls rename(QString, QString) -> bool.
+func (o VehicleManager) Rename(id string, name string) (v bool, err error) {
+	err = o.c.Call("vehicleManager", "rename", &v, id, name)
+	return
+}
+
+// SetOrientation calls setOrientation(QString, double, double) -> bool.
+func (o VehicleManager) SetOrientation(id string, yaw float64, tilt float64) (v bool, err error) {
+	err = o.c.Call("vehicleManager", "setOrientation", &v, id, yaw, tilt)
+	return
+}
+
+// PicturePath calls picturePath(QString) -> QString.
+func (o VehicleManager) PicturePath(id string) (v string, err error) {
+	err = o.c.Call("vehicleManager", "picturePath", &v, id)
+	return
+}
+
+// PictureSaved calls pictureSaved(QString).
+func (o VehicleManager) PictureSaved(id string) error {
+	return o.c.Call("vehicleManager", "pictureSaved", nil, id)
 }
 
 // VolumeController is the service object "volumeController" (C++ VolumeController); NewVolumeController(c) binds it to a client.

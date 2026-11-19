@@ -432,6 +432,8 @@ qt_add_executable(octave
     src/managers/frontendmanifest.cpp
     src/managers/frontendmanager.h
     src/managers/frontendmanager.cpp
+    src/managers/vehiclemanager.h
+    src/managers/vehiclemanager.cpp
     src/managers/frontendsupervisor.h
     src/managers/frontendsupervisor.cpp
     # The simulator (--sim, the `sim` object, the browser demo): in every

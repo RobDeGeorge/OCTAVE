@@ -46,6 +46,7 @@
 #include "sim/simulator.h"
 #include "sim/demodrive.h"
 #include "managers/frontendmanager.h"
+#include "managers/vehiclemanager.h"
 
 class QQmlContext;
 class Units;
@@ -104,6 +105,8 @@ public:
     DemoDrive demoDrive;
     // Installed frontends (<config>/frontends) and which one is the screen
     FrontendManager frontendManager;
+    // The vehicle shown (the built-in Jeep, or a model under <config>/vehicles)
+    VehicleManager vehicleManager;
 
 private:
     void expose(const char *name, QObject *object);
