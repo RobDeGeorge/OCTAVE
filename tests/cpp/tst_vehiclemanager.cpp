@@ -75,8 +75,9 @@ private slots:
         QVERIFY(m.select("bmw-e46-330i-zhp"));
         a = m.active();
         QVERIFY(a.value("builtIn").toBool());
-        QVERIFY(!a.value("rigged").toBool());
-        QCOMPARE(a.value("asset").toString(), QStringLiteral("vehicles/bmw-e46-330i-zhp/model.glb"));
+        QVERIFY(a.value("rigged").toBool());
+        QVERIFY(a.value("asset").toString().isEmpty());
+        QCOMPARE(a.value("rig").toString(), QStringLiteral("vehicles/bmw-e46-330i-zhp"));
         QVERIFY(a.value("modelUrl").toString().isEmpty());
 
         for (const QString &id : kBuiltIns) {

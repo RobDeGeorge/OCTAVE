@@ -153,7 +153,7 @@ for side in ("driver", "passenger"):
         drive(wheel, "rotation_euler", 0, "wheel_turns", "v*2*pi")
 
 for name, angle, axis in (("driver_door", -68, 2), ("passenger_door", 68, 2),
-                           ("hood", -65, 0), ("tailgate", 95, 2)):
+                           ("hood", -65, 0), ("tailgate", 90, 2)):
     obj = bpy.data.objects[name]
     obj.rotation_mode = "XYZ"
     drive(obj, "rotation_euler", axis, name, f"v*{angle}*pi/180")

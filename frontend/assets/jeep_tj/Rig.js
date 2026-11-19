@@ -39,7 +39,7 @@ var parts = {
       -1.7899999618530273
     ],
     "axis": "Y",
-    "openAngle": 95
+    "openAngle": 90
   },
   "hood": {
     "file": "hood.glb",
@@ -186,7 +186,7 @@ var parts = {
     ]
   }
 };
-var bounds = {"closedRadius": 2.1286343829649157, "sweptRadius": 2.816346561055898};
+var bounds = {"closedRadius": 2.1286343829649157, "sweptRadius": 2.8162657848867694};
 var steering = {"driverPivot": [0.64, -0.5, 1.186], "passengerPivot": [-0.64, -0.5, 1.186], "driverEnd": [0.69, -0.47, 1.358], "passengerEnd": [-0.69, -0.47, 1.358], "pitmanPivot": [0.48, -0.1211, 1.61], "pitmanEnd": [0.48, -0.19110000000000005, 1.425], "pickupFraction": 0.15, "pitmanTravel": 22, "tieBend": 0.08, "damperStart": [-0.35, -0.4, 1.18], "damperFraction": 0.45};
 // Sprung-body lift (metres); body-mounted lamps rise by this.
 var bodyLift = 0.08889999999999999;

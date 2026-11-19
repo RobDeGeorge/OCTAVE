@@ -5,6 +5,8 @@ import QtQuick3D.AssetUtils
 Node {
     id: hinge
     required property var part
+    // The folder under frontend/assets/ the part's file is in
+    property string folder: "jeep_tj"
     property bool open: false
     property bool animate: true
     // A tap on the model is resolved by View3D.pick(), which sees only
@@ -26,7 +28,8 @@ Node {
     readonly property bool moving: hingeAnimation.running
     readonly property bool closed: !moving && Math.abs(animatedAngle) < 0.1
     readonly property bool opened: !moving && Math.abs(animatedAngle - part.openAngle) < 0.1
-    readonly property bool ready: loader.status === RuntimeLoader.Success
+    // (a part with no file, a pivot only, has nothing to wait for)
+    readonly property bool ready: loader.status === RuntimeLoader.Success || !part.file
     readonly property string error: loader.status === RuntimeLoader.Error ? loader.errorString : ""
     position: Qt.vector3d(part.pivot[0], part.pivot[1], part.pivot[2])
     // Spinners (axis "Z") carry an "orient" quaternion that tilts their local
@@ -42,7 +45,7 @@ Node {
         id: loader
         // assetStore hands Assimp a real file (extracted from the APK on Android)
         // (null-guarded: at shutdown the backend drops assetStore before the scene dies)
-        source: assetStore && hinge.part.file ? assetStore.localUrl("jeep_tj/" + hinge.part.file) : ""
+        source: assetStore && hinge.part.file ? assetStore.localUrl(hinge.folder + "/" + hinge.part.file) : ""
         onStatusChanged: {
             if (status === RuntimeLoader.Error)
                 console.warn("Jeep asset:", source, errorString)

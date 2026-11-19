@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QString>
 #include <QUrl>
+#include <QVariant>
 
 // Hands QML a plain file:// URL for a file under frontend/assets/.
 //
@@ -23,6 +24,9 @@ public:
     explicit AssetStore(const QString &sourceDir, QObject *parent = nullptr);
 
     Q_INVOKABLE QUrl localUrl(const QString &relativePath);
+    // A JSON file under frontend/assets/, as a map (a vehicle's rig.json);
+    // empty when it is missing or is not a JSON object
+    Q_INVOKABLE QVariantMap readJson(const QString &relativePath) const;
 
 private:
     QString m_sourceDir;

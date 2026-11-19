@@ -1,0 +1,301 @@
+{
+  "units": "metres",
+  "forward": "+Z",
+  "left": "+X",
+  "parts": {
+    "body": {
+      "file": "body.glb",
+      "pivot": [
+        0.0,
+        0.0,
+        -0.0
+      ],
+      "axis": "Y",
+      "openAngle": 0,
+      "role": "body"
+    },
+    "door_front_left": {
+      "file": "door_front_left.glb",
+      "pivot": [
+        0.862,
+        -0.1,
+        0.7005
+      ],
+      "axis": "Y",
+      "openAngle": -62,
+      "tap": "driverDoorOpen",
+      "role": "panel"
+    },
+    "door_front_right": {
+      "file": "door_front_right.glb",
+      "pivot": [
+        -0.862,
+        -0.1,
+        0.7005
+      ],
+      "axis": "Y",
+      "openAngle": 62,
+      "tap": "passengerDoorOpen",
+      "role": "panel"
+    },
+    "door_rear_left": {
+      "file": "door_rear_left.glb",
+      "pivot": [
+        0.868,
+        -0.1,
+        -0.2945
+      ],
+      "axis": "Y",
+      "openAngle": -60,
+      "tap": "rearLeftDoorOpen",
+      "role": "panel"
+    },
+    "door_rear_right": {
+      "file": "door_rear_right.glb",
+      "pivot": [
+        -0.868,
+        -0.1,
+        -0.2945
+      ],
+      "axis": "Y",
+      "openAngle": 60,
+      "tap": "rearRightDoorOpen",
+      "role": "panel"
+    },
+    "hood": {
+      "file": "hood.glb",
+      "pivot": [
+        0.0,
+        0.255,
+        0.8505
+      ],
+      "axis": "X",
+      "openAngle": -52,
+      "tap": "hoodOpen",
+      "role": "panel"
+    },
+    "trunk": {
+      "file": "trunk.glb",
+      "pivot": [
+        0.0,
+        0.355,
+        -1.6795
+      ],
+      "axis": "X",
+      "openAngle": 78,
+      "tap": "tailgateOpen",
+      "role": "panel"
+    },
+    "wheel_front_left": {
+      "file": "wheel_front_left.glb",
+      "pivot": [
+        0.7405,
+        -0.382,
+        1.4835
+      ],
+      "axis": "X",
+      "openAngle": 0,
+      "role": "steered_wheel",
+      "radius": 0.318
+    },
+    "wheel_front_right": {
+      "file": "wheel_front_right.glb",
+      "pivot": [
+        -0.7405,
+        -0.382,
+        1.4835
+      ],
+      "axis": "X",
+      "openAngle": 0,
+      "role": "steered_wheel",
+      "radius": 0.318
+    },
+    "wheel_rear_left": {
+      "file": "wheel_rear_left.glb",
+      "pivot": [
+        0.744,
+        -0.382,
+        -1.2415
+      ],
+      "axis": "X",
+      "openAngle": 0,
+      "role": "wheel",
+      "radius": 0.318
+    },
+    "wheel_rear_right": {
+      "file": "wheel_rear_right.glb",
+      "pivot": [
+        -0.744,
+        -0.382,
+        -1.2415
+      ],
+      "axis": "X",
+      "openAngle": 0,
+      "role": "wheel",
+      "radius": 0.318
+    }
+  },
+  "bounds": {
+    "closedRadius": 2.3495,
+    "sweptRadius": 2.5343
+  },
+  "name": "BMW 330i ZHP",
+  "groundY": -0.7,
+  "maxSteer": 34,
+  "lamps": [
+    {
+      "circuit": "head",
+      "position": [
+        0.575,
+        0.006,
+        2.1755
+      ],
+      "size": [
+        0.11,
+        0.08
+      ],
+      "round": true,
+      "facing": "front"
+    },
+    {
+      "circuit": "head",
+      "position": [
+        -0.575,
+        0.006,
+        2.1755
+      ],
+      "size": [
+        0.11,
+        0.08
+      ],
+      "round": true,
+      "facing": "front"
+    },
+    {
+      "circuit": "head",
+      "position": [
+        0.41,
+        0.006,
+        2.2055
+      ],
+      "size": [
+        0.1,
+        0.07
+      ],
+      "round": true,
+      "facing": "front"
+    },
+    {
+      "circuit": "head",
+      "position": [
+        -0.41,
+        0.006,
+        2.2055
+      ],
+      "size": [
+        0.1,
+        0.07
+      ],
+      "round": true,
+      "facing": "front"
+    },
+    {
+      "circuit": "fog",
+      "position": [
+        0.565,
+        -0.355,
+        2.2155
+      ],
+      "size": [
+        0.1,
+        0.075
+      ],
+      "round": true,
+      "facing": "front"
+    },
+    {
+      "circuit": "fog",
+      "position": [
+        -0.565,
+        -0.355,
+        2.2155
+      ],
+      "size": [
+        0.1,
+        0.075
+      ],
+      "round": true,
+      "facing": "front"
+    },
+    {
+      "circuit": "brake",
+      "position": [
+        0.69,
+        0.15,
+        -2.1905
+      ],
+      "size": [
+        0.14,
+        0.08
+      ],
+      "round": false,
+      "facing": "rear"
+    },
+    {
+      "circuit": "brake",
+      "position": [
+        -0.69,
+        0.15,
+        -2.1905
+      ],
+      "size": [
+        0.14,
+        0.08
+      ],
+      "round": false,
+      "facing": "rear"
+    },
+    {
+      "circuit": "brake",
+      "position": [
+        0.0,
+        0.427,
+        -1.5345
+      ],
+      "size": [
+        0.5,
+        0.018
+      ],
+      "round": false,
+      "facing": "rear"
+    },
+    {
+      "circuit": "reverse",
+      "position": [
+        0.685,
+        0.228,
+        -2.1905
+      ],
+      "size": [
+        0.12,
+        0.035
+      ],
+      "round": false,
+      "facing": "rear"
+    },
+    {
+      "circuit": "reverse",
+      "position": [
+        -0.685,
+        0.228,
+        -2.1905
+      ],
+      "size": [
+        0.12,
+        0.035
+      ],
+      "round": false,
+      "facing": "rear"
+    }
+  ]
+}

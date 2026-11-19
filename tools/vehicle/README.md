@@ -155,6 +155,29 @@ These are visual packaging dimensions, not a fabrication-ready exhaust design.
 The legacy suspension audit retains straight-ahead steering: full lock combined
 with axle roll can still contact the provisional front coil/seat brackets.
 
+Body-panel corrections (2026-11-19), all in the generators:
+
+- The panels behind the flares are cut to the flares' own outlines
+  (`FLARE_OUTLINES`, `flare_panel_edge()` in `build_jeep_tj.py`): the rear
+  quarter's wheel opening, the engine-bay side panel and the cowl's lower
+  corner. They used a smaller arch, which left a band of paint hanging inside
+  every wheel opening below the flare once the housings were fitted to the
+  flares. The rocker rail and door sill stop behind the flare heels.
+- The steel part of the front fender is painted (`painted_fender_top()`, a
+  skin 3 mm over the inner part of the black "Front flare" section, which the
+  wheel housings stay fitted to); only the outer 125 mm, the flare, is black.
+- The licence-plate bracket is under the driver-side tail lamp (reference 010).
+- The mirror shell's bevel is smaller than half its depth (it had collapsed
+  into creases) and the glass fits its back.
+- Seat inserts are whole rings / columns of the seat lofts, and the seams sit
+  on a column, so the insert edge is a clean line (`cabin.py`).
+- The tailgate opens 90 degrees (`rig_export.HINGES`, `build_jeep_twin.py`):
+  at 95 the spare's tread went 4 mm into the passenger tail lamp.
+
+Known and left alone: the hood's rear lower corners pass into the cowl sides
+when it is open (the hinge line is above them); the provisional shocks' lower
+eyes hang ahead of the axles; a small shading nick on the fog-lamp lens rim.
+
 Soft-top component layout is informed by the
 [Bestop TJ Supertop installation diagrams](https://www.bestop.com/wp-content/uploads/Installation%20Instructions/BDKW_51709-INS_001.pdf).
 This establishes hardware relationships, not the owner's exact top model or
@@ -453,12 +476,38 @@ These dimensions describe the model revision, not measured TJ factory values.
 
 ## Other vehicles
 
-`build_bmw_e46.py` builds a BMW E46 330i ZHP sedan as a static model,
-`frontend/assets/vehicles/bmw-e46-330i-zhp/model.glb`, one of the vehicles the app ships with
-(`blender -b -P tools/vehicle/build_bmw_e46.py`, add `-- --render DIR` for check pictures; then
-`render_preview.py bmw-e46-330i-zhp` for its `preview.png`). It is not rigged: the app shows it
-whole, as it does any model added in Settings > Device > Vehicle (`docs/VEHICLES.md`). To ship
-another, add its folder under `frontend/assets/vehicles/` and a row to `kBuiltIns` in
-`src/managers/vehiclemanager.cpp`. The body is one shell lofted through cross-sections along the car, from the
-E46's published dimensions; glass, lamps, grilles and shut lines are 2D outlines projected onto it.
-The wheels are separate objects with their origin on the axle, for a later rig.
+`build_bmw_e46.py` builds a BMW E46 330i ZHP sedan as a rigged vehicle,
+`frontend/assets/vehicles/bmw-e46-330i-zhp/` (a `.glb` per moving part and `rig.json`), one of
+the vehicles the app ships with:
+
+```sh
+blender -b -P tools/vehicle/build_bmw_e46.py                       # writes the rig
+blender -b -P tools/vehicle/build_bmw_e46.py -- --render DIR       # and studio check pictures
+blender -b -P tools/vehicle/build_bmw_e46.py -- --render DIR --shots front34,open-cabin --no-export
+QT_QPA_PLATFORM=xcb xvfb-run -a venv/bin/python tools/vehicle/render_preview.py bmw-e46-330i-zhp   # preview.png
+# The real Qt view instead of the preview: --out FILE [--open] [--lights] [--yaw D] [--pitch D]
+```
+
+The machinery is `carkit.py`, written to be shared by any car built the same way:
+
+- The body is one shell lofted through cross-sections along the car (`loft()`), each section
+  from four curves of the side and top views, here from the E46's published dimensions.
+- `mark()` cuts the shell along an outline drawn in the side / front / top view and tags what
+  is inside: the four doors, the hood and the trunk lid (each with a shut line round it, which
+  stays on the body), the glass, the black trim. `add_inner_skin()` gives panels and the cabin
+  a second skin joined along every open edge, so a door has a back and an edge and the opening
+  it leaves has a jamb. `shade_from()` then gives the cut skin the smooth shell's normals back
+  (a cut leaves long thin faces, which shade in streaks otherwise).
+- Inside are boxes and lathed shapes: floor, seats, dashboard, steering wheel, console, parcel
+  shelf, B-pillars, an engine bay under the hood and a boot under the lid.
+- Lamps, grilles, plates and badges are flat outlines laid onto the skin (`decal()`), each
+  joined to the part it moves with (the tail lamps are split at the lid's edge, as on the car).
+- `export_rig()` writes each part about its own pivot and `rig.json`: `parts` (`file`, `pivot`,
+  `axis`, `openAngle`, `role` body / panel / wheel / steered_wheel, `tap`), `bounds`, `groundY`,
+  `maxSteer` and `lamps`. `frontend/RigVehicle.qml` assembles that; no QML is written per car.
+
+To ship another car: a `build_<car>.py` beside this one with its own curves, outlines and
+interior, its folder under `frontend/assets/vehicles/`, and a row in `kBuiltIns`
+(`src/managers/vehiclemanager.cpp`) with `rigged` true and the folder as `rig`. What the BMW is
+not: its nose and tail are the lofted shell with the lamps laid on, not modelled housings; the
+doors have no window mechanism; nothing under the car is modelled.

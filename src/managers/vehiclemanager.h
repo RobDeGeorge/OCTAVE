@@ -44,11 +44,13 @@ class VehicleManager : public QObject
     Q_PROPERTY(QVariantList vehicles READ vehicles NOTIFY vehiclesChanged)
     // The vehicle shown; "" when none is chosen or the chosen one is gone
     Q_PROPERTY(QString activeId READ activeId WRITE select NOTIFY activeChanged)
-    // {id, name, builtIn, rigged, modelUrl, pictureUrl, asset, pictureAsset,
-    // yaw, tilt}; id "" when no vehicle is chosen. A built-in vehicle names
-    // its files under frontend/assets/ (asset: the model, "" for the rig;
-    // pictureAsset); an added one gives URLs (modelUrl; pictureUrl, "" until
-    // the app has rendered its picture)
+    // {id, name, builtIn, rigged, modelUrl, pictureUrl, asset, rig,
+    // pictureAsset, yaw, tilt}; id "" when no vehicle is chosen. A built-in
+    // vehicle names its files under frontend/assets/ (asset: the model, ""
+    // for a rigged one; rig: the folder of a rigged one's parts and rig.json,
+    // "" for the Jeep, which has its own QML; pictureAsset); an added one
+    // gives URLs (modelUrl; pictureUrl, "" until the app has rendered its
+    // picture)
     Q_PROPERTY(QVariantMap active READ active NOTIFY activeChanged)
     // False where a model can't be picked from a file (the browser build)
     Q_PROPERTY(bool canImport READ canImport CONSTANT)

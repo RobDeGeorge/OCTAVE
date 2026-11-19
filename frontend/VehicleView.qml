@@ -55,8 +55,9 @@ Item {
         : spec.asset ? ((typeof assetStore !== "undefined" && assetStore) ? assetStore.localUrl(spec.asset) : "")
         : (spec.modelUrl || "")
 
-    // The JeepVehicle (the built-in rig) or GenericVehicle (a model of the
-    // user's): both offer the members used here. Null for a moment while
+    // The JeepVehicle (the Jeep's own rig), a RigVehicle (a rig from a
+    // rig.json) or GenericVehicle (a model of the user's): all offer the
+    // members used here. Null for a moment while
     // the vehicle is being swapped, and while none is chosen.
     readonly property var vehicle: vehicleLoader.item
     readonly property bool ready: !!vehicle && vehicle.ready
@@ -65,6 +66,8 @@ Item {
     readonly property real groundY: vehicle ? vehicle.groundY : -1
 
     Component { id: rigComponent; JeepVehicle { active: root.active } }
+    // A rigged vehicle described by a rig.json (spec.rig: its folder under assets/)
+    Component { id: dataRigComponent; RigVehicle { active: root.active; folder: root.spec.rig } }
     Component {
         id: modelComponent
         GenericVehicle {
@@ -185,7 +188,9 @@ Item {
 
             Loader3D {
                 id: vehicleLoader
-                sourceComponent: !root.hasVehicle ? null : root.rigged ? rigComponent : modelComponent
+                sourceComponent: !root.hasVehicle ? null
+                    : !root.rigged ? modelComponent
+                    : (root.spec && root.spec.rig) ? dataRigComponent : rigComponent
             }
         }
     }

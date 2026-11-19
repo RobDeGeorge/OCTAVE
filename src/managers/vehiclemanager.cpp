@@ -19,19 +19,22 @@ namespace {
 const QString kManifest = QStringLiteral("vehicle.json");
 const QString kPicture = QStringLiteral("preview.png");
 const QString kActiveFile = QStringLiteral("ACTIVE");
-// The vehicles that ship with the frontend. `asset` and `picture` are paths
-// under frontend/assets/; the rig has no single model file (JeepVehicle.qml
-// assembles it from frontend/assets/jeep_tj/).
+// The vehicles that ship with the frontend. `asset`, `rig` and `picture` are
+// paths under frontend/assets/. A rigged one has no single model file: the
+// Jeep is assembled by JeepVehicle.qml from frontend/assets/jeep_tj/, and one
+// with a `rig` folder (its parts and rig.json, written by a build script of
+// tools/vehicle/ through carkit.py) by RigVehicle.qml.
 struct BuiltIn {
     const char *id;
     const char *name;
     bool rigged;
     const char *asset;
+    const char *rig;
     const char *picture;
 };
 const BuiltIn kBuiltIns[] = {
-    {"jeep-tj", "Jeep TJ", true, "", "jeep_tj/preview.png"},
-    {"bmw-e46-330i-zhp", "BMW 330i ZHP", false, "vehicles/bmw-e46-330i-zhp/model.glb",
+    {"jeep-tj", "Jeep TJ", true, "", "", "jeep_tj/preview.png"},
+    {"bmw-e46-330i-zhp", "BMW 330i ZHP", true, "", "vehicles/bmw-e46-330i-zhp",
      "vehicles/bmw-e46-330i-zhp/preview.png"},
 };
 
@@ -48,7 +51,8 @@ QVariantMap describeBuiltIn(const BuiltIn &b)
 {
     return {{"id", QString::fromLatin1(b.id)}, {"name", QString::fromLatin1(b.name)}, {"builtIn", true},
             {"rigged", b.rigged}, {"modelUrl", QString()}, {"pictureUrl", QString()},
-            {"asset", QString::fromLatin1(b.asset)}, {"pictureAsset", QString::fromLatin1(b.picture)},
+            {"asset", QString::fromLatin1(b.asset)}, {"rig", QString::fromLatin1(b.rig)},
+            {"pictureAsset", QString::fromLatin1(b.picture)},
             {"yaw", 0.0}, {"tilt", 0.0}};
 }
 

@@ -180,6 +180,37 @@ def rr(a, b, c, d, r=0.06):
     return rounded([(a, b), (c, b), (c, d), (a, d)], r)
 
 
+# Side outlines (y, z) of the flare tops. The body panels behind them are cut to
+# the same outlines, so no paint shows inside a wheel opening below a flare.
+FLARE_OUTLINES = {
+    "Front flare": [(-1.80, 0.90), (-1.76, 1.045), (-1.60, 1.083), (-1.04, 1.083), (-0.91, 1.055), (-0.54, 0.58)],
+    "Rear flare": [(0.58, 0.56), (0.81, 1.00), (0.91, 1.045), (1.49, 1.045), (1.59, 1.00), (1.73, 0.56)],
+}
+# The flare's underside meets the body 16 mm below its top; a panel edge this far
+# below the top ends inside the flare's closed section.
+FLARE_PANEL_DROP = 0.008
+
+
+def flare_profile(name):
+    outline = FLARE_OUTLINES[name]
+    return [outline[0]] + rounded(outline, 0.072, 7)[7:-7] + [outline[-1]]
+
+
+def flare_panel_edge(name, start=None, end=None):
+    """The edge (y, z) a body panel takes under a flare, optionally only from y=start to y=end."""
+    points = [(y, z - FLARE_PANEL_DROP) for y, z in flare_profile(name)]
+    if start is None:
+        return points
+
+    def at(y):
+        for (y0, z0), (y1, z1) in zip(points, points[1:], strict=False):
+            if y0 <= y <= y1:
+                return (y, z0 + (z1 - z0) * (y - y0) / (y1 - y0))
+        raise ValueError(y)
+
+    return [at(start)] + [p for p in points if start + 1e-6 < p[0] < end - 1e-6] + [at(end)]
+
+
 def shell_thickness(obj, thickness=0.008):
     """Give open exterior skins an inner face and closed cut edges."""
     mod = obj.modifiers.new("Inner panel return", "SOLIDIFY")
@@ -424,20 +455,10 @@ path(
 
 # Real door apertures: the sill and rear quarter do not cover the moving doors.
 for s in (-1, 1):
-    edge = [
-        (0.64, 1.255),
-        (1.73, 1.255),
-        (1.73, 0.55),
-        (1.69, 0.55),
-        (1.52, 0.94),
-        (1.46, 0.97),
-        (0.93, 0.97),
-        (0.85, 0.94),
-        (0.62, 0.55),
-        (0.52, 0.55),
-        (0.52, 0.66),
-        (0.62, 0.76),
-    ]
+    # The opening follows the rear flare (it was a smaller arch, which left a
+    # band of paint hanging inside the wheel opening below the flare).
+    arch = flare_panel_edge("Rear flare")
+    edge = [(0.64, 1.255), (1.73, 1.255)] + arch[:0:-1] + [(0.58, 0.55), (0.52, 0.55), (0.52, 0.66), (0.62, 0.76)]
     shell_thickness(sheet("Rear quarter with wheel opening", edge, lambda y, z, s=s: (s * 0.735, y, z), paint))
     box("Tub beltline return", (s * 0.714, 1.184, 1.248), (0.046, 1.098, 0.010), paint, 0.003)
     # Rolled rear corner joins the side skin to the narrower tail-lamp panel.
@@ -459,8 +480,9 @@ for s in (-1, 1):
             True,
         )
     )
-    box("Door aperture sill", (s * 0.718, 0.12, 0.605), (0.07, 1.01, 0.085), paint, 0.012)
-    box("Rocker rail", (s * 0.705, 0.02, 0.555), (0.085, 1.21, 0.085), paint, 0.025)
+    # Both stop behind the flare heels (front heel y = -0.54, rear heel y = 0.58).
+    box("Door aperture sill", (s * 0.718, 0.1075, 0.605), (0.07, 0.985, 0.085), paint, 0.012)
+    box("Rocker rail", (s * 0.705, 0.0185, 0.555), (0.085, 1.127, 0.085), paint, 0.025)
     # Wheel housings rise from the narrowed rear floor and stay clear of the tires.
     well = [(0.66, 0.615), (0.86, 0.90), (0.94, 0.94), (1.45, 0.94), (1.55, 0.90), (1.72, 0.615)]
     sheet("Rear wheel housing inner wall", well, lambda y, z, s=s: (s * 0.55, y, z), black)
@@ -574,13 +596,16 @@ for x in [i * 0.022 for i in range(-11, 12)]:
 for s in (-1, 1):
     sheet(
         "Engine bay side panel",
-        [(-1.70, 1.107), (-0.630, 1.107), (-0.630, 0.60), (-0.90, 0.97), (-1.70, 1.01)],
+        # Lower edge on the front flare, so the wheel opening shows the liner, not paint.
+        [(-1.70, 1.107), (-0.630, 1.107)] + flare_panel_edge("Front flare", -1.70, -0.630)[::-1],
         lambda y, z, s=s: (s * min(0.735, 0.558 + 0.174 * (y + 1.70) / 1.06), y, z),
         paint,
     )
     sheet(
         "Cowl lower side panel",
-        [(-0.632, 1.256), (-0.37, 1.256), (-0.37, 0.56), (-0.53, 0.56), (-0.632, 0.60)],
+        # The front lower corner is cut along the flare's rear leg.
+        [(-0.632, 1.256), (-0.37, 1.256), (-0.37, 0.56), (-0.53, 0.56),
+         flare_panel_edge("Front flare", -0.632, -0.60)[0]],
         lambda y, z, s=s: (s * 0.735, y, z),
         paint,
     )
@@ -1015,13 +1040,58 @@ SPINNERS = {
     **DRIVESHAFTS,
 }
 
+# The flare proper: the black plastic that bolts to the outside of the steel fender.
+FENDER_FLARE_WIDTH = 0.125
+
+
+def painted_fender_top(s, profile, widths):
+    """Body-colour skin over the steel part of the front fender.
+
+    "Front flare" below is one black section from the hood side to the outer lip, which
+    was right while the flares were body colour. With black flares it painted the whole
+    fender top black; on the vehicle only the outer flare is plastic. The skin lies 3 mm
+    over the inner part (from the fender's top front corner back to where the rear slope
+    narrows to the flare alone) and leaves the flare section, which the wheel housings
+    are fitted to, as it was.
+    """
+    rows = []
+    for i in range(4, len(profile)):
+        (y, z), (inner, outer) = profile[i], widths[i]
+        split = outer - FENDER_FLARE_WIDTH
+        if split - inner < 0.012:
+            break
+        (y0, z0), (y1, z1) = profile[i - 1], profile[min(i + 1, len(profile) - 1)]
+        normal = Vector((0, z0 - z1, y1 - y0)).normalized()
+
+        def at(x, lift, y=y, z=z, inner=inner, outer=outer, normal=normal):
+            top = z + 0.006 * (x - inner) / (outer - 0.045 - inner)
+            return tuple(Vector((s * x, y, top)) + normal * lift)
+
+        rows.append((at(inner, 0.003), at(split, 0.003), at(split, -0.002), at(inner, -0.002)))
+    vertices, faces = [], []
+
+    def strip(a, b):
+        # Its own vertices, so the top's shading does not round over into the edge walls.
+        start = len(vertices)
+        for row in rows:
+            vertices.extend((row[a], row[b]))
+        faces.extend((start + 2 * j, start + 2 * j + 1, start + 2 * j + 3, start + 2 * j + 2) for j in range(len(rows) - 1))
+
+    strip(0, 1)
+    strip(1, 2)
+    strip(3, 0)
+    for row in (rows[0], rows[-1]):
+        faces.append(tuple(range(len(vertices), len(vertices) + 4)))
+        vertices.extend(row)
+    mesh_object("Painted front fender top", vertices, faces, paint, True)
+
+
 # Flat-top front fenders roll down around the tire; rear flares have a trapezoid opening.
 for s in (-1, 1):
-    front = [(-1.80, 0.90), (-1.76, 1.045), (-1.60, 1.083), (-1.04, 1.083), (-0.91, 1.055), (-0.54, 0.58)]
-    rear = [(0.58, 0.56), (0.81, 1.00), (0.91, 1.045), (1.49, 1.045), (1.59, 1.00), (1.73, 0.56)]
-    for name, profile, basewidth in [("Front flare", front, 0.61), ("Rear flare", rear, 0.735)]:
-        profile = [profile[0]] + rounded(profile, 0.072, 7)[7:-7] + [profile[-1]]
+    for name, basewidth in [("Front flare", 0.61), ("Rear flare", 0.735)]:
+        profile = flare_profile(name)
         rows = []
+        widths = []
         for y, z in profile:
             # Match the tapered engine-bay wall, avoiding a gap inside the flare.
             inner_width = basewidth
@@ -1030,6 +1100,7 @@ for s in (-1, 1):
             # Full-thickness rolled lip; taper the heels into the tub instead of pointed ends.
             heel = max(0, min(1, (z - 0.58) / 0.38))
             outer_width = 0.785 + 0.09 * heel
+            widths.append((inner_width, outer_width))
             rows.append(
                 [
                     (s * inner_width, y, z),
@@ -1042,6 +1113,8 @@ for s in (-1, 1):
                 ]
             )
         loft(name, rows, black, capped=True)
+        if name == "Front flare":
+            painted_fender_top(s, profile, widths)
         path(
             name + " lower trim",
             [(s * (0.773 + 0.09 * max(0, min(1, (z - 0.58) / 0.38))), y, z - 0.070) for y, z in profile],
@@ -1163,8 +1236,10 @@ for s in (-1, 1):
             cylinder("Hinge screw", (s * 0.757, y, z), 0.0038, 0.004, alloy, (1, 0, 0), 12)
     box("Mirror mounting bracket", (s * 0.776, -0.361, 1.238), (0.070, 0.075, 0.095), black, 0.012)
     path("Mirror stalk", [(s * 0.78, -0.36, 1.255), (s * 0.86, -0.42, 1.32), (s * 0.90, -0.42, 1.39)], 0.014, steel)
-    box("Rounded mirror shell", (s * 0.911, -0.437, 1.44), (0.17, 0.080, 0.217), black, 0.042)
-    box("Mirror reflective face", (s * 0.911, -0.39, 1.44), (0.137, 0.009, 0.185), alloy, 0.027)
+    # Bevels stay under half the thinnest side: 0.042 on the 80 mm shell (and 0.027 on the
+    # 9 mm glass) folded the corners into creases and left the glass wider than the shell's back.
+    box("Rounded mirror shell", (s * 0.911, -0.437, 1.44), (0.17, 0.080, 0.217), black, 0.020)
+    box("Mirror reflective face", (s * 0.911, -0.39, 1.44), (0.124, 0.009, 0.171), alloy, 0.003)
     ACTIVE_PART = "body"
     box("Molded side step", (s * 0.80, 0.095, 0.526), (0.188, 0.99, 0.055), black, 0.022)
     for y in [i * 0.022 for i in range(-17, 22)]:
@@ -1327,7 +1402,8 @@ box("Tailgate pressure vent", (0, 1.797, 0.814), (0.39, 0.012, 0.17), black, 0.0
 for z in (0.755, 0.792, 0.83, 0.866):
     box("Pressure vent louver", (0, 1.806, z), (0.36, 0.012, 0.014), black, 0.004)
 ACTIVE_PART = "body"
-box("License bracket", (-0.60, 1.82, 0.784), (0.19, 0.04, 0.113), black, 0.009)
+# Driver side (+X), under the left tail lamp, as in reference photo 010.
+box("License bracket", (0.60, 1.82, 0.784), (0.19, 0.04, 0.113), black, 0.009)
 ACTIVE_PART = "tailgate"
 box("Spare carrier mount", (0, 1.85, 1.03), (0.30, 0.12, 0.27), steel, 0.02)
 box("Third brake light stalk", (0, 1.847, 1.315), (0.055, 0.06, 0.38), black, 0.009)

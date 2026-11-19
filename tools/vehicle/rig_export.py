@@ -25,7 +25,8 @@ HINGES = {
     "body": ((0, 0, 0.9), "Z", 0),
     "driver_door": ((0.767, -0.394, 0.96), "Z", -68),
     "passenger_door": ((-0.767, -0.394, 0.96), "Z", 68),
-    "tailgate": ((-0.455, 1.79, 0.95), "Z", 95),
+    # 90 degrees: at 95 the spare's tread went 4 mm into the passenger tail lamp.
+    "tailgate": ((-0.455, 1.79, 0.95), "Z", 90),
     "rear_glass": ((0, 1.717, 1.72), "X", 100),
     "hood": ((0, -0.635, 1.285), "X", -65),
     "driver_wheel": ((0.64, -1.186, 0.4), "Z", 0),

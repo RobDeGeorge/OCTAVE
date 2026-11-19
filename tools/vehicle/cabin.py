@@ -94,6 +94,9 @@ def rebuild_cabin(body, lift, attach, material):
     # One contoured shell per cushion/back; inserts are material regions on the
     # same surface, eliminating detached upholstery plates and stacked bolsters.
     n=64
+    # Seams sit on a column of the seatback loft (cos of 50.625 degrees), so
+    # the insert between them can be whole columns.
+    SEAM=math.cos(math.radians(50.625))
     for x in (-.36,.36):
         side="driver" if x>0 else "passenger"
         rows=[]
@@ -111,8 +114,11 @@ def rebuild_cabin(body, lift, attach, material):
                          for a in [i*math.tau/n for i in range(n)]])
         cushion=loft("Cabin "+side+" cushion",rows,upholstery)
         cushion.data.materials.append(cloth)
+        # The insert is the top from the crown ring inward: whole rings of the
+        # loft (faces are stored ring by ring, n per ring), so its edge is a
+        # clean line. A height test on face centres left a torn, stepped edge.
         for p in cushion.data.polygons:
-            if p.center.z>.80:
+            if 3*n <= p.index < (len(rows)-1)*n:
                 p.material_index=1
         controls=[(.835,.202,.058),(.875,.220,.063),(1.04,.222,.061),
                   (1.20,.220,.059),(1.24,.215,.057),(1.28,.202,.054),
@@ -138,14 +144,20 @@ def rebuild_cabin(body, lift, attach, material):
                          for a in [i*math.tau/n for i in range(n)]])
         back=loft("Cabin "+side+" reclining seatback",rows,upholstery)
         back.data.materials.append(cloth)
+        # The insert is the front-facing columns of the loft between the two
+        # seams, up to the shoulder: whole columns and rings, so its edge is
+        # straight. Position tests on face centres left a torn, stepped edge.
         for p in back.data.polygons:
-            c=p.center
-            if c.z<1.32 and c.y < .35+.22*(c.z-.835)-.025 and abs(c.x-x)<.16:
+            ring,column=divmod(p.index,n)
+            if ring >= len(rows)-1:
+                continue
+            a=(column+.5)*math.tau/n
+            if math.sin(a)<0 and abs(math.cos(a))<SEAM and rows[ring+1][0][2]<=1.34:
                 p.material_index=1
         # A seam follows the front-facing padding, not an independent insert.
         for s in (-1,1):
-            tube("Cabin seat stitched seam",[(x+s*w*.67,.35+.22*(z-.835)-d*math.sqrt(1-.67**2)*
-                                               front_shape(z,.67)-.0006,z)
+            tube("Cabin seat stitched seam",[(x+s*w*SEAM,.35+.22*(z-.835)-d*math.sqrt(1-SEAM**2)*
+                                               front_shape(z,SEAM)-.0006,z)
                                              for z,w,d in profiles if z<=1.34],.0008,trim)
         box("Cabin seat recliner housing",(x+(.235 if x>0 else -.235),.32,.77),(.025,.10,.09),trim)
         box("Cabin seatbelt buckle",(x-math.copysign(.237,x),.30,.84),(.028,.045,.067),trim,.006)

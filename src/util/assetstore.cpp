@@ -3,6 +3,8 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLoggingCategory>
 #include <QStandardPaths>
 
@@ -16,6 +18,25 @@ AssetStore::AssetStore(const QString &sourceDir, QObject *parent)
     m_cacheDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
                  + QStringLiteral("/asset-cache");
 #endif
+}
+
+QVariantMap AssetStore::readJson(const QString &relativePath) const
+{
+    if (relativePath.isEmpty() || relativePath.contains(QStringLiteral("..")))
+        return {};
+    // Qt reads "assets:/" itself, so this needs no copy out of the APK
+    QFile file(m_sourceDir + QLatin1Char('/') + relativePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        qCWarning(lcAssetStore) << "No such asset:" << relativePath;
+        return {};
+    }
+    QJsonParseError error;
+    const QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &error);
+    if (!doc.isObject()) {
+        qCWarning(lcAssetStore) << "Not a JSON object:" << relativePath << error.errorString();
+        return {};
+    }
+    return doc.object().toVariantMap();
 }
 
 QUrl AssetStore::localUrl(const QString &relativePath)
