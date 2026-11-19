@@ -4661,6 +4661,18 @@ func (o SettingsManager) GetMaxHomeObdParameters() (v int, err error) {
 	return
 }
 
+// GetHomeVehicleCard reads the property "homeVehicleCard" (bool, writable).
+func (o SettingsManager) GetHomeVehicleCard() (v bool, err error) {
+	err = o.c.Get("settingsManager", "homeVehicleCard", &v)
+	return
+}
+
+// SetHomeVehicleCard writes the property "homeVehicleCard" and returns the value read back.
+func (o SettingsManager) SetHomeVehicleCard(value bool) (v bool, err error) {
+	err = o.c.Set("settingsManager", "homeVehicleCard", value, &v)
+	return
+}
+
 // GetCustomThemes reads the property "customThemes" (QVariantList).
 func (o SettingsManager) GetCustomThemes() (v []any, err error) {
 	err = o.c.Get("settingsManager", "customThemes", &v)
@@ -5468,6 +5480,11 @@ func (o SettingsManager) SaveBlackBoxEnabled(enabled bool) error {
 // Deprecated: use the blackBoxSweepAll property; goes in protocol 5
 func (o SettingsManager) SaveBlackBoxSweepAll(enabled bool) error {
 	return o.c.Call("settingsManager", "save_black_box_sweep_all", nil, enabled)
+}
+
+// SetHomeVehicleCardCall calls setHomeVehicleCard(bool).
+func (o SettingsManager) SetHomeVehicleCardCall(enabled bool) error {
+	return o.c.Call("settingsManager", "setHomeVehicleCard", nil, enabled)
 }
 
 // SaveBlackBoxMaxMb calls save_black_box_max_mb(int).

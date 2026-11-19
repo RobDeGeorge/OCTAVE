@@ -269,11 +269,12 @@
 
         <pre><code><span class="cmt">// frontend/ImuDemand.qml, dropped into each page that shows IMU readings</span>
 App.ImuDemand { consumer: <span class="str">"sensorMenu"</span>; wanted: sensorMenu.visible }
-<span class="cmt">// MainMenu: only while a home card shows an IMU reading</span>
+<span class="cmt">// MainMenu: only while a home card shows an IMU reading, or the vehicle card is up</span>
 App.ImuDemand {
     consumer: <span class="str">"mainMenu"</span>
-    wanted: mainMenu.visible &amp;&amp; settingsManager.homeOBDParameters.some(<span class="kw">function</span>(id) {
-        <span class="kw">return</span> App.OBDParameterModel.sensorParameters.indexOf(id) !== -<span class="num">1</span> })
+    wanted: mainMenu.visible &amp;&amp; (mainMenu.vehicleCardShown
+        || settingsManager.homeOBDParameters.some(<span class="kw">function</span>(id) {
+            <span class="kw">return</span> App.OBDParameterModel.sensorParameters.indexOf(id) !== -<span class="num">1</span> }))
 }</code></pre>
 
         <p>Each page that shows IMU readings drops in an <code>ImuDemand</code> (<span class="file-path">frontend/ImuDemand.qml</span>), which calls <code>berryIMU.setDemand(consumer, wanted)</code>; the manager runs at full rate while any consumer wants it. The consumers are CarMenu, SensorMenu, SensorHome, OBDMenu and MainMenu while a home card shows one of the IMU ids (<code>OBDParameterModel.sensorParameters</code>: <code>PITCH</code>, <code>ROLL</code>, <code>HEADING</code>, <code>ALTITUDE</code>, <code>ACCEL_MAG</code>, <code>LATERAL_G</code>, <code>LONGITUDINAL_G</code>, <code>BARO_TEMP</code>). Until open-backend #10 <code>Main.qml</code> decided from a list of page names on every StackView change.</p>

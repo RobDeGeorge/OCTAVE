@@ -1614,6 +1614,8 @@ export interface SettingsManager {
     homeOBDParameters: unknown[]
     /** int, constant */
     maxHomeObdParameters: number
+    /** bool, writable, notify homeVehicleCardChanged */
+    homeVehicleCard: boolean
     /** QVariantList, notify customThemesChanged */
     customThemes: unknown[]
     /** QVariantMap, notify customThemesChanged */
@@ -1800,6 +1802,7 @@ export interface SettingsManager {
     save_black_box_enabled: { args: [enabled: boolean]; returns: void }
     /** @deprecated use the blackBoxSweepAll property; goes in protocol 5 */
     save_black_box_sweep_all: { args: [enabled: boolean]; returns: void }
+    setHomeVehicleCard: { args: [enabled: boolean]; returns: void }
     /** @deprecated use the blackBoxMaxMB property; goes in protocol 5 */
     save_black_box_max_mb: { args: [megabytes: number]; returns: void }
     save_obd_parameter_enabled: { args: [parameter: string, enabled: boolean]; returns: void }
@@ -2033,6 +2036,7 @@ export interface SettingsManager {
     blackBoxMaxMBChanged: [value: number]
     obdParametersChanged: []
     homeOBDParametersChanged: []
+    homeVehicleCardChanged: [value: boolean]
     supportedOBDParametersChanged: []
     directoryHistoryChanged: []
     customThemesChanged: []

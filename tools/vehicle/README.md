@@ -398,6 +398,7 @@ QT_QPA_PLATFORM=xcb xvfb-run -a venv/bin/python tools/vehicle/check_jeep_view.py
 
 [Studio preview](../../docs/vehicle/jeep-tj-preview.png) ·
 [In-app preview](../../docs/vehicle/jeep-tj-in-app.png) ·
+[Home picture](../../frontend/assets/jeep_tj/preview.png) (`render_preview.py`) ·
 [Side](../../docs/vehicle/jeep-tj-side.png) ·
 [Front](../../docs/vehicle/jeep-tj-front.png) ·
 [Rear](../../docs/vehicle/jeep-tj-rear.png) ·

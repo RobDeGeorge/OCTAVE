@@ -749,6 +749,18 @@
             "scope": "settings"
         },
         {
+            "kind": "slot",
+            "name": "setHomeVehicleCard",
+            "params": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ],
+            "returns": "",
+            "scope": "settings"
+        },
+        {
             "deprecated": "use the blackBoxMaxMB property; goes in protocol 5",
             "kind": "slot",
             "name": "save_black_box_max_mb",
@@ -2471,6 +2483,15 @@
         },
         {
             "constant": false,
+            "name": "homeVehicleCard",
+            "notify": "homeVehicleCardChanged",
+            "readable": true,
+            "scope": "settings",
+            "type": "bool",
+            "writable": true
+        },
+        {
+            "constant": false,
             "name": "customThemes",
             "notify": "customThemesChanged",
             "readable": true,
@@ -3298,6 +3319,15 @@
         {
             "name": "homeOBDParametersChanged",
             "params": [
+            ]
+        },
+        {
+            "name": "homeVehicleCardChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "bool"
+                }
             ]
         },
         {

@@ -1286,6 +1286,28 @@ Item {
                 }
             }
 
+            // The vehicle's picture beside the Home readings
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: App.Spacing.rowSpacing
+
+                SettingsToggle {
+                    objectName: "homeVehicleCardToggle"
+                    compact: true
+                    Layout.fillWidth: false
+                    Layout.alignment: Qt.AlignLeft
+                    text: "Vehicle on Home"
+                    checked: settingsManager ? settingsManager.homeVehicleCard : false
+                    activeColor: App.Style.accent
+                    inactiveColor: App.Style.hoverColor
+                    onToggled: function(checked) { if (settingsManager) settingsManager.homeVehicleCard = checked }
+                }
+
+                SettingDescription {
+                    text: "Show the vehicle beside the Home readings, with pitch and roll under it while a motion sensor is connected. Tap it for the 3D view"
+                }
+            }
+
             // Units the gauges and dashboards show (the Sensors page has its own)
             ColumnLayout {
                 Layout.fillWidth: true

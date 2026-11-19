@@ -248,6 +248,8 @@ class SettingsManager : public QObject
     Q_PROPERTY(QVariantList homeOBDParameters READ homeOBDParameters WRITE save_home_obd_parameters NOTIFY homeOBDParametersChanged)
     // The home screen holds at most this many OBD cards
     Q_PROPERTY(int maxHomeObdParameters READ maxHomeObdParameters CONSTANT)
+    // The vehicle's picture as a card beside the Home readings (pitch and roll under it with an IMU)
+    Q_PROPERTY(bool homeVehicleCard READ homeVehicleCard WRITE setHomeVehicleCard NOTIFY homeVehicleCardChanged)
     Q_PROPERTY(QVariantList customThemes READ customThemes NOTIFY customThemesChanged)   // names
     // Every saved custom theme, name -> theme object (as on disk)
     Q_PROPERTY(QVariantMap customThemeData READ customThemeData NOTIFY customThemesChanged)
@@ -389,6 +391,7 @@ public:
     bool blackBoxSweepAll() const;
     int blackBoxMaxMB() const;
     QVariantList homeOBDParameters() const;
+    bool homeVehicleCard() const;
     static constexpr int kMaxHomeObdParameters = 8;
     // Saved window size range: the window's own minimum up to 8K (a bigger
     // value would be clamped and then pushed back onto a real window)
@@ -534,6 +537,7 @@ signals:
     void blackBoxMaxMBChanged(int value);
     void obdParametersChanged();
     void homeOBDParametersChanged();
+    void homeVehicleCardChanged(bool value);
     void supportedOBDParametersChanged();
 
     // Directory history
@@ -667,6 +671,7 @@ public slots:
     void save_fuel_tank_capacity(float capacity);
     void save_black_box_enabled(bool enabled);
     void save_black_box_sweep_all(bool enabled);
+    void setHomeVehicleCard(bool enabled);
     void save_black_box_max_mb(int megabytes);
     void save_obd_parameter_enabled(const QString &parameter, bool enabled);
     void save_supported_obd_parameters(const QVariantList &parameters);

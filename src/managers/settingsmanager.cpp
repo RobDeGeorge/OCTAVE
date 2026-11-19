@@ -188,6 +188,7 @@ bool fixDeviceId(QVariant &v)
     X(fuelTankCapacity, QMetaType::Double, 15.0, any(), N_FLOAT(fuelTankCapacityChanged), "save_fuel_tank_capacity", Plain) \
     X(blackBoxEnabled, QMetaType::Bool, true, any(), N_BOOL(blackBoxEnabledChanged), "save_black_box_enabled", Plain) \
     X(blackBoxSweepAll, QMetaType::Bool, true, any(), N_BOOL(blackBoxSweepAllChanged), "save_black_box_sweep_all", Plain) \
+    X(homeVehicleCard, QMetaType::Bool, false, any(), N_BOOL(homeVehicleCardChanged), "setHomeVehicleCard", Plain) \
     X(blackBoxMaxMB, QMetaType::Int, 500, clampTo(50, 5000), N_INT(blackBoxMaxMBChanged), "save_black_box_max_mb", Plain) \
     X(lastSettingsSection, QMetaType::QString, QStringLiteral("deviceSettings"), oneOf(kSettingsSections), N_STR(lastSettingsSectionChanged), "set_last_settings_section", Plain) \
     X(autoPlayOnStartup, QMetaType::Bool, false, any(), N_BOOL(autoPlayOnStartupChanged), "save_auto_play_on_startup", Plain) \
@@ -496,6 +497,7 @@ QJsonObject SettingsManager::buildSettingsRegistry()
     reg[QStringLiteral("obd_fast_mode")]              = entry("obdFastMode", "OBD Fast Mode", "obdSettings", "toggle", "save_obd_fast_mode");
     reg[QStringLiteral("black_box_enabled")]          = entry("blackBoxEnabled", "Black Box Recording", "obdSettings", "toggle", "save_black_box_enabled");
     reg[QStringLiteral("black_box_sweep_all")]        = entry("blackBoxSweepAll", "Black Box Records All PIDs", "obdSettings", "toggle", "save_black_box_sweep_all");
+    reg[QStringLiteral("home_vehicle_card")]          = entry("homeVehicleCard", "Vehicle on Home", "obdSettings", "toggle", "setHomeVehicleCard");
     reg[QStringLiteral("black_box_max_mb")]           = entry("blackBoxMaxMB", "Black Box Storage Cap", "obdSettings", "slider", "save_black_box_max_mb", sliderParams(50, 5000, 50));
     reg[QStringLiteral("gesture_sensor_enabled")]     = entry("gestureSensorEnabled", "Gesture Sensor", "gestureSensorSettings", "toggle", "save_gesture_sensor_enabled");
     reg[QStringLiteral("imu_enabled")]                = entry("imuEnabled", "IMU Sensor", "imuSettings", "toggle", "save_imu_enabled");
@@ -1166,6 +1168,7 @@ int SettingsManager::obdAutoReconnectAttempts() const { return row(R_obdAutoReco
 float SettingsManager::fuelTankCapacity() const { return static_cast<float>(row(R_fuelTankCapacity).toDouble()); }
 bool SettingsManager::blackBoxEnabled() const { return row(R_blackBoxEnabled).toBool(); }
 bool SettingsManager::blackBoxSweepAll() const { return row(R_blackBoxSweepAll).toBool(); }
+bool SettingsManager::homeVehicleCard() const { return row(R_homeVehicleCard).toBool(); }
 int SettingsManager::blackBoxMaxMB() const { return row(R_blackBoxMaxMB).toInt(); }
 QVariantList SettingsManager::homeOBDParameters() const  { return m_homeObdParameters; }
 
@@ -1404,6 +1407,7 @@ void SettingsManager::save_obd_auto_reconnect_attempts(int attempts) { setRow(R_
 void SettingsManager::save_fuel_tank_capacity(float capacity) { setRow(R_fuelTankCapacity, static_cast<double>(capacity)); }
 void SettingsManager::save_black_box_enabled(bool enabled) { setRow(R_blackBoxEnabled, enabled); }
 void SettingsManager::save_black_box_sweep_all(bool enabled) { setRow(R_blackBoxSweepAll, enabled); }
+void SettingsManager::setHomeVehicleCard(bool enabled) { setRow(R_homeVehicleCard, enabled); }
 void SettingsManager::save_black_box_max_mb(int megabytes) { setRow(R_blackBoxMaxMB, megabytes); }
 
 void SettingsManager::save_obd_parameter_enabled(const QString &parameter, bool enabled)

@@ -19,9 +19,10 @@ Item {
     // Full IMU rate while the home screen shows an IMU reading on a card
     App.ImuDemand {
         consumer: "mainMenu"
-        wanted: mainMenu.visible && !!settingsManager && settingsManager.homeOBDParameters.some(function(id) {
-            return App.OBDParameterModel.sensorParameters.indexOf(id) !== -1
-        })
+        wanted: mainMenu.visible && !!settingsManager && (mainMenu.vehicleCardShown
+            || settingsManager.homeOBDParameters.some(function(id) {
+                return App.OBDParameterModel.sensorParameters.indexOf(id) !== -1
+            }))
     }
     property StackView stackView
     property ApplicationWindow mainWindow
@@ -65,6 +66,8 @@ Item {
     // nothing to show, so a fresh install is one tap from a car and music
     readonly property bool obdConnected: typeof obdManager !== "undefined" && !!obdManager
                                          && obdManager.connectionState === OBDManager.Connected
+    // The vehicle's picture beside the readings (the homeVehicleCard setting)
+    readonly property bool vehicleCardShown: obdConnected && !!settingsManager && settingsManager.homeVehicleCard
     // The active playlist's length (not a raw directory scan, which misses
     // "All Music"); the phone or Android Auto counts as music
     property int localSongCount: 0
@@ -583,6 +586,7 @@ Item {
 
         // ========== RIGHT SECTION: OBD (2/3 of width) ==========
         Rectangle {
+            id: obdSection
             visible: true
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -598,6 +602,8 @@ Item {
                 visible: mainMenu.obdConnected
                 anchors.fill: parent
                 anchors.margins: dp(5)
+                // Room for the vehicle card, the grid's own spacing between them
+                anchors.rightMargin: mainMenu.vehicleCardShown ? vehicleCard.width + dp(15) : dp(5)
             }
 
             MouseArea {
@@ -605,6 +611,16 @@ Item {
                 onClicked: {
                     stackView.openPage("OBDMenu.qml")
                 }
+            }
+
+            // The vehicle beside the readings; above the MouseArea, as its
+            // tap opens the 3D view (where the build has one), not the OBD page
+            App.HomeVehicleCard {
+                id: vehicleCard
+                visible: mainMenu.vehicleCardShown
+                anchors { top: parent.top; right: parent.right; bottom: parent.bottom; margins: dp(15) }
+                width: Math.round(parent.width * 0.36)
+                onClicked: stackView.openPage(typeof hasQuick3D !== "undefined" && hasQuick3D ? "CarMenu.qml" : "OBDMenu.qml")
             }
 
             // No adapter: connect straight from Home (scan, pair, connect);
@@ -615,6 +631,14 @@ Item {
                 anchors.centerIn: parent
                 width: Math.min(parent.width - dp(40), dp(560))
                 spacing: dp(16)
+
+                // The vehicle, while the panel has the height for it
+                App.VehiclePicture {
+                    objectName: "homeVehiclePicture"
+                    width: parent.width
+                    height: Math.round(obdSection.height * 0.42)
+                    visible: obdSection.height >= dp(360)
+                }
 
                 Text {
                     width: parent.width

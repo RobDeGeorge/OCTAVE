@@ -15,6 +15,7 @@ Breaking:
 Settings: `downloadSubfolder`, `downloadFormat` and `downloadBitrate` are gone, and are dropped from an existing settings file at start-up.
 
 Added:
+- `settingsManager.homeVehicleCard` / `homeVehicleCardChanged` / `setHomeVehicleCard`: the vehicle's picture as a card beside the Home readings (off by default).
 - `dashboardManager.arrange` (experimental): moves or resizes a cell, the cells it lands on swapping with it or moving to the nearest free space; `{ok, cells, moved, swapped, reason}`.
 - `dashboardManager.minSpan` / `sizeOptions` (experimental): a widget type's smallest readable span and its S / M / L spans on a given grid. The widget catalog gains `minSize` (`{w, h}` dp) and `aspect` on every widget, and the `editableProps` `BarGauge.maxThickness` and `WarningLight.maxSize`.
 - `dashboardManager.nearestFree` (experimental): the free spot of a span nearest a grid cell, `{ok, col, row, colSpan, rowSpan}`.

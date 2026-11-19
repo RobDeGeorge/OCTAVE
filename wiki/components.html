@@ -34,6 +34,7 @@
             <li><a href="#obd-adapter-sheet">OBDAdapterSheet</a></li>
             <li><a href="#obd-parameter-model">OBDParameterModel</a></li>
             <li><a href="#vehicle-view">VehicleView</a></li>
+            <li><a href="#vehicle-picture">VehiclePicture and HomeVehicleCard</a></li>
             <li><a href="#jeep-rig">The Jeep TJ Rig</a></li>
             <li><a href="#design-decisions">Design Decisions</a></li>
           </ul>
@@ -62,6 +63,8 @@
             <tr><td><code>OBDParameterModel</code></td><td><code>QtObject</code> singleton</td><td>every OBD view, the gauges, the dashboard editor, Main.qml's IMU gating</td></tr>
             <tr><td><code>JeepVehicle</code>, <code>JeepHinge</code>, <code>JeepLamp</code>, <code>JeepLink</code></td><td>Quick3D <code>Node</code></td><td><span class="file-path">VehicleView.qml</span></td></tr>
             <tr><td><code>VehicleView</code></td><td><code>Item</code></td><td><span class="file-path">CarMenu.qml</span></td></tr>
+            <tr><td><code>VehiclePicture</code></td><td><code>Image</code></td><td><span class="file-path">MainMenu.qml</span> (the "No vehicle connected" panel), <span class="file-path">HomeVehicleCard.qml</span></td></tr>
+            <tr><td><code>HomeVehicleCard</code></td><td><code>Rectangle</code></td><td><span class="file-path">MainMenu.qml</span> (beside the readings, <code>homeVehicleCard</code> setting)</td></tr>
             <tr><td><code>VehicleRigPanel</code></td><td><code>Rectangle</code></td><td><span class="file-path">CarMenu.qml</span> (test controls, on request)</td></tr>
           </tbody>
         </table>
@@ -404,6 +407,12 @@ scanTerminal.<span class="fn">appendLine</span>(<span class="str">"[DONE] 412 fi
         </table>
 
         <p>The scene background is transparent, so the vehicle sits on whatever the page draws behind it. The ring is a flat <code>#Rectangle</code> carrying a 2D circle as its texture (Quick3D has no ring mesh), unlit and alpha-blended.</p>
+
+        <h2 id="vehicle-picture">VehiclePicture and HomeVehicleCard</h2>
+
+        <p><span class="file-path">frontend/VehiclePicture.qml</span> is the vehicle as an <code>Image</code>: <span class="file-path">assets/jeep_tj/preview.png</span> (900&nbsp;px, transparent background), fitted inside whatever size it is given. It is for the places that show the car without paying for a live scene; where the car has to move, use <a href="#vehicle-view">VehicleView</a>. The picture is the real scene rendered once: <code>tools/vehicle/render_preview.py</code> loads <code>VehicleView</code> at its default camera with no level ring, grabs it and crops to the vehicle. Run it again after the model or the view's lighting changes.</p>
+
+        <p id="home-vehicle-card"><span class="file-path">frontend/HomeVehicleCard.qml</span> (<code>objectName: "homeVehicleCard"</code>) is the Home screen's vehicle card, drawn like the reading cards beside it: the picture and, while <code>berryIMU.connected</code>, PITCH and ROLL in whole degrees from <code>OBDParameterModel.liveValue()</code>. It emits <code>clicked()</code>; <a href="pages.html#mainmenu">MainMenu</a> places it and decides what the tap opens.</p>
 
         <h2 id="jeep-rig">The Jeep TJ Rig</h2>
 
