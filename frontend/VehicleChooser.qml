@@ -7,7 +7,9 @@
 // (vehicleManager.select) and emits chosen().
 //
 // Settings > Device > Vehicle shows the same tiles inside its card
-// (`embedded`: as tall as its content, at the top, scrolled by the card).
+// (`embedded`: as tall as its content, at the top, scrolled by the card) and
+// adds a "No vehicle" tile (`offerNone`), which the 3D view has no use for:
+// with none chosen it shows this chooser.
 import QtQuick
 import QtQuick.Dialogs
 import "." as App
@@ -23,6 +25,8 @@ Item {
     signal chosen()
     // Inside another scrolling page: no scrolling or centring of its own
     property bool embedded: false
+    // A "No vehicle" tile after the vehicles (vehicleManager.select(""))
+    property bool offerNone: false
     implicitHeight: content.implicitHeight
     // Here, not in the tile: choosing changes vehicleManager.vehicles, which
     // rebuilds the tiles, and the tapped one is gone before select() returns
@@ -68,7 +72,7 @@ Item {
                 id: tiles
                 // Centred: as wide as its rows of tiles, no wider
                 readonly property int tileWidth: chooser.dp(280)
-                readonly property int count: tileRepeater.count + (addTile.visible ? 1 : 0)
+                readonly property int count: tileRepeater.count + (noneTile.visible ? 1 : 0) + (addTile.visible ? 1 : 0)
                 readonly property int perRow: Math.max(1, Math.min(count, Math.floor((parent.width + spacing) / (tileWidth + spacing))))
                 width: perRow * tileWidth + (perRow - 1) * spacing
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -112,6 +116,62 @@ Item {
                             cursorShape: Qt.PointingHandCursor
                             onClicked: chooser.choose(tile.modelData.id)
                         }
+                    }
+                }
+
+                // No vehicle: a tile like a vehicle's, outlined while none is chosen
+                Rectangle {
+                    id: noneTile
+                    objectName: "vehicleTileNone"
+                    readonly property bool current: !!chooser.vm && !chooser.vm.active.id
+                    visible: chooser.offerNone && !!chooser.vm
+                    width: tiles.tileWidth
+                    height: chooser.dp(250)
+                    radius: Math.max(2, chooser.dp(10))
+                    color: noneMouse.pressed ? Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.22)
+                                             : App.Style.contentColor
+                    border.width: current ? 2 : 1
+                    border.color: current ? App.Style.accent
+                        : Qt.rgba(App.Style.accent.r, App.Style.accent.g, App.Style.accent.b, 0.3)
+
+                    // Where a vehicle's picture is: an empty ring, struck through
+                    Item {
+                        anchors { top: parent.top; left: parent.left; right: parent.right; bottom: noneName.top; margins: chooser.dp(12) }
+                        Rectangle {
+                            id: noneRing
+                            anchors.centerIn: parent
+                            width: Math.min(parent.width, parent.height) * 0.5
+                            height: width
+                            radius: width / 2
+                            color: "transparent"
+                            border.width: Math.max(2, chooser.dp(4))
+                            border.color: App.Style.secondaryTextColor
+                            opacity: 0.6
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: parent.width - parent.border.width
+                                height: parent.border.width
+                                color: parent.border.color
+                                rotation: -45
+                                antialiasing: true
+                            }
+                        }
+                    }
+                    Text {
+                        id: noneName
+                        anchors { left: parent.left; right: parent.right; bottom: parent.bottom; margins: chooser.dp(10) }
+                        horizontalAlignment: Text.AlignHCenter
+                        elide: Text.ElideRight
+                        text: "No vehicle"
+                        color: App.Style.primaryTextColor
+                        font.pixelSize: App.Spacing.overallText
+                        font.family: App.Style.fontFamily
+                    }
+                    MouseArea {
+                        id: noneMouse
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: chooser.choose("")
                     }
                 }
 

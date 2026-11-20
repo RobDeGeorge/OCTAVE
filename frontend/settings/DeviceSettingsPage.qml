@@ -685,21 +685,13 @@ Flickable {
             readonly property bool own: !!current.id && !current.builtIn
 
             // The tiles of the 3D view's "Choose your vehicle": a picture per
-            // vehicle, the one in use outlined, and one to add a model
+            // vehicle, the one in use outlined, "No vehicle", and one to add a model
             App.VehicleChooser {
                 objectName: "settingsVehicleChooser"
                 Layout.fillWidth: true
                 Layout.preferredHeight: implicitHeight
                 embedded: true
-            }
-
-            SettingsButton {
-                objectName: "noVehicle"
-                visible: !!vehicleCard.current.id
-                Layout.alignment: Qt.AlignHCenter
-                Layout.preferredHeight: pageRoot.dp(44)
-                text: "No Vehicle"
-                onClicked: vehicleCard.vm.select("")
+                offerNone: true
             }
 
             // The vehicle's picture beside the Home readings

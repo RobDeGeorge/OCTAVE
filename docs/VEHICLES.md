@@ -10,7 +10,7 @@ An install that was already in use before this choice existed keeps the Jeep it 
 2. Settings > Device > Vehicle > the **Add your own** tile (the 3D view's chooser has the same tile), and pick the file.
 3. If it comes in sideways or lying down, press **Turn 90°** or **Stand it up** until it sits like a parked car, nose towards you and to the right.
 
-That's all: the model is now the vehicle in the 3D view, and the picture on Home is taken from the preview on that card. Tap another name on the card to switch, **Remove** to delete the one selected, **No vehicle** to show none. The vehicles that come with the app are always listed.
+That's all: the model is now the vehicle in the 3D view, and the picture on Home is taken from the preview on that card. Tap another tile on the card to switch, **Remove** to delete the one selected, the **No vehicle** tile to show none. The vehicles that come with the app are always listed.
 
 A model is copied into OCTAVE's own folder, so the file you picked can be moved or deleted afterwards. The limit is 256 MB; a model for a car screen should be far smaller (a few MB draws quickly on a Raspberry Pi, a 100 MB scan does not).
 

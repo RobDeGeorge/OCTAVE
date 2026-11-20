@@ -109,7 +109,15 @@ Node {
         }
     }
 
+    // Counts the parts the repeaters have made. `ready` and `error` read it:
+    // a repeater's `count` changes before its parts exist when the page is
+    // built in the background (asynchronous incubation), objectAt() is not
+    // something a binding hears about, and without this `ready` stayed
+    // false ("Loading…" over a vehicle that had drawn).
+    property int _partsMade: 0
+
     function _all(test) {
+        _partsMade
         var total = hinges.count + wheels.count
         if (total === 0)
             return false
@@ -125,6 +133,7 @@ Node {
     }
     readonly property bool ready: _all(function(h) { return h.ready })
     readonly property string error: {
+        _partsMade
         for (var i = 0; i < hinges.count; ++i) {
             if (hinges.objectAt(i) && hinges.objectAt(i).error)
                 return hinges.objectAt(i).error
@@ -140,6 +149,8 @@ Node {
     Repeater3D {
         id: hinges
         model: vehicle.hingedParts
+        onObjectAdded: ++vehicle._partsMade
+        onObjectRemoved: ++vehicle._partsMade
         delegate: JeepHinge {
             required property var modelData
             objectName: "rigPart_" + modelData.name
@@ -156,6 +167,8 @@ Node {
     Repeater3D {
         id: wheels
         model: vehicle.wheelParts
+        onObjectAdded: ++vehicle._partsMade
+        onObjectRemoved: ++vehicle._partsMade
         delegate: Node {
             id: wheel
             required property var modelData
