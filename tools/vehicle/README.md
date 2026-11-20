@@ -40,8 +40,8 @@ the Blender fabric bump shader still requires separate baking for app parity.
 shocks/frame and hood/engine surface intersections at frames 1, 40, 80 and 120.
 The candidate loop fails when these selected intersection checks fail. This is
 not an exhaustive collision certificate, nor does it validate mount dimensions.
-Shock mounts remain provisional; the fit pass relocates them to avoid the coil
-and tire intersections found in the earlier prototype.
+Shock mount positions remain estimates; each shock now sits in brackets on the
+axle tube and on the coil tower or frame rail, clear of the coil, tire and rail.
 
 `cabin.py` replaces the old front upholstery blocks with contoured cushions and
 rearward-reclining, integrated seatbacks. Insert materials share the seat mesh.
@@ -93,6 +93,7 @@ the app's GLB set and `Rig.js`/`rig.json` through `rig_export.py`. There is no
 blender -b --python-exit-code 1 --python tools/vehicle/export_jeep_twin.py -- \
   --blend dev/jeep-twin/<candidate>/jeep-twin.blend --output /new/dir/jeep_tj_2003.glb
 venv/bin/python tools/vehicle/check_jeep_asset.py /new/dir
+blender -b --python-exit-code 1 --python tools/vehicle/check_jeep_hood_swing.py -- /new/dir
 cp /new/dir/jeep_tj_2003.glb tools/vehicle/reference/ && cp /new/dir/jeep_tj/* frontend/assets/jeep_tj/
 ```
 
@@ -174,9 +175,25 @@ Body-panel corrections (2026-11-19), all in the generators:
 - The tailgate opens 90 degrees (`rig_export.HINGES`, `build_jeep_twin.py`):
   at 95 the spare's tread went 4 mm into the passenger tail lamp.
 
-Known and left alone: the hood's rear lower corners pass into the cowl sides
-when it is open (the hinge line is above them); the provisional shocks' lower
-eyes hang ahead of the axles; a small shading nick on the fog-lamp lens rim.
+Known and left alone: a small shading nick on the fog-lamp lens rim.
+
+Hood hinge and shock mounts (2026-11-19):
+
+- The hood turns about a line on the cowl seam, above its own rear edge
+  (`rig_export.HINGES`, z 1.325 where it was 1.285). From the lower line the
+  rear edge turned back under the cowl top from 25 degrees on.
+  `check_jeep_hood_swing.py ASSET_DIR` turns the exported hood through its
+  travel against the exported body and fails on any contact.
+- The twin's shocks run between brackets (`SHOCKS` in `build_jeep_twin.py`).
+  Their lower eyes used to hang 38 cm ahead of each axle with nothing holding
+  them, the front pair under the bumper. Front: ahead of the coil and under the
+  wheel housing, tabs on the axle tube below and on the coil tower above. Rear:
+  inboard of the rail and under the floor, so it leans forward and takes a
+  shorter shock (each shock's body and shaft lengths ride on its lower
+  endpoint, and `check_jeep_twin.py` reads them), tabs on the axle tube and a
+  channel on the rail. `check_jeep_twin.py` also fails when a bracket reaches
+  nothing or an eye sits outside its bracket. The positions are packaging
+  estimates, not measured Fox mounts.
 
 Soft-top component layout is informed by the
 [Bestop TJ Supertop installation diagrams](https://www.bestop.com/wp-content/uploads/Installation%20Instructions/BDKW_51709-INS_001.pdf).

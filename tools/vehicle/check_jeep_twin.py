@@ -177,11 +177,39 @@ for heave in (-.07, 0., .07):
                 a = objects[f"{label}_{sign}_shock_axle"].matrix_world.translation
                 b = objects[f"{label}_{sign}_shock_frame"].matrix_world.translation
                 length = (a-b).length
-                # Keep the provisional fixed-length shaft inside the fixed
-                # body throughout the pose envelope; do not scale either.
-                assert length > .390 + .015, (label, sign, length)
-                assert length < .345 + .390 - .025, (label, sign, length)
+                # Keep the fixed-length shaft inside the fixed body throughout
+                # the pose envelope, and the body short of the lower eye; do
+                # not scale either. Each shock carries its own lengths.
+                lower = objects[f"{label}_{sign}_shock_axle"]
+                body_end, shaft = lower["body_end_m"], lower["shaft_m"]
+                assert length > shaft + .015, (label, sign, length)
+                assert length > body_end + .030, (label, sign, length)
+                assert length < body_end + shaft - .025, (label, sign, length)
+# At rest every shock eye sits in a bracket, and each bracket reaches what it is welded to.
+for label in ("front", "rear"):
+    ctrl[label+"_heave_m"] = 0.
+    ctrl[label+"_roll_deg"] = 0.
+update()
+
+
+def surface(obj):
+    return BVHTree.FromPolygons([obj.matrix_world @ v.co for v in obj.data.vertices],
+                                [tuple(p.vertices) for p in obj.data.polygons])
+
+
+mounts = [o for o in objects if o.name.startswith("Shock mount ") and o.type == "MESH"]
+for kind, anchor, count in (("axle tab", "Dana 44 axle tube", 8), ("tower tab", "Coil mount ", 4), ("rail plate", "Boxed frame rail", 2)):
+    group = [surface(o) for o in mounts if kind in o.name]
+    assert len(group) == count, (kind, len(group))
+    anchors = [surface(o) for o in objects if o.name.startswith(anchor) and o.type == "MESH"]
+    assert all(any(m.overlap(a) for a in anchors) for m in group), (kind, "bracket reaches nothing")
+brackets = [surface(o) for o in mounts if "bolt" not in o.name]
+for label in ("front", "rear"):
+    for sign in (-1, 1):
+        for end in ("axle", "frame"):
+            eye = objects[f"{label}_{sign}_shock_{end}"].matrix_world.translation
+            assert min(b.find_nearest(eye)[3] for b in brackets) < .035, (label, sign, end, "eye outside its bracket")
 for obj in objects:
     assert all(math.isfinite(v) for row in obj.matrix_world for v in row), obj.name
-print("PASS: connected roof with welded joins, manifold thickness, no nonadjacent shell crossings; lift separation, axle heave/roll, shock tracking, steering/spin hierarchy, panel and engine controls, finite transforms")
+print("PASS: connected roof with welded joins, manifold thickness, no nonadjacent shell crossings; lift separation, axle heave/roll, shock tracking and brackets, steering/spin hierarchy, panel and engine controls, finite transforms")
 print("NOT CERTIFIED: fixed link lengths, collision clearance, vehicle measurements, Qt parity")

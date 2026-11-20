@@ -12,6 +12,7 @@ import math
 from pathlib import Path
 import sys
 
+import bmesh
 import bpy
 from mathutils import Matrix, Vector
 
@@ -224,6 +225,48 @@ def cylinder_local(name, radius, z0, z1, mat, parent):
     return obj
 
 
+# Shock hardpoints for the +X side (metres; ground is z = -0.9, axle centres
+# z = -0.5 at y = -/+1.186) with the length of the body below its upper eye and
+# of the shaft above its lower eye. Positions are packaging estimates, not
+# measured Fox mounts. Front: ahead of the coil, under the wheel housing, on
+# the coil tower. Rear: inboard of the rail and under the floor, so it leans
+# forward and takes a shorter shock.
+SHOCKS = {
+    "front": {"lower": (.455, -1.310, -.615), "upper": (.430, -1.335, -.070), "body": .340, "shaft": .390},
+    "rear": {"lower": (.262, 1.100, -.570), "upper": (.262, .800, -.260), "body": .285, "shaft": .295},
+}
+
+
+def flat(obj):
+    """Flat faces that point outwards (the app culls back faces)."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(obj.data)
+    bm.free()
+    for p in obj.data.polygons:
+        p.use_smooth = False
+    return obj
+
+
+def slab(name, center, size, parent):
+    hx, hy, hz = (v/2 for v in size)
+    verts = [(center[0]+i*hx, center[1]+j*hy, center[2]+k*hz) for i in (-1, 1) for j in (-1, 1) for k in (-1, 1)]
+    obj = mesh(name, verts, [(0,1,3,2), (4,6,7,5), (0,4,5,1), (2,3,7,6), (0,2,6,4), (1,5,7,3)], steel, parent)
+    return flat(obj)
+
+
+def tab(name, x, start, end, half_width, parent, thickness=.006):
+    """A flat plate in the vehicle's side plane from (y, z) start to end, round the end by half_width."""
+    a, b = Vector(start), Vector(end)
+    u = (b-a).normalized()
+    v = Vector((-u.y, u.x))*half_width
+    outline = [a+v, a-v, b+u*half_width-v, b+u*half_width+v]
+    verts = [(x+side*thickness/2, p.x, p.y) for side in (-1, 1) for p in outline]
+    obj = mesh(name, verts, [(0,1,2,3), (7,6,5,4), (0,4,5,1), (1,5,6,2), (2,6,7,3), (3,7,4,0)], steel, parent)
+    return flat(obj)
+
+
 links = []
 shocks = []
 for label, y in (("front", -1.186), ("rear", 1.186)):
@@ -231,19 +274,41 @@ for label, y in (("front", -1.186), ("rear", 1.186)):
     direction = 1 if label == "front" else -1
     for sign in (-1, 1):
         x = sign*.52
-        # Keep the provisional shock envelope outside the coil, rather than
-        # crossing through its upper turns. Actual Fox mounts remain unmeasured.
-        lower = endpoint(f"{label}_{sign}_shock_axle", (x-sign*.12, y-.38, -.52), axle)
-        upper = endpoint(f"{label}_{sign}_shock_frame", (x-sign*.17, y-.16, -.11+LIFT), body)
+        # Each shock runs from a bracket on the axle tube to one on the frame
+        # (SHOCKS above); its body and shaft keep their lengths through travel.
+        spec = SHOCKS[label]
+        lower = endpoint(f"{label}_{sign}_shock_axle", (sign*spec["lower"][0], *spec["lower"][1:]), axle)
+        upper = endpoint(f"{label}_{sign}_shock_frame", (sign*spec["upper"][0], *spec["upper"][1:]), body)
+        lower["body_end_m"], lower["shaft_m"] = spec["body"] + .005, spec["shaft"]
         axis = aim(f"{label}_{sign}_shock_axis", upper, lower)
-        cylinder_local("Fox style shock body UNMEASURED", .027, .025, .340, alloy, axis)
-        cylinder_local("Shock seal head", .030, .320, .345, black, axis)
+        cylinder_local("Fox style shock body UNMEASURED", .027, .025, spec["body"], alloy, axis)
+        cylinder_local("Shock seal head", .030, spec["body"] - .020, spec["body"] + .005, black, axis)
         rod = aim(f"{label}_{sign}_shock_rod_axis", lower, upper)
-        cylinder_local("Telescoping shock shaft", .009, .012, .390, chrome, rod)
+        cylinder_local("Telescoping shock shaft", .009, .012, spec["shaft"], chrome, rod)
         shocks.append((lower, upper))
         for p in (lower, upper):
             eye = cylinder_local("Shock eye", .029, -.022, .022, black, p)
             eye.rotation_euler.y = math.pi/2
+            cylinder_local("Shock mount bolt", .008, -.040, .040, steel, p).rotation_euler.y = math.pi/2
+        # Two tabs either side of each eye: from the axle tube, and from the
+        # coil tower (front) or the frame rail (rear).
+        for offset in (-.031, .031):
+            # (the rear tab leaves the tube's lower front, under the tank skid's edge)
+            tab("Shock mount axle tab", sign*spec["lower"][0] + offset,
+                (y, -.5) if label == "front" else (y - .030, -.515), spec["lower"][1:],
+                .030 if label == "front" else .024, axle)
+            if label == "front":
+                tab("Shock mount tower tab", sign*spec["upper"][0] + offset,
+                    (y - .096, -.075), spec["upper"][1:], .024, body)
+        if label == "rear":
+            # A channel on the rail's inner face, open below, the eye between its sides.
+            ux, uy, uz = sign*spec["upper"][0], *spec["upper"][1:]
+            # The rail's inner face here, where chassis.py has begun to move it outboard
+            # for the coil; the plate goes 6 mm into it and stays below the upper arm.
+            rail = sign*(.3025 + .120*min(1, max(0, (.95 - abs(uy))/.25)) + .006)
+            slab("Shock mount rail plate", ((ux + sign*.028 + rail)/2, uy, uz - .0215), (abs(rail - ux) - .028, .070, .067), body)
+            slab("Shock mount channel", (ux - sign*.031, uy, uz - .0125), (.006, .070, .085), body)
+            slab("Shock mount channel", (ux, uy, uz + .030), (.068, .070, .006), body)
         a = endpoint(f"{label}_{sign}_coil_axle", (x, y, -.46), axle)
         b = endpoint(f"{label}_{sign}_coil_frame", (x, y, -.16+LIFT), body)
         axis = aim(f"{label}_{sign}_spring_axis", a, b)

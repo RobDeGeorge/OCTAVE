@@ -28,7 +28,9 @@ HINGES = {
     # 90 degrees: at 95 the spare's tread went 4 mm into the passenger tail lamp.
     "tailgate": ((-0.455, 1.79, 0.95), "Z", 90),
     "rear_glass": ((0, 1.717, 1.72), "X", 100),
-    "hood": ((0, -0.635, 1.285), "X", -65),
+    # On the cowl seam and above the hood's rear edge (1.31), as the outside hinges
+    # are: from 1.285 the edge turned back under the cowl top from 25 degrees on.
+    "hood": ((0, -0.636, 1.325), "X", -65),
     "driver_wheel": ((0.64, -1.186, 0.4), "Z", 0),
     "passenger_wheel": ((-0.64, -1.186, 0.4), "Z", 0),
     "driver_front_spin": ((0.737, -1.186, 0.4), "X", 0),

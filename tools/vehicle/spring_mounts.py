@@ -45,13 +45,6 @@ def build_spring_mounts(body, lift):
                 world = upper.matrix_world.copy()
                 world.translation.z = .566 - .9 + lift
                 upper.matrix_world = world
-            # The old shock line occupied the newly narrowed rail. Keep the
-            # provisional shock assembly inboard, separate from the coil.
-            for suffix,x in (("_shock_axle",.260),("_shock_frame",.240)):
-                mount = bpy.data.objects[key+suffix]
-                world = mount.matrix_world.copy()
-                world.translation.x = sign*x
-                mount.matrix_world = world
             bpy.context.view_layer.update()
             a, b = lower.matrix_world.translation, upper.matrix_world.translation
             # Move curve points to compress the coil, rather than scaling the
