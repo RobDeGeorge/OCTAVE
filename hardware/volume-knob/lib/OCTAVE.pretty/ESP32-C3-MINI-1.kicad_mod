@@ -1,0 +1,484 @@
+(footprint "ESP32-C3-MINI-1"
+	(version 20260206)
+	(generator "octave_gen")
+	(layer "F.Cu")
+	(descr "Espressif ESP32-C3-MINI-1 (-N4 / -H4 / -H4X), 13.2x16.6 mm, 53 pads, PCB antenna; land pattern per ESP32-C3-MINI-1 datasheet v2.2 Figure 11-1, https://www.espressif.com/sites/default/files/documentation/esp32-c3-mini-1_datasheet_en.pdf")
+	(tags "ESP32-C3 MINI-1 2.4 GHz Wi-Fi Bluetooth LE module espressif 13.2x16.6mm")
+	(property "Reference" "REF**"
+		(at 0 6.9 0)
+		(layer "F.SilkS")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Value" "ESP32-C3-MINI-1"
+		(at 0 8.4 0)
+		(layer "F.Fab")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr smd)
+	(fp_line
+		(start -6.75 -11.15)
+		(end 6.75 -11.15)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(layer "F.SilkS")
+	)
+	(fp_line
+		(start -6.75 -11.15)
+		(end -6.75 5.75)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(layer "F.SilkS")
+	)
+	(fp_line
+		(start 6.75 -11.15)
+		(end 6.75 5.75)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(layer "F.SilkS")
+	)
+	(fp_line
+		(start -6.75 5.75)
+		(end 6.75 5.75)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(layer "F.SilkS")
+	)
+	(fp_poly
+		(pts
+			(xy -7.1 -4) (xy -7.436 -3.76) (xy -7.436 -4.24)
+		)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(fill yes)
+		(layer "F.SilkS")
+	)
+	(fp_rect
+		(start -6.85 -11.25)
+		(end 6.85 5.85)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.CrtYd")
+	)
+	(fp_rect
+		(start -6.6 -11)
+		(end 6.6 5.6)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.Fab")
+	)
+	(fp_line
+		(start -6.6 -5.6)
+		(end 6.6 -5.6)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(layer "F.Fab")
+	)
+	(fp_poly
+		(pts
+			(xy -6.6 -4.6) (xy -5.9 -4) (xy -6.6 -3.4)
+		)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.Fab")
+	)
+	(fp_text user "Antenna - no copper"
+		(at 0 -9.6 0)
+		(layer "Cmts.User")
+		(effects
+			(font
+				(size 0.8 0.8)
+				(thickness 0.12)
+			)
+		)
+	)
+	(fp_text user "${REFERENCE}"
+		(at 0 -7.4 0)
+		(layer "F.Fab")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(pad "1" smd rect
+		(at -5.9 -4)
+		(size 0.8 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "2" smd rect
+		(at -5.9 -3.2)
+		(size 0.8 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "3" smd rect
+		(at -5.9 -2.4)
+		(size 0.8 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "4" smd rect
+		(at -5.9 -1.6)
+		(size 0.8 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "5" smd rect
+		(at -5.9 -0.8)
+		(size 0.8 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "6" smd rect
+		(at -5.9 0)
+		(size 0.8 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "7" smd rect
+		(at -5.9 0.8)
+		(size 0.8 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "8" smd rect
+		(at -5.9 1.6)
+		(size 0.8 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "9" smd rect
+		(at -5.9 2.4)
+		(size 0.8 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "10" smd rect
+		(at -5.9 3.2)
+		(size 0.8 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "11" smd rect
+		(at -5.9 4)
+		(size 0.8 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "12" smd rect
+		(at -4.8 4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "13" smd rect
+		(at -4 4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "14" smd rect
+		(at -3.2 4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "15" smd rect
+		(at -2.4 4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "16" smd rect
+		(at -1.6 4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "17" smd rect
+		(at -0.8 4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "18" smd rect
+		(at 0 4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "19" smd rect
+		(at 0.8 4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "20" smd rect
+		(at 1.6 4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "21" smd rect
+		(at 2.4 4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "22" smd rect
+		(at 3.2 4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "23" smd rect
+		(at 4 4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "24" smd rect
+		(at 4.8 4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "25" smd rect
+		(at 5.9 4)
+		(size 0.8 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "26" smd rect
+		(at 5.9 3.2)
+		(size 0.8 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "27" smd rect
+		(at 5.9 2.4)
+		(size 0.8 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "28" smd rect
+		(at 5.9 1.6)
+		(size 0.8 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "29" smd rect
+		(at 5.9 0.8)
+		(size 0.8 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "30" smd rect
+		(at 5.9 0)
+		(size 0.8 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "31" smd rect
+		(at 5.9 -0.8)
+		(size 0.8 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "32" smd rect
+		(at 5.9 -1.6)
+		(size 0.8 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "33" smd rect
+		(at 5.9 -2.4)
+		(size 0.8 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "34" smd rect
+		(at 5.9 -3.2)
+		(size 0.8 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "35" smd rect
+		(at 5.9 -4)
+		(size 0.8 0.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "36" smd rect
+		(at 4.8 -4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "37" smd rect
+		(at 4 -4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "38" smd rect
+		(at 3.2 -4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "39" smd rect
+		(at 2.4 -4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "40" smd rect
+		(at 1.6 -4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "41" smd rect
+		(at 0.8 -4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "42" smd rect
+		(at 0 -4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "43" smd rect
+		(at -0.8 -4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "44" smd rect
+		(at -1.6 -4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "45" smd rect
+		(at -2.4 -4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "46" smd rect
+		(at -3.2 -4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "47" smd rect
+		(at -4 -4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "48" smd rect
+		(at -4.8 -4.9)
+		(size 0.4 0.8)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "49" smd roundrect
+		(at -1.975 -1.975)
+		(size 1.45 1.45)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(property pad_prop_heatsink)
+		(roundrect_rratio 0)
+		(chamfer_ratio 0.4138)
+		(chamfer top_left)
+	)
+	(pad "49" smd rect
+		(at -1.975 0)
+		(size 1.45 1.45)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(property pad_prop_heatsink)
+	)
+	(pad "49" smd rect
+		(at -1.975 1.975)
+		(size 1.45 1.45)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(property pad_prop_heatsink)
+	)
+	(pad "49" smd rect
+		(at 0 -1.975)
+		(size 1.45 1.45)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(property pad_prop_heatsink)
+	)
+	(pad "49" smd rect
+		(at 0 0)
+		(size 1.45 1.45)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(property pad_prop_heatsink)
+	)
+	(pad "49" smd rect
+		(at 0 1.975)
+		(size 1.45 1.45)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(property pad_prop_heatsink)
+	)
+	(pad "49" smd rect
+		(at 1.975 -1.975)
+		(size 1.45 1.45)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(property pad_prop_heatsink)
+	)
+	(pad "49" smd rect
+		(at 1.975 0)
+		(size 1.45 1.45)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(property pad_prop_heatsink)
+	)
+	(pad "49" smd rect
+		(at 1.975 1.975)
+		(size 1.45 1.45)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(property pad_prop_heatsink)
+	)
+	(pad "50" smd rect
+		(at 5.95 -4.95)
+		(size 0.7 0.7)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "51" smd rect
+		(at 5.95 4.95)
+		(size 0.7 0.7)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "52" smd rect
+		(at -5.95 4.95)
+		(size 0.7 0.7)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "53" smd rect
+		(at -5.95 -4.95)
+		(size 0.7 0.7)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(zone
+		(net 0)
+		(net_name "")
+		(layers "F.Cu" "B.Cu" "In1.Cu" "In2.Cu" "In3.Cu" "In4.Cu" "In5.Cu" "In6.Cu" "In7.Cu" "In8.Cu" "In9.Cu" "In10.Cu" "In11.Cu" "In12.Cu" "In13.Cu" "In14.Cu" "In15.Cu" "In16.Cu" "In17.Cu" "In18.Cu" "In19.Cu" "In20.Cu" "In21.Cu" "In22.Cu" "In23.Cu" "In24.Cu" "In25.Cu" "In26.Cu" "In27.Cu" "In28.Cu" "In29.Cu" "In30.Cu")
+		(name "Antenna")
+		(hatch edge 0.5)
+		(connect_pads
+			(clearance 0)
+		)
+		(min_thickness 0.25)
+		(keepout
+			(tracks not_allowed)
+			(vias not_allowed)
+			(pads not_allowed)
+			(copperpour not_allowed)
+			(footprints not_allowed)
+		)
+		(placement
+			(enabled no)
+			(sheetname "")
+		)
+		(fill
+			(thermal_gap 0.5)
+			(thermal_bridge_width 0.5)
+		)
+		(polygon
+			(pts
+				(xy -6.6 -11) (xy 6.6 -11) (xy 6.6 -5.6) (xy -6.6 -5.6)
+			)
+		)
+	)
+	(embedded_fonts no)
+)

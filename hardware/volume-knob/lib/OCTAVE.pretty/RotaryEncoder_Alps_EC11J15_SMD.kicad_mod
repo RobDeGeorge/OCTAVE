@@ -1,0 +1,366 @@
+(footprint "RotaryEncoder_Alps_EC11J15_SMD"
+	(version 20260206)
+	(generator "octave_gen")
+	(layer "F.Cu")
+	(descr "Alps Alpine EC11J15 reflow rotary encoder with push switch (EC11J1525402 and other EC11J15 types), vertical shaft; land pattern per Alps EC11 catalogue, EC11J mounting hole dimensions; boss o1.95 at the axis and pin o1.45 at 4.5 mm protrude 1.2 mm below the mounting surface")
+	(tags "rotary encoder Alps EC11J EC11J15 EC11J1525402 SMD reflow push switch")
+	(property "Reference" "REF**"
+		(at 0 -10.6 0)
+		(layer "F.SilkS")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Value" "RotaryEncoder_Alps_EC11J15_SMD"
+		(at 0 10.6 0)
+		(layer "F.Fab")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr smd)
+	(pad "A" smd rect
+		(at -2.5 7.3)
+		(size 1.3 2.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "C" smd rect
+		(at 0 7.3)
+		(size 1.3 2.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "B" smd rect
+		(at 2.5 7.3)
+		(size 1.3 2.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "S1" smd rect
+		(at -2.5 -7)
+		(size 1.3 2.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "S2" smd rect
+		(at 2.5 -7)
+		(size 1.3 2.4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "MP" smd rect
+		(at -6.375 0)
+		(size 3.75 4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "MP" smd rect
+		(at -5 -7.9)
+		(size 2.5 3.2)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "MP" smd rect
+		(at -5 7.9)
+		(size 2.5 3.2)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "MP" smd rect
+		(at 6.375 0)
+		(size 3.75 4)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "MP" smd rect
+		(at 5 -7.9)
+		(size 2.5 3.2)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "MP" smd rect
+		(at 5 7.9)
+		(size 2.5 3.2)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+	)
+	(pad "" np_thru_hole circle
+		(at 0 0)
+		(size 2.1 2.1)
+		(drill 2.1)
+		(layers "*.Cu" "*.Mask")
+	)
+	(pad "" np_thru_hole circle
+		(at 0 4.5)
+		(size 1.9 1.9)
+		(drill 1.9)
+		(layers "*.Cu" "*.Mask")
+	)
+	(zone
+		(net 0)
+		(net_name "")
+		(layers "F.Cu")
+		(name "EC11J frame")
+		(hatch edge 0.5)
+		(connect_pads
+			(clearance 0)
+		)
+		(min_thickness 0.25)
+		(keepout
+			(tracks not_allowed)
+			(vias not_allowed)
+			(pads allowed)
+			(copperpour not_allowed)
+			(footprints allowed)
+		)
+		(placement
+			(enabled no)
+			(sheetname "")
+		)
+		(fill
+			(thermal_gap 0.5)
+			(thermal_bridge_width 0.5)
+		)
+		(polygon
+			(pts
+				(xy -6.5 -5) (xy -3.15 -5) (xy -3.15 -2.75) (xy -6.5 -2.75)
+			)
+		)
+	)
+	(zone
+		(net 0)
+		(net_name "")
+		(layers "F.Cu")
+		(name "EC11J frame")
+		(hatch edge 0.5)
+		(connect_pads
+			(clearance 0)
+		)
+		(min_thickness 0.25)
+		(keepout
+			(tracks not_allowed)
+			(vias not_allowed)
+			(pads allowed)
+			(copperpour not_allowed)
+			(footprints allowed)
+		)
+		(placement
+			(enabled no)
+			(sheetname "")
+		)
+		(fill
+			(thermal_gap 0.5)
+			(thermal_bridge_width 0.5)
+		)
+		(polygon
+			(pts
+				(xy -6.5 2.75) (xy -3.15 2.75) (xy -3.15 5) (xy -6.5 5)
+			)
+		)
+	)
+	(zone
+		(net 0)
+		(net_name "")
+		(layers "F.Cu")
+		(name "EC11J frame")
+		(hatch edge 0.5)
+		(connect_pads
+			(clearance 0)
+		)
+		(min_thickness 0.25)
+		(keepout
+			(tracks not_allowed)
+			(vias not_allowed)
+			(pads allowed)
+			(copperpour not_allowed)
+			(footprints allowed)
+		)
+		(placement
+			(enabled no)
+			(sheetname "")
+		)
+		(fill
+			(thermal_gap 0.5)
+			(thermal_bridge_width 0.5)
+		)
+		(polygon
+			(pts
+				(xy 3.15 -5) (xy 6.5 -5) (xy 6.5 -2.75) (xy 3.15 -2.75)
+			)
+		)
+	)
+	(zone
+		(net 0)
+		(net_name "")
+		(layers "F.Cu")
+		(name "EC11J frame")
+		(hatch edge 0.5)
+		(connect_pads
+			(clearance 0)
+		)
+		(min_thickness 0.25)
+		(keepout
+			(tracks not_allowed)
+			(vias not_allowed)
+			(pads allowed)
+			(copperpour not_allowed)
+			(footprints allowed)
+		)
+		(placement
+			(enabled no)
+			(sheetname "")
+		)
+		(fill
+			(thermal_gap 0.5)
+			(thermal_bridge_width 0.5)
+		)
+		(polygon
+			(pts
+				(xy 3.15 2.75) (xy 6.5 2.75) (xy 6.5 5) (xy 3.15 5)
+			)
+		)
+	)
+	(fp_poly
+		(pts
+			(xy -5.85 -9) (xy 5.85 -9) (xy 5.85 -1.5) (xy 7.5 -1.5) (xy 7.5 1.5) (xy 5.85 1.5) (xy 5.85 9) (xy -5.85 9) (xy -5.85 1.5) (xy -7.5 1.5) (xy -7.5 -1.5) (xy -5.85 -1.5)
+		)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.Fab")
+	)
+	(fp_circle
+		(center 0 0)
+		(end 4.49 0)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.Fab")
+	)
+	(fp_circle
+		(center 0 0)
+		(end 3 0)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.Fab")
+	)
+	(fp_text user "${REFERENCE}"
+		(at 0 -3.5 0)
+		(layer "F.Fab")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(fp_text user "A"
+		(at -2.5 9.3 0)
+		(layer "F.Fab")
+		(effects
+			(font
+				(size 0.6 0.6)
+				(thickness 0.09)
+			)
+		)
+	)
+	(fp_text user "C"
+		(at 0 9.3 0)
+		(layer "F.Fab")
+		(effects
+			(font
+				(size 0.6 0.6)
+				(thickness 0.09)
+			)
+		)
+	)
+	(fp_text user "B"
+		(at 2.5 9.3 0)
+		(layer "F.Fab")
+		(effects
+			(font
+				(size 0.6 0.6)
+				(thickness 0.09)
+			)
+		)
+	)
+	(fp_text user "S1"
+		(at -2.5 -5 0)
+		(layer "F.Fab")
+		(effects
+			(font
+				(size 0.7 0.7)
+				(thickness 0.105)
+			)
+		)
+	)
+	(fp_text user "S2"
+		(at 2.5 -5 0)
+		(layer "F.Fab")
+		(effects
+			(font
+				(size 0.7 0.7)
+				(thickness 0.105)
+			)
+		)
+	)
+	(fp_rect
+		(start -8.5 -9.75)
+		(end 8.5 9.75)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.CrtYd")
+	)
+	(fp_line
+		(start -5.97 -6)
+		(end -5.97 -2.3)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(layer "F.SilkS")
+	)
+	(fp_line
+		(start -5.97 2.3)
+		(end -5.97 6)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(layer "F.SilkS")
+	)
+	(fp_line
+		(start 5.97 -6)
+		(end 5.97 -2.3)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(layer "F.SilkS")
+	)
+	(fp_line
+		(start 5.97 2.3)
+		(end 5.97 6)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(layer "F.SilkS")
+	)
+	(fp_line
+		(start -1.55 -8.4)
+		(end 1.55 -8.4)
+		(stroke
+			(width 0.12)
+			(type solid)
+		)
+		(layer "F.SilkS")
+	)
+	(embedded_fonts no)
+)

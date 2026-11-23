@@ -1,0 +1,44 @@
+** Drc report for volume-knob.kicad_pcb **
+** Created on 2026-11-22T19:45:48 **
+** Report includes: Errors, Warnings, Exclusions **
+
+** Found 8 DRC violations **
+[npth_inside_courtyard]: NPTH inside courtyard
+    Local override; error
+    @(100.0000 mm, 100.0000 mm): NPTH pad of SW1
+    @(121.6500 mm, 101.2000 mm): Footprint BT1
+[npth_inside_courtyard]: NPTH inside courtyard
+    Local override; error
+    @(100.0000 mm, 104.5000 mm): NPTH pad of SW1
+    @(121.6500 mm, 101.2000 mm): Footprint BT1
+[lib_footprint_mismatch]: Footprint 'ESP32-C3-MINI-1' does not match copy in library 'OCTAVE'
+    Local override; warning
+    @(100.0000 mm, 88.6000 mm): Footprint U6
+[lib_footprint_mismatch]: Footprint 'L_Sunlord_SWPA252012S' does not match copy in library 'Inductor_SMD'
+    Local override; warning
+    @(112.3000 mm, 111.8500 mm): Footprint L1
+[lib_footprint_mismatch]: Footprint 'SOT-23-5' does not match copy in library 'Package_TO_SOT_SMD'
+    Local override; warning
+    @(109.5214 mm, 91.5712 mm): Footprint U7
+[lib_footprint_mismatch]: Footprint 'TI_YBH0006_WCSP-6_0.8x1.2mm' does not match copy in library 'OCTAVE'
+    Local override; warning
+    @(110.2000 mm, 112.5000 mm): Footprint U4
+[lib_footprint_mismatch]: Footprint 'Battery_Nichicon_SLB12400_Horizontal' does not match copy in library 'OCTAVE'
+    Local override; warning
+    @(121.6500 mm, 101.2000 mm): Footprint BT1
+[lib_footprint_mismatch]: Footprint 'USB_C_Receptacle_HRO_TYPE-C-31-M-12' does not match copy in library 'Connector_USB'
+    Local override; warning
+    @(100.0000 mm, 119.8000 mm): Footprint J1
+
+** Found 0 unconnected pads **
+
+** Found 0 Footprint errors **
+
+** Ignored checks **
+    - Footprint has no courtyard defined
+    - Track endpoint not centered on via
+    - Tuning profile track geometries
+    - Footprint doesn't match symbol's footprint filters
+    - Footprint component type doesn't match footprint pads
+
+** End of Report **
