@@ -6,6 +6,7 @@
 #include "elm327protocol.h"
 #include "rfcommsocket.h"
 #include "../util/perfscope.h"
+#include "../util/threadidle.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -354,6 +355,7 @@ void OBDManager::startConnection()
     m_workerThread = new QThread();
     m_workerThread->setObjectName(QStringLiteral("obd-worker"));  // visible in top -H / ps
     m_worker->moveToThread(m_workerThread);
+    sleepWhenIdle(m_workerThread);   // the browser build: see threadidle.h
 
     // Connect worker signals (queued connections -- cross-thread safe)
     QObject::connect(m_worker, &OBDConnectionWorker::initComplete,

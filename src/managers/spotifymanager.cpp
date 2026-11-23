@@ -59,6 +59,16 @@ QString pageUrl()
         path.chop(int(qstrlen("index.html")));
     return QString::fromStdString(loc["origin"].as<std::string>()) + path;
 }
+
+// A page that runs frontends from other sites against this core (the
+// frontend playground) sets globalThis.octaveGuestPage before the core
+// starts. Every frontend there holds the service at full scope, so the
+// visitor's Spotify session stays out of it: nothing read from this
+// browser's storage, nothing written to it.
+bool guestPage()
+{
+    return emscripten::val::global("octaveGuestPage").isTrue();
+}
 #endif
 
 QString errorReason(const QJsonDocument &doc)
@@ -134,6 +144,8 @@ SpotifyManager::Stored SpotifyManager::load() const
 {
     QJsonObject o;
 #ifdef OCTAVE_WASM
+    if (guestPage())
+        return {};
     const emscripten::val v = emscripten::val::global("localStorage").call<emscripten::val>("getItem", std::string(kStorageKey));
     if (v.isString())
         o = QJsonDocument::fromJson(QByteArray::fromStdString(v.as<std::string>())).object();
@@ -156,6 +168,10 @@ SpotifyManager::Stored SpotifyManager::load() const
 
 void SpotifyManager::save() const
 {
+#ifdef OCTAVE_WASM
+    if (guestPage())
+        return;
+#endif
     QJsonObject o;
     // Only a client ID that isn't the build's is worth keeping
     if (m_clientId != kBuiltInClientId)
@@ -318,6 +334,13 @@ void SpotifyManager::signIn()
                                               m_oauthState);
     setStatus({});
 #ifdef OCTAVE_WASM
+    if (guestPage()) {
+        // Nothing is kept on this page, so the way back could not finish
+        setStatus(QStringLiteral("Spotify isn't available in the frontend playground. Use the main page."));
+        m_verifier.clear();
+        m_oauthState.clear();
+        return;
+    }
     save();   // the verifier, for when the page comes back
     qCInfo(lcSpotify) << "going to Spotify sign-in, back at" << redirectUri();
     setState(QStringLiteral("signingIn"));

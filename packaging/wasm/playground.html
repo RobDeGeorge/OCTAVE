@@ -13,8 +13,14 @@
   on a head unit.
 
   ?frontend=<name> picks a bundled one (frontends/<name>/), ?frontend=<url>
-  loads any folder or index.html URL whose host allows it (CORS; GitHub
+  offers any folder or index.html URL whose host allows it (CORS; GitHub
   Pages does).
+
+  A frontend holds the service at full scope, whoever wrote it. So a URL
+  that came in the address is not run until the visitor says so (a URL they
+  typed and loaded themselves is), and this page is a guest page
+  (octaveGuestPage below): the core keeps the visitor's Spotify session out
+  of it.
 -->
 <html lang="en">
 <head>
@@ -26,6 +32,9 @@
   <!-- Cross-origin isolation for threaded WebAssembly (index.html says why). -->
   <script>window.coi = { coepCredentialless: () => false };</script>
   <script src="coi-serviceworker.js"></script>
+  <!-- Before the core starts: frontends from other sites run here, so the core
+       leaves the visitor's Spotify session alone (spotifymanager.cpp, guestPage()). -->
+  <script>globalThis.octaveGuestPage = true;</script>
   <style>
     :root {
       --bg: #0b0d10;
@@ -92,6 +101,8 @@
     #status { margin: 10px 0 0; color: var(--muted); font-variant-numeric: tabular-nums; min-height: 1.4em; }
     #error { display: none; margin-top: 12px; padding: 10px 12px; background: var(--panel); border-left: 3px solid var(--error); white-space: pre-wrap; word-break: break-word; }
     .failed #error { display: block; }
+    #ask p { color: var(--text); margin: 0 0 12px; overflow-wrap: anywhere; }
+    #ask button { margin: 0 8px 8px 0; }
 
     @media (max-width: 900px) {
       body { height: auto; min-height: 100%; }
@@ -122,6 +133,12 @@
           <div class="bar indeterminate"><div id="fill"></div></div>
           <p id="status">Starting</p>
           <pre id="error"></pre>
+          <!-- A frontend from another site that came in the address: asked first -->
+          <div id="ask" hidden>
+            <p id="askText"></p>
+            <button id="askYes" class="primary" type="button">Load it</button>
+            <button id="askNo" type="button">No, show a bundled one</button>
+          </div>
         </div>
       </div>
       <!-- sandbox without allow-same-origin: the frontend gets an opaque origin, so a
@@ -288,6 +305,8 @@
 
     async function loadFrontend(value) {
       bridge.closeAll();
+      $('ask').hidden = true;
+      bar.style.display = '';
       frame.style.display = 'none';
       $('loader').style.display = 'flex';
       $('loader').classList.remove('failed');
@@ -308,7 +327,24 @@
     $('load').addEventListener('click', () => loadFrontend(urlBox.value.trim() || pick.value));
     pick.addEventListener('change', () => { urlBox.value = ''; loadFrontend(pick.value); });
     urlBox.addEventListener('keydown', (e) => { if (e.key === 'Enter') loadFrontend(urlBox.value.trim() || pick.value); });
-    loadFrontend(urlBox.value.trim() || pick.value);
+
+    // A frontend has the service at full scope. One of this site's runs at
+    // once; a URL that came in the address (somebody's link) waits for a yes
+    const fromLink = urlBox.value.trim();
+    if (!fromLink) {
+      loadFrontend(pick.value);
+    } else {
+      let where = fromLink;
+      try { where = new URL(fromLink, location.href).host || fromLink; } catch (e) { /* shown as given */ }
+      bar.style.display = 'none';
+      status.textContent = '';
+      $('askText').textContent = 'This link asks to run a frontend from ' + where + '. It is not one of OCTAVE\'s. '
+        + 'It would control the car on this page: the simulated one, or yours if you connect an adapter here. '
+        + 'Load it only if you trust where the link came from.';
+      $('ask').hidden = false;
+      $('askYes').onclick = () => loadFrontend(fromLink);
+      $('askNo').onclick = () => { urlBox.value = ''; loadFrontend(pick.value); };
+    }
   })();
   </script>
 </body>

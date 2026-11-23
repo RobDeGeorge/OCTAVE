@@ -2,6 +2,7 @@
 
 #include "obdmanager.h"
 #include "settingsmanager.h"
+#include "../util/threadidle.h"
 
 #include <QDateTime>
 #include <QDesktopServices>
@@ -110,6 +111,7 @@ void TripRecorder::start()
     m_thread->setObjectName(QStringLiteral("trip-store"));
     m_store = new TripStore();
     m_store->moveToThread(m_thread);
+    sleepWhenIdle(m_thread);   // the browser build: see threadidle.h
     connect(m_thread, &QThread::finished, m_store, &QObject::deleteLater);
 
     connect(m_store, &TripStore::storeOpened, this, [this](bool ok, const QString &err) {

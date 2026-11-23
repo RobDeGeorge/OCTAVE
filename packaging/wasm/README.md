@@ -101,10 +101,18 @@ simulated car itself (`obdManager.connect_to_adapter("sim://elm327")`).
   just works. Binary stream records (video) are not carried.
 - **Sandboxed.** The iframe is `sandbox="allow-scripts allow-forms"` without
   `allow-same-origin`: the frontend has an opaque origin, can't reach this
-  site, its storage or the playground's page, and has only the bridge. That
-  is what makes `?frontend=<url>` (any folder or `index.html` whose host
-  allows CORS, as GitHub Pages does) safe to offer. `localStorage` throws in
-  there, so a frontend must not depend on it.
+  site, its storage or the playground's page, and has only the bridge.
+  `localStorage` throws in there, so a frontend must not depend on it.
+- **But it holds the service at full scope**, as every frontend in the page
+  does, so the sandbox is not the whole answer for `?frontend=<url>` (any
+  folder or `index.html` whose host allows CORS, as GitHub Pages does). Two
+  rules cover the rest: a URL that came in the address is not run until the
+  visitor presses **Load it** (a URL they typed and loaded themselves is),
+  and the playground is a guest page (`globalThis.octaveGuestPage`, set
+  before the core starts): the core neither reads nor writes the visitor's
+  Spotify session there (`guestPage()` in `spotifymanager.cpp`). Anything
+  else the core ever keeps in the browser's storage for a visitor must
+  follow the same rule.
 - **Bundled frontends**: `frontends/hello-car-js/` (the template),
   `frontends/glass/`, and three native examples built for the browser,
   `frontends/sunlight/`, `frontends/arcade/` and `frontends/retro-cluster/`

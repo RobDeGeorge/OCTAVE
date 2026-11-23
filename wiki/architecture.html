@@ -351,6 +351,15 @@ EmbeddedDhuItem { anchors.fill: parent }</code></pre>
             <tr><td>UI watchdog</td><td><code>QThread</code> pinging the GUI thread.</td></tr>
           </tbody>
         </table>
+        <p>
+          Every <code>QThread</code> that runs an event loop (a worker object moved to it) is passed to
+          <code>sleepWhenIdle(thread)</code> (<span class="file-path">src/util/threadidle.h</span>). It does nothing
+          outside the browser build. There, Qt 6.10 and later (6.12 included) have a bug: a thread other than the main one
+          whose event loop has no running timer does not sleep, it spins, a whole CPU core for as long as the page is open
+          (<code>QEventDispatcherWasm::secondaryThreadWait()</code> waits for <code>milliseconds::max()</code>, which
+          overflows). The helper gives the thread a timer that fires once an hour and does nothing, which makes the wait a
+          real one. The black box's store thread and the OBD worker thread have it; a new worker thread needs it too.
+        </p>
 
         <h3 id="thread-obd">OBD Worker Thread</h3>
         <p>

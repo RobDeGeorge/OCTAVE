@@ -312,6 +312,7 @@ qt_add_executable(octave
     src/util/uiwatchdog.h
     src/util/uiwatchdog.cpp
     src/util/perfscope.h
+    src/util/threadidle.h
     src/util/licensetexts.h
     src/util/licensetexts.cpp
     src/util/dashboardgrid.h
