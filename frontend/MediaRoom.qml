@@ -1017,6 +1017,12 @@ Item {
                         active: mediaRoom.showMusicDevice
                         source: active ? "MusicDeviceScene.qml" : ""
                     }
+                    // A tap on the 3D device opens the same menu as a tap on the art
+                    Connections {
+                        target: musicDeviceLoader.item
+                        ignoreUnknownSignals: true
+                        function onClicked() { albumArtPopup.openPicker() }
+                    }
                     Binding { target: musicDeviceLoader.item; property: "device"; value: App.MusicDevicePreference.mode; when: musicDeviceLoader.status === Loader.Ready }
                     Binding { target: musicDeviceLoader.item; property: "playing"; value: mediaRoom.devicePlaying; when: musicDeviceLoader.status === Loader.Ready }
                     Binding { target: musicDeviceLoader.item; property: "artSource"; value: mediaRoom._displayAlbumArt; when: musicDeviceLoader.status === Loader.Ready }
@@ -1062,7 +1068,7 @@ Item {
 
                         onAnimationFinished: sideCardRefreshTimer.restart()
 
-                        onArtClicked: albumArtPopup.open()
+                        onArtClicked: albumArtPopup.openPicker()
 
                         onArtLoadFailed: mediaRoom._displayAlbumArt = "./assets/missing_art.png"
                     }
@@ -1519,95 +1525,95 @@ Item {
         }
     }
 
-    // Album Art Popup — Save Theme
+    // Album Art Popup: a carousel to pick what this corner shows (the art or a 3D player)
     Popup {
         id: albumArtPopup
         anchors.centerIn: Overlay.overlay
-        width: dp(340)
+        width: Math.round(Math.min(mediaRoom.width * 0.92, dp(900)))
         modal: true
         focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
-        property bool themeSaved: false
+        // Asked on open, not bound: the first call compiles the 3D scene
+        property bool devicesAvailable: false
 
-        onOpened: {
-            themeSaved = false
-            // Always extract fresh colors for the current song so the theme
-            // matches what's playing now, not a stale previous extraction
-            if (mediaRoom._np)
-                mediaRoom._np.extractArtColors()   // the phone's art or the local track's
+        // Nothing to pick from without the Quick3D modules: stay shut
+        function openPicker() {
+            devicesAvailable = App.MusicDevicePreference.isAvailable()
+            if (devicesAvailable) open()
         }
-
-        background: Rectangle {
-            color: App.Style.backgroundColor
-            radius: dpMin(8, 2)
-            border.color: App.Style.accent
-            border.width: 1
-
-            layer.enabled: true
-            layer.effect: DropShadow {
-                horizontalOffset: 0
-                verticalOffset: 4
-                radius: 30.0
-                samples: 31
-                color: Qt.rgba(0, 0, 0, 0.5)
+        onAboutToShow: {
+            if (viewCarousel.item) {
+                viewCarousel.item.show(albumArtPopup.currentChoice())
+                viewCarousel.item.forceActiveFocus()
             }
         }
+        // The ring's choices: the Music Player Object options, with "Vinyl"
+        // after "Album art". Vinyl is the album art with the vinyl record
+        // setting on, so the two of them set that switch as well.
+        readonly property var choices: {
+            var list = App.MusicDevicePreference.options.slice()
+            list.splice(list.indexOf("Album art") + 1, 0, "Vinyl")
+            return list
+        }
+        function currentChoice() {
+            var mode = App.MusicDevicePreference.mode
+            return mode === "Album art" && settingsManager && settingsManager.vinylRecordMode ? "Vinyl" : mode
+        }
+        function use(value) {
+            if (value === "") return
+            var vinyl = value === "Vinyl"
+            if (settingsManager && (vinyl || value === "Album art"))
+                settingsManager.vinylRecordMode = vinyl
+            App.MusicDevicePreference.select(vinyl ? "Album art" : value)
+            close()
+        }
+
+        // No panel: the ring floats over the page, which is dimmed well
+        // down so the title and keys behind don't read through it
+        background: Item {}
+        padding: 0
+        Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.8) }
 
         contentItem: ColumnLayout {
             spacing: dp(16)
 
-            // Header — album name
+            // What the art corner shows: the album art or one of the 3D
+            // players (the Music Player Object setting), picked from a
+            // carousel. A Loader by url: this file must load without Quick3D.
+            Loader {
+                id: viewCarousel
+                // Built on the first open and kept: the models load once
+                active: albumArtPopup.devicesAvailable
+                source: active ? "MusicDeviceCarousel.qml" : ""
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.round(Math.min(dp(480), mediaRoom.height * 0.62))
+                readonly property string focusValue: item ? item.focusValue : ""
+                onLoaded: {
+                    item.options = albumArtPopup.choices
+                    item.show(albumArtPopup.currentChoice())
+                    item.forceActiveFocus()
+                }
+                Binding { target: viewCarousel.item; property: "artSource"; value: mediaRoom._displayAlbumArt; when: viewCarousel.status === Loader.Ready }
+                Binding { target: viewCarousel.item; property: "playbackPosition"; value: mediaRoom.position; when: viewCarousel.status === Loader.Ready }
+                Binding { target: viewCarousel.item; property: "playbackDuration"; value: mediaRoom.duration; when: viewCarousel.status === Loader.Ready }
+                Connections {
+                    target: viewCarousel.item
+                    function onChosen(value) { albumArtPopup.use(value) }
+                    function onMissed() { albumArtPopup.close() }
+                }
+            }
+
+            // The name of the one at the front; a tap on it there picks it
             Text {
                 Layout.fillWidth: true
-                text: mediaRoom.currentAlbum
+                text: viewCarousel.focusValue
                 color: App.Style.primaryTextColor
-                font.pixelSize: dp(16)
+                font.pixelSize: Math.round(App.Spacing.overallText * 1.25)
                 font.bold: true
                 font.family: mediaRoom.globalFont
                 horizontalAlignment: Text.AlignHCenter
                 elide: Text.ElideRight
-            }
-
-            // Thin divider
-            Rectangle {
-                Layout.fillWidth: true
-                height: 1
-                color: Qt.rgba(App.Style.primaryTextColor.r,
-                               App.Style.primaryTextColor.g,
-                               App.Style.primaryTextColor.b, 0.15)
-            }
-
-            // Save as Theme button
-            Rectangle {
-                Layout.fillWidth: true
-                height: App.Spacing.formElementHeight
-                radius: dpMin(6, 2)
-                color: saveThemeMA.containsMouse ? App.Style.accent : App.Style.hoverColor
-                opacity: App.Style.albumArtTheme ? 1.0 : 0.4
-
-                Text {
-                    anchors.centerIn: parent
-                    text: albumArtPopup.themeSaved ? "Theme Saved" : "Save as Theme"
-                    color: saveThemeMA.containsMouse ? "white" : App.Style.primaryTextColor
-                    font.pixelSize: App.Spacing.overallText
-                    font.family: mediaRoom.globalFont
-                }
-
-                MouseArea {
-                    id: saveThemeMA
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    enabled: App.Style.albumArtTheme !== null && !albumArtPopup.themeSaved
-                    onClicked: {
-                        var themeName = mediaRoom.currentAlbum
-                        if (!themeName || themeName === "Unknown Album") {
-                            themeName = mediaRoom.currentTrackName || "Custom Theme"
-                        }
-                        settingsManager.save_custom_theme(themeName, App.Style.albumArtTheme, mediaRoom.currentAlbumArt)
-                        albumArtPopup.themeSaved = true
-                    }
-                }
             }
         }
     }

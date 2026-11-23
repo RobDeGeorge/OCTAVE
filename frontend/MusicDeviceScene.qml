@@ -49,6 +49,9 @@ Item {
     property real loadProgress: 1
     readonly property bool loading: loadingAnimation.running
     signal loadingFinished()
+    // A tap on the device that was not a drag or half of a double click
+    // (Media Room opens its view menu on it)
+    signal clicked()
 
     // Smooth, deterministic choreography. Rapid skips reuse the current exchange;
     // metadata bindings already contain the latest track, so no stale queue builds up.
@@ -398,14 +401,31 @@ Item {
         cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
         property real lastX: 0
         property real lastY: 0
-        onPressed: function(mouse) { lastX = mouse.x; lastY = mouse.y }
+        property real downX: 0
+        property real downY: 0
+        property bool dragged: false
+        onPressed: function(mouse) {
+            lastX = mouse.x; lastY = mouse.y
+            downX = mouse.x; downY = mouse.y
+            dragged = false
+        }
         onPositionChanged: function(mouse) {
             if (!pressed) return
+            if (Math.abs(mouse.x - downX) + Math.abs(mouse.y - downY) > 12)
+                dragged = true
             // Wrap equivalent angles to keep precision over repeated full turns.
             root.yaw = (root.yaw + (mouse.x - lastX) * .25) % 360
             root.pitch = (root.pitch + (mouse.y - lastY) * .2) % 360
             lastX = mouse.x; lastY = mouse.y
         }
-        onDoubleClicked: { root.yaw = -18; root.pitch = -18 }
+        // Held back for the double-click interval, so the second click of a
+        // "reset the view" double click doesn't land on an open menu
+        onClicked: if (!dragged) clickTimer.restart()
+        onDoubleClicked: { clickTimer.stop(); root.yaw = -18; root.pitch = -18 }
+        Timer {
+            id: clickTimer
+            interval: Qt.styleHints.mouseDoubleClickInterval
+            onTriggered: root.clicked()
+        }
     }
 }

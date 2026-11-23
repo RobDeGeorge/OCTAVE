@@ -176,7 +176,7 @@
         <!-- Custom Themes -->
         <h2 id="custom-themes">Custom (Saved Album Art) Themes</h2>
 
-        <p>Custom themes are created from the Media Room: while Album Art Capture is active, the album-art popup's "Save as Theme" button (<span class="file-path">frontend/MediaRoom.qml</span>) calls</p>
+        <p>A custom theme is a saved album-art palette. The Media Room's album-art popup had a "Save as Theme" button for it until 2026-11-23; no page of the QML UI offers one now, so saved themes are the ones already in the settings file or stored by a client of the service API. Saving is</p>
 
         <pre><code>settingsManager.<span class="fn">save_custom_theme</span>(themeName, App.Style.albumArtTheme, mediaRoom.currentAlbumArt)</code></pre>
 
@@ -196,7 +196,7 @@
         <h3>Triggers</h3>
         <ul>
           <li>One rule, in <a href="signals-slots-reference.html#nowPlaying"><code>NowPlaying</code></a>: while <code>themeSetting</code> is "Album Art Capture", the colours follow the art of whatever is playing, the phone's while it has the media controls, else the local track's. It extracts when <code>nowPlaying.artUrl</code> changes (a new track, a source switch, the phone's art arriving after its metadata, the restored track at startup; the same art keeps the same colours, so nothing runs) and when the theme is chosen. Local art goes through <code>extractColorsFromAlbumArt(file)</code>, the phone's through <code>extractColorsFromImage(artUrl)</code>.</li>
-          <li>On demand: Media Room's "Save as Theme" popup calls <code>nowPlaying.extractArtColors()</code>.</li>
+          <li>On demand: <code>nowPlaying.extractArtColors()</code> (no page of the QML UI calls it since the Media Room's "Save as Theme" button went).</li>
           <li>Until open-backend #5 the rule lived in four places (MediaManager's own hooks and a startup timer, <code>Main.qml</code> twice, the Display-page toggle), so a theme switch extracted twice and the toggle ignored the phone.</li>
         </ul>
 
