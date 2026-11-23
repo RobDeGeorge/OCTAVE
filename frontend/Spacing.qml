@@ -88,9 +88,9 @@ QtObject {
     
     // Media room metadata
     property real mediaRoomMetaSpacingPercent: .01
-    property real mediaRoomMetaDataSongTextPercent: .06
-    property real mediaRoomMetaDataBandTextPercent: .05
-    property real mediaRoomMetaDataAlbumTextPercent: .05
+    property real mediaRoomMetaDataSongTextPercent: .078
+    property real mediaRoomMetaDataBandTextPercent: .064
+    property real mediaRoomMetaDataAlbumTextPercent: .064
     
     // Media room artwork
     property real mediaRoomAlbumArtHeightPercent: .6

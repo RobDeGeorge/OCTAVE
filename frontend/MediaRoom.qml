@@ -319,8 +319,9 @@ Item {
                 // Volume icon control
                 Control {
                     id: volumeIconControl
-                    implicitWidth: App.Spacing.bottomBarMuteButtonWidth
-                    implicitHeight: App.Spacing.bottomBarMuteButtonHeight
+                    // 1.4 of the bottom bar's mute button: it reads small up here
+                    implicitWidth: Math.round(App.Spacing.bottomBarMuteButtonWidth * 1.4)
+                    implicitHeight: Math.round(App.Spacing.bottomBarMuteButtonHeight * 1.4)
                     Layout.alignment: Qt.AlignVCenter
                     // Portrait: as wide as the % text, so the slider is centred
                     Layout.preferredWidth: App.Spacing.isPortrait
@@ -460,7 +461,8 @@ Item {
                     id: volumePercentText
                     text: Math.round(volumeSlider.value) + "%"
                     color: App.Style.mediaRoomSeekColor
-                    font.pixelSize: App.Spacing.mediaRoomSliderDurationText
+                    // A third larger than the seek bar's times
+                    font.pixelSize: Math.round(App.Spacing.mediaRoomSliderDurationText * 1.35)
                     font.family: mediaRoom.globalFont
                     Layout.minimumWidth: App.Spacing.isPortrait ? 0 : dp(40)
                     Layout.preferredWidth: App.Spacing.isPortrait ? volumeIconControl.Layout.preferredWidth : -1
@@ -565,6 +567,7 @@ Item {
 
                     // Media Controls Row
                     RowLayout {
+                        id: transportRow
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignHCenter
                         // Portrait: spread the keys across more of the page width.
@@ -572,9 +575,33 @@ Item {
                         // two margins), not the column's own: a spacing that follows
                         // the width the layout is just handing out makes it start
                         // over ("Detected recursive rearrange")
+                        // Landscape: the three keys grow to fill the column
+                        // (previous, play at 1.25 of a key, next, and a gap of
+                        // 0.6 of a key each side of play: 4.45 keys across),
+                        // held by the height so the title keeps its room and
+                        // never under the Spacing sizes. Portrait keeps those.
+                        readonly property real columnRoom:
+                            mediaControlsContainer.width * (mediaRoom.showMusicDevice ? 0.56 : 0.6) - dp(28)
+                        readonly property int keySize: mediaControlsGrid.portrait
+                            ? App.Spacing.mediaRoomKeySize
+                            : Math.max(App.Spacing.mediaRoomKeySize,
+                                       Math.round(Math.min(columnRoom / 4.45,
+                                                           mediaControlsContainer.height * 0.45 / 1.25)))
+                        readonly property int playKeySize: mediaControlsGrid.portrait
+                            ? App.Spacing.mediaRoomPlayKeySize
+                            : Math.max(App.Spacing.mediaRoomPlayKeySize, Math.round(keySize * 1.25))
                         spacing: mediaControlsGrid.portrait
                             ? Math.max(App.Spacing.mediaRoomBetweenButton, (mediaControlsContainer.width - dp(40)) * 0.07)
-                            : App.Spacing.mediaRoomBetweenButton
+                            : Math.max(App.Spacing.mediaRoomBetweenButton,
+                                       Math.min(keySize * 0.6, (columnRoom - 2 * keySize - playKeySize) / 2))
+                        // Touch targets reach past the keys: sideways to the
+                        // middle of each gap, so the three meet with nothing dead
+                        // between them, and up and down into the empty space
+                        // (less in portrait, where the title sits close above)
+                        readonly property real hitSide: spacing / 2
+                        readonly property real hitVertical: mediaControlsGrid.portrait
+                            ? App.Spacing.mediaRoomBetweenButton / 2
+                            : App.Spacing.mediaRoomSpacing
 
                         // Portrait: shuffle joins this row (it is reparented
                         // here), balanced by an empty slot after Next
@@ -587,8 +614,8 @@ Item {
 
                         Control { //Previous button
                             id: previousControl
-                            implicitHeight: App.Spacing.mediaRoomPreviousButtonHeight
-                            implicitWidth: App.Spacing.mediaRoomPreviousButtonWidth
+                            implicitHeight: transportRow.keySize
+                            implicitWidth: transportRow.keySize
 
                             property bool _tiltEnabled: settingsManager && settingsManager.show3DButtonTilt
                             property real tiltAngle: (_tiltEnabled && prevMouseArea.pressed) ? 15 : 0
@@ -640,7 +667,10 @@ Item {
                             MouseArea {
                                 id: prevMouseArea
                                 anchors.fill: parent
-                                anchors.margins: -App.Spacing.mediaRoomBetweenButton / 2
+                                anchors.leftMargin: -transportRow.hitSide
+                                anchors.rightMargin: -transportRow.hitSide
+                                anchors.topMargin: -transportRow.hitVertical
+                                anchors.bottomMargin: -transportRow.hitVertical
                                 onClicked: {
                                     mediaRoom._slideDirection = -1
                                     // Fire animation BEFORE the backend call — enter card
@@ -655,8 +685,8 @@ Item {
 
                         Control { //Play Button
                             id: playControl
-                            implicitHeight: App.Spacing.mediaRoomPlayButtonHeight
-                            implicitWidth: App.Spacing.mediaRoomPlayButtonWidth
+                            implicitHeight: transportRow.playKeySize
+                            implicitWidth: transportRow.playKeySize
 
                             property bool _tiltEnabled: settingsManager && settingsManager.show3DButtonTilt
                             property real tiltAngle: (_tiltEnabled && playMouseArea.pressed) ? 25 : 0
@@ -706,7 +736,10 @@ Item {
                             MouseArea {
                                 id: playMouseArea
                                 anchors.fill: parent
-                                anchors.margins: -App.Spacing.mediaRoomBetweenButton / 2
+                                anchors.leftMargin: -transportRow.hitSide
+                                anchors.rightMargin: -transportRow.hitSide
+                                anchors.topMargin: -transportRow.hitVertical
+                                anchors.bottomMargin: -transportRow.hitVertical
                                 onClicked: {
                                     if (mediaRoom._np) mediaRoom._np.togglePlay()
                                 }
@@ -715,8 +748,8 @@ Item {
                         
                         Control { //Next Button
                             id: nextControl
-                            implicitHeight: App.Spacing.mediaRoomNextButtonHeight
-                            implicitWidth: App.Spacing.mediaRoomNextButtonWidth
+                            implicitHeight: transportRow.keySize
+                            implicitWidth: transportRow.keySize
 
                             property bool _tiltEnabled: settingsManager && settingsManager.show3DButtonTilt
                             property real tiltAngle: (_tiltEnabled && nextMouseArea.pressed) ? 15 : 0
@@ -768,7 +801,10 @@ Item {
                             MouseArea {
                                 id: nextMouseArea
                                 anchors.fill: parent
-                                anchors.margins: -App.Spacing.mediaRoomBetweenButton / 2
+                                anchors.leftMargin: -transportRow.hitSide
+                                anchors.rightMargin: -transportRow.hitSide
+                                anchors.topMargin: -transportRow.hitVertical
+                                anchors.bottomMargin: -transportRow.hitVertical
                                 onClicked: {
                                     mediaRoom._slideDirection = 1
                                     mediaRoom._userInitiatedChange = true
@@ -1398,9 +1434,11 @@ Item {
             parent: App.Spacing.isPortrait ? portraitShuffleSlot : mainContent
             visible: !playlistEmpty
             opacity: mediaRoom._np && mediaRoom._np.canShuffle ? 1.0 : 0.35
-            // The same box as previous / next (its icon is drawn at 0.7 of it)
+            // Portrait: the same box as previous / next (keyBox). Landscape:
+            // half as large again, as far as the strip beside the seek bar allows
             readonly property int keyBox: App.Spacing.mediaRoomKeySize
-            width: keyBox
+            width: App.Spacing.isPortrait ? keyBox
+                 : Math.max(dp(48), Math.min(Math.round(keyBox * 1.5), durationBar.x - dp(12)))
             height: width
             y: App.Spacing.isPortrait ? 0 : durationBar.y + (durationBar.height - height) / 2 - dp(15)
             x: App.Spacing.isPortrait ? 0 : (durationBar.x - width) / 2
@@ -1412,8 +1450,8 @@ Item {
                 Image {
                     id: shuffleButtonImage
                     anchors.centerIn: parent
-                    width: parent.width * 0.7
-                    height: parent.height * 0.7
+                    width: parent.width * 0.75
+                    height: parent.height * 0.75
                     source: "./assets/shuffle_button.svg"
                     sourceSize: Qt.size(width * 2, height * 2)
                     fillMode: Image.PreserveAspectFit
