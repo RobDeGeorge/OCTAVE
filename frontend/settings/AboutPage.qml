@@ -344,11 +344,14 @@ Flickable {
                         }
                     }
 
-                    // Show remote commit info when update is available
+                    // Show remote commit info when update is available. A self-update
+                    // in any state keeps it up too: a finished build sets updateStatus
+                    // to "up-to-date", and the Restart button lives in here
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: App.Spacing.overallSpacing * 0.3
-                        visible: networkManager && networkManager.updateStatus === "update-available"
+                        visible: networkManager && (networkManager.updateStatus === "update-available"
+                                                    || networkManager.selfUpdateStatus !== "")
 
                         RowLayout {
                             Layout.fillWidth: true
@@ -416,6 +419,7 @@ Flickable {
                                 Layout.fillWidth: true
                                 spacing: App.Spacing.overallSpacing
                                 visible: networkManager && networkManager.canSelfUpdate
+                                         && networkManager.updateStatus === "update-available"
                                          && !networkManager.workingTreeDirty
                                          && networkManager.selfUpdateStatus !== "fetching"
                                          && networkManager.selfUpdateStatus !== "restart-required"
@@ -561,9 +565,10 @@ Flickable {
                                 }
 
                                 SettingsButton {
+                                    objectName: "updateRestartButton"
                                     text: "Restart Now"
                                     buttonColor: "#4CAF50"
-                                    height: dp(30)
+                                    height: dp(44)
                                     onClicked: {
                                         if (networkManager)
                                             networkManager.restartApp()
