@@ -223,9 +223,6 @@ public:
     // PIDs the frame holds (parseSupportedPids).
     static std::optional<QVector<uint8_t>> parseFreezeFrameData(const QStringList &lines, int pid);
 
-    // Default PIDs to poll (the 16 most common)
-    static QList<PidKey> defaultPids();
-
     // Access the full PID table
     static const QHash<PidKey, PidEntry> &pidTable();
 
@@ -243,9 +240,6 @@ public:
 
     // Model year and manufacturer from a VIN
     static VinInfo decodeVin(const QString &vin);
-
-    // Get all parameter names from the PID table
-    static QStringList allParameterNames();
 
     // python-obd command names of every table entry whose PID appears in the
     // vehicle's supported set (mode 01 PID numbers). ELM_VOLTAGE is always

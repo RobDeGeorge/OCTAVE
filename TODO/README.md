@@ -48,7 +48,6 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 
 | File | Goal | Effort | Needs |
 |---|---|---|---|
-| [engine-sound.md](engine-sound.md) | Pick a real engine from a catalog and hear it through the speakers over everything, from RPM / throttle or speed in an EV; works in the browser demo | blocked on clean recordings, then L–XL | desktop, browser, Jeep + a CAN car |
 | [phone-mirror-android-host.md](phone-mirror-android-host.md) | OCTAVE on an Android tablet mirrors a phone | XL | tablet + phone |
 | [android-auto-native-receiver.md](android-auto-native-receiver.md) | Android Auto straight into OCTAVE over adb (works on desktop; Pi, AOA next), no DHU | L | AA phone, Pi |
 | [carplay-native.md](carplay-native.md) | CarPlay from an iPhone on USB with no dongle, on a user-supplied Apple identity (spike first) | M research, L spike | iPhone on USB |

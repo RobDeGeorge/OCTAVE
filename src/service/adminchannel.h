@@ -44,7 +44,6 @@ public:
 
     // Listen for the instance whose config folder is `configDir`
     bool listen(const QString &configDir);
-    QString serverName() const { return m_name; }
 
     // The channel name (a socket path on Unix, a pipe name on Windows)
     static QString nameFor(const QString &configDir);

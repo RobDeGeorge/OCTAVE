@@ -486,7 +486,7 @@ accumulator += delta;
         <h3>Android Auto, DHU backend &mdash; <code>image://dhuframe</code></h3>
         <p>
           Google's Desktop Head Unit is a separate process with its own window. OCTAVE launches it and
-          <em>captures the window</em> with <code>QScreen::grabWindow()</code>. <code>findDhuWindow()</code> returns zero, so automatic embedded capture is incomplete (on Linux and macOS the capture falls back to the whole screen). See <a href="phone-mirror-android-auto.html#android-auto">Android Auto limitations</a>. Captured frames are plain
+          <em>captures the window</em> with <code>QScreen::grabWindow()</code>. Nothing looks the window up, so automatic embedded capture is incomplete (on Linux and macOS the capture falls back to the whole screen). See <a href="phone-mirror-android-auto.html#android-auto">Android Auto limitations</a>. Captured frames are plain
           <code>QImage</code>s, so a <code>QQuickImageProvider</code> named <code>dhuframe</code> serves the latest
           one and QML re-requests it:
         </p>

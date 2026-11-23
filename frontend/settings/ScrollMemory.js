@@ -1,2 +1,0 @@
-.pragma library
-var positions = {}

@@ -113,7 +113,6 @@ public:
     // Replace the wall clock (ms since epoch). With a clock installed sample
     // times come straight from it instead of start + monotonic elapsed.
     void setClock(std::function<qint64()> clock) { m_clock = std::move(clock); }
-    void setMaxBytes(qint64 bytes) { m_maxBytes = bytes; }
     // Least time between two liveTripChanged signals (default 5 s)
     void setLiveRefreshMs(int ms) { m_liveRefreshMs = ms; }
     // Run the trip-boundary check now (the 1 s timer does this normally)

@@ -959,28 +959,6 @@ VinInfo ELM327Protocol::decodeVin(const QString &vinIn)
     return info;
 }
 
-QList<PidKey> ELM327Protocol::defaultPids()
-{
-    return {
-        {1, 0x0C},  // RPM
-        {1, 0x0D},  // Speed
-        {1, 0x05},  // Coolant Temp
-        {1, 0x04},  // Engine Load
-        {1, 0x11},  // Throttle Position
-        {1, 0x0F},  // Intake Air Temp
-        {1, 0x0B},  // Intake Manifold Pressure
-        {1, 0x42},  // Control Module Voltage
-        {1, 0x2F},  // Fuel Level
-        {1, 0x10},  // MAF
-        {1, 0x0E},  // Timing Advance
-        {1, 0x06},  // Short Fuel Trim 1
-        {1, 0x07},  // Long Fuel Trim 1
-        {1, 0x14},  // O2 B1S1
-        {1, 0x0A},  // Fuel Pressure
-        {1, 0x5C},  // Oil Temp
-    };
-}
-
 QStringList ELM327Protocol::supportedCommandNames(const QSet<int> &supportedPids)
 {
     QStringList names;
@@ -996,22 +974,6 @@ QStringList ELM327Protocol::supportedCommandNames(const QSet<int> &supportedPids
             for (const ExtendedSignal &s : it.value())
                 names.append(s.paramId);
         }
-    }
-    names.sort();
-    return names;
-}
-
-QStringList ELM327Protocol::allParameterNames()
-{
-    QStringList names;
-    const auto &table = pidTable();
-    for (auto it = table.constBegin(); it != table.constEnd(); ++it) {
-        names.append(it.value().name);
-    }
-    const auto &ext = extendedPidTable();
-    for (auto it = ext.constBegin(); it != ext.constEnd(); ++it) {
-        for (const ExtendedSignal &s : it.value())
-            names.append(s.name);
     }
     names.sort();
     return names;

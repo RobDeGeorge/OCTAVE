@@ -87,7 +87,6 @@ public:
 
     QString source() const;
     Source sourceKind() const { return m_source; }
-    bool isPhone() const { return m_source == Source::Phone; }
     bool playing() const { return m_playing; }
     bool hasTrack() const { return m_hasTrack; }
     QString title() const { return m_title; }
@@ -138,7 +137,6 @@ private:
     void onAaConnectedChanged();
     void onAaMicrophone(bool open);
     void readAaTrack();
-    void readAaState();
     void readSpotify();
     void onSpotifyStartedElsewhere();
     // The mirrored phone's playing app is Spotify: the phone source and the

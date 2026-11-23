@@ -41,11 +41,6 @@ bool AndroidAutoMedia::recentUserIntent() const
     return m_sinceIntent.isValid() && m_sinceIntent.elapsed() < kIntentWindowMs;
 }
 
-qint64 AndroidAutoMedia::msSinceConnect() const
-{
-    return m_connected && m_sinceConnect.isValid() ? m_sinceConnect.elapsed() : -1;
-}
-
 void AndroidAutoMedia::setConnected(bool connected)
 {
     if (connected == m_connected)
@@ -53,9 +48,7 @@ void AndroidAutoMedia::setConnected(bool connected)
     m_connected = connected;
     m_focus = false;
     m_pendingGain = false;
-    if (connected) {
-        m_sinceConnect.start();
-    } else {
+    if (!connected) {
         // The track stays on show (paused) until something else plays
         setPlaying(false);
         if (m_micOpen)

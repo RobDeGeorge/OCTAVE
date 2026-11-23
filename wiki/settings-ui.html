@@ -289,9 +289,6 @@ ExpandedCards.<span class="fn">load</span>(settingsManager)     <span class="cmt
 
         <p>The cache exists so that creating a card never touches the disk and so the card does not hold a <code>settingsManager</code> binding (the comment cites binding re-evaluation cascades). <code>SettingsManager</code> provides the generic <code>get_setting_with_default(key, default)</code> / <code>save_setting(key, value)</code> pair the module uses.</p>
 
-        <h3>ScrollMemory.js</h3>
-        <p>Two lines: <code>.pragma library</code> and <code>var positions = {}</code>. Layouts store <code>positions[section] = flickable.contentY</code> on every scroll and restore it after the page loads. Because it is a library singleton the offsets survive layout switches within a session but not an app restart.</p>
-
         <!-- Adding a Page -->
         <h2 id="adding-page">Adding a New Settings Page</h2>
 

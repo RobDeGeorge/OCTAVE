@@ -3474,41 +3474,6 @@ void MediaManager::_precache_tracks(const QStringList &filenames)
     }
 }
 
-// ─── Update media directory ────────────────────────────────────────
-
-void MediaManager::update_media_directory(const QString &directory)
-{
-    QDir dir(directory);
-    if (!dir.exists())
-        return;
-
-    m_mediaDir = directory;
-    _clear_metadata_cache();
-    m_albumArtCache.clear();
-    m_accessCount.clear();
-    invalidate_stats_cache();
-
-    get_media_files();
-
-    const QString currentFile = get_current_file();
-    if (m_isPlaying) {
-        const QString path = _get_file_path(currentFile);
-        if (!currentFile.isEmpty() && !path.isEmpty() && QFile::exists(path)) {
-            play_file(currentFile);
-        } else {
-            QStringList files = get_media_files(false);
-            if (!files.isEmpty()) {
-                play_file(files.first());
-            } else {
-                m_player->stop();
-                m_isPlaying = false;
-                m_isPaused = true;
-                emit playStateChanged(false);
-            }
-        }
-    }
-}
-
 QString MediaManager::get_default_media_dir()
 {
     return m_defaultMediaDir;

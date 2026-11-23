@@ -87,7 +87,7 @@
             <tr><td><span class="file-path">src/managers/obdmanager_diagnostics.cpp</span></td><td><span class="platform-badge all">All</span></td><td>Diagnostic mode, trouble codes, the MIL, freeze frame, the VIN, the bus monitor's manager side.</td></tr>
             <tr><td><span class="file-path">src/managers/obdmanager_android.cpp</span></td><td><span class="platform-badge android">Android</span></td><td>The Android BLE state machine (<code>#ifdef Q_OS_ANDROID</code>; empty elsewhere).</td></tr>
             <tr><td><span class="file-path">src/managers/obdconnectionworker.{h,cpp}</span></td><td><span class="platform-badge all">All</span></td><td><code>OBDConnectionWorker</code> (worker thread: <code>QSerialPort</code> or another transport, init, polling, DTC, scan, bus monitor). <span class="file-path">obdmanager.h</span> includes it.</td></tr>
-            <tr><td><span class="file-path">src/managers/elm327protocol.{h,cpp}</span></td><td><span class="platform-badge all">All</span></td><td>Static <code>ELM327Protocol</code> class (init commands, PID table with a <code>commandName</code> column, parsers, <code>elmVoltageRequest()</code> / <code>parseElmVoltage()</code>, <code>supportedCommandNames()</code>, <code>defaultPids()</code>), <code>ResponseBuffer</code>, and the <code>octave.elm327</code> logging category.</td></tr>
+            <tr><td><span class="file-path">src/managers/elm327protocol.{h,cpp}</span></td><td><span class="platform-badge all">All</span></td><td>Static <code>ELM327Protocol</code> class (init commands, PID table with a <code>commandName</code> column, parsers, <code>elmVoltageRequest()</code> / <code>parseElmVoltage()</code>, <code>supportedCommandNames()</code>), <code>ResponseBuffer</code>, and the <code>octave.elm327</code> logging category.</td></tr>
             <tr><td><span class="file-path">android/src/org/octave/app/OctaveOBDBridge.java</span></td><td><span class="platform-badge android">Android</span></td><td>Static Java class wrapping <code>BluetoothGatt</code>. Called from C++ via <code>QJniObject</code>: <code>connect</code>, <code>disconnect</code>, <code>write</code>, <code>stateCode</code>, <code>pollResponse</code>, <code>pollLog</code>, <code>lastError</code>, <code>lastEvent</code>, <code>bondedDevices</code> (paired adapters as <code>"MAC|name"</code>).</td></tr>
             <tr><td><span class="file-path">src/managers/obdadapterfinder.{h,cpp}</span>, <span class="file-path">src/platform/bluezpairer.{h,cpp}</span></td><td><span class="platform-badge all">All; full flow on Linux</span></td><td><code>OBDAdapterFinder</code> (QML <code>obdAdapterFinder</code>): Bluetooth discovery, PIN pairing through BlueZ, trust, SPP channel lookup, then hand-off to <code>connectDirect()</code>. See <a href="#adapter-finder">Adapter Finder</a>.</td></tr>
             <tr><td><span class="file-path">frontend/OBDAdapterSheet.qml</span></td><td><span class="platform-badge all">QML</span></td><td>The "Connect OBD2 Adapter" sheet the finder drives.</td></tr>
@@ -215,9 +215,7 @@ ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
           unless <code>setConnectionTimeout()</code> changed it).
           An empty reply, <code>NO DATA</code> or
           <code>UNABLE</code> means "adapter but no vehicle": the worker <em>releases the port</em> and emits
-          <code>initComplete(false, "Connected to adapter, no vehicle response")</code>. Note the header comment claims
-          <code>ELM327Protocol::defaultPids()</code> lists "the 16 most common"; that list is not used by the worker --
-          the poll list is built from consumer demand by <code>buildPidsToWatch()</code> (see <a href="#watcher-system">Which PIDs Get Polled</a>).
+          <code>initComplete(false, "Connected to adapter, no vehicle response")</code>. The poll list is built from consumer demand by <code>buildPidsToWatch()</code> (see <a href="#watcher-system">Which PIDs Get Polled</a>).
         </p>
         <p>
           <strong>Android</strong>: the same table is walked by a single-shot <code>QTimer</code>
@@ -999,7 +997,6 @@ t[kElmVoltageKey] = {<span class="str">"ELM Voltage"</span>, <span class="str">"
             <tr><td><code>parseResponseLines(lines, mode, pid)</code></td><td>Like <code>parseResponse</code>, from every line of a reply: joins a CAN multi-frame answer and returns the first message answering <code>mode</code>/<code>pid</code>. Used for the multi-value PIDs.</td></tr>
             <tr><td><code>decodeExtendedPid(mode, pid, bytes)</code></td><td><code>[(paramId, value), ...]</code> from <code>extendedPidTable()</code>, skipping values whose support bit is clear or whose bytes are missing. Covered by <code>decodeExtendedPid</code> in <span class="file-path">tests/cpp/tst_elm327protocol.cpp</span>.</td></tr>
             <tr><td><code>parseVin(lines)</code>, <code>decodeVin(vin)</code></td><td>Mode 09 PID 02 reply to the 17-character VIN (<code>""</code> for <code>NO DATA</code>), and VIN to make + model year. See <a href="#vin">Vehicle identity</a>.</td></tr>
-            <tr><td><code>defaultPids()</code></td><td>16 common PIDs. Not used by the runtime poll list.</td></tr>
           </tbody>
         </table>
         <h3>ResponseBuffer</h3>

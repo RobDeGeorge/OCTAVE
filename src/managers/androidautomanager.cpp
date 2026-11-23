@@ -533,38 +533,6 @@ bool AndroidAutoManager::prepareAdbConnection()
     return true;
 }
 
-// ─── Window finding ──────────────────────────────────────────────────
-
-int AndroidAutoManager::findDhuWindow() const
-{
-    // Platform-specific window enumeration.
-    // On Windows we would use EnumWindows; on X11 we could walk the
-    // window tree.  Since DHU is rarely used and the capture already
-    // uses QScreen::grabWindow(), we rely on QProcess::processId()
-    // at launch time and skip enumeration for now.
-    //
-    // The m_dhuHwnd is set by pollAndHideDhu() on Windows or
-    // setupSeamlessCapture() on other platforms via
-    // QProcess::processId().
-
-#ifdef Q_OS_WIN
-    // On Windows, enumerate top-level windows looking for "Desktop Head Unit"
-    // or the DHU process ID.
-    if (!m_dhuProcess)
-        return 0;
-
-    // We cannot call Win32 EnumWindows from pure Qt without winapi
-    // includes.  Instead, use a simple heuristic: wait for the process
-    // to create a window, then return its process ID as a stand-in.
-    // Real embedding code would use platform-native APIs.
-    return 0;  // Handled in pollAndHideDhu via WinAPI
-#else
-    // On Linux/macOS, we don't embed the window.  We just capture it
-    // via QScreen::grabWindow(0) (whole-screen fallback) if needed.
-    return 0;
-#endif
-}
-
 // ─── Slots ───────────────────────────────────────────────────────────
 
 QString AndroidAutoManager::getDhuInstallInstructions()

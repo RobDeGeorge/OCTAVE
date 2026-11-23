@@ -231,9 +231,6 @@ private:
     bool    setupAdbForward();
     bool    prepareAdbConnection();
 
-    // Window finding (platform-specific)
-    int findDhuWindow() const;
-
     // Members
     QProcess    *m_dhuProcess      = nullptr;
     DhuCapture  *m_dhuCaptureObj   = nullptr;

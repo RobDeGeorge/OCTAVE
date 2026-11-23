@@ -63,7 +63,6 @@ public:
     ~Runtime() override;
 
     bool devMode() const { return m_dev; }
-    bool profiling() const { return m_profile; }
 
     // Before engine.load(): context properties, the simulated adapter
     void beforeLoad();

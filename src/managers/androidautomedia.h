@@ -48,8 +48,6 @@ public:
     // control sent to it, a voice request
     void noteUserIntent();
     bool recentUserIntent() const;
-    // Milliseconds since the session started running (-1 when not connected)
-    qint64 msSinceConnect() const;
 
     // ── fed by AndroidAutoManager ──
     void setConnected(bool connected);
@@ -101,7 +99,6 @@ private:
     int m_reportedPositionMs = 0;
     QElapsedTimer m_sinceReport;
     QElapsedTimer m_sinceIntent;
-    QElapsedTimer m_sinceConnect;
     bool m_micOpen = false;
     bool m_guidance = false;
     bool m_system = false;

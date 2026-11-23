@@ -412,7 +412,6 @@ private:
     QString _strip_single_filename(const QString &filename);
     void _scan_library_inner(bool resetDisplayNames);
     void _precache_tracks(const QStringList &filenames);
-    void update_media_directory(const QString &directory);
 
     // Album art extraction helpers (TagLib)
     QString _extract_album_art_mp3(const QString &filePath, const QString &albumId);
