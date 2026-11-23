@@ -14,6 +14,9 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QHash>
+#include <QHostAddress>
+#include <QHostInfo>
+#include <QImageReader>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -1537,6 +1540,44 @@ void SettingsManager::remove_from_directory_history(const QString &folderPath)
 }
 
 // --- Custom themes ---
+// The picture of a custom theme comes from a caller that may be a paired
+// device holding only the "settings" scope, so its source is not trusted:
+// a local path used to be copied whatever it named (any file the app can
+// read, a key or a token among them, into theme_art/), and a URL was
+// fetched wherever it pointed (the head unit asking for addresses on its
+// own network on a stranger's behalf). Both take pictures only now.
+namespace {
+const qint64 kMaxThemeArtBytes = 16 * 1024 * 1024;
+
+// A readable picture of a sane size, whatever the file is called
+bool isPictureFile(const QString &path)
+{
+    const QFileInfo info(path);
+    if (!info.isFile() || info.size() <= 0 || info.size() > kMaxThemeArtBytes)
+        return false;
+    QImageReader reader(path);
+    reader.setDecideFormatFromContent(true);
+    return reader.canRead();
+}
+
+// An address out on the internet: not this machine, not its own network
+bool isPublicAddress(const QHostAddress &a)
+{
+    if (a.isNull() || a.isLoopback() || a.isLinkLocal() || a.isPrivateUse() || a.isMulticast() || a.isBroadcast())
+        return false;
+    bool v4 = false;
+    const quint32 ip = a.toIPv4Address(&v4);   // also an IPv4 address written as IPv6
+    if (v4) {
+        const QHostAddress four(ip);
+        if (four.isLoopback() || four.isLinkLocal() || four.isPrivateUse() || four.isMulticast() || four.isBroadcast())
+            return false;
+        if ((ip >> 24) == 0 || (ip >> 22) == (0x64400000u >> 22))   // 0.0.0.0/8, 100.64.0.0/10 (carrier NAT)
+            return false;
+    }
+    return true;
+}
+} // namespace
+
 void SettingsManager::save_custom_theme(const QString &name, const QVariantMap &themeData,
                                          const QString &albumArtSource)
 {
@@ -1560,7 +1601,9 @@ void SettingsManager::save_custom_theme(const QString &name, const QVariantMap &
         QString localPath = albumArtSource.startsWith(QStringLiteral("file://"))
             ? QUrl(albumArtSource).toLocalFile()
             : albumArtSource;
-        if (!localPath.isEmpty() && QFile::exists(localPath)) {
+        if (!localPath.isEmpty() && QFile::exists(localPath) && !isPictureFile(localPath)) {
+            qCWarning(lcSettings) << "Theme art refused, not a picture:" << localPath;
+        } else if (!localPath.isEmpty() && QFile::exists(localPath)) {
             QString ext = QFileInfo(localPath).suffix();
             if (ext.isEmpty()) ext = QStringLiteral("jpg");
             QString dest = artDir + QStringLiteral("/theme_") + safeName + QStringLiteral(".") + ext;
@@ -1598,10 +1641,50 @@ void SettingsManager::downloadThemeArtAsync(const QString &themeName, const QStr
         const QString dest = artDir + QStringLiteral("/theme_") + safeName + QStringLiteral(".jpg");
         // Use QProcess + curl as a portable download approach
 #if QT_CONFIG(process)
+        // Only from the internet: the name is looked up here, every address
+        // it has must be a public one, and curl is held to the address that
+        // was checked (--resolve), with no redirects, so neither a second
+        // lookup nor a redirect can turn the request towards this network
+        const QUrl target(url, QUrl::StrictMode);
+        const QString host = target.host();
+        const bool https = target.scheme() == QLatin1String("https");
+        if (!target.isValid() || host.isEmpty() || !target.userInfo().isEmpty()
+            || (!https && target.scheme() != QLatin1String("http"))) {
+            qCWarning(lcSettings) << "Theme art refused, not a plain http(s) address:" << url;
+            return;
+        }
+        const QList<QHostAddress> addresses = QHostInfo::fromName(host).addresses();
+        if (addresses.isEmpty()) {
+            qCWarning(lcSettings) << "Theme art: no address for" << host;
+            return;
+        }
+        for (const QHostAddress &a : addresses) {
+            if (!isPublicAddress(a)) {
+                qCWarning(lcSettings) << "Theme art refused:" << host << "is not on the internet (" << a.toString() << ")";
+                return;
+            }
+        }
+        const QHostAddress pinned = addresses.first();
+        const QString pin = QStringLiteral("%1:%2:%3")
+                                .arg(host)
+                                .arg(target.port(https ? 443 : 80))
+                                .arg(pinned.protocol() == QAbstractSocket::IPv6Protocol
+                                         ? QStringLiteral("[%1]").arg(pinned.toString())
+                                         : pinned.toString());
         QProcess proc;
-        proc.start(QStringLiteral("curl"), {QStringLiteral("-sL"), QStringLiteral("-o"), dest, url});
-        const bool downloaded = proc.waitForFinished(30000) && proc.exitStatus() == QProcess::NormalExit
-                                && proc.exitCode() == 0;
+        proc.start(QStringLiteral("curl"),
+                   {QStringLiteral("-s"), QStringLiteral("--proto"), QStringLiteral("=http,https"),
+                    QStringLiteral("--max-redirs"), QStringLiteral("0"), QStringLiteral("--max-time"),
+                    QStringLiteral("30"), QStringLiteral("--max-filesize"), QString::number(kMaxThemeArtBytes),
+                    QStringLiteral("--resolve"), pin, QStringLiteral("-o"), dest, QStringLiteral("--"),
+                    target.toString(QUrl::FullyEncoded)});
+        bool downloaded = proc.waitForFinished(35000) && proc.exitStatus() == QProcess::NormalExit
+                          && proc.exitCode() == 0;
+        if (downloaded && !isPictureFile(dest)) {
+            qCWarning(lcSettings) << "Theme art refused, what came back is not a picture:" << url;
+            QFile::remove(dest);
+            downloaded = false;
+        }
 #else
         const bool downloaded = false;   // no processes in the browser (wasm)
 #endif

@@ -21,7 +21,8 @@ function(octave_add_test name)
     add_executable(${name} ${srcs})
     octave_own_code(${name})
     target_include_directories(${name} PRIVATE "${OCTAVE_SRC}" "${CMAKE_BINARY_DIR}/generated")
-    target_link_libraries(${name} PRIVATE Qt6::Test Qt6::Core ${T_LIBS})
+    # Network: settingsmanager.cpp, which most tests compile, looks a host up (theme art)
+    target_link_libraries(${name} PRIVATE Qt6::Test Qt6::Core Qt6::Network ${T_LIBS})
     target_compile_definitions(${name} PRIVATE
         OCTAVE_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
         OCTAVE_VERSION="${PROJECT_VERSION}"

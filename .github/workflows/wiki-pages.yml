@@ -109,7 +109,19 @@ jobs:
         run: |
           rustup target add wasm32-unknown-unknown
           v=$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/[^0-9.]/, ""); print; exit }' examples/frontends/retro-cluster/Cargo.lock)
-          curl -fsSL "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/$v/wasm-bindgen-$v-x86_64-unknown-linux-musl.tar.gz" | tar -xz -C "$RUNNER_TEMP"
+          # The program is run by the build of a page this workflow publishes, so
+          # it is checked against a hash kept here, not trusted as downloaded.
+          # A Cargo.lock that moves to another version fails here until its
+          # hash is added: sha256 of the release's
+          # wasm-bindgen-<version>-x86_64-unknown-linux-musl.tar.gz
+          case "$v" in
+            0.2.129) sha=82d12bb940e2d4e72e0d5605387fc1b8ca179044e012b620f0ce4e7440e8320e ;;
+            *) echo "::error::no pinned sha256 for wasm-bindgen $v (see this step in wiki-pages.yml)"; exit 1 ;;
+          esac
+          f="wasm-bindgen-$v-x86_64-unknown-linux-musl.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$f" "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/$v/$f"
+          echo "$sha  $RUNNER_TEMP/$f" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$f" -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/wasm-bindgen-$v-x86_64-unknown-linux-musl" >> "$GITHUB_PATH"
       - name: Build the sunlight, arcade and retro-cluster examples for the browser
         run: |

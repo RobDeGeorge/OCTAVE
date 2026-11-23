@@ -13,6 +13,7 @@
 #include <QMetaProperty>
 #include <QSet>
 #include <QHash>
+#include <QImage>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
@@ -252,6 +253,38 @@ private slots:
                  QJsonDocument::fromJson(json.toUtf8()).object());
         sm.delete_custom_theme(QStringLiteral("Dusk"));
         QVERIFY(sm.customThemeData().isEmpty());
+    }
+
+    void themeArtTakesPicturesOnly()
+    {
+        // The source comes from a caller that may hold only the "settings"
+        // scope: a path that isn't a picture (a key, a token file) must not
+        // be copied into theme_art/, whatever it is called
+        SettingsManager sm;
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString secret = dir.filePath("spotify.json");
+        const QString disguised = dir.filePath("token.png");
+        for (const QString &path : {secret, disguised}) {
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write("{\"refreshToken\":\"not for a paired device\"}");
+        }
+        const QString picture = dir.filePath("cover.png");
+        QImage image(8, 8, QImage::Format_RGB32);
+        image.fill(Qt::red);
+        QVERIFY(image.save(picture));
+
+        const QDir art(SettingsManager::getAppDataDir() + "/theme_art");
+        sm.save_custom_theme(QStringLiteral("Leak"), QVariantMap{{"accent", "#ff0000"}}, secret);
+        sm.save_custom_theme(QStringLiteral("Leak2"), QVariantMap{{"accent", "#ff0000"}}, "file://" + disguised);
+        QVERIFY(art.entryList(QDir::Files).isEmpty());
+        QVERIFY(!sm.customThemeData().value("Leak").toMap().contains("albumArt"));
+        QVERIFY(!sm.customThemeData().value("Leak2").toMap().contains("albumArt"));
+
+        sm.save_custom_theme(QStringLiteral("Cover"), QVariantMap{{"accent", "#ff0000"}}, picture);
+        QCOMPARE(art.entryList(QDir::Files), QStringList{QStringLiteral("theme_Cover.png")});
+        QVERIFY(sm.customThemeData().value("Cover").toMap().value("albumArt").toString().endsWith("theme_Cover.png"));
     }
 
     void homeCardsAreCappedUniqueAndMove()
