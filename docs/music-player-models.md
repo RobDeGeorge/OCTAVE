@@ -1,6 +1,6 @@
 # Music player objects
 
-Select **Settings → Media → Now Playing → Music Player Object** (also available in the immersive Now Playing editor). Choices are Album art, Record player, MP3 player, CD player, Cassette player, and iPod. Album art is the default. Drag a model to change its viewing angle; double-click/tap to restore the view.
+Tap the album art (or the player) on the Now Playing page: a ring of the choices opens. Drag or flick it round, tap one to bring it to the front, and tap the front one to use it. Choices are Album art, Vinyl, Record player, MP3 player, CD player, Cassette player, and iPod. Album art is the default. Drag a model to look round it; let go and it eases back to its resting angle (double-click/tap to snap it back at once).
 
 ![Loading animations rendered in Qt Quick 3D](images/music-player-loading.gif)
 

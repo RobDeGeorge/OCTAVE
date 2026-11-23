@@ -136,11 +136,31 @@ Item {
     readonly property bool ipod: device === "iPod"
     readonly property bool digital: ipod || device === "MP3 player"
     property real spin: 0
-    property real yaw: -18
-    property real pitch: -18
+    readonly property real restYaw: -18
+    readonly property real restPitch: -18
+    property real yaw: restYaw
+    property real pitch: restPitch
+    // Let go of after a drag, the player eases back to its resting angle like
+    // memory foam: a short hold, then a slow return by the short way round.
+    function settleHome() {
+        homeward.stop()
+        // The drag wraps the angles at 360: bring each within half a turn of rest
+        yaw = restYaw + ((((yaw - restYaw) % 360) + 540) % 360 - 180)
+        pitch = restPitch + ((((pitch - restPitch) % 360) + 540) % 360 - 180)
+        if (yaw !== restYaw || pitch !== restPitch) homeward.start()
+    }
+    SequentialAnimation {
+        id: homeward
+        PauseAnimation { duration: 450 }
+        ParallelAnimation {
+            NumberAnimation { target: root; property: "yaw"; to: root.restYaw; duration: 1800; easing.type: Easing.InOutCubic }
+            NumberAnimation { target: root; property: "pitch"; to: root.restPitch; duration: 1800; easing.type: Easing.InOutCubic }
+        }
+    }
     onDeviceChanged: {
         cancelLoading()
-        spin = 0; supplySpin = 0; takeupSpin = 0; yaw = -18; pitch = -18
+        homeward.stop()
+        spin = 0; supplySpin = 0; takeupSpin = 0; yaw = restYaw; pitch = restPitch
         if (initialized && animateOnArrival) deviceChangeLoad.restart()
     }
 
@@ -405,10 +425,13 @@ Item {
         property real downY: 0
         property bool dragged: false
         onPressed: function(mouse) {
+            homeward.stop()   // caught mid-return: it stays where the finger has it
             lastX = mouse.x; lastY = mouse.y
             downX = mouse.x; downY = mouse.y
             dragged = false
         }
+        onReleased: root.settleHome()
+        onCanceled: root.settleHome()
         onPositionChanged: function(mouse) {
             if (!pressed) return
             if (Math.abs(mouse.x - downX) + Math.abs(mouse.y - downY) > 12)
@@ -421,7 +444,7 @@ Item {
         // Held back for the double-click interval, so the second click of a
         // "reset the view" double click doesn't land on an open menu
         onClicked: if (!dragged) clickTimer.restart()
-        onDoubleClicked: { clickTimer.stop(); root.yaw = -18; root.pitch = -18 }
+        onDoubleClicked: { clickTimer.stop(); homeward.stop(); root.yaw = root.restYaw; root.pitch = root.restPitch }
         Timer {
             id: clickTimer
             interval: Qt.styleHints.mouseDoubleClickInterval

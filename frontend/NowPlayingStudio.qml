@@ -385,10 +385,7 @@ Item {
 
                         SettingSubcategory {
                             id: roundedSub
-                            title: "Rounded"
-                            togglable: true
-                            checked: settingsManager ? settingsManager.roundedAlbumArt : true
-                            onToggled: function(c) { if (settingsManager) settingsManager.save_rounded_album_art(c) }
+                            title: "Corners"
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 spacing: studio.dp(4)
@@ -409,49 +406,6 @@ Item {
                                         function onAlbumArtCornerRadiusChanged() { radiusSlider.value = settingsManager.albumArtCornerRadius }
                                     }
                                 }
-                            }
-                        }
-
-                        SettingCategory {
-                            title: "Shadow"
-                            inlineContent: SettingsToggle {
-                                id: shadowToggle
-                                compact: true
-                                Layout.preferredWidth: studio.dp(104)
-                                Layout.minimumWidth: studio.dp(104)
-                                checked: settingsManager ? settingsManager.showAlbumArtShadow : true
-                                activeColor: App.Style.accent
-                                inactiveColor: App.Style.hoverColor
-                                onToggled: function(c) { if (settingsManager) settingsManager.save_show_album_art_shadow(c) }
-                            }
-                        }
-
-                        SettingCategory {
-                            title: "Music Player Object"
-                            description: App.MusicDevicePreference.isAvailable()
-                                ? "Drag the player to rotate. Double-tap to reset."
-                                : "3D players require Qt Quick 3D."
-                            NowPlayingButtonGrid {
-                                options: App.MusicDevicePreference.options
-                                currentValue: App.MusicDevicePreference.mode
-                                onSelected: function(value) {
-                                    if (value === "Album art" || App.MusicDevicePreference.isAvailable())
-                                        App.MusicDevicePreference.select(value)
-                                }
-                            }
-                        }
-
-                        SettingCategory {
-                            title: "Vinyl"
-                            inlineContent: SettingsToggle {
-                                id: vinylToggle
-                                compact: true
-                                Layout.preferredWidth: studio.dp(104)
-                                Layout.minimumWidth: studio.dp(104)
-                                checked: settingsManager ? settingsManager.vinylRecordMode : false
-                                activeColor: App.Style.accent
-                                inactiveColor: App.Style.hoverColor
-                                onToggled: function(c) { if (settingsManager) settingsManager.save_vinyl_record_mode(c) }
                             }
                         }
 

@@ -1049,12 +1049,12 @@ Item {
                         // Portrait: nearly the page width, no side cards (no room for them)
                         artFill: mediaControlsGrid.portrait ? 0.92 : 0.85
                         previewEnabled: !mediaControlsGrid.portrait && settingsManager && settingsManager.show3DAlbumPreview
-                        roundedArt: settingsManager && settingsManager.roundedAlbumArt
+                        roundedArt: true   // always; the radius is the setting
                         artRadius: dp(settingsManager ? settingsManager.albumArtCornerRadius : 16)
                         vinylMode: settingsManager && settingsManager.vinylRecordMode
                         sideCardAngle: settingsManager ? settingsManager.sideCardAngle : 30
                         sideCardOpacity: settingsManager ? settingsManager.sideCardOpacity : 0.4
-                        showShadow: settingsManager && settingsManager.showAlbumArtShadow
+                        showShadow: true
                         transitionStyle: settingsManager ? settingsManager.albumArtTransition : "Crossfade"
 
                         // Media state

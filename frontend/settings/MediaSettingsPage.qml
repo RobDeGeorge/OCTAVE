@@ -477,88 +477,30 @@ Flickable {
                     }
 
                     SettingCategory {
-                        title: "Rounded Album Art"
-                        description: "Soft corners on the current track's album art."
+                        title: "Album Art Corners"
+                        description: "How round the corners of the current track's album art are."
 
-                        inlineContent: SettingsToggle {
-                            id: roundedToggle
-                            compact: true
-                            checked: settingsManager ? settingsManager.roundedAlbumArt : true
-                            activeColor: App.Style.accent
-                            inactiveColor: App.Style.hoverColor
-                            onToggled: function(c) { if (settingsManager) settingsManager.save_rounded_album_art(c) }
-                        }
-
-                        SettingSubcategory {
+                        RowLayout {
                             Layout.fillWidth: true
-                            visible: settingsManager && settingsManager.roundedAlbumArt
-                            title: "Corner Radius"
+                            spacing: App.Spacing.overallSpacing
 
-                            RowLayout {
+                            SettingsSlider {
+                                id: radiusSlider
+                                from: 2; to: 32; stepSize: 1
+                                value: settingsManager ? settingsManager.albumArtCornerRadius : 16
+                                activeColor: App.Style.accent
                                 Layout.fillWidth: true
-                                spacing: App.Spacing.overallSpacing
-
-                                SettingsSlider {
-                                    id: radiusSlider
-                                    from: 2; to: 32; stepSize: 1
-                                    value: settingsManager ? settingsManager.albumArtCornerRadius : 16
-                                    activeColor: App.Style.accent
-                                    Layout.fillWidth: true
-                                    onMoved: { if (settingsManager) settingsManager.save_album_art_corner_radius(radiusSlider.value) }
-                                    Connections {
-                                        target: settingsManager
-                                        function onAlbumArtCornerRadiusChanged() { radiusSlider.value = settingsManager.albumArtCornerRadius }
-                                    }
-                                }
-
-                                ValueDisplay {
-                                    text: radiusSlider.value.toFixed(0) + " dp"
-                                    Layout.fillWidth: false
+                                onMoved: { if (settingsManager) settingsManager.save_album_art_corner_radius(radiusSlider.value) }
+                                Connections {
+                                    target: settingsManager
+                                    function onAlbumArtCornerRadiusChanged() { radiusSlider.value = settingsManager.albumArtCornerRadius }
                                 }
                             }
-                        }
-                    }
 
-                    SettingCategory {
-                        title: "Album Art Shadow"
-                        description: "Drop shadow behind the current track's album art."
-
-                        inlineContent: SettingsToggle {
-                            id: shadowToggle
-                            compact: true
-                            checked: settingsManager ? settingsManager.showAlbumArtShadow : true
-                            activeColor: App.Style.accent
-                            inactiveColor: App.Style.hoverColor
-                            onToggled: function(c) { if (settingsManager) settingsManager.save_show_album_art_shadow(c) }
-                        }
-                    }
-
-                    SettingCategory {
-                        title: "Music Player Object"
-                        description: App.MusicDevicePreference.isAvailable()
-                            ? "Replace album art with a real 3D player. Drag to rotate; double-tap to reset."
-                            : "3D players require Qt Quick 3D. Album art remains available."
-                        NowPlayingButtonGrid {
-                            options: App.MusicDevicePreference.options
-                            currentValue: App.MusicDevicePreference.mode
-                            onSelected: function(value) {
-                                if (value === "Album art" || App.MusicDevicePreference.isAvailable())
-                                    App.MusicDevicePreference.select(value)
+                            ValueDisplay {
+                                text: radiusSlider.value.toFixed(0) + " dp"
+                                Layout.fillWidth: false
                             }
-                        }
-                    }
-
-                    SettingCategory {
-                        title: "Vinyl Record Mode"
-                        description: "Swap album art for a spinning vinyl while playing."
-
-                        inlineContent: SettingsToggle {
-                            id: vinylToggle
-                            compact: true
-                            checked: settingsManager ? settingsManager.vinylRecordMode : false
-                            activeColor: App.Style.accent
-                            inactiveColor: App.Style.hoverColor
-                            onToggled: function(c) { if (settingsManager) settingsManager.save_vinyl_record_mode(c) }
                         }
                     }
 
