@@ -175,18 +175,7 @@ Item {
         }
     }
 
-    // "Now Playing" takes the whole window (the Now Playing Studio).
-    function selectTile(cardId, rect) {
-        if (cardId === "media_now_playing"
-            && settingsMenu && settingsMenu.mainWindow
-            && typeof settingsMenu.mainWindow.openNowPlayingStudio === "function") {
-            var p = allTilesGrid.parent.mapToItem(null, rect.x, rect.y)
-            settingsMenu.mainWindow.openNowPlayingStudio(
-                Qt.rect(p.x, p.y, rect.width, rect.height))
-            return
-        }
-        contentArea.openTile(cardId, rect)
-    }
+    function selectTile(cardId, rect) { contentArea.openTile(cardId, rect) }
 
     Rectangle {
         id: contentArea

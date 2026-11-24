@@ -705,16 +705,6 @@ if(OCTAVE_BUILD_TESTS)
     add_subdirectory(tests/cpp)
 endif()
 
-# ---- Shader resources ----
-# Qt RHI's ShaderEffect rejects assets:/ URIs on Android (only qrc:/ or local files),
-# so .qsb shaders must live in the compiled-in Qt resource system. QML branches on
-# Qt.platform.os to use qrc:/ on Android and filesystem on desktop.
-qt_add_resources(octave "shaders"
-    PREFIX "/shaders"
-    BASE "${CMAKE_SOURCE_DIR}/frontend/shaders"
-    FILES "${CMAKE_SOURCE_DIR}/frontend/shaders/dissolve_squares.frag.qsb"
-)
-
 # ---- The service's reference browser client (sdk/web), served at GET / ----
 qt_add_resources(octave "web_client"
     PREFIX "/web-client"

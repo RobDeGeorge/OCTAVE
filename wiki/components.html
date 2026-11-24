@@ -50,7 +50,7 @@
         <table>
           <thead><tr><th>Component</th><th>Root type</th><th>Instantiated by</th></tr></thead>
           <tbody>
-            <tr><td><code>AlbumArtCarousel</code></td><td><code>Item</code></td><td><span class="file-path">MediaRoom.qml</span> (and, through it, the Now Playing Studio preview)</td></tr>
+            <tr><td><code>AlbumArtCarousel</code></td><td><code>Item</code></td><td><span class="file-path">MediaRoom.qml</span> (the look editor shows it on the page itself)</td></tr>
             <tr><td><code>CoverflowCard</code></td><td><code>Item</code></td><td><code>AlbumArtCarousel</code> (three instances)</td></tr>
             <tr><td><code>ThemedIcon</code></td><td><code>Item</code></td><td>settings tiles and cards, hub widgets</td></tr>
             <tr><td><code>TerminalFeedback</code></td><td><code>Rectangle</code></td><td><span class="file-path">settings/MediaSettingsPage.qml</span> (library-scan output); <span class="file-path">OBDDiagnostics.qml</span> has its own inline terminal instead</td></tr>
@@ -72,7 +72,7 @@
         <!-- AlbumArtCarousel -->
         <h2 id="album-art-carousel">AlbumArtCarousel</h2>
 
-        <p><span class="file-path">frontend/AlbumArtCarousel.qml</span> is the album-art display at the centre of <a href="pages.html#mediaroom">MediaRoom</a>. It owns three <code>CoverflowCard</code>s (previous, centre, next), a frozen "exit snapshot" of the outgoing art, the dissolve shader, and ten selectable track-change animations. The header comment states the design: <em>one unified transition list</em> &mdash; <code>transitionStyle</code> picks any of the ten names, and each animation reads <code>previewEnabled</code> to decide whether the side cards take part (3D-flavoured animations animate them when the preview is on and no-op that part when it is off; 2D-flavoured animations never touch them).</p>
+        <p><span class="file-path">frontend/AlbumArtCarousel.qml</span> is the album-art display at the centre of <a href="pages.html#mediaroom">MediaRoom</a>: the square art or, in vinyl mode, a record. It owns three <code>CoverflowCard</code>s (previous, centre, next), a frozen "exit snapshot" of the outgoing art, and the one track-change transition, the same for the square art and the record. The 3D players (<code>MusicDeviceScene</code>) have their own. Until 2026-11-23 there were ten transitions to pick from (<code>transitionStyle</code>, the <code>albumArtTransition</code> setting), one of them a shader.</p>
 
         <h3>Public API</h3>
 
@@ -81,7 +81,6 @@
 <span class="prop">property url</span> artSource: <span class="str">""</span>
 <span class="prop">property url</span> prevArtSource: <span class="str">""</span>
 <span class="prop">property url</span> nextArtSource: <span class="str">""</span>
-<span class="prop">property string</span> transitionStyle: <span class="str">"Crossfade"</span>
 <span class="prop">property bool</span> previewEnabled: <span class="kw">false</span>   <span class="cmt">// show 3D side cards</span>
 <span class="prop">property bool</span> roundedArt: <span class="kw">false</span>
 <span class="prop">property real</span> artRadius: <span class="num">0</span>
@@ -94,9 +93,6 @@
 
 <span class="cmt">// Outputs</span>
 <span class="prop">property bool</span> animBusy: <span class="kw">false</span>
-<span class="kw">readonly property bool</span> dissolveActive
-<span class="kw">readonly property real</span> dissolveProgress
-<span class="kw">readonly property url</span>  dissolveNewArt
 <span class="prop">property real</span> artSize          <span class="cmt">// min(w,h) * (previewEnabled ? 0.75 : 0.85)</span>
 
 <span class="kw">signal</span> <span class="fn">animationFinished</span>()
@@ -104,49 +100,38 @@
 <span class="kw">signal</span> <span class="fn">artClicked</span>()
 <span class="kw">signal</span> <span class="fn">artLoadFailed</span>()
 
-<span class="kw">function</span> <span class="fn">triggerSlide</span>()    <span class="cmt">// dispatch on transitionStyle</span>
-<span class="kw">function</span> <span class="fn">showSideCards</span>()   <span class="cmt">// re-bind side-card opacity after a 3D animation</span></code></pre>
+<span class="kw">function</span> <span class="fn">triggerSlide</span>()    <span class="cmt">// run the transition (call as the track changes)</span>
+<span class="kw">function</span> <span class="fn">showSideCards</span>()   <span class="cmt">// the neighbours are refreshed: fade the side cards back in</span></code></pre>
 
-        <p>MediaRoom binds the inputs straight to settings: <code>show3DAlbumPreview</code>, <code>albumArtCornerRadius</code> (through <code>dp()</code>), <code>vinylRecordMode</code>, <code>sideCardAngle</code>, <code>sideCardOpacity</code> and <code>albumArtTransition</code>; <code>roundedArt</code> and <code>showShadow</code> are fixed on. There is no separate "3D style" setting; the same <code>albumArtTransition</code> string selects a 2D or 3D animation.</p>
+        <p>MediaRoom binds the inputs straight to settings: <code>show3DAlbumPreview</code>, <code>vinylRecordMode</code>, <code>sideCardAngle</code> and <code>sideCardOpacity</code>; <code>roundedArt</code> and <code>showShadow</code> are fixed on and <code>artRadius</code> is 16&nbsp;dp (<code>mediaRoom.albumArtRadius</code>).</p>
 
-        <h3>Transition styles and constants</h3>
+        <h3>The transition</h3>
+
+        <p><code>triggerSlide()</code> runs <code>swapAnim</code>: the old art leaves a short way in the direction the track list moved, shrinking a little and fading; the new art arrives from the other side and settles without a bounce. <code>direction</code> 1 (next) brings the new art from the right, -1 from the left.</p>
 
         <table>
-          <thead><tr><th>Style</th><th>Flavour</th><th>Constants (top of file)</th><th>Notes</th></tr></thead>
+          <thead><tr><th>Constant (top of file)</th><th>Value</th><th>Meaning</th></tr></thead>
           <tbody>
-            <tr><td><code>"Crossfade"</code> (default and fallback)</td><td>2D</td><td><code>kCrossfadeDuration 250</code>, <code>kCrossfadeScale 0.97</code></td><td>Old art fades out while the new art scales up from 0.97</td></tr>
-            <tr><td><code>"Slide"</code></td><td>2D</td><td><code>kSlideDuration 280</code>, <code>kSlideDistance 80</code> (passed through <code>dp()</code>)</td><td>Direction-aware horizontal slide</td></tr>
-            <tr><td><code>"Vinyl Lift"</code></td><td>2D</td><td><code>kLiftDuration 180</code>, <code>kLiftPause 60</code>, <code>kLiftScale 0.85</code></td><td>Sequential: lift out, pause, drop in with <code>OutBack</code> overshoot 1.2 &mdash; 420 ms in total</td></tr>
-            <tr><td><code>"Dissolve"</code></td><td>2D</td><td><code>kDissolveDuration 900</code>, <code>kDissolveGridSize 20</code>, <code>kDissolveSmoothness 0.1</code></td><td>GPU shader, see below</td></tr>
-            <tr><td><code>"Flip"</code></td><td>2D</td><td><code>kFlipDuration 350</code> (half per side)</td><td>Y-axis flip: exit snapshot turns away, new art turns in</td></tr>
-            <tr><td><code>"Coverflow"</code>, <code>"Conveyor"</code>, <code>"Stack"</code>, <code>"Depth"</code>, <code>"Swing"</code></td><td>3D</td><td><code>k3dDuration 350</code>, <code>k3dSideOffsetFactor 0.42</code>, <code>k3dSideScale 0.72</code>, <code>k3dFarScale 0.5</code></td><td>Side cards move into the centre slot; a few per-style numbers are inline (Coverflow fast-fade 220 ms, Swing &plusmn;70&deg; exit / &plusmn;60&deg; side, Depth 0.5 exit / 0.4 far scale)</td></tr>
+            <tr><td><code>kSwapDuration</code></td><td>340 ms</td><td>The whole transition. The old art is gone at 60&nbsp;% of it (<code>OutQuad</code>), the new art is opaque at 75&nbsp;%</td></tr>
+            <tr><td><code>kSwapTravel</code></td><td>0.10</td><td>How far each picture travels, as a share of <code>artSize</code> (old art <code>OutCubic</code>, new art <code>OutQuint</code>)</td></tr>
+            <tr><td><code>kSwapScale</code></td><td>0.94</td><td>The scale the old art ends at and the new art starts from</td></tr>
+            <tr><td><code>k3dSideOffsetFactor</code>, <code>k3dSideScale</code></td><td>0.42, 0.72</td><td>Place and size of the 3D preview's side cards</td></tr>
+            <tr><td><code>kSideFadeDuration</code></td><td>160 ms</td><td>The side cards fade out as a transition starts and back in on <code>showSideCards()</code> (<code>_sideShown</code>)</td></tr>
           </tbody>
         </table>
 
-        <p>Every animation sets <code>animBusy = true</code> on start and calls <code>animationFinished()</code> on finish; a 50&nbsp;ms <code>settleTimer</code> then clears <code>animBusy</code> and emits <code>settled()</code>. MediaRoom does its heavy work (FFT analysis of the new file) only on <code>settled</code>, so it never competes with animation frames. A <code>_anyAnimRunning</code> property ORs the ten animation <code>running</code> flags and gates the live-ness of the exit-snapshot texture and the drop-shadow layer.</p>
+        <p>The transition sets <code>animBusy = true</code> on start and emits <code>animationFinished()</code> on finish; a 50&nbsp;ms <code>settleTimer</code> then clears <code>animBusy</code> and emits <code>settled()</code>. MediaRoom does its heavy work (FFT analysis of the new file) only on <code>settled</code>, so it never competes with animation frames. <code>swapAnim.running</code> gates the live-ness of the exit-snapshot texture and the drop-shadow layer.</p>
 
         <h3>Structure</h3>
 
         <ul>
-          <li><strong>Shared masks</strong> &mdash; two hidden <code>Rectangle</code>s with <code>layer.enabled: true</code>: <code>artRoundedMask</code> (radius = <code>artRadius</code> when <code>roundedArt</code>) and <code>vinylMaskRect</code> (a circle with a black centre hole at 12&nbsp;% of the width). They are handed to every card and to the dissolve effect as <code>OpacityMask.maskSource</code> so the GPU holds one mask texture, not one per card.</li>
+          <li><strong>Shared masks</strong> &mdash; two hidden <code>Rectangle</code>s with <code>layer.enabled: true</code>: <code>artRoundedMask</code> (radius = <code>artRadius</code> when <code>roundedArt</code>) and <code>vinylMaskRect</code> (a circle with a black centre hole at 12&nbsp;% of the width). They are handed to every card and to the exit snapshot as <code>OpacityMask.maskSource</code> so the GPU holds one mask texture, not one per card.</li>
           <li><strong>Side cards</strong> &mdash; <code>prevCard</code> / <code>nextCard</code>, visible only when <code>previewEnabled</code> and a source is set, at <code>artSize * 0.9</code>, with <code>image.layer.live: !animBusy</code>.</li>
-          <li><strong>Exit snapshot</strong> &mdash; an <code>Item</code> holding a <code>ShaderEffectSource</code> of <code>centerCard.image</code> (<code>live: !_anyAnimRunning</code>, <code>hideSource: false</code>) with its own translate/rotation. Animations move this frozen copy of the outgoing art while the centre card already shows the new one.</li>
-          <li><strong>Centre card</strong> &mdash; carries <code>showShadow</code> / <code>shadowLive</code>, the vinyl angle, emits <code>artLoadFailed()</code> on <code>Image.Error</code> (MediaRoom then substitutes <span class="file-path">assets/missing_art.png</span>) and hosts the full-size <code>MouseArea</code> that emits <code>artClicked()</code>.</li>
+          <li><strong>Exit snapshot</strong> &mdash; an <code>Item</code> (<code>exitSnapshot</code>, which keeps the place) holding a <code>ShaderEffectSource</code> of <code>centerCard.image</code> (<code>exitTexture</code>: <code>live: !swapAnim.running</code>, <code>hideSource: false</code>). The transition moves this frozen copy of the outgoing art while the centre card already shows the new one.</li>
+          <li><strong>Centre card</strong> &mdash; inside <code>centerSlot</code>, an <code>Item</code> that keeps the place so the card is free to be moved; carries <code>showShadow</code> / <code>shadowLive</code>, the vinyl angle, emits <code>artLoadFailed()</code> on <code>Image.Error</code> (MediaRoom then substitutes <span class="file-path">assets/missing_art.png</span>) and hosts the full-size <code>MouseArea</code> that emits <code>artClicked()</code>.</li>
           <li><strong>Vinyl rotation</strong> &mdash; a <code>Binding</code> active only in <code>vinylMode</code> maps <code>playbackPosition / playbackDuration</code> to 0&ndash;360&deg; (one revolution per track), smoothed by a 200&nbsp;ms linear <code>Behavior</code> that is disabled while animating; the angle resets to 0 whenever <code>artSource</code> changes.</li>
-          <li><strong>Animation types</strong> &mdash; Crossfade and the animated stages of Vinyl Lift use render-thread <code>Animator</code> types. Slide, Flip, Dissolve and the coverflow-style transitions also use <code>NumberAnimation</code>; the render-thread claim does not apply to every transition.</li>
+          <li><strong>Animation types</strong> &mdash; <code>swapAnim</code> is a <code>ParallelAnimation</code> of <code>Animator</code> types only (<code>XAnimator</code>, <code>ScaleAnimator</code>, <code>OpacityAnimator</code> on <code>exitTexture</code> and <code>centerCard</code>), so all of it runs on the render thread. An Animator writes its property only when it ends, so <code>triggerSlide()</code> puts both pictures at their start values first and <code>_resetAll()</code> at their rest values after.</li>
         </ul>
-
-        <h3>The Dissolve shader</h3>
-
-        <p>The file comment reads: "GPU shader replaces the old 400-item grid. A single ShaderEffect with one draw call dissolves the new art in over the old art (visible via centerCard underneath)." The <code>ShaderEffect</code> takes the hidden <code>dissolveNewArtImage</code> as <code>source</code> plus <code>progress</code>, <code>gridSize</code> and <code>smoothness</code> uniforms, is clipped by the same shared mask through <code>OpacityMask</code>, and points at a pre-compiled bundle:</p>
-
-        <pre><code><span class="cmt">// On Android, QML is bundled under assets:/ which Qt RHI's ShaderEffect</span>
-<span class="cmt">// rejects (only qrc:/ or local files). Embed the .qsb via qrc for Android.</span>
-<span class="prop">fragmentShader</span>: Qt.platform.os === <span class="str">"android"</span>
-    ? <span class="str">"qrc:/shaders/dissolve_squares.frag.qsb"</span>
-    : <span class="str">"shaders/dissolve_squares.frag.qsb"</span></code></pre>
-
-        <p>What the shader does and how the <span class="file-path">.qsb</span> is produced is covered in <a href="frontend-overview.html#shaders">Frontend Overview &rarr; Shaders</a>. The three <code>dissolve*</code> readonly properties let MediaRoom keep its blurred background in step with the dissolve.</p>
 
         <!-- CoverflowCard -->
         <h2 id="coverflow-card">CoverflowCard</h2>
@@ -190,7 +175,7 @@
 
         <div class="info-box info">
           <div class="info-box-title">Why the masks are passed in</div>
-          The comment on <code>roundedMask</code> / <code>vinylMask</code> says it directly: "External mask items &mdash; shared across all cards to avoid duplicating GPU textures." Three cards plus the dissolve effect would otherwise allocate four identical mask textures per resize.
+          The comment on <code>roundedMask</code> / <code>vinylMask</code> says it directly: "External mask items &mdash; shared across all cards to avoid duplicating GPU textures." Three cards plus the exit snapshot would otherwise allocate four identical mask textures per resize.
         </div>
 
         <!-- ThemedIcon -->
@@ -212,7 +197,7 @@
         <!-- Music devices -->
         <h2 id="music-devices">Music Device Components</h2>
         <p><code>MusicDevicePreference</code> is the singleton behind the choice of what the Media Room's art corner shows (picked on the ring in its album-art popup). It persists <code>musicDeviceModel</code> through the generic settings API. Choices are Album art (default), Record player, MP3 player, CD player, Cassette player and iPod. It probes <code>MusicDeviceScene.qml</code> on demand and caches whether Quick3D can load; Album art does not require that module.</p>
-        <p><code>MusicDeviceCarousel</code> is the picker in the Media Room's album-art popup: every option of <code>MusicDevicePreference</code>, and "Vinyl" (which the popup maps to Album art with <code>vinylRecordMode</code> on), on a ring in one <code>View3D</code> (orthographic, 1 unit = 1 px, so positions and the hit test are plain arithmetic on <code>pos</code>, the ring's position in items). The ring is an ellipse seen from a little above and every item stays in view: the front one large, the others smaller the further round. Set <code>options</code>, <code>artSource</code> and <code>playbackPosition</code> / <code>playbackDuration</code> (the Vinyl item turns once per song, as the record on the page does), call <code>show(value)</code> on open (<code>step(&plusmn;1)</code> moves it one item); it reports <code>focusValue</code> and emits <code>chosen(value)</code> for a tap on the front item or Return, and <code>missed()</code> for a tap on none. A drag follows the pointer and settles on the nearest item in 320 ms, a flick carries up to two items further, the wheel steps one item per notch.</p>
+        <p><code>MusicDeviceCarousel</code> is the picker in the Media Room's album-art popup: every option of <code>MusicDevicePreference</code>, and "Vinyl" (which the popup maps to Album art with <code>vinylRecordMode</code> on), on a ring in one <code>View3D</code> (orthographic, 1 unit = 1 px, so positions and the hit test are plain arithmetic on <code>pos</code>, the ring's position in items). The ring is an ellipse seen from a little above and every item stays in view: the front one large, the others smaller the further round. Set <code>options</code>, <code>artSource</code>, <code>artCornerRadius</code> (the album art card's corners in pixels when it is at the front; MediaRoom gives it the page's 16&nbsp;dp) and <code>playbackPosition</code> / <code>playbackDuration</code> (the Vinyl item turns once per song, as the record on the page does), call <code>show(value)</code> on open (<code>step(&plusmn;1)</code> moves it one item); it reports <code>focusValue</code> and emits <code>chosen(value)</code> for a tap on the front item or Return, and <code>missed()</code> for a tap on none. A drag follows the pointer and settles on the nearest item in 320 ms, a flick carries up to two items further, the wheel steps one item per notch.</p>
         <p><code>MusicDeviceScene</code> renders the selected device, lets a drag turn it and then eases it back to its resting angle (a 450 ms hold, then 1.8 s; a double click snaps it back at once), emits <code>clicked()</code> for a tap that was not a drag or half of a double click (the Media Room opens its album-art popup on it), and accepts <code>device</code>, <code>playing</code>, <code>artSource</code>, <code>trackTitle</code>, <code>artist</code>, <code>playbackPosition</code>, <code>playbackDuration</code> and <code>hasTrack</code>. Position and duration are milliseconds. Its loading animation exchanges physical media on track changes, while playback progress drives the displays, record-player arm and cassette tape packs. MediaRoom hosts the scene in a Loader and keeps it loaded between visits while that mode remains selected.</p>
         <p><code>MusicDeviceCover</code> loads artwork asynchronously with a 512&times;512 decode target and falls back to <code>assets/missing_art.png</code> for an empty or failed source. <code>MusicDeviceArtSurface</code> places that cover on a Quick3D rectangle, with optional static alpha masks for record and CD labels. Models, masks and the studio probe live in <code>assets/music_devices/</code>; <code>assetStore</code> resolves assets that need real filesystem paths.</p>
 
@@ -487,11 +472,11 @@ scanTerminal.<span class="fn">appendLine</span>(<span class="str">"[DONE] 412 fi
 
         <p>Each item is taken from a comment in the file or from the commit that introduced it.</p>
 
-        <h3>One carousel, ten animations, one setting</h3>
-        <p>The carousel header explains the shape of the API: rather than separate 2D and 3D pickers, every animation reads <code>previewEnabled</code> and adapts, so the settings UI exposes a single <code>albumArtTransition</code> list and the Now Playing Studio can preview any of them with <code>previewTrackTransition()</code>. The exit-snapshot / centre-card split means the incoming art is always the real <code>Image</code> and only the outgoing art is a frozen texture.</p>
+        <h3>One transition</h3>
+        <p>There were ten transitions and a setting to pick one; since 2026-11-23 there is one, with nothing to choose, as the 3D players bring their own. The exit-snapshot / centre-card split means the incoming art is always the real <code>Image</code> and only the outgoing art is a frozen texture.</p>
 
         <h3>GPU work over scene-graph work</h3>
-        <p>The dissolve moved from a 400-item grid of rectangles to one <code>ShaderEffect</code> draw call; masks are shared textures; the album-art shadow is a layer whose <code>live</code> flag is dropped during animation; Crossfade and the animated stages of Vinyl Lift use render-thread <code>Animator</code>s. All of these are documented in-line as ways to keep a busy QML thread (IMU signals, backend calls) from stuttering the visuals on the single-board head unit.</p>
+        <p>Masks are shared textures; the album-art shadow is a layer whose <code>live</code> flag is dropped during the transition; the transition itself is render-thread <code>Animator</code>s only. All of these are documented in-line as ways to keep a busy QML thread (IMU signals, backend calls) from stuttering the visuals on the single-board head unit.</p>
 
         <h3>No blur where a shape will do</h3>
         <p><code>ThemedIcon</code>'s shadow is a second <code>ColorOverlay</code> and MediaPlayer's row shadow is a translucent <code>Rectangle</code>; both comments say so explicitly, because a <code>DropShadow</code> blur costs a full-screen pass per frame on Pi-class GPUs. <code>CornerBrackets</code> and the environment features in <code>TerminalFeedback</code> stop their animations when hidden for the same reason.</p>

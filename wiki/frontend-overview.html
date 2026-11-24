@@ -13,7 +13,7 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Frontend Overview</div>
           <h1 class="page-title">Frontend Overview</h1>
-          <p class="page-subtitle">QML architecture, the file inventory under <span class="file-path">frontend/</span>, Main.qml structure, page routing, scaling, effects, shaders, and the bridge between the two backends and the UI</p>
+          <p class="page-subtitle">QML architecture, the file inventory under <span class="file-path">frontend/</span>, Main.qml structure, page routing, scaling, effects, and the bridge between the two backends and the UI</p>
         </div>
 
         <nav class="toc">
@@ -37,7 +37,6 @@
             <li><a href="#settings-connections">Settings Manager Connections</a></li>
             <li><a href="#drop-shadows">Drop Shadows</a></li>
             <li><a href="#graphical-effects">Graphical Effects: Qt5Compat vs MultiEffect</a></li>
-            <li><a href="#shaders">Shaders</a></li>
             <li><a href="#objectnames">objectName Conventions for Dev Scripting</a></li>
             <li><a href="#keyboard">Keyboard Handling</a></li>
             <li><a href="#initialization">Initialization Sequence</a></li>
@@ -68,8 +67,6 @@
  |  +--------------------------------------------------------+  |
  |  | BottomBar (persistent nav + transport + volume)    z:0 |  |
  |  +--------------------------------------------------------+  |
- |  | NowPlayingStudio (window-level overlay)            z:5 |  |
- |  +--------------------------------------------------------+  |
  |  | globalFullScreenFlash (Rectangle)             z:999999 |  |
  |  | globalAuraFlash (4 edge gradients)            z:999999 |  |
  |  +--------------------------------------------------------+  |
@@ -82,18 +79,18 @@
 
         <p>Key architectural points:</p>
         <ul>
-          <li><strong>Single window</strong> &mdash; one <code>ApplicationWindow</code> hosts everything, including full-window overlays (Now Playing Studio, shift-light flash). QML popups and dialogs stay in that window; native file pickers and the Android Auto DHU may use platform windows.</li>
+          <li><strong>Single window</strong> &mdash; one <code>ApplicationWindow</code> hosts everything, including full-window overlays (the shift-light flash). QML popups and dialogs stay in that window; native file pickers and the Android Auto DHU may use platform windows.</li>
           <li><strong>StackView navigation</strong> &mdash; pages are pushed/popped on a <code>StackView</code>; there is no router. Most navigation pages are instantiated on first visit or during prewarming and then cached (<code>stackView.openPage()</code>, see <a href="#page-cache">the page cache</a>), so later visits re-push the same instance.</li>
           <li><strong>Persistent BottomBar</strong> &mdash; visible below (horizontal) or to the left of (vertical "side" mode) the StackView, except under a page that declares <code>hidesNavigation: true</code> (the dashboard editor): while that page is current, <code>mainWindow.navigationHidden</code> hides the bar and its shadow and the StackView fills the window. See <a href="bottom-bar.html">Bottom Bar</a>.</li>
           <li><strong>Singletons declared in qmldir</strong> &mdash; <code>Style</code>, <code>Spacing</code>, <code>EnvironmentTheme</code>, <code>OBDParameterModel</code>, <code>dashboards/WidgetCatalog</code>, and <code>MusicDevicePreference</code> are <code>pragma Singleton</code> objects.</li>
           <li><strong>No page transitions</strong> &mdash; all six StackView transitions (<code>pushEnter/Exit</code>, <code>popEnter/Exit</code>, <code>replaceEnter/Exit</code>) are <code>null</code>.</li>
-          <li><strong>No global z-order tricks</strong> beyond the ones in the diagram: the StackView sits above the BottomBar (<code>z: 1</code> vs <code>0</code>), shadows at <code>z: 2</code>, the studio at <code>z: 5</code>, overlays at <code>z: 999999</code>.</li>
+          <li><strong>No global z-order tricks</strong> beyond the ones in the diagram: the StackView sits above the BottomBar (<code>z: 1</code> vs <code>0</code>), shadows at <code>z: 2</code>, overlays at <code>z: 999999</code>.</li>
         </ul>
 
         <!-- File inventory -->
         <h2 id="file-inventory">File Inventory</h2>
 
-        <p>Everything the UI needs lives under <span class="file-path">frontend/</span>. The top level is flat; only settings, gauges, dashboards, shaders and assets get subdirectories.</p>
+        <p>Everything the UI needs lives under <span class="file-path">frontend/</span>. The top level is flat; only settings, gauges, dashboards and assets get subdirectories.</p>
 
         <table>
           <thead><tr><th>File</th><th>Role</th><th>Documented in</th></tr></thead>
@@ -105,7 +102,7 @@
             <tr><td><span class="file-path">MainMenu.qml</span>, <span class="file-path">HomeOBDView.qml</span></td><td>Home screen and its OBD card grid</td><td><a href="pages.html#mainmenu">Pages</a>, <a href="components.html#home-obd-view">Components</a></td></tr>
             <tr><td><span class="file-path">MediaRoom.qml</span>, <span class="file-path">MediaPlayer.qml</span></td><td>Now-playing view, library browser</td><td><a href="pages.html">Pages</a></td></tr>
             <tr><td><span class="file-path">MusicDevicePreference.qml</span>, <span class="file-path">MusicDeviceScene.qml</span>, <span class="file-path">MusicDeviceCarousel.qml</span>, <span class="file-path">MusicDeviceCover.qml</span>, <span class="file-path">MusicDeviceArtSurface.qml</span></td><td>Playback-device preference singleton and optional Quick3D music-device visuals</td><td><a href="components.html#music-devices">Components</a></td></tr>
-            <tr><td><span class="file-path">NowPlayingStudio.qml</span></td><td>Window-level immersive editor for Now Playing visuals</td><td><a href="pages.html#nowplayingstudio">Pages</a></td></tr>
+            <tr><td><span class="file-path">NowPlayingStudio.qml</span></td><td>The Now Playing look editor: panels MediaRoom loads around itself (customize button)</td><td><a href="pages.html#nowplayingstudio">Pages</a></td></tr>
             <tr><td><span class="file-path">AlbumArtCarousel.qml</span>, <span class="file-path">CoverflowCard.qml</span>, <span class="file-path">ThemedIcon.qml</span>, <span class="file-path">CornerBrackets.qml</span>, <span class="file-path">TerminalFeedback.qml</span>, <span class="file-path">ErrorToast.qml</span></td><td>Reusable components</td><td><a href="components.html">Components</a></td></tr>
             <tr><td><span class="file-path">OBDHome.qml</span>, <span class="file-path">OBDMenu.qml</span>, <span class="file-path">OBDDiagnostics.qml</span>, <span class="file-path">OBDParameterModel.qml</span></td><td>OBD hub, live gauges/dashboards (with the shift light editor in <span class="file-path">obd/</span>), DTC reader, PID singleton</td><td><a href="pages.html">Pages</a>, <a href="components.html#obd-parameter-model">Components</a></td></tr>
             <tr><td><span class="file-path">SensorHome.qml</span>, <span class="file-path">SensorMenu.qml</span>, <span class="file-path">SensorCard.qml</span>, <span class="file-path">GForceDisplay.qml</span></td><td>Sensor hub, IMU readouts, sensor cards</td><td><a href="pages.html">Pages</a>, <a href="components.html">Components</a></td></tr>
@@ -115,7 +112,6 @@
             <tr><td><span class="file-path">SettingsMenu.qml</span> + <span class="file-path">SettingsSidebarLayout.qml</span></td><td>Settings orchestrator and its layout (the tile grid)</td><td><a href="pages.html#settingsmenu">Pages</a>, <a href="settings-ui.html">Settings UI</a></td></tr>
             <tr><td><span class="file-path">settings/</span> (pages, cards, toggles, sliders, <span class="file-path">widgets/</span>)</td><td>Settings pages and the settings component library</td><td><a href="settings-ui.html">Settings UI</a></td></tr>
             <tr><td><span class="file-path">gauges/</span>, <span class="file-path">dashboards/</span> (<span class="file-path">DashboardRenderer.qml</span>, <span class="file-path">WidgetCatalog.qml</span>, <span class="file-path">editor/</span>, <span class="file-path">presets/</span>, <span class="file-path">widgets/</span>)</td><td>Gauge primitives, JSON-driven dashboards, the in-app editor</td><td><a href="gauges-dashboards.html">Gauges &amp; Dashboards</a></td></tr>
-            <tr><td><span class="file-path">shaders/</span></td><td><span class="file-path">dissolve_squares.frag</span> source, its compiled <span class="file-path">.qsb</span>, and <span class="file-path">shaders.qrc</span></td><td><a href="#shaders">Shaders</a></td></tr>
             <tr><td><span class="file-path">assets/</span></td><td>Flat-white SVG icons (<code>*_button.svg</code>, <code>cat_*.svg</code>), <span class="file-path">missing_art.png</span>, <span class="file-path">fonts/</span> (GoogleSans-Regular.ttf, JetBrainsMono-Regular.ttf), <span class="file-path">jeep_tj/</span> (rig parts), <span class="file-path">vehicle_studio.hdr</span>, <span class="file-path">readme/</span> (README screenshots and <code>.webp</code> clips produced by the screenshot sweeper), <span class="file-path">-src/</span> (Illustrator <code>.ai</code> design sources for the logo and transport icons)</td><td>this page, <a href="components.html#jeep-rig">Components</a></td></tr>
           </tbody>
         </table>
@@ -158,7 +154,7 @@
             <tr><td><code>startUpVolume</code>, <code>showClock</code>, <code>clockFormat24Hour</code>, <code>clockSize</code>, <code>lastSettingsSection</code></td><td><code>settingsManager</code></td><td>Mirrors kept on the window for child pages</td></tr>
             <tr><td><code>screenWidth</code> / <code>screenHeight</code></td><td><code>settingsManager.screenWidth</code> / <code>screenHeight</code> (defaults 1280&times;720)</td><td>Persisted window dimensions</td></tr>
             <tr><td><code>isVerticalLayout</code></td><td><code>settingsManager.bottomBarOrientation === "side"</code></td><td>Side bar vs bottom bar mode</td></tr>
-            <tr><td><code>nowPlayingStudioOpen</code>, <code>nowPlayingStudioOriginRect</code></td><td><code>openNowPlayingStudio(rect)</code> / <code>closeNowPlayingStudio()</code></td><td>Drive the studio overlay and its hero-morph origin</td></tr>
+
           </tbody>
         </table>
 
@@ -371,7 +367,7 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
           <li><code>paramStore</code> &mdash; the live value of every PID and IMU reading, one notifying key per id: <code>OBDParameterModel</code> mirrors it.</li>
           <li><code>dashboardManager</code> &mdash; OBDMenu builds its registry with the built-in "grid" sentinel alone when the manager is absent; <span class="file-path">dashboards/editor/DashboardEditor.qml</span> guards its save/load and draft-rescue paths the same way.</li>
           <li><code>esp32VolumeManager</code>, <code>gestureSensor</code>, <code>diagnosticsManager</code>, <code>phoneMirrorManager</code>, <code>mediaManager</code>, <code>settingsManager</code> &mdash; settings pages, hub widgets, the media views, the two dashboard media widgets and Main.qml's album-art handlers.</li>
-          <li><code>typeof obj.method === "function"</code> &mdash; feature probes on items and managers: <code>currentItem.navigateToHub</code>, <code>mainWindow.openNowPlayingStudio</code>, <code>roomLoader.item.previewTrackTransition</code>, and in the OBD settings page <code>obdManager.connectToAdapter</code> / <code>setTargetAddress</code> / <code>platformHint</code>.</li>
+          <li><code>typeof obj.method === "function"</code> &mdash; feature probes on items and managers: <code>currentItem.navigateToHub</code>, and in the OBD settings page <code>obdManager.connectToAdapter</code> / <code>setTargetAddress</code> / <code>platformHint</code>.</li>
         </ul>
 
         <p>Everything else assumes the manager exists and binds to it directly.</p>
@@ -503,24 +499,6 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
           The two blurred album-art backgrounds use <code>QtQuick.Effects.MultiEffect</code>. Other masks, tints and shadows still use <code>Qt5Compat.GraphicalEffects</code>, so both modules must be available at runtime.
         </div>
 
-        <!-- Shaders -->
-        <h2 id="shaders">Shaders</h2>
-
-        <p>There is one custom shader. <span class="file-path">frontend/shaders/dissolve_squares.frag</span> is a GLSL 4.40 fragment shader used by <code>AlbumArtCarousel</code>'s "Dissolve" transition: it hashes each cell of a <code>gridSize</code>&times;<code>gridSize</code> grid over the texture coordinates to a pseudo-random threshold and reveals the new art with <code>smoothstep(r - smoothness, r + smoothness, progress)</code>, so squares pop in at random as <code>progress</code> runs 0&rarr;1. The uniform block carries <code>qt_Matrix</code>, <code>qt_Opacity</code>, <code>progress</code>, <code>gridSize</code>, <code>smoothness</code>; the sampler is the hidden <code>Image</code> holding the incoming art. One <code>ShaderEffect</code> with a single draw call replaced an earlier 400-item grid of Rectangles.</p>
-
-        <p>Qt 6's RHI does not compile GLSL at runtime; <code>ShaderEffect.fragmentShader</code> must point at a pre-compiled <span class="file-path">.qsb</span> bundle. The committed <span class="file-path">dissolve_squares.frag.qsb</span> contains six variants &mdash; SPIR-V 1.0, GLSL ES 100, GLSL 120, GLSL 150, HLSL 5.0 and MSL 1.2 (checked with <code>qsb -d</code>) &mdash; which is what the standard invocation produces:</p>
-
-        <pre><code>qsb --glsl <span class="str">"100 es,120,150"</span> --hlsl 50 --msl 12 \
-    -o frontend/shaders/dissolve_squares.frag.qsb frontend/shaders/dissolve_squares.frag</code></pre>
-
-        <p><code>qsb</code> ships with the Qt Shader Tools module (<code>qtshadertools</code>). Regenerate the bundle whenever the <span class="file-path">.frag</span> changes and commit both files; there is no build step that does it.</p>
-
-        <p>How the bundle is located differs by platform, in <span class="file-path">AlbumArtCarousel.qml</span>:</p>
-        <pre><code><span class="prop">fragmentShader</span>: Qt.platform.os === <span class="str">"android"</span>
-    ? <span class="str">"qrc:/shaders/dissolve_squares.frag.qsb"</span>
-    : <span class="str">"shaders/dissolve_squares.frag.qsb"</span></code></pre>
-        <p>On desktop the path resolves relative to the QML file on disk. On Android the QML is served from <code>assets:/</code>, which the RHI ShaderEffect rejects (only <code>qrc:/</code> or local files), so <span class="file-path">CMakeLists.txt</span> compiles the <span class="file-path">.qsb</span> into the executable with <code>qt_add_resources(octave "shaders" PREFIX "/shaders" ...)</code>. <span class="file-path">frontend/shaders/shaders.qrc</span> lists the same file for tooling.</p>
-
         <!-- objectName -->
         <h2 id="objectnames">objectName Conventions for Dev Scripting</h2>
 
@@ -575,7 +553,7 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
         <p>The reasons below are taken from code comments, commit messages and <span class="file-path">CLAUDE.md</span>, not inferred.</p>
 
         <h3>One Main.qml, one StackView, pages created on demand</h3>
-        <p>A single window with a StackView keeps the persistent BottomBar, the shift-light overlays and the Now Playing Studio in one scene graph, so overlays render above every page without secondary windows (the placement comment on <code>globalFullScreenFlash</code> calls this out as the cross-platform requirement). Pages are instantiated with <code>Qt.createComponent()</code> only when navigated to, so an install without the optional QtQuick3D module still boots &mdash; <code>SensorHome</code> greys its card out (from the <code>hasQuick3D</code> context property, a <code>qmldir</code> check in <code>main.cpp</code> that loads nothing) rather than the app failing at load (CMake comment, commit <code>0c29e64</code>). All six StackView transitions are <code>null</code> ("Disable transitions for better performance"). Most navigation pages use the shared cache.</p>
+        <p>A single window with a StackView keeps the persistent BottomBar, and the shift-light overlays in one scene graph, so overlays render above every page without secondary windows (the placement comment on <code>globalFullScreenFlash</code> calls this out as the cross-platform requirement). Pages are instantiated with <code>Qt.createComponent()</code> only when navigated to, so an install without the optional QtQuick3D module still boots &mdash; <code>SensorHome</code> greys its card out (from the <code>hasQuick3D</code> context property, a <code>qmldir</code> check in <code>main.cpp</code> that loads nothing) rather than the app failing at load (CMake comment, commit <code>0c29e64</code>). All six StackView transitions are <code>null</code> ("Disable transitions for better performance"). Most navigation pages use the shared cache.</p>
 
         <h3>Context properties, not a QML module of registered types</h3>
         <p>Managers are plain <code>QObject</code>s registered by name in <span class="file-path">src/main.cpp</span>; QML never imports a backend module, and the context-property name plus the slots/signals/properties behind it are the contract. Mobile builds swap in stub classes under the same names, so the same <span class="file-path">frontend/</span> tree loads everywhere. Registration happens before <code>engine.load()</code> because bindings evaluate on first load (the <code>dashboardManager</code> comment in <span class="file-path">src/main.cpp</span>). The only registered <em>type</em> is <code>EmbeddedDhuItem</code> in the <code>OCTAVE.AndroidAuto 1.0</code> module, because the DHU window has to be reparented into a real scene item; everything else is a context property.</p>

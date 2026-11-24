@@ -23,24 +23,6 @@ Item {
     // changed while the page was hidden is shown stale.
     StackView.onActivated: mainContent.syncNowPlaying()
 
-    // Demo a track-transition without actually changing the track. Used by
-    // the Now Playing studio's chip selection so users see the chosen
-    // transition fire immediately. `style` overrides the carousel's bound
-    // value for this one animation; we re-bind right after so future
-    // settings changes still propagate live.
-    function previewTrackTransition(direction, style) {
-        if (!albumArtStack) return
-        if (style && style !== "")
-            albumArtStack.transitionStyle = style
-        albumArtStack.direction = (direction === -1) ? -1 : 1
-        albumArtStack.triggerSlide()
-        if (musicDeviceLoader.item) musicDeviceLoader.item.loadMedia(false)
-        // Restore live binding so subsequent settings changes still flow.
-        albumArtStack.transitionStyle = Qt.binding(function() {
-            return settingsManager ? settingsManager.albumArtTransition : "Crossfade"
-        })
-    }
-
     // Global font binding for all text in this component
     // fontFamily always returns a valid font (systemDefaultFont or custom font)
     property string globalFont: App.Style.fontFamily
@@ -189,16 +171,67 @@ Item {
         _cardAnimBusy = true
         waveformContainer.dropBars()
 
-        // Always trigger the carousel — it picks single-card or 3D mode
-        // based on previewEnabled.  Heavy work deferred via settled signal.
+        // Always trigger the carousel (hidden under a 3D player it still
+        // times the change).  Heavy work deferred via settled signal.
         albumArtStack.triggerSlide()
         if (musicDeviceLoader.item) musicDeviceLoader.item.loadMedia(false)
+    }
+
+    // ── The look editor (NowPlayingStudio.qml) ──────────────────────────
+    // The customize button at the top right shrinks this page into a mirror
+    // at the top right and shows the editor's panels in the room that frees;
+    // a tap on the mirror brings the page back. The mirror is the page
+    // itself (mainContent, scaled), so every change is seen on the real thing.
+    property bool studioOpen: false
+    property real studioProgress: studioOpen ? 1.0 : 0.0
+    Behavior on studioProgress {
+        // Leaving the page shuts the editor at once (see onDeactivated)
+        enabled: mediaRoom.StackView.status === StackView.Active
+        NumberAnimation { duration: 320; easing.type: Easing.OutCubic }
+    }
+    StackView.onDeactivated: studioOpen = false
+
+    // The album art's corners, here and on the card in the art picker's ring
+    readonly property int albumArtRadius: dp(16)
+
+    readonly property int studioMargin: dp(10)
+    readonly property int studioGap: dp(10)
+    // Taller than wide: the output strip goes beside the mirror, the panel below
+    readonly property bool studioStacked: height > width
+    // The mirror keeps the page's shape. Wide: half the height, as long as
+    // the main panel beside it keeps 300 dp. Tall: a third of the height,
+    // at most half the width.
+    readonly property real studioMirrorWidth: {
+        if (width <= 0 || height <= 0) return 1
+        var aspect = width / height
+        if (studioStacked)
+            return Math.max(1, Math.min(height * 0.36 * aspect, width * 0.5 - studioMargin))
+        var natural = Math.max(dp(180), height * 0.5) * aspect
+        var room = width - 2 * studioMargin - studioGap - dp(300)
+        return Math.max(dp(120), Math.min(natural, room))
+    }
+    readonly property real studioMirrorScale: width > 0 ? studioMirrorWidth / width : 1
+
+    Rectangle {
+        anchors.fill: parent
+        color: App.Style.backgroundColor
+        visible: mediaRoom.studioProgress > 0.001
     }
 
     Rectangle {
         id: mainContent        
         anchors.fill: parent
         color: transparentColor
+        // The mirror: the whole page scaled down towards the top right
+        readonly property real mirrorScale: 1.0 + (mediaRoom.studioMirrorScale - 1.0) * mediaRoom.studioProgress
+        clip: mediaRoom.studioProgress > 0.001
+        transform: [
+            Scale { xScale: mainContent.mirrorScale; yScale: mainContent.mirrorScale },
+            Translate {
+                x: (mediaRoom.width - mediaRoom.studioMargin - mediaRoom.studioMirrorWidth) * mediaRoom.studioProgress
+                y: mediaRoom.studioMargin * mediaRoom.studioProgress
+            }
+        ]
 
         Item { //background
             id: backgroundContainer
@@ -303,11 +336,14 @@ Item {
 
         Rectangle { // Volume control at top
             id: topVolumeControl
-            width: parent.width * (App.Spacing.isPortrait ? 0.9 : 0.75)
+            // Portrait: the customize button takes the right end of the row
+            readonly property int portraitButtonRoom: App.Spacing.isPortrait ? customizeButton.width + dp(8) : 0
+            width: parent.width * (App.Spacing.isPortrait ? 0.9 : 0.75) - portraitButtonRoom
             height: App.Spacing.mediaRoomDurationBarHeight
             anchors {
                 top: parent.top
                 horizontalCenter: parent.horizontalCenter
+                horizontalCenterOffset: -topVolumeControl.portraitButtonRoom / 2
                 margins: App.Spacing.mediaRoomMargin
             }
             color: transparentColor
@@ -1049,13 +1085,12 @@ Item {
                         // Portrait: nearly the page width, no side cards (no room for them)
                         artFill: mediaControlsGrid.portrait ? 0.92 : 0.85
                         previewEnabled: !mediaControlsGrid.portrait && settingsManager && settingsManager.show3DAlbumPreview
-                        roundedArt: true   // always; the radius is the setting
-                        artRadius: dp(settingsManager ? settingsManager.albumArtCornerRadius : 16)
+                        roundedArt: true   // always, 16 dp (the ring's card has the same)
+                        artRadius: mediaRoom.albumArtRadius
                         vinylMode: settingsManager && settingsManager.vinylRecordMode
                         sideCardAngle: settingsManager ? settingsManager.sideCardAngle : 30
                         sideCardOpacity: settingsManager ? settingsManager.sideCardOpacity : 0.4
                         showShadow: true
-                        transitionStyle: settingsManager ? settingsManager.albumArtTransition : "Crossfade"
 
                         // Media state
                         artSource: mediaRoom._displayAlbumArt
@@ -1483,7 +1518,90 @@ Item {
                 }
             }
         }
+
+        // Customize: opens the look editor around this page. Landscape: in
+        // the strip right of the volume row (as shuffle sits left of the
+        // seek bar). Portrait: the right end of the volume row.
+        Control {
+            id: customizeButton
+            objectName: "customizeButton"
+            width: Math.max(dp(44), Math.round(App.Spacing.bottomBarMuteButtonWidth * 1.4))
+            height: width
+            readonly property real rowRight: topVolumeControl.x + topVolumeControl.width
+            x: App.Spacing.isPortrait ? rowRight + dp(8)
+                                      : rowRight + (parent.width - rowRight - width) / 2
+            y: Math.max(dp(4), topVolumeControl.y + (topVolumeControl.height - height) / 2)
+            opacity: (customizeArea.pressed ? buttonPressedOpacity : buttonNormalOpacity)
+                     * (1.0 - mediaRoom.studioProgress)
+            visible: opacity > 0.01
+            background: Rectangle {
+                color: customizeArea.containsMouse ? App.Style.mediaRoomToggleShade : "transparent"
+                radius: 4
+            }
+            contentItem: Item {
+                App.ThemedIcon {
+                    anchors.centerIn: parent
+                    width: parent.width * 0.7
+                    height: parent.height * 0.7
+                    source: "./assets/customize_button.svg"
+                    color: App.Style.bottomBarVolumeButton
+                    shadow: false
+                }
+            }
+            MouseArea {
+                id: customizeArea
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: mediaRoom.studioOpen = true
+            }
+        }
+
+        // While the editor is open the page is a mirror: nothing on it takes
+        // input, a tap anywhere on it closes the editor
+        MouseArea {
+            id: mirrorArea
+            objectName: "studioMirror"
+            anchors.fill: parent
+            z: 1000
+            enabled: mediaRoom.studioOpen || mediaRoom.studioProgress > 0.001
+            visible: enabled
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: mediaRoom.studioOpen = false
+            onWheel: function(wheel) { wheel.accepted = true }
+
+            // Accent frame, 2 px on screen whatever the mirror's scale
+            Rectangle {
+                anchors.fill: parent
+                color: mirrorArea.pressed ? Qt.rgba(0, 0, 0, 0.25) : "transparent"
+                border.width: Math.ceil((mirrorArea.containsMouse ? 3 : 2) / Math.max(0.05, mainContent.mirrorScale))
+                border.color: App.Style.accent
+                opacity: mediaRoom.studioProgress
+            }
+        }
     }
+
+    // The editor's panels, around the mirror. Built on the first open and
+    // kept; by url and asynchronous, so the page itself loads no slower.
+    Loader {
+        id: studioLoader
+        anchors.fill: parent
+        property bool wanted: false
+        active: wanted
+        asynchronous: true
+        source: active ? "NowPlayingStudio.qml" : ""
+        visible: mediaRoom.studioProgress > 0.001
+        enabled: mediaRoom.studioOpen
+        // The page shrinks first, the controls resolve once there is room
+        opacity: Math.max(0.0, (mediaRoom.studioProgress - 0.45) / 0.55)
+        Binding { target: studioLoader.item; property: "mirrorWidth"; value: mediaRoom.studioMirrorWidth; when: studioLoader.status === Loader.Ready }
+        Binding { target: studioLoader.item; property: "mirrorHeight"; value: mediaRoom.height * mediaRoom.studioMirrorScale; when: studioLoader.status === Loader.Ready }
+        Binding { target: studioLoader.item; property: "margin"; value: mediaRoom.studioMargin; when: studioLoader.status === Loader.Ready }
+        Binding { target: studioLoader.item; property: "gap"; value: mediaRoom.studioGap; when: studioLoader.status === Loader.Ready }
+        Binding { target: studioLoader.item; property: "stacked"; value: mediaRoom.studioStacked; when: studioLoader.status === Loader.Ready }
+    }
+    onStudioOpenChanged: if (studioOpen) studioLoader.wanted = true
 
     // Track local song count for empty-state detection (always active).
     // When a playlist transitions from empty → has songs (files appeared
@@ -1595,6 +1713,7 @@ Item {
                     item.forceActiveFocus()
                 }
                 Binding { target: viewCarousel.item; property: "artSource"; value: mediaRoom._displayAlbumArt; when: viewCarousel.status === Loader.Ready }
+                Binding { target: viewCarousel.item; property: "artCornerRadius"; value: mediaRoom.albumArtRadius; when: viewCarousel.status === Loader.Ready }
                 Binding { target: viewCarousel.item; property: "playbackPosition"; value: mediaRoom.position; when: viewCarousel.status === Loader.Ready }
                 Binding { target: viewCarousel.item; property: "playbackDuration"; value: mediaRoom.duration; when: viewCarousel.status === Loader.Ready }
                 Connections {

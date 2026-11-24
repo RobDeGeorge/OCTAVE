@@ -33,7 +33,7 @@ Item {
           subSections: ["Layout", "Appearance", "Units", "Clock"] },
         { name: "Media",       section: "mediaSettings",       source: "settings/MediaSettingsPage.qml", icon: "\u266B", iconSource: Style.assetBase + "cat_media.svg",
           group: "Appearance",
-          subSections: ["Library & Playback", "Now Playing", "Spotify"] },
+          subSections: ["Library & Playback", "Spotify"] },
         { name: "OBD",         section: "obdSettings",         source: "settings/OBDSettingsPage.qml", icon: "\u26A1", iconSource: Style.assetBase + "cat_obd.svg",
           group: "Connectivity",
           subSections: ["Connection", "Home Gauges", "Black Box", "Advanced"] },

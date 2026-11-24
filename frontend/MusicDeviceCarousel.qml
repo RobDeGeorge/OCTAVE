@@ -20,6 +20,8 @@ Item {
 
     property var options: []
     property url artSource: ""
+    // Corner radius of the album art card when it is at the front, in pixels
+    property real artCornerRadius: 0
     // The Vinyl item turns as the record on the page does: once round per
     // song, by how far the song is (degrees clockwise; AlbumArtCarousel's
     // rule). Smoothed between position updates as it is there.
@@ -168,17 +170,35 @@ Item {
         // without touching this file
 
         Slot {   // the plain album art, as a card
+            id: artSlot
             index: root.options.indexOf("Album art")
             radius: 62
+            // The card (100 units across) is this many pixels wide at the front
+            readonly property real frontSide: 100 * root.unit / radius
             Model {
                 source: "#Rectangle"
                 materials: PrincipledMaterial {
                     lighting: PrincipledMaterial.NoLighting
                     cullMode: Material.NoCulling
+                    alphaMode: PrincipledMaterial.Blend
                     baseColorMap: Texture {
                         sourceItem: MusicDeviceCover {
                             width: 512; height: 512
                             artSource: root.artSource
+                        }
+                    }
+                    // Rounded corners, as the art has on the page: read from
+                    // the red channel, as the Vinyl item's disc is
+                    opacityChannel: Material.R
+                    opacityMap: Texture {
+                        sourceItem: Rectangle {
+                            width: 512; height: 512
+                            color: "black"
+                            Rectangle {
+                                anchors.fill: parent
+                                color: "white"
+                                radius: Math.min(width / 2, width * root.artCornerRadius / Math.max(1, artSlot.frontSide))
+                            }
                         }
                     }
                 }

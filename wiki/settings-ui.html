@@ -13,7 +13,7 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Settings UI</div>
           <h1 class="page-title">Settings UI</h1>
-          <p class="page-subtitle">The SettingsMenu orchestrator, the six settings pages and their tile grids, the four layout engines (Grid default), the Now Playing studio, the reusable component library, widgets, persistence helpers, and how to add a page</p>
+          <p class="page-subtitle">The SettingsMenu orchestrator, the six settings pages and their tile grids, the four layout engines (Grid default), the reusable component library, widgets, persistence helpers, and how to add a page</p>
         </div>
 
         <nav class="toc">
@@ -23,7 +23,6 @@
             <li><a href="#page-model">Page Model</a></li>
             <li><a href="#pages">The Settings Pages</a></li>
             <li><a href="#tile-system">Tile Grids and the Card Popup</a></li>
-            <li><a href="#now-playing-studio">Now Playing Studio</a></li>
             <li><a href="#layouts">The Layout</a></li>
             <li><a href="#sidebar">Grid Layout</a></li>
             <li><a href="#components">Reusable Components</a></li>
@@ -71,7 +70,7 @@
       <span class="prop">icon</span>: <span class="str">"☼"</span>, <span class="prop">iconSource</span>: Style.assetBase + <span class="str">"cat_display.svg"</span>,
       <span class="prop">group</span>: <span class="str">"Appearance"</span>,   <span class="prop">subSections</span>: [<span class="str">"Layout"</span>, <span class="str">"Appearance"</span>, <span class="str">"Units"</span>, <span class="str">"Clock"</span>] },
     { <span class="prop">name</span>: <span class="str">"Media"</span>,       <span class="prop">section</span>: <span class="str">"mediaSettings"</span>,       ... <span class="prop">iconSource</span>: Style.assetBase + <span class="str">"cat_media.svg"</span>,
-      <span class="prop">group</span>: <span class="str">"Appearance"</span>,   <span class="prop">subSections</span>: [<span class="str">"Library &amp; Playback"</span>, <span class="str">"Now Playing"</span>, <span class="str">"Spotify"</span>] },
+      <span class="prop">group</span>: <span class="str">"Appearance"</span>,   <span class="prop">subSections</span>: [<span class="str">"Library &amp; Playback"</span>, <span class="str">"Spotify"</span>] },
     { <span class="prop">name</span>: <span class="str">"OBD"</span>,         <span class="prop">section</span>: <span class="str">"obdSettings"</span>,         ... <span class="prop">iconSource</span>: Style.assetBase + <span class="str">"cat_obd.svg"</span>,
       <span class="prop">group</span>: <span class="str">"Connectivity"</span>, <span class="prop">subSections</span>: [<span class="str">"Connection"</span>, <span class="str">"Home Gauges"</span>, <span class="str">"Black Box"</span>, <span class="str">"Advanced"</span>] },
     { <span class="prop">name</span>: <span class="str">"Phone"</span>,       <span class="prop">section</span>: <span class="str">"phoneSettings"</span>,       <span class="prop">source</span>: <span class="str">"settings/PhoneSettingsPage.qml"</span>, ...
@@ -125,7 +124,7 @@
           <thead><tr><th>Tile</th><th>Controls</th></tr></thead>
           <tbody>
             <tr><td>Library &amp; Playback (<code>media_library</code>)</td><td>Library folder text field; <strong>Browse</strong> opens a <code>FolderDialog</code> whose result goes to <code>settingsManager.save_media_folder_url()</code>, which maps it to a path (<span class="file-path">src/util/pathurl.h</span>: a <code>file://</code> URL incl. a Windows drive letter; an Android Storage Access Framework tree to <code>/storage/emulated/0/...</code> or, for an SD card, <code>/storage/&lt;volume&gt;/...</code>; the library is read with <code>QDir</code> under the <code>READ_MEDIA_AUDIO</code> permission) and refuses anything else, which the page explains under the field instead of leaving an empty library; <strong>Scan</strong> (<code>mediaManager.scanLibrary()</code>) and <strong>Clean Titles</strong> (<code>stripFilenames()</code>, which tidies the song names shown and leaves the files alone) buttons. Then the former Playback tile: <strong>Startup Volume</strong> slider 0&ndash;1 (displayed as <code>sqrt(value)&times;100&nbsp;%</code> to match the quadratic curve, 100&nbsp;ms debounce); <strong>Audio Output</strong> chips (&ldquo;System default&rdquo; plus each <code>mediaManager.audioOutputs</code> entry, saved with <code>settingsManager.save_audio_output_device(id)</code>; the description names <code>mediaManager.currentAudioOutput</code> and says when the picked output is unplugged); <strong>Autoplay on Startup</strong>; <strong>Remember Shuffle</strong>; <strong>Open Music to the Library</strong> (<code>musicButtonDefaultPage</code> = <code>mediaPlayer</code> / <code>mediaRoom</code>); <strong>Return to Library After Picking a Song</strong>. Last, because it is tall, a <code>TerminalFeedback</code> panel ("Scan Log") fed by <code>mediaManager.scanProgress</code>, hidden until Scan or Clean Titles has written a line.</td></tr>
-            <tr><td>Now Playing (<code>media_now_playing</code>)</td><td>An L-shaped editor: a live <code>MediaRoomLivePreview</code> locked top-right (sized to the window's aspect ratio, at most 40&nbsp;% of the card height), a left column and a bottom-right column of <code>SettingCategory</code> cards. Left: Background Layout (Normal / 2x2 / 4x4), Background Blur 0&ndash;100, Dark Overlay 0&ndash;100&nbsp;%, Album Art Corners (radius 2&ndash;32), Waveform Visualizer (one toggle &mdash; commit <code>118f484</code> collapsed the old tiered visualizer settings), 3D Album Preview with gated Side Cards angle 5&ndash;60&deg; and opacity 10&ndash;100&nbsp;%, Text Scroll Speed 1&ndash;10&nbsp;s, 3D Button Tilt with gated Tilt Duration 50&ndash;500&nbsp;ms. Bottom-right: four <strong>Presets</strong> (Minimal, Vinyl, Showcase 3D, Cinema) that write a bundle of settings in one tap, and a <strong>Track Transition</strong> grid of ten options (Crossfade, Slide, Vinyl Lift, Dissolve, Flip, Coverflow, Conveyor, Stack, Depth, Swing) that previews the chosen animation in the PiP. In the tile layouts this tile does not open the in-place popup &mdash; it opens the window-level <a href="#now-playing-studio">Now Playing Studio</a>.</td></tr>
+
             <tr><td>Spotify (<code>media_spotify</code>)</td><td>One card, a step at a time. Setup: how to create the Spotify developer app, the redirect URI to register and the Client ID field (<code>setClientId</code>; empty goes back to the build's <code>OCTAVE_SPOTIFY_CLIENT_ID</code>), hidden in a build with its own ID unless <strong>Use My Own Client ID</strong> is pressed. <strong>Connect Spotify</strong> (<code>spotifyManager.signIn()</code>) shows once there is an ID of 32 letters and digits. Signed in: who, and <strong>Sign Out</strong>. <code>spotifyManager.status</code> in red when something went wrong. Tile state: "Signed in as &lt;name&gt;" / "Needs setup" / "Not connected". See <a href="media-manager.html#spotify">Media Manager &rarr; Spotify</a>.</td></tr>
           </tbody>
         </table>
@@ -193,7 +192,7 @@
         <!-- Now Playing Studio -->
         <h2 id="now-playing-studio">Now Playing Studio</h2>
 
-        <p>The Media page's "Now Playing" tile (<code>cardId === "media_now_playing"</code>) is special-cased in the tile host: instead of <code>openTile()</code> they map the tile rectangle to scene coordinates and call <code>mainWindow.openNowPlayingStudio(rect)</code>. <span class="file-path">frontend/NowPlayingStudio.qml</span> is instantiated once in Main.qml at <code>z: 5</code>, above the <code>StackView</code>. It performs the same hero-morph from the tile's rectangle to its target rectangle, which Main.qml sizes to exclude the bottom bar (so navigation stays usable). The studio's back header returns to the settings grid. Any <code>stackView.currentItemChanged</code> closes it. Its header comment defines a visual standard for the rows inside (named spacing tokens, labels left / controls right) and the helper component <code>NowPlayingButtonGrid</code> exists for it. Commit <code>484bc76</code> ("now playing settings update") introduced this arrangement and removed the last environment-preset files.</p>
+        <p>The Now Playing look editor left Settings on 2026-11-23: there is no "Now Playing" tile on the Media page any more. It opens from the customize button at the top right of the Media Room, around the page it edits; see <a href="pages.html#nowplayingstudio">Pages &rarr; NowPlayingStudio</a>. It still uses this page's components (<code>SettingCategory</code>, <code>SettingsSlider</code>, <code>NowPlayingButtonGrid</code>, ...).</p>
 
         <!-- Layouts -->
         <h2 id="layouts">The Layout</h2>
@@ -248,7 +247,7 @@
             <tr><td><strong>SettingsTile</strong>, <strong>SettingsTilePage</strong>, <strong>SettingsCardPopup</strong></td><td>See <a href="#tile-system">Tile Grids and the Card Popup</a>.</td></tr>
             <tr><td><strong>ThemedIcon</strong> (<span class="file-path">frontend/ThemedIcon.qml</span>)</td><td>Tinted SVG with an offset shadow overlay; see <a href="theme-system.html#themed-icon">Theme System</a>.</td></tr>
             <tr><td><strong>CornerBrackets</strong> (<span class="file-path">frontend/CornerBrackets.qml</span>)</td><td>Pulsing accent corner marks; instantiated by cards and tiles with <code>visible: cornerBrackets</code>, which is always false. The pulse animation runs only while visible.</td></tr>
-            <tr><td><strong>MediaRoomLivePreview</strong></td><td>Loads a real <span class="file-path">../MediaRoom.qml</span> at <code>designWidth &times; designHeight</code> (the live window size) inside a scaled stage, "Fit" (letterbox) or "Fill" (crop) mode, with a 2&nbsp;px accent border on the exact visible rectangle. The inner <code>Loader</code> source is cleared while the preview is not visible so vinyl rotation and FFT analysis are not rendered twice. <code>previewTrackTransition(direction, style)</code> forwards a synthetic transition to the embedded room.</td></tr>
+
             <tr><td><strong>NowPlayingButtonGrid</strong></td><td>Two-column <code>GridLayout</code> of equal-width option buttons (selected = accent); signal <code>selected(value)</code>.</td></tr>
           </tbody>
         </table>
@@ -345,16 +344,8 @@ ExpandedCards.<span class="fn">load</span>(settingsManager)     <span class="cmt
               <td>Commit <code>93d0fc9</code>: "tile grids for every page". Four large touch targets per page suit a dash-mounted screen; the popup "grows from the clicked tile's rect" so the user keeps spatial context, and content fades in only once "there's enough room for them".</td>
             </tr>
             <tr>
-              <td>Now Playing takes over the window</td>
-              <td>Comments in <code>SettingsSidebarLayout</code> and Main.qml: the studio "needs every pixel" and covers the StackView, but Main.qml reserves the bottom bar so navigation stays available (the settings sidebar is covered, so the studio's settings panel gets its width); any page change closes it "so it doesn't hang on top of an unrelated screen".</td>
-            </tr>
-            <tr>
-              <td>Live <code>MediaRoom</code> preview instead of a mock</td>
-              <td><code>MediaRoomLivePreview</code> renders "a real MediaRoom instance at the host window's design dimensions" so Now Playing changes are seen exactly as they will look, and unloads it while hidden to avoid "double-rendering vinyl rotation / FFT analysis".</td>
-            </tr>
-            <tr>
               <td><code>closeTile()</code> nulls the tile component</td>
-              <td>Comment: without it "page-scoped resources (e.g. the Now Playing live PiP) would persist after the user backs out of the tile"; destroying the content is invisible because the body has already faded.</td>
+              <td>Comment: without it "page-scoped resources would persist after the user backs out of the tile"; destroying the content is invisible because the body has already faded.</td>
             </tr>
             <tr>
               <td>Pages hide themselves in tile hosts</td>

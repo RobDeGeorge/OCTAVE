@@ -141,6 +141,7 @@ None of the extras touch the core adapter; they hang off the expansion port and 
 - `obd-adapter-discovery.md`: steps 3 and the BLE-only future depend on its scan/pair work on each platform (BLE-on-desktop not started).
 - The black box's health trends (`TripStore::computeHealth`, `kHealthMetrics` in `src/managers/tripstore.cpp`, shipped 2026-11-01): step 5 and the sensor channels feed them; a battery / alternator number from the pod is a new row there (bump `kHealthVersion`).
 - `traffic-stop-mode.md`: the adapter is the always-hot backup store for the phone's recordings: microSD on the ESP32 (SPI), Wi-Fi receiver, BLE trigger / status to the companion app, panic button, ATECC608B-signed OBD window, LIS2DH12 wake-on-motion. All on Rev 0 since 2026-11-09. A camera "survivor pod" is an optional extra that would merge with the sensor pod.
+- `lora-car-finder.md`: adds LoRa to the sensor pod (the parked car as a beacon, a keychain that points at it) and proposes a different split: the adapter stays whole on the plug and the pod is a peripheral with its own MCU on a four-wire cable (5 V, ground, UART). Rev A's expansion port should carry that connector behind a current-limited load switch.
 - `dashboards-roadmap.md` / `docs/GAUGE_AUTHORING.md`: new parameters (pod sensors, temp probes) need PID metadata in `OBDParameterModel.qml` and the gauge doc.
 
 ## Recommended order

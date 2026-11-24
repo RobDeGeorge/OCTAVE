@@ -161,7 +161,7 @@ bool fixDeviceId(QVariant &v)
 // Ranges given with within() are the sliders': startUpVolume is the linear
 // 0-1 the volume slider maps to (MediaSettingsPage.qml), clockSize 10-85,
 // uiScale 0.5-2.0, colorTransitionMs 0-2000 (DisplaySettingsPage.qml),
-// backgroundBlurRadius 0-100 (MediaSettingsPage.qml, NowPlayingStudio.qml).
+// backgroundBlurRadius 0-100 (NowPlayingStudio.qml).
 #define OCTAVE_SETTINGS(X) \
     X(deviceName, QMetaType::QString, QStringLiteral("Default Device"), any(), N_STR(deviceNameChanged), "save_device_name", Plain) \
     X(themeSetting, QMetaType::QString, QStringLiteral("CosmicVoyager"), any(), N_STR(themeSettingChanged), "save_theme_setting", Plain) \
