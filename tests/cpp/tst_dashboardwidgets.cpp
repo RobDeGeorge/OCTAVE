@@ -1042,6 +1042,74 @@ private slots:
         QTRY_VERIFY(!editor->property("drivingLocked").toBool());
     }
 
+    // Home is a dashboard: what the renderer tells its host
+    void rendererTapActionsDemandAndFrames()
+    {
+        QVERIFY(load("dashboards/DashboardRenderer.qml"));
+        const auto cell = [](const QString &type, const QString &paramId, int col, const QVariantMap &props = {}) {
+            return QVariantMap{{"type", type}, {"paramId", paramId}, {"col", col}, {"row", 0},
+                               {"colSpan", 1}, {"rowSpan", 1}, {"props", props}};
+        };
+        const QVariantList cells{
+            cell("NowPlayingWidget", "", 0), cell("DigitalReadout", "SPEED", 1), cell("DigitalReadout", "PITCH", 2),
+            cell("VehicleWidget", "", 3), cell("MediaControlsWidget", "", 4), cell("ShiftLightWidget", "", 5),
+            cell("DigitalReadout", "SPEED", 6, {{"tapAction", "media"}}), cell("ClockWidget", "", 7, {{"frame", true}})};
+        QVariantMap spec{{"gridColumns", 8}, {"gridRows", 1}, {"margins", 0}, {"spacing", 0}, {"cells", cells}};
+        root->setProperty("spec", spec);
+
+        // Off unless the host asks: the OBD menu's dashboards are display only
+        QCOMPARE(root->property("interactive").toBool(), false);
+        const auto action = [&](int i) {
+            QVariant out;
+            QMetaObject::invokeMethod(root.get(), "tapActionFor", Q_RETURN_ARG(QVariant, out), Q_ARG(QVariant, cells.at(i)));
+            return out.toString();
+        };
+        QCOMPARE(action(0), QStringLiteral("media"));
+        QCOMPARE(action(1), QStringLiteral("obd"));
+        QCOMPARE(action(2), QStringLiteral("sensors"));   // an IMU reading
+        QCOMPARE(action(3), QStringLiteral("vehicle"));
+        QCOMPARE(action(4), QStringLiteral("none"));      // its buttons are its own
+        QCOMPARE(action(5), QStringLiteral("obd"));
+        QCOMPARE(action(6), QStringLiteral("media"));     // the cell's own choice wins
+        QCOMPARE(action(7), QStringLiteral("none"));
+
+        // The shift light keeps RPM polled though it binds no PID; each id once
+        QCOMPARE(root->property("paramIds").toStringList(), QStringList({"SPEED", "PITCH", "RPM"}));
+        QVERIFY(root->property("usesImu").toBool());
+        spec["cells"] = QVariantList{cells.at(0), cells.at(1)};
+        root->setProperty("spec", spec);
+        QVERIFY(!root->property("usesImu").toBool());
+        spec["cells"] = QVariantList{cell("GForceGauge", "", 0)};
+        root->setProperty("spec", spec);
+        QVERIFY(root->property("usesImu").toBool());
+
+        // Where a cell stands, for the host's prompts
+        spec["cells"] = cells;
+        root->setProperty("spec", spec);
+        root->setProperty("width", 800);
+        root->setProperty("height", 100);
+        QVariant rect;
+        QMetaObject::invokeMethod(root.get(), "cellRect", Q_RETURN_ARG(QVariant, rect), Q_ARG(QVariant, 3));
+        QCOMPARE(rect.toRectF(), QRectF(300, 0, 100, 100));
+    }
+
+    void readoutCardStyle()
+    {
+        QVERIFY(load("gauges/DigitalReadout.qml"));
+        root->setProperty("paramId", "CONTROL_MODULE_VOLTAGE");
+        store->ingest("CONTROL_MODULE_VOLTAGE", 14.2f);
+        QTRY_COMPARE(root->property("_formatted").toString(), QStringLiteral("14"));
+        // The card shows the reading's own decimals
+        root->setProperty("card", true);
+        QCOMPARE(root->property("_formatted").toString(), QStringLiteral("14.2"));
+        root->setProperty("card", false);
+        // Never "-0"
+        root->setProperty("value", -0.3);
+        QCOMPARE(root->property("_formatted").toString(), QStringLiteral("0"));
+        root->setProperty("value", -1.3);
+        QCOMPARE(root->property("_formatted").toString(), QStringLiteral("-1"));
+    }
+
     void alertBannerAndAutoShow()
     {
         // The renderer names a widget at its critical limit, unless the

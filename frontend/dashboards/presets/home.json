@@ -1,0 +1,195 @@
+{
+  "id": "home",
+  "label": "Home",
+  "schema": 2,
+  "gridColumns": 12,
+  "gridRows": 12,
+  "margins": 10,
+  "spacing": 10,
+  "alertBanner": false,
+  "cells": [
+    {
+      "type": "NowPlayingWidget",
+      "paramId": "",
+      "col": 0,
+      "row": 0,
+      "colSpan": 3,
+      "rowSpan": 12,
+      "props": {
+        "seekable": true,
+        "showBackground": true
+      }
+    },
+    {
+      "type": "DigitalReadout",
+      "paramId": "SPEED",
+      "col": 3,
+      "row": 0,
+      "colSpan": 3,
+      "rowSpan": 4,
+      "props": {
+        "card": true,
+        "frame": true
+      }
+    },
+    {
+      "type": "DigitalReadout",
+      "paramId": "RPM",
+      "col": 6,
+      "row": 0,
+      "colSpan": 3,
+      "rowSpan": 4,
+      "props": {
+        "card": true,
+        "frame": true
+      }
+    },
+    {
+      "type": "DigitalReadout",
+      "paramId": "COOLANT_TEMP",
+      "col": 3,
+      "row": 4,
+      "colSpan": 3,
+      "rowSpan": 4,
+      "props": {
+        "card": true,
+        "frame": true
+      }
+    },
+    {
+      "type": "DigitalReadout",
+      "paramId": "CONTROL_MODULE_VOLTAGE",
+      "col": 6,
+      "row": 4,
+      "colSpan": 3,
+      "rowSpan": 4,
+      "props": {
+        "card": true,
+        "frame": true
+      }
+    },
+    {
+      "type": "VehicleWidget",
+      "paramId": "",
+      "col": 3,
+      "row": 8,
+      "colSpan": 6,
+      "rowSpan": 4,
+      "props": {}
+    },
+    {
+      "type": "GForceGauge",
+      "paramId": "",
+      "col": 9,
+      "row": 0,
+      "colSpan": 3,
+      "rowSpan": 4,
+      "props": {
+        "frame": true
+      }
+    },
+    {
+      "type": "CompassGauge",
+      "paramId": "",
+      "col": 9,
+      "row": 4,
+      "colSpan": 3,
+      "rowSpan": 4,
+      "props": {
+        "frame": true
+      }
+    },
+    {
+      "type": "DigitalReadout",
+      "paramId": "PITCH",
+      "col": 9,
+      "row": 8,
+      "colSpan": 3,
+      "rowSpan": 2,
+      "props": {
+        "card": true,
+        "frame": true
+      }
+    },
+    {
+      "type": "DigitalReadout",
+      "paramId": "ROLL",
+      "col": 9,
+      "row": 10,
+      "colSpan": 3,
+      "rowSpan": 2,
+      "props": {
+        "card": true,
+        "frame": true
+      }
+    }
+  ],
+  "layouts": {
+    "portrait": {
+      "gridColumns": 12,
+      "gridRows": 20,
+      "cells": [
+        {
+          "col": 0,
+          "row": 0,
+          "colSpan": 12,
+          "rowSpan": 4
+        },
+        {
+          "col": 0,
+          "row": 4,
+          "colSpan": 4,
+          "rowSpan": 6
+        },
+        {
+          "col": 4,
+          "row": 4,
+          "colSpan": 4,
+          "rowSpan": 6
+        },
+        {
+          "col": 0,
+          "row": 10,
+          "colSpan": 4,
+          "rowSpan": 6
+        },
+        {
+          "col": 4,
+          "row": 10,
+          "colSpan": 4,
+          "rowSpan": 6
+        },
+        {
+          "col": 8,
+          "row": 4,
+          "colSpan": 4,
+          "rowSpan": 12
+        },
+        {
+          "col": 0,
+          "row": 16,
+          "colSpan": 4,
+          "rowSpan": 4
+        },
+        {
+          "col": 4,
+          "row": 16,
+          "colSpan": 4,
+          "rowSpan": 4
+        },
+        {
+          "col": 8,
+          "row": 16,
+          "colSpan": 4,
+          "rowSpan": 2
+        },
+        {
+          "col": 8,
+          "row": 18,
+          "colSpan": 4,
+          "rowSpan": 2
+        }
+      ]
+    }
+  }
+}

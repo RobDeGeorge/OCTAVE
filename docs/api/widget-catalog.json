@@ -6,6 +6,7 @@
         "Warnings",
         "Motion",
         "Media",
+        "Vehicle",
         "Time"
     ],
     "colorSwatches": [
@@ -168,6 +169,13 @@
                     "kind": "bool",
                     "label": "Flash when critical",
                     "section": "range"
+                },
+                {
+                    "def": false,
+                    "key": "frame",
+                    "kind": "bool",
+                    "label": "Frame",
+                    "section": "look"
                 }
             ],
             "glyph": "◯",
@@ -184,7 +192,8 @@
                 "trackColor",
                 "redlineColor",
                 "labelColor",
-                "valueColor"
+                "valueColor",
+                "tapAction"
             ],
             "supportedKinds": [
                 "*"
@@ -300,6 +309,13 @@
                     "kind": "bool",
                     "label": "Flash when critical",
                     "section": "range"
+                },
+                {
+                    "def": false,
+                    "key": "frame",
+                    "kind": "bool",
+                    "label": "Frame",
+                    "section": "look"
                 }
             ],
             "glyph": "◠",
@@ -318,7 +334,8 @@
                 "trackColor",
                 "redlineColor",
                 "labelColor",
-                "valueColor"
+                "valueColor",
+                "tapAction"
             ],
             "supportedKinds": [
                 "*"
@@ -420,6 +437,13 @@
                     "kind": "bool",
                     "label": "Flash when critical",
                     "section": "range"
+                },
+                {
+                    "def": false,
+                    "key": "frame",
+                    "kind": "bool",
+                    "label": "Frame",
+                    "section": "look"
                 }
             ],
             "glyph": "▮",
@@ -435,7 +459,8 @@
                 "alertHysteresis",
                 "trackColor",
                 "labelColor",
-                "valueColor"
+                "valueColor",
+                "tapAction"
             ],
             "supportedKinds": [
                 "percentage",
@@ -530,6 +555,13 @@
                     "kind": "bool",
                     "label": "Flash when critical",
                     "section": "range"
+                },
+                {
+                    "def": false,
+                    "key": "frame",
+                    "kind": "bool",
+                    "label": "Frame",
+                    "section": "look"
                 }
             ],
             "glyph": "▮",
@@ -545,7 +577,8 @@
                 "alertHysteresis",
                 "trackColor",
                 "labelColor",
-                "valueColor"
+                "valueColor",
+                "tapAction"
             ],
             "supportedKinds": [
                 "*"
@@ -638,6 +671,13 @@
                     "kind": "bool",
                     "label": "Flash when critical",
                     "section": "range"
+                },
+                {
+                    "def": false,
+                    "key": "frame",
+                    "kind": "bool",
+                    "label": "Frame",
+                    "section": "look"
                 }
             ],
             "glyph": "↔",
@@ -654,7 +694,8 @@
                 "centerOriginAtZero",
                 "trackColor",
                 "labelColor",
-                "valueColor"
+                "valueColor",
+                "tapAction"
             ],
             "supportedKinds": [
                 "bidirectional"
@@ -754,6 +795,20 @@
                     "kind": "bool",
                     "label": "Flash when critical",
                     "section": "range"
+                },
+                {
+                    "def": false,
+                    "key": "card",
+                    "kind": "bool",
+                    "label": "Card style",
+                    "section": "look"
+                },
+                {
+                    "def": false,
+                    "key": "frame",
+                    "kind": "bool",
+                    "label": "Frame",
+                    "section": "look"
                 }
             ],
             "glyph": "88",
@@ -769,7 +824,9 @@
                 "alertHysteresis",
                 "alignment",
                 "labelColor",
-                "unitColor"
+                "unitColor",
+                "tapAction",
+                "barColor"
             ],
             "supportedKinds": [
                 "*"
@@ -876,6 +933,13 @@
                     "kind": "bool",
                     "label": "Flash when critical",
                     "section": "range"
+                },
+                {
+                    "def": false,
+                    "key": "frame",
+                    "kind": "bool",
+                    "label": "Frame",
+                    "section": "look"
                 }
             ],
             "glyph": "∿",
@@ -892,7 +956,8 @@
                 "fillColor",
                 "labelColor",
                 "valueColor",
-                "backgroundColor"
+                "backgroundColor",
+                "tapAction"
             ],
             "supportedKinds": [
                 "*"
@@ -954,6 +1019,13 @@
                     "max": 400,
                     "min": 0,
                     "section": "advanced"
+                },
+                {
+                    "def": false,
+                    "key": "frame",
+                    "kind": "bool",
+                    "label": "Frame",
+                    "section": "look"
                 }
             ],
             "glyph": "⚠",
@@ -967,7 +1039,8 @@
                 "alertHysteresis",
                 "inactiveColor",
                 "labelColor",
-                "activeLabelColor"
+                "activeLabelColor",
+                "tapAction"
             ],
             "supportedKinds": [
                 "*"
@@ -982,6 +1055,7 @@
             ],
             "defaultColSpan": 4,
             "defaultRowSpan": 4,
+            "defaultTapAction": "sensors",
             "demo": {
             },
             "description": "Cornering and braking forces from the motion sensor",
@@ -1009,6 +1083,13 @@
                     "kind": "bool",
                     "label": "Readout",
                     "section": "look"
+                },
+                {
+                    "def": false,
+                    "key": "frame",
+                    "kind": "bool",
+                    "label": "Frame",
+                    "section": "look"
                 }
             ],
             "glyph": "◎",
@@ -1021,11 +1102,13 @@
             "specProps": [
                 "ringColor",
                 "labelColor",
-                "valueColor"
+                "valueColor",
+                "tapAction"
             ],
             "supportedKinds": [
             ],
-            "type": "GForceGauge"
+            "type": "GForceGauge",
+            "usesImu": true
         },
         {
             "aspect": 1,
@@ -1035,6 +1118,7 @@
             ],
             "defaultColSpan": 4,
             "defaultRowSpan": 4,
+            "defaultTapAction": "sensors",
             "demo": {
             },
             "description": "Heading from the motion sensor",
@@ -1045,6 +1129,13 @@
                     "key": "showDegrees",
                     "kind": "bool",
                     "label": "Degrees",
+                    "section": "look"
+                },
+                {
+                    "def": false,
+                    "key": "frame",
+                    "kind": "bool",
+                    "label": "Frame",
                     "section": "look"
                 }
             ],
@@ -1059,11 +1150,13 @@
                 "ringColor",
                 "cardinalColor",
                 "labelColor",
-                "valueColor"
+                "valueColor",
+                "tapAction"
             ],
             "supportedKinds": [
             ],
-            "type": "CompassGauge"
+            "type": "CompassGauge",
+            "usesImu": true
         },
         {
             "aspect": 3.5,
@@ -1073,9 +1166,10 @@
             ],
             "defaultColSpan": 6,
             "defaultRowSpan": 2,
+            "defaultTapAction": "media",
             "demo": {
             },
-            "description": "The song playing, with cover art and progress",
+            "description": "The song playing, with cover art and progress; a column when taller than wide",
             "displayName": "Now Playing",
             "editableProps": [
                 {
@@ -1098,6 +1192,27 @@
                     "kind": "bool",
                     "label": "Progress",
                     "section": "look"
+                },
+                {
+                    "def": false,
+                    "key": "seekable",
+                    "kind": "bool",
+                    "label": "Touch to seek",
+                    "section": "look"
+                },
+                {
+                    "def": false,
+                    "key": "showBackground",
+                    "kind": "bool",
+                    "label": "Blurred art behind",
+                    "section": "look"
+                },
+                {
+                    "def": false,
+                    "key": "frame",
+                    "kind": "bool",
+                    "label": "Frame",
+                    "section": "look"
                 }
             ],
             "glyph": "♪",
@@ -1109,7 +1224,8 @@
             "rangeProps": false,
             "specProps": [
                 "titleColor",
-                "artistColor"
+                "artistColor",
+                "tapAction"
             ],
             "supportedKinds": [
             ],
@@ -1123,11 +1239,19 @@
             ],
             "defaultColSpan": 4,
             "defaultRowSpan": 2,
+            "defaultTapAction": "none",
             "demo": {
             },
             "description": "Previous, play / pause and next",
             "displayName": "Media Keys",
             "editableProps": [
+                {
+                    "def": false,
+                    "key": "frame",
+                    "kind": "bool",
+                    "label": "Frame",
+                    "section": "look"
+                }
             ],
             "glyph": "▶",
             "labelProps": false,
@@ -1138,11 +1262,88 @@
             "rangeProps": false,
             "specProps": [
                 "buttonColor",
-                "glyphColor"
+                "glyphColor",
+                "tapAction"
             ],
             "supportedKinds": [
             ],
             "type": "MediaControlsWidget"
+        },
+        {
+            "aspect": 1.6,
+            "category": "Vehicle",
+            "colorProps": [
+                "frameColor"
+            ],
+            "defaultColSpan": 4,
+            "defaultRowSpan": 3,
+            "defaultTapAction": "vehicle",
+            "demo": {
+            },
+            "description": "A picture of your vehicle",
+            "displayName": "Vehicle",
+            "editableProps": [
+                {
+                    "def": true,
+                    "key": "showFrame",
+                    "kind": "bool",
+                    "label": "Frame",
+                    "section": "look"
+                }
+            ],
+            "glyph": "▣",
+            "labelProps": false,
+            "minSize": {
+                "h": 80,
+                "w": 120
+            },
+            "rangeProps": false,
+            "specProps": [
+                "labelColor",
+                "valueColor",
+                "tapAction"
+            ],
+            "supportedKinds": [
+            ],
+            "type": "VehicleWidget"
+        },
+        {
+            "aspect": 1,
+            "category": "Vehicle",
+            "colorProps": [
+            ],
+            "defaultColSpan": 2,
+            "defaultRowSpan": 2,
+            "defaultTapAction": "obd",
+            "demand": [
+                "RPM"
+            ],
+            "demo": {
+            },
+            "description": "Lights up at your shift points (Settings > OBD > Shift Light)",
+            "displayName": "Shift Light",
+            "editableProps": [
+                {
+                    "def": false,
+                    "key": "frame",
+                    "kind": "bool",
+                    "label": "Frame",
+                    "section": "look"
+                }
+            ],
+            "glyph": "●",
+            "labelProps": false,
+            "minSize": {
+                "h": 44,
+                "w": 44
+            },
+            "rangeProps": false,
+            "specProps": [
+                "tapAction"
+            ],
+            "supportedKinds": [
+            ],
+            "type": "ShiftLightWidget"
         },
         {
             "aspect": 2,
@@ -1152,6 +1353,7 @@
             ],
             "defaultColSpan": 4,
             "defaultRowSpan": 2,
+            "defaultTapAction": "none",
             "demo": {
             },
             "description": "The time, and the date if you like",
@@ -1170,6 +1372,13 @@
                     "kind": "bool",
                     "label": "Seconds",
                     "section": "look"
+                },
+                {
+                    "def": false,
+                    "key": "frame",
+                    "kind": "bool",
+                    "label": "Frame",
+                    "section": "look"
                 }
             ],
             "glyph": "12",
@@ -1180,7 +1389,8 @@
             },
             "rangeProps": false,
             "specProps": [
-                "labelColor"
+                "labelColor",
+                "tapAction"
             ],
             "supportedKinds": [
             ],

@@ -255,7 +255,7 @@ Item {
                 tripHistoryPage.selectTrip(tripHistoryPage.selectedTrip)
         }
     }
-    // Elapsed clock for the recording pill
+    // Elapsed time of the trip being recorded
     readonly property int liveElapsedS: available ? tripRecorder.currentTripElapsedS : 0
     Component.onCompleted: {
         if (available) {
@@ -308,38 +308,27 @@ Item {
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                         }
-                        // Recording pill
-                        Rectangle {
-                            radius: height / 2
-                            color: recording ? Qt.rgba(1, 0.27, 0.27, 0.18) : Qt.darker(backgroundColor, 1.2)
-                            border.color: recording ? "#FF4444" : labelColor
-                            border.width: 1
-                            implicitWidth: pillRow.implicitWidth + dp(16)
-                            implicitHeight: pillRow.implicitHeight + dp(6)
-                            RowLayout {
-                                id: pillRow
-                                anchors.centerIn: parent
-                                spacing: dp(6)
-                                Rectangle {
-                                    width: dp(8); height: dp(8); radius: dp(4)
-                                    color: recording ? "#FF4444" : labelColor
-                                    SequentialAnimation on opacity {
-                                        running: recording && tripHistoryPage.visible
-                                        loops: Animation.Infinite
-                                        NumberAnimation { to: 0.3; duration: 700 }
-                                        NumberAnimation { to: 1.0; duration: 700 }
-                                    }
+                        // Recording mark: a blinking red dot and REC, only while a trip records
+                        RowLayout {
+                            objectName: "recordingMark"
+                            visible: recording
+                            spacing: dp(6)
+                            Rectangle {
+                                width: dp(8); height: dp(8); radius: dp(4)
+                                color: "#FF4444"
+                                SequentialAnimation on opacity {
+                                    running: recording && tripHistoryPage.visible
+                                    loops: Animation.Infinite
+                                    NumberAnimation { to: 0.3; duration: 700 }
+                                    NumberAnimation { to: 1.0; duration: 700 }
                                 }
-                                Text {
-                                    text: !available || !tripRecorder.storeReady ? "Unavailable"
-                                        : !tripRecorder.enabled ? "Off"
-                                        : recording ? "REC " + fmtClock(liveElapsedS) + " · " + tripRecorder.currentSampleCount
-                                        : "Waiting for engine"
-                                    color: textColor
-                                    font.pixelSize: App.Spacing.overallText * 0.75
-                                    font.family: globalFont
-                                    font.bold: recording
-                                }
+                            }
+                            Text {
+                                text: "REC"
+                                color: "#FF4444"
+                                font.pixelSize: App.Spacing.overallText * 0.75
+                                font.family: globalFont
+                                font.bold: true
                             }
                         }
                     }
@@ -434,16 +423,30 @@ Item {
                                         elide: Text.ElideRight
                                         Layout.fillWidth: true
                                     }
+                                    // The trip being recorded: a blinking red dot, as in the header
                                     Rectangle {
-                                        visible: modelData.open === true || modelData.clean === false
+                                        objectName: "liveDot"
+                                        visible: modelData.open === true
+                                        Layout.alignment: Qt.AlignTop | Qt.AlignRight
+                                        width: dp(8); height: dp(8); radius: dp(4)
+                                        color: "#FF4444"
+                                        SequentialAnimation on opacity {
+                                            running: modelData.open === true && tripHistoryPage.visible
+                                            loops: Animation.Infinite
+                                            NumberAnimation { to: 0.3; duration: 700 }
+                                            NumberAnimation { to: 1.0; duration: 700 }
+                                        }
+                                    }
+                                    Rectangle {
+                                        visible: modelData.open !== true && modelData.clean === false
                                         radius: dpMin(4, 2)
-                                        color: modelData.open === true ? "#FF4444" : Qt.rgba(1, 0.67, 0, 0.8)
+                                        color: Qt.rgba(1, 0.67, 0, 0.8)
                                         implicitWidth: badge.implicitWidth + dp(10)
                                         implicitHeight: badge.implicitHeight + dp(4)
                                         Text {
                                             id: badge
                                             anchors.centerIn: parent
-                                            text: modelData.open === true ? "LIVE" : "RECOVERED"
+                                            text: "RECOVERED"
                                             color: "white"
                                             font.pixelSize: App.Spacing.overallText * 0.6
                                             font.bold: true
@@ -704,23 +707,6 @@ Item {
                                 font.family: globalFont
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
-                            }
-                        }
-                        // Ends the recording for good: asks first (tap, then
-                        // "Confirm end" within 4 s), like settings/ConfirmButton
-                        TripActionButton {
-                            id: endTripButton
-                            property bool armed: false
-                            text: armed ? "Confirm end" : "End trip"
-                            danger: armed
-                            visible: selectedTrip !== null && selectedTrip.open === true
-                            onVisibleChanged: if (!visible) armed = false
-                            Timer { id: endTripArmTimer; interval: 4000; onTriggered: endTripButton.armed = false }
-                            onClicked: {
-                                if (!armed) { armed = true; endTripArmTimer.restart(); return }
-                                armed = false
-                                endTripArmTimer.stop()
-                                tripRecorder.endTripNow()
                             }
                         }
                     }
@@ -1350,36 +1336,6 @@ Item {
                     }
                 }
             }
-        }
-    }
-
-    // Small accent-outline button used by the page
-    component TripActionButton: Rectangle {
-        id: btn
-        property string text: ""
-        property bool danger: false   // armed for something that cannot be undone
-        readonly property color tint: danger ? App.Style.statusDanger : accentColor
-        signal clicked()
-        implicitWidth: Math.max(btnText.implicitWidth + dp(20), dp(44))
-        implicitHeight: Math.max(btnText.implicitHeight + dp(10), dp(40))
-        radius: dpMin(6, 2)
-        color: btnMouse.pressed ? Qt.rgba(btn.tint.r, btn.tint.g, btn.tint.b, 0.3) : "transparent"
-        border.color: btn.tint
-        border.width: 1
-        Text {
-            id: btnText
-            anchors.centerIn: parent
-            text: btn.text
-            color: btn.tint
-            font.pixelSize: App.Spacing.overallText * 0.75
-            font.bold: true
-            font.family: tripHistoryPage.globalFont
-        }
-        MouseArea {
-            id: btnMouse
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: btn.clicked()
         }
     }
 

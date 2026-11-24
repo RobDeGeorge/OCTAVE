@@ -30,6 +30,13 @@ ValueGaugeBase {
     property bool showTitle: true
     property bool showUnit: true
     property int alignment: Qt.AlignHCenter   // Qt.AlignLeft / AlignHCenter / AlignRight
+    // The Home screen's reading card: centred in its cell, the decimals the
+    // reading has by itself (90.0 °C, 14.1 V) and a bar along the bottom for
+    // where the value stands in its range. With the cell's `frame`, the box.
+    property bool card: false
+    property color barColor: App.Style.obdBarColor
+    readonly property int _decimals: (card && paramId !== "") ? App.OBDParameterModel.decimalsFor(paramId) : decimals
+    readonly property real _barHeight: card ? Math.max(2, Math.min(App.Spacing.dp(4), height * 0.06)) : 0
 
     // ── Computed ────────────────────────────────────────────────────
     // Shrink the whole stack when the cell is shorter than the natural
@@ -40,11 +47,12 @@ ValueGaugeBase {
       + App.Spacing.overallText * valueScale
       + (showUnit && unit.length > 0 ? App.Spacing.overallText * 0.85 : 0)
       + App.Spacing.dp(6)
-    readonly property real _vfit: Math.min(1, height / Math.max(1, _naturalH))
+    readonly property real _vfit: Math.min(1, (height - _barHeight) / Math.max(1, _naturalH))
 
     readonly property string _formatted: {
         if (!hasValue) return "--"
-        var v = value.toFixed(Math.max(0, Math.min(4, decimals)))
+        var v = value.toFixed(Math.max(0, Math.min(4, _decimals)))
+        if (Number(v) === 0 && v.charAt(0) === "-") v = v.substring(1)   // never "-0"
         if (padDigits > 0) {
             var dotIdx = v.indexOf(".")
             var intPart = dotIdx >= 0 ? v.substring(0, dotIdx) : v
@@ -63,7 +71,8 @@ ValueGaugeBase {
         // _vfit sizes the fonts; this takes up what it misses (line
         // spacing, the gaps) so the unit never falls out of a short cell
         transformOrigin: Item.Top
-        scale: Math.max(0.01, Math.min(1, root.height / Math.max(1, implicitHeight)))
+        scale: Math.max(0.01, Math.min(1, (root.height - root._barHeight) / Math.max(1, implicitHeight)))
+        y: root.card ? Math.max(0, (root.height - root._barHeight - implicitHeight * scale) / 2) : 0
 
         Text {
             visible: root.showTitle && root.title.length > 0
@@ -100,6 +109,26 @@ ValueGaugeBase {
             width: parent.width
             horizontalAlignment: root.alignment
             elide: Text.ElideRight
+        }
+    }
+
+    // Card style: where the value stands in its range
+    Rectangle {
+        visible: root.card
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: root._barHeight
+        radius: height / 2
+        color: Qt.darker(App.Style.obdBoxBackground, 1.35)
+
+        Rectangle {
+            visible: root.hasValue && root.max > root.min
+            width: Math.max(parent.height, parent.width * Math.max(0, Math.min(1, (root.value - root.min) / (root.max - root.min))))
+            height: parent.height
+            radius: parent.radius
+            color: root.alertLevel > 0 ? root._alertColor : root.barColor
+            Behavior on width { NumberAnimation { duration: 200 } }
         }
     }
 }

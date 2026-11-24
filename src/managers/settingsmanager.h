@@ -92,6 +92,12 @@ class SettingsManager : public QObject
     Q_CLASSINFO("octave.deprecated.save_black_box_sweep_all", "use the blackBoxSweepAll property; goes in protocol 5")
     Q_CLASSINFO("octave.deprecated.save_black_box_max_mb", "use the blackBoxMaxMB property; goes in protocol 5")
     Q_CLASSINFO("octave.deprecated.save_home_obd_parameters", "use the homeOBDParameters property; goes in protocol 5")
+    // Home is a dashboard (dashboardManager.homeDashboardId): the classic Home's card list and vehicle switch go with it
+    Q_CLASSINFO("octave.deprecated.homeOBDParameters", "Home is a dashboard: dashboardManager.homeDashboardId; goes with the classic Home")
+    Q_CLASSINFO("octave.deprecated.homeOBDParametersChanged", "Home is a dashboard: dashboardManager.homeDashboardChanged; goes with the classic Home")
+    Q_CLASSINFO("octave.deprecated.maxHomeObdParameters", "Home is a dashboard: dashboardManager.homeDashboardId; goes with the classic Home")
+    Q_CLASSINFO("octave.deprecated.homeVehicleCard", "Home is a dashboard: place a VehicleWidget; goes with the classic Home")
+    Q_CLASSINFO("octave.deprecated.homeVehicleCardChanged", "Home is a dashboard: place a VehicleWidget; goes with the classic Home")
     Q_CLASSINFO("octave.deprecated.save_window_state", "use the windowState property; goes in protocol 5")
     Q_CLASSINFO("octave.deprecated.set_last_settings_section", "use the lastSettingsSection property; goes in protocol 5")
     Q_CLASSINFO("octave.deprecated.save_android_auto_enabled", "use the androidAutoEnabled property; goes in protocol 5")
@@ -248,7 +254,7 @@ class SettingsManager : public QObject
     Q_PROPERTY(QVariantList homeOBDParameters READ homeOBDParameters WRITE save_home_obd_parameters NOTIFY homeOBDParametersChanged)
     // The home screen holds at most this many OBD cards
     Q_PROPERTY(int maxHomeObdParameters READ maxHomeObdParameters CONSTANT)
-    // The vehicle's picture as a card beside the Home readings (pitch and roll under it with an IMU)
+    // The vehicle's picture as a card with the Home readings
     Q_PROPERTY(bool homeVehicleCard READ homeVehicleCard WRITE setHomeVehicleCard NOTIFY homeVehicleCardChanged)
     Q_PROPERTY(QVariantList customThemes READ customThemes NOTIFY customThemesChanged)   // names
     // Every saved custom theme, name -> theme object (as on disk)

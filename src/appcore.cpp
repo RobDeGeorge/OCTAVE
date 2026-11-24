@@ -145,6 +145,15 @@ AppCore::AppCore(const QDir &frontendDir, Units *units)
     dashboardManager.setWidgetCatalogFile(frontendDir.absoluteFilePath(QStringLiteral("dashboards/widget-catalog.json")));
     dashboardManager.setTemplatesDir(frontendDir.absoluteFilePath(QStringLiteral("dashboards/templates")));
     dashboardManager.setUserDir(SettingsManager::getAppDataDir() + QStringLiteral("/dashboards"));
+    // Home is a dashboard: once per config, the classic Home's card list,
+    // vehicle switch and RPM-card shift light become the user's Home dashboard
+    {
+        QStringList readings;
+        for (const QVariant &id : settingsManager.homeOBDParameters())
+            readings.append(id.toString());
+        dashboardManager.migrateClassicHome(readings, settingsManager.homeVehicleCard(),
+                                            shiftLightManager.enabled() && shiftLightManager.showOnHomeCard());
+    }
     expose("dashboardManager", &dashboardManager);
 
     // The simulator: `active` false and every control a no-op unless started

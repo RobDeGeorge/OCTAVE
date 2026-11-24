@@ -27,6 +27,19 @@
         },
         {
             "kind": "slot",
+            "name": "setHomeDashboard",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "bool",
+            "scope": "files",
+            "stability": "experimental"
+        },
+        {
+            "kind": "slot",
             "name": "restoreBuiltInDashboards",
             "params": [
             ],
@@ -642,6 +655,15 @@
         },
         {
             "constant": false,
+            "name": "homeDashboardId",
+            "notify": "homeDashboardChanged",
+            "readable": true,
+            "stability": "experimental",
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
             "name": "hiddenBuiltInCount",
             "notify": "dashboardsChanged",
             "readable": true,
@@ -704,6 +726,11 @@
         },
         {
             "name": "widgetPresetsChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "homeDashboardChanged",
             "params": [
             ]
         }

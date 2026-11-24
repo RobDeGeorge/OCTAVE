@@ -1394,6 +1394,9 @@ Item {
                                 } else if (action === "share") {
                                     shareMenu.dashId = card.dash.id
                                     shareMenu.popup()
+                                } else if (action === "home") {
+                                    // The Home screen shows this one (Home is a dashboard)
+                                    dashboardManager.setHomeDashboard(card.dash.id)
                                 } else if (action === "duplicate") {
                                     // Empty label → manager appends " (Copy)".
                                     dashboardManager.duplicateDashboard(card.dash.id, "")
@@ -1590,9 +1593,12 @@ Item {
                                     model: [
                                         { "action": "edit",      "label": "Edit",   "danger": false, "show": card.dash.builtIn === false },
                                         { "action": "customize", "label": "Customize", "danger": false, "show": card.dash.builtIn === true },
+                                        { "action": "home",      "label": dashboardManager.homeDashboardId === card.dash.id ? "Home \u2713" : "Use as Home",
+                                          "danger": false, "show": true },
                                         { "action": "duplicate", "label": "Copy",   "danger": false, "show": true },
                                         { "action": "share",     "label": "Share",  "danger": false, "show": true },
-                                        { "action": "delete",    "label": "Delete", "danger": true,  "show": true }
+                                        // (the built-in Home is what Home falls back to: it stays)
+                                        { "action": "delete",    "label": "Delete", "danger": true,  "show": card.dash.id !== "home" }
                                     ]
                                     delegate: Rectangle {
                                         objectName: "dashCard_" + card.dash.id + "_" + modelData.action

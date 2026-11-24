@@ -37,7 +37,7 @@ class DashboardManager : public QObject
     // Service permissions (src/service/servicescopes.h)
     Q_CLASSINFO("octave.scope", "files")
     Q_CLASSINFO("octave.scope.read", "arrange canPlace derivePortrait fitAt fromTemplate isBuiltIn loadDashboard minSpan nearestFree normalizedSpec orientedSpec refresh rescale sizeOptions thumbnailFromImage uniqueIdForLabel widgetPresetText")
-    Q_CLASSINFO("octave.experimental", "arrange derivePortrait endPreview fromTemplate lastImportReport minSpan nearestFree orientedSpec preview previewDashboard rescale sizeOptions templates thumbnailFromImage copyWidgetPresetToClipboard deleteWidgetPreset importWidgetPresetFromClipboard importWidgetPresetFromText saveWidgetPreset widgetPresetText widgetPresets")
+    Q_CLASSINFO("octave.experimental", "arrange derivePortrait endPreview fromTemplate lastImportReport minSpan nearestFree orientedSpec preview previewDashboard rescale sizeOptions templates thumbnailFromImage copyWidgetPresetToClipboard deleteWidgetPreset importWidgetPresetFromClipboard importWidgetPresetFromText saveWidgetPreset widgetPresetText widgetPresets homeDashboardId setHomeDashboard")
     Q_PROPERTY(QVariantList dashboards READ dashboards NOTIFY dashboardsChanged)
     // Human-readable reason the last export/import failed ("" after a
     // success) — the chooser shows it in its status line.
@@ -70,6 +70,10 @@ class DashboardManager : public QObject
     // Placing one places its baseType with these props (and its paramId
     // when it has one).
     Q_PROPERTY(QVariantList widgetPresets READ widgetPresets NOTIFY widgetPresetsChanged)
+    // The dashboard the Home screen shows: the one chosen with
+    // setHomeDashboard() while it exists, else the built-in "home"
+    // (kHomeId). Any dashboard can be Home.
+    Q_PROPERTY(QString homeDashboardId READ homeDashboardId NOTIFY homeDashboardChanged)
     // Built-in presets the user deleted (hidden) — the chooser shows
     // "Restore defaults" while this is non-zero.
     Q_PROPERTY(int hiddenBuiltInCount READ hiddenBuiltInCount NOTIFY dashboardsChanged)
@@ -196,6 +200,28 @@ public:
     int hiddenBuiltInCount() const { return m_hiddenBuiltIns.size(); }
     int supportedSchema() const { return kSupportedSchema; }
 
+    // The built-in Home dashboard (presets/home.json): what Home shows
+    // until another is chosen, and falls back to. It cannot be hidden.
+    static constexpr const char *kHomeId = "home";
+    QString homeDashboardId() const;
+
+    // The Home dashboard for a set of readings (at most 8, two columns; an
+    // odd count gives the first the full width), with or without the
+    // vehicle's picture and a shift light beside RPM: music on the left,
+    // the readings (over the vehicle) in the middle, G-force / compass /
+    // pitch / roll on the right; portrait: music on top, sensors along the
+    // bottom. No id or label. presets/home.json is this for the default
+    // readings (tst_dashboardmanager holds them together).
+    static QVariantMap homeSpec(const QStringList &readings, bool vehicle, bool shiftLight);
+
+    // Once per config (until a Home choice is on disk): carries the classic
+    // Home's settings over. A card list other than the default, the vehicle
+    // card switched off or a shift light on the RPM card become a user
+    // dashboard "My Home" (homeSpec), made Home; otherwise Home is the
+    // built-in. Returns the new dashboard's id, "" when none was needed or
+    // the choice was already made.
+    QString migrateClassicHome(const QStringList &readings, bool vehicleCard, bool shiftLight);
+
     // OBDMenu's built-in Parameter Cards entry. Not a file, but it shares the
     // id space: no dashboard may take it.
     static constexpr const char *kParameterCardsId = "grid";
@@ -216,6 +242,10 @@ public slots:
     // Deletes a user dashboard file, or hides a built-in preset (persisted
     // in .hidden-builtins). Returns true on success.
     bool deleteDashboard(const QString &id);
+
+    // Makes dashboard `id` the one Home shows ("" or kHomeId: the built-in
+    // Home). False for an id that is no dashboard.
+    bool setHomeDashboard(const QString &id);
 
     // Un-hides every built-in preset deleted with deleteDashboard().
     // Returns true if anything was restored.
@@ -271,8 +301,18 @@ signals:
     void lastImportReportChanged();
     void previewChanged();
     void widgetPresetsChanged();
+    void homeDashboardChanged();
 
 private:
+    // The id chosen as Home (<userDir>/.home, one line); "" before any choice
+    QString m_homeChoice;
+    // homeDashboardId() as last announced
+    QString m_homeAnnounced;
+    QString homeChoicePath() const;
+    void loadHomeChoice();
+    bool saveHomeChoice(const QString &id);
+    void announceHome();
+
     QString m_lastShareError;
     void setShareError(const QString &message);
     QString m_lastError;

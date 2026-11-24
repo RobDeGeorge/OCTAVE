@@ -1684,6 +1684,7 @@
             <tr><td><code>dashboards</code></td><td><code>QVariantList</code></td><td>read-only</td><td><code>dashboardsChanged</code></td><td>Merged headers <code>[{id, label, builtIn, path}, &hellip;]</code>, built-ins first</td></tr>
             <tr><td><code>lastShareError</code></td><td><code>QString</code></td><td>read-only</td><td><code>lastShareErrorChanged</code></td><td>Reason the last export/import failed; <code>""</code> after a success</td></tr>
             <tr><td><code>lastError</code></td><td><code>QString</code></td><td>read-only</td><td><code>lastErrorChanged</code></td><td>Why the last <code>loadDashboard</code> / <code>saveDashboard</code> failed (unknown id, unreadable file, newer schema, no name, a built-in id...); <code>""</code> after one that worked. The calls' return values are unchanged</td></tr>
+            <tr><td><code>homeDashboardId</code></td><td><code>QString</code></td><td>read-only</td><td><code>homeDashboardChanged</code></td><td>Experimental. The dashboard the Home screen shows: the one chosen with <code>setHomeDashboard()</code> while it exists, else the built-in <code>home</code></td></tr>
             <tr><td><code>hiddenBuiltInCount</code></td><td><code>int</code></td><td>read-only</td><td><code>dashboardsChanged</code></td><td>Built-in presets the user deleted (hidden); shows the chooser's "Restore defaults" button</td></tr>
             <tr><td><code>lastImportReport</code></td><td><code>QVariantMap</code></td><td>read-only</td><td><code>lastImportReportChanged</code></td><td>Experimental. What the last successful import kept and left out: <code>{id, label, cells, droppedCells, droppedProps, movedCells, portraitDropped, unknownTypes, paramIds}</code></td></tr>
             <tr><td><code>preview</code></td><td><code>QVariantMap</code></td><td>read-only</td><td><code>previewChanged</code></td><td>Experimental. A dashboard being edited on another device, <code>{id, spec}</code>, shown on the dashboard page; <code>{}</code> when none</td></tr>
@@ -1701,6 +1702,7 @@
             <tr><td><code>isBuiltIn(QString id)</code></td><td><code>bool</code></td><td>True for a read-only preset</td></tr>
             <tr><td><code>saveDashboard(QVariantMap spec)</code></td><td><code>QString</code></td><td>Normalise and write a user dashboard JSON (needs a <code>label</code>; a missing <code>id</code> becomes <code>uniqueIdForLabel(label)</code>, a given one must be file-safe); returns the id, <code>""</code> on failure, a newer schema or collision with a built-in</td></tr>
             <tr><td><code>deleteDashboard(QString id)</code></td><td><code>bool</code></td><td>Delete a user dashboard file, or hide a built-in (persisted in <code>.hidden-builtins</code>)</td></tr>
+            <tr><td><code>setHomeDashboard(QString id)</code></td><td><code>bool</code></td><td>Experimental. Makes dashboard <code>id</code> the one Home shows (<code>""</code> or <code>home</code>: the built-in Home); false for an id that is no dashboard. Kept in <code>&lt;config&gt;/dashboards/.home</code></td></tr>
             <tr><td><code>restoreBuiltInDashboards()</code></td><td><code>bool</code></td><td>Un-hide every deleted built-in; false if none were hidden</td></tr>
             <tr><td><code>uniqueIdForLabel(QString label)</code></td><td><code>QString</code></td><td>Free id for a new dashboard named <code>label</code> (slug, then <code>-2</code>, <code>-3</code>, ...); never a built-in id, hidden or not, or the Parameter Cards id <code>"grid"</code>. The editor calls it before <code>saveDashboard</code></td></tr>
             <tr><td><code>normalizedSpec(QVariantMap spec)</code></td><td><code>QVariantMap</code></td><td>A spec as save / load would leave it, for one that isn't a file (the editor's rescued draft); empty if unusable; an absent id stays absent</td></tr>
@@ -1735,6 +1737,7 @@
         <table>
           <thead><tr><th>Signal</th><th>Description</th></tr></thead>
           <tbody>
+            <tr><td><code>homeDashboardChanged()</code></td><td>Home shows another dashboard: <code>setHomeDashboard()</code>, or the chosen one was deleted (back to the built-in)</td></tr>
             <tr><td><code>dashboardsChanged()</code></td><td>After any rescan (save, delete, duplicate, import, <code>refresh()</code>, or the user dir changing on disk)</td></tr>
             <tr><td><code>lastShareErrorChanged()</code></td><td>When <code>lastShareError</code> changes</td></tr>
             <tr><td><code>lastImportReportChanged()</code>, <code>previewChanged()</code>, <code>widgetPresetsChanged()</code></td><td>When those properties change</td></tr>

@@ -37,6 +37,8 @@ QtObject {
         "CompassGauge":        Qt.resolvedUrl("../gauges/CompassGauge.qml"),
         "NowPlayingWidget":    Qt.resolvedUrl("widgets/NowPlayingWidget.qml"),
         "MediaControlsWidget": Qt.resolvedUrl("widgets/MediaControlsWidget.qml"),
+        "VehicleWidget":       Qt.resolvedUrl("widgets/VehicleWidget.qml"),
+        "ShiftLightWidget":    Qt.resolvedUrl("widgets/ShiftLightWidget.qml"),
         "ClockWidget":         Qt.resolvedUrl("widgets/ClockWidget.qml")
     })
 

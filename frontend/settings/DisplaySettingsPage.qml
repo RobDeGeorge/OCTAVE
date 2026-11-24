@@ -307,6 +307,43 @@ Flickable {
                 }
             }
 
+            // Home is a dashboard (frontend/HomeDashboard.qml); the classic
+            // panels stay selectable until it has been checked in the car
+            SettingCategory {
+                id: homeScreenCategory
+                title: "Home Screen"
+                readonly property var dm: (typeof dashboardManager !== "undefined" && dashboardManager) ? dashboardManager : null
+                readonly property string homeLabel: {
+                    if (!dm) return ""
+                    var list = dm.dashboards
+                    for (var i = 0; i < list.length; i++)
+                        if (list[i].id === dm.homeDashboardId) return list[i].label
+                    return "Home"
+                }
+                property string style: settingsManager ? settingsManager.get_setting_with_default("homeStyle", "dashboard") : "dashboard"
+                description: style === "classic"
+                    ? "The fixed music, readings and sensors panels."
+                    : "Showing the dashboard \u201C" + homeLabel + "\u201D. Press and hold on Home to edit it; any dashboard can be made Home from OBD > Dashboards."
+
+                SettingsSegmentedControl {
+                    objectName: "homeStyleControl"
+                    Layout.fillWidth: true
+                    options: ["dashboard", "classic"]
+                    currentValue: homeScreenCategory.style
+                    onSelected: function(value) {
+                        homeScreenCategory.style = value
+                        if (settingsManager) settingsManager.save_setting("homeStyle", value)
+                    }
+                }
+                SettingsButton {
+                    objectName: "homeDashboardResetButton"
+                    visible: homeScreenCategory.style !== "classic" && !!homeScreenCategory.dm
+                             && homeScreenCategory.dm.homeDashboardId !== "home"
+                    text: "Use the default Home"
+                    onClicked: homeScreenCategory.dm.setHomeDashboard("")
+                }
+            }
+
             SettingCategory {
                 title: "Nav Bar Media Controls"
 

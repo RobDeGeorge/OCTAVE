@@ -892,13 +892,136 @@ private slots:
 
     void presetsHavePortraitLayouts()
     {
-        for (const QString id : {"sport", "minimal", "fullgrid", "performance", "tj-wrangler"}) {
+        for (const QString id : {"sport", "minimal", "fullgrid", "performance", "tj-wrangler", "home"}) {
             const QVariantMap spec = m_dm->loadDashboard(id).toMap();
             QVERIFY2(spec.value("schema").toInt() == 2, qPrintable(id));
             const QVariantMap portrait = spec.value("layouts").toMap().value("portrait").toMap();
             QCOMPARE(portrait.value("cells").toList().size(), spec.value("cells").toList().size());
             QVERIFY(portrait.value("gridRows").toInt() >= portrait.value("gridColumns").toInt());
         }
+    }
+
+    // ── Home is a dashboard ──
+
+    void homeIsTheBuiltInUntilChosen()
+    {
+        QCOMPARE(m_dm->homeDashboardId(), QStringLiteral("home"));
+        QVERIFY(m_dm->isBuiltIn("home"));
+        // What Home falls back to cannot go
+        QVERIFY(!m_dm->deleteDashboard("home"));
+        QVERIFY(!m_dm->loadDashboard("home").toMap().isEmpty());
+
+        QSignalSpy changed(m_dm.get(), &DashboardManager::homeDashboardChanged);
+        QVERIFY(!m_dm->setHomeDashboard("no-such-dashboard"));
+        QVERIFY(!m_dm->setHomeDashboard("grid"));
+        QCOMPARE(changed.size(), 0);
+
+        const QString mine = m_dm->duplicateDashboard("sport", "Track day");
+        QVERIFY(!mine.isEmpty());
+        QVERIFY(m_dm->setHomeDashboard(mine));
+        QCOMPARE(m_dm->homeDashboardId(), mine);
+        QCOMPARE(changed.size(), 1);
+        // A built-in can be Home as well
+        QVERIFY(m_dm->setHomeDashboard("minimal"));
+        QCOMPARE(m_dm->homeDashboardId(), QStringLiteral("minimal"));
+        QVERIFY(m_dm->setHomeDashboard(mine));
+
+        // The choice is on disk
+        DashboardManager again;
+        again.setPresetsDir(QStringLiteral(OCTAVE_SOURCE_DIR "/frontend/dashboards/presets"));
+        again.setUserDir(m_tmp->path() + "/dashboards");
+        QCOMPARE(again.homeDashboardId(), mine);
+
+        // Its dashboard deleted: back to the built-in, and said so
+        changed.clear();
+        QVERIFY(m_dm->deleteDashboard(mine));
+        QCOMPARE(m_dm->homeDashboardId(), QStringLiteral("home"));
+        QCOMPARE(changed.size(), 1);
+        // "" is the built-in
+        QVERIFY(m_dm->setHomeDashboard(QString()));
+        QCOMPARE(m_dm->homeDashboardId(), QStringLiteral("home"));
+    }
+
+    void homePresetIsTheDefaultHomeSpec()
+    {
+        QVariantMap built = DashboardManager::homeSpec(
+            {"SPEED", "RPM", "COOLANT_TEMP", "CONTROL_MODULE_VOLTAGE"}, true, false);
+        built.insert("id", "home");
+        built.insert("label", "Home");
+        QCOMPARE(QJsonObject::fromVariantMap(m_dm->loadDashboard("home").toMap()), QJsonObject::fromVariantMap(built));
+    }
+
+    void homeSpecsFitTheirGrids_data()
+    {
+        QTest::addColumn<int>("count");
+        QTest::addColumn<bool>("vehicle");
+        QTest::addColumn<bool>("lamp");
+        for (int n = 0; n <= 8; ++n)
+            for (int v = 0; v < 2; ++v)
+                for (int l = 0; l < 2; ++l)
+                    QTest::addRow("%d readings%s%s", n, v ? ", vehicle" : "", l ? ", shift light" : "") << n << bool(v) << bool(l);
+    }
+
+    void homeSpecsFitTheirGrids()
+    {
+        QFETCH(int, count);
+        QFETCH(bool, vehicle);
+        QFETCH(bool, lamp);
+        const QStringList all{"RPM", "SPEED", "COOLANT_TEMP", "CONTROL_MODULE_VOLTAGE", "ENGINE_LOAD", "THROTTLE_POS",
+                              "INTAKE_TEMP", "FUEL_LEVEL"};
+        QVariantMap spec = DashboardManager::homeSpec(all.mid(0, count), vehicle, lamp);
+        spec.insert("label", "Mine");
+        // Saved as written: nothing moved, shrunk or dropped by the rules
+        const QString id = m_dm->saveDashboard(spec);
+        QVERIFY2(!id.isEmpty(), qPrintable(m_dm->lastError()));
+        spec.insert("id", id);
+        QCOMPARE(QJsonObject::fromVariantMap(m_dm->loadDashboard(id).toMap()), QJsonObject::fromVariantMap(spec));
+        int readouts = 0, lamps = 0, vehicles = 0;
+        for (const QVariant &c : spec.value("cells").toList()) {
+            const QVariantMap cell = c.toMap();
+            readouts += cell.value("type") == "DigitalReadout" && all.contains(cell.value("paramId").toString());
+            lamps += cell.value("type") == "ShiftLightWidget";
+            vehicles += cell.value("type") == "VehicleWidget";
+        }
+        QCOMPARE(readouts, count);
+        QCOMPARE(lamps, lamp && count > 0 ? 1 : 0);
+        QCOMPARE(vehicles, vehicle ? 1 : 0);
+    }
+
+    void classicHomeIsCarriedOverOnce()
+    {
+        const QStringList defaults{"SPEED", "RPM", "COOLANT_TEMP", "CONTROL_MODULE_VOLTAGE"};
+        // Nothing of the user's own: the built-in, and no dashboard written
+        const int before = m_dm->dashboards().size();
+        QCOMPARE(m_dm->migrateClassicHome(defaults, true, false), QString());
+        QCOMPARE(m_dm->dashboards().size(), before);
+        QCOMPARE(m_dm->homeDashboardId(), QStringLiteral("home"));
+        // Decided: a later run changes nothing
+        QCOMPARE(m_dm->migrateClassicHome({"FUEL_LEVEL"}, false, false), QString());
+        QCOMPARE(m_dm->dashboards().size(), before);
+
+        // A fresh config with the user's own cards and no vehicle card
+        QTemporaryDir other;
+        DashboardManager dm;
+        dm.setPresetsDir(QStringLiteral(OCTAVE_SOURCE_DIR "/frontend/dashboards/presets"));
+        dm.setWidgetCatalogFile(QStringLiteral(OCTAVE_SOURCE_DIR "/frontend/dashboards/widget-catalog.json"));
+        dm.setUserDir(other.path() + "/dashboards");
+        const QString id = dm.migrateClassicHome({"FUEL_LEVEL", "RPM", "SPEED"}, false, true);
+        QVERIFY(!id.isEmpty());
+        QCOMPARE(dm.homeDashboardId(), id);
+        QVERIFY(!dm.isBuiltIn(id));
+        const QVariantMap spec = dm.loadDashboard(id).toMap();
+        QCOMPARE(spec.value("label").toString(), QStringLiteral("My Home"));
+        QStringList bound, types;
+        for (const QVariant &c : spec.value("cells").toList()) {
+            types << c.toMap().value("type").toString();
+            if (!c.toMap().value("paramId").toString().isEmpty()) bound << c.toMap().value("paramId").toString();
+        }
+        QCOMPARE(bound, QStringList({"FUEL_LEVEL", "RPM", "SPEED", "PITCH", "ROLL"}));
+        QVERIFY(types.contains("ShiftLightWidget"));
+        QVERIFY(!types.contains("VehicleWidget"));
+        QCOMPARE(dm.migrateClassicHome({"SPEED"}, true, false), QString());
+        QCOMPARE(dm.homeDashboardId(), id);
     }
 
     // ── sizes ──

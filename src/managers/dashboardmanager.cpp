@@ -212,6 +212,178 @@ bool DashboardManager::restoreBuiltInDashboards()
     return true;
 }
 
+// ---------------------------------------------------------------------------
+// Home
+// ---------------------------------------------------------------------------
+
+QString DashboardManager::homeChoicePath() const
+{
+    if (m_userDir.isEmpty()) return {};
+    return m_userDir + QDir::separator() + QStringLiteral(".home");
+}
+
+void DashboardManager::loadHomeChoice()
+{
+    m_homeChoice.clear();
+    QFile f(homeChoicePath());
+    if (f.exists() && f.open(QIODevice::ReadOnly))
+        m_homeChoice = QString::fromUtf8(f.read(256)).trimmed();
+}
+
+bool DashboardManager::saveHomeChoice(const QString &id)
+{
+    const QString path = homeChoicePath();
+    if (path.isEmpty()) return false;
+    ensureUserDir();
+    QSaveFile out(path);
+    if (!out.open(QIODevice::WriteOnly)) {
+        qCWarning(lcDashboards) << "Cannot write" << path << ":" << out.errorString();
+        return false;
+    }
+    const QByteArray data = id.toUtf8() + '\n';
+    if (out.write(data) != data.size() || !out.commit())
+        return false;
+    m_homeChoice = id;
+    return true;
+}
+
+QString DashboardManager::homeDashboardId() const
+{
+    if (!m_homeChoice.isEmpty() && m_homeChoice != QLatin1String(kParameterCardsId)
+        && !findEntry(m_homeChoice).isEmpty())
+        return m_homeChoice;
+    return QLatin1String(kHomeId);
+}
+
+void DashboardManager::announceHome()
+{
+    const QString now = homeDashboardId();
+    if (now == m_homeAnnounced)
+        return;
+    m_homeAnnounced = now;
+    emit homeDashboardChanged();
+}
+
+bool DashboardManager::setHomeDashboard(const QString &idIn)
+{
+    const QString id = idIn.isEmpty() ? QString::fromLatin1(kHomeId) : idIn;
+    if (id == QLatin1String(kParameterCardsId) || (id != QLatin1String(kHomeId) && findEntry(id).isEmpty())) {
+        setError(QStringLiteral("%1 is not a dashboard").arg(id));
+        return false;
+    }
+    if (!saveHomeChoice(id)) {
+        setError(QStringLiteral("Could not save the Home choice"));
+        return false;
+    }
+    setError({});
+    announceHome();
+    return true;
+}
+
+QVariantMap DashboardManager::homeSpec(const QStringList &readingsIn, bool vehicle, bool shiftLight)
+{
+    QStringList readings;
+    for (const QString &id : readingsIn)
+        if (!id.isEmpty() && !readings.contains(id) && readings.size() < 8)
+            readings.append(id);
+
+    QVariantList cells, portrait;
+    // One widget and where it stands in each layout: {col, row, colSpan, rowSpan}
+    const auto add = [&](const QString &type, const QString &paramId, const QVariantMap &props,
+                         const QList<int> &land, const QList<int> &port) {
+        // (every key, as a saved dashboard has them)
+        cells.append(QVariantMap{{QStringLiteral("type"), type}, {QStringLiteral("paramId"), paramId},
+                                 {QStringLiteral("col"), land.at(0)}, {QStringLiteral("row"), land.at(1)},
+                                 {QStringLiteral("colSpan"), land.at(2)}, {QStringLiteral("rowSpan"), land.at(3)},
+                                 {QStringLiteral("props"), props}});
+        portrait.append(QVariantMap{{QStringLiteral("col"), port.at(0)}, {QStringLiteral("row"), port.at(1)},
+                                    {QStringLiteral("colSpan"), port.at(2)}, {QStringLiteral("rowSpan"), port.at(3)}});
+    };
+
+    // Landscape 12 x 12: music 0-2, readings (and the vehicle) 3-8, sensors 9-11.
+    // Portrait 12 x 20: music rows 0-3, readings (vehicle beside) 4-15, sensors 16-19.
+    add(QStringLiteral("NowPlayingWidget"), {},
+        {{QStringLiteral("seekable"), true}, {QStringLiteral("showBackground"), true}},
+        {0, 0, 3, 12}, {0, 0, 12, 4});
+
+    // The reading cards of the classic Home, and the same box around the sensors
+    const QVariantMap card{{QStringLiteral("card"), true}, {QStringLiteral("frame"), true}};
+    const QVariantMap framed{{QStringLiteral("frame"), true}};
+
+    const int n = readings.size();
+    const int rows = (n + 1) / 2;                       // reading rows, two columns
+    // Landscape: the readings' share of the 12 rows, a whole number per row
+    const int landBlock = n == 0 ? 0 : !vehicle ? 12 : rows == 1 ? 4 : rows == 3 ? 9 : 8;
+    const int landRow = rows > 0 ? landBlock / rows : 0;
+    const int portRow = rows > 0 ? 12 / rows : 0;
+    const int portHalf = vehicle ? 4 : 6;               // a reading column's width in portrait
+    for (int i = 0; i < n; ++i) {
+        // An odd count: the first reading takes a whole row
+        const bool wide = (n % 2 == 1) && i == 0;
+        const int slot = (n % 2 == 1) ? (i == 0 ? 0 : i + 1) : i;   // position in the 2-column flow
+        const int r = slot / 2, c = slot % 2;
+        QList<int> land{3 + c * 3, r * landRow, wide ? 6 : 3, landRow};
+        QList<int> port{c * portHalf, 4 + r * portRow, wide ? 2 * portHalf : portHalf, portRow};
+        const QString id = readings.at(i);
+        // The shift light stands in the last column of the RPM card's cell
+        const bool lamp = shiftLight && id == QLatin1String("RPM");
+        if (lamp) {
+            land[2] -= 1;
+            port[2] -= 1;
+        }
+        add(QStringLiteral("DigitalReadout"), id, card, land, port);
+        if (lamp)
+            add(QStringLiteral("ShiftLightWidget"), {}, framed,
+                {land.at(0) + land.at(2), land.at(1), 1, land.at(3)},
+                {port.at(0) + port.at(2), port.at(1), 1, port.at(3)});
+    }
+    if (vehicle)
+        add(QStringLiteral("VehicleWidget"), {}, {},
+            {3, landBlock, 6, 12 - landBlock}, {8, 4, 4, 12});
+
+    add(QStringLiteral("GForceGauge"), {}, framed, {9, 0, 3, 4}, {0, 16, 4, 4});
+    add(QStringLiteral("CompassGauge"), {}, framed, {9, 4, 3, 4}, {4, 16, 4, 4});
+    add(QStringLiteral("DigitalReadout"), QStringLiteral("PITCH"), card, {9, 8, 3, 2}, {8, 16, 4, 2});
+    add(QStringLiteral("DigitalReadout"), QStringLiteral("ROLL"), card, {9, 10, 3, 2}, {8, 18, 4, 2});
+
+    return QVariantMap{
+        {QStringLiteral("schema"), 2},
+        {QStringLiteral("gridColumns"), 12},
+        {QStringLiteral("gridRows"), 12},
+        {QStringLiteral("margins"), 10},
+        {QStringLiteral("spacing"), 10},
+        {QStringLiteral("alertBanner"), false},
+        {QStringLiteral("cells"), cells},
+        {QStringLiteral("layouts"),
+         QVariantMap{{QStringLiteral("portrait"),
+                      QVariantMap{{QStringLiteral("gridColumns"), 12}, {QStringLiteral("gridRows"), 20},
+                                  {QStringLiteral("cells"), portrait}}}}}};
+}
+
+QString DashboardManager::migrateClassicHome(const QStringList &readings, bool vehicleCard, bool shiftLight)
+{
+    const QString path = homeChoicePath();
+    if (path.isEmpty() || QFile::exists(path))
+        return {};
+    static const QStringList defaults{QStringLiteral("SPEED"), QStringLiteral("RPM"), QStringLiteral("COOLANT_TEMP"),
+                                      QStringLiteral("CONTROL_MODULE_VOLTAGE")};
+    const bool lamp = shiftLight && readings.contains(QStringLiteral("RPM"));
+    if (readings == defaults && vehicleCard && !lamp) {
+        saveHomeChoice(QString::fromLatin1(kHomeId));
+        return {};
+    }
+    QVariantMap spec = homeSpec(readings, vehicleCard, lamp);
+    spec.insert(QStringLiteral("label"), QStringLiteral("My Home"));
+    const QString id = saveDashboard(spec);
+    if (id.isEmpty()) {
+        qCWarning(lcDashboards) << "Could not carry the Home settings over:" << m_lastError;
+        return {};
+    }
+    setHomeDashboard(id);
+    qCInfo(lcDashboards) << "Home settings carried over to dashboard" << id;
+    return id;
+}
+
 QVariant DashboardManager::loadDashboard(const QString &id)
 {
     QVariantMap entry = findEntry(id);
@@ -325,7 +497,9 @@ void DashboardManager::rescanAll()
     qCInfo(lcDashboards) << "Scanned dashboards:"
                          << m_dashboards.size() << "total";
     m_userDirSignature = userDirSignatureNow();
+    loadHomeChoice();
     emit dashboardsChanged();
+    announceHome();
     rescanWidgetPresets();
 }
 
@@ -469,6 +643,11 @@ bool DashboardManager::deleteDashboard(const QString &id)
 {
     QVariantMap entry = findEntry(id);
     if (entry.isEmpty()) return false;
+    if (id == QLatin1String(kHomeId)) {
+        // What Home falls back to when its dashboard goes
+        setError(QStringLiteral("The built-in Home dashboard stays"));
+        return false;
+    }
     if (entry.value(QStringLiteral("builtIn")).toBool()) {
         // Preset files are read-only app resources: hide instead.
         m_hiddenBuiltIns.insert(id);

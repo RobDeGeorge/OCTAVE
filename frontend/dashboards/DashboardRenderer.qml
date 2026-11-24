@@ -86,15 +86,73 @@ Item {
                                   && dashboardManager) ? dashboardManager.orientedSpec(spec, true) : spec
 
     // Every distinct paramId the spec binds — the host registers these with
-    // obdManager.setParameterDemand() so exactly these PIDs get polled.
+    // obdManager.setParameterDemand() so exactly these PIDs get polled. A
+    // self-binding type's own readings (the catalog's `demand`: the shift
+    // light's RPM) are in it too.
     readonly property var paramIds: {
         var seen = {}, out = []
         var cells = (spec && spec.cells && !tooNew) ? spec.cells : []
         for (var i = 0; i < cells.length; i++) {
             var id = cells[i].paramId
             if (id && !seen[id]) { seen[id] = true; out.push(id) }
+            var m = App.WidgetCatalog.metaFor(cells[i].type)
+            var extra = (m && m.demand) ? m.demand : []
+            for (var d = 0; d < extra.length; d++)
+                if (!seen[extra[d]]) { seen[extra[d]] = true; out.push(extra[d]) }
         }
         return out
+    }
+
+    // True when the spec shows the motion sensor: a widget type the catalog
+    // marks `usesImu` (G-Force, Compass) or a cell bound to an IMU reading.
+    // The host asks for the full IMU rate from it (App.ImuDemand).
+    readonly property bool usesImu: {
+        var cells = (spec && spec.cells && !tooNew) ? spec.cells : []
+        for (var i = 0; i < cells.length; i++) {
+            var m = App.WidgetCatalog.metaFor(cells[i].type)
+            if (m && m.usesImu === true) return true
+            if (cells[i].paramId && App.OBDParameterModel.isSensorParameter(cells[i].paramId)) return true
+        }
+        return false
+    }
+
+    // ── Taps (off by default: the OBD menu's dashboards are display only) ──
+    // With `interactive`, a tap on a cell emits cellTapped(action, index):
+    // the cell's `props.tapAction`, else its type's `defaultTapAction` from
+    // the catalog ("media", "obd", "sensors", "vehicle"; a PID-bound cell
+    // without one is "obd", or "sensors" for an IMU reading), never for
+    // "none". What an action opens is the host's business (Home maps them to
+    // pages). A press held anywhere emits pressAndHold(). A widget keeps a
+    // tap to itself (its own buttons, a slider) by having
+    // `function octaveConsumesTap(x, y)` return true for that spot.
+    property bool interactive: false
+    signal cellTapped(string action, int index)
+    signal pressAndHold()
+
+    function tapActionFor(cellSpec) {
+        if (!cellSpec) return "none"
+        var own = cellSpec.props ? cellSpec.props.tapAction : undefined
+        if (typeof own === "string" && own !== "") return own
+        var m = App.WidgetCatalog.metaFor(cellSpec.type)
+        if (m && typeof m.defaultTapAction === "string" && m.defaultTapAction !== "") return m.defaultTapAction
+        if (cellSpec.paramId)
+            return App.OBDParameterModel.isSensorParameter(cellSpec.paramId) ? "sensors" : "obd"
+        return "none"
+    }
+
+    // Where cell `index` is drawn, in this item's coordinates
+    function cellRect(index) {
+        var cells = (_laid && _laid.cells) ? _laid.cells : []
+        if (index < 0 || index >= cells.length) return Qt.rect(0, 0, 0, 0)
+        var c = cells[index]
+        var cs = c.colSpan !== undefined ? c.colSpan : 1, rs = c.rowSpan !== undefined ? c.rowSpan : 1
+        return Qt.rect(_margin + (c.col || 0) * (_cellW + _spacing), _margin + (c.row || 0) * (_cellH + _spacing),
+                       cs * _cellW + (cs - 1) * _spacing, rs * _cellH + (rs - 1) * _spacing)
+    }
+
+    TapHandler {
+        enabled: root.interactive
+        onLongPressed: root.pressAndHold()
     }
 
     // Widget registry: type-string → absolute QML source URL. Owned by the
@@ -273,9 +331,15 @@ Item {
                 && App.OBDParameterModel.vehicleKnown
                 && !App.OBDParameterModel.isSupported(modelData.paramId)
 
+            // `props.frame`: the cell as a card, whatever the widget
+            // (dashboards/CellFrame.qml; the editor canvas draws the same)
+            readonly property bool _framed: !!modelData.props && modelData.props.frame === true
+            CellFrame { id: cellFrame; visible: cell._framed; anchors.fill: parent }
+
             Loader {
                 id: widgetLoader
                 anchors.fill: parent
+                anchors.margins: cell._framed ? cellFrame.inset(cell.width, cell.height) : 0
                 asynchronous: true
                 // A cell the vehicle does not report shows the placeholder
                 // below and loads no widget behind it
@@ -315,6 +379,20 @@ Item {
                         console.warn("DashboardRenderer: load error for type",
                                      modelData.type, "source:", source)
                     }
+                }
+            }
+
+            // Passive: a widget's own buttons and sliders still get the touch
+            TapHandler {
+                enabled: root.interactive
+                onTapped: function(eventPoint) {
+                    var w = widgetLoader.item
+                    if (w && typeof w.octaveConsumesTap === "function"
+                            && w.octaveConsumesTap(eventPoint.position.x, eventPoint.position.y))
+                        return
+                    var action = root.tapActionFor(modelData)
+                    if (action !== "none")
+                        root.cellTapped(action, index)
                 }
             }
 

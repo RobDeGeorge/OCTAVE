@@ -37,7 +37,8 @@
         "trackColor",
         "redlineColor",
         "labelColor",
-        "valueColor"
+        "valueColor",
+        "tapAction"
       ],
       "editableProps": [
         {
@@ -152,6 +153,13 @@
           "kind": "bool",
           "def": false,
           "section": "range"
+        },
+        {
+          "key": "frame",
+          "label": "Frame",
+          "kind": "bool",
+          "def": false,
+          "section": "look"
         }
       ]
     },
@@ -189,7 +197,8 @@
         "trackColor",
         "redlineColor",
         "labelColor",
-        "valueColor"
+        "valueColor",
+        "tapAction"
       ],
       "editableProps": [
         {
@@ -286,6 +295,13 @@
           "kind": "bool",
           "def": false,
           "section": "range"
+        },
+        {
+          "key": "frame",
+          "label": "Frame",
+          "kind": "bool",
+          "def": false,
+          "section": "look"
         }
       ]
     },
@@ -323,7 +339,8 @@
         "alertHysteresis",
         "trackColor",
         "labelColor",
-        "valueColor"
+        "valueColor",
+        "tapAction"
       ],
       "editableProps": [
         {
@@ -407,6 +424,13 @@
           "kind": "bool",
           "def": false,
           "section": "range"
+        },
+        {
+          "key": "frame",
+          "label": "Frame",
+          "kind": "bool",
+          "def": false,
+          "section": "look"
         }
       ]
     },
@@ -440,7 +464,8 @@
         "alertHysteresis",
         "trackColor",
         "labelColor",
-        "valueColor"
+        "valueColor",
+        "tapAction"
       ],
       "editableProps": [
         {
@@ -513,6 +538,13 @@
           "kind": "bool",
           "def": false,
           "section": "range"
+        },
+        {
+          "key": "frame",
+          "label": "Frame",
+          "kind": "bool",
+          "def": false,
+          "section": "look"
         }
       ]
     },
@@ -547,7 +579,8 @@
         "centerOriginAtZero",
         "trackColor",
         "labelColor",
-        "valueColor"
+        "valueColor",
+        "tapAction"
       ],
       "editableProps": [
         {
@@ -622,6 +655,13 @@
           "kind": "bool",
           "def": false,
           "section": "range"
+        },
+        {
+          "key": "frame",
+          "label": "Frame",
+          "kind": "bool",
+          "def": false,
+          "section": "look"
         }
       ]
     },
@@ -655,7 +695,9 @@
         "alertHysteresis",
         "alignment",
         "labelColor",
-        "unitColor"
+        "unitColor",
+        "tapAction",
+        "barColor"
       ],
       "editableProps": [
         {
@@ -737,6 +779,20 @@
           "kind": "bool",
           "def": false,
           "section": "range"
+        },
+        {
+          "key": "card",
+          "label": "Card style",
+          "kind": "bool",
+          "def": false,
+          "section": "look"
+        },
+        {
+          "key": "frame",
+          "label": "Frame",
+          "kind": "bool",
+          "def": false,
+          "section": "look"
         }
       ]
     },
@@ -771,7 +827,8 @@
         "fillColor",
         "labelColor",
         "valueColor",
-        "backgroundColor"
+        "backgroundColor",
+        "tapAction"
       ],
       "editableProps": [
         {
@@ -860,6 +917,13 @@
           "kind": "bool",
           "def": false,
           "section": "range"
+        },
+        {
+          "key": "frame",
+          "label": "Frame",
+          "kind": "bool",
+          "def": false,
+          "section": "look"
         }
       ]
     },
@@ -894,7 +958,8 @@
         "alertHysteresis",
         "inactiveColor",
         "labelColor",
-        "activeLabelColor"
+        "activeLabelColor",
+        "tapAction"
       ],
       "editableProps": [
         {
@@ -935,6 +1000,13 @@
           "min": 0,
           "max": 400,
           "section": "advanced"
+        },
+        {
+          "key": "frame",
+          "label": "Frame",
+          "kind": "bool",
+          "def": false,
+          "section": "look"
         }
       ]
     },
@@ -961,7 +1033,8 @@
       "specProps": [
         "ringColor",
         "labelColor",
-        "valueColor"
+        "valueColor",
+        "tapAction"
       ],
       "editableProps": [
         {
@@ -986,8 +1059,17 @@
           "kind": "bool",
           "def": true,
           "section": "look"
+        },
+        {
+          "key": "frame",
+          "label": "Frame",
+          "kind": "bool",
+          "def": false,
+          "section": "look"
         }
-      ]
+      ],
+      "defaultTapAction": "sensors",
+      "usesImu": true
     },
     {
       "type": "CompassGauge",
@@ -1013,7 +1095,8 @@
         "ringColor",
         "cardinalColor",
         "labelColor",
-        "valueColor"
+        "valueColor",
+        "tapAction"
       ],
       "editableProps": [
         {
@@ -1022,15 +1105,24 @@
           "kind": "bool",
           "def": true,
           "section": "look"
+        },
+        {
+          "key": "frame",
+          "label": "Frame",
+          "kind": "bool",
+          "def": false,
+          "section": "look"
         }
-      ]
+      ],
+      "defaultTapAction": "sensors",
+      "usesImu": true
     },
     {
       "type": "NowPlayingWidget",
       "displayName": "Now Playing",
       "glyph": "♪",
       "category": "Media",
-      "description": "The song playing, with cover art and progress",
+      "description": "The song playing, with cover art and progress; a column when taller than wide",
       "demo": {},
       "defaultColSpan": 6,
       "defaultRowSpan": 2,
@@ -1047,7 +1139,8 @@
       ],
       "specProps": [
         "titleColor",
-        "artistColor"
+        "artistColor",
+        "tapAction"
       ],
       "editableProps": [
         {
@@ -1070,8 +1163,30 @@
           "kind": "bool",
           "def": true,
           "section": "look"
+        },
+        {
+          "key": "seekable",
+          "label": "Touch to seek",
+          "kind": "bool",
+          "def": false,
+          "section": "look"
+        },
+        {
+          "key": "showBackground",
+          "label": "Blurred art behind",
+          "kind": "bool",
+          "def": false,
+          "section": "look"
+        },
+        {
+          "key": "frame",
+          "label": "Frame",
+          "kind": "bool",
+          "def": false,
+          "section": "look"
         }
-      ]
+      ],
+      "defaultTapAction": "media"
     },
     {
       "type": "MediaControlsWidget",
@@ -1095,9 +1210,90 @@
       ],
       "specProps": [
         "buttonColor",
-        "glyphColor"
+        "glyphColor",
+        "tapAction"
       ],
-      "editableProps": []
+      "editableProps": [
+        {
+          "key": "frame",
+          "label": "Frame",
+          "kind": "bool",
+          "def": false,
+          "section": "look"
+        }
+      ],
+      "defaultTapAction": "none"
+    },
+    {
+      "type": "VehicleWidget",
+      "displayName": "Vehicle",
+      "glyph": "▣",
+      "category": "Vehicle",
+      "description": "A picture of your vehicle",
+      "demo": {},
+      "defaultColSpan": 4,
+      "defaultRowSpan": 3,
+      "minSize": {
+        "w": 120,
+        "h": 80
+      },
+      "aspect": 1.6,
+      "supportedKinds": [],
+      "labelProps": false,
+      "rangeProps": false,
+      "colorProps": [
+        "frameColor"
+      ],
+      "specProps": [
+        "labelColor",
+        "valueColor",
+        "tapAction"
+      ],
+      "editableProps": [
+        {
+          "key": "showFrame",
+          "label": "Frame",
+          "kind": "bool",
+          "def": true,
+          "section": "look"
+        }
+      ],
+      "defaultTapAction": "vehicle"
+    },
+    {
+      "type": "ShiftLightWidget",
+      "displayName": "Shift Light",
+      "glyph": "●",
+      "category": "Vehicle",
+      "description": "Lights up at your shift points (Settings > OBD > Shift Light)",
+      "demo": {},
+      "defaultColSpan": 2,
+      "defaultRowSpan": 2,
+      "minSize": {
+        "w": 44,
+        "h": 44
+      },
+      "aspect": 1.0,
+      "supportedKinds": [],
+      "labelProps": false,
+      "rangeProps": false,
+      "colorProps": [],
+      "specProps": [
+        "tapAction"
+      ],
+      "editableProps": [
+        {
+          "key": "frame",
+          "label": "Frame",
+          "kind": "bool",
+          "def": false,
+          "section": "look"
+        }
+      ],
+      "defaultTapAction": "obd",
+      "demand": [
+        "RPM"
+      ]
     },
     {
       "type": "ClockWidget",
@@ -1120,7 +1316,8 @@
         "valueColor"
       ],
       "specProps": [
-        "labelColor"
+        "labelColor",
+        "tapAction"
       ],
       "editableProps": [
         {
@@ -1136,8 +1333,16 @@
           "kind": "bool",
           "def": false,
           "section": "look"
+        },
+        {
+          "key": "frame",
+          "label": "Frame",
+          "kind": "bool",
+          "def": false,
+          "section": "look"
         }
-      ]
+      ],
+      "defaultTapAction": "none"
     }
   ],
   "colorSwatches": [
@@ -1157,6 +1362,7 @@
     "Warnings",
     "Motion",
     "Media",
+    "Vehicle",
     "Time"
   ],
   "suggestions": {

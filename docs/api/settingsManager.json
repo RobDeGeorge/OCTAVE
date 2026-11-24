@@ -2467,6 +2467,7 @@
         },
         {
             "constant": false,
+            "deprecated": "Home is a dashboard: dashboardManager.homeDashboardId; goes with the classic Home",
             "name": "homeOBDParameters",
             "notify": "homeOBDParametersChanged",
             "readable": true,
@@ -2476,6 +2477,7 @@
         },
         {
             "constant": true,
+            "deprecated": "Home is a dashboard: dashboardManager.homeDashboardId; goes with the classic Home",
             "name": "maxHomeObdParameters",
             "readable": true,
             "type": "int",
@@ -2483,6 +2485,7 @@
         },
         {
             "constant": false,
+            "deprecated": "Home is a dashboard: place a VehicleWidget; goes with the classic Home",
             "name": "homeVehicleCard",
             "notify": "homeVehicleCardChanged",
             "readable": true,
@@ -3317,11 +3320,13 @@
             ]
         },
         {
+            "deprecated": "Home is a dashboard: dashboardManager.homeDashboardChanged; goes with the classic Home",
             "name": "homeOBDParametersChanged",
             "params": [
             ]
         },
         {
+            "deprecated": "Home is a dashboard: place a VehicleWidget; goes with the classic Home",
             "name": "homeVehicleCardChanged",
             "params": [
                 {

@@ -771,7 +771,7 @@ QTimer::singleShot(delay * <span class="num">1000</span>, <span class="kw">this<
           <li>Trip boundaries: a trip <strong>starts</strong> on the first <code>RPM &gt; 0</code> reading (any reading
             when the scan says the car has no RPM PID) and <strong>ends</strong> after 2 min of RPM 0, 2 min without the
             adapter (a shorter dropout is logged as an event and does not split the trip), when recording is switched
-            off, on "End trip" in the viewer, or at shutdown (<code>shutdown()</code> blocks until the files are written,
+            off, on <code>tripRecorder.endTripNow()</code> (no button in the viewer), or at shutdown (<code>shutdown()</code> blocks until the files are written,
             before <code>obdManager.close()</code>). Within a trip, sample times are start + monotonic elapsed, so an NTP
             step on the head unit cannot fold the trace.</li>
           <li>Events (<code>disconnected</code> / <code>reconnected</code> / <code>connection_lost</code>, <code>mil</code>,

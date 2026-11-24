@@ -131,7 +131,7 @@ At a warning or critical level the value text and the fill (arc, bar, line,
 lit segments) take that level's colour. Circular and Arc also draw each band
 as a thin arc on the inner edge of the scale (warning bands stop where a
 critical one starts); `redlineStart` stays a separate red zone. All four
-limits are `paramUnit` props (stored in the PID's own unit, §5.5).
+limits are `paramUnit` props (stored in the PID's own unit, §5.6).
 
 ### 3.1 `CircularGauge`
 
@@ -190,6 +190,9 @@ Big number, no chrome. Use as the dominant element on a sport dashboard.
 | `showTitle`   | bool | `true`            |                                                        |
 | `showUnit`    | bool | `true`            |                                                        |
 | `alignment`   | int  | `Qt.AlignHCenter` | or `Qt.AlignLeft` / `Qt.AlignRight`                    |
+| `card`        | bool | `false`           | The Home screen's reading card: centred in its cell, the reading's own decimals (`OBDParameterModel.decimalsFor`, so 90.0 °C and 14.1 V) and a bar along the bottom for where the value stands in its range (`barColor`). Pair with the cell's `frame` (§5.1) for the box. |
+
+A value that rounds to zero never shows as `-0`.
 
 ### 3.5 `ArcGauge`
 
@@ -272,13 +275,17 @@ CompassGauge the dashboards roadmap deferred until heading data existed.
 
 Album art + title + artist + progress bar for the active media source. Follows
 the app-wide source rule (the phone while `phoneMirrorManager.mediaActive`,
-else local media) and re-resolves on source / track changes. Display-only.
+else local media) and re-resolves on source / track changes. Wider than tall
+it is a strip (art on the left); taller than wide a column (art on top, the
+text centred, the progress bar at the bottom with the times): Home's music panel.
 
-| Property       | Type | Default | Notes                  |
-| -------------- | ---- | ------- | ---------------------- |
-| `showArt`      | bool | `true`  | Album art square.      |
-| `showArtist`   | bool | `true`  | Artist line.           |
-| `showProgress` | bool | `true`  | Position/duration bar. |
+| Property         | Type | Default | Notes                  |
+| ---------------- | ---- | ------- | ---------------------- |
+| `showArt`        | bool | `true`  | Album art square.      |
+| `showArtist`     | bool | `true`  | Artist line.           |
+| `showProgress`   | bool | `true`  | Position/duration bar. |
+| `seekable`       | bool | `false` | The progress bar takes a touch and seeks (`nowPlaying.seek`), with a handle and the times beside it. |
+| `showBackground` | bool | `false` | The art, blurred and darkened, behind the card (the `backgroundBlurRadius` setting). |
 
 ### 3.11 `MediaControlsWidget` *(self-binding, lives in `frontend/dashboards/widgets/`)*
 
@@ -330,6 +337,25 @@ visible. Time and date fit their allotted width and height.
 
 The expanded editor palette scrolls within 90% of the window height and
 uses 2–4 columns according to available width.
+
+### 3.14 `VehicleWidget` *(self-binding)*
+
+The vehicle as a picture (`App.VehiclePicture`: `vehicleManager`'s active
+vehicle) in `frontend/dashboards/widgets/`. Default span 4 × 3. With no
+vehicle chosen it says so; an added model with no picture yet shows its name.
+
+| Property | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `showFrame` | bool | `true` | The reading cards' box around the picture. |
+| `frameColor`, `labelColor`, `valueColor` | color | theme | The editor exposes `frameColor`. |
+
+### 3.15 `ShiftLightWidget` *(self-binding)*
+
+The RPM shift light as a lamp, in `frontend/dashboards/widgets/`: dark until
+a shift-light flag is reached, then that flag's colour. Default span 2 × 2.
+It only draws: the flags, the flash and the look are `shiftLightManager`'s
+(Settings > OBD > Shift Light). No props. Its catalog entry's
+`demand: ["RPM"]` keeps RPM polled while a dashboard shows it.
 
 ---
 
@@ -488,7 +514,7 @@ opens on an unsaved copy named "… (mine)", saved under its own id on Done).
 miniatures of `frontend/dashboards/templates/*.json` (Hero + 4, 2 up, 2 × 2,
 3 × 2, Six-field strip, Track, Economy, Towing temps, Media + gauges,
 Blank), each slot filled with the PIDs the connected car reports
-(`dashboardManager.fromTemplate(id, supported)`, see §5.6), laid out again
+(`dashboardManager.fromTemplate(id, supported)`, see §5.7), laid out again
 on the screen's grid density when the editor opens.
 The editor is full screen and touch first (select, then manipulate): tap a
 widget to select it, and a floating toolbar offers **Data** (the PID picker),
@@ -540,7 +566,7 @@ supported-PID scan, its PIDs sort first in each group and the rest are greyed
 ("Not supported by this vehicle") but stay assignable — a dashboard may be
 built for another car or shared. The panel warns when the bound PID is
 unsupported, and at render time `DashboardRenderer` swaps such a cell for a
-"Not supported by this vehicle" placeholder (see §5.5).
+"Not supported by this vehicle" placeholder (see §5.6).
 
 **Reuse.** The toolbar's **Style** menu: *Copy style* / *Paste style* carry
 a widget's look (its `look` and `advanced` options and its colour, not its
@@ -595,7 +621,7 @@ is needed. `dashboardManager.refresh()` forces an immediate rescan.
 - Built-ins are read-only: `deleteDashboard` on one hides it (ids listed in `<userDir>/.hidden-builtins`, id still reserved) and `restoreBuiltInDashboards()` brings them back; `hiddenBuiltInCount` drives the chooser's "Restore defaults" button. Parameter Cards (`grid`) can't be deleted. "Duplicate" via `dashboardManager.duplicateDashboard(sourceId, newLabel)` creates an editable user copy with an auto-generated unique id. New ids come from `dashboardManager.uniqueIdForLabel(label)` (editor, Duplicate and Import alike); it never returns a built-in id (hidden ones included) or `grid`, and `saveDashboard` refuses both.
 - **Newer schema.** A spec whose `schema` is above `dashboardManager.supportedSchema` (`kSupportedSchema`, 2) renders no cells, demands no PIDs, and shows one centred "This dashboard needs a newer version of OCTAVE" message. Import refuses such files; this covers one dropped into the folder by hand.
 - **One set of spec rules** (`DashboardManager::normalizeSpec`, applied by `saveDashboard`, `loadDashboard` and every import, so the editor, Duplicate, Import and the renderer all see the same thing):
-  - Kept keys: `schema`, `id`, `label`, `gridColumns`, `gridRows`, `margins`, `spacing`, `cells` and per cell `type` / `paramId` / `col` / `row` / `colSpan` / `rowSpan` / `props`; anything else is dropped. `props` keeps scalars only (bool, number, string ≤ 200 chars; `"NaN"` survives).
+  - Kept keys: `schema`, `id`, `label`, `gridColumns`, `gridRows`, `margins`, `spacing`, `thumbnail`, `alertBanner`, `showWhen`, `layouts.portrait`, `cells` and per cell `type` / `paramId` / `col` / `row` / `colSpan` / `rowSpan` / `props`; anything else is dropped. `props` keeps scalars only (bool, number, string ≤ 200 chars; `"NaN"` survives).
   - Numbers must be JSON numbers (a string or bool gets the default). Grid size: not a positive number = 12 × 6, else capped at 48. `margins` / `spacing`: 0..200, absent or `null` = the renderer's 20 / 16. Caps: 256 cells (refused on save and import; a file on disk shows its first 256), label 80 chars (whitespace collapsed).
   - A cell off the grid keeps its size and moves back in (as a drag does); only a span wider than the grid shrinks.
   - Cells never overlap. In file order the earlier cell wins; a later one shrinks toward 1×1 (wider side first, as a newly placed widget does) and is dropped, logged, only if its corner is taken.
@@ -614,7 +640,48 @@ is needed. `dashboardManager.refresh()` forces an immediate rescan.
   Failures set `dashboardManager.lastShareError`.
 - **Hot reload.** `DashboardManager` watches the user dashboards directory (`QFileSystemWatcher`, 300 ms debounce, rescans only when the file-name/mtime/size signature changed). Drop a JSON in from a terminal or sync client and it appears in the chooser without restarting; delete one and it disappears. If the deleted file was the active dashboard, `OBDMenu` falls back to Parameter Cards.
 
-### 5.5 Vehicle gate and polling demand
+### 5.5 Home is a dashboard
+
+The Home screen (`frontend/HomeDashboard.qml`, loaded by `MainMenu.qml`)
+shows the dashboard `dashboardManager.homeDashboardId` names in the same
+`DashboardRenderer`: the built-in `home` (`presets/home.json`) until
+`setHomeDashboard(id)` picks another (the chooser's **Use as Home**; `""`
+goes back to the built-in), and again when that dashboard is deleted. `home`
+cannot be hidden. The choice is one line in `<config>/dashboards/.home`.
+
+- **The default layout** is `DashboardManager::homeSpec(readings, vehicle,
+  shiftLight)`: music on the left, two columns of reading cards over the
+  vehicle in the middle, G-force / compass / pitch / roll on the right;
+  portrait: music on top, the vehicle beside the readings, the sensors along
+  the bottom. `presets/home.json` is that for the default four readings
+  (`tst_dashboardmanager` holds the two together).
+- **Carried over once**: `migrateClassicHome()` (called from `AppCore`)
+  turns the classic Home's settings (`homeOBDParameters`, `homeVehicleCard`,
+  a shift light on the RPM card) into a user dashboard "My Home" when they
+  differ from the defaults. Those settings are deprecated.
+- **Taps.** Only Home sets `DashboardRenderer.interactive`. A tap on a cell
+  emits `cellTapped(action, index)`: the cell's `props.tapAction`, else its
+  type's catalog `defaultTapAction`, else `obd` for a PID-bound cell
+  (`sensors` for an IMU reading), never for `none`. Home opens the music
+  page for `media`, the OBD menu for `obd`, Sensors for `sensors` and
+  Settings > Device > Vehicle for `vehicle`. A widget keeps a touch to itself
+  with `function octaveConsumesTap(x, y)` (Now Playing's seek bar). A press
+  held anywhere emits `pressAndHold()`: Home opens the editor on its
+  dashboard (a built-in as an unsaved copy that becomes Home when saved).
+- **Frames.** `"frame": true` in any cell's `props` draws the reading cards'
+  box behind the widget (`dashboards/CellFrame.qml`, in the renderer and the
+  editor canvas alike); the editor offers it as **Frame**.
+- **Prompts** are Home's, not the widgets': "No vehicle connected" + Connect
+  over the block of OBD-bound cells (a strip along the bottom when other
+  widgets stand in that block), the music prompt over a Now Playing cell
+  with no music, "No sensor" on IMU cells. `DashboardRenderer.cellRect(i)`
+  gives a cell's place; `usesImu` says whether the spec shows the motion
+  sensor (a catalog `usesImu` type or an IMU `paramId`).
+- Until it has been checked in the car the hand-built Home stays selectable:
+  setting `homeStyle` = `classic` (Settings > Display > Layout > Home Screen).
+  See `TODO/home-dashboard.md`.
+
+### 5.6 Vehicle gate and polling demand
 
 - **Range props are in the PID's own unit.** A spec's `min`, `max` (for
   widgets with `rangeProps`) and the thresholds a widget's `editableProps`
@@ -644,7 +711,7 @@ is needed. `dashboardManager.refresh()` forces an immediate rescan.
   for the 3D Jeep while `CarMenu` is visible), `"settings"`
   (`OBDSettingsPage`). Backend side: `wiki/obd-manager.html`.
 
-### 5.6 Templates
+### 5.7 Templates
 
 `frontend/dashboards/templates/*.json` are the starting points **+ New**
 offers, in their `order`. A template is a schema-1 spec on the Normal 6 × 4
@@ -902,6 +969,11 @@ polled as PID 0x0E and counts as supported whenever timing advance does.
      set but no editor offers (`trackColor`, `labelColor`, `warnColor`,
      `alertHysteresis` ...). A prop in none of these lists is not applied
      (§5.1), so list every prop you document for the widget.
+   - `defaultTapAction` — what a tap on the widget asks an interactive
+     host (Home) for: `media`, `obd`, `sensors`, `vehicle` or `none`
+     (§5.5); `usesImu` — `true` if it reads the motion sensor by itself;
+     `demand` — PIDs a self-binding widget needs polled (`["RPM"]` for the
+     shift light). All optional.
    - `editableProps` — `{ key, label, kind, def, section[, min, max][, options][, paramUnit] }` with
      `kind` ∈ `bool` (switch) · `int` / `real` (number field, clamped to
      `min`/`max`) · `string` (text field) · `enum` (segmented buttons over
@@ -972,8 +1044,11 @@ frontend/
 ├── dashboards/
 │   ├── widgets/               self-binding non-gauge dashboard widgets
 │   │   ├── NowPlayingWidget.qml    art + title + artist + progress (local/phone)
-│   │   └── MediaControlsWidget.qml prev / play-pause / next transport
-│   ├── DashboardRenderer.qml  JSON spec → grid of widget instances
+│   │   ├── MediaControlsWidget.qml prev / play-pause / next transport
+│   │   ├── VehicleWidget.qml       the vehicle's picture
+│   │   └── ShiftLightWidget.qml    the RPM shift light as a lamp
+│   ├── DashboardRenderer.qml  JSON spec → grid of widget instances (taps for Home)
+│   ├── CellFrame.qml          the card behind a cell with `frame: true`
 │   ├── CellProps.js           how a cell's props reach its widget (catalog-listed keys only)
 │   ├── widget-catalog.json    the catalog data: gallery metadata (category,
 │   │                          description, demo), spans and sizes,

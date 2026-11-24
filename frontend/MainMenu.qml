@@ -16,13 +16,10 @@ Item {
     id: mainMenu
     objectName: "mainMenu"
 
-    // Full IMU rate while the home screen shows an IMU reading on a card
+    // Full IMU rate while the home screen is up: its sensor panel shows the IMU
     App.ImuDemand {
         consumer: "mainMenu"
-        wanted: mainMenu.visible && !!settingsManager && (mainMenu.vehicleCardShown
-            || settingsManager.homeOBDParameters.some(function(id) {
-                return App.OBDParameterModel.sensorParameters.indexOf(id) !== -1
-            }))
+        wanted: mainMenu.visible && !mainMenu.dashboardHome
     }
     property StackView stackView
     property ApplicationWindow mainWindow
@@ -89,21 +86,58 @@ Item {
         }
     }
 
-    // Main content area: media on the left (1/3), OBD on the right (2/3);
-    // in portrait, media on top and OBD below
+    // Home is a dashboard (HomeDashboard.qml: dashboardManager.homeDashboardId
+    // in the dashboard renderer, editable like any other); the hand-built
+    // panels below are the "classic" Home, kept selectable (the homeStyle
+    // setting, Settings > Device) until the dashboard one has been checked
+    // in the car, then they go (TODO/home-dashboard.md)
+    property string homeStyle: settingsManager ? settingsManager.get_setting_with_default("homeStyle", "dashboard") : "dashboard"
+    readonly property bool dashboardHome: homeStyle !== "classic"
+                                          && typeof dashboardManager !== "undefined" && !!dashboardManager
+    Connections {
+        target: settingsManager
+        function onGenericSettingChanged(key) {
+            if (key === "homeStyle")
+                mainMenu.homeStyle = settingsManager.get_setting_with_default("homeStyle", "dashboard")
+        }
+    }
+
+    Loader {
+        id: homeLoader
+        objectName: "homeLoader"
+        anchors.fill: parent
+        sourceComponent: mainMenu.dashboardHome ? dashboardHomeComponent : classicHomeComponent
+    }
+
+    Component {
+        id: dashboardHomeComponent
+        App.HomeDashboard {
+            stackView: mainMenu.stackView
+            mainWindow: mainMenu.mainWindow
+            musicEmpty: mainMenu.musicEmpty
+        }
+    }
+
+    Component {
+        id: classicHomeComponent
+        Item {
+    // Main content area, three panels: media on the left (a quarter), the OBD
+    // readings in the middle, the sensors on the right; in portrait media is
+    // a strip on top, the readings under it and the sensors a strip below
     GridLayout {
         anchors.fill: parent
         anchors.margins: dp(10)
-        columns: App.Spacing.isPortrait ? 1 : 2
+        columns: App.Spacing.isPortrait ? 1 : 3
         columnSpacing: dp(10)
         rowSpacing: dp(10)
 
-        // ========== LEFT SECTION: Media Controls (1/3 of width) ==========
+        // ========== LEFT SECTION: Media (a quarter of the width) ==========
         Rectangle {
             id: mediaSection
-            Layout.preferredWidth: App.Spacing.isPortrait ? -1 : parent.width * 0.33
+            objectName: "homeMediaSection"
+            Layout.preferredWidth: App.Spacing.isPortrait ? -1 : Math.round(parent.width * 0.24)
             Layout.fillWidth: App.Spacing.isPortrait
-            Layout.preferredHeight: App.Spacing.isPortrait ? parent.height * 0.48 : -1
+            Layout.preferredHeight: App.Spacing.isPortrait ? Math.round(parent.height * 0.2) : -1
             Layout.fillHeight: !App.Spacing.isPortrait
             color: "transparent"
             radius: dpMin(8, 2)
@@ -148,21 +182,29 @@ Item {
                 z: 10
             }
 
-            // Media content - vertical layout for narrow panel
-            ColumnLayout {
+            // Media content: one column in the narrow panel (art, title,
+            // artist, progress); in portrait the panel is a short strip,
+            // so the art stands on the left with the rest beside it
+            GridLayout {
+                id: mediaGrid
                 visible: !mainMenu.musicEmpty
                 anchors.fill: parent
                 anchors.margins: dp(15)
-                spacing: dp(10)
+                readonly property bool strip: App.Spacing.isPortrait
+                columns: strip ? 2 : 1
+                rowSpacing: dp(10)
+                columnSpacing: dp(15)
 
-                // Album Art (top, centered)
+                // Album Art (top, centered; the strip: left, full height)
                 Item {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: parent.width + dp(40)
-                    // Portrait: the panel is wide and short, so the art
-                    // shrinks to what is left after the text and slider
-                    Layout.fillHeight: App.Spacing.isPortrait
-                    Layout.maximumHeight: parent.width + dp(40)
+                    Layout.row: 0
+                    Layout.column: 0
+                    Layout.rowSpan: mediaGrid.strip ? 5 : 1
+                    Layout.fillWidth: !mediaGrid.strip
+                    Layout.fillHeight: mediaGrid.strip
+                    Layout.preferredWidth: mediaGrid.strip ? mediaGrid.height : -1
+                    Layout.preferredHeight: mediaGrid.strip ? -1 : mediaGrid.width + dp(40)
+                    Layout.maximumHeight: mediaGrid.strip ? Number.POSITIVE_INFINITY : mediaGrid.width + dp(40)
                     Layout.alignment: Qt.AlignHCenter
 
                     Image {
@@ -187,9 +229,19 @@ Item {
                     }
                 }
 
+                // The strip: title and artist midway between the top and the progress bar
+                Item {
+                    visible: mediaGrid.strip
+                    Layout.row: mediaGrid.strip ? 0 : 5
+                    Layout.column: mediaGrid.strip ? 1 : 0
+                    Layout.fillHeight: true
+                }
+
                 // Song title with scrolling (like MediaRoom)
                 Item {
                     id: songTitleContainer
+                    Layout.row: 1
+                    Layout.column: mediaGrid.strip ? 1 : 0
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignHCenter
                     // Layout.preferredHeight, not height: a ColumnLayout sizes its children
@@ -257,6 +309,8 @@ Item {
                 // Artist & Album with scrolling (like MediaRoom)
                 Item {
                     id: metadataContainer
+                    Layout.row: 2
+                    Layout.column: mediaGrid.strip ? 1 : 0
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignHCenter
                     Layout.preferredHeight: Math.ceil(App.Spacing.mainMenuArtistTextSize * 1.4)  // see songTitleContainer
@@ -328,10 +382,16 @@ Item {
                 }
 
                 // Spacer
-                Item { Layout.fillHeight: true }
+                Item {
+                    Layout.row: 3
+                    Layout.column: mediaGrid.strip ? 1 : 0
+                    Layout.fillHeight: true
+                }
 
                 // Progress Bar
                 RowLayout {
+                    Layout.row: 4
+                    Layout.column: mediaGrid.strip ? 1 : 0
                     Layout.fillWidth: true
                     spacing: dp(8)
 
@@ -469,9 +529,16 @@ Item {
             }
         }
 
-        // ========== RIGHT SECTION: OBD (2/3 of width) ==========
+        // ========== MIDDLE SECTION: OBD (what the other two leave) ==========
         Rectangle {
             id: obdSection
+            objectName: "homeObdSection"
+            // The vehicle card: under the readings in a landscape window
+            // (the panel is about as tall as wide there, and a car is
+            // wider than tall), beside them in portrait
+            readonly property bool vehicleBelow: !App.Spacing.isPortrait
+            readonly property real vehicleTakenW: mainMenu.vehicleCardShown && !vehicleBelow ? vehicleCard.width + dp(15) : 0
+            readonly property real vehicleTakenH: mainMenu.vehicleCardShown && vehicleBelow ? vehicleCard.height + dp(15) : 0
             visible: true
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -484,11 +551,13 @@ Item {
             // Hidden while no adapter is connected (its cards would all read
             // "--"); hiding it also drops its poll demand
             HomeOBDView {
+                id: homeReadings
                 visible: mainMenu.obdConnected
                 anchors.fill: parent
                 anchors.margins: dp(5)
                 // Room for the vehicle card, the grid's own spacing between them
-                anchors.rightMargin: mainMenu.vehicleCardShown ? vehicleCard.width + dp(15) : dp(5)
+                anchors.rightMargin: obdSection.vehicleTakenW > 0 ? obdSection.vehicleTakenW : dp(5)
+                anchors.bottomMargin: obdSection.vehicleTakenH > 0 ? obdSection.vehicleTakenH : dp(5)
             }
 
             MouseArea {
@@ -498,14 +567,17 @@ Item {
                 }
             }
 
-            // The vehicle beside the readings; above the MouseArea, as its
+            // The vehicle with the readings; above the MouseArea, as its
             // tap opens Settings > Device > Vehicle (pick or change the
             // vehicle), not the OBD page
             App.HomeVehicleCard {
                 id: vehicleCard
                 visible: mainMenu.vehicleCardShown
-                anchors { top: parent.top; right: parent.right; bottom: parent.bottom; margins: dp(15) }
-                width: Math.round(parent.width * 0.36)
+                anchors { right: parent.right; bottom: parent.bottom; margins: dp(15) }
+                width: obdSection.vehicleBelow ? parent.width - 2 * dp(15) : Math.round(parent.width * 0.36)
+                // Under the readings it gives way as their rows grow (2 columns)
+                readonly property real belowShare: homeReadings.cardCount <= 4 ? 0.36 : homeReadings.cardCount <= 6 ? 0.3 : 0.24
+                height: obdSection.vehicleBelow ? Math.round(parent.height * belowShare) : parent.height - 2 * dp(15)
                 onClicked: if (mainMenu.mainWindow) mainMenu.mainWindow.navigateToSettings("deviceSettings", "device_vehicle")
             }
 
@@ -515,10 +587,10 @@ Item {
                 objectName: "homeOBDPrompt"
                 visible: !mainMenu.obdConnected
                 // Centred in what the vehicle card leaves of the panel
-                readonly property real taken: mainMenu.vehicleCardShown ? vehicleCard.width + dp(15) : 0
                 anchors.centerIn: parent
-                anchors.horizontalCenterOffset: -taken / 2
-                width: Math.min(parent.width - taken - dp(40), dp(560))
+                anchors.horizontalCenterOffset: -obdSection.vehicleTakenW / 2
+                anchors.verticalCenterOffset: -obdSection.vehicleTakenH / 2
+                width: Math.min(parent.width - obdSection.vehicleTakenW - dp(40), dp(560))
                 spacing: dp(16)
 
                 // The vehicle, while the panel has the height for it
@@ -556,6 +628,18 @@ Item {
                     fontFamily: mainMenu.globalFont
                 }
             }
+        }
+
+        // ========== RIGHT SECTION: Sensors ==========
+        App.HomeSensorPanel {
+            Layout.preferredWidth: App.Spacing.isPortrait ? -1 : Math.round(parent.width * 0.22)
+            Layout.fillWidth: App.Spacing.isPortrait
+            Layout.preferredHeight: App.Spacing.isPortrait ? Math.round(parent.height * 0.2) : -1
+            Layout.fillHeight: !App.Spacing.isPortrait
+            inRow: App.Spacing.isPortrait
+            onClicked: stackView.openPage("SensorHome.qml")
+        }
+    }
         }
     }
 

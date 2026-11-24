@@ -18,10 +18,10 @@ Item {
     // Parameter info from centralized singleton (covers all 92 params: 84 OBD + 8 IMU)
     property var parameterInfo: App.OBDParameterModel.parameterInfo
     
-    // Smart grid layout - 1 column for up to 5 cards, 2 columns for 6-8 cards.
-    // Portrait gives this view the full width, so 2 columns from 2 cards up.
+    // 2 columns from 2 cards up: Home gives this view a panel wider than
+    // tall in both orientations (the vehicle card is under it or beside it)
     property int cardCount: obdRepeater.count
-    property int columnCount: cardCount <= (App.Spacing.isPortrait ? 1 : 5) ? 1 : 2
+    property int columnCount: cardCount <= 1 ? 1 : 2
 
     GridLayout {
         id: gridLayout
@@ -56,6 +56,14 @@ Item {
                 // False until a reading arrives, so the card shows "--"
                 // rather than a misleading 0.0 while OBD is disconnected.
                 readonly property bool hasValue: App.OBDParameterModel.liveValue(param) !== undefined
+
+                // Title and reading shrink together in a card too short for
+                // them at full size (eight cards above the vehicle card)
+                readonly property real textFit: {
+                    var needed = (App.Spacing.mainMenuOBDTextSize + App.Spacing.mainMenuOBDDataSize) * 1.25 + dp(5)
+                    var room = height - dp(5) - dp(8)
+                    return room > 0 && needed > room ? Math.max(0.4, room / needed) : 1
+                }
 
                 // Animated display value - fast rolling effect
                 property real displayValue: value
@@ -179,11 +187,11 @@ Item {
                     anchors.rightMargin: dp(5)
                     anchors.topMargin: dp(5)
                     anchors.bottomMargin: dp(4) + dp(4)
-                    spacing: dp(5)
+                    spacing: Math.round(dp(5) * display.textFit)
 
                     Text {
                         text: info.title.toUpperCase()
-                        font.pixelSize: App.Spacing.mainMenuOBDTextSize
+                        font.pixelSize: Math.round(App.Spacing.mainMenuOBDTextSize * display.textFit)
                         font.family: homeOBDView.globalFont
                         color: App.Style.secondaryTextColor
                         Layout.alignment: Qt.AlignLeft
@@ -194,7 +202,7 @@ Item {
                         text: display.hasValue
                               ? displayValue.toFixed(App.OBDParameterModel.decimalsFor(param)) + " " + info.unit
                               : "-- " + info.unit
-                        font.pixelSize: App.Spacing.mainMenuOBDDataSize
+                        font.pixelSize: Math.round(App.Spacing.mainMenuOBDDataSize * display.textFit)
                         font.bold: true
                         font.family: homeOBDView.globalFont
                         color: display.hasValue ? App.Style.primaryTextColor : App.Style.secondaryTextColor

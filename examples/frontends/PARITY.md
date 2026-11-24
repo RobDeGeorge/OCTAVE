@@ -45,7 +45,8 @@ Video (the phone mirror picture, Android Auto frames) is out of scope for every 
 | Direct MAC connect, target address | `obdManager.connectDirect`, `setTargetAddress` | Yes | No | Yes | No | No | |
 | Vehicle: VIN, make, year, supported PIDs, scan | `obdManager.vin`, `vehicleMake`, `vehicleModelYear`, `vehicleSupportedParameters`, `scanVehicle` | Yes | Yes | Yes | Partial | Partial | retro-cluster, sunlight: readouts only |
 | Live values of every PID, demand-driven | `paramStore`, `parameterCatalog.displayParameters`, `obdManager.setParameterDemand` | Yes | Yes | Yes | Yes | Partial | sunlight: DRIVE's five and the open dashboard's PIDs |
-| Home OBD cards: choose, order | `settingsManager.homeOBDParameters`, `add_home_obd_parameter`, `remove_home_obd_parameter`, `move_home_obd_parameter` | Yes | Yes | Yes | No | No | console: settings table (list as JSON) |
+| Home OBD cards: choose, order (deprecated: the classic Home) | `settingsManager.homeOBDParameters`, `add_home_obd_parameter`, `remove_home_obd_parameter`, `move_home_obd_parameter` | Yes | Yes | Yes | No | No | console: settings table (list as JSON) |
+| Home as a dashboard: which one, choose | `dashboardManager.homeDashboardId`, `setHomeDashboard` | Yes | No | No | No | No | QML: `HomeDashboard.qml`; the others still show their own Home |
 | Trouble codes: read, clear, MIL | `obdManager.readDtc`, `clearDtc`, `getDtcCodes`, `dtcCodesChanged`, `milStatusChanged` | Yes | Yes | Yes | Yes | Yes | |
 | Freeze frame | `obdManager.readFreezeFrame`, `freezeFrameChanged` | Yes | Yes | Yes | Yes | No | the frame's PID values since svc/9 |
 | Diagnostic mode, status, current codes | `obdManager.enterDiagnosticMode`, `exitDiagnosticMode`, `readStatus`, `readCurrentDtc` | Yes | Yes | Yes | No | No | |

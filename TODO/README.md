@@ -1,6 +1,6 @@
 # TODO index — easiest to hardest
 
-**Last updated:** 2026-11-23 (lora-car-finder.md added; its pod board started)
+**Last updated:** 2026-11-24 (home-dashboard.md added)
 
 One file per deferred plan. Each file opens with a one-line **Goal**, lists only the work that is left, and gives every step an **Effort** (S under an hour, M one session, L several sessions, XL a new subsystem) and the device it needs. When a plan is finished, delete its file and its row here.
 
@@ -23,6 +23,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 
 | File | Goal | Effort | Needs |
 |---|---|---|---|
+| [home-dashboard.md](home-dashboard.md) | Home is a dashboard (code done): check it on the Pi and the phone, then delete the classic Home and its settings; later the Sensors page and Parameter Cards | S, then M, then L | Pi in the Jeep, S22 |
 | [dashboards-roadmap.md](dashboards-roadmap.md) | Prove the dashboard editor and demand-driven polling on a touchscreen and in the car | M | S22, Jeep |
 | [future-tests.md](future-tests.md) | Wiring of the hardware inputs (the rest is checked by ctest `wiring`), then QML integration and OBD replay suites | S … L–XL | desktop, Jeep for OBD recordings |
 | [dp-helper-consolidation.md](dp-helper-consolidation.md) | One shared `dp()` instead of 63 private copies | M | 10-min S22 check first |

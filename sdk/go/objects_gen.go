@@ -919,6 +919,14 @@ func (o DashboardManager) GetWidgetPresets() (v []any, err error) {
 	return
 }
 
+// GetHomeDashboardId reads the property "homeDashboardId" (QString).
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) GetHomeDashboardId() (v string, err error) {
+	err = o.c.Get("dashboardManager", "homeDashboardId", &v)
+	return
+}
+
 // GetHiddenBuiltInCount reads the property "hiddenBuiltInCount" (int).
 func (o DashboardManager) GetHiddenBuiltInCount() (v int, err error) {
 	err = o.c.Get("dashboardManager", "hiddenBuiltInCount", &v)
@@ -954,6 +962,14 @@ func (o DashboardManager) SaveDashboard(spec map[string]any) (v string, err erro
 // DeleteDashboard calls deleteDashboard(QString) -> bool.
 func (o DashboardManager) DeleteDashboard(id string) (v bool, err error) {
 	err = o.c.Call("dashboardManager", "deleteDashboard", &v, id)
+	return
+}
+
+// SetHomeDashboard calls setHomeDashboard(QString) -> bool.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o DashboardManager) SetHomeDashboard(id string) (v bool, err error) {
+	err = o.c.Call("dashboardManager", "setHomeDashboard", &v, id)
 	return
 }
 
@@ -4644,30 +4660,40 @@ func (o SettingsManager) SetBlackBoxMaxMB(value int) (v int, err error) {
 }
 
 // GetHomeOBDParameters reads the property "homeOBDParameters" (QVariantList, writable).
+//
+// Deprecated: Home is a dashboard: dashboardManager.homeDashboardId; goes with the classic Home
 func (o SettingsManager) GetHomeOBDParameters() (v []any, err error) {
 	err = o.c.Get("settingsManager", "homeOBDParameters", &v)
 	return
 }
 
 // SetHomeOBDParameters writes the property "homeOBDParameters" and returns the value read back.
+//
+// Deprecated: Home is a dashboard: dashboardManager.homeDashboardId; goes with the classic Home
 func (o SettingsManager) SetHomeOBDParameters(value []any) (v []any, err error) {
 	err = o.c.Set("settingsManager", "homeOBDParameters", value, &v)
 	return
 }
 
 // GetMaxHomeObdParameters reads the property "maxHomeObdParameters" (int).
+//
+// Deprecated: Home is a dashboard: dashboardManager.homeDashboardId; goes with the classic Home
 func (o SettingsManager) GetMaxHomeObdParameters() (v int, err error) {
 	err = o.c.Get("settingsManager", "maxHomeObdParameters", &v)
 	return
 }
 
 // GetHomeVehicleCard reads the property "homeVehicleCard" (bool, writable).
+//
+// Deprecated: Home is a dashboard: place a VehicleWidget; goes with the classic Home
 func (o SettingsManager) GetHomeVehicleCard() (v bool, err error) {
 	err = o.c.Get("settingsManager", "homeVehicleCard", &v)
 	return
 }
 
 // SetHomeVehicleCard writes the property "homeVehicleCard" and returns the value read back.
+//
+// Deprecated: Home is a dashboard: place a VehicleWidget; goes with the classic Home
 func (o SettingsManager) SetHomeVehicleCard(value bool) (v bool, err error) {
 	err = o.c.Set("settingsManager", "homeVehicleCard", value, &v)
 	return

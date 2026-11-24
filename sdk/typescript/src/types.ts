@@ -445,6 +445,11 @@ export interface DashboardManager {
      * @experimental not covered by the protocol version; may change or go in any release
      */
     widgetPresets: unknown[]
+    /**
+     * QString, notify homeDashboardChanged
+     * @experimental not covered by the protocol version; may change or go in any release
+     */
+    homeDashboardId: string
     /** int, notify dashboardsChanged */
     hiddenBuiltInCount: number
     /** int, constant */
@@ -460,6 +465,8 @@ export interface DashboardManager {
   methods: {
     saveDashboard: { args: [spec: Record<string, unknown>]; returns: string }
     deleteDashboard: { args: [id: string]; returns: boolean }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    setHomeDashboard: { args: [id: string]; returns: boolean }
     restoreBuiltInDashboards: { args: []; returns: boolean }
     duplicateDashboard: { args: [sourceId: string, newLabel: string]; returns: string }
     exportDashboard: { args: [id: string]; returns: string }
@@ -517,6 +524,7 @@ export interface DashboardManager {
     lastImportReportChanged: []
     previewChanged: []
     widgetPresetsChanged: []
+    homeDashboardChanged: []
   }
 }
 
@@ -1610,11 +1618,20 @@ export interface SettingsManager {
     blackBoxSweepAll: boolean
     /** int, writable, notify blackBoxMaxMBChanged */
     blackBoxMaxMB: number
-    /** QVariantList, writable, notify homeOBDParametersChanged */
+    /**
+     * QVariantList, writable, notify homeOBDParametersChanged
+     * @deprecated Home is a dashboard: dashboardManager.homeDashboardId; goes with the classic Home
+     */
     homeOBDParameters: unknown[]
-    /** int, constant */
+    /**
+     * int, constant
+     * @deprecated Home is a dashboard: dashboardManager.homeDashboardId; goes with the classic Home
+     */
     maxHomeObdParameters: number
-    /** bool, writable, notify homeVehicleCardChanged */
+    /**
+     * bool, writable, notify homeVehicleCardChanged
+     * @deprecated Home is a dashboard: place a VehicleWidget; goes with the classic Home
+     */
     homeVehicleCard: boolean
     /** QVariantList, notify customThemesChanged */
     customThemes: unknown[]
@@ -2035,7 +2052,9 @@ export interface SettingsManager {
     blackBoxSweepAllChanged: [value: boolean]
     blackBoxMaxMBChanged: [value: number]
     obdParametersChanged: []
+    /** @deprecated Home is a dashboard: dashboardManager.homeDashboardChanged; goes with the classic Home */
     homeOBDParametersChanged: []
+    /** @deprecated Home is a dashboard: place a VehicleWidget; goes with the classic Home */
     homeVehicleCardChanged: [value: boolean]
     supportedOBDParametersChanged: []
     directoryHistoryChanged: []

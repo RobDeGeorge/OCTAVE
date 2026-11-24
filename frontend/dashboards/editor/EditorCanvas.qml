@@ -32,6 +32,7 @@
 import QtQuick 2.15
 import QtQuick.Window 2.15
 import "../.." as App
+import ".." as Dashboards
 import "../CellProps.js" as CellProps
 
 Item {
@@ -382,10 +383,17 @@ Item {
                 }
             }
 
+            // `frame` in the props: the cell as a card, as the renderer draws it
+            readonly property bool _framed: {
+                try { return JSON.parse(model.propsJson || "{}").frame === true } catch (e) { return false }
+            }
+            Dashboards.CellFrame { id: cellFrame; visible: cellRoot._framed; anchors.fill: parent }
+
             Loader {
                 id: widgetLoader
                 objectName: "editorWidgetLoader"
                 anchors.fill: parent
+                anchors.margins: cellRoot._framed ? cellFrame.inset(cellRoot.width, cellRoot.height) : 0
                 clip: true
                 source: App.WidgetCatalog.urlFor(model.type)
 
