@@ -341,7 +341,7 @@ Item {
             // The loaded playlist, as every other list emitter sends it.
             // getMediaFiles() would emit only the files directly in the
             // media folder: none for "All Music" over a library of subfolders,
-            // which emptied this list and put Home back to "No music yet".
+            // which emptied this list and put Home back to "No Music Loaded".
             mediaListConnections.onMediaListChanged(mediaManager.getCurrentSongList())
             var currentFile = mediaManager.getCurrentFile()
             if (currentFile) {

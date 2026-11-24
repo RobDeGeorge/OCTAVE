@@ -1,6 +1,6 @@
 // MusicEmptyPrompt.qml
 //
-// What a music screen shows while there is no music: "No music yet", what
+// What a music screen shows while there is no music: "No Music Loaded", what
 // to do about it, and the buttons that do it (pick the library folder, open
 // Spotify, connect a phone). One component, so Home's music card, the Now
 // Playing screen and the library list say and offer the same thing.
@@ -37,6 +37,19 @@ Column {
         stackView.openPage(settingsManager && settingsManager.phoneMirrorEnabled
                            ? "PhoneMirrorView.qml" : "AirPlayView.qml")
     }
+
+    // The height the host can give, 0 for as much as it takes. In a short
+    // space (Home's music cell in a portrait window is wide and low) the
+    // explanation goes first, then the heading: the buttons always stay.
+    property real maxHeight: 0
+    readonly property real _pairWidth: browseButton.width + (spotifyOffered ? spotifyButton.width + dp(12) : 0)
+    // Every button on one line when they fit
+    readonly property bool _phoneInRow: phoneOffered && _pairWidth + phoneRowButton.width + dp(12) <= width
+    readonly property int _buttonRows: (_pairWidth <= width || !spotifyOffered ? 1 : 2) + (phoneOffered && !_phoneInRow ? 1 : 0)
+    readonly property real _buttonsHeight: _buttonRows * App.Spacing.bottomBarNavButtonHeight + (_buttonRows - 1) * spacing
+    readonly property bool _headingFits: maxHeight <= 0 || heading.implicitHeight + spacing + _buttonsHeight <= maxHeight
+    readonly property bool _hintFits: maxHeight <= 0
+                                      || heading.implicitHeight + hint.implicitHeight + 2 * spacing + _buttonsHeight <= maxHeight
 
     // Why a picked folder wasn't taken (instead of a library that stays empty)
     property string folderError: ""
@@ -87,17 +100,21 @@ Column {
     spacing: dp(16)
 
     Text {
+        id: heading
         width: parent.width
+        visible: prompt._headingFits
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
-        text: "No music yet"
+        text: "No Music Loaded"
         color: App.Style.metadataColor
         font.pixelSize: App.Spacing.overallText * 1.2
         font.bold: true
         font.family: prompt.fontFamily
     }
     Text {
+        id: hint
         width: parent.width
+        visible: prompt._hintFits
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
         text: prompt.phoneOffered && prompt.spotifyOffered ? "Pick a music folder, or connect your phone or Spotify"
@@ -112,7 +129,7 @@ Column {
     // screen, and narrower still at a large UI scale
     Grid {
         anchors.horizontalCenter: parent.horizontalCenter
-        columns: browseButton.width + spotifyButton.width + spacing <= parent.width ? 2 : 1
+        columns: prompt._phoneInRow ? 3 : prompt._pairWidth <= parent.width ? 2 : 1
         spacing: prompt.dp(12)
         horizontalItemAlignment: Grid.AlignHCenter
 
@@ -131,10 +148,17 @@ Column {
             text: "Spotify"
             onClicked: if (prompt.mainWindow) prompt.mainWindow.openSpotify()
         }
+        PromptButton {
+            id: phoneRowButton
+            objectName: "musicPromptPhoneRowButton"
+            visible: prompt._phoneInRow
+            text: "Connect Phone"
+            onClicked: prompt.openPhone()
+        }
     }
     PromptButton {
         objectName: "musicPromptPhoneButton"
-        visible: prompt.phoneOffered
+        visible: prompt.phoneOffered && !prompt._phoneInRow
         anchors.horizontalCenter: parent.horizontalCenter
         text: "Connect Phone"
         onClicked: prompt.openPhone()

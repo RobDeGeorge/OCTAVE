@@ -60,8 +60,7 @@
  |  |   pushed lazily: MediaRoom, MediaPlayer,               |  |
  |  |     OBDHome, OBDMenu, OBDDiagnostics, SensorHome,      |  |
  |  |     SensorMenu, CarMenu, ClockMenu, SettingsMenu,      |  |
- |  |     PhoneMirrorView, AndroidAutoView,                  |  |
- |  |     dashboards/editor/DashboardEditor                  |  |
+ |  |     PhoneMirrorView, AndroidAutoView                   |  |
  |  +--------------------------------------------------------+  |
  |  | bottomBarShadow / sideBarShadow (gradient strips)  z:2 |  |
  |  +--------------------------------------------------------+  |
@@ -81,7 +80,7 @@
         <ul>
           <li><strong>Single window</strong> &mdash; one <code>ApplicationWindow</code> hosts everything, including full-window overlays (the shift-light flash). QML popups and dialogs stay in that window; native file pickers and the Android Auto DHU may use platform windows.</li>
           <li><strong>StackView navigation</strong> &mdash; pages are pushed/popped on a <code>StackView</code>; there is no router. Most navigation pages are instantiated on first visit or during prewarming and then cached (<code>stackView.openPage()</code>, see <a href="#page-cache">the page cache</a>), so later visits re-push the same instance.</li>
-          <li><strong>Persistent BottomBar</strong> &mdash; visible below (horizontal) or to the left of (vertical "side" mode) the StackView, except under a page that declares <code>hidesNavigation: true</code> (the dashboard editor): while that page is current, <code>mainWindow.navigationHidden</code> hides the bar and its shadow and the StackView fills the window. See <a href="bottom-bar.html">Bottom Bar</a>.</li>
+          <li><strong>Persistent BottomBar</strong> &mdash; visible below (horizontal) or to the left of (vertical "side" mode) the StackView. See <a href="bottom-bar.html">Bottom Bar</a>.</li>
           <li><strong>Singletons declared in qmldir</strong> &mdash; <code>Style</code>, <code>Spacing</code>, <code>EnvironmentTheme</code>, <code>OBDParameterModel</code>, <code>dashboards/WidgetCatalog</code>, and <code>MusicDevicePreference</code> are <code>pragma Singleton</code> objects.</li>
           <li><strong>No page transitions</strong> &mdash; all six StackView transitions (<code>pushEnter/Exit</code>, <code>popEnter/Exit</code>, <code>replaceEnter/Exit</code>) are <code>null</code>.</li>
           <li><strong>No global z-order tricks</strong> beyond the ones in the diagram: the StackView sits above the BottomBar (<code>z: 1</code> vs <code>0</code>), shadows at <code>z: 2</code>, overlays at <code>z: 999999</code>.</li>
@@ -208,7 +207,7 @@
 }</code></pre>
 
         <h3 id="page-cache">Lazy loading and the page cache</h3>
-        <p>Most navigation pages are built once, on demand or by prewarming, and then retained. The dashboard editor is owned by the StackView and destroyed when popped. The StackView in Main.qml owns a small cache, <code>stackView._pageCache</code>, keyed by file name (<code>"OBDMenu.qml"</code>), and helper functions that every navigation site goes through:</p>
+        <p>Most navigation pages are built once, on demand or by prewarming, and then retained. The StackView in Main.qml owns a small cache, <code>stackView._pageCache</code>, keyed by file name (<code>"OBDMenu.qml"</code>), and helper functions that every navigation site goes through:</p>
 
         <table>
           <thead><tr><th>Function</th><th>Behaviour</th></tr></thead>
@@ -360,7 +359,7 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
           <li><code>screenAutoScale</code> &mdash; Main.qml only applies it if defined.</li>
           <li><code>berryIMU</code> &mdash; Main.qml's gating, the Accessories settings page (its values reach QML through <code>paramStore</code>).</li>
           <li><code>paramStore</code> &mdash; the live value of every PID and IMU reading, one notifying key per id: <code>OBDParameterModel</code> mirrors it.</li>
-          <li><code>dashboardManager</code> &mdash; OBDMenu builds its registry with the built-in "grid" sentinel alone when the manager is absent; <span class="file-path">dashboards/editor/DashboardEditor.qml</span> guards its save/load and draft-rescue paths the same way.</li>
+          <li><code>dashboardManager</code> &mdash; OBDMenu and HomeDashboard guard every use, so the pages load without the manager.</li>
           <li><code>esp32VolumeManager</code>, <code>gestureSensor</code>, <code>diagnosticsManager</code>, <code>phoneMirrorManager</code>, <code>mediaManager</code>, <code>settingsManager</code> &mdash; settings pages, hub widgets, the media views, the two dashboard media widgets and Main.qml's album-art handlers.</li>
           <li><code>typeof obj.method === "function"</code> &mdash; feature probes on items and managers: <code>currentItem.navigateToHub</code>, and in the OBD settings page <code>obdManager.connectToAdapter</code> / <code>setTargetAddress</code> / <code>platformHint</code>.</li>
         </ul>
@@ -504,9 +503,9 @@ settingsManager.<span class="fn">save_theme_setting</span>(newTheme)
           <tbody>
             <tr><td>Page root = camelCase file name</td><td><code>mainMenu</code>, <code>mediaRoom</code>, <code>mediaPlayer</code>, <code>obdHome</code>, <code>obdMenu</code>, <code>obdDiagnostics</code>, <code>sensorHome</code>, <code>sensorMenu</code>, <code>carMenu</code>, <code>settingsMenu</code>; <code>phoneMirrorView</code> is declared on PhoneMirrorView itself; <code>AndroidAutoView</code> and <code>ClockMenu</code> have none</td></tr>
             <tr><td>Prefix families for hub buttons</td><td>BottomBar tests <code>name.indexOf("obd") === 0</code> and <code>name.indexOf("sensor") === 0 || name === "carMenu"</code> to decide "pop back to the hub" vs "jump to the remembered subpage"</td></tr>
-            <tr><td>Scriptable controls on a page</td><td>OBDMenu: <code>dashboardsButton</code>, <code>newDashboardButton</code>, <code>resumeDraftButton</code>, <code>chooserScroll</code>, <code>dashCard_&lt;id&gt;</code>, <code>dashCard_&lt;id&gt;_&lt;action&gt;</code>; CarMenu: <code>imuZero</code>, <code>imuReset</code>, <code>jeepControl_&lt;key&gt;</code>, <code>jeepOpenAll</code>, <code>jeepSteering</code>, <code>centerWheels</code>, <code>jeepSpinWheels</code>, <code>jeepWheelSpeed</code></td></tr>
+            <tr><td>Scriptable controls on a page</td><td>OBDMenu: <code>paramCard_&lt;id&gt;</code>, <code>parameterCardsScroll</code>; CarMenu: <code>imuZero</code>, <code>imuReset</code>, <code>jeepControl_&lt;key&gt;</code>, <code>jeepOpenAll</code>, <code>jeepSteering</code>, <code>centerWheels</code>, <code>jeepSpinWheels</code>, <code>jeepWheelSpeed</code></td></tr>
             <tr><td>3D scene nodes</td><td><code>jeepVehicle</code>, <code>driverHinge</code>, <code>passengerHinge</code>, <code>glassHinge</code>, <code>gateHinge</code>, <code>hoodHinge</code>, <code>driverWheel</code> / <code>passengerWheel</code> (steering knuckles), <code>driverFrontSpin</code> / <code>passengerFrontSpin</code> / <code>driverRearSpin</code> / <code>passengerRearSpin</code> (axle spin), <code>pitmanArm</code>, <code>dragLink</code>, <code>tieRodDriver</code> / <code>tieRodCenter</code> / <code>tieRodPassenger</code>, lamps (<code>fogLight</code>, <code>brakeLight</code>, <code>reverseLight</code>, <code>thirdBrakeLight</code>, <code>headlightGlow</code>/<code>headlightBeam</code>), each <code>JeepLamp</code>'s children <code>&lt;name&gt;Glow</code> / <code>&lt;name&gt;Beam</code></td></tr>
-            <tr><td>Scriptable functions instead of names</td><td><code>OBDMenu.openDashboardChooser()</code> / <code>closeDashboardChooser()</code> are called through the server's <code>call</code> action; settings cards are looked up by <code>objectName</code> set from their tile title (<code>SettingsMenu.findChildByObjectName</code>)</td></tr>
+            <tr><td>Scriptable functions instead of names</td><td>Settings cards are looked up by <code>objectName</code> set from their tile title (<code>SettingsMenu.findChildByObjectName</code>)</td></tr>
           </tbody>
         </table>
 

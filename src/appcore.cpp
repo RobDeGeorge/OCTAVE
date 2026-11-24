@@ -146,13 +146,13 @@ AppCore::AppCore(const QDir &frontendDir, Units *units)
     dashboardManager.setTemplatesDir(frontendDir.absoluteFilePath(QStringLiteral("dashboards/templates")));
     dashboardManager.setUserDir(SettingsManager::getAppDataDir() + QStringLiteral("/dashboards"));
     // Home is a dashboard: once per config, the classic Home's card list,
-    // vehicle switch and RPM-card shift light become the user's Home dashboard
+    // and vehicle switch become the user's Home dashboard (no shift light
+    // on Home: the ShiftLightWidget is there for whoever wants one)
     {
         QStringList readings;
         for (const QVariant &id : settingsManager.homeOBDParameters())
             readings.append(id.toString());
-        dashboardManager.migrateClassicHome(readings, settingsManager.homeVehicleCard(),
-                                            shiftLightManager.enabled() && shiftLightManager.showOnHomeCard());
+        dashboardManager.migrateClassicHome(readings, settingsManager.homeVehicleCard());
     }
     expose("dashboardManager", &dashboardManager);
 

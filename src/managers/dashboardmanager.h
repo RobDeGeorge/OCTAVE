@@ -207,20 +207,20 @@ public:
 
     // The Home dashboard for a set of readings (at most 8, two columns; an
     // odd count gives the first the full width), with or without the
-    // vehicle's picture and a shift light beside RPM: music on the left,
+    // vehicle's picture: music on the left,
     // the readings (over the vehicle) in the middle, G-force / compass /
     // pitch / roll on the right; portrait: music on top, sensors along the
     // bottom. No id or label. presets/home.json is this for the default
     // readings (tst_dashboardmanager holds them together).
-    static QVariantMap homeSpec(const QStringList &readings, bool vehicle, bool shiftLight);
+    static QVariantMap homeSpec(const QStringList &readings, bool vehicle);
 
     // Once per config (until a Home choice is on disk): carries the classic
     // Home's settings over. A card list other than the default, the vehicle
-    // card switched off or a shift light on the RPM card become a user
+    // card switched off become a user
     // dashboard "My Home" (homeSpec), made Home; otherwise Home is the
     // built-in. Returns the new dashboard's id, "" when none was needed or
     // the choice was already made.
-    QString migrateClassicHome(const QStringList &readings, bool vehicleCard, bool shiftLight);
+    QString migrateClassicHome(const QStringList &readings, bool vehicleCard);
 
     // OBDMenu's built-in Parameter Cards entry. Not a file, but it shares the
     // id space: no dashboard may take it.

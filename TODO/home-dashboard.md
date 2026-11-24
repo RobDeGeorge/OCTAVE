@@ -5,6 +5,8 @@
 **Status:** active. The code is done on desktop (2026-11-24); what is left waits on the Jeep's head unit and a phone.
 **Last updated:** 2026-11-24
 
+**In-app editing removed (2026-11-24):** Rob builds dashboards with Claude as JSON files and loads them (`<config>/dashboards/`, picked in Settings > Display > Home Screen). The touch editor, its tiled rework of that day, the OBD page's chooser and the built-in dashboards other than `home` were deleted from the tree (the tiled editor is kept as `dev/patches/2026-11-24-tiled-editor.patch`, against the commit before). Left to decide: whether a tap on a Home widget opens its page again (`HomeDashboard.tapsOpenPages`, false).
+
 ## Why it is parked here
 
 Home is on screen most of the drive, and the Orange Pi is the machine it has to be cheap on. The dashboard Home was built and driven on desktop only (`--sim` under Xvfb at 1280x800 and 800x1280), so the hand-built Home was kept one switch away (Settings > Display > Layout > Home Screen, the `homeStyle` setting) until the checks below are done. Until then the tree carries both, and the settings that only the classic Home reads.
@@ -15,8 +17,8 @@ What exists: `frontend/HomeDashboard.qml` (loaded by `frontend/MainMenu.qml`), `
 
 1. **The Pi check.** **Effort:** S. **Needs:** Pi, in the Jeep.
    - Home idle and while driving, dashboard against classic (switch in Settings): CPU of the `octave` process and frame time (`--profile`, or `top`). The cells are async `Loader`s with `clip`, the compass is a `Canvas`, the blurred art is a `MultiEffect` layer.
-   - The migration on the Jeep's real config: the first start should write "My Home" from the card list in use there, with the shift light beside RPM if that was on.
-   - A press held on the touchscreen opens the editor; a tap on each widget opens its page; the progress bar seeks without opening the player.
+   - The migration on the Jeep's real config: the first start should write "My Home" from the card list in use there (no shift light: Home no longer gets one by itself).
+   - A press held on the touchscreen opens the editor; a tap on each widget opens its page (off since 2026-11-24, `HomeDashboard.tapsOpenPages`: decide whether it comes back); the progress bar seeks without opening the player.
    - With the adapter unplugged: "No vehicle connected" over the readings and its Connect button.
 2. **The phone check.** **Effort:** S. **Needs:** S22.
    - Portrait Home on the phone's size; the music prompt and the Connect button reachable; long-press does not fight scrolling titles.

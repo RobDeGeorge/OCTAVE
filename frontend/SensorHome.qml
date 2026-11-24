@@ -29,16 +29,6 @@ Item {
         ? settingsManager.get_setting_with_default("lastSensorPage", "")
         : ""
 
-    property bool imuConnected: berryIMU ? berryIMU.connected : false
-
-    Connections {
-        target: berryIMU
-        ignoreUnknownSignals: true
-        function onConnectionStatusChanged(status) {
-            sensorHome.imuConnected = (status === "Connected")
-        }
-    }
-
     // Remember the subpage only once it actually opened. Persisting up front
     // meant a page that can no longer load (CarMenu without the optional
     // QtQuick3D module) became the bottom bar's remembered target, so the
@@ -78,38 +68,6 @@ Item {
             anchors.fill: parent
             anchors.margins: dp(20)
             spacing: dp(20)
-
-            // ── Connection status bar ────────────────────────────
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: dp(48)
-                radius: dpMin(8, 3)
-                color: Qt.darker(backgroundColor, 0.9)
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: dp(16)
-                    anchors.rightMargin: dp(16)
-                    spacing: dp(10)
-
-                    Rectangle {
-                        width: dp(12)
-                        height: width
-                        radius: width / 2
-                        color: sensorHome.imuConnected ? "#00FF00" : "#FF4444"
-                    }
-
-                    Text {
-                        text: sensorHome.imuConnected ? "IMU Connected" : "IMU Disconnected"
-                        color: textColor
-                        font.pixelSize: App.Spacing.overallText
-                        font.bold: true
-                        font.family: sensorHome.globalFont
-                    }
-
-                    Item { Layout.fillWidth: true }
-                }
-            }
 
             // ── Button grid ──────────────────────────────────────
             GridLayout {

@@ -2,7 +2,6 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import "." as App
-import OCTAVE.OBD 1.0
 
 Item {
     // Local dp/dpMin wrappers — work around Qt Android singleton-function bug.
@@ -27,11 +26,8 @@ Item {
 
     // Connection status: bound to the manager, so a page built after the
     // link came up (the startup pre-build, the browser demo) shows it too
-    readonly property string connectionStatus: obdManager ? obdManager.connectionStatus : "Disconnected"
-    readonly property string connectionDetail: obdManager ? obdManager.connectionDetail : ""
     readonly property bool connected: obdManager ? obdManager.connected : false
     // Every step toward a link (the BLE ones included), from the manager's state
-    readonly property bool connecting: !!obdManager && obdManager.connectionState === OBDManager.Connecting
 
     // Helper to push a subpage
     function pushSubpage(qmlFile) {
@@ -78,55 +74,6 @@ Item {
             anchors.fill: parent
             anchors.margins: dp(20)
             spacing: dp(20)
-
-            // ── Connection status bar ────────────────────────────
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: dp(48)
-                radius: dpMin(8, 3)
-                color: Qt.darker(backgroundColor, 0.9)
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: dp(16)
-                    anchors.rightMargin: dp(16)
-                    spacing: dp(10)
-
-                    // Status dot
-                    Rectangle {
-                        width: dp(12)
-                        height: width
-                        radius: width / 2
-                        color: obdHome.connected ? "#00FF00"
-                             : obdHome.connecting ? "#FFAA00"
-                             : "#FF4444"
-
-                        SequentialAnimation on opacity {
-                            running: obdHome.connecting && obdHome.visible  // visible includes hidden pages/sections
-                            loops: Animation.Infinite
-                            NumberAnimation { to: 0.3; duration: 600 }
-                            NumberAnimation { to: 1.0; duration: 600 }
-                        }
-                    }
-
-                    Text {
-                        text: (obdManager && obdManager.simulated ? "Simulated · " : "") + obdHome.connectionStatus
-                        color: textColor
-                        font.pixelSize: App.Spacing.overallText
-                        font.bold: true
-                        font.family: obdHome.globalFont
-                    }
-
-                    Text {
-                        text: obdHome.connectionDetail
-                        color: labelColor
-                        font.pixelSize: App.Spacing.overallText * 0.85
-                        font.family: obdHome.globalFont
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
-                    }
-                }
-            }
 
             // ── Button grid ──────────────────────────────────────
             GridLayout {
@@ -185,7 +132,7 @@ Item {
                         }
 
                         Text {
-                            text: "Dashboards"
+                            text: "Live Data"
                             color: textColor
                             font.pixelSize: App.Spacing.overallText * 1.2
                             font.bold: true
@@ -194,7 +141,7 @@ Item {
                         }
 
                         Text {
-                            text: "Live gauges & parameters"
+                            text: "Every reading from the car"
                             color: labelColor
                             font.pixelSize: App.Spacing.overallText * 0.85
                             font.family: obdHome.globalFont

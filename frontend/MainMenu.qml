@@ -516,13 +516,14 @@ Item {
                 }
             }
 
-            // No music yet: pick the library folder or bring the phone
+            // No Music Loaded: pick the library folder or bring the phone
             // (the same prompt as the music screens)
             App.MusicEmptyPrompt {
                 objectName: "homeMusicPrompt"
                 visible: mainMenu.musicEmpty
                 anchors.centerIn: parent
                 width: parent.width - dp(24)
+                maxHeight: parent.height - dp(16)
                 stackView: mainMenu.stackView
                 mainWindow: mainMenu.mainWindow
                 fontFamily: mainMenu.globalFont

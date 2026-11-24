@@ -1,6 +1,8 @@
 # User-Created, Shareable Dashboard Primitives
 
 **Goal:** let people save and share their own dashboard building blocks (styled gauges and small gauge groups) as safely as they already share whole dashboards.
+**Note (2026-11-24):** the in-app dashboard editor was removed, so the editor side of composites (canvas grouping, the gallery) has nowhere to live in the app; the renderer and spec side would still apply, and the browser editor is the only editor left.
+
 **Status:** tier 1 widget presets done 2026-10-30 ("My widgets": `dashboardManager.widgetPresets` / `saveWidgetPreset` / `importWidgetPresetFromText`, `<config>/widgets/*.json`, the gallery's Mine section, the Style menu's *Save as my widget…*); composites and tier 2 parked
 **Last updated:** 2026-10-30
 

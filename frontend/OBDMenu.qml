@@ -2,11 +2,8 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Shapes 1.15
-import QtQuick.Dialogs
-import Qt5Compat.GraphicalEffects
 import "." as App
 import "dashboards" as Dashboards
-import "dashboards/editor" as Editor
 import "obd" as Obd
 import OCTAVE.OBD 1.0
 
@@ -18,8 +15,8 @@ Item {
     id: obdPage
     objectName: "obdMenu"
 
-    // Full IMU rate while the OBD views are on screen (dashboards can carry
-    // compass and G-force gauges)
+    // Full IMU rate while the page is on screen (a dashboard previewed from
+    // a browser can carry compass and G-force gauges)
     App.ImuDemand { consumer: "obdMenu"; wanted: obdPage.visible }
     required property StackView stackView
     required property ApplicationWindow mainWindow
@@ -37,281 +34,22 @@ Item {
     // Card style setting - true for circular gauges, false for square cards
     readonly property bool useCircularCards: settingsManager ? settingsManager.obdCardStyleCircular : false
 
-    // Active dashboard: "grid" = default parameter cards, or one of the registered dashboards
-    property string activeDashboardId: settingsManager
-        ? settingsManager.get_setting_with_default("activeDashboard", "grid")
-        : "grid"
+    // The live-data page: one card for every reading the connected vehicle
+    // supports. Dashboards are not shown or chosen here (Home shows one,
+    // picked in Settings > Display); the one exception is a dashboard being
+    // edited in a browser, which previews here (`previewing`).
 
-    // Dashboards only show against a live vehicle. Until obdManager reports
-    // a connection the page shows the connect prompt (parameterCardsEmpty)
-    // instead of whichever dashboard is active, swipe is off and the page
-    // dots are hidden. The active id is kept, so the same dashboard comes
-    // back the moment the adapter connects. The chooser stays reachable so
-    // dashboards can still be created and edited while parked offline.
+    // Until obdManager reports a connection the page shows the connect
+    // prompt (parameterCardsEmpty) in place of the cards.
     readonly property bool obdConnected: typeof obdManager !== "undefined" && obdManager
                                          && obdManager.connected === true
 
-    // Dashboard registry — built-in "grid" (parameter-cards view in this
-    // file) plus every JSON-defined dashboard enumerated by DashboardManager
-    // (presets + user-authored files). Ids like "sport"/"minimal"/"fullgrid"
-    // still resolve to the same dashboards — they just render from JSON via
-    // DashboardRenderer now instead of hand-written QML. See
-    // TODO/dashboards-roadmap.md for the full Phase 2 design.
     // A dashboard being edited on another device (dashboardManager.preview):
     // shown here in place of the active one, with or without a car, until
     // that device ends it (or 60 s after its last change)
     readonly property var _preview: (typeof dashboardManager !== "undefined" && dashboardManager)
                                     ? dashboardManager.preview : ({})
     readonly property bool previewing: !!(_preview && _preview.spec)
-
-    readonly property var _gridSentinel:
-        ({ id: "grid", label: "Parameter Cards", builtIn: true })
-
-    property var dashboardRegistry: _rebuildRegistry()
-
-    // Loaded specs by dashboard id. loadDashboard() returns a new object on
-    // every call, so a spec binding that re-evaluates during page activation
-    // would hand DashboardRenderer a "new" dashboard and tear its async
-    // widget Loaders down mid-incubation. Reading through this cache keeps
-    // the object the same; filling it doesn't notify (only reassigning
-    // _specCache does), so it can be read inside the binding.
-    property var _specCache: ({})
-    function _specFor(id) {
-        if (!_specCache[id])
-            _specCache[id] = dashboardManager.loadDashboard(id)
-        return _specCache[id]
-    }
-
-    function _rebuildRegistry() {
-        var list = [_gridSentinel]
-        if (typeof dashboardManager !== "undefined" && dashboardManager) {
-            list = list.concat(dashboardManager.dashboards)
-        }
-        return list
-    }
-
-    // Refresh the registry whenever DashboardManager's list changes (user
-    // added/deleted a dashboard, or an external edit + refresh()).
-    Connections {
-        target: (typeof dashboardManager !== "undefined") ? dashboardManager : null
-        ignoreUnknownSignals: true
-        function onDashboardsChanged() {
-            obdPage.dashboardRegistry = obdPage._rebuildRegistry()
-            obdPage._specCache = ({})   // a dashboard was saved, edited or removed: reload
-            // If the active dashboard vanished (deleted in-app, or its JSON
-            // was removed externally and refresh() ran), fall back to the
-            // built-in Parameter Cards rather than rendering nothing.
-            var stillExists = false
-            for (var i = 0; i < obdPage.dashboardRegistry.length; i++) {
-                if (obdPage.dashboardRegistry[i].id === obdPage.activeDashboardId) {
-                    stillExists = true
-                    break
-                }
-            }
-            if (!stillExists)
-                obdPage.setActiveDashboard("grid")
-        }
-    }
-
-    function setActiveDashboard(id) {
-        activeDashboardId = id
-        if (settingsManager) settingsManager.save_setting("activeDashboard", id)
-    }
-
-    // Scriptable (dev tooling drives these through the command server's `call`)
-    // ── Swipe between dashboards (see swipeHandler) ──────────────────
-    property real _swipeOffset: 0
-    property int _swipeDir: 0
-
-    function _registryIndex(id) {
-        for (var i = 0; i < dashboardRegistry.length; i++)
-            if (dashboardRegistry[i].id === id) return i
-        return 0
-    }
-
-    // dir = +1 next, -1 previous; wraps around the registry.
-    function swipeDashboard(dir) {
-        var n = dashboardRegistry.length
-        if (n < 2 || !obdConnected) return
-        _swipeDir = dir
-        swipeAnim.restart()
-    }
-
-    function _commitSwipe() {
-        var n = dashboardRegistry.length
-        var next = (_registryIndex(activeDashboardId) + _swipeDir + n) % n
-        setActiveDashboard(dashboardRegistry[next].id)
-        _swipeOffset = _swipeDir * Math.max(1, cardsScroll.width)   // enter from the far side
-    }
-
-    SequentialAnimation {
-        id: swipeAnim
-        NumberAnimation {
-            target: obdPage; property: "_swipeOffset"
-            to: -obdPage._swipeDir * Math.max(1, cardsScroll.width)
-            duration: 160; easing.type: Easing.InCubic
-        }
-        ScriptAction { script: obdPage._commitSwipe() }
-        NumberAnimation {
-            target: obdPage; property: "_swipeOffset"
-            to: 0; duration: 220; easing.type: Easing.OutCubic
-        }
-    }
-
-    NumberAnimation {
-        id: swipeBack
-        target: obdPage; property: "_swipeOffset"
-        to: 0; duration: 180; easing.type: Easing.OutCubic
-    }
-
-    function openDashboardChooser() { dashboardChooserPopup.open() }
-    function closeDashboardChooser() { dashboardChooserPopup.close() }
-
-    // Delete a dashboard from the chooser (built-ins are hidden, not removed). Lives on the page (not in the
-    // card delegate) because dashboardsChanged rebuilds the registry
-    // synchronously inside deleteDashboard(), which destroys the delegate that
-    // tapped Delete — any code after the call in the delegate context throws
-    // "obdPage is not defined". Active-dashboard fallback happens in the
-    // onDashboardsChanged handler.
-    // ── Sharing ──────────────────────────────────────────────────────
-    property string shareStatus: ""
-    property bool shareStatusIsError: false
-    Timer {
-        id: shareStatusTimer
-        interval: 4500
-        onTriggered: obdPage.shareStatus = ""
-    }
-    function showShareStatus(msg, isError) {
-        shareStatus = msg
-        shareStatusIsError = isError
-        shareStatusTimer.restart()
-    }
-    function finishImport(newId) {
-        if (newId && newId.length > 0) {
-            var label = newId
-            for (var i = 0; i < dashboardRegistry.length; i++)
-                if (dashboardRegistry[i].id === newId) label = dashboardRegistry[i].label
-            showShareStatus("Imported \"" + label + "\"", false)
-            importReportPopup.openFor(dashboardManager.lastImportReport)
-        } else {
-            showShareStatus(dashboardManager.lastShareError || "Import failed", true)
-        }
-    }
-
-    Dashboards.RemoteEditPopup { id: remoteEditPopup }
-
-    // What the import brought in and what it left out
-    Dashboards.ImportReportPopup {
-        id: importReportPopup
-        stageWidth: obdPage.width
-        stageHeight: Math.max(1, obdPage.height - dp(80))
-        onShowRequested: function(id) {
-            dashboardChooserPopup.close()
-            obdPage.setActiveDashboard(id)
-        }
-        onEditRequested: function(id) {
-            dashboardChooserPopup.close()
-            obdPage.stackView.push("dashboards/editor/DashboardEditor.qml", {
-                stackView: obdPage.stackView,
-                callerPage: obdPage,
-                editingId: id
-            })
-        }
-    }
-
-    Menu {
-        id: shareMenu
-        objectName: "shareMenu"
-        property string dashId: ""
-        MenuItem {
-            objectName: "shareExport"
-            text: "Save to Downloads"
-            onTriggered: {
-                var path = dashboardManager.exportDashboard(shareMenu.dashId)
-                if (path.length > 0) obdPage.showShareStatus("Saved to " + path, false)
-                else obdPage.showShareStatus(dashboardManager.lastShareError || "Export failed", true)
-            }
-        }
-        MenuItem {
-            objectName: "shareClipboard"
-            text: "Copy as text"
-            onTriggered: {
-                if (dashboardManager.copyDashboardToClipboard(shareMenu.dashId))
-                    obdPage.showShareStatus("Copied. Paste it anywhere to share.", false)
-                else
-                    obdPage.showShareStatus(dashboardManager.lastShareError || "Copy failed", true)
-            }
-        }
-    }
-
-    FileDialog {
-        id: importFileDialog
-        title: "Import a dashboard"
-        nameFilters: ["OCTAVE dashboards (*.json)", "All files (*)"]
-        onAccepted: obdPage.finishImport(dashboardManager.importDashboard(selectedFile.toString()))
-    }
-
-    function restoreDefaultDashboards() {
-        if (typeof dashboardManager === "undefined" || !dashboardManager) return
-        if (dashboardManager.restoreBuiltInDashboards())
-            showShareStatus("Default dashboards restored", false)
-    }
-
-    function deleteUserDashboard(id) {
-        if (typeof dashboardManager === "undefined" || !dashboardManager) return false
-        return dashboardManager.deleteDashboard(id)
-    }
-
-    // Unsaved editor work rescued by DashboardEditor's Component.onDestruction
-    // (e.g. user switched menus mid-build). Refreshed each time the chooser opens;
-    // non-empty shows the "Resume draft" button.
-    property string _editorDraft: ""
-
-    // Display label for the currently-active dashboard, derived from the
-    // registry so custom user dashboards show their real name in the header.
-    readonly property string activeDashboardLabel: {
-        for (var i = 0; i < dashboardRegistry.length; i++) {
-            if (dashboardRegistry[i].id === activeDashboardId)
-                return dashboardRegistry[i].label
-        }
-        return "Dashboard"
-    }
-
-    // Fallback schematic preview for the "Parameter Cards" entry, which
-    // has no standalone QML file (it's the built-in grid in this file).
-    // All other dashboards render as live, scaled miniatures of the real
-    // QML in the chooser popup below.
-    Component {
-        id: gridPreview
-        GridLayout {
-            anchors.fill: parent
-            columns: 3
-            rows: 3
-            rowSpacing: dpMin(3, 1)
-            columnSpacing: dpMin(3, 1)
-            Repeater {
-                model: 9
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    radius: dpMin(3, 1)
-                    color: Qt.darker(App.Style.obdBoxBackground, 1.15)
-                    border.color: Qt.darker(App.Style.obdBarColor, 1.4)
-                    border.width: 1
-                    Rectangle {
-                        anchors.left: parent.left
-                        anchors.bottom: parent.bottom
-                        anchors.margins: Math.max(2, parent.width * 0.08)
-                        width: parent.width * 0.55
-                        height: Math.max(2, parent.height * 0.1)
-                        radius: height / 2
-                        color: App.Style.obdBarColor
-                    }
-                }
-            }
-        }
-    }
-
 
     // OBD parameters from centralized singleton
     property var allParameters: App.OBDParameterModel.allParameters
@@ -323,7 +61,7 @@ Item {
     // it was visible. Hidden, the cards settle once to "--"; on return they
     // pick up the live values. On screen each card listens to its own value
     // (OBDParameterModel.liveValue -> paramStore[id]), not to every value.
-    readonly property bool _gridLive: obdConnected && activeDashboardId === "grid"
+    readonly property bool _gridLive: obdConnected && !previewing
         && (StackView.status === StackView.Active || StackView.status === StackView.Activating)
     
     // Parameter Cards = the connected vehicle's full PID list: every OBD
@@ -349,15 +87,14 @@ Item {
 
     // ── Polling demand ────────────────────────────────────────────────
     // obdManager polls only what is on screen. While this page is the
-    // active StackView page: the active dashboard's PIDs, or — on Parameter
-    // Cards — every PID the vehicle supports. Leaving the page withdraws
-    // both demands.
+    // active StackView page: every PID the vehicle supports, or the previewed
+    // dashboard's while there is one. Leaving the page withdraws both demands.
     readonly property bool _pageActiveForDemand:
         StackView.status === StackView.Active || StackView.status === StackView.Activating
     readonly property var _dashboardDemand:
-        (_pageActiveForDemand && obdConnected && (previewing || activeDashboardId !== "grid")) ? dashboardRenderer.paramIds : []
+        (_pageActiveForDemand && obdConnected && previewing) ? dashboardRenderer.paramIds : []
     readonly property var _cardsDemand: {
-        if (!_pageActiveForDemand || !obdConnected || previewing || activeDashboardId !== "grid") return [];
+        if (!_pageActiveForDemand || !obdConnected || previewing) return [];
         return vehicleParameters.map(function(p) { return p.id; });
     }
     function _pushDemand(consumer, ids) {
@@ -369,179 +106,18 @@ Item {
     Component.onDestruction: {
         _pushDemand("dashboard", []);
         _pushDemand("cards", []);
-        _pushDemand("autoShow", []);
     }
 
-    // ── "Show this dashboard when ..." (a spec's showWhen) ───────────
-    // Checked twice a second while this page is on screen with a car
-    // connected (dashboards/AutoShowRules.qml has the rules). A dashboard
-    // shown by a rule isn't saved as the active one.
-    readonly property var _autoRules: dashboardRegistry.filter(function(d) { return !!d.showWhen })
-    readonly property var _autoDemand: {
-        if (!_pageActiveForDemand || !obdConnected) return []
-        var seen = {}, out = []
-        for (var i = 0; i < _autoRules.length; i++) {
-            var id = _autoRules[i].showWhen.paramId
-            if (!seen[id]) { seen[id] = true; out.push(id) }
-        }
-        return out
-    }
-    on_AutoDemandChanged: _pushDemand("autoShow", _autoDemand)
-    Dashboards.AutoShowRules {
-        id: autoShow
-        rules: obdPage._autoRules
-        activeId: obdPage.activeDashboardId
-        onSwitchTo: function(id) { obdPage.activeDashboardId = id }
-    }
-
-    Timer {
-        id: autoRuleTimer
-        interval: 500
-        repeat: true
-        running: obdPage._autoRules.length > 0 && obdPage._pageActiveForDemand && obdPage.obdConnected
-        onTriggered: autoShow.check()
-    }
-    
     Rectangle {
         anchors.fill: parent
         color: backgroundColor
-        clip: true      // swipe slides content past the page edges
 
-        // ── Header bar ─────────────────────────────────────────────────
-        // Hosts the current dashboard's label and the chooser button.
-        // Content sits below this.
-        Rectangle {
-            id: obdHeader
-            anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.right: parent.right
-            // Match MediaPlayer's titleBar height exactly so the header
-            // lines up with the media pages.
-            height: App.Spacing.bottomBarNavButtonHeight + App.Spacing.mediaRoomMargin * 2
-            color: Qt.darker(obdPage.backgroundColor, 1.12)
-            z: 2
-
-            // Page dots: one per registry entry, active one filled — shows
-            // where you are when swiping between dashboards.
-            Row {
-                objectName: "dashboardPageDots"
-                visible: obdPage.obdConnected && obdPage.dashboardRegistry.length > 1
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.bottom: parent.bottom
-                anchors.bottomMargin: dp(5)
-                spacing: dp(6)
-                Repeater {
-                    model: obdPage.dashboardRegistry.length
-                    delegate: Rectangle {
-                        readonly property bool _active: index === obdPage._registryIndex(obdPage.activeDashboardId)
-                        width: dp(6); height: dp(6); radius: width / 2
-                        color: _active ? App.Style.accent : App.Style.obdLabelColor
-                        opacity: _active ? 1.0 : 0.35
-                    }
-                }
-            }
-
-            Text {
-                objectName: "dashboardTitle"
-                anchors.centerIn: parent
-                text: obdPage.previewing
-                      ? "Preview from another device · " + (obdPage._preview.spec.label || "New dashboard")
-                      : (obdManager && obdManager.simulated ? "Simulated · " : "") + obdPage.activeDashboardLabel
-                color: App.Style.obdValueColor
-                font.pixelSize: App.Spacing.overallText * 1.15
-                font.bold: true
-                font.family: obdPage.globalFont
-            }
-
-            // Subtle separator line at the bottom of the header.
-            Rectangle {
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                height: 1
-                color: Qt.darker(App.Style.obdBarColor, 1.8)
-                opacity: 0.6
-            }
-        }
-
-        // Dashboards chooser button — anchored to the outer content
-        // Rectangle (NOT to obdHeader) with mediaRoomMargin top/right
-        // margins and the bottom-bar nav button size.
-        Control {
-            id: dashboardsButton
-            objectName: "dashboardsButton"
-            width: App.Spacing.bottomBarNavButtonWidth
-            height: App.Spacing.bottomBarNavButtonHeight
-            z: 3
-            anchors {
-                top: parent.top
-                right: parent.right
-                topMargin: App.Spacing.mediaRoomMargin
-                rightMargin: App.Spacing.mediaRoomMargin
-            }
-
-            background: Rectangle {
-                color: "transparent"
-                radius: dpMin(8, 2)
-                border.color: App.Style.accent
-                border.width: 1
-                scale: dashboardsButtonMouse.pressed ? 0.8 : 1.0
-                opacity: dashboardsButtonMouse.pressed ? 0.7 : 1.0
-                Behavior on scale {
-                    NumberAnimation { duration: 200; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
-                }
-                Behavior on opacity { NumberAnimation { duration: 150 } }
-            }
-
-            contentItem: Item {
-                scale: dashboardsButtonMouse.pressed ? 0.8 : 1.0
-                opacity: dashboardsButtonMouse.pressed ? 0.7 : 1.0
-                Behavior on scale {
-                    NumberAnimation { duration: 200; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
-                }
-                Behavior on opacity { NumberAnimation { duration: 150 } }
-                Image {
-                    id: dashboardsButtonImage
-                    anchors.centerIn: parent
-                    width: parent.width * 0.7
-                    height: parent.height * 0.7
-                    source: "./assets/dashboard_button.svg"
-                    sourceSize: Qt.size(width * 2, height * 2)
-                    fillMode: Image.PreserveAspectFit
-                    smooth: true
-                    antialiasing: true
-                    mipmap: true
-                    visible: false
-                }
-                ColorOverlay {
-                    anchors.fill: dashboardsButtonImage
-                    source: dashboardsButtonImage
-                    color: App.Style.accent
-                }
-            }
-
-            MouseArea {
-                id: dashboardsButtonMouse
-                width: parent.width * 2
-                height: parent.height * 2
-                anchors.centerIn: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: dashboardChooserPopup.open()
-            }
-        }
-
-        // ── Dashboard renderer (visible only when a dashboard is active) ──
-        // Takes a JSON spec (fetched from DashboardManager) and instantiates
-        // widgets into a grid. Replaces the old per-dashboard QML loader.
-        // Hidden (and, through `spec`, unloaded) while no vehicle is
-        // connected: the connect prompt takes the page instead.
+        // ── A dashboard previewed from a browser editor ───────────────────
         Dashboards.DashboardRenderer {
             id: dashboardRenderer
             objectName: "activeDashboardRenderer"
-            transform: Translate { x: obdPage._swipeOffset }
             anchors {
-                top: obdHeader.bottom
+                top: parent.top
                 left: parent.left
                 right: parent.right
                 bottom: parent.bottom
@@ -550,7 +126,7 @@ Item {
                 topMargin: dp(6)
                 bottomMargin: dp(10)
             }
-            visible: obdPage.previewing || (obdPage.obdConnected && obdPage.activeDashboardId !== "grid")
+            visible: obdPage.previewing
             // Load the dashboard only while this is the active StackView page,
             // not merely `visible`: page pre-building draws this page once
             // offscreen (briefly visible), and a visible-keyed spec then
@@ -561,16 +137,15 @@ Item {
             readonly property bool _pageActive: obdPage.StackView.status === StackView.Active
                                                 || obdPage.StackView.status === StackView.Activating
             spec: (visible && _pageActive && typeof dashboardManager !== "undefined" && dashboardManager)
-                  ? (obdPage.previewing ? obdPage._preview.spec : obdPage._specFor(obdPage.activeDashboardId))
-                  : null
+                  ? obdPage._preview.spec : null
         }
 
         Flickable {
             id: cardsScroll
             objectName: "parameterCardsScroll"
-            visible: !obdPage.previewing && obdPage.obdConnected && obdPage.activeDashboardId === "grid"
+            visible: !obdPage.previewing && obdPage.obdConnected
             anchors {
-                top: obdHeader.bottom
+                top: parent.top
                 left: parent.left
                 right: parent.right
                 bottom: parent.bottom
@@ -585,7 +160,6 @@ Item {
             flickableDirection: Flickable.VerticalFlick
             boundsBehavior: Flickable.StopAtBounds
             interactive: contentHeight > height + 1
-            transform: Translate { x: obdPage._swipeOffset }
 
             // Rows needed for the current card count, and the height a row
             // may not shrink below before the grid starts scrolling.
@@ -874,11 +448,10 @@ Item {
         Column {
             objectName: "parameterCardsEmpty"
             visible: !obdPage.previewing && (!obdPage.obdConnected
-                     || (obdPage.activeDashboardId === "grid" && obdPage.vehicleParameters.length === 0))
+                     || obdPage.vehicleParameters.length === 0)
             anchors.centerIn: cardsScroll
             width: Math.min(cardsScroll.width - dp(40), dp(560))
             spacing: dp(10)
-            transform: Translate { x: obdPage._swipeOffset }
 
             readonly property bool _connected: obdPage.obdConnected
 
@@ -916,36 +489,6 @@ Item {
             }
         }
 
-        // ── Swipe between dashboards ────────────────────────────────────
-        // Horizontal drag anywhere on the content cycles through the
-        // registry (Parameter Cards + every dashboard, wrapping). Only the
-        // active dashboard is ever instantiated: the content follows the
-        // finger, slides out, the dashboard switches, and the new one slides
-        // in from the other side. xAxis-only, so the cards' vertical scroll
-        // and taps on widget buttons are unaffected.
-        DragHandler {
-            id: swipeHandler
-            objectName: "dashboardSwipeHandler"
-            target: null
-            xAxis.enabled: true
-            yAxis.enabled: false
-            enabled: obdPage.obdConnected && obdPage.dashboardRegistry.length > 1 && !swipeAnim.running
-            onTranslationChanged: if (active) obdPage._swipeOffset = translation.x
-            onActiveChanged: {
-                if (active) return
-                // translation is already reset when this fires; the offset
-                // tracked during the drag holds the distance travelled.
-                var w = Math.max(1, cardsScroll.width)
-                var dx = obdPage._swipeOffset
-                var vx = centroid.velocity.x
-                // A fast flick counts only past a minimum distance, so a tap
-                // that skids a little on a bumpy road never flips the page.
-                var flick = Math.abs(dx) > w * 0.08
-                if (dx < -w * 0.2 || (flick && vx < -dp(800))) obdPage.swipeDashboard(1)
-                else if (dx > w * 0.2 || (flick && vx > dp(800))) obdPage.swipeDashboard(-1)
-                else swipeBack.restart()
-            }
-        }
     }
     
     // Use a timer to delay layout updates to prevent rapid successive updates
@@ -977,665 +520,6 @@ Item {
     // the page visible with the wrong column count for 100 ms on every open.
     Component.onCompleted: {
         updateLayout()
-        // The saved active dashboard may have been deleted (or its JSON
-        // removed) while the app was closed — fall back to Parameter Cards
-        // instead of rendering an empty page. Runtime deletions are handled
-        // in onDashboardsChanged.
-        if (activeDashboardId !== "grid" && _registryIndex(activeDashboardId) === 0
-                && dashboardRegistry[0].id !== activeDashboardId)
-            setActiveDashboard("grid")
-    }
-
-    // ── Dashboard Chooser Popup ──────────────────────────────────────
-    // "+ New": pick a starting point, then the editor opens on it, fitted
-    // to this screen's grid density
-    Editor.TemplateGallery {
-        id: templateGallery
-        stageWidth: obdPage.width
-        stageHeight: Math.max(1, obdPage.height - dp(80))
-        onTemplatePicked: function(spec) {
-            dashboardChooserPopup.close()
-            obdPage.stackView.push("dashboards/editor/DashboardEditor.qml", {
-                stackView: obdPage.stackView,
-                callerPage: obdPage,
-                initialSpec: spec,
-                fitToScreen: true
-            })
-        }
-    }
-
-    Popup {
-        id: dashboardChooserPopup
-        parent: Overlay.overlay
-        x: Math.round((parent.width - width) / 2)
-        y: Math.round((parent.height - height) / 2)
-        width: Math.min(parent.width * 0.92, dp(960))
-        height: Math.min(
-            parent.height * 0.9,
-            chooserHeader.height + chooserGrid.implicitHeight + dp(62)
-        )
-        modal: true
-        focus: true
-        padding: 0
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-
-        // True from aboutToShow until fully closed — gates the miniature
-        // Loaders so instantiation begins *before* the popup animates in,
-        // hiding the gauge value-binding animation that would otherwise
-        // play out after the popup is already visible.
-        property bool preloadMinis: false
-        onAboutToShow: {
-            preloadMinis = true
-            // Re-check for an abandoned editor draft (saved when the editor
-            // page is destroyed mid-edit, e.g. by switching menus).
-            obdPage._editorDraft = settingsManager
-                ? settingsManager.get_setting_with_default("dashboardEditorDraft", "")
-                : ""
-        }
-        onClosed: preloadMinis = false
-
-        background: Rectangle {
-            color: Qt.rgba(App.Style.contentColor.r, App.Style.contentColor.g, App.Style.contentColor.b, 0.97)
-            radius: App.Spacing.overallMargin
-            border.color: App.Style.accent
-            border.width: 2
-        }
-
-        contentItem: Item {
-            id: chooserContent
-
-            // Header strip — sized to the button + margins, like obdHeader:
-            // the New / Import / Restore row on the left, the title centred.
-            Rectangle {
-                id: chooserHeader
-                anchors.top: parent.top
-                anchors.left: parent.left
-                anchors.right: parent.right
-                height: App.Spacing.bottomBarNavButtonHeight + App.Spacing.mediaRoomMargin * 2
-                color: "transparent"
-
-                Text {
-                    id: chooserTitle
-                    anchors.centerIn: parent
-                    text: "Dashboards"
-                    // Gives way when the button row reaches it (an upright
-                    // window: "In a browser" sat on top of it at 432 wide)
-                    readonly property Item lastButton: restoreDefaultsButton.visible ? restoreDefaultsButton
-                                                     : browserEditButton.visible ? browserEditButton : importDashboardButton
-                    visible: x > lastButton.x + lastButton.width + dp(10)
-                    color: App.Style.primaryTextColor
-                    font.pixelSize: App.Spacing.overallText * 1.3
-                    font.bold: true
-                    font.family: obdPage.globalFont
-                }
-
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    height: 1
-                    color: Qt.darker(App.Style.obdBarColor, 1.8)
-                    opacity: 0.6
-                }
-            }
-
-            // Share/import result line (auto-hides).
-            Rectangle {
-                id: shareStatusBanner
-                objectName: "shareStatusBanner"
-                visible: obdPage.shareStatus.length > 0
-                z: 10
-                anchors.bottom: parent.bottom
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.bottomMargin: dp(14)
-                width: Math.min(parent.width - dp(40), shareStatusText.implicitWidth + dp(32))
-                height: shareStatusText.implicitHeight + dp(18)
-                radius: dpMin(8, 2)
-                color: obdPage.shareStatusIsError ? App.Style.statusDanger : App.Style.accent
-
-                Text {
-                    id: shareStatusText
-                    anchors.centerIn: parent
-                    width: parent.width - dp(24)
-                    horizontalAlignment: Text.AlignHCenter
-                    wrapMode: Text.WordWrap
-                    text: obdPage.shareStatus
-                    color: "white"
-                    font.pixelSize: App.Spacing.overallText * 0.85
-                    font.family: obdPage.globalFont
-                }
-            }
-
-            // Launch the Phase 3 editor on a blank spec. Edit/Duplicate/Delete
-            // live as per-card action buttons below.
-            Rectangle {
-                id: newDashboardButton
-                objectName: "newDashboardButton"
-                anchors.top: parent.top
-                anchors.left: parent.left
-                anchors.topMargin: App.Spacing.mediaRoomMargin
-                anchors.leftMargin: App.Spacing.mediaRoomMargin
-                height: App.Spacing.bottomBarNavButtonHeight
-                width: newDashboardLabel.implicitWidth + dp(24)
-                radius: dpMin(8, 2)
-                color: "transparent"
-                border.color: App.Style.accent
-                border.width: 1
-                scale: newDashboardMouse.pressed ? 0.9 : 1.0
-                Behavior on scale {
-                    NumberAnimation { duration: 200; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
-                }
-
-                Text {
-                    id: newDashboardLabel
-                    anchors.centerIn: parent
-                    text: "+ New"
-                    color: App.Style.accent
-                    font.pixelSize: App.Spacing.overallText
-                    font.bold: true
-                    font.family: obdPage.globalFont
-                }
-
-                MouseArea {
-                    id: newDashboardMouse
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    // A template first (Blank among them); the editor
-                    // opens on the one picked
-                    onClicked: templateGallery.open()
-                }
-            }
-
-            // Resume an editor draft rescued from a mid-build menu switch.
-            Rectangle {
-                id: resumeDraftButton
-                objectName: "resumeDraftButton"
-                visible: obdPage._editorDraft.length > 0
-                anchors.top: parent.top
-                anchors.left: newDashboardButton.right
-                anchors.topMargin: App.Spacing.mediaRoomMargin
-                anchors.leftMargin: dp(8)
-                height: App.Spacing.bottomBarNavButtonHeight
-                width: resumeDraftLabel.implicitWidth + dp(24)
-                radius: dpMin(8, 2)
-                color: "transparent"
-                border.color: App.Style.accent
-                border.width: 1
-                scale: resumeDraftMouse.pressed ? 0.9 : 1.0
-                Behavior on scale {
-                    NumberAnimation { duration: 200; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
-                }
-
-                Text {
-                    id: resumeDraftLabel
-                    anchors.centerIn: parent
-                    text: "▲ Draft"
-                    color: App.Style.accent
-                    font.pixelSize: App.Spacing.overallText
-                    font.bold: true
-                    font.family: obdPage.globalFont
-                }
-
-                MouseArea {
-                    id: resumeDraftMouse
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        dashboardChooserPopup.close()
-                        obdPage.stackView.push("dashboards/editor/DashboardEditor.qml", {
-                            stackView: obdPage.stackView,
-                            callerPage: obdPage,
-                            draftJson: obdPage._editorDraft
-                        })
-                    }
-                }
-            }
-
-            // Import a shared dashboard (file or clipboard) — always becomes
-            // a new user dashboard; the backend validates and re-ids it.
-            Rectangle {
-                id: importDashboardButton
-                objectName: "importDashboardButton"
-                anchors.top: parent.top
-                anchors.left: resumeDraftButton.visible ? resumeDraftButton.right : newDashboardButton.right
-                anchors.topMargin: App.Spacing.mediaRoomMargin
-                anchors.leftMargin: dp(8)
-                height: App.Spacing.bottomBarNavButtonHeight
-                width: importLabel.implicitWidth + dp(24)
-                radius: dpMin(8, 2)
-                color: "transparent"
-                border.color: App.Style.accent
-                border.width: 1
-                scale: importMouse.pressed ? 0.9 : 1.0
-                Behavior on scale {
-                    NumberAnimation { duration: 200; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
-                }
-
-                Text {
-                    id: importLabel
-                    anchors.centerIn: parent
-                    text: "Import"
-                    color: App.Style.accent
-                    font.pixelSize: App.Spacing.overallText
-                    font.bold: true
-                    font.family: obdPage.globalFont
-                }
-
-                MouseArea {
-                    id: importMouse
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: importMenu.popup(importDashboardButton, 0, importDashboardButton.height)
-                }
-
-                Menu {
-                    id: importMenu
-                    objectName: "importMenu"
-                    MenuItem {
-                        objectName: "importFromFile"
-                        text: "From file…"
-                        onTriggered: importFileDialog.open()
-                    }
-                    MenuItem {
-                        objectName: "importFromClipboard"
-                        text: "Paste from clipboard"
-                        onTriggered: obdPage.finishImport(dashboardManager.importDashboardFromClipboard())
-                    }
-                }
-            }
-
-            // The browser dashboard editor: where to open it, and a code
-            Rectangle {
-                id: browserEditButton
-                objectName: "browserEditButton"
-                visible: typeof servicePairing !== "undefined" && servicePairing !== null
-                anchors.top: parent.top
-                anchors.left: importDashboardButton.right
-                anchors.topMargin: App.Spacing.mediaRoomMargin
-                anchors.leftMargin: dp(8)
-                height: App.Spacing.bottomBarNavButtonHeight
-                width: visible ? browserEditLabel.implicitWidth + dp(24) : 0
-                radius: dpMin(8, 2)
-                color: "transparent"
-                border.color: App.Style.accent
-                border.width: 1
-                scale: browserEditMouse.pressed ? 0.9 : 1.0
-                Behavior on scale {
-                    NumberAnimation { duration: 200; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
-                }
-
-                Text {
-                    id: browserEditLabel
-                    anchors.centerIn: parent
-                    text: "In a browser"
-                    color: App.Style.accent
-                    font.pixelSize: App.Spacing.overallText
-                    font.bold: true
-                    font.family: obdPage.globalFont
-                }
-
-                MouseArea {
-                    id: browserEditMouse
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: remoteEditPopup.open()
-                }
-            }
-
-            // Bring back built-in dashboards the user deleted.
-            Rectangle {
-                id: restoreDefaultsButton
-                objectName: "restoreDefaultsButton"
-                visible: typeof dashboardManager !== "undefined" && dashboardManager
-                         && dashboardManager.hiddenBuiltInCount > 0
-                anchors.top: parent.top
-                anchors.left: browserEditButton.visible ? browserEditButton.right : importDashboardButton.right
-                anchors.topMargin: App.Spacing.mediaRoomMargin
-                anchors.leftMargin: dp(8)
-                height: App.Spacing.bottomBarNavButtonHeight
-                width: restoreDefaultsLabel.implicitWidth + dp(24)
-                radius: dpMin(8, 2)
-                color: "transparent"
-                border.color: App.Style.accent
-                border.width: 1
-                scale: restoreDefaultsMouse.pressed ? 0.9 : 1.0
-                Behavior on scale {
-                    NumberAnimation { duration: 200; easing.type: Easing.OutBack; easing.overshoot: 1.1 }
-                }
-
-                Text {
-                    id: restoreDefaultsLabel
-                    anchors.centerIn: parent
-                    text: "Restore defaults"
-                    color: App.Style.accent
-                    font.pixelSize: App.Spacing.overallText
-                    font.bold: true
-                    font.family: obdPage.globalFont
-                }
-
-                MouseArea {
-                    id: restoreDefaultsMouse
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: obdPage.restoreDefaultDashboards()
-                }
-            }
-
-            Flickable {
-                id: chooserScroll
-                objectName: "chooserScroll"
-                anchors {
-                    top: chooserHeader.bottom
-                    bottom: parent.bottom
-                    left: parent.left
-                    right: parent.right
-                    topMargin: dp(10)
-                    leftMargin: dp(18)
-                    rightMargin: dp(18)
-                    bottomMargin: dp(18)
-                }
-                contentWidth: width
-                contentHeight: chooserGrid.implicitHeight
-                flickableDirection: Flickable.VerticalFlick
-                clip: true
-                boundsBehavior: Flickable.DragAndOvershootBounds
-                flickDeceleration: 1200
-                maximumFlickVelocity: 4000
-                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AlwaysOff }
-
-                GridLayout {
-                    id: chooserGrid
-                    width: chooserScroll.width
-                    columns: 2
-                    rowSpacing: dp(14)
-                    columnSpacing: dp(14)
-
-                    Repeater {
-                        model: obdPage.dashboardRegistry
-                        delegate: Rectangle {
-                            id: card
-                            objectName: "dashCard_" + modelData.id
-
-                            // The dashboard entry — aliased so the nested
-                            // action-button Repeater (whose own modelData
-                            // shadows this one) can still reach it.
-                            readonly property var dash: modelData
-
-                            // Two-tap delete confirm ("Delete" → "Sure?").
-                            property bool confirmingDelete: false
-                            Timer {
-                                id: deleteConfirmTimer
-                                interval: 3000
-                                onTriggered: card.confirmingDelete = false
-                            }
-
-                            function triggerAction(action) {
-                                if (action === "customize") {
-                                    // A built-in is read-only: the editor opens
-                                    // on an unsaved copy, saved under its own id
-                                    // on Done ("Sport (mine)")
-                                    var spec = dashboardManager.loadDashboard(card.dash.id)
-                                    if (!spec || !spec.cells) return
-                                    spec.label = (spec.label || card.dash.label) + " (mine)"
-                                    delete spec.id
-                                    dashboardChooserPopup.close()
-                                    obdPage.stackView.push("dashboards/editor/DashboardEditor.qml", {
-                                        stackView: obdPage.stackView,
-                                        callerPage: obdPage,
-                                        initialSpec: spec
-                                    })
-                                } else if (action === "edit") {
-                                    dashboardChooserPopup.close()
-                                    obdPage.stackView.push("dashboards/editor/DashboardEditor.qml", {
-                                        stackView: obdPage.stackView,
-                                        callerPage: obdPage,
-                                        editingId: card.dash.id
-                                    })
-                                } else if (action === "share") {
-                                    shareMenu.dashId = card.dash.id
-                                    shareMenu.popup()
-                                } else if (action === "home") {
-                                    // The Home screen shows this one (Home is a dashboard)
-                                    dashboardManager.setHomeDashboard(card.dash.id)
-                                } else if (action === "duplicate") {
-                                    // Empty label → manager appends " (Copy)".
-                                    dashboardManager.duplicateDashboard(card.dash.id, "")
-                                } else if (action === "delete") {
-                                    if (!card.confirmingDelete) {
-                                        card.confirmingDelete = true
-                                        deleteConfirmTimer.restart()
-                                        return
-                                    }
-                                    card.confirmingDelete = false
-                                    obdPage.deleteUserDashboard(card.dash.id)
-                                }
-                            }
-
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: width * 0.72
-                            radius: dpMin(12, 4)
-                            color: obdPage.activeDashboardId === modelData.id
-                                   ? Qt.lighter(App.Style.obdBoxBackground, 1.18)
-                                   : (choiceMouse.containsMouse
-                                      ? Qt.lighter(App.Style.obdBoxBackground, 1.1)
-                                      : Qt.darker(App.Style.obdBoxBackground, 1.05))
-                            border.color: obdPage.activeDashboardId === modelData.id
-                                          ? App.Style.obdBarColor
-                                          : Qt.darker(App.Style.obdBarColor, 1.5)
-                            border.width: obdPage.activeDashboardId === modelData.id ? 3 : 1
-
-                            Behavior on color { ColorAnimation { duration: 120 } }
-                            Behavior on border.width { NumberAnimation { duration: 120 } }
-
-                            ColumnLayout {
-                                anchors.fill: parent
-                                anchors.margins: dp(10)
-                                spacing: dp(8)
-
-                                // Preview "screen" — shows a scaled miniature of the
-                                // real dashboard QML. For the built-in "grid" entry
-                                // (Parameter Cards, no standalone QML), falls back to
-                                // the schematic gridPreview Component.
-                                Rectangle {
-                                    id: previewScreen
-                                    Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    radius: dpMin(8, 2)
-                                    color: App.Style.backgroundColor
-                                    clip: true
-
-                                    // Schematic fallback for Parameter Cards
-                                    Loader {
-                                        anchors.fill: parent
-                                        anchors.margins: dp(8)
-                                        active: modelData.id === "grid"
-                                        sourceComponent: active ? gridPreview : null
-                                    }
-
-                                    // Live miniature for everything else: render
-                                    // the real dashboard at full natural size and
-                                    // scale it down to fit the card. Loader is
-                                    // active while the popup is open (starting at
-                                    // aboutToShow so instantiation overlaps the
-                                    // popup enter animation), and the contents
-                                    // fade in only after gauge bindings have
-                                    // settled — hides the 140ms 0→value animation
-                                    // baked into the gauge primitives.
-                                    Item {
-                                        id: miniStage
-                                        visible: modelData.id !== "grid"
-                                        width: Math.max(1, obdPage.width)
-                                        height: Math.max(1, obdPage.height - dp(80))
-                                        anchors.centerIn: parent
-                                        transformOrigin: Item.Center
-                                        scale: Math.min(
-                                            previewScreen.width / Math.max(1, width),
-                                            previewScreen.height / Math.max(1, height)
-                                        )
-
-                                        property bool settled: false
-                                        opacity: settled ? 1 : 0
-                                        Behavior on opacity {
-                                            NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
-                                        }
-
-                                        // Miniature is a DashboardRenderer bound to the
-                                        // same JSON spec the main view uses — guaranteed
-                                        // 1:1 with what the user will see full-size.
-                                        Dashboards.DashboardRenderer {
-                                            id: miniRenderer
-                                            anchors.fill: parent
-                                            spec: (miniStage.visible
-                                                   && dashboardChooserPopup.preloadMinis
-                                                   && typeof dashboardManager !== "undefined"
-                                                   && dashboardManager)
-                                                  ? dashboardManager.loadDashboard(modelData.id)
-                                                  : null
-
-                                            onSpecChanged: {
-                                                if (spec && Object.keys(spec).length > 0) {
-                                                    settleTimer.restart()
-                                                } else {
-                                                    miniStage.settled = false
-                                                }
-                                            }
-                                        }
-
-                                        Timer {
-                                            id: settleTimer
-                                            interval: 180
-                                            onTriggered: miniStage.settled = true
-                                        }
-
-                                        // Reset on close so the fade replays next open
-                                        Connections {
-                                            target: dashboardChooserPopup
-                                            function onClosed() { miniStage.settled = false }
-                                        }
-                                    }
-                                }
-
-                                // Label row with active indicator dot
-                                Row {
-                                    Layout.alignment: Qt.AlignHCenter
-                                    spacing: dp(6)
-
-                                    Rectangle {
-                                        visible: obdPage.activeDashboardId === modelData.id
-                                        width: dp(8)
-                                        height: width
-                                        radius: width / 2
-                                        color: App.Style.obdBarColor
-                                        anchors.verticalCenter: parent.verticalCenter
-                                    }
-                                    Text {
-                                        text: modelData.label
-                                        color: obdPage.activeDashboardId === modelData.id
-                                               ? App.Style.obdBarColor
-                                               : App.Style.obdValueColor
-                                        font.pixelSize: App.Spacing.overallText
-                                        font.bold: true
-                                        font.family: obdPage.globalFont
-                                    }
-                                }
-                            }
-
-                            MouseArea {
-                                id: choiceMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    obdPage.setActiveDashboard(modelData.id)
-                                    dashboardChooserPopup.close()
-                                }
-                            }
-
-                            // Card actions (Phase 3 Milestone C): always-visible
-                            // buttons, no long-press (discoverability-hostile in
-                            // a glance-and-go in-car UI — see roadmap). Duplicate
-                            // and Delete on every JSON dashboard (deleting a
-                            // built-in hides it until "Restore defaults"); Edit
-                            // only on user-authored ones. The "grid" sentinel
-                            // (Parameter Cards) has no JSON spec and can't be
-                            // deleted, so no actions at all.
-                            // One line at the card's right while it fits
-                            // (oneLine); in a narrow card (an upright window)
-                            // the buttons wrap inside it. As a plain Row they
-                            // ran over the neighbouring card, cut at the left.
-                            Flow {
-                                id: cardActions
-                                visible: card.dash.id !== "grid"
-                                anchors.top: parent.top
-                                anchors.right: parent.right
-                                anchors.topMargin: dp(8)
-                                anchors.rightMargin: dp(8)
-                                spacing: dp(6)
-                                z: 2
-                                // Summed over children, which notifies as
-                                // each button arrives. Repeater.itemAt() does
-                                // not: on a page pre-built in the background
-                                // the buttons are created after the Repeater
-                                // reports its count, so the sum stayed 0 and
-                                // they stacked outside the card (0.9.6-rc3).
-                                readonly property real oneLine: {
-                                    var w = 0, n = 0
-                                    for (var i = 0; i < children.length; i++) {
-                                        var b = children[i]
-                                        if (b.shown === true) { w += b.width; n++ }
-                                    }
-                                    return w + Math.max(0, n - 1) * spacing
-                                }
-                                width: Math.min(Math.ceil(oneLine), card.width - dp(16))
-
-                                Repeater {
-                                    id: cardActionButtons
-                                    model: [
-                                        { "action": "edit",      "label": "Edit",   "danger": false, "show": card.dash.builtIn === false },
-                                        { "action": "customize", "label": "Customize", "danger": false, "show": card.dash.builtIn === true },
-                                        { "action": "home",      "label": dashboardManager.homeDashboardId === card.dash.id ? "Home \u2713" : "Use as Home",
-                                          "danger": false, "show": true },
-                                        { "action": "duplicate", "label": "Copy",   "danger": false, "show": true },
-                                        { "action": "share",     "label": "Share",  "danger": false, "show": true },
-                                        // (the built-in Home is what Home falls back to: it stays)
-                                        { "action": "delete",    "label": "Delete", "danger": true,  "show": card.dash.id !== "home" }
-                                    ]
-                                    delegate: Rectangle {
-                                        objectName: "dashCard_" + card.dash.id + "_" + modelData.action
-                                        readonly property bool shown: modelData.show
-                                        visible: shown
-                                        width: actionLabel.implicitWidth + dp(16)
-                                        height: actionLabel.implicitHeight + dp(10)
-                                        radius: dpMin(6, 2)
-                                        color: Qt.rgba(0, 0, 0, actionMouse.pressed ? 0.7 : 0.45)
-                                        border.color: modelData.danger ? App.Style.statusDanger : App.Style.accent
-                                        border.width: 1
-
-                                        Text {
-                                            id: actionLabel
-                                            anchors.centerIn: parent
-                                            text: (modelData.action === "delete" && card.confirmingDelete)
-                                                  ? "Sure?" : modelData.label
-                                            color: modelData.danger ? App.Style.statusDanger : App.Style.accent
-                                            font.pixelSize: App.Spacing.overallText * 0.75
-                                            font.bold: true
-                                            font.family: obdPage.globalFont
-                                        }
-
-                                        MouseArea {
-                                            id: actionMouse
-                                            anchors.fill: parent
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: card.triggerAction(modelData.action)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 
     // RPM shift light editor (the RPM card opens it)

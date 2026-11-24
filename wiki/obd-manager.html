@@ -127,9 +127,9 @@ Desktop                                   Android
           <thead><tr><th>QML file</th><th>What it uses</th></tr></thead>
           <tbody>
             <tr><td><span class="file-path">frontend/OBDParameterModel.qml</span></td><td>Serves the C++ <code>paramStore</code> (fed from <code>parameterSampled</code> in <span class="file-path">appcore.cpp</span>) as <code>liveValue(id)</code> and the <code>ParameterCatalog</code> metadata. Gauges, the parameter-card grid and home cards read this shared model; the global RPM overlays also listen directly to <code>rpmChanged</code>.</td></tr>
-            <tr><td><span class="file-path">frontend/OBDMenu.qml</span></td><td>Parameter-card grid (one card per parameter the connected vehicle supports; registers the <code>"cards"</code> poll demand), the dashboards chooser/renderer, the RPM/shift-light settings popup. While no adapter is connected no dashboard renders at all (<code>obdConnected</code> gates the renderer, the cards grid, swipe and the page dots): the page shows "No vehicle connected" and a "Connect Bluetooth OBD2" button (<code>obdConnectButton</code>) that opens <code>OBDAdapterSheet</code>, whichever dashboard is active.</td></tr>
+            <tr><td><span class="file-path">frontend/OBDMenu.qml</span></td><td>Parameter-card grid (one card per parameter the connected vehicle supports; registers the <code>"cards"</code> poll demand), the RPM/shift-light settings popup. While no adapter is connected (<code>obdConnected</code>) the page shows "No vehicle connected" and a "Connect" button (<code>obdConnectButton</code>) that opens <code>OBDAdapterSheet</code>.</td></tr>
             <tr><td><span class="file-path">frontend/OBDAdapterSheet.qml</span></td><td>Everything on <code>obdAdapterFinder</code>; in fallback mode <code>availableAdapters</code>, <code>scan()</code> and <code>connectToAdapter()</code>; <code>connected</code> closes the sheet 1.5 s after the adapter comes up.</td></tr>
-            <tr><td><span class="file-path">frontend/OBDHome.qml</span></td><td>Status row bound to <code>connectionStatusChanged</code> / <code>connectionStatusDetailChanged</code> and the sub-page buttons; while <code>connected</code> is false, only "No vehicle connected" and the "Connect Bluetooth OBD2" button (<code>OBDConnectButton</code>).</td></tr>
+            <tr><td><span class="file-path">frontend/OBDHome.qml</span></td><td>Status row bound to <code>connectionStatusChanged</code> / <code>connectionStatusDetailChanged</code> and the sub-page buttons; while <code>connected</code> is false, only "No vehicle connected" and the "Connect" button (<code>OBDConnectButton</code>).</td></tr>
             <tr><td><span class="file-path">frontend/OBDDiagnostics.qml</span></td><td><code>enterDiagnosticMode()</code> on creation and on every <code>visible</code> transition, <code>exitDiagnosticMode()</code> when hidden or destroyed, plus <code>readDtc</code> / <code>readCurrentDtc</code> / <code>readStatus</code> / <code>readFreezeFrame</code> / <code>clearDtc</code>.</td></tr>
             <tr><td><span class="file-path">frontend/HomeOBDView.qml</span></td><td>Home-screen cards for the parameters in <code>homeOBDParameters</code>, plus the RPM card's shift-light disc.</td></tr>
             <tr><td><span class="file-path">frontend/Main.qml</span></td><td>Connects <code>obdManager.rpmChanged</code> by hand in <code>Component.onCompleted</code> to drive the global full-screen flash and aura overlays.</td></tr>
@@ -138,7 +138,7 @@ Desktop                                   Android
         </table>
 
         <h2 id="simulated-adapter">Simulated Adapter</h2>
-        <p>Open <strong>Connect OBD2 Adapter</strong> and choose <strong>Simulated car</strong>. This entry is always available, including with Bluetooth off, on desktop, mobile and WebAssembly. It starts an automatic demo drive through the real ELM327 parser and poller, plus simulated IMU motion; no developer flags are required. <code>obdManager.simulated</code> identifies demo data, and the OBD screens display a Simulated label. Choosing hardware or closing the connection stops the demo motion. The saved hardware adapter is preserved, so a restart returns to the normal hardware configuration.</p>
+        <p>Open <strong>Connect OBD2 Adapter</strong> and choose <strong>Simulated car</strong>. This entry is always available, including with Bluetooth off, on desktop, mobile and WebAssembly. It starts an automatic demo drive through the real ELM327 parser and poller, plus simulated IMU motion; no developer flags are required. <code>obdManager.simulated</code> identifies demo data, and the OBD settings page shows a Simulated label beside the connection status (the OBD pages themselves no longer do, since their title and status rows went on 2026-11-24). Choosing hardware or closing the connection stops the demo motion. The saved hardware adapter is preserved, so a restart returns to the normal hardware configuration.</p>
         <p>Service frontends can select it with <code>obdManager.connectToAdapter("sim://elm327")</code>. Both adapter lists include it. Android sends this custom transport through the worker instead of the Java Bluetooth bridge.</p>
 
         <!-- Connection Flow -->
@@ -433,7 +433,7 @@ ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
         <p>
           <code>OBDAdapterFinder</code> (QML <code>obdAdapterFinder</code>, <span class="file-path">src/managers/obdadapterfinder.{h,cpp}</span>,
           with BlueZ pairing in <span class="file-path">src/platform/bluezpairer.{h,cpp}</span>) lets someone connect an adapter without knowing its MAC or
-          pairing it in the OS first. The "Connect Bluetooth OBD2" button on the empty Parameter Cards page and "Find Bluetooth
+          pairing it in the OS first. The "Connect" button on the empty Parameter Cards page and "Find Bluetooth
           Adapters" in Settings &rarr; OBD &rarr; Connection both open <span class="file-path">frontend/OBDAdapterSheet.qml</span>, which starts a scan.
           Phase 1 of <span class="file-path">TODO/obd-adapter-discovery.md</span>: the full flow runs on desktop Linux (Pi / Orange Pi included).
           On every other platform <code>supported</code> is false and the sheet lists <code>obdManager.availableAdapters</code> instead
@@ -650,9 +650,8 @@ QTimer::singleShot(delay * <span class="num">1000</span>, <span class="kw">this<
           Polling is <strong>demand-driven</strong>: OCTAVE polls what is on screen, not a list of parameters switched on
           in settings. Every consumer registers the parameter ids it shows with
           <code>obdManager.setParameterDemand(consumer, ids)</code> (an empty list removes the consumer). The QML
-          consumers are <code>"dashboard"</code> (the active dashboard's PIDs), <code>"cards"</code> (every supported PID
-          while Parameter Cards is open), <code>"home"</code> (the Home screen OBD tiles), <code>"editor"</code> (the
-          dashboard editor canvas), <code>"settings"</code> (the OBD settings parameter list while it is shown) and
+          consumers are <code>"homeDashboard"</code> (the PIDs of the dashboard Home shows), <code>"dashboard"</code> (a dashboard previewed from a browser, on the OBD page), <code>"cards"</code> (every supported PID
+          while Parameter Cards is open), <code>"home"</code> (the classic Home's OBD tiles) and
           <code>"carMenu"</code> (RPM and SPEED for the 3D Jeep's engine and driveline while CarMenu is on screen).
         </p>
         <p>The poll set is built by <code>buildPidsToWatch()</code>:</p>
@@ -1120,7 +1119,6 @@ std::optional&lt;QString&gt; ResponseBuffer::<span class="fn">getResponse</span>
             <tr><td><code>obdSavedAdapters</code></td><td><code>"[]"</code></td><td>MACs remembered by <code>connectToAdapter</code> as quick-connect chips.</td></tr>
             <tr><td><code>rpm_flags</code>, <code>rpm_max_rpm</code>, <code>rpm_shift_light_enabled</code>, <code>rpm_show_on_home_card</code>, <code>rpm_shift_light_size</code>, <code>rpm_glow_size</code>, <code>rpm_glow_intensity</code>, <code>rpm_color_transition_speed</code>, <code>rpm_pulse_enabled</code>, <code>rpm_fullscreen_flash_opacity</code></td><td><code>"[]"</code>, 8000, true, true, 0.5, 0.6, 0.6, 100, false, 0.5</td><td>Shift light (generic <code>save_setting</code> / <code>get_setting_with_default</code> keys).</td></tr>
             <tr><td><code>obdCardStyleCircular</code></td><td><code>false</code></td><td>Parameter-card grid: circular gauges instead of square cards.</td></tr>
-            <tr><td><code>activeDashboard</code>, <code>dashboardEditorDraft</code></td><td><code>"grid"</code>, <code>""</code></td><td>See <a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>.</td></tr>
             <tr><td><code>lastOBDPage</code></td><td><code>""</code></td><td>Last visited OBD sub-page indicator on <code>OBDHome</code>.</td></tr>
           </tbody>
         </table>

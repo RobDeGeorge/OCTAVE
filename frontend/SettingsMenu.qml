@@ -36,7 +36,7 @@ Item {
           subSections: ["Library & Playback", "Spotify"] },
         { name: "OBD",         section: "obdSettings",         source: "settings/OBDSettingsPage.qml", icon: "\u26A1", iconSource: Style.assetBase + "cat_obd.svg",
           group: "Connectivity",
-          subSections: ["Connection", "Home Gauges", "Black Box", "Advanced"] },
+          subSections: ["Connection", "Black Box", "Advanced"] },
         { name: "Phone",       section: "phoneSettings",       source: "settings/PhoneSettingsPage.qml", icon: "\u260E", iconSource: Style.assetBase + "cat_accessories.svg",
           group: "Connectivity",
           desktopOnly: true,

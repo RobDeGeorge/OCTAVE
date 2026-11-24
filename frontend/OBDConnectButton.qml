@@ -2,7 +2,7 @@ import QtQuick 2.15
 import "." as App
 import OCTAVE.OBD 1.0
 
-// "Connect Bluetooth OBD2": opens the adapter sheet, which scans, pairs and
+// "Connect": opens the adapter sheet, which scans, pairs and
 // connects (OBDAdapterSheet.qml). Shown by the OBD pages while no adapter
 // is connected (OBDHome.qml, the connect prompt in OBDMenu.qml).
 Rectangle {
@@ -34,7 +34,7 @@ Rectangle {
     Text {
         id: obdConnectLabel
         anchors.centerIn: parent
-        text: obdConnectButton._connecting ? "Connecting…" : "Connect Bluetooth OBD2"
+        text: obdConnectButton._connecting ? "Connecting…" : "Connect"
         color: App.Style.accent
         font.pixelSize: App.Spacing.overallText
         font.bold: true

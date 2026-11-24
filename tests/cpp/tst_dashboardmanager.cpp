@@ -30,6 +30,22 @@ class TstDashboardManager : public QObject
 {
     Q_OBJECT
 
+    // The built-ins these tests work on: the shipped ones (only "home"
+    // since 2026-11-24) plus two more of the tests' own ("sport", "minimal"
+    // in fixtures/presets), in one directory as the manager wants them
+    QString presetsDir()
+    {
+        if (!m_presets) {
+            m_presets = std::make_unique<QTemporaryDir>();
+            for (const QString &from : {QStringLiteral(OCTAVE_SOURCE_DIR "/frontend/dashboards/presets"),
+                                        QStringLiteral(OCTAVE_SOURCE_DIR "/tests/cpp/fixtures/presets")})
+                for (const QString &name : QDir(from).entryList({"*.json"}, QDir::Files))
+                    QFile::copy(from + "/" + name, m_presets->path() + "/" + name);
+        }
+        return m_presets->path();
+    }
+    std::unique_ptr<QTemporaryDir> m_presets;
+
 private slots:
     void init()
     {
@@ -40,7 +56,7 @@ private slots:
         qputenv("XDG_CONFIG_HOME", (m_tmp->path() + "/config").toUtf8());
         qputenv("XDG_DOWNLOAD_DIR", (m_tmp->path() + "/dl").toUtf8());
         m_dm = std::make_unique<DashboardManager>();
-        m_dm->setPresetsDir(QStringLiteral(OCTAVE_SOURCE_DIR "/frontend/dashboards/presets"));
+        m_dm->setPresetsDir(presetsDir());
         m_dm->setWidgetCatalogFile(QStringLiteral(OCTAVE_SOURCE_DIR "/frontend/dashboards/widget-catalog.json"));
         m_dm->setTemplatesDir(QStringLiteral(OCTAVE_SOURCE_DIR "/frontend/dashboards/templates"));
         m_dm->setUserDir(m_tmp->path() + "/dashboards");
@@ -267,7 +283,7 @@ private slots:
         // Every shipped dashboard renders exactly as written
         const QDir presets(QStringLiteral(OCTAVE_SOURCE_DIR "/frontend/dashboards/presets"));
         const QStringList files = presets.entryList({"*.json"}, QDir::Files);
-        QVERIFY(files.size() >= 5);
+        QVERIFY(files.size() >= 1);   // "home"; the others went on 2026-11-24
         for (const QString &name : files) {
             QFile f(presets.filePath(name));
             QVERIFY(f.open(QIODevice::ReadOnly));
@@ -892,7 +908,7 @@ private slots:
 
     void presetsHavePortraitLayouts()
     {
-        for (const QString id : {"sport", "minimal", "fullgrid", "performance", "tj-wrangler", "home"}) {
+        for (const QString id : {"sport", "minimal", "home"}) {
             const QVariantMap spec = m_dm->loadDashboard(id).toMap();
             QVERIFY2(spec.value("schema").toInt() == 2, qPrintable(id));
             const QVariantMap portrait = spec.value("layouts").toMap().value("portrait").toMap();
@@ -928,7 +944,7 @@ private slots:
 
         // The choice is on disk
         DashboardManager again;
-        again.setPresetsDir(QStringLiteral(OCTAVE_SOURCE_DIR "/frontend/dashboards/presets"));
+        again.setPresetsDir(presetsDir());
         again.setUserDir(m_tmp->path() + "/dashboards");
         QCOMPARE(again.homeDashboardId(), mine);
 
@@ -945,7 +961,7 @@ private slots:
     void homePresetIsTheDefaultHomeSpec()
     {
         QVariantMap built = DashboardManager::homeSpec(
-            {"SPEED", "RPM", "COOLANT_TEMP", "CONTROL_MODULE_VOLTAGE"}, true, false);
+            {"SPEED", "RPM", "COOLANT_TEMP", "CONTROL_MODULE_VOLTAGE"}, true);
         built.insert("id", "home");
         built.insert("label", "Home");
         QCOMPARE(QJsonObject::fromVariantMap(m_dm->loadDashboard("home").toMap()), QJsonObject::fromVariantMap(built));
@@ -955,21 +971,18 @@ private slots:
     {
         QTest::addColumn<int>("count");
         QTest::addColumn<bool>("vehicle");
-        QTest::addColumn<bool>("lamp");
         for (int n = 0; n <= 8; ++n)
             for (int v = 0; v < 2; ++v)
-                for (int l = 0; l < 2; ++l)
-                    QTest::addRow("%d readings%s%s", n, v ? ", vehicle" : "", l ? ", shift light" : "") << n << bool(v) << bool(l);
+                QTest::addRow("%d readings%s", n, v ? ", vehicle" : "") << n << bool(v);
     }
 
     void homeSpecsFitTheirGrids()
     {
         QFETCH(int, count);
         QFETCH(bool, vehicle);
-        QFETCH(bool, lamp);
         const QStringList all{"RPM", "SPEED", "COOLANT_TEMP", "CONTROL_MODULE_VOLTAGE", "ENGINE_LOAD", "THROTTLE_POS",
                               "INTAKE_TEMP", "FUEL_LEVEL"};
-        QVariantMap spec = DashboardManager::homeSpec(all.mid(0, count), vehicle, lamp);
+        QVariantMap spec = DashboardManager::homeSpec(all.mid(0, count), vehicle);
         spec.insert("label", "Mine");
         // Saved as written: nothing moved, shrunk or dropped by the rules
         const QString id = m_dm->saveDashboard(spec);
@@ -984,7 +997,7 @@ private slots:
             vehicles += cell.value("type") == "VehicleWidget";
         }
         QCOMPARE(readouts, count);
-        QCOMPARE(lamps, lamp && count > 0 ? 1 : 0);
+        QCOMPARE(lamps, 0);   // Home gets no shift light of its own
         QCOMPARE(vehicles, vehicle ? 1 : 0);
     }
 
@@ -993,20 +1006,20 @@ private slots:
         const QStringList defaults{"SPEED", "RPM", "COOLANT_TEMP", "CONTROL_MODULE_VOLTAGE"};
         // Nothing of the user's own: the built-in, and no dashboard written
         const int before = m_dm->dashboards().size();
-        QCOMPARE(m_dm->migrateClassicHome(defaults, true, false), QString());
+        QCOMPARE(m_dm->migrateClassicHome(defaults, true), QString());
         QCOMPARE(m_dm->dashboards().size(), before);
         QCOMPARE(m_dm->homeDashboardId(), QStringLiteral("home"));
         // Decided: a later run changes nothing
-        QCOMPARE(m_dm->migrateClassicHome({"FUEL_LEVEL"}, false, false), QString());
+        QCOMPARE(m_dm->migrateClassicHome({"FUEL_LEVEL"}, false), QString());
         QCOMPARE(m_dm->dashboards().size(), before);
 
         // A fresh config with the user's own cards and no vehicle card
         QTemporaryDir other;
         DashboardManager dm;
-        dm.setPresetsDir(QStringLiteral(OCTAVE_SOURCE_DIR "/frontend/dashboards/presets"));
+        dm.setPresetsDir(presetsDir());
         dm.setWidgetCatalogFile(QStringLiteral(OCTAVE_SOURCE_DIR "/frontend/dashboards/widget-catalog.json"));
         dm.setUserDir(other.path() + "/dashboards");
-        const QString id = dm.migrateClassicHome({"FUEL_LEVEL", "RPM", "SPEED"}, false, true);
+        const QString id = dm.migrateClassicHome({"FUEL_LEVEL", "RPM", "SPEED"}, false);
         QVERIFY(!id.isEmpty());
         QCOMPARE(dm.homeDashboardId(), id);
         QVERIFY(!dm.isBuiltIn(id));
@@ -1018,9 +1031,9 @@ private slots:
             if (!c.toMap().value("paramId").toString().isEmpty()) bound << c.toMap().value("paramId").toString();
         }
         QCOMPARE(bound, QStringList({"FUEL_LEVEL", "RPM", "SPEED", "PITCH", "ROLL"}));
-        QVERIFY(types.contains("ShiftLightWidget"));
+        QVERIFY(!types.contains("ShiftLightWidget"));
         QVERIFY(!types.contains("VehicleWidget"));
-        QCOMPARE(dm.migrateClassicHome({"SPEED"}, true, false), QString());
+        QCOMPARE(dm.migrateClassicHome({"SPEED"}, true), QString());
         QCOMPARE(dm.homeDashboardId(), id);
     }
 

@@ -42,12 +42,6 @@ ApplicationWindow {
     property bool isVerticalLayout: settingsManager ?
                                    settingsManager.bottomBarOrientation === "side" : false
 
-    // A page that declares `hidesNavigation: true` (the dashboard editor)
-    // gets the whole window while it is on top: no nav bar, so it is left
-    // only through its own Done / Close
-    readonly property bool navigationHidden:
-        !!stackView.currentItem && stackView.currentItem.hidesNavigation === true
-
     // Set initial window size. On desktop use the saved user preference so
     // their previous window size persists across runs. On mobile we must NOT
     // set width/height at all — the Qt Android window manager pillarboxes
@@ -491,13 +485,12 @@ ApplicationWindow {
                 return page
             }
 
-            // Different anchoring based on orientation; the whole window
-            // for a page that hides the navigation (the dashboard editor)
+            // Different anchoring based on orientation
             anchors {
-                left: (isVerticalLayout && !mainWindow.navigationHidden) ? bottomBar.right : parent.left
+                left: isVerticalLayout ? bottomBar.right : parent.left
                 right: parent.right
                 top: parent.top
-                bottom: (isVerticalLayout || mainWindow.navigationHidden) ? parent.bottom : bottomBar.top
+                bottom: isVerticalLayout ? parent.bottom : bottomBar.top
             }
 
             initialItem: MainMenu {
@@ -810,7 +803,6 @@ ApplicationWindow {
         BottomBar {
             id: bottomBar
             z: 0
-            visible: !mainWindow.navigationHidden
             stackView: stackView
             mainWindow: mainWindow
             isVertical: isVerticalLayout

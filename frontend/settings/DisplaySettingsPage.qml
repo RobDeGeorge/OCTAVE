@@ -323,7 +323,7 @@ Flickable {
                 property string style: settingsManager ? settingsManager.get_setting_with_default("homeStyle", "dashboard") : "dashboard"
                 description: style === "classic"
                     ? "The fixed music, readings and sensors panels."
-                    : "Showing the dashboard \u201C" + homeLabel + "\u201D. Press and hold on Home to edit it; any dashboard can be made Home from OBD > Dashboards."
+                    : "Showing the dashboard \u201C" + homeLabel + "\u201D. Dashboards are files in the dashboards folder of OCTAVE\u2019s settings; pick the one Home shows here."
 
                 SettingsSegmentedControl {
                     objectName: "homeStyleControl"
@@ -335,12 +335,29 @@ Flickable {
                         if (settingsManager) settingsManager.save_setting("homeStyle", value)
                     }
                 }
-                SettingsButton {
-                    objectName: "homeDashboardResetButton"
+                // Which dashboard Home shows: the built-in and every file in
+                // <config>/dashboards (two with one name: told apart by id)
+                SettingsChips {
+                    id: homeDashboardChips
+                    objectName: "homeDashboardChips"
                     visible: homeScreenCategory.style !== "classic" && !!homeScreenCategory.dm
-                             && homeScreenCategory.dm.homeDashboardId !== "home"
-                    text: "Use the default Home"
-                    onClicked: homeScreenCategory.dm.setHomeDashboard("")
+                    readonly property var list: homeScreenCategory.dm ? homeScreenCategory.dm.dashboards : []
+                    function name(d) {
+                        var same = 0
+                        for (var i = 0; i < list.length; i++) if (list[i].label === d.label) same++
+                        return same > 1 ? d.label + " (" + d.id + ")" : d.label
+                    }
+                    options: list.map(function(d) { return homeDashboardChips.name(d) })
+                    currentValue: {
+                        var id = homeScreenCategory.dm ? homeScreenCategory.dm.homeDashboardId : ""
+                        for (var i = 0; i < list.length; i++)
+                            if (list[i].id === id) return name(list[i])
+                        return ""
+                    }
+                    onSelected: function(value) {
+                        for (var i = 0; i < list.length; i++)
+                            if (name(list[i]) === value) { homeScreenCategory.dm.setHomeDashboard(list[i].id); return }
+                    }
                 }
             }
 

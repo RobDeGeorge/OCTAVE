@@ -1,6 +1,8 @@
 # Dashboards: on-device checks
 
 **Goal:** prove the dashboard editor and demand-driven polling work on a real touchscreen and a real car.
+**Note (2026-11-24):** the in-app dashboard editor and the OBD page's chooser were removed; dashboards are JSON files and Home shows one. Every step below about the editor, the chooser, swipe or auto-show is moot. What still stands is the polling and renderer checks in the car.
+
 **Status:** active. Primitives, JSON dashboards, the in-app editor, renderer validation and user-folder hot-reload are all done and verified on desktop (2026-09-08 and 2026-10-04 passes).
 **Last updated:** 2026-10-30
 

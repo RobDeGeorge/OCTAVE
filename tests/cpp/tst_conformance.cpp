@@ -183,9 +183,11 @@ private slots:
                 }
             }
         }
-        // The scan still finds the handlers: 122 after SettingsToggle stopped
-        // needing a re-sync Connections per toggle (it was 150-odd before)
-        QVERIFY2(checked > 100, qPrintable(QString::number(checked)));
+        // The scan still finds the handlers: 100 after the dashboard editor,
+        // the OBD page's chooser and the hub pages' status rows went
+        // (2026-11-24); 122 before that, 150-odd before SettingsToggle
+        // stopped needing a re-sync Connections per toggle
+        QVERIFY2(checked > 80, qPrintable(QString::number(checked)));
         QVERIFY2(offenders.isEmpty(), qPrintable("Connections handlers for signals the service doesn't publish: "
                                                  + offenders.join("; ")));
     }

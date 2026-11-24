@@ -2,12 +2,13 @@
 //
 // Home as a dashboard: the dashboard dashboardManager.homeDashboardId names
 // (the built-in "home" until the user picks or makes another), drawn by the
-// same DashboardRenderer as the OBD menu's dashboards, here with taps:
+// DashboardRenderer. Dashboards are not made in the app: each is a JSON
+// file in <config>/dashboards/ (docs/GAUGE_AUTHORING.md), and Settings >
+// Display > Home Screen picks the one shown here.
 //
-//   a tap on a widget opens its page (music, the OBD menu, Sensors, the
-//   vehicle settings), by the action DashboardRenderer.cellTapped() gives;
-//   a press held anywhere opens the dashboard editor on Home's dashboard
-//   (a built-in opens as an unsaved copy, which becomes Home when saved).
+// A tap on a widget can open its page (music, the OBD menu, Sensors, the
+// vehicle settings; the action DashboardRenderer.cellTapped() gives). That
+// is switched off for now: tapsOpenPages.
 //
 // With nothing connected the widgets would only read "--", so this page lays
 // the first-run prompts over them: "No vehicle connected" + Connect over the
@@ -73,30 +74,12 @@ Item {
         wanted: home.visible && renderer.usesImu
     }
 
-    // ── Editing ──
-    // The editor's save hook (it calls callerPage.setActiveDashboard(savedId))
-    function setActiveDashboard(id) {
-        if (_dm) _dm.setHomeDashboard(id)
-    }
-    function openEditor() {
-        if (!_dm || !stackView || homeId === "")
-            return
-        var args = { stackView: home.stackView, callerPage: home }
-        if (_dm.isBuiltIn(homeId)) {
-            // A built-in is read-only: an unsaved copy, Home once it is saved
-            var copy = _dm.loadDashboard(homeId)
-            if (!copy || !copy.cells) return
-            copy.label = homeId === "home" ? "My Home" : (copy.label || "Home") + " (mine)"
-            delete copy.id
-            args.initialSpec = copy
-        } else {
-            args.editingId = homeId
-        }
-        stackView.push("dashboards/editor/DashboardEditor.qml", args)
-    }
-
+    // Off while the new Home is being worked out (2026-11-24): a tap on a
+    // widget or beside a prompt goes nowhere. The prompts' own buttons still
+    // work.
+    property bool tapsOpenPages: false
     function openAction(action) {
-        if (!stackView) return
+        if (!stackView || !tapsOpenPages) return
         if (action === "media") {
             var page = (typeof settingsManager !== "undefined" && settingsManager) ? settingsManager.musicButtonDefaultPage : "mediaRoom"
             stackView.openPage(page === "mediaPlayer" ? "MediaPlayer.qml" : "MediaRoom.qml")
@@ -116,7 +99,6 @@ Item {
         spec: home.spec
         interactive: true
         onCellTapped: function(action, index) { home.openAction(action) }
-        onPressAndHold: home.openEditor()
     }
 
     // ── What the cells are, for the prompts ──
@@ -171,7 +153,7 @@ Item {
         border.color: Qt.darker(App.Style.obdBarColor, 1.4)
         border.width: 1
         // A tap beside the button still opens the OBD menu
-        TapHandler { onTapped: home.openAction("obd"); onLongPressed: home.openEditor() }
+        TapHandler { onTapped: home.openAction("obd") }
 
         Column {
             anchors.centerIn: parent
@@ -240,23 +222,25 @@ Item {
         }
     }
 
-    // No music yet, over each Now Playing widget with the room for it
+    // No Music Loaded, over each Now Playing widget with the room for it
     Repeater {
         model: home.musicEmpty ? home._ofKind("media") : []
         delegate: Rectangle {
             required property var modelData
-            visible: modelData.rect.width >= home.dp(200) && modelData.rect.height >= home.dp(150)
+            // (a low cell keeps the buttons and drops the words: maxHeight)
+            visible: modelData.rect.width >= home.dp(200)
+                     && modelData.rect.height >= App.Spacing.bottomBarNavButtonHeight + home.dp(16)
             x: modelData.rect.x; y: modelData.rect.y
             width: modelData.rect.width; height: modelData.rect.height
             radius: home.dp(8)
             color: App.Style.obdBoxBackground
             border.color: Qt.darker(App.Style.obdBarColor, 1.4)
             border.width: 1
-            TapHandler { onLongPressed: home.openEditor() }
             App.MusicEmptyPrompt {
                 objectName: "homeMusicPrompt"
                 anchors.centerIn: parent
                 width: parent.width - home.dp(24)
+                maxHeight: parent.height - home.dp(16)
                 stackView: home.stackView
                 mainWindow: home.mainWindow
                 fontFamily: App.Style.fontFamily

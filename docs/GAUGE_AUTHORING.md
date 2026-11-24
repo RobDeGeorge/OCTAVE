@@ -390,7 +390,7 @@ automatically look correct.
 
 ## 5. Recipe: add a new dashboard
 
-As of Phase 2, dashboards are **JSON specs**, not hand-written QML. `DashboardRenderer.qml` reads a spec and instantiates widgets into a grid. `OBDMenu.qml` hosts the renderer and a modal chooser popup; the active dashboard id persists under the `activeDashboard` setting. The default choice (`"grid"`) shows the built-in Parameter Cards view in `OBDMenu.qml` itself: one card for every PID the connected vehicle reported in this session's supported-PID scan (empty, with an explanatory message, until a vehicle answers). A horizontal swipe anywhere on the page cycles Parameter Cards and every dashboard (wrapping); page dots under the header show the position. Nothing renders until `obdManager.connected` is true (`obdPage.obdConnected`): while disconnected the renderer is hidden with a `null` spec (widgets unloaded), swipe and the dots are off, and the page shows the "No vehicle connected" prompt with the connect button in place of the active dashboard. The chooser and editor still work offline.
+Dashboards are **JSON specs**, not hand-written QML, and they are **not made in the app** (since 2026-11-24): you write the file, the app shows it. `DashboardRenderer.qml` reads a spec and instantiates widgets into a grid. **Home shows one dashboard** (§5.5): the built-in `home`, or any file in the user dashboards directory picked in Settings > Display > Home Screen. `OBDMenu.qml` is the Parameter Cards only (one card for every PID the connected vehicle reported in this session's supported-PID scan); it shows no dashboards, except that a dashboard being edited in the browser editor previews there.
 
 ### 5.1 Dashboard JSON schema (1 and 2)
 
@@ -502,117 +502,56 @@ Per cell: `type` matches a widget registered in `WidgetCatalog` — the gauge pr
 ### 5.2 Add a built-in preset
 
 1. Write `frontend/dashboards/presets/my-board.json` using the schema above.
-2. Restart the app. `DashboardManager` enumerates `presets/` on startup and the chooser picks it up. No code changes.
+2. Restart the app. `DashboardManager` enumerates `presets/` on startup; it is then one of the dashboards Settings > Display > Home Screen offers. No code changes. (`home.json` is the only one shipped.)
 
 ### 5.3 Add a user dashboard
 
-**Primary path — the in-app editor.** In the dashboard chooser (square
-Dashboards button at the top-right of `OBDMenu.qml`), tap **+ New** — or
-**Edit** on a user dashboard, or **Customize** on a built-in (the editor
-opens on an unsaved copy named "… (mine)", saved under its own id on Done).
-**+ New** opens the template gallery (`TemplateGallery.qml`): live
-miniatures of `frontend/dashboards/templates/*.json` (Hero + 4, 2 up, 2 × 2,
-3 × 2, Six-field strip, Track, Economy, Towing temps, Media + gauges,
-Blank), each slot filled with the PIDs the connected car reports
-(`dashboardManager.fromTemplate(id, supported)`, see §5.7), laid out again
-on the screen's grid density when the editor opens.
-The editor is full screen and touch first (select, then manipulate): tap a
-widget to select it, and a floating toolbar offers **Data** (the PID picker),
-**Settings**, **S / M / L** sizes (from the catalog's `minSize` / `aspect`),
-**Duplicate** and **Delete** (undoable from the snackbar). Drag the selected
-widget to move it (press and hold drags any widget); neighbours slide aside
-live, a widget it lands on swaps with it when it fits the gap, and a drop
-with no room turns the ghost red with the reason. With a widget selected, tap
-another one to **Swap**, or free space to **Move here**; with nothing selected,
-tap free space to **Add here**, or use **+ Add**. The corner grip resizes,
-never below the widget's readable minimum. The grid is Coarse / Normal / Fine
-(4 × 3, 6 × 4, 12 × 8; a new dashboard starts at the finest whose cells are at
-least 12 mm on the screen). Undo / Redo (top bar, Ctrl+Z / Ctrl+Y) step
-through up to 50 edits. **Settings** opens the properties panel as a side
-sheet (bottom sheet in portrait) and zooms the dashboard to fit beside it.
-The widget gallery (`PalettePopup.qml`, from Add here / + Add) shows every
-widget live on its catalog `demo` PID, by `category`, with its `description`
-and a search; **What do you want to see?** asks for a PID first and places
-the widget the catalog's `suggestions` propose for it, already bound. The
-PID picker lists parameters by system (`group`), the last few picks under
-Recent, with live values. The settings sheet has sections: **Data** (the PID
-and its live value) · **Look** (title / unit overrides, colour swatches, the
-`section: "look"` options) · **Range & alerts** (min / max, warning /
-critical limits, flash, and a **Test value** slider that drives this widget
-only and is never saved) · **Advanced** (the other options, position and
-size steppers) · **JSON** (the props as text, applied through the spec
-rules) → **Remove**. **Portrait** (top bar) switches the canvas to the
-portrait layout, shown as an upright screen (derived the first time from the
-landscape one; the editor opens on it on an upright screen and
-follows the screen until the first edit); data and
-options are shared, positions are each layout's own. A status line says
-what each value on the dashboard gets from the adapter ("6 values from the
-car · about 2.5 updates a second each", amber under one a second). Editing
-pauses while the car moves (above about 5 km/h): "I'm a passenger" lifts it
-for the session, and the Grid · Demo menu's *Allow editing while driving*
-(the `dashboardEditWhileDriving` setting) for good. Saving writes the JSON below through
-`dashboardManager.saveDashboard()` and the chooser refreshes immediately.
-Editor sources live in `frontend/dashboards/editor/` (`DashboardEditor`,
-`EditorCanvas`, `PalettePopup`, `PIDPicker`, `PropertiesPanel`); the widget
-set, palette metadata, and curated editable props all come from the
-widget catalog: the data in `frontend/dashboards/widget-catalog.json`
-(served as `dashboardManager.widgetCatalog`, published as
+**Write the file.** A user dashboard is one JSON file with the schema above.
+There is no editor in the app: the touch editor (`frontend/dashboards/editor/`)
+and the OBD page's chooser were removed on 2026-11-24. The widget set and the
+props each type takes come from the widget catalog: the data in
+`frontend/dashboards/widget-catalog.json` (served as
+`dashboardManager.widgetCatalog`, published as
 `docs/api/widget-catalog.json`), which the `WidgetCatalog` singleton
 (`frontend/dashboards/WidgetCatalog.qml`) pairs with each type's QML url.
 
-**PID picker and the vehicle gate.** With no vehicle scanned this session the
-picker lists every PID. Once a connected vehicle has answered the
-supported-PID scan, its PIDs sort first in each group and the rest are greyed
-("Not supported by this vehicle") but stay assignable — a dashboard may be
-built for another car or shared. The panel warns when the bound PID is
-unsupported, and at render time `DashboardRenderer` swaps such a cell for a
-"Not supported by this vehicle" placeholder (see §5.6).
+**Show it.** Settings > Display > Home Screen lists every dashboard as a chip
+(`homeDashboardChips`); the one picked is what Home shows
+(`dashboardManager.setHomeDashboard(id)`).
 
-**Reuse.** The toolbar's **Style** menu: *Copy style* / *Paste style* carry
-a widget's look (its `look` and `advanced` options and its colour, not its
-data, range or alerts; `WidgetCatalog.styleKeys`) to another widget, the
-colour across types; *Use this style on every …* gives it to every widget of
-the same type in one undo step. *Save as my widget…* keeps the widget's
-type, value and options under a name (`dashboardManager.saveWidgetPreset`,
-`<config>/widgets/<id>.json`, `{"schema": 1, "kind": "widgetPreset", label,
-baseType, paramId, props}`); the gallery lists them first under **Mine**,
-with *Copy* (as text, to share) and *×*, and *Paste a widget* adds one
-someone shared. The **Grid · Demo** menu's *Alerts and auto-show…* sets
-`alertBanner` and `showWhen`.
-
-**Sharing path.** In the chooser, **Share** on any JSON dashboard card offers
-*Save to Downloads* (`<Downloads>/OCTAVE-dashboards/<id>.json`) or *Copy as
-text*; **Import** offers *From file…* or *Paste from clipboard*. Imports are
-validated and always become a new user dashboard (§5.4); a report then shows
-the new dashboard and what didn't come across (`lastImportReport`: values
-the connected car doesn't report, values or widget types this build doesn't
-know, widgets dropped as overlapping, settings reset, widgets moved back
-onto the grid), with **Show it** and **Edit**.
+**The vehicle gate.** A dashboard may name any PID, so it can be written for
+another car or shared. At render time `DashboardRenderer` swaps a cell whose
+PID the connected vehicle does not report for a "Not supported by this
+vehicle" placeholder (see §5.6).
 
 **In a browser.** With the service on, `http://<car>:9876/dashboards`
 (`sdk/web/dashboards.html`) is a dashboard editor for a laptop or phone:
 the list (thumbnails, Edit / Customize / Copy / Download / Delete, New from
-a template, Import by paste or file with the same report), and an editor
-with drag to move and resize (placed by the app's own `arrange` /
-`nearestFree` / `rescale`), the widget's data, look, range and alert
-options from the catalog, grid density, the portrait layout, undo, and the
-dashboard's alert banner and auto-show rule. **Show on the car** sends
-every change to `dashboardManager.previewDashboard`: the car's dashboard
-page shows it in place of the active dashboard ("Preview from another
-device") until the page ends it or 60 s after its last update. The
-chooser's **In a browser** button shows the address and a QR code to scan,
-and a pairing code; with the service on loopback only (the default) it
-gives the address for a browser on the same computer and says to start
-OCTAVE with `--service-bind` for the network.
+a template, Import by paste or file with a report of what didn't come
+across), and an editor with drag to move and resize (placed by the app's own
+`arrange` / `nearestFree` / `rescale`), the widget's data, look, range and
+alert options from the catalog, grid density, the portrait layout and undo.
+It writes the same files. **Show on the car** sends every change to
+`dashboardManager.previewDashboard`: the car's OBD page shows it ("Preview
+from another device") until the page ends it or 60 s after its last update.
+Off the device the service needs `--service-bind` and a pairing code
+(`octave --pair-code`).
 
-**Manual path.** Drop a JSON file with the same schema under the OS config dir:
+**Sharing.** `dashboardManager.exportDashboard(id)` writes
+`<Downloads>/OCTAVE-dashboards/<id>.json`; `importDashboard(file)` /
+`importDashboardFromText(json)` validate and always make a new user
+dashboard (§5.4), with `lastImportReport` saying what didn't come across. No
+button in the app calls them now; the browser editor does, and a file copied
+into the directory below needs no import.
+
+**Where it goes.** Under the OS config dir:
 
 - Linux: `~/.config/OCTAVE/dashboards/my-board.json`
 - macOS: `~/Library/Application Support/OCTAVE/dashboards/my-board.json`
 - Windows: `%APPDATA%/OCTAVE/dashboards/my-board.json`
 
 `DashboardManager` watches the user dashboards directory, so a hand-dropped file
-appears in the chooser within about a second (see §5.4 Hot reload); no restart
+is listed within about a second (see §5.4 Hot reload); no restart
 is needed. `dashboardManager.refresh()` forces an immediate rescan.
 
 ### 5.4 Registry rules
@@ -645,29 +584,28 @@ is needed. `dashboardManager.refresh()` forces an immediate rescan.
 The Home screen (`frontend/HomeDashboard.qml`, loaded by `MainMenu.qml`)
 shows the dashboard `dashboardManager.homeDashboardId` names in the same
 `DashboardRenderer`: the built-in `home` (`presets/home.json`) until
-`setHomeDashboard(id)` picks another (the chooser's **Use as Home**; `""`
+`setHomeDashboard(id)` picks another (Settings > Display > Home Screen; `""`
 goes back to the built-in), and again when that dashboard is deleted. `home`
 cannot be hidden. The choice is one line in `<config>/dashboards/.home`.
 
-- **The default layout** is `DashboardManager::homeSpec(readings, vehicle,
-  shiftLight)`: music on the left, two columns of reading cards over the
+- **The default layout** is `DashboardManager::homeSpec(readings,
+  vehicle)`: music on the left, two columns of reading cards over the
   vehicle in the middle, G-force / compass / pitch / roll on the right;
   portrait: music on top, the vehicle beside the readings, the sensors along
   the bottom. `presets/home.json` is that for the default four readings
   (`tst_dashboardmanager` holds the two together).
 - **Carried over once**: `migrateClassicHome()` (called from `AppCore`)
-  turns the classic Home's settings (`homeOBDParameters`, `homeVehicleCard`,
-  a shift light on the RPM card) into a user dashboard "My Home" when they
+  turns the classic Home's settings (`homeOBDParameters`, `homeVehicleCard`)
+  into a user dashboard "My Home" when they
   differ from the defaults. Those settings are deprecated.
-- **Taps.** Only Home sets `DashboardRenderer.interactive`. A tap on a cell
+- **Taps.** Switched off for now (`HomeDashboard.tapsOpenPages`, false since
+  2026-11-24: Home opens nothing on a tap). Only Home sets `DashboardRenderer.interactive`. A tap on a cell
   emits `cellTapped(action, index)`: the cell's `props.tapAction`, else its
   type's catalog `defaultTapAction`, else `obd` for a PID-bound cell
   (`sensors` for an IMU reading), never for `none`. Home opens the music
   page for `media`, the OBD menu for `obd`, Sensors for `sensors` and
   Settings > Device > Vehicle for `vehicle`. A widget keeps a touch to itself
-  with `function octaveConsumesTap(x, y)` (Now Playing's seek bar). A press
-  held anywhere emits `pressAndHold()`: Home opens the editor on its
-  dashboard (a built-in as an unsaved copy that becomes Home when saved).
+  with `function octaveConsumesTap(x, y)` (Now Playing's seek bar).
 - **Frames.** `"frame": true` in any cell's `props` draws the reading cards'
   box behind the widget (`dashboards/CellFrame.qml`, in the renderer and the
   editor canvas alike); the editor offers it as **Frame**.
@@ -706,10 +644,8 @@ cannot be hidden. The choice is one line in `<config>/dashboards/.home`.
   `obdManager.setParameterDemand(consumer, ids)`. A dashboard needs no extra
   wiring: `DashboardRenderer.paramIds` lists its distinct PIDs and
   `OBDMenu` registers them as the `"dashboard"` consumer while the page is
-  active. Other consumers: `"cards"` (Parameter Cards), `"editor"`
-  (`DashboardEditor` canvas), `"home"` (`HomeOBDView`), `"carMenu"` (RPM/SPEED
-  for the 3D Jeep while `CarMenu` is visible), `"settings"`
-  (`OBDSettingsPage`). Backend side: `wiki/obd-manager.html`.
+  active. Other consumers: `"cards"` (Parameter Cards), `"home"` (`HomeOBDView`), `"carMenu"` (RPM/SPEED
+  for the 3D Jeep while `CarMenu` is visible). Backend side: `wiki/obd-manager.html`.
 
 ### 5.7 Templates
 
@@ -1057,25 +993,14 @@ frontend/
 │   │                          categories, suggestions
 │   ├── WidgetCatalog.qml      singleton: that data (dashboardManager.
 │   │                          widgetCatalog) + each type's url
-│   ├── editor/                the in-app editor (docs/DASHBOARD_EDITOR_REVIEW.md)
-│   │   ├── DashboardEditor.qml   full-screen page; owns the working spec, toolbar, sheet, undo
-│   │   ├── EditorCanvas.qml      dot grid, select-then-drag with live push, resize grip
-│   │   ├── TemplateGallery.qml   "+ New": live template miniatures, filled from the car
-│   │   ├── PalettePopup.qml      widget gallery: live miniatures, categories, data first
-│   │   ├── PIDPicker.qml         PID list by system, recents, live values, vehicle-gated
-│   │   └── PropertiesPanel.qml   settings sheet: Data / Look / Range & alerts / Advanced / JSON
-│   ├── templates/             starting points for + New (slots filled by fromTemplate)
+│   ├── templates/             starting points (fromTemplate; the browser editor's "New from")
 │   └── presets/               built-in dashboard JSON specs (ship with bundle)
-│       ├── sport.json         big speed + RPM dial + vitals strip
-│       ├── minimal.json       three round gauges: speed, RPM, fuel
-│       ├── fullgrid.json      4×2 grid of compact round gauges
-│       ├── performance.json   arc speed + sparklines + warning lights
-│       └── tj-wrangler.json   "TJ Wrangler 4.0": 17-cell board from the Orange Pi rig
+│       └── home.json          Home's default (the only built-in since 2026-11-24;
+│                              sport / minimal are test fixtures, tests/cpp/fixtures/presets)
 ├── OBDParameterModel.qml      singleton aggregator: values, gate, demo mode;
 │                              metadata from parameterCatalog (src/managers/parametercatalog.cpp)
-└── OBDMenu.qml                hosts DashboardRenderer, Parameter Cards, swipe
-                               between dashboards, and the chooser popup
-                               (Import / Share)
+├── HomeDashboard.qml          Home: the dashboard picked in Settings > Display
+└── OBDMenu.qml                Parameter Cards; previews a dashboard edited in a browser
 
 src/managers/
 ├── dashboardmanager.h         enumerates presets + user dashboards, save/

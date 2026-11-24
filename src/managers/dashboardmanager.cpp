@@ -280,7 +280,7 @@ bool DashboardManager::setHomeDashboard(const QString &idIn)
     return true;
 }
 
-QVariantMap DashboardManager::homeSpec(const QStringList &readingsIn, bool vehicle, bool shiftLight)
+QVariantMap DashboardManager::homeSpec(const QStringList &readingsIn, bool vehicle)
 {
     QStringList readings;
     for (const QString &id : readingsIn)
@@ -324,18 +324,7 @@ QVariantMap DashboardManager::homeSpec(const QStringList &readingsIn, bool vehic
         const int r = slot / 2, c = slot % 2;
         QList<int> land{3 + c * 3, r * landRow, wide ? 6 : 3, landRow};
         QList<int> port{c * portHalf, 4 + r * portRow, wide ? 2 * portHalf : portHalf, portRow};
-        const QString id = readings.at(i);
-        // The shift light stands in the last column of the RPM card's cell
-        const bool lamp = shiftLight && id == QLatin1String("RPM");
-        if (lamp) {
-            land[2] -= 1;
-            port[2] -= 1;
-        }
-        add(QStringLiteral("DigitalReadout"), id, card, land, port);
-        if (lamp)
-            add(QStringLiteral("ShiftLightWidget"), {}, framed,
-                {land.at(0) + land.at(2), land.at(1), 1, land.at(3)},
-                {port.at(0) + port.at(2), port.at(1), 1, port.at(3)});
+        add(QStringLiteral("DigitalReadout"), readings.at(i), card, land, port);
     }
     if (vehicle)
         add(QStringLiteral("VehicleWidget"), {}, {},
@@ -360,19 +349,18 @@ QVariantMap DashboardManager::homeSpec(const QStringList &readingsIn, bool vehic
                                   {QStringLiteral("cells"), portrait}}}}}};
 }
 
-QString DashboardManager::migrateClassicHome(const QStringList &readings, bool vehicleCard, bool shiftLight)
+QString DashboardManager::migrateClassicHome(const QStringList &readings, bool vehicleCard)
 {
     const QString path = homeChoicePath();
     if (path.isEmpty() || QFile::exists(path))
         return {};
     static const QStringList defaults{QStringLiteral("SPEED"), QStringLiteral("RPM"), QStringLiteral("COOLANT_TEMP"),
                                       QStringLiteral("CONTROL_MODULE_VOLTAGE")};
-    const bool lamp = shiftLight && readings.contains(QStringLiteral("RPM"));
-    if (readings == defaults && vehicleCard && !lamp) {
+    if (readings == defaults && vehicleCard) {
         saveHomeChoice(QString::fromLatin1(kHomeId));
         return {};
     }
-    QVariantMap spec = homeSpec(readings, vehicleCard, lamp);
+    QVariantMap spec = homeSpec(readings, vehicleCard);
     spec.insert(QStringLiteral("label"), QStringLiteral("My Home"));
     const QString id = saveDashboard(spec);
     if (id.isEmpty()) {

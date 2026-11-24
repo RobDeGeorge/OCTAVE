@@ -116,18 +116,17 @@ Item {
         return false
     }
 
-    // ── Taps (off by default: the OBD menu's dashboards are display only) ──
+    // ── Taps (off by default: a dashboard is display only) ──
     // With `interactive`, a tap on a cell emits cellTapped(action, index):
     // the cell's `props.tapAction`, else its type's `defaultTapAction` from
     // the catalog ("media", "obd", "sensors", "vehicle"; a PID-bound cell
     // without one is "obd", or "sensors" for an IMU reading), never for
     // "none". What an action opens is the host's business (Home maps them to
-    // pages). A press held anywhere emits pressAndHold(). A widget keeps a
+    // pages). A widget keeps a
     // tap to itself (its own buttons, a slider) by having
     // `function octaveConsumesTap(x, y)` return true for that spot.
     property bool interactive: false
     signal cellTapped(string action, int index)
-    signal pressAndHold()
 
     function tapActionFor(cellSpec) {
         if (!cellSpec) return "none"
@@ -148,11 +147,6 @@ Item {
         var cs = c.colSpan !== undefined ? c.colSpan : 1, rs = c.rowSpan !== undefined ? c.rowSpan : 1
         return Qt.rect(_margin + (c.col || 0) * (_cellW + _spacing), _margin + (c.row || 0) * (_cellH + _spacing),
                        cs * _cellW + (cs - 1) * _spacing, rs * _cellH + (rs - 1) * _spacing)
-    }
-
-    TapHandler {
-        enabled: root.interactive
-        onLongPressed: root.pressAndHold()
     }
 
     // Widget registry: type-string → absolute QML source URL. Owned by the
