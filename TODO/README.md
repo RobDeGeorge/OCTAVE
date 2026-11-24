@@ -1,6 +1,6 @@
 # TODO index — easiest to hardest
 
-**Last updated:** 2026-11-15 (licensing-review.md and fix-up-leftovers.md added after the codebase review and fixing session; launcher.md, written 2026-10-26, brought in from its branch)
+**Last updated:** 2026-11-23 (lora-car-finder.md added; its pod board started)
 
 One file per deferred plan. Each file opens with a one-line **Goal**, lists only the work that is left, and gives every step an **Effort** (S under an hour, M one session, L several sessions, XL a new subsystem) and the device it needs. When a plan is finished, delete its file and its row here.
 
@@ -53,3 +53,4 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | [carplay-native.md](carplay-native.md) | CarPlay from an iPhone on USB with no dongle, on a user-supplied Apple identity (spike first) | M research, L spike | iPhone on USB |
 | [carlinkit-dongle-port.md](carlinkit-dongle-port.md) | CarPlay / wireless Android Auto through a Carlinkit dongle | XL | $60 dongle, iPhone |
 | [diy-obd-adapter.md](diy-obd-adapter.md) | Our own all-protocol Bluetooth OBD adapter (STM32G474 + ESP32) with native fast mode, store-and-forward, optional sensor pod | M bench steps, then L–XL hardware | Nucleo + ECU sim, Jeep |
+| [lora-car-finder.md](lora-car-finder.md) | A dash pod on the OBD adapter makes the parked car a LoRa beacon; a keychain with GNSS and a compass points at it | L–XL hardware (pod board routed, no fab files; no dev boards) | the pod and adapter boards, Jeep |

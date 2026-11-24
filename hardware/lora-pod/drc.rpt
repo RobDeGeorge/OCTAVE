@@ -1,0 +1,26 @@
+** Drc report for lora-pod.kicad_pcb **
+** Created on 2026-11-23T16:53:54 **
+** Report includes: Errors, Warnings, Exclusions **
+
+** Found 2 DRC violations **
+[silk_edge_clearance]: Silkscreen clipped by board edge
+    Rule: board setup constraints silk; warning
+    @(95.0000 mm, 46.0000 mm): Segment on Edge.Cuts
+    @(64.3000 mm, 44.6600 mm): Segment of J2 on F.Silkscreen
+[silk_edge_clearance]: Silkscreen clipped by board edge
+    Rule: board setup constraints silk; warning
+    @(95.0000 mm, 46.0000 mm): Segment on Edge.Cuts
+    @(73.7000 mm, 44.6600 mm): Segment of J2 on F.Silkscreen
+
+** Found 0 unconnected pads **
+
+** Found 0 Footprint errors **
+
+** Ignored checks **
+    - Footprint has no courtyard defined
+    - Track endpoint not centered on via
+    - Tuning profile track geometries
+    - Footprint doesn't match symbol's footprint filters
+    - Footprint component type doesn't match footprint pads
+
+** End of Report **
