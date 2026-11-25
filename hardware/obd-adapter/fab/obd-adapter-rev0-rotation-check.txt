@@ -1,0 +1,5 @@
+Parts with a pin 1 or a polarity whose JLCPCB rotation has NOT been checked against JLCPCB's own
+footprint (no entry in JLC_CORR, gen/build.py): they are placed at KiCad's angle. Look at each one
+in JLCPCB's placement preview before paying; add what is wrong to JLC_CORR and run fab again.
+Every bottom-side part is on this board for the first time: look at those too.
+

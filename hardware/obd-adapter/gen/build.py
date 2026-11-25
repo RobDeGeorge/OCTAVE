@@ -60,10 +60,16 @@ def project_files():
     # battery-side nets keep HV_CLEARANCE from everything else (Freerouting gets the same rule
     # through the DSN classes; this makes KiCad's DRC and interactive router enforce it too)
     cond = " || ".join(f"A.NetName == '{n}'" for n in sorted(HV) + [HV_SPARE + "*"])
+    # (not against the pod switch's own pads: its package puts an unused pin 0.25 mm from IN and from OUT)
+    u19 = next((p.ref for p in __import__("obd_adapter").d.parts if p.value == "TPS27S100APWPR"), None)
+    own = f" && !A.memberOfFootprint('{u19}') && !B.memberOfFootprint('{u19}')" if u19 else ""
     with open(os.path.join(PROJ, NAME + ".kicad_dru"), "w") as f:
         f.write("(version 1)\n"
-                f"(rule \"battery-side clearance\"\n  (condition \"({cond}) && A.NetName != B.NetName\")\n"
-                f"  (constraint clearance (min {HV_CLEARANCE / 1000:.2f}mm)))\n")
+                f"(rule \"battery-side clearance\"\n  (condition \"({cond}) && A.NetName != B.NetName{own}\")\n"
+                f"  (constraint clearance (min {HV_CLEARANCE / 1000:.2f}mm)))\n"
+                # ... and the copper ahead of the fuse twice that (pcbgen.UNFUSED)
+                "(rule \"unfused battery clearance\"\n  (condition \"A.NetName == 'VBAT_IN' && A.NetName != B.NetName\")\n"
+                "  (constraint clearance (min 0.60mm)))\n")
 
 
 def sch():
@@ -90,15 +96,30 @@ def sch():
     print(open(rpt).read().split("** ERC messages")[1].split("\n")[0] if os.path.exists(rpt) else "no report")
 
 
+# Six copper layers: F.Cu signal, In1 GND, In2 signal, In3 signal, In4 3V3, B.Cu signal. Each signal
+# layer has a plane next to it; the two planes sit one prepreg from the outer layers, where the parts are.
+LAYERS = 6
+
+
+def GND_L():
+    import pcbnew
+    return pcbnew.In1_Cu
+
+
+def PWR_L():
+    import pcbnew
+    return pcbnew.In4_Cu if LAYERS == 6 else pcbnew.In2_Cu
+
+
 def pcb():
     import pcbnew
     import layout
     import obd_adapter
     import pcbgen
     d = obd_adapter.d
-    board = pcbgen.new_board(4)
+    board = pcbgen.new_board(LAYERS)
     ds = board.GetDesignSettings()
-    ds.SetCopperLayerCount(4)
+    ds.SetCopperLayerCount(LAYERS)
     ds.m_TrackMinWidth = pcbnew.FromMM(0.15)
     ds.m_ViasMinSize = pcbnew.FromMM(0.45)
     ds.m_MinThroughDrill = pcbnew.FromMM(0.2)  # JLCPCB 4-layer minimum; the PowerPAD thermal vias are 0.2
@@ -110,10 +131,20 @@ def pcb():
         r = fp.Reference()
         r.SetTextSize(pcbnew.VECTOR2I(pcbnew.FromMM(1.0), pcbnew.FromMM(1.0)))
         r.SetTextThickness(pcbnew.FromMM(0.15))
+        # the library's silkscreen outlines are 0.12 mm wide; JLCPCB's minimum is 0.15
+        for g in fp.GraphicalItems():
+            if g.GetLayer() in (pcbnew.F_SilkS, pcbnew.B_SilkS) and not isinstance(g, pcbnew.PCB_TEXT) \
+                    and 0 < g.GetWidth() < pcbnew.FromMM(0.15):
+                g.SetWidth(pcbnew.FromMM(0.15))
     layout.place_all(board, d, fps)
     # the mounting holes (layout.KEEPOUTS kept their squares free of parts); labels keep off them too
     fps.update(pcbgen.add_holes(board, layout.HOLES, layout.HOLE_KEEP))
-    crowded = layout.place_labels(fps, skip=layout.LABELS)
+    # the references, each side's among that side's parts (a through-hole part's pads are on both)
+    thru = {r for r, fp in fps.items() if layout.tht(fp) or r == "J6"}
+    front = {r: fp for r, fp in fps.items() if not fp.IsFlipped() or r in thru}
+    rear = {r: fp for r, fp in fps.items() if fp.IsFlipped() or r in thru}
+    crowded = layout.place_labels(front, skip=set(layout.LABELS) | {r for r in thru if fps[r].IsFlipped()})
+    crowded += layout.place_labels(rear, skip=set(layout.LABELS) | {r for r in thru if not fps[r].IsFlipped()}, back=True)
     if crowded:
         print("labels with no clear spot:", " ".join(sorted(crowded)))
     for ref, (x, y, angle) in layout.LABELS.items():
@@ -127,9 +158,10 @@ def pcb():
     import mklib
     yc = layout.PLUG[1]
     pcbgen.outline(board, layout.X0, 0, layout.W, layout.H,
-                   tab=(yc - mklib.TAB / 2, yc + mklib.TAB / 2, mklib.TAB_DEPTH))
-    # In1 is the GND plane (Freerouting sees it as a power layer); In2 is poured with 3V3 after routing
-    pcbgen.zone(board, nets["GND"], pcbnew.In1_Cu, layout.X0, 0, layout.W, layout.H, clearance=0.25, solid=True)
+                   tab=(yc - mklib.TAB / 2, yc + mklib.TAB / 2, mklib.TAB_DEPTH), lobe=layout.LOBE)
+
+    # the GND plane (Freerouting sees it as a power layer); the 3V3 plane is poured after routing
+    pcbgen.zone(board, nets["GND"], GND_L(), layout.X0, 0, layout.W, layout.H_ALL, clearance=0.25, solid=True)
     for fp in fps.values():
         for pad in fp.Pads():
             if pad.GetAttribute() == pcbnew.PAD_ATTRIB_PTH and fp.GetValue().startswith("ESP32"):
@@ -144,20 +176,30 @@ def pcb():
 # lands on (Freerouting does not neck down): 3V3 reaches 0.3 mm LQFP pins, VBUS the USB-C.
 WIDTHS = {
     1200: ["VBAT_IN"],
-    600: ["VBAT_F", "VBAT_P", "BUCK_SW", "5V"],
+    # (POD_F: the fused pod supply's run from F2 across the board. It was 0.3 mm on a 0.5 oz inner layer
+    # for 57 mm, review 2026-11-24; 0.6 mm keeps it on the outer layers)
+    600: ["VBAT_F", "VBAT_P", "BUCK_SW", "5V", "POD_F", "POD_VIN"],
     # 5V_BUCK's power path (L1 -> output caps -> OR diode) is pre-routed at 1.0-1.2 mm; what is
     # left to route are branches to the CAN VCC pins (~70 mA each), the VPW reference and the FB divider
-    400: ["5V_BUCK", "VBUS", "VBUS2", "3V3_ESP", "DLC_SW", "VJ1850", "KLINE", "LLINE", "KLINE_PU", "LLINE_PU"],
+    400: ["5V_BUCK", "VBUS", "3V3_ESP", "DLC_SW", "VJ1850", "KLINE", "LLINE", "KLINE_PU", "LLINE_PU", "VJ_IN"],
     250: ["3V3", "GND"],
+    # the high-speed pair from the USB-C socket to the hub: outer layers only (OUTER_ONLY), so both lines
+    # run over a plane next to them and neither dives to an inner layer alone
+    150: ["USB_DP", "USB_DM"],
 }
 # nets that can sit at battery voltage (or ring like the switch node): wider clearance to the rest
 HV = {"VBAT_IN", "VBAT_F", "VBAT_P", "DLC_SW", "DLC_SW_G", "KLINE", "LLINE", "KLINE_PU", "LLINE_PU",
-      "J1850_P", "J1850_N", "J1850_PD", "VJ1850", "CMP_VCC", "K_IN", "BUCK_SW",
+      # (not VJ1850, 7.2 V regulated, nor K_IN, behind 10k: at 0.3 mm they could not be wired at all in
+      # the corner where the J1850 regulator stands over the comparator)
+      "J1850_P", "J1850_N", "J1850_PD", "CMP_VCC", "BUCK_SW", "DLC_SW_D", "VJ_IN", "VJ_B",
       "CAN1_H", "CAN1_L", "CAN2_H", "CAN2_L",
       # also at bus / battery potential: the TERM node (120R to CAN_H, the jumper to CAN_L), the ideal
       # diode's gate drive (above VBAT) and the buck's bootstrap (rides the switch node)
-      "CAN1_TERM", "CAN2_TERM", "IDEAL_GATE", "IDEAL_VCAP", "BUCK_BOOT"}
+      "CAN1_TERM", "CAN2_TERM", "IDEAL_GATE", "IDEAL_VCAP", "BUCK_BOOT",
+      # the pod bus's supply (battery voltage), its switch's gate and level-shift nodes
+      "POD_F", "POD_VIN"}
 HV_CLEARANCE = 300
+OUTER_ONLY = {"USB_DP", "USB_DM"}
 # The plug's pads this board does not use (J1962 pins 1, 8, 9, 12, 13: the car maker's own, some at
 # battery voltage, pin 1 often switched 12 V) have a net each of this name. They get the same clearance:
 # route() adds them to HV
@@ -195,8 +237,9 @@ def _dsn_postprocess(text):
     # from the .kicad_pro: set the signal width / clearance here
     text = re.sub(r"\(rule\s+\(width 200\)\s+\(clearance 200\)",
                   f"(rule\n      (width {SIGNAL_WIDTH})\n      (clearance {SIGNAL_CLEARANCE})", text, count=1)
-    if IN2_PLANE:   # In2 is the 3V3 plane: signals on F.Cu / B.Cu only
-        text = text.replace("(layer In2.Cu\n      (type signal)", "(layer In2.Cu\n      (type power)")
+    if IN2_PLANE:   # the 3V3 plane (In4 of six layers, In2 of four): no signals on it
+        pl = "In4.Cu" if LAYERS == 6 else "In2.Cu"
+        text = text.replace(f"(layer {pl}\n      (type signal)", f"(layer {pl}\n      (type power)")
     # every 3V3 pad has its own via into In2, which is poured after routing: give Freerouting one
     # 3V3 pin only, so it doesn't spend board space joining them with tracks
     text = re.sub(r"\(net 3V3\s+\(pins (\S+)[^)]*\)", r"(net 3V3\n      (pins \1)", text)
@@ -207,7 +250,8 @@ def _dsn_postprocess(text):
     ko = ""
     for i, (x0, y0, x1, y1) in enumerate(prewire.KEEPOUTS):
         # the buck's and the LDO's are for F.Cu; the plug's tab carries no copper on any layer
-        for layer in (("F.Cu", "In1.Cu", "In2.Cu", "B.Cu") if (x0, y0, x1, y1) == prewire.TAB_KEEPOUT else ("F.Cu",)):
+        every = ("F.Cu", "In1.Cu", "In2.Cu", "In3.Cu", "In4.Cu", "B.Cu") if LAYERS == 6 else ("F.Cu", "In1.Cu", "In2.Cu", "B.Cu")
+        for layer in (every if (x0, y0, x1, y1) == prewire.TAB_KEEPOUT else ("F.Cu",)):
             ko += f"(keepout \"k{i}_{layer}\" (rect {layer} {x0 * 1000:.0f} {-y1 * 1000:.0f} {x1 * 1000:.0f} {-y0 * 1000:.0f}))\n    "
     # In2 around the LDO tab: no signals, so the 3V3 pour there is solid and its vias reach the plane
     x0, y0, x1, y1 = prewire.LDO_TAB
@@ -218,14 +262,22 @@ def _dsn_postprocess(text):
     names = m.group(1).split()
     special = {n for nets in WIDTHS.values() for n in nets}
     bare = lambda n: n.strip('"').lstrip("/")    # noqa: E731  (the DSN quotes names with brackets in them)
-    via = '(circuit\n        (use_via "Via[0-3]_600:300_um")\n      )'
+    # signal nets use the small via (0.45 / 0.2 mm) where the board has one defined: it fits between two
+    # rows of 0603 pads, where the 0.6 / 0.3 mm one does not. The supply classes keep the big one.
+    big = f"Via[0-{LAYERS - 1}]_600:300_um"
+    small = f"Via[0-{LAYERS - 1}]_450:200_um"
+    if f'(padstack "{small}"' not in text:
+        small = big
+    via = f'(circuit\n        (use_via "{small}")\n      )'
 
-    outer = '(circuit\n        (use_via "Via[0-3]_600:300_um")\n        (use_layer F.Cu B.Cu)\n      )'
+    outer = f'(circuit\n        (use_via "Via[0-{LAYERS - 1}]_600:300_um")\n        (use_layer F.Cu B.Cu)\n      )'
 
     def cls(name, nets, width, clear=200):
         # power-current nets stay off the 0.5 oz inner layer (a fault before the PTC trips could fuse
         # it); battery-side signals (K/L, J1850, DLC_SW: <= 0.2 A, current-limited) may use In2
-        v = outer if (width >= 600 or "VBUS" in nets) else via
+        # (VBUS may use the inner layers: kept to the outer ones, its only way from the socket to the OR
+        # diode was 145 mm round the board)
+        v = outer if (width >= 600 or OUTER_ONLY & {bare(n) for n in nets}) else via
         return (f"(class {name} {' '.join(nets)}\n      {v}\n"
                 f"      (rule\n        (width {width})\n        (clearance {clear})\n      )\n    )\n    ")
     # every net is in one class only: Freerouting takes the last one that lists it
@@ -239,10 +291,16 @@ def _dsn_postprocess(text):
         if lo:
             classes += cls(f"w{w}", lo, w)
         if hi:
-            classes += cls(f"w{w}hv", hi, w, HV_CLEARANCE)
+            import pcbgen
+            classes += cls(f"w{w}hv", hi, w, max([HV_CLEARANCE] + [int(pcbgen.UNFUSED.get(n, 0) * 1000) for n in hi]))
     if hv_plain:
         classes += cls("hv", hv_plain, 200, HV_CLEARANCE)
     text = text[:m.start()] + classes + new + text[m.end():]
+    # ... and the default class
+    i = text.index("(class kicad_default ")
+    j = text.index("(use_via ", i)
+    k = text.index(")", j)
+    text = text[:j] + f'(use_via "{small}"' + text[k:]
     return text
 
 
@@ -300,7 +358,8 @@ def route():
     import prewire
     work = os.path.join(PROJ, "route")
     os.makedirs(work, exist_ok=True)
-    keepout = list(layout.KEEPOUTS) + [prewire.TAB_KEEPOUT]  # ESP32 antenna (none now), the plug's tab
+    # where no via may go: the plug's tab, and beside the plug's hand-soldered pads
+    keepout = list(layout.KEEPOUTS) + [prewire.TAB_KEEPOUT] + list(layout.VIA_KEEPOUTS)
     d = obd_adapter.d
 
     board = pcbnew.LoadBoard(PCB)
@@ -323,8 +382,36 @@ def route():
         t.SetLocked(True)
     pre_items = _snapshot(board, before)
     if IN2_PLANE:   # exported to the DSN as the 3V3 plane; every 3V3 pad's fan-out via lands on it
-        pcbgen.zone(board, board.FindNet("3V3"), pcbnew.In2_Cu, layout.X0, 0, layout.W, layout.H, clearance=0.3, solid=True)
+        pcbgen.zone(board, board.FindNet("3V3"), PWR_L(), layout.X0, 0, layout.W, layout.H_ALL, clearance=0.3, solid=True)
     board.Save(PCB)
+    if patch and os.environ.get("OBD_ROUTER") == "raster":
+        # a small patch (a few new parts): the raster finisher joins the open nets in seconds each,
+        # where Freerouting takes hours on this board with everything else locked
+        import raster
+        _copper(board, d, keepout, stitch=False)
+        lifted = []
+        if os.environ.get("OBD_RIP"):    # x0,y0,x1,y1 in mm: old copper to lift and lay again last
+            lifted = raster.rip(board, [float(v) for v in os.environ["OBD_RIP"].split(",")])
+        left = raster.finish(board, _width_of, HV, last=lifted)
+        n = _prune_stubs(board)
+        while True:     # a via the lifted copper left behind, its tracks now all on one layer
+            board.BuildConnectivity()
+            con = board.GetConnectivity()
+            idle = [v for v in board.GetTracks() if v.Type() == pcbnew.PCB_VIA_T and v.GetNetname() not in ("GND", "3V3")
+                    and len({t.GetLayer() for t in con.GetConnectedItems(v) if t.Type() == pcbnew.PCB_TRACE_T}) < 2
+                    and not any(t.Type() == pcbnew.PCB_PAD_T for t in con.GetConnectedItems(v))]
+            if not idle:
+                break
+            for v in idle:
+                board.Remove(v)
+            n += len(idle) + _prune_stubs(board)
+        print("stubs and idle vias pruned:", n)
+        pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+        print("nets still in pieces after the raster finisher:", left or "none")
+        print("copper on the plug's tab:", prewire.on_tab(board) or "none")
+        board.Save(PCB)
+        drc()
+        return
     _route_rest(board, d, keepout, pre_items, stitch=not patch)
 
 
@@ -342,14 +429,23 @@ def _full_prepare(board, d, keepout):
     bad = pcbgen.fanout(board, "GND", pcbnew.In1_Cu, keepouts=keepout,
                        hv=HV, hv_clearance=HV_CLEARANCE / 1000)
     print("GND fan-out, pads without a via:", bad or "none")
-    bad = pcbgen.fanout(board, "3V3", pcbnew.In2_Cu, keepouts=keepout,
+    bad = pcbgen.fanout(board, "3V3", PWR_L(), keepouts=keepout,
                        hv=HV, hv_clearance=HV_CLEARANCE / 1000)
     print("3V3 fan-out, pads without a via:", bad or "none")
+    # more ground vias where a surge or the plug's whole current returns (review 2026-11-24: one or two each)
+    # (the plug's ground pins have theirs from prewire.py)
+    for ref_, num, n in ((_ref_of(d, "power", "5.0SMDJ26CA", "5.0SMDJ33CA"), "2", 4), (_ref_of(d, "power", "47u 50V"), "2", 2)):
+        got = pcbgen.extra_vias(board, "GND", ref_, num, n, keepouts=keepout, hv=HV, hv_clearance=HV_CLEARANCE / 1000)
+        print(f"extra GND vias at {ref_}.{num}: {got} of {n}")
     if SEED:    # nets Freerouting keeps leaving boxed in: route them first, on a near-empty board
         import maze
         left = maze.finish(board, _width_of, _clearance_of, prewire.KEEPOUTS + keepout, skip=("GND", "3V3"),
                            hv=HV, hv_clearance=HV_CLEARANCE / 1000, only=set(SEED))
         print("seeded before Freerouting:", [n for n in SEED if n not in left], "failed:", left or "none")
+
+
+def _ref_of(d, block, *values):
+    return next(p.ref for p in d.parts if p.block.name == block and p.value in values)
 
 
 def _route_rest(board, d, keepout, pre_items, stitch):
@@ -376,7 +472,7 @@ def _route_rest(board, d, keepout, pre_items, stitch):
         # pre-routed copper). FREEROUTING_JAR overrides; a finished run takes ~4 min here.
         for attempt in range(3):
             subprocess.run(["timeout", "1200", "java", "-jar", FREEROUTING_JAR, "-de", dsn, "-do", ses,
-                            "--gui.enabled=false", "--feature_flags.multi_threading=false", "-mp", "200",
+                            "--gui.enabled=false", "--feature_flags.multi_threading=false", "-mp", os.environ.get("OBD_PASSES", "12"),
                             "--router.automatic_neckdown=false", "--router.copper_to_edge_clearance_um=400",
                             "--usage_and_diagnostic_data.disable_analytics=true"],
                            stdout=open(os.path.join(work, log), "w"), stderr=subprocess.STDOUT)
@@ -396,7 +492,7 @@ def _route_rest(board, d, keepout, pre_items, stitch):
             board.BuildConnectivity()
             return board.GetConnectivity().GetUnconnectedCount(False)
         # 3V3 pads all have a via to In2 and are joined by the In2 pour after routing: count with it
-        z = pcbgen.zone(board, board.FindNet("3V3"), pcbnew.In2_Cu, layout.X0, 0, layout.W, layout.H,
+        z = pcbgen.zone(board, board.FindNet("3V3"), PWR_L(), layout.X0, 0, layout.W, layout.H_ALL,
                         clearance=0.3, solid=True)
         pcbnew.ZONE_FILLER(board).Fill(board.Zones())
         board.BuildConnectivity()
@@ -440,13 +536,243 @@ def _route_rest(board, d, keepout, pre_items, stitch):
         left = _bridge_3v3(board, ldo, prewire.KEEPOUTS + layout.KEEPOUTS)
         if left:
             print("3V3 pads still cut off from the pour:", [p.GetParentFootprint().GetReference() + "." + p.GetNumber() for p in left])
-    # Freerouting stalls with a few connections left: finish them with the grid router
-    import maze
-    left = maze.finish(board, _width_of, _clearance_of, prewire.KEEPOUTS, skip=("GND", "3V3"), hv=HV, hv_clearance=HV_CLEARANCE / 1000)
+    _finish(board)
+
+
+def _finish(board):
+    """After the autorouter: join what it left open (gen/raster.py: plain first, then through the
+    autorouter's own copper, which is then laid again), take out copper it left closer than the rules
+    allow and join that again; prune, refill, save, DRC. The slow grid router (gen/maze.py) is no
+    longer in the flow: on six layers it took over four minutes a net and closed nothing more."""
+    import pcbnew
+    import prewire
+    import raster
+    print("autorouter's vias in pads or beside the plug's pads, taken out:", _bad_vias(board))
+    board.Save(PCB)         # (the finisher works on a saved board: nothing is lost if it is stopped)
+    left = raster.finish_rip(board, _width_of, HV)
+    for rnd in range(6):
+        n = _prune_stubs(board)
+        pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+        board.Save(PCB)
+        keep = {t.m_Uuid.AsString() for t in board.GetTracks() if t.IsLocked()}
+        hit = _drc_copper_hits(keep)
+        if not hit:
+            break
+        gone = [t for t in board.GetTracks() if t.m_Uuid.AsString() in hit]
+        for t in gone:
+            board.Remove(t)
+        board.BuildConnectivity()
+        print(f"finish: round {rnd + 1}: {len(gone)} tracks / vias in a copper violation taken out, {n} stubs pruned")
+        left = raster.finish_rip(board, _width_of, HV)
+    board.Save(PCB)         # (a board reloaded here: after the rip-up rounds pcbnew's objects for this one go stale)
+    board = pcbnew.LoadBoard(PCB)
+    print("track ends welded onto the track they only overlapped:", _weld(board))
+    print("signal vias joining nothing across layers, taken out:", _idle_vias(board))
+    print("copper islands with no pad on them, taken out:", _drop_islands(board))
+    pcbnew.ZONE_FILLER(board).Fill(board.Zones())
     print("nets still in pieces after the finisher:", left or "none")
     print("copper on the plug's tab:", prewire.on_tab(board) or "none")
     board.Save(PCB)
     drc()
+
+
+def _bad_vias(board):
+    """Remove the autorouter's vias (not the locked ones: hand copper, fan-out) that sit in or against an
+    SMD pad, where the hole takes the joint's solder, or inside layout.VIA_KEEPOUTS; the finisher joins
+    what that opens. Returns how many went."""
+    import pcbnew
+    import layout
+    T = pcbnew.ToMM
+    pads = [p for fp in board.GetFootprints() for p in fp.Pads() if p.GetAttribute() == pcbnew.PAD_ATTRIB_SMD]
+    gone = []
+    for v in board.GetTracks():
+        if v.Type() != pcbnew.PCB_VIA_T or v.IsLocked():
+            continue
+        x, y = T(v.GetPosition().x), T(v.GetPosition().y)
+        r = T(v.GetWidth(pcbnew.F_Cu)) / 2
+        if any(k[0] - r < x < k[2] + r and k[1] - r < y < k[3] + r for k in layout.VIA_KEEPOUTS):
+            gone.append(v)
+            continue
+        vb = v.GetBoundingBox()
+        for p in pads:
+            if not vb.Intersects(p.GetBoundingBox()):
+                continue
+            L = pcbnew.F_Cu if p.IsOnLayer(pcbnew.F_Cu) else pcbnew.B_Cu
+            if v.GetEffectiveShape(L).Collide(p.GetEffectiveShape(L), pcbnew.FromMM(0.05)):
+                gone.append(v)
+                break
+    for v in gone:
+        board.Remove(v)
+    board.BuildConnectivity()
+    return len(gone)
+
+
+def _weld(board):
+    """A track end that lies on no other end, via or pad of its net but whose copper overlaps another track
+    of it: add the short piece from that end to the nearest point of the other track's centre line. The
+    finisher joins by overlap; KiCad counts a joint only where an end lies in the other's copper, and the
+    overlap alone can be narrower than a track (review 2026-11-24). Returns how many pieces it added."""
+    import pcbnew
+    T = pcbnew.ToMM
+    # first the debris that hides open ends: zero-length pieces, and a piece laid twice (the same two ends,
+    # either way round): an end shared only with its own copy is still an open end
+    seen, dup = set(), []
+    for t in board.GetTracks():
+        if t.Type() != pcbnew.PCB_TRACE_T:
+            continue
+        a, b = (t.GetStart().x, t.GetStart().y), (t.GetEnd().x, t.GetEnd().y)
+        key = (t.GetNetCode(), t.GetLayer(), min(a, b), max(a, b))
+        if a == b or key in seen:
+            dup.append(t)
+        seen.add(key)
+    for t in dup:
+        board.Remove(t)
+    trk = [t for t in board.GetTracks() if t.Type() == pcbnew.PCB_TRACE_T]
+    by = {}
+    for t in trk:
+        by.setdefault((t.GetNetCode(), t.GetLayer()), []).append(t)
+    vias = {}
+    for v in board.GetTracks():
+        if v.Type() == pcbnew.PCB_VIA_T:
+            vias.setdefault(v.GetNetCode(), []).append(v)
+    pads = {}
+    for fp in board.GetFootprints():
+        for p in fp.Pads():
+            pads.setdefault(p.GetNetCode(), []).append(p)
+    new = []
+    for (net, layer), ts in by.items():
+        ends = {}
+        for t in ts:
+            for e in (t.GetStart(), t.GetEnd()):
+                ends[(e.x, e.y)] = ends.get((e.x, e.y), 0) + 1
+        for t in ts:
+            for e in (t.GetStart(), t.GetEnd()):
+                if ends[(e.x, e.y)] > 1:
+                    continue
+                at = next((v for v in vias.get(net, ()) if (v.GetPosition() - e).EuclideanNorm() < v.GetWidth(layer) // 2), None)
+                if at is not None:      # inside a via's ring but not on its middle: run it in (KiCad calls the
+                    if (at.GetPosition() - e).EuclideanNorm() > 1000:      # via dangling otherwise)
+                        s = pcbnew.PCB_TRACK(board)
+                        s.SetStart(e)
+                        s.SetEnd(at.GetPosition())
+                        s.SetWidth(t.GetWidth())
+                        s.SetLayer(layer)
+                        s.SetNetCode(net)
+                        s.SetLocked(t.IsLocked())
+                        new.append(s)
+                    continue
+                if any(p.IsOnLayer(layer) and p.HitTest(e) for p in pads.get(net, ())):
+                    continue
+                # an end just outside a via's ring or a pad, its copper overlapping it: run it in
+                hw = t.GetWidth() // 2
+                near = next((v for v in vias.get(net, ())
+                             if (v.GetPosition() - e).EuclideanNorm() < v.GetWidth(layer) // 2 + hw), None)
+                tgt = near.GetPosition() if near is not None else None
+                if tgt is None:
+                    for p in pads.get(net, ()):
+                        if p.IsOnLayer(layer) and p.GetEffectiveShape(layer).Collide(
+                                pcbnew.SHAPE_SEGMENT(e, e, t.GetWidth()), 0):
+                            bb = p.GetBoundingBox()
+                            bb.Inflate(-min(bb.GetWidth(), bb.GetHeight()) // 4)
+                            tgt = pcbnew.VECTOR2I(min(max(e.x, bb.GetLeft()), bb.GetRight()),
+                                                  min(max(e.y, bb.GetTop()), bb.GetBottom()))
+                            break
+                if tgt is not None:
+                    s = pcbnew.PCB_TRACK(board)
+                    s.SetStart(e)
+                    s.SetEnd(tgt)
+                    s.SetWidth(t.GetWidth())
+                    s.SetLayer(layer)
+                    s.SetNetCode(net)
+                    s.SetLocked(t.IsLocked())
+                    new.append(s)
+                    continue
+                best = None
+                for o in ts:
+                    if o is t:
+                        continue
+                    a, b = o.GetStart(), o.GetEnd()
+                    dx, dy = b.x - a.x, b.y - a.y
+                    L2 = dx * dx + dy * dy
+                    k = 0.0 if L2 == 0 else max(0.0, min(1.0, ((e.x - a.x) * dx + (e.y - a.y) * dy) / L2))
+                    px, py = a.x + k * dx, a.y + k * dy
+                    dist = ((e.x - px) ** 2 + (e.y - py) ** 2) ** 0.5
+                    if dist < (t.GetWidth() + o.GetWidth()) / 2 and (best is None or dist < best[0]):
+                        best = (dist, int(round(px)), int(round(py)), o)
+                if best and best[0] > 1000:     # (under a micron: it is on the line already)
+                    s = pcbnew.PCB_TRACK(board)
+                    s.SetStart(e)
+                    s.SetEnd(pcbnew.VECTOR2I(best[1], best[2]))
+                    s.SetWidth(min(t.GetWidth(), best[3].GetWidth()))
+                    s.SetLayer(layer)
+                    s.SetNetCode(net)
+                    s.SetLocked(t.IsLocked())
+                    new.append(s)
+    for s in new:
+        board.Add(s)
+    board.BuildConnectivity()
+    return len(new)
+
+
+def _idle_vias(board):
+    """Remove signal vias whose tracks are all on one layer (KiCad's 'dangling' vias: what a rip-up or a
+    re-join leaves in the middle of a track). Checked as a whole: if the board has more open connections
+    afterwards than before, every one is put back. Returns how many went."""
+    import pcbnew
+
+    def open_count():
+        board.BuildConnectivity()
+        return board.GetConnectivity().GetUnconnectedCount(False)
+
+    try:
+        before = open_count()
+    except AttributeError:      # pcbnew sometimes hands back an unwrapped connectivity object after items were removed
+        print("idle vias: left in (pcbnew's connectivity object is not usable in this run)")
+        return 0
+    con = board.GetConnectivity()
+    idle = []
+    for v in list(board.GetTracks()):
+        if v.Type() != pcbnew.PCB_VIA_T or v.GetNetname() in ("GND", "3V3"):
+            continue
+        items = con.GetConnectedItems(v)
+        layers = {t.GetLayer() for t in items if t.Type() == pcbnew.PCB_TRACE_T}
+        layers |= {L for p in items if p.Type() == pcbnew.PCB_PAD_T for L in (pcbnew.F_Cu, pcbnew.B_Cu) if p.IsOnLayer(L)}
+        if len(layers) < 2:
+            idle.append(v)
+    for v in idle:
+        board.Remove(v)
+    if open_count() > before:
+        for v in idle:
+            board.Add(v)
+        board.BuildConnectivity()
+        return 0
+    return len(idle)
+
+
+def _drop_islands(board):
+    """Remove the tracks and vias of a signal net that hang together but reach none of its pads (what
+    a rip-up leaves between two vias: no end of it dangles, so the stub pruning keeps it). Returns
+    how many items went."""
+    import maze
+    import pcbnew
+    n = 0
+    nets = sorted({t.GetNetname() for t in board.GetTracks()} - {"GND", "3V3", ""})
+    for net in nets:
+        for piece in maze._pieces(board, net):
+            if not any(it.Type() == pcbnew.PCB_PAD_T for it in piece):
+                for it in piece:
+                    board.Remove(it)
+                n += len(piece)
+    board.BuildConnectivity()
+    return n
+
+
+def finish():
+    """`build.py finish`: the finisher alone, on the routed board on disk."""
+    import pcbnew
+    board = pcbnew.LoadBoard(PCB)
+    _hv_spare(board)
+    _finish(board)
 
 
 def _copper(board, d, keepout, stitch):
@@ -466,11 +792,19 @@ def _copper(board, d, keepout, stitch):
     if stitch:
         print("stitching vias:", pcbgen.stitch(board, "GND", layout.X0 + 2, 2, layout.W - 2, layout.H - 2, pitch=3.0, keepouts=keepout,
                                                 clearance=HV_CLEARANCE / 1000))
+    # no via and no pour beside the plug's hand-soldered pads (tracks leave them as before); no pour under
+    # the PTC either: its two pads are battery ahead of the fuse and behind it. (Added here, after the
+    # autorouter: in the board it is given, KiCad exports a rule area as a keep-out for tracks too, and
+    # Freerouting then could not reach the plug's pads.)
+    for k in layout.VIA_KEEPOUTS:
+        pcbgen.rule_area(board, "plug joint: no vias, no pour", (pcbnew.F_Cu, pcbnew.B_Cu), *k)
+    ptc = board.FindFootprintByReference(next(p.ref for p in d.parts if p.value == "2A 60V"))
+    pcbgen.rule_area(board, "PTC: no pour", (pcbnew.F_Cu,), *layout.courtyard(ptc), vias=True)
     gnd = board.FindNet("GND")
     for layer in (pcbnew.F_Cu, pcbnew.B_Cu):
-        pcbgen.zone(board, gnd, layer, layout.X0, 0, layout.W, layout.H, clearance=0.3, solid=False)
-    if not any(z.GetNetname() == "3V3" and z.IsOnLayer(pcbnew.In2_Cu) for z in board.Zones()):
-        pcbgen.zone(board, board.FindNet("3V3"), pcbnew.In2_Cu, layout.X0, 0, layout.W, layout.H, clearance=0.3, solid=True)
+        pcbgen.zone(board, gnd, layer, layout.X0, 0, layout.W, layout.H_ALL, clearance=0.3, solid=False)
+    if not any(z.GetNetname() == "3V3" and z.IsOnLayer(PWR_L()) for z in board.Zones()):
+        pcbgen.zone(board, board.FindNet("3V3"), PWR_L(), layout.X0, 0, layout.W, layout.H_ALL, clearance=0.3, solid=True)
     # thermal relief on the pours (no tombstoned 0603s); big pads and the exposed pads stay solid
     for fp in board.GetFootprints():
         for pad in fp.Pads():
@@ -480,7 +814,8 @@ def _copper(board, d, keepout, stitch):
             area = pcbnew.ToMM(sz.x) * pcbnew.ToMM(sz.y)
             # through-hole GND pins too: the pour round a connector pin is often crowded down to one
             # spoke or an island (KiCad's starved_thermal); the pin reaches In1 through its barrel anyway
-            if area >= 3.0 or pad.GetAttribute() == pcbnew.PAD_ATTRIB_PTH:
+            # ... and a connector's GND pads: beside its shell tabs the pour leaves room for one spoke only
+            if area >= 3.0 or pad.GetAttribute() == pcbnew.PAD_ATTRIB_PTH or fp.GetReference().startswith("J"):
                 pad.SetLocalZoneConnection(pcbnew.ZONE_CONNECTION_FULL)
     return ldo
 
@@ -574,7 +909,12 @@ def _patch_prepare(board, d, keepout):
             boxes.append(bb)
     gone = [t for t in tracks if any(b.Intersects(t.GetBoundingBox()) for b in boxes)
             or not edge.Contains(t.GetBoundingBox())]
+    def where(t):
+        p, q = (t.GetPosition(),) * 2 if t.Type() == pcbnew.PCB_VIA_T else (t.GetStart(), t.GetEnd())
+        return (f"{t.GetNetname()} {t.GetLayerName()} ({pcbnew.ToMM(p.x):.1f}, {pcbnew.ToMM(p.y):.1f})"
+                f"-({pcbnew.ToMM(q.x):.1f}, {pcbnew.ToMM(q.y):.1f})")
     for t in gone:
+        print("patch:   gone:", where(t))
         board.Remove(t)
     print(f"patch: removed {len(gone)} over moved parts or off the board, "
           f"{_prune_stubs(board)} stubs left dangling")
@@ -586,7 +926,7 @@ def _patch_prepare(board, d, keepout):
         board.Remove(t)
     new = {t.m_Uuid.AsString() for t in board.GetTracks()} - have
     print(f"patch: hand copper re-laid, {len(new)} new items")
-    for net, layer in (("GND", pcbnew.In1_Cu), ("3V3", pcbnew.In2_Cu)):
+    for net, layer in (("GND", pcbnew.In1_Cu), ("3V3", PWR_L())):
         bad = pcbgen.fanout(board, net, layer, keepouts=keepout, hv=HV, hv_clearance=HV_CLEARANCE / 1000,
                             refs=moved)
         print(f"patch: {net} fan-out of the moved parts, pads without a via:", bad or "none")
@@ -596,6 +936,7 @@ def _patch_prepare(board, d, keepout):
         if not hit:
             break
         for t in [t for t in board.GetTracks() if t.m_Uuid.AsString() in hit]:
+            print("patch:   clash:", where(t))
             board.Remove(t)
         print(f"patch: DRC round {rnd + 1}: removed {len(hit)} clashing items, "
               f"{_prune_stubs(board)} stubs left dangling")
@@ -804,12 +1145,28 @@ def _natural(ref):
 # Derived 2026-11-03 by overlaying each JLC footprint on the KiCad pads (all within 0.25 mm);
 # still check JLC's placement preview for U1, U4, U7, J2 and L1.
 JLC_CORR = {
-    "C8326": (180, 0, 0), "C8545": (180, 0, 0), "C15127": (180, 0, 0), "C20526": (180, 0, 0),
+    "C8545": (180, 0, 0), "C15127": (180, 0, 0), "C20526": (180, 0, 0),
     "C233494": (180, 0, 0), "C131941": (180, 0, 0), "C150716": (180, 0, 0),
     "C2687116": (270, 0, 0), "C2941042": (270, 0, 0), "C334232": (270, 0, 0), "C1852061": (270, 0, 0),
-    "C183332": (270, 0, 0), "C97521": (270, 0, 0), "C7932": (270, 0, 0), "C524806": (270, 0, 0),
+    "C183332": (270, 0, 0), "C97521": (270, 0, 0), "C524806": (270, 0, 0),
     "C521608": (270, 0, 0), "C41376037": (270, 0, 0),
     "C10493": (180, 0, 0),        # SI2309CDS SOT-23
+    # (fourth review, 2026-11-25: every BOM number but the inductor laid over JLCPCB's own footprint)
+    "C100026": (90, -0.65, 0),    # BCX56-16,115 SOT-89: JLCPCB's drawing has the leads up and its origin 0.65 mm toward the tab
+    "C189895": (0, 0, -0.25),     # JST GH: origin 0.25 mm off
+    **{k: (0, 0, 0) for k in ("C2887275", "C2913642", "C85100", "C8678", "C19077410", "C8598", "C173417", "C81598",
+                              "C19077514", "C96512", "C19077401", "C19077418", "C160404", "C160402", "C318884",
+                              "C13738", "C9002")},        # checked: right as they are
+    "C1518769": (270, 0, 0),      # ATECC608B SOIC-8 and
+    "C2672621": (270, 0, 0),      # THVD2450 SOIC-8: the same KiCad footprint and frame as the TCAN1044
+    # found by laying JLCPCB's own footprints (EasyEDA's library) over KiCad's pads, third review 2026-11-25:
+    "C110926": (270, 0, 0),       # LIS2DH12 LGA-12
+    "C5373042": (270, 0, 0),      # CH334P QFN-16
+    "C2879389": (270, 0, 0),      # TPS27S100APWPR HTSSOP-14
+    "C585350": (180, 0, 0),       # Molex 104031-0811 microSD socket
+    "C40736": (270, 0, 0),        # KINGTEK DSHP04TSGET DIP switch
+    "C29718": (270, 0, 0),        # 4 x 10k array
+    "C965840": (180, 0, 0),       # XL-1615RGBC RGB LED
     "C22427890": (270, 0, 0),     # LM2901BIDR SOIC-14
     "C84681": (270, 0, 0),        # CH340C SOIC-16 (same frame as the TCAN1044 SOIC-8, checked by pad match)
     "C701342": (270, 0, 3.74),    # ESP32: JLC origin is the pad-field centre, not the body centre
@@ -879,7 +1236,10 @@ def _plug_fab(out):
     run(["kicad-cli", "pcb", "export", "gerbers", "--layers", layers, "--subtract-soldermask",
          "-o", gdir + "/", PLUG_PCB], capture_output=True)
     run(["kicad-cli", "pcb", "export", "drill", "--format", "excellon", "--excellon-separate-th",
-         "--generate-map", "--map-format", "gerberx2", "-o", gdir + "/", PLUG_PCB], capture_output=True)
+         "-o", gdir + "/", PLUG_PCB], capture_output=True)
+    for f_ in os.listdir(gdir):         # nothing in the zip that JLCPCB's importer could take for a layer
+        if f_.endswith(".gbrjob") or "drl_map" in f_ or (f_.endswith("NPTH.drl") and "T1" not in open(os.path.join(gdir, f_)).read()):
+            os.remove(os.path.join(gdir, f_))
     shutil.make_archive(os.path.join(out, f"{PLUG_NAME}-rev{REV}-gerbers"), "zip", gdir)
     import plugprint    # the 1:1 sheet a bought plug is checked on before the boards are ordered
     plugprint.main(PLUG_PCB, os.path.join(out, f"{PLUG_NAME}-rev{REV}-print-1to1.pdf"))
@@ -894,13 +1254,16 @@ def fab():
     gdir = os.path.join(out, "gerbers")
     shutil.rmtree(out, ignore_errors=True)
     os.makedirs(gdir)
-    layers = "F.Cu,In1.Cu,In2.Cu,B.Cu,F.Paste,B.Paste,F.Silkscreen,B.Silkscreen,F.Mask,B.Mask,Edge.Cuts"
+    layers = "F.Cu,In1.Cu,In2.Cu,In3.Cu,In4.Cu,B.Cu,F.Paste,B.Paste,F.Silkscreen,B.Silkscreen,F.Mask,B.Mask,Edge.Cuts"
     run(["kicad-cli", "pcb", "export", "gerbers", "--layers", layers, "--subtract-soldermask",
          "-o", gdir + "/", PCB], capture_output=True)
     run(["kicad-cli", "pcb", "export", "drill", "--format", "excellon", "--excellon-separate-th",
-         "--generate-map", "--map-format", "gerberx2", "-o", gdir + "/", PCB], capture_output=True)
+         "-o", gdir + "/", PCB], capture_output=True)
+    for f_ in os.listdir(gdir):         # nothing in the zip that JLCPCB's importer could take for a layer
+        if f_.endswith(".gbrjob") or "drl_map" in f_ or (f_.endswith("NPTH.drl") and "T1" not in open(os.path.join(gdir, f_)).read()):
+            os.remove(os.path.join(gdir, f_))
     shutil.make_archive(os.path.join(out, f"{NAME}-rev{REV}-gerbers"), "zip", gdir)
-    # BOM: group by value + footprint + LCSC
+    # BOM: one line per LCSC number and footprint (the four buttons are one line, not four)
     groups, hand = {}, []
     for p in obd_adapter.d.parts:
         if p.dnp:
@@ -909,38 +1272,63 @@ def fab():
             if not p.lib_id.startswith(("Connector:TestPoint", "Jumper:SolderJumper")):  # bare pads
                 hand.append(p)
             continue
-        key = (p.value, p.footprint.split(":")[1], p.lcsc)
-        groups.setdefault(key, []).append(p.ref)
+        groups.setdefault((p.lcsc, p.footprint.split(":")[1]), []).append(p)
     with open(os.path.join(out, f"{NAME}-rev{REV}-bom-jlcpcb.csv"), "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["Comment", "Designator", "Footprint", "LCSC"])
-        for (val, fp, lcsc), refs in sorted(groups.items(), key=lambda kv: kv[1][0]):
-            w.writerow([val, ",".join(sorted(refs, key=_natural)), fp, lcsc])
+        for (lcsc, fp), ps in sorted(groups.items(), key=lambda kv: _natural(kv[1][0].ref)):
+            vals = sorted({p.value for p in ps})
+            w.writerow([" / ".join(vals), ",".join(sorted((p.ref for p in ps), key=_natural)), fp, lcsc])
     with open(os.path.join(out, f"{NAME}-rev{REV}-hand-fit.txt"), "w") as f:
         f.write("Not assembled by JLCPCB (no LCSC number): fit by hand or leave off.\n\n")
         for p in hand:
             f.write(f"{p.ref:6} {p.value:22} {p.footprint}\n")
-    # CPL from KiCad's position file
-    pos = os.path.join(out, "pos.csv")
-    run(["kicad-cli", "pcb", "export", "pos", "--format", "csv", "--units", "mm", "--side", "both",
-         "--exclude-dnp", "-o", pos, PCB], capture_output=True)
-    assembled = {r for refs in groups.values() for r in refs}
-    with open(pos) as fin, open(os.path.join(out, f"{NAME}-rev{REV}-cpl-jlcpcb.csv"), "w", newline="") as fout:
+    # CPL, straight from the board. JLCPCB's convention for the bottom side (as kicad-jlcpcb-tools applies
+    # it): the angle is mirrored (180 - angle) before the part's correction is added, and the correction's
+    # x offset changes sign. Top side: angle + correction.
+    import math
+    import pcbnew
+    board = pcbnew.LoadBoard(PCB)
+    assembled = {p.ref: p for ps in groups.values() for p in ps}
+    unchecked = []
+    with open(os.path.join(out, f"{NAME}-rev{REV}-cpl-jlcpcb.csv"), "w", newline="") as fout:
         w = csv.writer(fout)
         w.writerow(["Designator", "Mid X", "Mid Y", "Layer", "Rotation"])
-        import math
-        lcsc_of = {p.ref: p.lcsc for p in obd_adapter.d.parts}
-        for row in csv.DictReader(fin):
-            if row["Ref"] not in assembled:
+        aux = board.GetDesignSettings().GetAuxOrigin()
+        for fp in sorted(board.GetFootprints(), key=lambda f: _natural(f.GetReference())):
+            ref = fp.GetReference()
+            if ref not in assembled:
                 continue
-            x, y, rot = float(row["PosX"]), float(row["PosY"]), float(row["Rot"])  # y is already up
-            drot, dx, dy = JLC_CORR.get(lcsc_of[row["Ref"]], (0, 0, 0))
+            bottom = fp.IsFlipped()
+            rot = fp.GetOrientationDegrees() % 360
+            if bottom:
+                rot = (180 - rot) % 360
+            lcsc = assembled[ref].lcsc
+            drot, dx, dy = JLC_CORR.get(lcsc, (0, 0, 0))
             r = math.radians(rot)
-            x += dx * math.cos(r) + dy * math.sin(r)
-            y -= -dx * math.sin(r) + dy * math.cos(r)
-            w.writerow([row["Ref"], f"{x:.4f}mm", f"{y:.4f}mm",
-                        "Top" if row["Side"] == "top" else "Bottom", f"{(rot + drot) % 360:g}"])
-    os.remove(pos)
+            ox = dx * math.cos(r) + dy * math.sin(r)
+            oy = -dx * math.sin(r) + dy * math.cos(r)       # board y runs down
+            if bottom:
+                ox = -ox
+            q = fp.GetPosition()
+            x = pcbnew.ToMM(q.x - aux.x) + ox
+            y = -(pcbnew.ToMM(q.y - aux.y) + oy)
+            w.writerow([ref, f"{x:.4f}mm", f"{y:.4f}mm", "Bottom" if bottom else "Top", f"{(rot + drot) % 360:g}"])
+            pins = len({pd.GetNumber() for pd in fp.Pads() if pd.GetNumber()})
+            name = fp.GetFPID().GetLibItemName().__str__()
+            chip2 = name.startswith(("R_", "C_0", "C_1", "L_", "Fuse_")) and not name.startswith("R_Array")
+            polar = not chip2       # everything but a two-terminal chip part: a wrong zero angle shows on it
+            if polar and lcsc not in JLC_CORR:
+                unchecked.append((ref, assembled[ref].value, fp.GetFPID().GetLibItemName().__str__(), lcsc,
+                                  "Bottom" if bottom else "Top"))
+    with open(os.path.join(out, f"{NAME}-rev{REV}-rotation-check.txt"), "w") as f:
+        f.write("Parts with a pin 1 or a polarity whose JLCPCB rotation has NOT been checked against JLCPCB's own\n"
+                "footprint (no entry in JLC_CORR, gen/build.py): they are placed at KiCad's angle. Look at each one\n"
+                "in JLCPCB's placement preview before paying; add what is wrong to JLC_CORR and run fab again.\n"
+                "Every bottom-side part is on this board for the first time: look at those too.\n\n")
+        for row in unchecked:
+            f.write("{:6} {:22} {:55} {:10} {}\n".format(*row))
+    print(f"{len(unchecked)} polarised parts have no checked JLCPCB rotation: fab/{NAME}-rev{REV}-rotation-check.txt")
     _plug_fab(out)
     print("fab outputs in", out, ":", sorted(os.listdir(out)))
     print(len(assembled), "parts assembled,", len(groups), "BOM lines,", len(hand), "hand-fit")

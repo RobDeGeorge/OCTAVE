@@ -1,27 +1,35 @@
 ** Drc report for obd-adapter.kicad_pcb **
-** Created on 2026-11-17T16:06:38 **
+** Created on 2026-11-25T07:50:43 **
 ** Report includes: Errors, Warnings, Exclusions **
 
-** Found 5 DRC violations **
+** Found 8 DRC violations **
 [lib_footprint_mismatch]: Footprint 'ESP32-WROOM-32E' does not match copy in library 'RF_Module'
     Local override; warning
-    @(93.4400 mm, 35.0000 mm): Footprint U4
+    @(73.4400 mm, 27.5000 mm): Footprint U4
+[silk_edge_clearance]: Silkscreen clipped by board edge
+    Rule: board setup constraints silk; warning
+    @(80.0000 mm, 0.0000 mm): Segment on Edge.Cuts
+    @(79.4400 mm, 18.3000 mm): Polygon of U4 on F.Silkscreen
 [silk_edge_clearance]: Silkscreen clipped by board edge
     Rule: board setup constraints silk; warning
     @(0.0000 mm, 0.0000 mm): Segment on Edge.Cuts
-    @(89.3000 mm, 1.3500 mm): Segment of J2 on F.Silkscreen
+    @(69.7000 mm, 1.3500 mm): Segment of J2 on F.Silkscreen
 [silk_edge_clearance]: Silkscreen clipped by board edge
     Rule: board setup constraints silk; warning
     @(0.0000 mm, 0.0000 mm): Segment on Edge.Cuts
-    @(98.7000 mm, 1.3500 mm): Segment of J2 on F.Silkscreen
-[silk_edge_clearance]: Silkscreen clipped by board edge
-    Rule: board setup constraints silk; warning
-    @(100.0000 mm, 70.0000 mm): Segment on Edge.Cuts
-    @(89.3000 mm, 68.6500 mm): Segment of J7 on F.Silkscreen
-[silk_edge_clearance]: Silkscreen clipped by board edge
-    Rule: board setup constraints silk; warning
-    @(100.0000 mm, 70.0000 mm): Segment on Edge.Cuts
-    @(98.7000 mm, 68.6500 mm): Segment of J7 on F.Silkscreen
+    @(79.1000 mm, 1.3500 mm): Segment of J2 on F.Silkscreen
+[via_dangling]: Via is not connected or connected on only one layer
+    Local override; warning
+    @(13.1500 mm, 15.5000 mm): Via [VBAT_P] on F.Cu - B.Cu
+[via_dangling]: Via is not connected or connected on only one layer
+    Local override; warning
+    @(27.1472 mm, 42.4493 mm): Via [5V_BUCK] on F.Cu - B.Cu
+[via_dangling]: Via is not connected or connected on only one layer
+    Local override; warning
+    @(38.8947 mm, 46.8548 mm): Via [POD_F] on F.Cu - B.Cu
+[via_dangling]: Via is not connected or connected on only one layer
+    Local override; warning
+    @(48.3282 mm, 24.7500 mm): Via [ACC_INT1] on F.Cu - B.Cu
 
 ** Found 0 unconnected pads **
 

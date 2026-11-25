@@ -2,7 +2,7 @@
 
 **Goal:** build our own OBD-II adapter that speaks every OBD protocol (including the TJ's J1850 VPW), works with every app over the ELM327 command set, and adds an OCTAVE native mode with an on-adapter PID scheduler, hardware timestamps and store-and-forward into the black box; optionally a tethered sensor pod (GNSS dead reckoning, IMU, baro, extras).
 **Status:** in progress: the Rev 0 bring-up board is designed (`hardware/obd-adapter/`, 2026-11-02). Since 2026-11-07 it plugs straight into the OBD-II port (a J1962 male plug on a small adapter board soldered across the board's end, the board in the middle of the plug) instead of using a Micro-Fit cable. Generated, ERC/DRC clean, JLCPCB fab files ready; not yet reviewed by a human or ordered, and the plug footprint (Jiatel CR-PG001, from its drawing) has to be checked against a real plug first. No firmware yet. Nothing in OCTAVE depends on it.
-**Last updated:** 2026-11-09
+**Last updated:** 2026-11-25 (the board reworked compact and two-sided: 80 x 55 mm, six layers, 0402 passives, one USB-C behind a hub that reaches both chips, no mounting holes, the pod-bus connector on it. Routed and rule-checked, through four design reviews by Claude and none by a person, JLCPCB order files in `fab/`, not ordered: `hardware/obd-adapter/README.md`, top. Where this file says 100 x 70 mm, two USB-C ports or mounting holes, it describes the one-sided Rev 0 layout that preceded it.)
 
 ## Why this is parked here
 

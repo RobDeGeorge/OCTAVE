@@ -2275,7 +2275,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
+		(property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
 			(at 203.2 71.12 0)
 			(hide yes)
 			(effects
@@ -2302,7 +2302,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C14663"
+		(property "LCSC" "C307331"
 			(at 203.2 71.12 0)
 			(hide yes)
 			(effects
@@ -2351,7 +2351,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
+		(property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
 			(at 215.9 71.12 0)
 			(hide yes)
 			(effects
@@ -2378,7 +2378,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C14663"
+		(property "LCSC" "C307331"
 			(at 215.9 71.12 0)
 			(hide yes)
 			(effects
@@ -2427,7 +2427,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
 			(at 228.6 71.12 0)
 			(hide yes)
 			(effects
@@ -2454,7 +2454,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C23162"
+		(property "LCSC" "C25900"
 			(at 228.6 71.12 0)
 			(hide yes)
 			(effects
@@ -2753,7 +2753,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
+		(property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
 			(at 203.2 137.16 0)
 			(hide yes)
 			(effects
@@ -2780,7 +2780,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C14663"
+		(property "LCSC" "C307331"
 			(at 203.2 137.16 0)
 			(hide yes)
 			(effects
@@ -2829,7 +2829,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
+		(property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
 			(at 215.9 137.16 0)
 			(hide yes)
 			(effects
@@ -2856,7 +2856,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C14663"
+		(property "LCSC" "C307331"
 			(at 215.9 137.16 0)
 			(hide yes)
 			(effects
@@ -2905,7 +2905,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
 			(at 228.6 137.16 0)
 			(hide yes)
 			(effects
@@ -2932,7 +2932,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C23162"
+		(property "LCSC" "C25900"
 			(at 228.6 137.16 0)
 			(hide yes)
 			(effects

@@ -1,5 +1,7 @@
 # STM32G474RET6 pin check vs ST open pin data (STM32G474R(B-C-E)Tx.xml, GPIO-STM32G47x_gpio_v1_0)
 
+(2026-11-24: the nets on PA11 / PA12 were renamed `USB_DM` / `USB_DP` -> `MCU_DM` / `MCU_DP` when the hub went in between them and the socket. The pins and their signals did not change; those two lines were edited by hand, the check was not re-run: ST's two XML files are not kept in the repository.)
+
 ```
 symbol pin names vs ST: OK
 
@@ -48,8 +50,8 @@ OK   41 PC9              J1850_TXN    needs TIM3_CH4             AFAF2
 OK   42 PA8              I2C_SDA      needs I2C2_SDA             AFAF4
 OK   43 PA9              I2C_SCL      needs I2C2_SCL             AFAF4
      44 PA10             EXP_PA10
-OK   45 PA11             USB_DM       needs USB_DM               AF-
-OK   46 PA12             USB_DP       needs USB_DP               AF-
+OK   45 PA11             MCU_DM       needs USB_DM               AF-
+OK   46 PA12             MCU_DP       needs USB_DP               AF-
      47 VSS              GND
      48 VDD              3V3
 OK   49 PA13             SWDIO        needs SYS_JTMS-SWDIO       AFAF0

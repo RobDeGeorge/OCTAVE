@@ -41,6 +41,10 @@ def set_model(fp, name):
     fp.Models().push_back(m)
 
 
+# every copper layer a board here can have (a layer the board lacks carries nothing)
+COPPER = (pcbnew.F_Cu, pcbnew.In1_Cu, pcbnew.In2_Cu, pcbnew.In3_Cu, pcbnew.In4_Cu, pcbnew.B_Cu)
+
+
 def new_board(layers=4):
     b = pcbnew.NewBoard("/dev/null") if False else pcbnew.BOARD()
     b.SetCopperLayerCount(layers)
@@ -179,9 +183,14 @@ def place(fp, x, y, rot=0, back=False):
     fp.SetOrientationDegrees(rot)
 
 
-def outline(board, x0, y0, x1, y1, r=1.0, tab=None):
-    """Rectangular board outline; tab = (ya, yb, depth) adds a tab sticking out of the left edge."""
-    pts = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+def outline(board, x0, y0, x1, y1, r=1.0, tab=None, lobe=None):
+    """Rectangular board outline; tab = (ya, yb, depth) adds a tab sticking out of the left edge,
+    lobe = (xa, xb, depth) a rectangle stepping out of the bottom edge."""
+    pts = [(x0, y0), (x1, y0), (x1, y1)]
+    if lobe:
+        xa, xb, depth = lobe
+        pts += [(xb, y1), (xb, y1 + depth), (xa, y1 + depth), (xa, y1)]
+    pts += [(x0, y1)]
     if tab:
         ya, yb, depth = tab
         pts += [(x0, yb), (x0 - depth, yb), (x0 - depth, ya), (x0, ya)]
@@ -230,6 +239,10 @@ def fanout(board, netname, layer_plane, keepouts=(), via_d=0.6, drill=0.3, width
     clr = MM(clearance)
     items = [t for t in board.GetTracks()] + [p for fp in board.GetFootprints() for p in fp.Pads()]
     failed = []
+    # the way out of every signal pin of a fine-pitch chip (0.65 mm pitch or less) stays free of these vias:
+    # 1.3 mm straight out from the pad, as wide as the pad plus a via. A supply pin's via beside each
+    # neighbour walls a signal pin in (the STM32's pins 25 / 26, then 30, 2026-11-24)
+    keepouts = list(keepouts) + escapes(board, via_d / 2 + 0.1)
     for fp in board.GetFootprints():
         if refs is not None and fp.GetReference() not in refs:
             continue
@@ -247,7 +260,8 @@ def fanout(board, netname, layer_plane, keepouts=(), via_d=0.6, drill=0.3, width
                 r = r0 + MM(extra)
                 p = pcbnew.VECTOR2I(int(c.x + r * math.cos(a)), int(c.y + r * math.sin(a)))
                 x, y = pcbnew.ToMM(p.x), pcbnew.ToMM(p.y)
-                if any(k0 <= x <= k2 and k1 <= y <= k3 for k0, k1, k2, k3 in keepouts):
+                g = vd / 2 + 0.05       # the whole via outside every keep-out, not its centre alone
+                if any(k0 - g <= x <= k2 + g and k1 - g <= y <= k3 + g for k0, k1, k2, k3 in keepouts):
                     continue
                 via = pcbnew.PCB_VIA(board)
                 via.SetPosition(p)
@@ -300,11 +314,46 @@ def fanout(board, netname, layer_plane, keepouts=(), via_d=0.6, drill=0.3, width
     return failed
 
 
-def _clear(board, via, trk, items, net, clr, hv=(), hv_clr=0):
+UNFUSED = {"VBAT_IN": 0.6}      # net -> clearance mm: battery copper ahead of the fuse keeps further off
+
+
+def escapes(board, grow, reach=1.3, planes=("GND", "3V3")):
+    """[(x0, y0, x1, y1)]: for each signal pad of a part with pads 0.65 mm apart or closer, the strip from the
+    pad's outer end `reach` mm away from the part's middle, grown by `grow`."""
+    T = pcbnew.ToMM
+    out = []
+    for fp in board.GetFootprints():
+        pads = [p for p in fp.Pads() if p.GetAttribute() == pcbnew.PAD_ATTRIB_SMD and p.GetNumber()]
+        if len(pads) < 8:
+            continue
+        pts = sorted((T(p.GetPosition().x), T(p.GetPosition().y)) for p in pads)
+        pitch = min((abs(a[0] - b[0]) + abs(a[1] - b[1]) for a, b in zip(pts, pts[1:]) if a != b), default=9)
+        if pitch > 0.66:
+            continue
+        c = fp.GetBoundingBox(False).GetCenter()
+        cx, cy = T(c.x), T(c.y)
+        for p in pads:
+            if p.GetNetname() in planes:
+                continue
+            b = p.GetBoundingBox()
+            x0, y0, x1, y1 = T(b.GetLeft()), T(b.GetTop()), T(b.GetRight()), T(b.GetBottom())
+            px, py = (x0 + x1) / 2, (y0 + y1) / 2
+            if abs(px - cx) > abs(py - cy) and x1 - x0 > y1 - y0:       # a pad on the left or right side
+                r = (x1, y0, x1 + reach, y1) if px > cx else (x0 - reach, y0, x0, y1)
+            elif abs(py - cy) >= abs(px - cx) and y1 - y0 > x1 - x0:    # on the top or bottom side
+                r = (x0, y1, x1, y1 + reach) if py > cy else (x0, y0 - reach, x1, y0)
+            else:
+                continue
+            out.append((r[0] - grow, r[1] - grow, r[2] + grow, r[3] + grow))
+    return out
+
+
+def _clear(board, via, trk, items, net, clr, hv=(), hv_clr=0, in_pad_ok=None):
     vbb = via.GetBoundingBox()
     tbb = trk.GetBoundingBox()
-    vbb.Inflate(max(clr, hv_clr))
-    tbb.Inflate(max(clr, hv_clr))
+    reach = max(clr, hv_clr, MM(max(UNFUSED.values())))     # (the widest clearance any item may ask for)
+    vbb.Inflate(reach)
+    tbb.Inflate(reach)
     edge = board.GetBoardEdgesBoundingBox()
     edge.Inflate(-(via.GetWidth(pcbnew.F_Cu) // 2 + pcbnew.FromMM(0.4)))
     if not edge.Contains(via.GetPosition()):
@@ -316,21 +365,93 @@ def _clear(board, via, trk, items, net, clr, hv=(), hv_clr=0):
             # same net: copper may touch, but drilled holes still need 0.25 mm between them
             if it.Type() in (pcbnew.PCB_VIA_T, pcbnew.PCB_PAD_T) and it.HasHole():
                 d = (it.GetPosition() - via.GetPosition()).EuclideanNorm()
-                hole_r = it.GetDrillValue() // 2 if it.Type() == pcbnew.PCB_VIA_T else it.GetDrillSizeX() // 2
+                # (a slot counts by its long side: a via was drilled into the USB-C shell's slot, review 2026-11-24)
+                hole_r = it.GetDrillValue() // 2 if it.Type() == pcbnew.PCB_VIA_T else \
+                    max(it.GetDrillSizeX(), it.GetDrillSizeY()) // 2
                 if d < hole_r + via.GetDrillValue() // 2 + pcbnew.FromMM(0.3):
                     return False
+            elif it.Type() == pcbnew.PCB_PAD_T and in_pad_ok is not it:
+                # no via in or against another pad of its own net either (a neighbouring supply pin, the
+                # cap on the other side): its hole would take the solder from that joint
+                for layer in (pcbnew.F_Cu, pcbnew.B_Cu):
+                    if it.IsOnLayer(layer) and via.GetEffectiveShape(layer).Collide(it.GetEffectiveShape(layer), pcbnew.FromMM(0.05)):
+                        return False
             continue
         ib = it.GetBoundingBox()
         for mine, bb in ((via, vbb), (trk, tbb)):
             if not bb.Intersects(ib):
                 continue
-            for layer in (pcbnew.F_Cu, pcbnew.In1_Cu, pcbnew.In2_Cu, pcbnew.B_Cu):
+            for layer in COPPER:
                 if not (mine.IsOnLayer(layer) and it.IsOnLayer(layer)):
                     continue
                 gap = max(clr, hv_clr) if it.GetNetname().lstrip("/") in hv else clr
+                gap = max(gap, MM(UNFUSED.get(it.GetNetname().lstrip("/"), 0)))
                 if mine.GetEffectiveShape(layer).Collide(it.GetEffectiveShape(layer), gap):
                     return False
     return True
+
+
+def extra_vias(board, netname, ref, num, n, via_d=0.6, drill=0.3, width=0.5, clearance=0.25, keepouts=(),
+               hv=(), hv_clearance=0.0, reach=4.0):
+    """Up to n more vias for one pad (a ground return that carries a surge or the plug's whole current):
+    each beside the pad or a little further out, joined to it by a track, clear of everything on every
+    layer. Returns how many it placed."""
+    import math
+    net = board.FindNet(netname)
+    pad = [p for p in board.FindFootprintByReference(ref).Pads() if p.GetNumber() == num][0]
+    layer = pcbnew.F_Cu if pad.IsOnLayer(pcbnew.F_Cu) else pcbnew.B_Cu
+    items = [t for t in board.GetTracks()] + [p for fp in board.GetFootprints() for p in fp.Pads()]
+    c, bb = pad.GetPosition(), pad.GetBoundingBox()
+    r0 = max(bb.GetWidth(), bb.GetHeight()) / 2 + MM(via_d / 2 + 0.25)
+    done = 0
+    for extra in [e * 0.4 for e in range(int(reach / 0.4) + 1)]:
+        for k in range(32):
+            if done >= n:
+                return done
+            a = 2 * math.pi * k / 32
+            p = pcbnew.VECTOR2I(int(c.x + (r0 + MM(extra)) * math.cos(a)), int(c.y + (r0 + MM(extra)) * math.sin(a)))
+            x, y = pcbnew.ToMM(p.x), pcbnew.ToMM(p.y)
+            g = via_d / 2 + 0.05        # the whole via outside every keep-out, not its centre alone
+            if any(k0 - g <= x <= k2 + g and k1 - g <= y <= k3 + g for k0, k1, k2, k3 in keepouts):
+                continue
+            via = pcbnew.PCB_VIA(board)
+            via.SetPosition(p)
+            via.SetWidth(MM(via_d))
+            via.SetDrill(MM(drill))
+            via.SetNet(net)
+            trk = pcbnew.PCB_TRACK(board)
+            trk.SetStart(c)
+            trk.SetEnd(p)
+            trk.SetWidth(MM(width))
+            trk.SetLayer(layer)
+            trk.SetNet(net)
+            if _clear(board, via, trk, items, net, MM(clearance), hv, MM(hv_clearance), in_pad_ok=pad):
+                via.SetLocked(True)
+                trk.SetLocked(True)
+                board.Add(via)
+                board.Add(trk)
+                items += [via, trk]
+                done += 1
+    return done
+
+
+def rule_area(board, name, layers, x0, y0, x1, y1, tracks=True, vias=False, fills=False):
+    """A rule area (rectangle) on `layers`: tracks / vias / zone fills allowed there or not."""
+    z = pcbnew.ZONE(board)
+    z.SetIsRuleArea(True)
+    z.SetZoneName(name)
+    z.SetLayerSet(_lset(*layers))
+    z.SetDoNotAllowTracks(not tracks)
+    z.SetDoNotAllowVias(not vias)
+    z.SetDoNotAllowZoneFills(not fills)
+    z.SetDoNotAllowPads(False)
+    z.SetDoNotAllowFootprints(False)
+    o = z.Outline()
+    o.NewOutline()
+    for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1)):
+        o.Append(MM(x), MM(y))
+    board.Add(z)
+    return z
 
 
 def star(board, netname, pads, x, y, via_d=0.6, drill=0.3, width=0.25, clearance=0.2, inset=3.6):

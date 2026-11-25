@@ -125,7 +125,8 @@ def j1962_plug_adapter(pitch=4.0, row=8.6, slot=(2.6, 1.3), pad=(3.2, 2.0), join
 
     The main board's tab goes through the slot between the rows (Edge.Cuts, part of this footprint)
     and is soldered to the joint pads on the back (B.Cu): one per pin, from 0.25 mm off the slot edge
-    out over the pin's own pad, so the tail's joint and the fillet to the main board are one."""
+    out over the pin's own pad, so the tail's joint and the fillet to the main board are one. Each
+    joint pad has two plated 0.45 mm holes at its slot end, which anchor it against peeling."""
     name = "J1962_Plug_Adapter"
     items = []
     sl, sw = SLOT
@@ -141,6 +142,12 @@ def j1962_plug_adapter(pitch=4.0, row=8.6, slot=(2.6, 1.3), pad=(3.2, 2.0), join
             items.append(pd)
             items.append(["pad", Q(str(num)), "smd", "rect", ["at", x, sgn * (y0 + y1) / 2], ["size", joint_w, y1 - y0],
                           ["layers", Q("B.Cu"), Q("B.Mask")]])
+            # two plated holes at the joint pad's free end, by the slot (review 2026-11-24): pulling the plug
+            # out peels these pads off the laminate from that end; the fillet's solder fills the holes and
+            # the barrels rivet the pad to the board. (The far end has the blade's own plated slot.)
+            for dx in (-0.75, 0.75):
+                items.append(["pad", Q(str(num)), "thru_hole", "circle", ["at", round(x + dx, 3), sgn * (y0 + 0.65)],
+                              ["size", 0.9, 0.9], ["drill", 0.45], ["layers", Q("*.Cu"), Q("*.Mask")]])
     # the slot: two straight sides and round ends
     hx, hy = (sl - sw) / 2, sw / 2
     items += [_line((-hx, -hy), (hx, -hy), "Edge.Cuts", 0.1), _line((-hx, hy), (hx, hy), "Edge.Cuts", 0.1),
@@ -222,6 +229,25 @@ def j1962_edge_joint(pitch=4.0, pad=(3.0, 2.5)):
           ["tags", Q("OBD OBD2 OBD-II J1962 edge joint")],
           _text("Reference", "REF**", tip / 2, -22.0, "F.Fab"), _text("Value", name, tip / 2, 22.0, "F.Fab"),
           ["attr", "smd"], *items, ["embedded_fonts", "no"], _model(EDGE_MODEL)]
+    return name, fp
+
+
+def led_rgb_1615():
+    """XINGLIGHT XL-1615RGBC (1.6 x 1.5 x 0.6 mm RGB LED, common anode), land pattern from its datasheet:
+    four 0.45 x 0.65 pads, 1.25 between the columns' centres, 0.95 between the rows'. Top view: 1 (red)
+    top left, 2 (anode) bottom left, 3 (green) top right, 4 (blue) bottom right."""
+    name = "LED_RGB_1615"
+    items = [["pad", Q(n), "smd", "roundrect", ["at", x, y], ["size", 0.45, 0.65],
+              ["layers", Q("F.Cu"), Q("F.Mask"), Q("F.Paste")], ["roundrect_rratio", 0.2]]
+             for n, x, y in (("1", -0.625, -0.475), ("2", -0.625, 0.475), ("3", 0.625, -0.475), ("4", 0.625, 0.475))]
+    items += _poly([(-0.8, -0.75), (0.8, -0.75), (0.8, 0.75), (-0.8, 0.75)], "F.Fab", 0.1)
+    items += _poly([(-1.1, -1.05), (1.1, -1.05), (1.1, 1.05), (-1.1, 1.05)], "F.CrtYd", 0.05)
+    items.append(_line((-1.1, -1.2), (-0.3, -1.2), "F.SilkS", 0.12))        # pin 1 corner
+    fp = ["footprint", Q(name), ["version", "20260206"], ["generator", Q("octave_gen")], ["layer", Q("F.Cu")],
+          ["descr", Q("RGB LED 1.6 x 1.5 mm, 4 pads, common anode on pad 2 (XINGLIGHT XL-1615RGBC)")],
+          ["tags", Q("LED RGB 1615")],
+          _text("Reference", "REF**", 0, -2.0, "F.SilkS"), _text("Value", name, 0, 2.0, "F.Fab"),
+          ["attr", "smd"], *items, ["embedded_fonts", "no"]]
     return name, fp
 
 

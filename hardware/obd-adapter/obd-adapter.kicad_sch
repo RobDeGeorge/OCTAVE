@@ -442,7 +442,7 @@
 		)
 		(uuid "ecd80e12-6e86-5250-a588-96f802679231")
 	)
-	(text "accelerometer, secure element, panic button"
+	(text "accelerometer, secure element, panic button;"
 		(exclude_from_sim no)
 		(at 118 138.5 0)
 		(effects
@@ -452,6 +452,17 @@
 			(justify left top)
 		)
 		(uuid "ba667a1d-1e67-572e-8ba0-add359c0a2cf")
+	)
+	(text "pod bus"
+		(exclude_from_sim no)
+		(at 118 142 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "70dbc33a-15f5-5056-9115-170c2c9eec17")
 	)
 	(polyline
 		(pts

@@ -2787,7 +2787,7 @@
 		)
 		(uuid "bb34ab52-e090-5330-94d9-f89a19f8d728")
 	)
-	(text "2N7002 level shift: Vgs = -7.4 V at 9 V battery, clamped at -12 V up to the 42 V TVS clamp."
+	(text "2N7002 level shift: Vgs = -7.4 V at 9 V battery, clamped at -12 V up to the TVS clamp (47-50 V)."
 		(exclude_from_sim no)
 		(at 210.82 39.02 0)
 		(effects
@@ -2796,7 +2796,7 @@
 			)
 			(justify left top)
 		)
-		(uuid "e9d91788-04b6-521a-a41c-431cb13f7056")
+		(uuid "4e58e4c3-e39c-5e3c-8590-d617a9e3cbb7")
 	)
 	(symbol
 		(lib_id "Transistor_FET:Q_PMOS_GSD")
@@ -3055,7 +3055,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_1206_3216Metric"
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
 			(at 83.82 67.31 0)
 			(hide yes)
 			(effects
@@ -3082,7 +3082,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C17902"
+		(property "LCSC" "C25804"
 			(at 83.82 67.31 0)
 			(hide yes)
 			(effects
@@ -3210,7 +3210,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
 			(at 58.42 85.09 0)
 			(hide yes)
 			(effects
@@ -3237,7 +3237,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C25803"
+		(property "LCSC" "C25741"
 			(at 58.42 85.09 0)
 			(hide yes)
 			(effects
@@ -3657,7 +3657,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
 			(at 54.61 134.62 0)
 			(hide yes)
 			(effects
@@ -3684,7 +3684,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C23179"
+		(property "LCSC" "C25117"
 			(at 54.61 134.62 0)
 			(hide yes)
 			(effects
@@ -3733,7 +3733,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
 			(at 40.64 138.43 0)
 			(hide yes)
 			(effects
@@ -3760,7 +3760,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C25803"
+		(property "LCSC" "C25741"
 			(at 40.64 138.43 0)
 			(hide yes)
 			(effects
@@ -4563,7 +4563,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
 			(at 54.61 210.82 0)
 			(hide yes)
 			(effects
@@ -4590,7 +4590,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C23179"
+		(property "LCSC" "C25117"
 			(at 54.61 210.82 0)
 			(hide yes)
 			(effects
@@ -4639,7 +4639,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
 			(at 40.64 214.63 0)
 			(hide yes)
 			(effects
@@ -4666,7 +4666,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C25803"
+		(property "LCSC" "C25741"
 			(at 40.64 214.63 0)
 			(hide yes)
 			(effects
@@ -5363,7 +5363,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "e4f49d5e-b1fe-5e66-91fd-3f8e12f90f7a")
-		(property "Reference" "#PWR088"
+		(property "Reference" "#PWR092"
 			(at 45.72 50.8 0)
 			(hide yes)
 			(effects
@@ -5413,7 +5413,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/87ac3972-63d6-5adc-a612-457c314a0b95"
-					(reference "#PWR088")
+					(reference "#PWR092")
 					(unit 1)
 				)
 			)
@@ -5470,7 +5470,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "a5bcad3c-4040-574a-b203-63e1fb6c4628")
-		(property "Reference" "#PWR089"
+		(property "Reference" "#PWR093"
 			(at 83.82 86.36 0)
 			(hide yes)
 			(effects
@@ -5520,7 +5520,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/87ac3972-63d6-5adc-a612-457c314a0b95"
-					(reference "#PWR089")
+					(reference "#PWR093")
 					(unit 1)
 				)
 			)
@@ -5556,7 +5556,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "6066e6b7-ba9c-5121-a620-51c57392c336")
-		(property "Reference" "#PWR090"
+		(property "Reference" "#PWR094"
 			(at 58.42 88.9 0)
 			(hide yes)
 			(effects
@@ -5606,7 +5606,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/87ac3972-63d6-5adc-a612-457c314a0b95"
-					(reference "#PWR090")
+					(reference "#PWR094")
 					(unit 1)
 				)
 			)
@@ -5621,7 +5621,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "47045537-1b85-5fc9-a6b5-c5f0c50c2734")
-		(property "Reference" "#PWR091"
+		(property "Reference" "#PWR095"
 			(at 147.32 73.66 0)
 			(hide yes)
 			(effects
@@ -5671,7 +5671,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/87ac3972-63d6-5adc-a612-457c314a0b95"
-					(reference "#PWR091")
+					(reference "#PWR095")
 					(unit 1)
 				)
 			)
@@ -5686,7 +5686,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "e484f1d4-8b5c-544c-8833-c84085f50045")
-		(property "Reference" "#PWR092"
+		(property "Reference" "#PWR096"
 			(at 121.92 81.28 0)
 			(hide yes)
 			(effects
@@ -5736,7 +5736,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/87ac3972-63d6-5adc-a612-457c314a0b95"
-					(reference "#PWR092")
+					(reference "#PWR096")
 					(unit 1)
 				)
 			)
@@ -5751,7 +5751,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "ede6c263-ee0b-57e0-98fd-03f414a5273e")
-		(property "Reference" "#PWR093"
+		(property "Reference" "#PWR097"
 			(at 30.48 119.38 0)
 			(hide yes)
 			(effects
@@ -5801,7 +5801,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/87ac3972-63d6-5adc-a612-457c314a0b95"
-					(reference "#PWR093")
+					(reference "#PWR097")
 					(unit 1)
 				)
 			)
@@ -5858,7 +5858,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "5dc0a091-bc43-5ac0-bd46-2fdfaf2f7c8e")
-		(property "Reference" "#PWR094"
+		(property "Reference" "#PWR098"
 			(at 78.74 139.7 0)
 			(hide yes)
 			(effects
@@ -5908,7 +5908,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/87ac3972-63d6-5adc-a612-457c314a0b95"
-					(reference "#PWR094")
+					(reference "#PWR098")
 					(unit 1)
 				)
 			)
@@ -5965,7 +5965,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "b323b028-4ecf-51b9-b637-290785b8c213")
-		(property "Reference" "#PWR095"
+		(property "Reference" "#PWR099"
 			(at 40.64 142.24 0)
 			(hide yes)
 			(effects
@@ -6015,7 +6015,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/87ac3972-63d6-5adc-a612-457c314a0b95"
-					(reference "#PWR095")
+					(reference "#PWR099")
 					(unit 1)
 				)
 			)
@@ -6030,7 +6030,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "b701fed6-d54a-5589-b33e-e8695f13980c")
-		(property "Reference" "#PWR096"
+		(property "Reference" "#PWR100"
 			(at 99.06 127 0)
 			(hide yes)
 			(effects
@@ -6080,7 +6080,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/87ac3972-63d6-5adc-a612-457c314a0b95"
-					(reference "#PWR096")
+					(reference "#PWR100")
 					(unit 1)
 				)
 			)
@@ -6095,7 +6095,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "f5234892-669d-54c1-969e-72cf36b1f790")
-		(property "Reference" "#PWR097"
+		(property "Reference" "#PWR101"
 			(at 132.08 147.32 0)
 			(hide yes)
 			(effects
@@ -6145,7 +6145,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/87ac3972-63d6-5adc-a612-457c314a0b95"
-					(reference "#PWR097")
+					(reference "#PWR101")
 					(unit 1)
 				)
 			)
@@ -6181,7 +6181,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "b235eeda-001d-5d1c-9fbc-772b25b84b17")
-		(property "Reference" "#PWR098"
+		(property "Reference" "#PWR102"
 			(at 149.86 160.02 0)
 			(hide yes)
 			(effects
@@ -6231,7 +6231,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/87ac3972-63d6-5adc-a612-457c314a0b95"
-					(reference "#PWR098")
+					(reference "#PWR102")
 					(unit 1)
 				)
 			)
@@ -6246,7 +6246,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "658d38fe-e9ca-5e54-bf13-f88716954699")
-		(property "Reference" "#PWR099"
+		(property "Reference" "#PWR103"
 			(at 142.24 152.4 0)
 			(hide yes)
 			(effects
@@ -6296,7 +6296,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/87ac3972-63d6-5adc-a612-457c314a0b95"
-					(reference "#PWR099")
+					(reference "#PWR103")
 					(unit 1)
 				)
 			)
@@ -6353,7 +6353,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "6027264b-5741-5106-bf2a-9358c0a2f11e")
-		(property "Reference" "#PWR100"
+		(property "Reference" "#PWR104"
 			(at 30.48 195.58 0)
 			(hide yes)
 			(effects
@@ -6403,7 +6403,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/87ac3972-63d6-5adc-a612-457c314a0b95"
-					(reference "#PWR100")
+					(reference "#PWR104")
 					(unit 1)
 				)
 			)
@@ -6460,7 +6460,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "371b9146-77ff-5c76-82cf-6dea3455fbae")
-		(property "Reference" "#PWR101"
+		(property "Reference" "#PWR105"
 			(at 78.74 215.9 0)
 			(hide yes)
 			(effects
@@ -6510,7 +6510,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/87ac3972-63d6-5adc-a612-457c314a0b95"
-					(reference "#PWR101")
+					(reference "#PWR105")
 					(unit 1)
 				)
 			)
@@ -6567,7 +6567,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "7942510d-9a3b-525d-b132-9bd6ba961166")
-		(property "Reference" "#PWR102"
+		(property "Reference" "#PWR106"
 			(at 40.64 218.44 0)
 			(hide yes)
 			(effects
@@ -6617,7 +6617,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/87ac3972-63d6-5adc-a612-457c314a0b95"
-					(reference "#PWR102")
+					(reference "#PWR106")
 					(unit 1)
 				)
 			)
@@ -6632,7 +6632,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "f0965b99-f0d9-50b3-b0bb-93c356f4a15b")
-		(property "Reference" "#PWR103"
+		(property "Reference" "#PWR107"
 			(at 99.06 203.2 0)
 			(hide yes)
 			(effects
@@ -6682,7 +6682,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/87ac3972-63d6-5adc-a612-457c314a0b95"
-					(reference "#PWR103")
+					(reference "#PWR107")
 					(unit 1)
 				)
 			)

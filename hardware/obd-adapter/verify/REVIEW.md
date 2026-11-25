@@ -320,6 +320,17 @@ A first human look at the copper (the buck's input loop, README "Before ordering
 
 ### Firmware obligations (all rounds)
 
+- (2026-11-24) Do not switch `DLC_SW` on while `VBAT_SENSE` reads over 30 V (U11 has a hardware clamp now, Q15 / D31 / R80; this is only about starting into a surge).
+- (2026-11-25) J1850: stop transmitting when `VPW_RX` does not echo Bus+ going high within one bit. With pin 2 shorted, the LM317L's current limit flows through the follower Q15 (about 1 W in a SOT-89) for as long as the adapter keeps trying.
+- (2026-11-25, fourth review) Release K (and stop L / Bus-) when `KLINE_RX` does not read low within 100 µs of driving it: the sinks have no current limit and a line shorted to the battery puts 3 to 5 W into a SOT-23.
+- (2026-11-25, fourth review) Discard K-line data while `VBAT_SENSE` is under 8 V (the comparator's inputs are out of range).
+- (2026-11-25, fourth review) PA0, PA1, PA2, PB5 stay in analog mode until the ESP32 is powered (`safe_pins.c` does this at reset; whoever turns the module off must put them back).
+- (2026-11-25) Do not rely on the battery ADC above 36 V: PA4 reaches its 4.0 V limit at 44 V on the plug.
+- (2026-11-24) PB8 (BOOT0) stays an input for good: driven high it resets the ESP32 through Q14.
+- (2026-11-24) PA3 (USART2 RX): no pull-up, and the receiver off, while `ESP_PWR_EN` is low: R78 holds the line at the dead 3V3_ESP rail then.
+- (2026-11-24) `POD_EN` (PD2): off when parked; off when the pods stop answering, with retries at a low duty. U19 gives no fault signal, and into a shorted cable it cycles hot at about 0.2 A for as long as it is on.
+- (2026-11-24) PC13 (panic input): no internal pull-up or pull-down; the pin can sit above VDD with the cable shorted to the battery.
+- (2026-11-24) The RGB LED is active low (pins sink it): drive PB9 / PC11 / PC12 high for off. CONFIG switch 4 holds the ESP32 in reset while it is on.
 - Keep PA1/PA2/PB5/PB7 low or as inputs until the ESP32 is powered, and drive ESP_EN open-drain (item 23).
 - Set LPUART1 TXINV **before** switching PC1 to its alternate function. LPUART idles high, and through the NPN that holds K low.
 - Set PWR_CR3.UCPD_DBDIS early, and put PB4/PB13 in AF (TXD high) before driving STB low. Never drive STB low while TXD is low.

@@ -44,8 +44,8 @@
 #define PIN_I2C_SDA      GPIO_PIN(A,  8)  /* pin 42, I2C2_SDA */
 #define PIN_I2C_SCL      GPIO_PIN(A,  9)  /* pin 43, I2C2_SCL */
 #define PIN_EXP_PA10     GPIO_PIN(A, 10)  /* pin 44 */
-#define PIN_USB_DM       GPIO_PIN(A, 11)  /* pin 45, USB_DM */
-#define PIN_USB_DP       GPIO_PIN(A, 12)  /* pin 46, USB_DP */
+#define PIN_MCU_DM       GPIO_PIN(A, 11)  /* pin 45, USB_DM */
+#define PIN_MCU_DP       GPIO_PIN(A, 12)  /* pin 46, USB_DP */
 #define PIN_SWDIO        GPIO_PIN(A, 13)  /* pin 49, SYS_JTMS-SWDIO */
 #define PIN_SWCLK        GPIO_PIN(A, 14)  /* pin 50, SYS_JTCK-SWCLK */
 #define PIN_BTN_USER     GPIO_PIN(A, 15)  /* pin 51 */
@@ -136,8 +136,8 @@
     X(I2C_SDA, A, 8) \
     X(I2C_SCL, A, 9) \
     X(EXP_PA10, A, 10) \
-    X(USB_DM, A, 11) \
-    X(USB_DP, A, 12) \
+    X(MCU_DM, A, 11) \
+    X(MCU_DP, A, 12) \
     X(SWDIO, A, 13) \
     X(SWCLK, A, 14) \
     X(BTN_USER, A, 15) \

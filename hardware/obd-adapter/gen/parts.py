@@ -18,6 +18,7 @@ LCSC = {
     "L8u2": "C96978",             # Sunlord SWPA8065S8R2MT 8.2 uH, Ext, 631
     "AP2114H-3.3": "C150716",     # 1 A LDO, SOT-223 (1 GND, 2 VOUT + tab, 3 VIN), ceramic-stable, Ext, 2.9k
     "TPS22918": "C131941",        # ESP32 load switch, Ext, 55k
+    "THVD2450": "C2672621",       # TI THVD2450DR: 3.3 V half-duplex RS-485, +-70 V bus fault, SOIC-8, Ext, 23.8k (2026-11-23)
     "W25Q128JVSIQ": "C97521",     # Basic, 77k
     "USBLC6-2SC6": "C2687116",    # UMW, Ext, 112k
     "LM2901BIDR": "C22427890",    # TI, LM339 pinout, -40..125 C, 38 V abs max (LM2901 non-B: 36 V), Ext, 1.7k
@@ -34,7 +35,11 @@ LCSC = {
     "B5819W": "C8598",            # Basic, 40 V 1 A Schottky SOD-123
     "1N4148W": "C81598",          # Basic, SOD-123
     "SS34": "C8678",              # Basic, 40 V 3 A
-    "5.0SMDJ26CA": "C444401",     # 5 kW bidirectional input TVS (SMC), Ext, 4k
+    "5.0SMDJ33CA": "C2913642",    # BORN 5 kW bidirectional input TVS (SMC), 33 V stand-off, Ext, 6k (2026-11-24). It was 5.0SMDJ26CA, C444401
+    "TPS27S100A": "C2879389",     # TI TPS27S100APWPR: 40 V high-side switch, current limit + thermal shutdown, HTSSOP-14, Ext, 755 (2026-11-24)
+    "BCX56-16": "C100026",        # Nexperia BCX56-16,135: 80 V 1 A NPN, SOT-89, 1.35 W, hFE 100-250 (the LM317L's input follower), Ext (2026-11-25)
+    "BZT52C30": "C19077418",      # 30 V zener SOD-123, 28.5-31.5 V, 350 mW, Preferred (2026-11-24)
+    "BZT52C5V1": "C19077401",     # 5.1 V zener SOD-123 (panic input clamp), Preferred, 2.1M (2026-11-24)
     "BZT52C33": "C173417",        # 33 V zener SOD-123 (comparator supply clamp), Ext, 3k
     "SMF24A": "C19077514",        # bus-line TVS, 200 W SOD-123FL, Preferred
     "NUP2105L": "C233494",        # SZNUP2105LT1G, CAN ESD, Ext
@@ -45,12 +50,17 @@ LCSC = {
     "CH340C": "C84681",           # USB-UART, internal clock, SOIC-16, Ext, 97k
     "SWD": "C41376037",           # 2x5 1.27 mm SMD header, Ext
     "QWIIC": "C160404",           # JST SM04B-SRSS-TB, Ext
+    "GH4": "C189895",             # JST SM04B-GHS-TB (pod bus), Ext, 16k (2026-11-23)
+    "PTC05": "C19078719",         # 1812L050/60GR: 0.5 A hold, 60 V, 1812 (pod bus supply), Ext, 89k (2026-11-23)
     "SH2": "C160402",             # JST SM02B-SRSS-TB (panic button), Ext
     "MICROSD": "C585350",         # Molex 104031-0811 push-pull microSD, Ext
     "ESD9B3.3": "C96512",         # onsemi ESD9B3.3ST5G, SOD-923 (panic input), Ext
     "SW": "C318884",              # XKB TS-1187A 5.1 mm tactile, Basic
     "DIP4": "C40736",             # KINGTEK DSHP04TSGET 4-way SMD DIP, 1.27 mm, -40..85 C, 24 V 25 mA, Ext
-    "LEDR": "C2286", "LEDG": "C12624", "LEDB": "C2288",
+    "LEDRGB": "C965840",          # XINGLIGHT XL-1615RGBC-RF, 1.6 x 1.5 mm RGB, common anode (pin 2); Ext, 513k (2026-11-24)
+    "CH334P": "C5373042",         # WCH USB 2.0 hub, QFN-16 3x3, Ext, 3.2k (2026-11-24)
+    "XTAL12M": "C9002",           # YXC X322512MSB4SI 12 MHz 20 pF 3225, Basic (2026-11-24). The CH334 does not give its
+                                  # internal load: if it is nearer 10 pF this runs 50-100 ppm fast (USB allows 500); a 12 pF part may suit better
     # passives (0603 Basic unless noted)
     "C100n": "C14663", "C1u": "C15849", "C10u": "C96446", "C4.7u": "C19666",
     "C22u": "C12891",             # 22 uF 25 V 1206
@@ -62,10 +72,19 @@ LCSC = {
     "C6.8n": "C1631", "C1n": "C1588", "C47p": "C1671", "C12p": "C38523", "C10p": "C1634",
     "R4.7k": "C23162", "R10k": "C25804", "R100k": "C25803", "R1k": "C21190",
     "R510": "C23193", "R5.1k": "C23186", "R13k": "C22797", "R18k": "C25810", "R510k": "C23192",
-    "R68k": "C23231", "R330": "C23138", "R4.7k_1206": "C17936", "R10k_1206": "C17902", "R470_1206": "C4502", "R47k": "C25819",
+    "R68k": "C23231", "R330": "C23138", "R4.7k_1206": "C17936", "R2k_1206": "C17944", "R1k_1206": "C4410", "R3k": "C4211", "R10k_1206": "C17902", "R470_1206": "C4502", "R47k": "C25819",
     "R2.2k": "C4190", "R680": "C23228", "R470": "C23179", "R12k": "C22790", "R84.5k": "C23118",
     "R160k": "C22813", "R120": "C22787", "R240": "C23350", "R787": "C23111", "R453": "C48136",
     "R2.7k": "C13167", "R1.5k": "C22843", "R510_2512": "C5843118",  # Yageo 2 W 2512
+    # 0402, all from the no-fee libraries (checked against JLCPCB's library on 2026-11-24): Basic but 18k (Preferred)
+    "R10k_0402": "C25744", "R1k_0402": "C11702", "R330_0402": "C25104", "R5.1k_0402": "C25905",
+    "R4.7k_0402": "C25900", "R100k_0402": "C25741", "R2.2k_0402": "C25879", "R18k_0402": "C25762",
+    "R47k_0402": "C25792", "R470_0402": "C25117",
+    "C100n_0402": "C307331",      # 100 nF 50 V X7R
+    "C1u_0402": "C52923",         # 1 uF 25 V X5R
+    "C10p_0402": "C32949",        # 10 pF 50 V C0G (the crystal's)
+    "C1n_0402": "C1523",          # 1 nF 50 V X7R
     "RN10k": "C29718",            # UNI-ROYAL 4D03WGJ0103T5E 4 x 10k 0603x4 array, Basic
     "R100k_0.1%": "C122538", "R10k_0.1%": "C95204",
+    "R120_1206": "C17909",        # 120R 1 % 0.25 W 1206 (pod bus terminator), Basic
 }

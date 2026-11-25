@@ -39,7 +39,7 @@ need = {
  "CAN1_RXD": "FDCAN2_RX", "CAN1_TXD": "FDCAN2_TX", "CAN2_RXD": "FDCAN3_RX", "CAN2_TXD": "FDCAN3_TX",
  "VPW_RX": "TIM3_CH1", "PWM_RX": "TIM3_CH2", "J1850_TXP": "TIM3_CH3", "J1850_TXN": "TIM3_CH4",
  "I2C_SDA": "I2C2_SDA", "I2C_SCL": "I2C2_SCL",
- "USB_DM": "USB_DM", "USB_DP": "USB_DP", "SWDIO": "SYS_JTMS-SWDIO", "SWCLK": "SYS_JTCK-SWCLK",
+ "MCU_DM": "USB_DM", "MCU_DP": "USB_DP", "SWDIO": "SYS_JTMS-SWDIO", "SWCLK": "SYS_JTCK-SWCLK",
 }
 print("\nnet -> pin -> required signal")
 for pos, (sname, net) in sorted(ours.items(), key=lambda x: int(x[0])):

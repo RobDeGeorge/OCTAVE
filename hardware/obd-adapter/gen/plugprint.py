@@ -67,6 +67,9 @@ def _view(ax, board, pcbnew, ox, oy, dims):
         px, py = T(p.GetPosition().x), T(p.GetPosition().y)
         pw, ph = T(p.GetSize(pcbnew.F_Cu).x), T(p.GetSize(pcbnew.F_Cu).y)
         dw, dh = T(p.GetDrillSize().x), T(p.GetDrillSize().y)
+        if dw == dh:                # a joint pad's round anchoring hole, not a blade's slot
+            ax.add_patch(plt.Circle((X(px), Y(py)), dw / 2, fc="black", ec="none"))
+            continue
         if p.GetNumber() == "1":                                    # pin 1: the rounded-square pad
             ax.add_patch(FancyBboxPatch((X(px) - pw / 2 + 0.3, Y(py) - ph / 2 + 0.3), pw - 0.6, ph - 0.6,
                                         boxstyle="round,pad=0.3", fc="none", ec="#b06000", lw=0.4))

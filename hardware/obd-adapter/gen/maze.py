@@ -15,7 +15,7 @@ import pcbnew
 MM = pcbnew.FromMM
 STEP = MM(0.1)
 LAYERS = (pcbnew.F_Cu, pcbnew.B_Cu)
-ALL = (pcbnew.F_Cu, pcbnew.In1_Cu, pcbnew.In2_Cu, pcbnew.B_Cu)
+ALL = (pcbnew.F_Cu, pcbnew.In1_Cu, pcbnew.In2_Cu, pcbnew.In3_Cu, pcbnew.In4_Cu, pcbnew.B_Cu)
 VIA_D, VIA_DRILL = 0.6, 0.3
 EDGE = 0.4      # copper to board edge, as Freerouting is told (the DRC limit is 0.3)
 

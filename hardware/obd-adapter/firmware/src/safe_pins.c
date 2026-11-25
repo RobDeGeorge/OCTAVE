@@ -41,15 +41,21 @@ const struct safe_pin safe_pins[] = {
     /* REVIEW item 23: "Keep PA1/PA2/PB5/PB7 low or as inputs until the ESP32 is powered, and drive
      * ESP_EN open-drain." All six ESP32 lines are inputs here and nothing in this firmware makes
      * the UART lines outputs. PB7 (EN) is only ever pulled low open-drain (board_esp_reset()).
-     * REVIEW: "Leave PB5 (IO0) and PB7 (EN) as inputs while the ESP32 is being flashed through J7."
+     * REVIEW: "Leave PB5 (IO0) and PB7 (EN) as inputs while the ESP32 is being flashed" (through the
+     * USB hub and the CH340C).
+     * Review of 2026-11-25: on Rev 0 the four lines that have no resistor to a rail (PA0, PA1, PA2,
+     * PB5) are in analog mode, not plain inputs: with the module unpowered they sit wherever its
+     * protection diodes leave them, and a digital input held mid-rail draws current. No pull-down:
+     * on IO0 it would fight the module's own pull-up at reset. Whoever turns the ESP32 on switches
+     * them to their functions afterwards (uart.c).
      * On the Nucleo PA2 / PA3 are the ST-LINK serial port; uart.c takes them after this table. */
-    P(ESP_RTS, PIN_INPUT, PIN_INPUT),
-    P(ESP_CTS_M, PIN_INPUT, PIN_INPUT),
-    P(MCU_TX_ESP_M, PIN_INPUT, PIN_INPUT),
+    P(ESP_RTS, PIN_ANALOG, PIN_INPUT),
+    P(ESP_CTS_M, PIN_ANALOG, PIN_INPUT),
+    P(MCU_TX_ESP_M, PIN_ANALOG, PIN_INPUT),
     P(ESP_TX_MCU, PIN_INPUT, PIN_INPUT),
-    P(ESP_IO0_M, PIN_INPUT, PIN_INPUT),
+    P(ESP_IO0_M, PIN_ANALOG, PIN_INPUT),
     P(ESP_EN_M, PIN_INPUT, PIN_INPUT),
-    /* PB6: the ESP32 load switch, OR'd with CONFIG switch 1 (3V3 through 1k) and VBUS2. As an input
+    /* PB6: the ESP32 load switch, OR'd with CONFIG switch 1 (3V3 through 1k) and the USB cable's VBUS. As an input
      * with the pull-down the switch decides ("esp auto"); PB6 then reads the switch position. */
     P(ESP_PWR_EN, PIN_INPUT_PULLDOWN, PIN_ANALOG),
 
@@ -73,10 +79,10 @@ const struct safe_pin safe_pins[] = {
     /* PB8 is BOOT0 at reset (10k to GND; CONFIG switch 4 ties it to 3V3). Read as an input, to warn. */
     P(BOOT0, PIN_INPUT, PIN_INPUT),
 
-    /* LEDs: pin -> resistor -> LED -> GND, on = high */
-    P(LED_R, PIN_OUT_LOW, PIN_OUT_LOW),
-    P(LED_G, PIN_OUT_LOW, PIN_OUT_LOW),
-    P(LED_B, PIN_OUT_LOW, PIN_OUT_LOW),
+    /* one RGB LED, common anode on 3V3: pin -> resistor -> cathode, on = low, so off is high */
+    P(LED_R, PIN_OUT_HIGH, PIN_OUT_HIGH),
+    P(LED_G, PIN_OUT_HIGH, PIN_OUT_HIGH),
+    P(LED_B, PIN_OUT_HIGH, PIN_OUT_HIGH),
 
     /* taken later by their drivers: adc.c, i2c.c (4.7k pull-ups on the board), uart.c (rev0 console) */
     P(VBAT_SENSE, PIN_ANALOG, PIN_ANALOG),
@@ -95,8 +101,8 @@ const struct safe_pin safe_pins[] = {
     P(QSPI_IO3, PIN_ANALOG, PIN_ANALOG),
 
     /* USB: the reset state. No USB stack in this firmware; the ROM bootloader (DFU) does its own. */
-    P(USB_DM, PIN_ANALOG, PIN_ANALOG),
-    P(USB_DP, PIN_ANALOG, PIN_ANALOG),
+    P(MCU_DM, PIN_ANALOG, PIN_ANALOG),
+    P(MCU_DP, PIN_ANALOG, PIN_ANALOG),
 
     /* spare pins on J5. PA5 is LD2 on the Nucleo. */
     P(EXP_PA5, PIN_ANALOG, PIN_OUT_LOW),

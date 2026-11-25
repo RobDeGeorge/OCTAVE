@@ -429,7 +429,7 @@ def power_page(D, design):
     x = f1["2"][0] + 3.81
     D.power((x, RAIL), "VBAT_F")
     x += 7.62
-    tvs = D.part(ref("5.0SMDJ26CA"), x, RAIL + 8.89, rot=270)
+    tvs = D.part(ref("5.0SMDJ33CA"), x, RAIL + 8.89, rot=270)
     D.wire((x, RAIL), tvs["1"])
     D.power(tvs["2"], "GND")
     x += 22.86
@@ -643,10 +643,10 @@ def j1850_page(D, design):
     # -- row 1: supply --------------------------------------------------------------------
     D.text("Supply: VJ1850 = 7.2 V (VPW); J1850_VSEL high shorts the 470R: 4.8 V (PWM)", 25.4, 33.02, size=1.8, bold=True)
     Y = 50.8
-    D.power((30.48, Y), "DLC_SW")
+    D.power((30.48, Y), "VJ_IN")       # DLC_SW through the 30 V follower (Q15 / D31 / R80)
     u11 = D.part(j("LM317LIDR"), 58.42, Y, fields="top")
     D.wire((30.48, Y), u11["VI"])
-    D.hang(F("100n", {"1": "DLC_SW"}), (40.64, Y))
+    D.hang(F("100n", {"1": "VJ_IN"}), (40.64, Y))
     D.wire(u11["VO"], (127.0, Y))
     D.power((127.0, Y), "VJ1850")
     D.hang(j("1u"), (76.2, Y))
@@ -665,6 +665,18 @@ def j1850_page(D, design):
     D.wire(q4["G"], (gx, q4["G"][1]), (gx, q4["G"][1] + 7.62))
     D.hang(F("10k", {"1": "J1850_VSEL"}), (gx, q4["G"][1] + 7.62), fields="left")
     D.lab((gx, q4["G"][1] + 5.08), "J1850_VSEL", "left", length=5.08)
+
+    # U11's input clamp: an emitter follower from DLC_SW, its base held at 30 V
+    D.text("VJ_IN: DLC_SW through a follower clamped at 30 V", 304.8, 33.02, size=1.8, bold=True)
+    D.power((309.88, Y), "DLC_SW")
+    r80 = D.hang(F("1k", {"2": "VJ_B"}), (320.04, Y), to=None, fields="left")
+    q15 = D.part(j("BCX56-16"), 337.82, r80["2"][1] + 2.54, fields="right")
+    D.wire((309.88, Y), (q15["C"][0], Y), q15["C"])
+    D.wire(r80["2"], (320.04, q15["B"][1]), q15["B"])
+    D.hang(j("BZT52C30"), (320.04, q15["B"][1]), first="K", fields="left")
+    D.name((327.66, q15["B"][1]), "VJ_B", "up", length=1.27)
+    D.lab(q15["E"], "VJ_IN", "right", length=5.08)
+    D.w.power_flags(["VJ_IN"], x=17.78, y=63.5)     # (a passive emitter drives it: tell ERC it is a supply)
 
     # -- row 2: Bus+ driver -----------------------------------------------------------------
     D.text("Bus+ driver: TXP high -> Q5 on -> P-FET Q6 on", 25.4, 119.38, size=1.8, bold=True)
@@ -733,6 +745,8 @@ def j1850_page(D, design):
     r45 = D.inline(j("18k"), (73.66, ref_y), "left", first="2", fields="below")
     D.power(r45["1"], "5V_BUCK")
     D.name((73.66, ref_y - 2.54), "VPW_REF", "right", length=2.54)
+    D.wire((73.66, ref_y), (83.82, ref_y))
+    D.hang(F("100n", {"1": "VPW_REF"}), (83.82, ref_y), fields="right")
     D.wire(ua["2"], (111.76, Y3))
     D.label((111.76, Y3), "VPW_RX", "right")
     D.hang(F("10k", {"2": "VPW_RX"}), (104.14, Y3), to="3V3", direction="up", first="2", fields="left")
@@ -760,9 +774,9 @@ def j1850_page(D, design):
     ue = D.part(j("LM2901BIDR"), 317.5, Y3, unit=5, fields="right")
     D.power(ue["V+"], "CMP_VCC")
     D.power(ue["V-"], "GND")
-    D.text("CMP_VCC: DLC_SW via 470R, 33 V zener", 330.2, 182.88, size=1.8, bold=True)
+    D.text("CMP_VCC: DLC_SW via 1k, 33 V zener", 330.2, 182.88, size=1.8, bold=True)
     D.power((332.74, 198.12), "DLC_SW")
-    r43 = D.inline(F("470", {"2": "CMP_VCC"}), (332.74, 198.12), "right", fields="above")
+    r43 = D.inline(F("1k", {"2": "CMP_VCC"}), (332.74, 198.12), "right", fields="above")
     D.wire(r43["2"], (375.92, 198.12))
     D.power((375.92, 198.12), "CMP_VCC")
     D.hang(j("BZT52C33"), (347.98, 198.12), first="K")

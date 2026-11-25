@@ -3548,7 +3548,7 @@
 		)
 		(uuid "2c21cee2-64cd-5c52-89b6-ef543f1fe937")
 	)
-	(text "5.0SMDJ26CA (5 kW) is bidirectional on purpose: a unidirectional TVS would short a reversed battery through the PTC."
+	(text "5.0SMDJ33CA (5 kW) is bidirectional on purpose: a unidirectional TVS would short a reversed battery through the PTC."
 		(exclude_from_sim no)
 		(at 20.32 22.86 0)
 		(effects
@@ -3557,9 +3557,9 @@
 			)
 			(justify left top)
 		)
-		(uuid "f7161ce3-3160-5ba7-bd48-e1fa7f0310c9")
+		(uuid "113a169a-c042-5858-83ef-09b0b01c7a0f")
 	)
-	(text "Everything on VBAT_P must survive the ~42 V TVS clamp: LM74700 65 V, AO4264E 60 V, TPS54360B 60 V, caps 50 V."
+	(text "Everything on VBAT_P must survive the TVS clamp, 47 V at 25 C and about 50 V hot at worst: LM74700 65 V,"
 		(exclude_from_sim no)
 		(at 20.32 25.86 0)
 		(effects
@@ -3568,9 +3568,9 @@
 			)
 			(justify left top)
 		)
-		(uuid "cff9e379-e38c-51a4-81f8-683d4bd5de15")
+		(uuid "8060369a-ac69-51a3-a149-cf0252f8f7dc")
 	)
-	(text "TPS54360B: datasheet 600 kHz design (Fig. 32) with FB 68k/12k = 5.33 V, so 5V is ~4.9 V after the SS34 OR."
+	(text "AO4264E 60 V, TPS54360B 60 V, caps 50 V, U19 48 V for 0.4 s. The LM317L (U11) has its own 30 V clamp (Q15)."
 		(exclude_from_sim no)
 		(at 20.32 28.86 0)
 		(effects
@@ -3579,9 +3579,9 @@
 			)
 			(justify left top)
 		)
-		(uuid "461c2018-b634-5a69-bec1-29e38092aa43")
+		(uuid "795e8785-52b8-583b-b7cb-677703d33875")
 	)
-	(text "EN left open (internal pull-up): the internal UVLO (~4.3 V) keeps the buck running through a 6 V cold crank."
+	(text "TPS54360B: datasheet 600 kHz design (Fig. 32) with FB 68k/12k = 5.33 V, so 5V is ~4.9 V after the SS34 OR."
 		(exclude_from_sim no)
 		(at 20.32 31.86 0)
 		(effects
@@ -3590,9 +3590,9 @@
 			)
 			(justify left top)
 		)
-		(uuid "bc92a16f-c62e-59ce-bab2-e5727b0a371c")
+		(uuid "2c63a0e3-d86c-55ff-a6ce-52cd6d61ca50")
 	)
-	(text "5V_BUCK (not the OR'd 5V) feeds everything on the vehicle side: CAN VCC, the VPW reference, the Bus- pull-up."
+	(text "EN left open (internal pull-up): the internal UVLO (~4.3 V) keeps the buck running through a 6 V cold crank."
 		(exclude_from_sim no)
 		(at 20.32 34.86 0)
 		(effects
@@ -3601,7 +3601,18 @@
 			)
 			(justify left top)
 		)
-		(uuid "4a3a4122-69ce-53ef-aded-f78d77fb6099")
+		(uuid "dc3f4bc6-b3c1-5f71-8579-e3666a7c77a4")
+	)
+	(text "5V_BUCK (not the OR'd 5V) feeds everything on the vehicle side: CAN VCC, the VPW reference, the Bus- pull-up."
+		(exclude_from_sim no)
+		(at 20.32 37.86 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "e2c8e778-7164-5e10-9d15-fa1c8b68e879")
 	)
 	(text "5 V: the buck OR'd with USB power; 3.3 V LDO"
 		(exclude_from_sim no)
@@ -3743,7 +3754,7 @@
 				)
 			)
 		)
-		(property "Value" "5.0SMDJ26CA"
+		(property "Value" "5.0SMDJ33CA"
 			(at 65.4843 71.12 270)
 			(effects
 				(font
@@ -3778,7 +3789,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C444401"
+		(property "LCSC" "C2913642"
 			(at 55.88 69.85 0)
 			(hide yes)
 			(effects
@@ -6372,7 +6383,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
+		(property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
 			(at 50.8 177.8 0)
 			(hide yes)
 			(effects
@@ -6399,7 +6410,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C14663"
+		(property "LCSC" "C307331"
 			(at 50.8 177.8 0)
 			(hide yes)
 			(effects

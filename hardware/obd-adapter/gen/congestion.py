@@ -23,7 +23,7 @@ import pcbnew
 PLANES = ("GND", "3V3")
 PITCH = 0.30            # track width 0.15 + clearance 0.15 (the Default net class)
 # signal layers: F.Cu and B.Cu (In1 / In2 are planes); OBD_IN2=signal (build.py) adds In2
-LAYERS = 3 if os.environ.get("OBD_IN2") == "signal" else 2
+LAYERS = int(os.environ.get("OBD_SIGNAL_LAYERS", 4))     # F.Cu, In2, In3, B.Cu (In1 GND and In4 3V3 are planes)
 CELL = 2.0              # mm
 
 

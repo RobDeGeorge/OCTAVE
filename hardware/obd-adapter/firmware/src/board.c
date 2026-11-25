@@ -84,9 +84,10 @@ unsigned board_check_outputs(void (*report)(const struct safe_pin *pin, bool dri
 
 void led_set(bool red, bool green, bool blue)
 {
-    gpio_write(PIN_LED_R, red);
-    gpio_write(PIN_LED_G, green);
-    gpio_write(PIN_LED_B, blue);
+    /* active low: the pins sink the RGB LED's cathodes */
+    gpio_write(PIN_LED_R, !red);
+    gpio_write(PIN_LED_G, !green);
+    gpio_write(PIN_LED_B, !blue);
 #if defined(BOARD_NUCLEO)
     gpio_write(PIN_EXP_PA5, red || green || blue); /* LD2: the Nucleo's one LED shows any colour */
 #endif

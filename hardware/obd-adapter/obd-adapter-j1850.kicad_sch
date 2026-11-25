@@ -1280,6 +1280,428 @@
 				)
 			)
 		)
+		(symbol "Transistor_BJT:BCX56"
+			(pin_names
+				(offset 0)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
+			(property "Reference" "Q"
+				(at 5.08 1.905 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Value" "BCX56"
+				(at 5.08 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Footprint" "Package_TO_SOT_SMD:SOT-89-3"
+				(at 5.08 -1.905 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+						(italic yes)
+					)
+					(justify left)
+				)
+			)
+			(property "Datasheet" "https://www.nxp.com/docs/en/data-sheet/BCP56_BCX56_BC56PA.pdf"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Description" "1A Ic, 80V Vce, NPN Medium Power Transistor, SOT-89"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Sim.Device" "NPN"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Sim.Pins" "1=B 2=C 3=E"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_keywords" "NPN Transistor"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "BCX56_0_1"
+				(polyline
+					(pts
+						(xy -2.54 0)
+						(xy 0.635 0)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0.635 1.905)
+						(xy 0.635 -1.905)
+					)
+					(stroke
+						(width 0.508)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(circle
+					(center 1.27 0)
+					(radius 2.8194)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "BCX56_1_1"
+				(polyline
+					(pts
+						(xy 0.635 0.635)
+						(xy 2.54 2.54)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0.635 -0.635)
+						(xy 2.54 -2.54)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 1.27 -1.778)
+						(xy 1.778 -1.27)
+						(xy 2.286 -2.286)
+						(xy 1.27 -1.778)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type outline)
+					)
+				)
+				(pin input line
+					(at -5.08 0 0)
+					(length 2.54)
+					(name "B"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 2.54 5.08 270)
+					(length 2.54)
+					(name "C"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 2.54 -5.08 90)
+					(length 2.54)
+					(name "E"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+			(property "ki_fp_filters" "SOT?89*"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+		)
+		(symbol "Device:D_Zener"
+			(pin_numbers
+				(hide yes)
+			)
+			(pin_names
+				(offset 1.016)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
+			(property "Reference" "D"
+				(at 0 2.54 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "D_Zener"
+				(at 0 -2.54 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Description" "Zener diode"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_keywords" "diode"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_fp_filters" "TO-???* *_Diode_* *SingleDiode* D_*"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "D_Zener_0_1"
+				(polyline
+					(pts
+						(xy -1.27 -1.27)
+						(xy -1.27 1.27)
+						(xy -0.762 1.27)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 1.27 0)
+						(xy -1.27 0)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 1.27 -1.27)
+						(xy 1.27 1.27)
+						(xy -1.27 0)
+						(xy 1.27 -1.27)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "D_Zener_1_1"
+				(pin passive line
+					(at -3.81 0 0)
+					(length 2.54)
+					(name "K"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 3.81 0 180)
+					(length 2.54)
+					(name "A"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "Transistor_FET:AO3401A"
 			(pin_names
 				(hide yes)
@@ -2898,178 +3320,6 @@
 			)
 			(embedded_fonts no)
 		)
-		(symbol "Device:D_Zener"
-			(pin_numbers
-				(hide yes)
-			)
-			(pin_names
-				(offset 1.016)
-				(hide yes)
-			)
-			(exclude_from_sim no)
-			(in_bom yes)
-			(on_board yes)
-			(in_pos_files yes)
-			(duplicate_pin_numbers_are_jumpers no)
-			(property "Reference" "D"
-				(at 0 2.54 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Value" "D_Zener"
-				(at 0 -2.54 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Footprint" ""
-				(at 0 0 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Datasheet" ""
-				(at 0 0 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Description" "Zener diode"
-				(at 0 0 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "ki_keywords" "diode"
-				(at 0 0 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "ki_fp_filters" "TO-???* *_Diode_* *SingleDiode* D_*"
-				(at 0 0 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(symbol "D_Zener_0_1"
-				(polyline
-					(pts
-						(xy -1.27 -1.27)
-						(xy -1.27 1.27)
-						(xy -0.762 1.27)
-					)
-					(stroke
-						(width 0.254)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(polyline
-					(pts
-						(xy 1.27 0)
-						(xy -1.27 0)
-					)
-					(stroke
-						(width 0)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(polyline
-					(pts
-						(xy 1.27 -1.27)
-						(xy 1.27 1.27)
-						(xy -1.27 0)
-						(xy 1.27 -1.27)
-					)
-					(stroke
-						(width 0.254)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-			)
-			(symbol "D_Zener_1_1"
-				(pin passive line
-					(at -3.81 0 0)
-					(length 2.54)
-					(name "K"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin passive line
-					(at 3.81 0 180)
-					(length 2.54)
-					(name "A"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "2"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-			)
-			(embedded_fonts no)
-		)
 		(symbol "power:GND"
 			(power global)
 			(pin_numbers
@@ -3497,6 +3747,159 @@
 		)
 		(uuid "c87789c2-4d6c-542d-b78a-31962d281a1e")
 	)
+	(text "VJ_IN: DLC_SW through a follower clamped at 30 V"
+		(exclude_from_sim no)
+		(at 304.8 33.02 0)
+		(effects
+			(font
+				(size 1.8 1.8)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "97035515-dc09-5374-9d03-f10adfbd1090")
+	)
+	(symbol
+		(lib_id "power:PWR_FLAG")
+		(at 17.78 63.5 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(dnp no)
+		(uuid "76908c45-6f34-56c6-bef1-65fc8459afa2")
+		(property "Reference" "#FLG10"
+			(at 17.78 63.5 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "PWR_FLAG"
+			(at 17.78 59.69 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 17.78 63.5 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 17.78 63.5 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 17.78 63.5 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "8c10ddbf-661a-5240-bfa3-f89547f3ef66")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
+					(reference "#FLG10")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 17.78 63.5)
+			(xy 17.78 68.58)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "1ada92b0-e75d-507a-ac66-4a69a400d558")
+	)
+	(symbol
+		(lib_id "power:+3V3")
+		(at 17.78 68.58 180)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(dnp no)
+		(uuid "f6d61984-2f3d-56ab-b571-564b8177d281")
+		(property "Reference" "#PWR057"
+			(at 17.78 68.58 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "VJ_IN"
+			(at 17.78 73.58 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 17.78 68.58 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 17.78 68.58 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 17.78 68.58 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "9139ff3c-87dd-5797-92b9-f1e88d7d1852")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
+					(reference "#PWR057")
+					(unit 1)
+				)
+			)
+		)
+	)
 	(text "Bus+ driver: TXP high -> Q5 on -> P-FET Q6 on"
 		(exclude_from_sim no)
 		(at 25.4 119.38 0)
@@ -3566,7 +3969,7 @@
 		)
 		(uuid "a2bac149-864b-5b11-a9e9-f49d075999c5")
 	)
-	(text "CMP_VCC: DLC_SW via 470R, 33 V zener"
+	(text "CMP_VCC: DLC_SW via 1k, 33 V zener"
 		(exclude_from_sim no)
 		(at 330.2 182.88 0)
 		(effects
@@ -3576,7 +3979,7 @@
 			)
 			(justify left top)
 		)
-		(uuid "59e13b9b-7b8b-5555-a0f0-1ffc958a3e41")
+		(uuid "152fba29-f638-549e-9a0f-630293493d2e")
 	)
 	(text "Notes"
 		(exclude_from_sim no)
@@ -3623,7 +4026,7 @@
 		)
 		(uuid "d56281e0-d9dd-5f57-b6a5-38ab879018e6")
 	)
-	(text "RX: LM2901B on CMP_VCC (DLC_SW via 470R, 33 V zener; 38 V abs max). VPW: Bus+ vs 5V_BUCK x 47/65 = 3.85 V, active high."
+	(text "RX: LM2901B on CMP_VCC (DLC_SW via 1k, 33 V zener; 38 V abs max). VPW: Bus+ vs 5V_BUCK x 47/65 = 3.85 V, active high."
 		(exclude_from_sim no)
 		(at 157.48 57.26 0)
 		(effects
@@ -3632,7 +4035,7 @@
 			)
 			(justify left top)
 		)
-		(uuid "8ee4cd0c-080e-5446-b39d-2ab0d7df2441")
+		(uuid "88b06d2b-9c84-5073-94f7-c7784da83328")
 	)
 	(text "PWM: Bus+ vs Bus-. Q7 base has 2.2k to GND: the bootloader's PC9 pull-up must not turn it on (Bus- low)."
 		(exclude_from_sim no)
@@ -4309,7 +4712,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
 			(at 96.52 100.33 0)
 			(hide yes)
 			(effects
@@ -4336,7 +4739,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C25804"
+		(property "LCSC" "C25744"
 			(at 96.52 100.33 0)
 			(hide yes)
 			(effects
@@ -4355,6 +4758,237 @@
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
 					(reference "R35")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 320.04 54.61 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "1deb1873-7086-55fb-9779-c20ae1d251ee")
+		(property "Reference" "R80"
+			(at 316.0238 53.34 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "1k"
+			(at 316.0238 55.88 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+			(at 320.04 54.61 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 320.04 54.61 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 320.04 54.61 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C21190"
+			(at 320.04 54.61 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "267fdd40-5890-5afc-a232-d575582fe705")
+		)
+		(pin "2"
+			(uuid "05b8dab9-bf86-5ebd-bc51-c2fba66e2902")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
+					(reference "R80")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Transistor_BJT:BCX56")
+		(at 337.82 60.96 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "5c0f848c-0a9d-5640-926f-a2a9afc74fda")
+		(property "Reference" "Q15"
+			(at 348.243 59.69 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "BCX56-16"
+			(at 348.243 62.23 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Package_TO_SOT_SMD:SOT-89-3"
+			(at 337.82 60.96 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 337.82 60.96 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 337.82 60.96 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C100026"
+			(at 337.82 60.96 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "6ce657a6-01a3-515a-817a-bf81b319a6ac")
+		)
+		(pin "2"
+			(uuid "a8d78610-5a79-5d7c-a8db-2725720ca7cb")
+		)
+		(pin "3"
+			(uuid "f41a21b3-d96e-537f-b3e6-67d9e18972b1")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
+					(reference "Q15")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:D_Zener")
+		(at 320.04 64.77 270)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "c670929d-d348-560d-8b80-993c2bf06689")
+		(property "Reference" "D31"
+			(at 312.436 63.5 270)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "BZT52C30"
+			(at 312.436 66.04 270)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Diode_SMD:D_SOD-123"
+			(at 320.04 64.77 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 320.04 64.77 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 320.04 64.77 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C19077418"
+			(at 320.04 64.77 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "c9aa824e-75df-563d-bd62-b8a8a68bd8f4")
+		)
+		(pin "2"
+			(uuid "dcd90d0b-d7ae-5cb1-92df-dbb55e557eb6")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
+					(reference "D31")
 					(unit 1)
 				)
 			)
@@ -4464,7 +5098,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
 			(at 40.64 163.83 0)
 			(hide yes)
 			(effects
@@ -4491,7 +5125,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C25804"
+		(property "LCSC" "C25744"
 			(at 40.64 163.83 0)
 			(hide yes)
 			(effects
@@ -5143,7 +5777,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
 			(at 189.23 160.02 0)
 			(hide yes)
 			(effects
@@ -5170,7 +5804,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C21190"
+		(property "LCSC" "C11702"
 			(at 189.23 160.02 0)
 			(hide yes)
 			(effects
@@ -5219,7 +5853,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
 			(at 177.8 163.83 0)
 			(hide yes)
 			(effects
@@ -5246,7 +5880,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C25803"
+		(property "LCSC" "C25741"
 			(at 177.8 163.83 0)
 			(hide yes)
 			(effects
@@ -5295,7 +5929,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
 			(at 200.66 163.83 0)
 			(hide yes)
 			(effects
@@ -5322,7 +5956,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C4190"
+		(property "LCSC" "C25879"
 			(at 200.66 163.83 0)
 			(hide yes)
 			(effects
@@ -5894,7 +6528,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
 			(at 73.66 219.71 0)
 			(hide yes)
 			(effects
@@ -5921,7 +6555,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C25819"
+		(property "LCSC" "C25792"
 			(at 73.66 219.71 0)
 			(hide yes)
 			(effects
@@ -5970,7 +6604,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
 			(at 69.85 215.9 0)
 			(hide yes)
 			(effects
@@ -5997,7 +6631,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C25810"
+		(property "LCSC" "C25762"
 			(at 69.85 215.9 0)
 			(hide yes)
 			(effects
@@ -6016,6 +6650,82 @@
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
 					(reference "R45")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:C")
+		(at 83.82 219.71 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "23116903-77f5-5348-ab9f-4a7488e410ce")
+		(property "Reference" "C57"
+			(at 89.519 218.44 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "100n"
+			(at 89.519 220.98 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
+			(at 83.82 219.71 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 83.82 219.71 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 83.82 219.71 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "LCSC" "C307331"
+			(at 83.82 219.71 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "22be3799-b710-5520-8b7c-5d6f8e4d071b")
+		)
+		(pin "2"
+			(uuid "894540d0-42da-52ab-921c-9ffee4cb4c18")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
+					(reference "C57")
 					(unit 1)
 				)
 			)
@@ -6046,7 +6756,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
 			(at 104.14 201.93 0)
 			(hide yes)
 			(effects
@@ -6073,7 +6783,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C25804"
+		(property "LCSC" "C25744"
 			(at 104.14 201.93 0)
 			(hide yes)
 			(effects
@@ -6505,7 +7215,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0603_1608Metric"
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
 			(at 220.98 201.93 0)
 			(hide yes)
 			(effects
@@ -6532,7 +7242,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C25804"
+		(property "LCSC" "C25744"
 			(at 220.98 201.93 0)
 			(hide yes)
 			(effects
@@ -6728,7 +7438,7 @@
 				)
 			)
 		)
-		(property "Value" "470"
+		(property "Value" "1k"
 			(at 336.55 200.736 90)
 			(effects
 				(font
@@ -6763,7 +7473,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C4502"
+		(property "LCSC" "C4410"
 			(at 336.55 198.12 0)
 			(hide yes)
 			(effects
@@ -7073,6 +7783,72 @@
 	)
 	(wire
 		(pts
+			(xy 309.88 50.8)
+			(xy 340.36 50.8)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "ca1d6a96-490d-5950-ac09-41756a198aa9")
+	)
+	(wire
+		(pts
+			(xy 340.36 50.8)
+			(xy 340.36 55.88)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "2888e6bf-d135-578c-a3c3-ab9ee026e949")
+	)
+	(wire
+		(pts
+			(xy 320.04 58.42)
+			(xy 320.04 60.96)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "491aa619-2fe3-5cb3-bf8c-dafc57414175")
+	)
+	(wire
+		(pts
+			(xy 320.04 60.96)
+			(xy 332.74 60.96)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7f5a6595-9120-5ace-b68c-c0138343dbc2")
+	)
+	(wire
+		(pts
+			(xy 327.66 60.96)
+			(xy 327.66 59.69)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "12bd2c3d-767a-52ae-9d01-3462faac806b")
+	)
+	(wire
+		(pts
+			(xy 340.36 66.04)
+			(xy 345.44 66.04)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c6ca9b0b-3acc-56ec-8df0-9afe24687529")
+	)
+	(wire
+		(pts
 			(xy 33.02 160.02)
 			(xy 48.26 160.02)
 		)
@@ -7080,7 +7856,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "c3288945-bbe0-5084-a136-99aab9e9d0de")
+		(uuid "a1ae8ea6-4748-58fc-9f7f-b811280ee917")
 	)
 	(wire
 		(pts
@@ -7091,7 +7867,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "4afb67e5-cf33-5c5b-aecc-c39957a4de4a")
+		(uuid "2f4c3fdf-aea2-51b9-b1be-026bdb952df9")
 	)
 	(wire
 		(pts
@@ -7102,7 +7878,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "9e1055c0-7874-5a41-9596-02ea086fd18c")
+		(uuid "035d5364-a5be-58ff-a1d6-f80174180d70")
 	)
 	(wire
 		(pts
@@ -7113,7 +7889,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "3d9eb224-d0f9-5755-9d7b-41a9c7849457")
+		(uuid "d15de196-4fbf-5f23-8a19-2230862262a7")
 	)
 	(wire
 		(pts
@@ -7124,7 +7900,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "a7199fa2-8012-56fe-95b3-6e73a1016792")
+		(uuid "74cf9179-4505-5b6e-86d7-81d0748ee76a")
 	)
 	(wire
 		(pts
@@ -7135,7 +7911,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "2eb1533d-ebe0-55f1-8327-6f7f5211cfe0")
+		(uuid "72a8afb1-4b54-5420-8771-ba55b4e5108d")
 	)
 	(wire
 		(pts
@@ -7146,7 +7922,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "0626d2dd-414e-5d73-acd7-cbbd4e4d3b0c")
+		(uuid "84886260-a59c-5e93-b23d-6cff3c024b0a")
 	)
 	(wire
 		(pts
@@ -7157,7 +7933,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "d194263d-c4a9-500c-be49-f3a7e13061e6")
+		(uuid "f821424a-8649-529e-9c7b-7855536584a1")
 	)
 	(wire
 		(pts
@@ -7168,7 +7944,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "8b899725-38b5-53be-90a1-a135de8ed79e")
+		(uuid "eff033e8-6953-5491-bcbc-57657dd4d0be")
 	)
 	(wire
 		(pts
@@ -7179,7 +7955,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "5ca82a5d-618b-5ecd-a85e-b4e06bc329f7")
+		(uuid "d042942a-bc8e-5bdb-a3e3-b960857d2bbe")
 	)
 	(wire
 		(pts
@@ -7190,7 +7966,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "c3a56798-8582-5889-b4e6-02a06590155b")
+		(uuid "cb06ba4a-ffa6-580b-8b9f-d067c046f495")
 	)
 	(wire
 		(pts
@@ -7201,7 +7977,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "53a17ad1-afc4-5db8-8adf-2a574b30ab52")
+		(uuid "ce467649-c0ea-5169-9992-ac25afc0d0ab")
 	)
 	(wire
 		(pts
@@ -7212,7 +7988,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "9ad31c8d-237c-5e15-bfa0-9bdb70e31334")
+		(uuid "d714377e-9db6-5c9e-b526-18cc22337eb0")
 	)
 	(wire
 		(pts
@@ -7223,7 +7999,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "555042de-a877-5a18-8d66-89a5212f4dd9")
+		(uuid "b860dfb8-7a7d-5439-b3eb-530d5481a68e")
 	)
 	(wire
 		(pts
@@ -7234,7 +8010,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "06222255-a36f-5f56-9b8c-bb661da26231")
+		(uuid "85d42c03-6e3d-5f48-b8a0-fceed953179d")
 	)
 	(wire
 		(pts
@@ -7245,7 +8021,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "7368cca4-9903-5806-acc7-27f4befb3990")
+		(uuid "cce9a527-6710-54db-9b96-2e5475c092b3")
 	)
 	(wire
 		(pts
@@ -7256,7 +8032,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "7c2c4c53-2b93-5500-b1fe-0a42e8b15de6")
+		(uuid "ed297eff-f041-56c6-b3bd-fba01410b10c")
 	)
 	(wire
 		(pts
@@ -7267,7 +8043,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "d8451ef0-69ac-5a6a-901c-e01444c24153")
+		(uuid "59a67eb1-1b41-5f36-9d08-98e54e2a8a36")
 	)
 	(wire
 		(pts
@@ -7278,7 +8054,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "87728329-aa29-5118-8e24-34c5dea3bc84")
+		(uuid "115ac5ef-48d7-5784-b239-3f30f12bb099")
 	)
 	(wire
 		(pts
@@ -7289,7 +8065,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "cbcdc41f-bec7-58a9-9e8d-a41b186be851")
+		(uuid "ffdda2f9-fa06-505d-9900-598d3a188ace")
 	)
 	(wire
 		(pts
@@ -7300,7 +8076,18 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "638d8f0e-5b01-59bf-afbc-57ac7fadf30b")
+		(uuid "43812ae9-0da5-5327-92d3-23757022a085")
+	)
+	(wire
+		(pts
+			(xy 73.66 215.9)
+			(xy 83.82 215.9)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "846decdc-7ec5-5378-b7dd-af639c20e600")
 	)
 	(wire
 		(pts
@@ -7311,7 +8098,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "486fabf8-4616-584a-90b1-96cf143fe756")
+		(uuid "a1e8f670-e263-5ef6-9dba-4d7a7d212205")
 	)
 	(wire
 		(pts
@@ -7322,7 +8109,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "8b8f4bc3-1648-595b-a635-a14574f07a22")
+		(uuid "df352c44-4977-5e6f-ab0e-2f0b3bb87f20")
 	)
 	(wire
 		(pts
@@ -7333,7 +8120,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "d0e0815b-67d2-5649-b495-3f0374d0f5ed")
+		(uuid "02176e4b-4539-5189-9a99-ddc91c924b8a")
 	)
 	(wire
 		(pts
@@ -7344,7 +8131,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "12e1e296-800f-5a7f-afb7-5f4aeca03f12")
+		(uuid "8370d48e-bee1-5f82-8151-c3fe7618d9b3")
 	)
 	(wire
 		(pts
@@ -7355,7 +8142,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "35190bf2-428d-5c0a-9999-b2edaa56028b")
+		(uuid "e95096a4-715d-5404-b382-e2940ca5236c")
 	)
 	(wire
 		(pts
@@ -7366,7 +8153,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "ca6bc2a7-ff1c-577e-a24b-281b84c00eb8")
+		(uuid "1bedb785-1306-53a9-8883-451b93dfe0b3")
 	)
 	(wire
 		(pts
@@ -7377,7 +8164,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "ccb79606-de31-592c-b6ea-9c8913b5434b")
+		(uuid "e1dd78c1-890e-553f-9962-30bd23956da8")
 	)
 	(wire
 		(pts
@@ -7388,7 +8175,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "ef7a5564-5c32-542e-b92d-6d2d1025e7c5")
+		(uuid "d1ac8286-d07d-584e-a179-86fcb6541efe")
 	)
 	(wire
 		(pts
@@ -7399,7 +8186,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "0bcc4d53-7d7a-57d5-8d56-6cf5b32f1dd1")
+		(uuid "b393158c-cc1c-569d-afbd-439344636349")
 	)
 	(wire
 		(pts
@@ -7410,7 +8197,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "9b850862-99e2-5a4a-b9ae-9c5769c0ff6a")
+		(uuid "08baa972-4186-5224-9fbd-61fa8ab9bca4")
 	)
 	(wire
 		(pts
@@ -7421,7 +8208,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "a23cc287-5b0d-5ab2-92a2-18ded36b39a5")
+		(uuid "068c7aeb-99c5-5ba1-9d47-df035ec5e3c9")
 	)
 	(wire
 		(pts
@@ -7432,7 +8219,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "e4e0c80c-eda7-51eb-9b4b-10b54d3fd306")
+		(uuid "e2d6c5bc-7b19-519c-98d6-629f778a87e3")
 	)
 	(wire
 		(pts
@@ -7443,7 +8230,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "e4054a51-617f-5c95-8ef5-2ff02a2f2aab")
+		(uuid "ce803925-ed99-510f-aa39-9f6f95ef0b2c")
 	)
 	(junction
 		(at 185.42 203.2)
@@ -7468,6 +8255,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "fd78a758-4d88-559f-bc64-2270529e381d")
+	)
+	(junction
+		(at 320.04 50.8)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "64bce3ba-b91f-541c-b07a-8e3efb40230d")
 	)
 	(junction
 		(at 195.58 160.02)
@@ -7498,6 +8291,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "14dc9419-f5f6-5430-a4c6-e39798893d1f")
+	)
+	(junction
+		(at 320.04 60.96)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "60053317-b6d4-5c58-b2de-32a4f9b4b4df")
 	)
 	(junction
 		(at 96.52 154.94)
@@ -7620,6 +8419,12 @@
 		(uuid "dd610a5c-4cf7-5390-9fcf-763acf6cae0c")
 	)
 	(junction
+		(at 73.66 215.9)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "5cbb2dfc-73ce-50f1-916c-6f97e735f21a")
+	)
+	(junction
 		(at 177.8 220.98)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -7630,6 +8435,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "3291143b-01e9-503c-bb25-992240b7c8d0")
+	)
+	(junction
+		(at 327.66 60.96)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "57868625-61a0-5b9e-ac25-0c48efea4f32")
 	)
 	(junction
 		(at 104.14 205.74)
@@ -7646,7 +8457,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "8793a42e-59ef-52e9-90e3-51dabe2b182a")
-		(property "Reference" "#PWR057"
+		(property "Reference" "#PWR058"
 			(at 30.48 50.8 0)
 			(hide yes)
 			(effects
@@ -7655,7 +8466,7 @@
 				)
 			)
 		)
-		(property "Value" "DLC_SW"
+		(property "Value" "VJ_IN"
 			(at 30.48 45.8 0)
 			(effects
 				(font
@@ -7696,7 +8507,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR057")
+					(reference "#PWR058")
 					(unit 1)
 				)
 			)
@@ -7711,7 +8522,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "e77881a5-631a-5dd0-8cba-50880720f121")
-		(property "Reference" "#PWR058"
+		(property "Reference" "#PWR059"
 			(at 40.64 58.42 0)
 			(hide yes)
 			(effects
@@ -7761,7 +8572,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR058")
+					(reference "#PWR059")
 					(unit 1)
 				)
 			)
@@ -7776,7 +8587,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "321953fb-61bd-5216-8496-70cc9a3f5a29")
-		(property "Reference" "#PWR059"
+		(property "Reference" "#PWR060"
 			(at 127 50.8 0)
 			(hide yes)
 			(effects
@@ -7826,7 +8637,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR059")
+					(reference "#PWR060")
 					(unit 1)
 				)
 			)
@@ -7841,7 +8652,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "2a7c69ae-20b4-599d-a4c0-f177ae595e6b")
-		(property "Reference" "#PWR060"
+		(property "Reference" "#PWR061"
 			(at 76.2 58.42 0)
 			(hide yes)
 			(effects
@@ -7891,7 +8702,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR060")
+					(reference "#PWR061")
 					(unit 1)
 				)
 			)
@@ -7927,7 +8738,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "1d243a9b-ec7e-516d-8fed-e77a3042d2dc")
-		(property "Reference" "#PWR061"
+		(property "Reference" "#PWR062"
 			(at 88.9 81.28 0)
 			(hide yes)
 			(effects
@@ -7977,7 +8788,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR061")
+					(reference "#PWR062")
 					(unit 1)
 				)
 			)
@@ -8013,7 +8824,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "dee6be13-4ef3-54ad-98bb-76bde3a4a8f3")
-		(property "Reference" "#PWR062"
+		(property "Reference" "#PWR063"
 			(at 106.68 93.98 0)
 			(hide yes)
 			(effects
@@ -8063,7 +8874,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR062")
+					(reference "#PWR063")
 					(unit 1)
 				)
 			)
@@ -8078,7 +8889,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "e87f0fea-b540-555f-a590-388d9d4e2a57")
-		(property "Reference" "#PWR063"
+		(property "Reference" "#PWR064"
 			(at 96.52 104.14 0)
 			(hide yes)
 			(effects
@@ -8128,7 +8939,7 @@
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR063")
+					(reference "#PWR064")
 					(unit 1)
 				)
 			)
@@ -8155,6 +8966,178 @@
 			)
 		)
 	)
+	(symbol
+		(lib_id "power:+3V3")
+		(at 309.88 50.8 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(dnp no)
+		(uuid "c314cfb1-9152-5889-b925-06dee2fdba4e")
+		(property "Reference" "#PWR065"
+			(at 309.88 50.8 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "DLC_SW"
+			(at 309.88 45.8 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 309.88 50.8 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 309.88 50.8 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 309.88 50.8 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "e5fc023a-e60e-55db-af09-d74531771279")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
+					(reference "#PWR065")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 320.04 68.58 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(dnp no)
+		(uuid "a354afe1-2b94-5af3-9b6a-a85a51742b30")
+		(property "Reference" "#PWR066"
+			(at 320.04 68.58 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 320.04 73.58 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 320.04 68.58 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 320.04 68.58 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 320.04 68.58 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "855cfc80-795b-5a94-9430-c30ba8842698")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
+					(reference "#PWR066")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(global_label "VJ_B"
+		(shape passive)
+		(at 327.66 59.69 90)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "4164e047-439d-5d50-a938-697ff29bffcc")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 327.66 59.69 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+	)
+	(global_label "VJ_IN"
+		(shape passive)
+		(at 345.44 66.04 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "ff2eb3a2-1060-5258-a7fc-d9b9d8b8aebd")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 345.44 66.04 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+	)
 	(global_label "J1850_TXP"
 		(shape passive)
 		(at 33.02 160.02 180)
@@ -8165,7 +9148,7 @@
 			)
 			(justify right)
 		)
-		(uuid "8cabf081-100b-5d9c-ac06-54518ef980be")
+		(uuid "cfb84ae9-d429-55c5-91a8-f44846d34cc5")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 33.02 160.02 0)
 			(effects
@@ -8184,8 +9167,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "1734c0dd-0907-51f4-b47a-03e09390b0de")
-		(property "Reference" "#PWR064"
+		(uuid "eaa41844-1b12-56b0-a3a7-c0f29faceb13")
+		(property "Reference" "#PWR067"
 			(at 40.64 167.64 0)
 			(hide yes)
 			(effects
@@ -8230,12 +9213,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "c8c26c8b-8a1e-58a3-b395-4995be1a8580")
+			(uuid "2e750ff1-1af2-5fb4-9e97-891b02156e82")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR064")
+					(reference "#PWR067")
 					(unit 1)
 				)
 			)
@@ -8249,8 +9232,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "9de4f497-c060-5c79-8d45-83cfe5535831")
-		(property "Reference" "#PWR065"
+		(uuid "661025c1-6e57-528c-a76d-9a0f0e03cb10")
+		(property "Reference" "#PWR068"
 			(at 55.88 165.1 0)
 			(hide yes)
 			(effects
@@ -8295,12 +9278,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "9734b5d3-798d-5bd9-91ad-cc03979ffeef")
+			(uuid "e9e15ea2-5489-59e7-acec-03d5100c7d8d")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR065")
+					(reference "#PWR068")
 					(unit 1)
 				)
 			)
@@ -8314,8 +9297,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "c7849e34-702d-5f81-9f02-6d215ff45717")
-		(property "Reference" "#PWR066"
+		(uuid "80cccdaa-ee51-5081-87af-326cba85926e")
+		(property "Reference" "#PWR069"
 			(at 66.04 137.16 0)
 			(hide yes)
 			(effects
@@ -8360,12 +9343,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "707c611b-6e68-537a-9a4d-175cef5c8a42")
+			(uuid "f180e335-2a2a-5085-af57-b445784ade4c")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR066")
+					(reference "#PWR069")
 					(unit 1)
 				)
 			)
@@ -8379,8 +9362,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "53ae8697-d1fc-5eb0-a1ee-60a97101dae6")
-		(property "Reference" "#PWR067"
+		(uuid "b6a276e5-1a27-5765-84c7-a2b3879c2443")
+		(property "Reference" "#PWR070"
 			(at 81.28 134.62 0)
 			(hide yes)
 			(effects
@@ -8425,12 +9408,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "5faf66b7-2891-59e7-a37e-baa47917c60d")
+			(uuid "a9993529-00a9-560b-a273-9305679d10b4")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR067")
+					(reference "#PWR070")
 					(unit 1)
 				)
 			)
@@ -8446,7 +9429,7 @@
 			)
 			(justify left)
 		)
-		(uuid "964971c8-3101-5787-89d3-5a88630ec5f4")
+		(uuid "22d5790f-8207-54bf-b9c3-ac5b21cd5047")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 60.96 142.24 0)
 			(effects
@@ -8467,7 +9450,7 @@
 			)
 			(justify right)
 		)
-		(uuid "f712f18d-ac52-5e31-be02-7c7d2e78ae76")
+		(uuid "e4e9160b-c731-550f-a9cf-2b36e08361fe")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 78.74 152.4 0)
 			(effects
@@ -8488,7 +9471,7 @@
 			)
 			(justify left)
 		)
-		(uuid "6bca1e9c-2713-5b4a-95a1-5860c0e8f947")
+		(uuid "af3dee50-d266-5f02-a2d7-b983ea55505c")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 139.7 154.94 0)
 			(effects
@@ -8507,8 +9490,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "185f86ff-e7a2-50c4-8b11-c9ab46b4d94b")
-		(property "Reference" "#PWR068"
+		(uuid "9044d3e6-cc04-5117-8351-93520bfc4a92")
+		(property "Reference" "#PWR071"
 			(at 96.52 162.56 0)
 			(hide yes)
 			(effects
@@ -8553,12 +9536,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "295e767c-a6df-5ff1-a6f4-631919920845")
+			(uuid "55a7197a-ee12-5018-8366-5a4dc5bdc2c0")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR068")
+					(reference "#PWR071")
 					(unit 1)
 				)
 			)
@@ -8572,8 +9555,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "d376cc63-9ebc-554d-89a1-5fa970c38302")
-		(property "Reference" "#PWR069"
+		(uuid "291420a8-a462-56cf-a553-994492f37aba")
+		(property "Reference" "#PWR072"
 			(at 116.84 170.18 0)
 			(hide yes)
 			(effects
@@ -8618,12 +9601,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "417865dc-fcf2-5844-b505-7d94d5a9966e")
+			(uuid "e0214d1a-cfbb-55f4-984c-202f9ddf8fbc")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR069")
+					(reference "#PWR072")
 					(unit 1)
 				)
 			)
@@ -8639,7 +9622,7 @@
 			)
 			(justify left)
 		)
-		(uuid "b7b7f498-93b6-5420-a80d-368a6d9b32a4")
+		(uuid "a9e592fc-7fe1-5c8a-9adc-907b4abbb889")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 119.38 162.56 0)
 			(effects
@@ -8660,7 +9643,7 @@
 			)
 			(justify right)
 		)
-		(uuid "c274da58-fe00-5e8c-bd41-01608627a2e8")
+		(uuid "60e129d1-670a-5bc1-a5ca-188722b611dc")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 172.72 160.02 0)
 			(effects
@@ -8679,8 +9662,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "dcbf65dc-1658-5c47-8514-aea855b1757f")
-		(property "Reference" "#PWR070"
+		(uuid "03f849b4-bc08-5904-9017-8f2963b92d48")
+		(property "Reference" "#PWR073"
 			(at 177.8 167.64 0)
 			(hide yes)
 			(effects
@@ -8725,12 +9708,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "7effeb72-9d46-5f20-aee8-76a0edb757a5")
+			(uuid "0edb3290-d3fb-5e47-9fd6-8c221f839baa")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR070")
+					(reference "#PWR073")
 					(unit 1)
 				)
 			)
@@ -8744,8 +9727,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "2319731a-2bed-5ed7-ac23-7761b21a17ed")
-		(property "Reference" "#PWR071"
+		(uuid "924f9939-8d1a-5580-9c98-ac45165b1a33")
+		(property "Reference" "#PWR074"
 			(at 200.66 167.64 0)
 			(hide yes)
 			(effects
@@ -8790,12 +9773,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "c09c99c7-f988-5d79-8c97-3ea40db6e5b4")
+			(uuid "f64a64a8-8984-5be1-9894-f3ad2e884743")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR071")
+					(reference "#PWR074")
 					(unit 1)
 				)
 			)
@@ -8811,7 +9794,7 @@
 			)
 			(justify left)
 		)
-		(uuid "c720f4d4-dcd1-507b-ac1f-bd8743c64cee")
+		(uuid "9afd1173-e379-5d26-8fb0-f6bd36d83993")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 195.58 157.48 0)
 			(effects
@@ -8830,8 +9813,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "cd6f7695-62a0-56de-a992-8edd00e86578")
-		(property "Reference" "#PWR072"
+		(uuid "d951afcf-83c1-52e5-9ceb-f963fdd69543")
+		(property "Reference" "#PWR075"
 			(at 213.36 165.1 0)
 			(hide yes)
 			(effects
@@ -8876,12 +9859,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "53dc6f26-3929-55a7-80d0-98437de791db")
+			(uuid "860a3040-ca0c-59ad-937f-62b7d267aff4")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR072")
+					(reference "#PWR075")
 					(unit 1)
 				)
 			)
@@ -8897,7 +9880,7 @@
 			)
 			(justify left)
 		)
-		(uuid "bc583c05-89e7-59d7-b082-dfa19d55effe")
+		(uuid "561a123d-4437-5462-897f-ebce23e27ea3")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 256.54 147.32 0)
 			(effects
@@ -8916,8 +9899,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "9a6d550a-7071-5bd7-877e-4ccf01a84a79")
-		(property "Reference" "#PWR073"
+		(uuid "06e38105-48d9-5f95-9c08-32460df7e7c6")
+		(property "Reference" "#PWR076"
 			(at 223.52 132.08 0)
 			(hide yes)
 			(effects
@@ -8962,12 +9945,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "53dc446b-d021-5957-bd11-d24200619f39")
+			(uuid "10ea9fad-a1bb-532b-b38f-b5b119e5bc8b")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR073")
+					(reference "#PWR076")
 					(unit 1)
 				)
 			)
@@ -8983,7 +9966,7 @@
 			)
 			(justify right)
 		)
-		(uuid "c43fba78-c20e-55d9-b7fb-3b26c42a9051")
+		(uuid "cc2df985-4dd8-5bfc-b6ed-f2b0350a36bd")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 220.98 139.7 0)
 			(effects
@@ -9002,8 +9985,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "1c51c3db-5ae3-5a1d-8f9a-42151d96cf4d")
-		(property "Reference" "#PWR074"
+		(uuid "0364336c-82a3-5fb3-85e4-fc4b3531c8df")
+		(property "Reference" "#PWR077"
 			(at 233.68 154.94 0)
 			(hide yes)
 			(effects
@@ -9048,12 +10031,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "0c719abb-c0ac-5d1f-8b0f-9a5f314bc4c8")
+			(uuid "34a8fad7-cf5b-5314-995b-699737dca7f4")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR074")
+					(reference "#PWR077")
 					(unit 1)
 				)
 			)
@@ -9069,7 +10052,7 @@
 			)
 			(justify right)
 		)
-		(uuid "18796cf4-6dda-5155-9fc7-9c5b02f57880")
+		(uuid "5b7181df-f0a1-5db3-98ea-6d5109c214b1")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 33.02 203.2 0)
 			(effects
@@ -9088,8 +10071,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "c28637db-6d2b-5b9b-9f6f-75a0ada2fa30")
-		(property "Reference" "#PWR075"
+		(uuid "f840d592-5dcb-514d-bdfd-0b34666bff9c")
+		(property "Reference" "#PWR078"
 			(at 55.88 210.82 0)
 			(hide yes)
 			(effects
@@ -9134,12 +10117,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "7d0da629-28f3-538a-8804-a753a7a2625e")
+			(uuid "dc49e0dd-0feb-551a-9863-5f7ecbbc665b")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR075")
+					(reference "#PWR078")
 					(unit 1)
 				)
 			)
@@ -9155,7 +10138,7 @@
 			)
 			(justify left)
 		)
-		(uuid "d01ac217-fd56-548b-a463-03b82b00f93b")
+		(uuid "c82da3c0-7e2b-5d9f-aac9-dcb6d6721a2c")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 66.04 200.66 0)
 			(effects
@@ -9174,8 +10157,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "3f3aca23-dc3c-5f76-aad8-ae84aaa8e8a7")
-		(property "Reference" "#PWR076"
+		(uuid "f6eea2c6-4232-528a-9f2c-28a601106d22")
+		(property "Reference" "#PWR079"
 			(at 73.66 223.52 0)
 			(hide yes)
 			(effects
@@ -9220,12 +10203,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "a7f8d8e6-e9c8-5382-9852-471d3b66815a")
+			(uuid "7b691255-b241-5586-8215-79e97e442348")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR076")
+					(reference "#PWR079")
 					(unit 1)
 				)
 			)
@@ -9239,8 +10222,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "7076f8e5-4d13-50c5-9a72-ae03608e67b1")
-		(property "Reference" "#PWR077"
+		(uuid "1079dcd4-91ac-5f7b-a9bd-84361a6b99ee")
+		(property "Reference" "#PWR080"
 			(at 66.04 215.9 0)
 			(hide yes)
 			(effects
@@ -9285,12 +10268,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "5f70540f-02e7-5745-9f06-209d6320b2f1")
+			(uuid "d6fd59a2-491f-52b0-8b5b-20b0a4e1d239")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR077")
+					(reference "#PWR080")
 					(unit 1)
 				)
 			)
@@ -9306,7 +10289,7 @@
 			)
 			(justify left)
 		)
-		(uuid "531b5dd2-7caa-5f73-9ac8-068df5c8af45")
+		(uuid "500c092f-5d93-552b-9499-7408893707f5")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 76.2 213.36 0)
 			(effects
@@ -9314,6 +10297,71 @@
 					(size 1.27 1.27)
 				)
 				(hide yes)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 83.82 223.52 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(dnp no)
+		(uuid "ff0064a6-a27f-5026-9fb1-b1f2dc4a1e0e")
+		(property "Reference" "#PWR081"
+			(at 83.82 223.52 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 83.82 228.52 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 83.82 223.52 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 83.82 223.52 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 83.82 223.52 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "a669c07d-1fc5-52fb-843e-94061159bf7d")
+		)
+		(instances
+			(project "obd-adapter"
+				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
+					(reference "#PWR081")
+					(unit 1)
+				)
 			)
 		)
 	)
@@ -9327,7 +10375,7 @@
 			)
 			(justify left)
 		)
-		(uuid "c33a6b13-03b8-516c-9807-22cd3f4df89f")
+		(uuid "1bd7703a-294f-556f-be88-ef5afe3b894b")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 111.76 205.74 0)
 			(effects
@@ -9346,8 +10394,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "a15e636a-c467-5373-89fb-343449132fba")
-		(property "Reference" "#PWR078"
+		(uuid "b2987900-25eb-5b63-a986-9e232bcf111f")
+		(property "Reference" "#PWR082"
 			(at 104.14 198.12 0)
 			(hide yes)
 			(effects
@@ -9392,12 +10440,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "88cbc6ab-618b-56f1-afc5-129d3f0ceaff")
+			(uuid "37cf25ae-70d0-536d-8522-2aadde6035ee")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR078")
+					(reference "#PWR082")
 					(unit 1)
 				)
 			)
@@ -9413,7 +10461,7 @@
 			)
 			(justify right)
 		)
-		(uuid "30092b51-24dc-5b33-b0f6-d07ab07dd83c")
+		(uuid "32ed5465-bebd-5422-9581-4ad3211b4bfd")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 149.86 203.2 0)
 			(effects
@@ -9432,8 +10480,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "4f6c5190-bd5b-593d-9571-286def1819a4")
-		(property "Reference" "#PWR079"
+		(uuid "a845f518-2da6-5783-b06b-02e1631ebcd3")
+		(property "Reference" "#PWR083"
 			(at 172.72 210.82 0)
 			(hide yes)
 			(effects
@@ -9478,12 +10526,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "12057ff6-ee11-5c40-8556-166e6c02d8bb")
+			(uuid "b79f8a7e-4daf-531d-9504-3c143f1be07b")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR079")
+					(reference "#PWR083")
 					(unit 1)
 				)
 			)
@@ -9499,7 +10547,7 @@
 			)
 			(justify left)
 		)
-		(uuid "2797ef6e-7abb-583e-92b7-0a634fcfc7d2")
+		(uuid "8902dfe3-2fe1-5143-8931-9e8120acb754")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 185.42 200.66 0)
 			(effects
@@ -9520,7 +10568,7 @@
 			)
 			(justify right)
 		)
-		(uuid "d14471ba-c8d1-54ff-a15b-3d25a00589d5")
+		(uuid "9290c248-79df-534a-9b04-14fdffc950ce")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 149.86 220.98 0)
 			(effects
@@ -9539,8 +10587,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "2495cd8f-3a27-5857-87dd-14e1e5e3acf1")
-		(property "Reference" "#PWR080"
+		(uuid "cc1dfaf3-96e4-5e62-b613-f699d0f91f5c")
+		(property "Reference" "#PWR084"
 			(at 177.8 228.6 0)
 			(hide yes)
 			(effects
@@ -9585,12 +10633,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "762cfa38-3852-5f62-b6ba-50feede8d68f")
+			(uuid "4ff905e8-c5a1-545c-a46f-c82e2c7326ac")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR080")
+					(reference "#PWR084")
 					(unit 1)
 				)
 			)
@@ -9606,7 +10654,7 @@
 			)
 			(justify right)
 		)
-		(uuid "e619060b-9664-5f84-bea3-a2622c262b3b")
+		(uuid "82be5ae1-c943-54c2-82cb-1f5399d493b2")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 185.42 223.52 0)
 			(effects
@@ -9627,7 +10675,7 @@
 			)
 			(justify left)
 		)
-		(uuid "31fae41e-a0ab-5d09-92f0-d1b60a3dc4e0")
+		(uuid "796b1e60-ff4e-54ea-b19f-0b89d44916e9")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 228.6 205.74 0)
 			(effects
@@ -9646,8 +10694,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "7b83d1cc-abdd-5b53-8023-2df44da92904")
-		(property "Reference" "#PWR081"
+		(uuid "fa6862ea-a04f-5663-a76c-1ec397ddc512")
+		(property "Reference" "#PWR085"
 			(at 220.98 198.12 0)
 			(hide yes)
 			(effects
@@ -9692,12 +10740,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "5ebd0c2f-23ca-5ce7-8d03-4cf0ebdcc673")
+			(uuid "a57e6e43-bad8-5379-9c4e-c410f96c4ea6")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR081")
+					(reference "#PWR085")
 					(unit 1)
 				)
 			)
@@ -9713,7 +10761,7 @@
 			)
 			(justify right)
 		)
-		(uuid "6e2ca6e7-30d5-5371-bfaa-d6cc8d81493e")
+		(uuid "cf18271e-9595-5496-aa2f-bc9e28fc9499")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 274.32 203.2 0)
 			(effects
@@ -9734,7 +10782,7 @@
 			)
 			(justify right)
 		)
-		(uuid "c63171cf-0e59-51ef-a9dc-98bbae76de02")
+		(uuid "a0d65256-17cf-576e-a56b-31707e71317b")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 274.32 208.28 0)
 			(effects
@@ -9753,8 +10801,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "e60f1a1b-9617-5ea0-9bd4-054debcacec5")
-		(property "Reference" "#PWR082"
+		(uuid "3a6b191b-7cfb-59e8-a5b7-e07d8e83376b")
+		(property "Reference" "#PWR086"
 			(at 314.96 198.12 0)
 			(hide yes)
 			(effects
@@ -9799,12 +10847,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "11c57af5-42da-549a-9cae-6180a3d1667b")
+			(uuid "a76cc4de-d243-54a7-8ba1-2c09a0850ac5")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR082")
+					(reference "#PWR086")
 					(unit 1)
 				)
 			)
@@ -9818,8 +10866,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "466caf19-cc2f-5042-8bb5-172b433b4afe")
-		(property "Reference" "#PWR083"
+		(uuid "774ea9ad-97ab-5c0f-9fd7-166866aad406")
+		(property "Reference" "#PWR087"
 			(at 314.96 213.36 0)
 			(hide yes)
 			(effects
@@ -9864,12 +10912,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "57afd797-61df-502a-a212-4bd52676b638")
+			(uuid "4f4a9eea-ce0f-5168-93af-8eac5d9517f9")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR083")
+					(reference "#PWR087")
 					(unit 1)
 				)
 			)
@@ -9883,8 +10931,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "1e918694-3eb1-55c3-87fd-12b4b5d52e63")
-		(property "Reference" "#PWR084"
+		(uuid "46019e43-707e-5c82-b245-0ac1c1b670f0")
+		(property "Reference" "#PWR088"
 			(at 332.74 198.12 0)
 			(hide yes)
 			(effects
@@ -9929,12 +10977,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "2180619e-27fe-5d62-916b-5dbb0f75a45c")
+			(uuid "72d49c1c-e0c0-52a9-8b6b-ee06968ee9a5")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR084")
+					(reference "#PWR088")
 					(unit 1)
 				)
 			)
@@ -9948,8 +10996,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "877025f8-f75a-50cc-a6fa-4df5ea244177")
-		(property "Reference" "#PWR085"
+		(uuid "51f07226-5775-5239-bbc7-ecdebf3adb05")
+		(property "Reference" "#PWR089"
 			(at 375.92 198.12 0)
 			(hide yes)
 			(effects
@@ -9994,12 +11042,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "459eaebf-8e0b-5ae8-9b96-92ac551b903d")
+			(uuid "2fd65f76-08f5-5473-8a62-9f29b7668ed9")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR085")
+					(reference "#PWR089")
 					(unit 1)
 				)
 			)
@@ -10013,8 +11061,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "bc401bb8-f11a-542c-8ec5-2c8c068dd250")
-		(property "Reference" "#PWR086"
+		(uuid "05ddca40-512c-510c-b7e1-3f6a5545d23e")
+		(property "Reference" "#PWR090"
 			(at 347.98 205.74 0)
 			(hide yes)
 			(effects
@@ -10059,12 +11107,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "97813e68-0e49-5340-b409-4e683a2ab76c")
+			(uuid "eb6cc0a4-a1e0-5f87-8c1b-ceaa95cff580")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR086")
+					(reference "#PWR090")
 					(unit 1)
 				)
 			)
@@ -10078,8 +11126,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "f024f963-628b-57c8-b603-284ff8b59814")
-		(property "Reference" "#PWR087"
+		(uuid "bc3b26af-0b2d-5ec6-9d4e-060efdd309ea")
+		(property "Reference" "#PWR091"
 			(at 363.22 205.74 0)
 			(hide yes)
 			(effects
@@ -10124,12 +11172,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "1bce63a2-1ed4-58ee-bcf0-5a4af0e2fc0d")
+			(uuid "774c9d46-e77b-596b-8a2a-d876d2179361")
 		)
 		(instances
 			(project "obd-adapter"
 				(path "/5328f787-5482-525d-a7e5-35b8dfb03679/72bf7671-c6e6-5862-96c5-d857d5d5ecb3"
-					(reference "#PWR087")
+					(reference "#PWR091")
 					(unit 1)
 				)
 			)
