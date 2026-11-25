@@ -98,7 +98,8 @@ Rectangle {
         // No Phone Mirror button for now (2026-11-25): the phone is seen on
         // Home only (PhoneMirrorWidget) while that flow is worked out. To
         // bring it back: push "phoneMirror" here when phoneMirrorManager
-        // .nativeAvailable and settingsManager.phoneMirrorEnabled.
+        // .nativeAvailable (the phoneMirrorEnabled switch, "Show in Nav
+        // Bar", is gone from Settings too).
         return s
     }
 
@@ -178,6 +179,12 @@ Rectangle {
     }
 
     function openHomeSection() {
+        // Already on Home with the phone shown there (PhoneMirrorWidget):
+        // Home again takes the phone to its own home screen
+        if (activeSection === "home" && _phoneLive()) {
+            phoneMirrorManager.pressHome()
+            return
+        }
         var savedSettings = persistentWikiSettings()
         if (!savedSettings) {
             while (stackView.depth > 1)
@@ -329,6 +336,13 @@ Rectangle {
 
     // Which nav button owns the page on top of the stack ("" = none). Drives
     // the highlight plate behind that button.
+    function _phoneLive() {
+        if (typeof phoneMirrorManager === "undefined" || !phoneMirrorManager || !phoneMirrorManager.nativeAvailable)
+            return false
+        var st = phoneMirrorManager.sessionState
+        return phoneMirrorManager.isRunning || st === "streaming"
+    }
+
     readonly property string activeSection: {
         var item = stackView ? stackView.currentItem : null
         var n = item ? item.objectName : ""

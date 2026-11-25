@@ -39,7 +39,7 @@ static constexpr int kResizeRestartMs = 1500;
 // ─── Construction ─────────────────────────────────────────────────────
 
 PhoneMirrorManager::PhoneMirrorManager(QObject *parent)
-    : QObject(parent), m_displaySize(kDefaultDisplaySize)
+    : QObject(parent), m_displaySize(kAutoDisplaySize)
 {
     m_adbPath = findAdb();
     if (m_adbPath.isEmpty()) {
@@ -66,7 +66,7 @@ PhoneMirrorManager::PhoneMirrorManager(QObject *parent)
     connect(this, &PhoneMirrorManager::deviceStateChanged, this, &PhoneMirrorManager::restartIfPhoneBack);
     connect(&m_resizeTimer, &QTimer::timeout, this, [this]() {
         if (isRunning() && m_displaySize == kAutoDisplaySize && !m_startedAutoSize.isEmpty()
-            && autoDisplaySize(m_viewWidth, m_viewHeight) != m_startedAutoSize) {
+            && autoSizeWorthRestart(m_startedAutoSize, autoDisplaySize(m_viewWidth, m_viewHeight))) {
             qCInfo(lcPhoneMirror) << "View resized: restarting the mirror at"
                                   << autoDisplaySize(m_viewWidth, m_viewHeight);
             restartSession();
@@ -710,9 +710,35 @@ void PhoneMirrorManager::updateDucking()
 void PhoneMirrorManager::restartSession()
 {
     if (isRunning()) {
+        // Straight to "starting": the view keeps its last picture and a
+        // spinner instead of flashing "No phone connected" for the gap
+        m_restarting = true;
         stopScrcpy();
-        QTimer::singleShot(300, this, &PhoneMirrorManager::startScrcpy);
+        m_restarting = false;
+        // A stop in the gap wins (it bumps the generation)
+        const int gen = m_startGeneration;
+        QTimer::singleShot(300, this, [this, gen]() {
+            if (gen == m_startGeneration)
+                startScrcpy();
+        });
     }
+}
+
+bool PhoneMirrorManager::autoSizeWorthRestart(const QString &started, const QString &wanted)
+{
+    if (started == wanted)
+        return false;
+    static const QRegularExpression re(QStringLiteral("^(\\d+)x(\\d+)$"));
+    const auto a = re.match(started), b = re.match(wanted);
+    if (!a.hasMatch() || !b.hasMatch())
+        return true;
+    const double aw = a.captured(1).toDouble(), ah = a.captured(2).toDouble();
+    const double bw = b.captured(1).toDouble(), bh = b.captured(2).toDouble();
+    if (aw <= 0 || ah <= 0 || bw <= 0 || bh <= 0)
+        return true;
+    const double aspect = (bw / bh) / (aw / ah);
+    const double longSide = qMax(bw, bh) / qMax(aw, ah);
+    return qAbs(aspect - 1.0) > 0.03 || qAbs(longSide - 1.0) > 0.15;
 }
 
 QString PhoneMirrorManager::normalizeDisplaySize(const QString &value)
@@ -732,10 +758,10 @@ QString PhoneMirrorManager::normalizeDisplaySize(const QString &value)
 
 void PhoneMirrorManager::setDisplaySize(const QString &size)
 {
-    const QString norm = normalizeDisplaySize(size);
-    if (norm != size.trimmed())
-        qCInfo(lcPhoneMirror) << "Display size" << size << "normalized to" << norm
-                              << "(scrcpy rounds to multiples of 8)";
+    // The desktop display always fits the view (2026-11-25: Settings' Fit to
+    // Screen switch and size field are gone): any size, including one saved
+    // before, means "auto"; "" (or anything unreadable) mirrors the phone
+    const QString norm = normalizeDisplaySize(size).isEmpty() ? QString() : kAutoDisplaySize;
     if (norm == m_displaySize)
         return;
     m_displaySize = norm;
@@ -779,33 +805,10 @@ void PhoneMirrorManager::setDisplayDpi(int dpi)
         restartSession();
 }
 
-void PhoneMirrorManager::setBitRateUsb(int mbps)
-{
-    mbps = qBound(2, mbps, 40);
-    if (mbps == m_bitRateUsbMbps)
-        return;
-    m_bitRateUsbMbps = mbps;
-    if (m_connectionType == QLatin1String("usb"))
-        restartSession();
-}
-
-void PhoneMirrorManager::setBitRateWifi(int mbps)
-{
-    mbps = qBound(2, mbps, 40);
-    if (mbps == m_bitRateWifiMbps)
-        return;
-    m_bitRateWifiMbps = mbps;
-    if (m_connectionType == QLatin1String("wifi"))
-        restartSession();
-}
-
-void PhoneMirrorManager::setBitRateAuto(bool enabled)
-{
-    if (enabled == m_bitRateAuto)
-        return;
-    m_bitRateAuto = enabled;
-    restartSession();
-}
+// Kept for the service API (deprecated): the bit rate is automatic
+void PhoneMirrorManager::setBitRateUsb(int) {}
+void PhoneMirrorManager::setBitRateWifi(int) {}
+void PhoneMirrorManager::setBitRateAuto(bool) {}
 
 void PhoneMirrorManager::setAutoWifi(bool enabled)
 {
@@ -817,6 +820,10 @@ void PhoneMirrorManager::setVideoSink(QObject *sink)
     m_videoSink = sink;
     if (m_client)
         m_client->setVideoSink(sink);
+    // The phone sends a frame only when its screen changes: ask for one now,
+    // or a view taking the sink back shows an old picture until then
+    if (sink)
+        requestVideoKeyframe();
     emit videoSinkChanged();
 }
 
@@ -1033,18 +1040,14 @@ void PhoneMirrorManager::continueStart(const StartPrep &prep, int generation)
         m_client->setVideoEncoder(softwareEncoderFor(sdk));
         addNotice(noticeText(QStringLiteral("software-encoder")));
     }
-    const int bitRateMbps = wireless ? m_bitRateWifiMbps : m_bitRateUsbMbps;
-    int startBps = bitRateMbps * 1000000;
-    if (m_bitRateAuto) {
-        // The setting is the ceiling; Wi-Fi starts below it and climbs while the link keeps up
-        m_client->setAdaptiveBitRate(kAdaptiveMinBps, startBps);
-        if (wireless)
-            startBps = qMax(kAdaptiveMinBps, int(startBps * kAdaptiveWifiStart));
-    }
+    // Always adaptive: from a rate that runs clean, up to the link's ceiling
+    // while frames keep flowing, down at once when they start to queue
+    const int maxBps = wireless ? kWifiMaxBps : kUsbMaxBps;
+    const int startBps = wireless ? kWifiStartBps : kUsbStartBps;
+    m_client->setAdaptiveBitRate(kAdaptiveMinBps, maxBps);
     qCInfo(lcPhoneMirror) << "Starting phone mirror (server" << serverVersion() << ") for" << serial
                           << "(display" << (displaySize.isEmpty() ? QStringLiteral("phone screen") : displaySize)
-                          << "," << startBps / 1000000.0 << "Mbps" << (m_bitRateAuto ? "adaptive, max" : "fixed")
-                          << bitRateMbps
+                          << "," << startBps / 1000000.0 << "Mbps adaptive, max" << maxBps / 1000000
                           << "," << (wireless ? "Wi-Fi" : "USB") << ")";
     m_serial = serial;
     setConnectionType(wireless ? QStringLiteral("wifi") : QStringLiteral("usb"));
@@ -1248,7 +1251,7 @@ void PhoneMirrorManager::stopScrcpy()
     m_startedAutoSize.clear();
     m_resizeTimer.stop();
     m_hadStream = false;
-    setSessionState(QStringLiteral("idle"));
+    setSessionState(m_restarting ? QStringLiteral("starting") : QStringLiteral("idle"));
     if (m_currentBitRate != 0) {
         m_currentBitRate = 0;
         emit currentBitRateChanged();

@@ -35,7 +35,9 @@ Flickable {
         var tiles = [
             { cardId: "phone_mirror", title: "Phone Mirror", component: phoneMirrorContent,
               summary: function() {
-                  if (!settingsManager || !settingsManager.phoneMirrorEnabled) return { state: "Off" }
+                  // Always on where it can run (no on / off switch since
+                  // 2026-11-25: Home's phone window is the way to it)
+                  if (!pageRoot._pm || !pageRoot._pm.nativeAvailable) return { state: "Off" }
                   var running = !!(pageRoot._pm && pageRoot._pm.isRunning)
                   return { state: running ? (pageRoot._pm.connectionType === "wifi" ? "Wi-Fi" : "USB") : "Waiting",
                            active: running,
@@ -109,19 +111,6 @@ Flickable {
                     : "Ready. Plug in a phone with USB debugging on, or pair it below."
                 color: !mirrorColumn.ready ? App.Style.statusError
                      : running ? App.Style.statusConnected : App.Style.secondaryTextColor
-            }
-
-            SettingCategory {
-                title: "Show in Nav Bar"
-
-                inlineContent: SettingsToggle {
-                    id: phoneMirrorEnabledToggle
-                    compact: true
-                    checked: settingsManager ? settingsManager.phoneMirrorEnabled : false
-                    onToggled: function(checked) {
-                        if (settingsManager) settingsManager.save_phone_mirror_enabled(checked)
-                    }
-                }
             }
 
             // Wi-Fi: QR pairing (Android 11+ Wireless debugging). The manager
@@ -258,58 +247,8 @@ Flickable {
                     }
                 }
 
-                // The rest only applies to the desktop display
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.overallSpacing
-                    visible: scrcpyModeControl.currentValue !== "Mirror Phone"
-
-                    SettingLabel { text: "Fit to Screen" }
-
-                    SettingsToggle {
-                        id: scrcpyFitToggle
-                        compact: true
-                        Layout.fillWidth: false
-                        checked: settingsManager ? settingsManager.scrcpyDisplaySize === "auto" : true
-
-                        onToggled: function(checked) {
-                            if (!settingsManager) return
-                            var size = checked ? "auto" : "1280x800"
-                            settingsManager.save_scrcpy_display_size(size)
-                            if (pageRoot._pm) pageRoot._pm.setDisplaySize(size)
-                        }
-                    }
-                }
-
-                SettingsTextField {
-                    id: scrcpyDisplaySizeField
-                    Layout.fillWidth: true
-                    visible: scrcpyModeControl.currentValue !== "Mirror Phone" && !scrcpyFitToggle.checked
-                    text: settingsManager && settingsManager.scrcpyDisplaySize !== "auto" ? settingsManager.scrcpyDisplaySize : ""
-                    placeholderText: "e.g. 1280x800"
-
-                    onEditingFinished: {
-                        if (settingsManager) {
-                            settingsManager.save_scrcpy_display_size(text)
-                            if (pageRoot._pm) {
-                                pageRoot._pm.setDisplaySize(text)
-                                // Manager may have snapped the dimensions to multiples of 8
-                                if (pageRoot._pm.displaySize !== text) {
-                                    settingsManager.save_scrcpy_display_size(pageRoot._pm.displaySize)
-                                }
-                            }
-                        }
-                    }
-
-                    Connections {
-                        target: settingsManager
-                        function onScrcpyDisplaySizeChanged() {
-                            if (settingsManager.scrcpyDisplaySize !== "auto")
-                                scrcpyDisplaySizeField.text = settingsManager.scrcpyDisplaySize
-                        }
-                    }
-                }
-
+                // The rest only applies to the desktop display (always the
+                // size of the window: no Fit to Screen switch since 2026-11-25)
                 SettingLabel {
                     text: "Text Size"
                     visible: scrcpyModeControl.currentValue !== "Mirror Phone"
@@ -347,100 +286,8 @@ Flickable {
                 }
             }
 
-            SettingCategory {
-                title: "Picture Quality"
-                description: scrcpyBitRateAutoToggle.checked
-                    ? "Adjusts to the link. The sliders set the most it will use."
-                    : "Higher is sharper in motion but needs a steadier link."
-
-                inlineContent: SettingsToggle {
-                    id: scrcpyBitRateAutoToggle
-                    compact: true
-                    text: "Auto"
-                    checked: settingsManager ? settingsManager.scrcpyBitRateAuto : true
-                    onToggled: function(checked) {
-                        if (settingsManager) settingsManager.save_scrcpy_bit_rate_auto(checked)
-                    }
-                }
-
-                SettingDescription {
-                    readonly property int bps: pageRoot._pm ? pageRoot._pm.currentBitRate : 0
-                    visible: bps > 0
-                    text: "Now: " + (bps / 1000000).toFixed(1) + " Mbps over "
-                          + (pageRoot._pm && pageRoot._pm.connectionType === "wifi" ? "Wi-Fi" : "USB")
-                    color: App.Style.accent
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.overallSpacing
-
-                    SettingDescription {
-                        text: "USB"
-                        Layout.fillWidth: false
-                        Layout.preferredWidth: pageRoot.dp(64)
-                    }
-
-                    SettingsSlider {
-                        id: scrcpyBitRateUsbSlider
-                        from: 4
-                        to: 32
-                        stepSize: 2
-                        value: settingsManager ? settingsManager.scrcpyBitRateUsb : 16
-                        Layout.fillWidth: true
-                        onPressedChanged: {
-                            if (!pressed && settingsManager)
-                                settingsManager.save_scrcpy_bit_rate_usb(value)
-                        }
-                        Connections {
-                            target: settingsManager
-                            function onScrcpyBitRateUsbChanged() {
-                                scrcpyBitRateUsbSlider.value = settingsManager.scrcpyBitRateUsb
-                            }
-                        }
-                    }
-
-                    ValueDisplay {
-                        text: scrcpyBitRateUsbSlider.value.toFixed(0) + " Mbps"
-                        Layout.fillWidth: false
-                    }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: App.Spacing.overallSpacing
-
-                    SettingDescription {
-                        text: "Wi-Fi"
-                        Layout.fillWidth: false
-                        Layout.preferredWidth: pageRoot.dp(64)
-                    }
-
-                    SettingsSlider {
-                        id: scrcpyBitRateWifiSlider
-                        from: 2
-                        to: 20
-                        stepSize: 1
-                        value: settingsManager ? settingsManager.scrcpyBitRateWifi : 8
-                        Layout.fillWidth: true
-                        onPressedChanged: {
-                            if (!pressed && settingsManager)
-                                settingsManager.save_scrcpy_bit_rate_wifi(value)
-                        }
-                        Connections {
-                            target: settingsManager
-                            function onScrcpyBitRateWifiChanged() {
-                                scrcpyBitRateWifiSlider.value = settingsManager.scrcpyBitRateWifi
-                            }
-                        }
-                    }
-
-                    ValueDisplay {
-                        text: scrcpyBitRateWifiSlider.value.toFixed(0) + " Mbps"
-                        Layout.fillWidth: false
-                    }
-                }
-            }
+            // No Picture Quality settings since 2026-11-25: the bit rate adapts on its own
+            // (PhoneMirrorManager kUsbMaxBps ...), so there is nothing to tune
 
             // adb over Wi-Fi, switched on at every USB session. The warning
             // stays in the description: until the phone restarts it accepts

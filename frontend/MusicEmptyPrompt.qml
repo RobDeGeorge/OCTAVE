@@ -29,15 +29,17 @@ Column {
     property string fontFamily: App.Style.fontFamily
 
     readonly property bool spotifyOffered: typeof spotifyManager !== "undefined" && !!spotifyManager
-    readonly property bool phoneOffered: (!!settingsManager && settingsManager.phoneMirrorEnabled)
+    readonly property bool _mirrorAvailable: typeof phoneMirrorManager !== "undefined" && !!phoneMirrorManager
+                                             && phoneMirrorManager.nativeAvailable
+    readonly property bool phoneOffered: _mirrorAvailable
                                          || (typeof airPlayManager !== "undefined" && !!airPlayManager
                                              && airPlayManager.available && airPlayManager.enabled)
     // The phone is shown on Home only for now (PhoneMirrorWidget): go there
     // and start mirroring; an iPhone still opens the AirPlay page
     function openPhone() {
-        if (settingsManager && settingsManager.phoneMirrorEnabled) {
+        if (_mirrorAvailable) {
             if (mainWindow) mainWindow.phoneMirrorStopped = false
-            if (typeof phoneMirrorManager !== "undefined" && phoneMirrorManager) phoneMirrorManager.startScrcpy()
+            phoneMirrorManager.startScrcpy()
             if (mainWindow) mainWindow.navigateHome()
             return
         }

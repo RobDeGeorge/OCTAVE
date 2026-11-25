@@ -1432,8 +1432,11 @@ export interface PhoneMirrorManager {
     setDisplaySize: { args: [size: string]; returns: void }
     setViewSize: { args: [width: number, height: number]; returns: void }
     setDisplayDpi: { args: [dpi: number]; returns: void }
+    /** @deprecated does nothing: the bit rate is automatic; goes in protocol 5 */
     setBitRateUsb: { args: [mbps: number]; returns: void }
+    /** @deprecated does nothing: the bit rate is automatic; goes in protocol 5 */
     setBitRateWifi: { args: [mbps: number]; returns: void }
+    /** @deprecated does nothing: the bit rate is always adaptive; goes in protocol 5 */
     setBitRateAuto: { args: [enabled: boolean]; returns: void }
     setAutoWifi: { args: [enabled: boolean]; returns: void }
     setPhoneScreenOff: { args: [off: boolean]; returns: void }

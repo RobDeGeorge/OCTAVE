@@ -100,6 +100,27 @@ private slots:
         QCOMPARE(PhoneMirrorManager::parseDevices(output), rows);
     }
 
+    void autoSizeWorthRestart_data()
+    {
+        QTest::addColumn<QString>("started");
+        QTest::addColumn<QString>("wanted");
+        QTest::addColumn<bool>("restart");
+        QTest::newRow("same") << "1224x632" << "1224x632" << false;
+        QTest::newRow("a few pixels") << "1224x632" << "1232x640" << false;
+        QTest::newRow("rotated") << "1224x632" << "632x1224" << true;
+        QTest::newRow("much bigger") << "1224x632" << "1920x992" << true;
+        QTest::newRow("narrower") << "1224x632" << "1104x632" << true;
+        QTest::newRow("unparsable") << "" << "1224x632" << true;
+    }
+
+    void autoSizeWorthRestart()
+    {
+        QFETCH(QString, started);
+        QFETCH(QString, wanted);
+        QFETCH(bool, restart);
+        QCOMPARE(PhoneMirrorManager::autoSizeWorthRestart(started, wanted), restart);
+    }
+
     void summarizeState_data()
     {
         QTest::addColumn<Rows>("rows");

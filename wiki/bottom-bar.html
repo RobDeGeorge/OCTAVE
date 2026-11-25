@@ -256,7 +256,7 @@ thickness: isVertical
           <tbody>
             <tr>
               <td>Home</td><td><code>home_button.svg</code> / <code>bottomBarHomeButton</code></td>
-              <td>Normally pops to the root. When Settings owns an open wiki reader, <code>openHomeSection()</code> keeps that page on the stack and opens or reuses a MainMenu above it so the reader can resume later.</td>
+              <td>Normally pops to the root. Pressed while already on Home with phone mirroring running, it takes the phone to its own home screen instead (<code>phoneMirrorManager.pressHome()</code>; on a desktop display that starts the launcher there). When Settings owns an open wiki reader, <code>openHomeSection()</code> keeps that page on the stack and opens or reuses a MainMenu above it so the reader can resume later.</td>
             </tr>
             <tr>
               <td>OBD</td><td><code>obd_button.svg</code> / <code>bottomBarOBDButton</code></td>

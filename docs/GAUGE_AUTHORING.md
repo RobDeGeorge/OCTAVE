@@ -363,9 +363,11 @@ phone retries running while shown (`setViewActive`), and reports its size
 says why: "Connecting to your phone…", "No phone connected" with Connect Phone
 (starts the session here), "Allow USB debugging on your phone", Set Up when
 mirroring needs setting up (Settings > Phone, where a new phone is paired by
-QR code), or "Phone Mirror is off" with Turn On. The manager has one video
+QR code). It runs wherever phone mirroring can (the `phoneMirrorEnabled`
+setting is not consulted since 2026-11-25). The manager has one video
 sink: the widget takes it while on screen. Every tap
-is the widget's own (`octaveConsumesTap`). The built-in Home is built around
+is the widget's own (`octaveConsumesTap`). The bottom bar's Home button, pressed while Home is
+already shown and mirroring runs, sends the phone to its own home screen. The built-in Home is built around
 it (2026-11-25): the phone as the base, a small Now Playing card under it,
 two readings on each side.
 

@@ -3812,16 +3812,22 @@ func (o PhoneMirrorManager) SetDisplayDpi(dpi int) error {
 }
 
 // SetBitRateUsb calls setBitRateUsb(int).
+//
+// Deprecated: does nothing: the bit rate is automatic; goes in protocol 5
 func (o PhoneMirrorManager) SetBitRateUsb(mbps int) error {
 	return o.c.Call("phoneMirrorManager", "setBitRateUsb", nil, mbps)
 }
 
 // SetBitRateWifi calls setBitRateWifi(int).
+//
+// Deprecated: does nothing: the bit rate is automatic; goes in protocol 5
 func (o PhoneMirrorManager) SetBitRateWifi(mbps int) error {
 	return o.c.Call("phoneMirrorManager", "setBitRateWifi", nil, mbps)
 }
 
 // SetBitRateAuto calls setBitRateAuto(bool).
+//
+// Deprecated: does nothing: the bit rate is always adaptive; goes in protocol 5
 func (o PhoneMirrorManager) SetBitRateAuto(enabled bool) error {
 	return o.c.Call("phoneMirrorManager", "setBitRateAuto", nil, enabled)
 }

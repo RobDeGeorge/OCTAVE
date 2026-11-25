@@ -12,6 +12,11 @@
 // page reports its own when shown: the manager restarts the session at the
 // new size).
 //
+// Smooth flow: the first start waits for the cell's size to settle; a
+// restart (a new size) or a dropped link keeps the last picture, dimmed under
+// a spinner, instead of the "No phone" panel; the manager restarts only for a
+// real change of shape (PhoneMirrorManager::autoSizeWorthRestart).
+//
 // The manager has one video sink: this widget takes it while it is on screen
 // and mirroring runs, and gives it up when hidden (PhoneMirrorView takes it
 // back whenever it is shown).
@@ -43,8 +48,6 @@ Item {
 
     readonly property bool _hasManager: typeof phoneMirrorManager !== "undefined" && !!phoneMirrorManager
     readonly property bool _available: _hasManager && phoneMirrorManager.nativeAvailable
-    readonly property bool _enabled: typeof settingsManager !== "undefined" && !!settingsManager
-                                     && settingsManager.phoneMirrorEnabled
     readonly property string _session: _hasManager ? phoneMirrorManager.sessionState : ""
     // The session state as well: it always says when the stream is up
     readonly property bool live: _available && (phoneMirrorManager.isRunning || _session === "streaming"
@@ -52,7 +55,9 @@ Item {
     readonly property string _device: _hasManager ? phoneMirrorManager.deviceState : ""
 
     // ── Starting the session from Home ──
-    readonly property bool _shown: visible && _available && _enabled
+    // Always on where it can run: the phoneMirrorEnabled setting ("Show in
+    // Nav Bar") is not consulted since 2026-11-25
+    readonly property bool _shown: visible && _available
     function _userStopped() {
         var w = _window()
         return !!w && w.phoneMirrorStopped === true
@@ -67,12 +72,28 @@ Item {
         _reportSize()
         // After the full-screen page's own deactivation, which turns retries off
         Qt.callLater(function() { if (root._shown) phoneMirrorManager.setViewActive(true) })
+        // Started once the cell has its size (Home lays out over the first
+        // moments): a start at a passing size would be restarted at the
+        // final one, seconds without a picture
         if (!_userStopped() && (_session === "idle" || _session === ""))
+            startDelay.restart()
+    }
+    Timer {
+        id: startDelay
+        interval: 400
+        onTriggered: {
+            if (!root._shown || root._userStopped() || !(root._session === "idle" || root._session === "")) return
+            root._reportSize()
             phoneMirrorManager.startScrcpy()
+        }
+    }
+    function _sizeChanged() {
+        _reportSize()
+        if (startDelay.running) startDelay.restart()
     }
     on_ShownChanged: _bringUp()
-    onWidthChanged: _reportSize()
-    onHeightChanged: _reportSize()
+    onWidthChanged: _sizeChanged()
+    onHeightChanged: _sizeChanged()
     readonly property real _fontFit: Math.max(0.1, Math.min(1, height / dp(140), width / dp(180)))
 
     // ── The video sink: ours while shown and live ──
@@ -92,6 +113,14 @@ Item {
     }
 
     readonly property bool _connecting: _session === "starting" || _session === "reconnecting"
+    // The last picture stays up, dimmed under a spinner, while the session
+    // restarts (a new size) or reconnects; it goes when mirroring has ended
+    property bool _hadPicture: false
+    onLiveChanged: if (live) _hadPicture = true
+    on_SessionChanged: if (_session !== "starting" && _session !== "reconnecting" && _session !== "streaming") _hadPicture = false
+    readonly property bool _holding: !live && _hadPicture && _connecting
+    // Dimmed with a spinner: held, or a dropped link the manager is retrying
+    readonly property bool _waiting: _holding || (live && _session === "reconnecting")
     readonly property bool _needsSetup: _session === "failed" || _device === "no-adb"
     function _window() { return ApplicationWindow.window }
     // Connect Phone: start here, as a user's own request (clears a stop)
@@ -112,7 +141,7 @@ Item {
         id: frame
         anchors.fill: parent
         radius: root.dp(8)
-        color: root.live ? "black" : (root.showFrame ? App.Style.obdBoxBackground : "transparent")
+        color: (root.live || root._holding) ? "black" : (root.showFrame ? App.Style.obdBoxBackground : "transparent")
         border.color: root.showFrame ? Qt.darker(root.frameColor, 1.4) : "transparent"
         border.width: 1
     }
@@ -121,7 +150,7 @@ Item {
     Item {
         anchors.fill: parent
         anchors.margins: 1
-        visible: root.live
+        visible: root.live || root._holding
         clip: true
 
         VideoOutput {
@@ -167,11 +196,23 @@ Item {
             onReleased: function(points) { send(points, 1) }
             onCanceled: function(points) { send(points, 1) }
         }
+
+        // Restarting or reconnecting: the last picture, dimmed, and a spinner
+        Rectangle {
+            anchors.fill: parent
+            visible: root._waiting
+            color: Qt.rgba(0, 0, 0, 0.55)
+            BusyIndicator {
+                anchors.centerIn: parent
+                width: root.dp(48); height: width
+                running: root._waiting
+            }
+        }
     }
 
     // ── Not mirroring ──
     Column {
-        visible: !root.live
+        visible: !root.live && !root._holding
         anchors.centerIn: parent
         width: parent.width - root.dp(16)
         spacing: root.dp(10) * root._fontFit
@@ -202,7 +243,6 @@ Item {
             maximumLineCount: 2
             elide: Text.ElideRight
             text: !root._available ? "Phone mirroring isn't available here"
-                  : !root._enabled ? "Phone Mirror is off"
                   : root._connecting ? "Connecting to your phone…"
                   : root._device === "unauthorized" ? "Allow USB debugging on your phone"
                   : root._session === "failed" ? "Phone mirroring needs setting up"
@@ -234,7 +274,7 @@ Item {
                 width: Math.min(implicitWidth, parent.width - root.dp(12))
                 elide: Text.ElideRight
                 // Setting up and pairing a new phone (QR code) are in Settings > Phone
-                text: !root._enabled ? "Turn On" : root._needsSetup ? "Set Up" : "Connect Phone"
+                text: root._needsSetup ? "Set Up" : "Connect Phone"
                 color: App.Style.accent
                 font.pixelSize: Math.max(1, App.Spacing.overallText * Math.max(0.7, root._fontFit))
                 font.bold: true
@@ -244,7 +284,7 @@ Item {
                 id: connectMouse
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
-                onClicked: (!root._enabled || root._needsSetup) ? root.openSettings() : root.connect()
+                onClicked: root._needsSetup ? root.openSettings() : root.connect()
             }
         }
     }

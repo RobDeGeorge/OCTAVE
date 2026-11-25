@@ -32,6 +32,9 @@ class PhoneMirrorManager : public QObject
     Q_CLASSINFO("octave.scope", "phone")
     Q_CLASSINFO("octave.scope.read", "describeDeviceState environmentOk getDeviceState getInstallInstructions hasConnectedDevice")
     Q_CLASSINFO("octave.scope.full", "cleanup videoSink")
+    Q_CLASSINFO("octave.deprecated.setBitRateUsb", "does nothing: the bit rate is automatic; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.setBitRateWifi", "does nothing: the bit rate is automatic; goes in protocol 5")
+    Q_CLASSINFO("octave.deprecated.setBitRateAuto", "does nothing: the bit rate is always adaptive; goes in protocol 5")
 
     Q_PROPERTY(QString adbPath READ adbPath CONSTANT)
     // libavcodec linked, server jar embedded, adb found
@@ -210,6 +213,11 @@ public:
     // encoders reject very large frames) and snapped to multiples of 8.
     // Falls back to kDefaultDisplaySize before the view has reported a size.
     static QString autoDisplaySize(int viewWidth, int viewHeight);
+    // Whether a session drawn at the "auto" size `started` should be restarted
+    // for the view's new one: only when the shape changes (more than 3 % in
+    // aspect) or the long side by more than 15 %. The picture is scaled to fit
+    // anyway, and a restart costs seconds without one.
+    static bool autoSizeWorthRestart(const QString &started, const QString &wanted);
     static constexpr int kAutoMaxSide = 1920;
     // Port a USB phone's adbd is switched to for adb over TCP (setting scrcpyAutoWifi)
     static constexpr int kTcpipPort = 5555;
@@ -222,13 +230,16 @@ public:
     static int adbToolsMajor(const QString &adbPath);
     // `adb pair` / `adb mdns` arrived in platform-tools 30
     static constexpr int kAdbWirelessMinTools = 30;
-    // Video bit rate defaults, Mbps (settings scrcpyBitRateUsb / scrcpyBitRateWifi)
-    static constexpr int kDefaultUsbBitRateMbps = 16;
-    static constexpr int kDefaultWifiBitRateMbps = 8;
-    // Adaptive quality: floor, and where a Wi-Fi session starts (fraction of
-    // the setting, which is the ceiling). USB starts at the ceiling.
+    // Picture quality is automatic (2026-11-25, no settings): every session
+    // adapts its video bit rate to what the link and our decoder keep up with
+    // (AdaptiveBitRate: it cuts the rate as soon as frames start to queue, and
+    // climbs back while they don't), between the floor and the link's
+    // ceiling, from a start rate known to run clean
     static constexpr int kAdaptiveMinBps = 2000000;
-    static constexpr double kAdaptiveWifiStart = 0.6;
+    static constexpr int kUsbMaxBps = 32000000;
+    static constexpr int kUsbStartBps = 16000000;
+    static constexpr int kWifiMaxBps = 20000000;
+    static constexpr int kWifiStartBps = 8000000;
 
 signals:
     // Session state (names kept from the original scrcpy-binary design;
@@ -287,17 +298,17 @@ public slots:
     // The output phone audio plays to (settingsManager.audioOutputDevice;
     // empty = the system default); call again when the outputs change
     void setAudioOutputDevice(const QString &id);
+    // "" mirrors the phone's own screen; any size ("auto", "1280x800") is a
+    // desktop display, always drawn at the view's size ("auto")
     void setDisplaySize(const QString &size);
     // The mirror view's size in device pixels; drives the "auto" display size.
     // A running auto session is restarted (debounced) when it changes.
     void setViewSize(int width, int height);
     // Virtual display density (setting scrcpyDisplayDpi), 0 = scaled from the phone's
     void setDisplayDpi(int dpi);
-    // Video bit rate per link in Mbps (settings scrcpyBitRateUsb / scrcpyBitRateWifi)
+    // Deprecated, do nothing: the bit rate is automatic (kUsbMaxBps ...)
     void setBitRateUsb(int mbps);
     void setBitRateWifi(int mbps);
-    // Setting scrcpyBitRateAuto: adapt the rate to the link, with the
-    // per-link settings as the ceiling (AdaptiveBitRate)
     void setBitRateAuto(bool enabled);
     // Setting scrcpyAutoWifi: before a USB session, switch the phone's adbd to
     // TCP port kTcpipPort and remember its Wi-Fi address, so it can be reached
@@ -445,14 +456,12 @@ private:
     QString m_startedAutoSize;      // "auto" size the running session was started with
     QTimer m_resizeTimer;           // debounces restarts on view resize
     int m_displayDpi = 0;
-    int m_bitRateUsbMbps = kDefaultUsbBitRateMbps;
-    int m_bitRateWifiMbps = kDefaultWifiBitRateMbps;
     bool m_autoWifi = false;
-    bool m_bitRateAuto = true;
     int m_currentBitRate = 0;
     bool m_tcpipChecked = false;    // the auto-Wi-Fi step ran for the session being started
     bool m_staleRetried = false;    // a failed Wi-Fi start already dropped its stale ip:port and retried
     int m_startGeneration = 0;      // bumped by stopScrcpy; a pending start checks it
+    bool m_restarting = false;      // restartSession's stop: the state goes to "starting", not "idle"
 
     ScrcpyClient *m_client = nullptr;
     QObject *m_videoSink = nullptr;

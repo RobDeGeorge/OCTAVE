@@ -114,6 +114,7 @@
             "scope": "phone"
         },
         {
+            "deprecated": "does nothing: the bit rate is automatic; goes in protocol 5",
             "kind": "slot",
             "name": "setBitRateUsb",
             "params": [
@@ -126,6 +127,7 @@
             "scope": "phone"
         },
         {
+            "deprecated": "does nothing: the bit rate is automatic; goes in protocol 5",
             "kind": "slot",
             "name": "setBitRateWifi",
             "params": [
@@ -138,6 +140,7 @@
             "scope": "phone"
         },
         {
+            "deprecated": "does nothing: the bit rate is always adaptive; goes in protocol 5",
             "kind": "slot",
             "name": "setBitRateAuto",
             "params": [
