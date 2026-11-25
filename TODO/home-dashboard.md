@@ -7,6 +7,10 @@
 
 **In-app editing removed (2026-11-24):** Rob builds dashboards with Claude as JSON files and loads them (`<config>/dashboards/`, picked in Settings > Display > Home Screen). The touch editor, its tiled rework of that day, the OBD page's chooser and the built-in dashboards other than `home` were deleted from the tree (the tiled editor is kept as `dev/patches/2026-11-24-tiled-editor.patch`, against the commit before). Left to decide: whether a tap on a Home widget opens its page again (`HomeDashboard.tapsOpenPages`, false).
 
+**Hand-built screens (2026-11-24):** six Home screens outside the grid were added in `frontend/home/` (Cockpit, Glass, Trail, then Retro, Rings, Telemetry; Settings > Display > Home Screen), as a first round of styles for Rob to react to. Seen on desktop only (simulated car and IMU, 1280x720 and 720x1180); not yet on the Pi, where Glass's blurred backdrop is the one to watch for cost.
+
+**Picker (2026-11-24):** Settings > Display > Home Screen is a grid of cards with a picture of each Home (`homeScreenCards`; pictures in `frontend/assets/home/`); the dashboard / classic switch is gone and Classic is one of the cards. When a screen's look changes, re-shoot its picture.
+
 ## Why it is parked here
 
 Home is on screen most of the drive, and the Orange Pi is the machine it has to be cheap on. The dashboard Home was built and driven on desktop only (`--sim` under Xvfb at 1280x800 and 800x1280), so the hand-built Home was kept one switch away (Settings > Display > Layout > Home Screen, the `homeStyle` setting) until the checks below are done. Until then the tree carries both, and the settings that only the classic Home reads.

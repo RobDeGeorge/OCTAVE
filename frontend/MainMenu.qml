@@ -6,6 +6,7 @@ import Qt5Compat.GraphicalEffects
 import QtQuick.Effects
 import QtQuick.Dialogs
 import "." as App
+import "home/HomeScreens.js" as HomeScreens
 import OCTAVE.OBD 1.0
 
 Item {
@@ -92,13 +93,22 @@ Item {
     // setting, Settings > Device) until the dashboard one has been checked
     // in the car, then they go (TODO/home-dashboard.md)
     property string homeStyle: settingsManager ? settingsManager.get_setting_with_default("homeStyle", "dashboard") : "dashboard"
-    readonly property bool dashboardHome: homeStyle !== "classic"
+    // A hand-built screen (frontend/home/, the `homeScreen` setting) in
+    // place of the dashboard: "" or an unknown id is the dashboard
+    property string homeScreen: settingsManager ? settingsManager.get_setting_with_default("homeScreen", "") : ""
+    // The classic panels: picked as a screen ("classic"), or left on by the
+    // old homeStyle switch (which Settings no longer has) with nothing picked
+    readonly property bool classicHome: homeScreen === "classic" || (homeScreen === "" && homeStyle === "classic")
+    readonly property string homeScreenSource: classicHome ? "" : HomeScreens.sourceFor(homeScreen)
+    readonly property bool dashboardHome: !classicHome
                                           && typeof dashboardManager !== "undefined" && !!dashboardManager
     Connections {
         target: settingsManager
         function onGenericSettingChanged(key) {
             if (key === "homeStyle")
                 mainMenu.homeStyle = settingsManager.get_setting_with_default("homeStyle", "dashboard")
+            else if (key === "homeScreen")
+                mainMenu.homeScreen = settingsManager.get_setting_with_default("homeScreen", "")
         }
     }
 
@@ -106,7 +116,21 @@ Item {
         id: homeLoader
         objectName: "homeLoader"
         anchors.fill: parent
-        sourceComponent: mainMenu.dashboardHome ? dashboardHomeComponent : classicHomeComponent
+        sourceComponent: mainMenu.homeScreenSource !== "" ? screenHomeComponent
+                         : mainMenu.dashboardHome ? dashboardHomeComponent : classicHomeComponent
+    }
+
+    Component {
+        id: screenHomeComponent
+        Loader {
+            objectName: "homeScreenLoader"
+            source: Qt.resolvedUrl(mainMenu.homeScreenSource)
+            onLoaded: {
+                item.stackView = mainMenu.stackView
+                item.mainWindow = mainMenu.mainWindow
+                item.musicEmpty = Qt.binding(function() { return mainMenu.musicEmpty })
+            }
+        }
     }
 
     Component {

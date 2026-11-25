@@ -34,10 +34,25 @@ QQuickItem *findVisual(QQuickItem *root, const QString &name)
 }
 }
 
+// OBDManager's enums for QML (import OCTAVE.OBD), as main.cpp registers the
+// real class: the Home screens' Connect button reads the connection state
+class ObdEnums : public QObject
+{
+    Q_OBJECT
+public:
+    enum class ConnectionState { Disconnected, Connecting, Connected, NoVehicle, Failed };
+    Q_ENUM(ConnectionState)
+};
+
 class TstDashboardWidgets : public QObject
 {
     Q_OBJECT
 private slots:
+    void initTestCase()
+    {
+        qmlRegisterUncreatableType<ObdEnums>("OCTAVE.OBD", 1, 0, "OBDManager", QStringLiteral("enums only"));
+    }
+
     void init()
     {
         catalog = std::make_unique<ParameterCatalog>();
@@ -63,6 +78,14 @@ private slots:
 
     void cleanup()
     {
+        // Whatever is still loading in the background must finish first (the
+        // renderer's cells are asynchronous Loaders). On Qt 6.7.3, the
+        // releases' Qt, ~QQmlEngine waits for the type-loader thread while
+        // that thread, importing a plugin for the widget being compiled
+        // (Now Playing's QtQuick.Effects), waits for this one: the test
+        // never returned and CI ran into its timeout. Qt 6.12 does not mind.
+        if (auto *item = qobject_cast<QQuickItem *>(root.get()))
+            QTRY_VERIFY_WITH_TIMEOUT(!stillLoading(item), 15000);
         root.reset();
         engine.reset();
     }
@@ -498,6 +521,42 @@ private slots:
         QCOMPARE(rect.toRectF(), QRectF(300, 0, 100, 100));
     }
 
+    // The hand-built Home screens (frontend/home/): each loads, in either
+    // shape, shows a reading it asked for, and says "--" without one
+    void homeScreens_data()
+    {
+        QTest::addColumn<QString>("file");
+        QTest::addColumn<QString>("name");
+        QTest::newRow("cockpit") << "home/HomeCockpit.qml" << "homeCockpit";
+        QTest::newRow("glass") << "home/HomeGlass.qml" << "homeGlass";
+        QTest::newRow("trail") << "home/HomeTrail.qml" << "homeTrail";
+        QTest::newRow("retro") << "home/HomeRetro.qml" << "homeRetro";
+        QTest::newRow("rings") << "home/HomeRings.qml" << "homeRings";
+        QTest::newRow("telemetry") << "home/HomeTelemetry.qml" << "homeTelemetry";
+    }
+
+    void homeScreens()
+    {
+        QFETCH(QString, file);
+        QFETCH(QString, name);
+        QVERIFY(load(file));
+        QCOMPARE(root->objectName(), name);
+        auto *item = qobject_cast<QQuickItem *>(root.get());
+        QVERIFY(item);
+        QVERIFY(!root->property("paramIds").toList().isEmpty());
+        for (const QSize size : {QSize(1280, 630), QSize(720, 1080), QSize(480, 272)}) {
+            item->setWidth(size.width());
+            item->setHeight(size.height());
+            QCOMPARE(root->property("portrait").toBool(), size.height() > size.width());
+            QVERIFY(root->property("u").toDouble() > 0);
+        }
+        // No reading is not zero
+        QVERIFY(hasText(item, "--"));
+        QCOMPARE(invoke(root.get(), "text", {"SPEED", QVariant()}).toString(), QStringLiteral("--"));
+        store->ingest("SPEED", 42);
+        QTRY_VERIFY(hasText(item, "42") || hasText(item, "68"));   // MPH, or km/h
+    }
+
     void readoutCardStyle()
     {
         QVERIFY(load("gauges/DigitalReadout.qml"));
@@ -567,6 +626,18 @@ private:
             root->setProperty("height", 120);
         }
         return bool(root);
+    }
+
+    // A Loader or an Image anywhere under `item` that is still loading
+    // (Loader.Loading and Image.Loading are both 2)
+    static bool stillLoading(QQuickItem *item)
+    {
+        if ((item->inherits("QQuickLoader") || item->inherits("QQuickImageBase")) && item->property("status").toInt() == 2)
+            return true;
+        for (auto *child : item->childItems())
+            if (stillLoading(child))
+                return true;
+        return false;
     }
 
     static bool hasText(QQuickItem *item, const QString &text)

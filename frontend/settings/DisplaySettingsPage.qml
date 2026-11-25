@@ -3,6 +3,7 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
 import ".." as App
+import "../home/HomeScreens.js" as HomeScreens
 
 Flickable {
     id: pageRoot
@@ -307,56 +308,143 @@ Flickable {
                 }
             }
 
-            // Home is a dashboard (frontend/HomeDashboard.qml); the classic
-            // panels stay selectable until it has been checked in the car
+            // What Home is: a card for each hand-built screen (frontend/home/,
+            // the classic panels among them) and each dashboard, with a
+            // picture of it; a tap makes it Home
             SettingCategory {
                 id: homeScreenCategory
                 title: "Home Screen"
+                description: "Pick what Home shows."
                 readonly property var dm: (typeof dashboardManager !== "undefined" && dashboardManager) ? dashboardManager : null
-                readonly property string homeLabel: {
-                    if (!dm) return ""
-                    var list = dm.dashboards
+                // The homeScreen setting ("" = a dashboard) and the old classic switch
+                property string screen: settingsManager ? settingsManager.get_setting_with_default("homeScreen", "") : ""
+                property string legacyStyle: settingsManager ? settingsManager.get_setting_with_default("homeStyle", "dashboard") : "dashboard"
+                readonly property string current: screen !== "" ? "screen:" + screen
+                                                  : legacyStyle === "classic" ? "screen:classic"
+                                                  : "dashboard:" + (dm ? dm.homeDashboardId : "")
+                // [{key, label, preview, dashboardId}]
+                readonly property var choices: {
+                    var out = []
+                    for (var s = 0; s < HomeScreens.list.length; s++) {
+                        var h = HomeScreens.list[s]
+                        out.push({ "key": "screen:" + h.id, "label": h.label, "preview": h.preview, "dashboardId": "" })
+                    }
+                    var list = dm ? dm.dashboards : []
                     for (var i = 0; i < list.length; i++)
-                        if (list[i].id === dm.homeDashboardId) return list[i].label
-                    return "Home"
+                        out.push({ "key": "dashboard:" + list[i].id, "label": list[i].label,
+                                   "preview": HomeScreens.dashboardPreviews[list[i].id] || "", "dashboardId": list[i].id })
+                    return out
                 }
-                property string style: settingsManager ? settingsManager.get_setting_with_default("homeStyle", "dashboard") : "dashboard"
-                description: style === "classic"
-                    ? "The fixed music, readings and sensors panels."
-                    : "Showing the dashboard \u201C" + homeLabel + "\u201D. Dashboards are files in the dashboards folder of OCTAVE\u2019s settings; pick the one Home shows here."
+                function pick(choice) {
+                    var id = choice.dashboardId !== "" ? "" : choice.key.substring(7)
+                    screen = id
+                    legacyStyle = "dashboard"
+                    if (settingsManager) {
+                        settingsManager.save_setting("homeScreen", id)
+                        settingsManager.save_setting("homeStyle", "dashboard")
+                    }
+                    if (choice.dashboardId !== "" && dm) dm.setHomeDashboard(choice.dashboardId)
+                }
 
-                SettingsSegmentedControl {
-                    objectName: "homeStyleControl"
+                Flow {
+                    id: homeCards
+                    objectName: "homeScreenCards"
                     Layout.fillWidth: true
-                    options: ["dashboard", "classic"]
-                    currentValue: homeScreenCategory.style
-                    onSelected: function(value) {
-                        homeScreenCategory.style = value
-                        if (settingsManager) settingsManager.save_setting("homeStyle", value)
-                    }
-                }
-                // Which dashboard Home shows: the built-in and every file in
-                // <config>/dashboards (two with one name: told apart by id)
-                SettingsChips {
-                    id: homeDashboardChips
-                    objectName: "homeDashboardChips"
-                    visible: homeScreenCategory.style !== "classic" && !!homeScreenCategory.dm
-                    readonly property var list: homeScreenCategory.dm ? homeScreenCategory.dm.dashboards : []
-                    function name(d) {
-                        var same = 0
-                        for (var i = 0; i < list.length; i++) if (list[i].label === d.label) same++
-                        return same > 1 ? d.label + " (" + d.id + ")" : d.label
-                    }
-                    options: list.map(function(d) { return homeDashboardChips.name(d) })
-                    currentValue: {
-                        var id = homeScreenCategory.dm ? homeScreenCategory.dm.homeDashboardId : ""
-                        for (var i = 0; i < list.length; i++)
-                            if (list[i].id === id) return name(list[i])
-                        return ""
-                    }
-                    onSelected: function(value) {
-                        for (var i = 0; i < list.length; i++)
-                            if (name(list[i]) === value) { homeScreenCategory.dm.setHomeDashboard(list[i].id); return }
+                    spacing: pageRoot.dp(12)
+                    readonly property int columns: width >= pageRoot.dp(560) ? 3 : width >= pageRoot.dp(300) ? 2 : 1
+                    readonly property real cardWidth: Math.floor((width - (columns - 1) * spacing) / columns)
+
+                    Repeater {
+                        model: homeScreenCategory.choices
+                        Rectangle {
+                            id: homeCard
+                            required property var modelData
+                            objectName: "homeCard_" + modelData.key.replace(":", "_")
+                            readonly property bool chosen: homeScreenCategory.current === modelData.key
+                            width: homeCards.cardWidth
+                            height: picture.height + caption.height + pageRoot.dp(6)
+                            radius: pageRoot.dp(12)
+                            color: Qt.darker(App.Style.obdBoxBackground, 1.15)
+                            border.width: chosen ? pageRoot.dp(2) : 1
+                            border.color: chosen ? App.Style.accent : Qt.darker(App.Style.obdBarColor, 1.8)
+                            scale: cardMouse.pressed ? 0.97 : 1.0
+                            Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+
+                            // The picture: a shot of the screen, or the dashboard's cells
+                            Item {
+                                id: picture
+                                x: pageRoot.dp(6); y: pageRoot.dp(6)
+                                width: parent.width - pageRoot.dp(12)
+                                height: Math.round(width * 31 / 64)
+                                clip: true
+                                Rectangle { anchors.fill: parent; color: App.Style.backgroundColor }
+                                Image {
+                                    anchors.fill: parent
+                                    visible: homeCard.modelData.preview !== ""
+                                    source: homeCard.modelData.preview !== "" ? Qt.resolvedUrl("../" + homeCard.modelData.preview) : ""
+                                    sourceSize: Qt.size(640, 310)
+                                    fillMode: Image.PreserveAspectCrop
+                                    asynchronous: true
+                                }
+                                // A dashboard with no picture: where its widgets stand
+                                Item {
+                                    id: plan
+                                    anchors.fill: parent
+                                    anchors.margins: pageRoot.dp(4)
+                                    visible: homeCard.modelData.preview === "" && homeCard.modelData.dashboardId !== ""
+                                    readonly property var spec: visible && homeScreenCategory.dm
+                                                                ? homeScreenCategory.dm.loadDashboard(homeCard.modelData.dashboardId) : null
+                                    readonly property int cols: spec && spec.gridColumns ? spec.gridColumns : 12
+                                    readonly property int rows: spec && spec.gridRows ? spec.gridRows : 6
+                                    Repeater {
+                                        model: plan.spec && plan.spec.cells ? plan.spec.cells : []
+                                        Rectangle {
+                                            required property var modelData
+                                            x: (modelData.col || 0) * plan.width / plan.cols + 1
+                                            y: (modelData.row || 0) * plan.height / plan.rows + 1
+                                            width: (modelData.colSpan || 1) * plan.width / plan.cols - 2
+                                            height: (modelData.rowSpan || 1) * plan.height / plan.rows - 2
+                                            radius: pageRoot.dp(3)
+                                            color: Qt.rgba(App.Style.obdBarColor.r, App.Style.obdBarColor.g, App.Style.obdBarColor.b, 0.22)
+                                            border.width: 1
+                                            border.color: Qt.rgba(App.Style.obdBarColor.r, App.Style.obdBarColor.g, App.Style.obdBarColor.b, 0.6)
+                                        }
+                                    }
+                                }
+                            }
+                            Item {
+                                id: caption
+                                anchors.top: picture.bottom
+                                x: pageRoot.dp(12)
+                                width: parent.width - pageRoot.dp(24)
+                                height: pageRoot.dp(40)
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: parent.width - (tick.visible ? tick.width + pageRoot.dp(8) : 0)
+                                    elide: Text.ElideRight
+                                    text: homeCard.modelData.label
+                                    color: homeCard.chosen ? App.Style.accent : App.Style.primaryTextColor
+                                    font.family: App.Style.fontFamily
+                                    font.pixelSize: App.Spacing.overallText
+                                    font.bold: homeCard.chosen
+                                }
+                                // The one in use
+                                Rectangle {
+                                    id: tick
+                                    visible: homeCard.chosen
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: pageRoot.dp(12); height: width; radius: width / 2
+                                    color: App.Style.accent
+                                }
+                            }
+                            MouseArea {
+                                id: cardMouse
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: homeScreenCategory.pick(homeCard.modelData)
+                            }
+                        }
                     }
                 }
             }

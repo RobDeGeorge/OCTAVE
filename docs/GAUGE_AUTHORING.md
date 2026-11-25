@@ -515,8 +515,9 @@ props each type takes come from the widget catalog: the data in
 `docs/api/widget-catalog.json`), which the `WidgetCatalog` singleton
 (`frontend/dashboards/WidgetCatalog.qml`) pairs with each type's QML url.
 
-**Show it.** Settings > Display > Home Screen lists every dashboard as a chip
-(`homeDashboardChips`); the one picked is what Home shows
+**Show it.** Settings > Display > Home Screen shows every dashboard as a card
+(`homeScreenCards`; a picture when there is one, else a plan of its cells);
+the one picked is what Home shows
 (`dashboardManager.setHomeDashboard(id)`).
 
 **The vehicle gate.** A dashboard may name any PID, so it can be written for
@@ -616,8 +617,38 @@ cannot be hidden. The choice is one line in `<config>/dashboards/.home`.
   gives a cell's place; `usesImu` says whether the spec shows the motion
   sensor (a catalog `usesImu` type or an IMU `paramId`).
 - Until it has been checked in the car the hand-built Home stays selectable:
-  setting `homeStyle` = `classic` (Settings > Display > Layout > Home Screen).
+  Classic card of Settings > Display > Layout > Home Screen (`homeScreen` = `classic`).
   See `TODO/home-dashboard.md`.
+
+### 5.5b Hand-built Home screens
+
+Home need not be a grid dashboard. `frontend/home/Home*.qml` are full-screen
+QML screens drawn by hand, with no layout rules: `HomeCockpit` (an instrument
+cluster), `HomeGlass` (the music over blurred album art, the drive in glass
+panes), `HomeTrail` (heading tape, artificial horizon, G-force), `HomeRetro`
+(seven-segment figures and a bar-graph tachometer), `HomeRings` (four
+readings as concentric rings) and `HomeTelemetry` (live traces and the black
+box's state). Each is a
+`HomeScreen` (`frontend/home/HomeScreen.qml`):
+
+```qml
+HomeScreen {
+    paramIds: ["SPEED", "RPM"]     // polled while the screen is on screen
+    usesImu: false                 // true: the full IMU rate as well
+    Text { text: parent.text("SPEED") + " " + parent.unitOf("SPEED") }   // "--" without a reading
+}
+```
+
+`value(id)` is NaN without a reading, `norm(id)` is where it stands in its
+range (0 to 1), `np` / `art` / `hasTrack` are what is playing, `u` is 1 % of
+the short side and `portrait` the shape: size everything from those so the
+screen works at any size and either way up. The primitives of §3 can be used
+inside one (the Cockpit's dial is a `CircularGauge`). Register a new screen in
+`frontend/home/HomeScreens.js` with a `preview` picture (640 x 310, a shot of
+the screen with the simulated car, in `frontend/assets/home/`); it then
+appears as a card in Settings > Display > Home Screen (the `homeScreen`
+setting holds its id). Add it to
+`tst_dashboardwidgets`' `homeScreens_data`.
 
 ### 5.6 Vehicle gate and polling demand
 
