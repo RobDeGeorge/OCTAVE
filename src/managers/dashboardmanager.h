@@ -208,10 +208,11 @@ public:
     // The Home dashboard for a set of readings (at most 8, two columns; an
     // odd count gives the first the full width), with or without the
     // vehicle's picture: music on the left,
-    // the readings (over the vehicle) in the middle, G-force / compass /
-    // pitch / roll on the right; portrait: music on top, sensors along the
-    // bottom. No id or label. presets/home.json is this for the default
-    // readings (tst_dashboardmanager holds them together).
+    // the readings (over the vehicle) in the middle, the phone's screen on
+    // the right; portrait: music on top, the phone along the bottom. No id
+    // or label. Used for the classic Home's carry-over only: since
+    // 2026-11-25 presets/home.json is laid out by hand (the phone as the
+    // base, music under it, two readings each side).
     static QVariantMap homeSpec(const QStringList &readings, bool vehicle);
 
     // Once per config (until a Home choice is on disk): carries the classic

@@ -349,7 +349,32 @@ vehicle chosen it says so; an added model with no picture yet shows its name.
 | `showFrame` | bool | `true` | The reading cards' box around the picture. |
 | `frameColor`, `labelColor`, `valueColor` | color | theme | The editor exposes `frameColor`. |
 
-### 3.15 `ShiftLightWidget` *(self-binding)*
+### 3.15 `PhoneMirrorWidget` *(self-binding)*
+
+The phone's screen in a cell, in `frontend/dashboards/widgets/`. Default span
+3 × 6 (a phone is tall). While phone mirroring runs it shows the live picture
+and passes touches through to the phone. Since 2026-11-25 it is the only place
+the phone is shown (no bottom-bar button, nothing opens the full-screen
+Phone Mirror page) while the flow is worked out. With Phone Mirror on it
+starts the session itself when it comes on screen (not after the user closed
+mirroring in this run: `mainWindow.phoneMirrorStopped`), keeps the manager's
+phone retries running while shown (`setViewActive`), and reports its size
+(`setViewSize`) so an "auto" virtual display is drawn to fit it. Not live it
+says why: "Connecting to your phone…", "No phone connected" with Connect Phone
+(starts the session here), "Allow USB debugging on your phone", Set Up when
+mirroring needs setting up (Settings > Phone, where a new phone is paired by
+QR code), or "Phone Mirror is off" with Turn On. The manager has one video
+sink: the widget takes it while on screen. Every tap
+is the widget's own (`octaveConsumesTap`). The built-in Home is built around
+it (2026-11-25): the phone as the base, a small Now Playing card under it,
+two readings on each side.
+
+| Property | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `showFrame` | bool | `true` | The reading cards' box around it. |
+| `frameColor`, `labelColor`, `valueColor` | color | theme | The editor exposes `frameColor`. |
+
+### 3.16 `ShiftLightWidget` *(self-binding)*
 
 The RPM shift light as a lamp, in `frontend/dashboards/widgets/`: dark until
 a shift-light flag is reached, then that flag's colour. Default span 2 × 2.
@@ -1013,6 +1038,7 @@ frontend/
 │   │   ├── NowPlayingWidget.qml    art + title + artist + progress (local/phone)
 │   │   ├── MediaControlsWidget.qml prev / play-pause / next transport
 │   │   ├── VehicleWidget.qml       the vehicle's picture
+│   │   ├── PhoneMirrorWidget.qml   the phone's screen, live while mirroring
 │   │   └── ShiftLightWidget.qml    the RPM shift light as a lamp
 │   ├── DashboardRenderer.qml  JSON spec → grid of widget instances (taps for Home)
 │   ├── CellFrame.qml          the card behind a cell with `frame: true`

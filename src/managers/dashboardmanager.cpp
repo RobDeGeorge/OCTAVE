@@ -300,15 +300,14 @@ QVariantMap DashboardManager::homeSpec(const QStringList &readingsIn, bool vehic
                                     {QStringLiteral("colSpan"), port.at(2)}, {QStringLiteral("rowSpan"), port.at(3)}});
     };
 
-    // Landscape 12 x 12: music 0-2, readings (and the vehicle) 3-8, sensors 9-11.
-    // Portrait 12 x 20: music rows 0-3, readings (vehicle beside) 4-15, sensors 16-19.
+    // Landscape 12 x 12: music 0-2, readings (and the vehicle) 3-8, phone 9-11.
+    // Portrait 12 x 20: music rows 0-3, readings (vehicle beside) 4-15, phone 16-19.
     add(QStringLiteral("NowPlayingWidget"), {},
         {{QStringLiteral("seekable"), true}, {QStringLiteral("showBackground"), true}},
         {0, 0, 3, 12}, {0, 0, 12, 4});
 
-    // The reading cards of the classic Home, and the same box around the sensors
+    // The reading cards of the classic Home
     const QVariantMap card{{QStringLiteral("card"), true}, {QStringLiteral("frame"), true}};
-    const QVariantMap framed{{QStringLiteral("frame"), true}};
 
     const int n = readings.size();
     const int rows = (n + 1) / 2;                       // reading rows, two columns
@@ -330,10 +329,9 @@ QVariantMap DashboardManager::homeSpec(const QStringList &readingsIn, bool vehic
         add(QStringLiteral("VehicleWidget"), {}, {},
             {3, landBlock, 6, 12 - landBlock}, {8, 4, 4, 12});
 
-    add(QStringLiteral("GForceGauge"), {}, framed, {9, 0, 3, 4}, {0, 16, 4, 4});
-    add(QStringLiteral("CompassGauge"), {}, framed, {9, 4, 3, 4}, {4, 16, 4, 4});
-    add(QStringLiteral("DigitalReadout"), QStringLiteral("PITCH"), card, {9, 8, 3, 2}, {8, 16, 4, 2});
-    add(QStringLiteral("DigitalReadout"), QStringLiteral("ROLL"), card, {9, 10, 3, 2}, {8, 18, 4, 2});
+    // The phone's screen where the motion sensors were (2026-11-25): a tall
+    // column in landscape, the bottom strip in portrait
+    add(QStringLiteral("PhoneMirrorWidget"), {}, {}, {9, 0, 3, 12}, {0, 16, 12, 4});
 
     return QVariantMap{
         {QStringLiteral("schema"), 2},

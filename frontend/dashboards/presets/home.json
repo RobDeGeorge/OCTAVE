@@ -11,10 +11,10 @@
     {
       "type": "NowPlayingWidget",
       "paramId": "",
-      "col": 0,
-      "row": 0,
-      "colSpan": 3,
-      "rowSpan": 12,
+      "col": 2,
+      "row": 9,
+      "colSpan": 8,
+      "rowSpan": 3,
       "props": {
         "seekable": true,
         "showBackground": true
@@ -23,10 +23,10 @@
     {
       "type": "DigitalReadout",
       "paramId": "SPEED",
-      "col": 3,
+      "col": 0,
       "row": 0,
-      "colSpan": 3,
-      "rowSpan": 4,
+      "colSpan": 2,
+      "rowSpan": 6,
       "props": {
         "card": true,
         "frame": true
@@ -35,10 +35,10 @@
     {
       "type": "DigitalReadout",
       "paramId": "RPM",
-      "col": 6,
-      "row": 0,
-      "colSpan": 3,
-      "rowSpan": 4,
+      "col": 0,
+      "row": 6,
+      "colSpan": 2,
+      "rowSpan": 6,
       "props": {
         "card": true,
         "frame": true
@@ -47,10 +47,10 @@
     {
       "type": "DigitalReadout",
       "paramId": "COOLANT_TEMP",
-      "col": 3,
-      "row": 4,
-      "colSpan": 3,
-      "rowSpan": 4,
+      "col": 10,
+      "row": 0,
+      "colSpan": 2,
+      "rowSpan": 6,
       "props": {
         "card": true,
         "frame": true
@@ -59,69 +59,23 @@
     {
       "type": "DigitalReadout",
       "paramId": "CONTROL_MODULE_VOLTAGE",
-      "col": 6,
-      "row": 4,
-      "colSpan": 3,
-      "rowSpan": 4,
+      "col": 10,
+      "row": 6,
+      "colSpan": 2,
+      "rowSpan": 6,
       "props": {
         "card": true,
         "frame": true
       }
     },
     {
-      "type": "VehicleWidget",
+      "type": "PhoneMirrorWidget",
       "paramId": "",
-      "col": 3,
-      "row": 8,
-      "colSpan": 6,
-      "rowSpan": 4,
-      "props": {}
-    },
-    {
-      "type": "GForceGauge",
-      "paramId": "",
-      "col": 9,
+      "col": 2,
       "row": 0,
-      "colSpan": 3,
-      "rowSpan": 4,
-      "props": {
-        "frame": true
-      }
-    },
-    {
-      "type": "CompassGauge",
-      "paramId": "",
-      "col": 9,
-      "row": 4,
-      "colSpan": 3,
-      "rowSpan": 4,
-      "props": {
-        "frame": true
-      }
-    },
-    {
-      "type": "DigitalReadout",
-      "paramId": "PITCH",
-      "col": 9,
-      "row": 8,
-      "colSpan": 3,
-      "rowSpan": 2,
-      "props": {
-        "card": true,
-        "frame": true
-      }
-    },
-    {
-      "type": "DigitalReadout",
-      "paramId": "ROLL",
-      "col": 9,
-      "row": 10,
-      "colSpan": 3,
-      "rowSpan": 2,
-      "props": {
-        "card": true,
-        "frame": true
-      }
+      "colSpan": 8,
+      "rowSpan": 9,
+      "props": {}
     }
   ],
   "layouts": {
@@ -131,63 +85,39 @@
       "cells": [
         {
           "col": 0,
+          "row": 17,
+          "colSpan": 12,
+          "rowSpan": 3
+        },
+        {
+          "col": 0,
+          "row": 14,
+          "colSpan": 3,
+          "rowSpan": 3
+        },
+        {
+          "col": 3,
+          "row": 14,
+          "colSpan": 3,
+          "rowSpan": 3
+        },
+        {
+          "col": 6,
+          "row": 14,
+          "colSpan": 3,
+          "rowSpan": 3
+        },
+        {
+          "col": 9,
+          "row": 14,
+          "colSpan": 3,
+          "rowSpan": 3
+        },
+        {
+          "col": 0,
           "row": 0,
           "colSpan": 12,
-          "rowSpan": 4
-        },
-        {
-          "col": 0,
-          "row": 4,
-          "colSpan": 4,
-          "rowSpan": 6
-        },
-        {
-          "col": 4,
-          "row": 4,
-          "colSpan": 4,
-          "rowSpan": 6
-        },
-        {
-          "col": 0,
-          "row": 10,
-          "colSpan": 4,
-          "rowSpan": 6
-        },
-        {
-          "col": 4,
-          "row": 10,
-          "colSpan": 4,
-          "rowSpan": 6
-        },
-        {
-          "col": 8,
-          "row": 4,
-          "colSpan": 4,
-          "rowSpan": 12
-        },
-        {
-          "col": 0,
-          "row": 16,
-          "colSpan": 4,
-          "rowSpan": 4
-        },
-        {
-          "col": 4,
-          "row": 16,
-          "colSpan": 4,
-          "rowSpan": 4
-        },
-        {
-          "col": 8,
-          "row": 16,
-          "colSpan": 4,
-          "rowSpan": 2
-        },
-        {
-          "col": 8,
-          "row": 18,
-          "colSpan": 4,
-          "rowSpan": 2
+          "rowSpan": 14
         }
       ]
     }

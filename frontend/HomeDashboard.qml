@@ -189,12 +189,22 @@ Item {
     }
 
     // No adapter, and the readings are scattered among other widgets: a strip
+    // along the bottom, or just above a widget that spans the bottom middle
+    // (Home's music card under the phone)
+    readonly property real _stripBottom: {
+        var bottom = height - dp(10)
+        for (var i = 0; i < _cells.length; i++) {
+            var r = _cells[i].rect
+            if (r.x <= width / 2 && r.x + r.width >= width / 2 && r.y + r.height >= height - dp(20))
+                bottom = Math.min(bottom, r.y - dp(24))
+        }
+        return bottom
+    }
     Rectangle {
         objectName: "homeOBDPromptStrip"
         visible: home._obdPrompt && !home._obdBlock.clean
-        anchors.bottom: parent.bottom
+        y: home._stripBottom - height
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottomMargin: dp(10)
         width: Math.min(parent.width - dp(20), stripRow.implicitWidth + dp(28))
         height: stripRow.implicitHeight + dp(12)
         radius: dp(8)

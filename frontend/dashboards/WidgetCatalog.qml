@@ -35,6 +35,7 @@ QtObject {
         "NowPlayingWidget":    Qt.resolvedUrl("widgets/NowPlayingWidget.qml"),
         "MediaControlsWidget": Qt.resolvedUrl("widgets/MediaControlsWidget.qml"),
         "VehicleWidget":       Qt.resolvedUrl("widgets/VehicleWidget.qml"),
+        "PhoneMirrorWidget":   Qt.resolvedUrl("widgets/PhoneMirrorWidget.qml"),
         "ShiftLightWidget":    Qt.resolvedUrl("widgets/ShiftLightWidget.qml"),
         "ClockWidget":         Qt.resolvedUrl("widgets/ClockWidget.qml")
     })

@@ -95,9 +95,10 @@ Rectangle {
         var s = ["home", "obd", "media", "sensor", "settings"]
         if (settingsManager && settingsManager.androidAutoEnabled)   // Settings > Phone > Android Auto
             s.push("androidAuto")
-        if (typeof phoneMirrorManager !== "undefined" && phoneMirrorManager !== null && phoneMirrorManager.nativeAvailable
-                && settingsManager && settingsManager.phoneMirrorEnabled)
-            s.push("phoneMirror")
+        // No Phone Mirror button for now (2026-11-25): the phone is seen on
+        // Home only (PhoneMirrorWidget) while that flow is worked out. To
+        // bring it back: push "phoneMirror" here when phoneMirrorManager
+        // .nativeAvailable and settingsManager.phoneMirrorEnabled.
         return s
     }
 

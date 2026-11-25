@@ -958,13 +958,30 @@ private slots:
         QCOMPARE(m_dm->homeDashboardId(), QStringLiteral("home"));
     }
 
-    void homePresetIsTheDefaultHomeSpec()
+    // The built-in Home (2026-11-25, while Home is worked out): the phone as
+    // the base, a small music card under it, two readings on each side; no
+    // motion sensors and no vehicle
+    void homePresetIsPhoneMusicAndFourReadings()
     {
-        QVariantMap built = DashboardManager::homeSpec(
-            {"SPEED", "RPM", "COOLANT_TEMP", "CONTROL_MODULE_VOLTAGE"}, true);
-        built.insert("id", "home");
-        built.insert("label", "Home");
-        QCOMPARE(QJsonObject::fromVariantMap(m_dm->loadDashboard("home").toMap()), QJsonObject::fromVariantMap(built));
+        const QVariantMap spec = m_dm->loadDashboard("home").toMap();
+        QStringList types, bound;
+        QVariantMap phone, music;
+        for (const QVariant &c : spec.value("cells").toList()) {
+            const QVariantMap cell = c.toMap();
+            types << cell.value("type").toString();
+            if (!cell.value("paramId").toString().isEmpty()) bound << cell.value("paramId").toString();
+            if (cell.value("type") == "PhoneMirrorWidget") phone = cell;
+            if (cell.value("type") == "NowPlayingWidget") music = cell;
+        }
+        QCOMPARE(types.count("PhoneMirrorWidget"), 1);
+        QCOMPARE(types.count("NowPlayingWidget"), 1);
+        QCOMPARE(bound, (QStringList{"SPEED", "RPM", "COOLANT_TEMP", "CONTROL_MODULE_VOLTAGE"}));
+        QCOMPARE(types.size(), 6);
+        // The phone is the biggest cell, the music card sits under it
+        QVERIFY(phone.value("colSpan").toInt() * phone.value("rowSpan").toInt()
+                > 2 * music.value("colSpan").toInt() * music.value("rowSpan").toInt());
+        QCOMPARE(music.value("row").toInt(), phone.value("row").toInt() + phone.value("rowSpan").toInt());
+        QCOMPARE(spec.value("layouts").toMap().value("portrait").toMap().value("cells").toList().size(), 6);
     }
 
     void homeSpecsFitTheirGrids_data()
@@ -1030,7 +1047,10 @@ private slots:
             types << c.toMap().value("type").toString();
             if (!c.toMap().value("paramId").toString().isEmpty()) bound << c.toMap().value("paramId").toString();
         }
-        QCOMPARE(bound, QStringList({"FUEL_LEVEL", "RPM", "SPEED", "PITCH", "ROLL"}));
+        QCOMPARE(bound, QStringList({"FUEL_LEVEL", "RPM", "SPEED"}));
+        // The phone where the motion sensors were (2026-11-25)
+        QVERIFY(types.contains("PhoneMirrorWidget"));
+        QVERIFY(!types.contains("GForceGauge"));
         QVERIFY(!types.contains("ShiftLightWidget"));
         QVERIFY(!types.contains("VehicleWidget"));
         QCOMPARE(dm.migrateClassicHome({"SPEED"}, true), QString());

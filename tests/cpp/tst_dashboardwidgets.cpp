@@ -408,7 +408,8 @@ private slots:
             "gauges/SegmentedGauge.qml", "dashboards/widgets/ClockWidget.qml",
             "gauges/CircularGauge.qml", "gauges/ArcGauge.qml", "gauges/BarGauge.qml",
             "gauges/LinearGauge.qml", "gauges/DigitalReadout.qml", "gauges/SparklineGauge.qml",
-            "gauges/WarningLight.qml", "gauges/GForceGauge.qml", "gauges/CompassGauge.qml"};
+            "gauges/WarningLight.qml", "gauges/GForceGauge.qml", "gauges/CompassGauge.qml",
+            "dashboards/widgets/PhoneMirrorWidget.qml"};
         for (const auto &file : files)
             for (const QSize size : {QSize(160, 50), QSize(80, 32), QSize(320, 100), QSize(164, 103),
                                      QSize(100, 240)})

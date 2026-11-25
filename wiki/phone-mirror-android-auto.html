@@ -755,7 +755,7 @@
           <table>
             <thead><tr><th>Setting</th><th>Default</th><th>Effect</th><th>Applied</th></tr></thead>
             <tbody>
-              <tr><td><code>phoneMirrorEnabled</code></td><td>false</td><td>Shows the Phone Mirror button in the bottom bar (hidden on Android regardless)</td><td>live</td></tr>
+              <tr><td><code>phoneMirrorEnabled</code></td><td>false</td><td>Turns phone mirroring on: Home's phone window starts it (the bottom bar's Phone Mirror button is hidden since 2026-11-25, while the flow is worked out)</td><td>live</td></tr>
               <tr><td><code>scrcpyDisplaySize</code></td><td><code>"auto"</code></td><td>Virtual display size (<code>new_display=</code>); <code>"auto"</code> = the view's pixel size, <code>""</code> = phone screen (the "Display Mode" control picks Mirror Phone <code>""</code> or Desktop (DeX) <code>"auto"</code>). The settings field is re-written with the snapped value</td><td>restarts the session</td></tr>
               <tr><td><code>scrcpyDisplayDpi</code></td><td>0</td><td>Appended as <code>new_display=WxH/dpi</code>; 0 = the server scales the phone's own density</td><td>restarts the session</td></tr>
               <tr><td><code>scrcpyBitRateUsb</code> / <code>scrcpyBitRateWifi</code></td><td>16 / 8</td><td><code>video_bit_rate</code> in Mbps for that link</td><td>restarts a session on that link</td></tr>

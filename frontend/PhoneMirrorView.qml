@@ -95,6 +95,8 @@ Item {
     // startMirror() only syncs the flag when the stream is already up and
     // starts it otherwise, so a revisit behaves like a fresh view used to.
     StackView.onActivated: {
+        // Take the video back from Home's Phone Mirror widget
+        if (phoneMirrorManager) phoneMirrorManager.videoSink = video.videoSink
         reportViewSize()
         startMirror()
     }
@@ -322,6 +324,7 @@ Item {
                 anchors.fill: parent
                 onClicked: {
                     if (phoneMirrorManager) phoneMirrorManager.stopScrcpy()   // back to idle: no reconnecting
+                    phoneMirrorView._markStopped()
                     mirrorRunning = false
                     stackView.pop()
                 }
@@ -444,6 +447,7 @@ Item {
 
             onClicked: {
                 if (phoneMirrorManager) phoneMirrorManager.stopScrcpy()
+                phoneMirrorView._markStopped()
                 stackView.pop()
             }
         }
@@ -717,7 +721,14 @@ Item {
         }
     }
 
+    // Home's Phone Mirror widget leaves a session the user closed alone
+    function _markStopped() {
+        var w = ApplicationWindow.window
+        if (w && w.phoneMirrorStopped !== undefined) w.phoneMirrorStopped = true
+    }
     function startMirror() {
+        var w = ApplicationWindow.window
+        if (w && w.phoneMirrorStopped !== undefined) w.phoneMirrorStopped = false
         if (!phoneMirrorManager) {
             launchFailed = true
             errorMessage = "Phone Mirror manager not available"

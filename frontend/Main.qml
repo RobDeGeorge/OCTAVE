@@ -18,6 +18,10 @@ ApplicationWindow {
     // say); prewarmPageSoon() asks it.
     property string graphicsRenderer: ""
     property bool gpuRendered: false
+    // The user closed phone mirroring (the full-screen page's X / Stop) in
+    // this run: Home's Phone Mirror widget then waits for Connect Phone
+    // instead of starting it again (dashboards/widgets/PhoneMirrorWidget.qml)
+    property bool phoneMirrorStopped: false
 
     // Global font setting - applies to all child components
     // fontFamily always returns a valid font (systemDefaultFont or custom font)

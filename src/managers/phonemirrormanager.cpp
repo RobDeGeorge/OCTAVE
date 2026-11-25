@@ -1130,6 +1130,10 @@ void PhoneMirrorManager::onConnected(int w, int h)
         m_activeDisplaySize = QStringLiteral("%1x%2").arg(w).arg(h);
     emit frameSizeChanged(w, h);
     qCInfo(lcPhoneMirror) << "Phone mirror connected:" << w << "x" << h;
+    // isRunning turned true on the client's thread at the handshake: say so
+    // (the start emitted it while it was still false; Home's Phone Mirror
+    // widget binds to it and stayed on "not running" without this)
+    emit isRunningChanged();
     emit scrcpyStarted(1);
     // Hand the sleep/panel policy to the phone-side keeper. The server
     // powers the device on asynchronously at start; give it a moment.

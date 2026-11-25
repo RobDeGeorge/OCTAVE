@@ -1261,6 +1261,41 @@
       "defaultTapAction": "vehicle"
     },
     {
+      "type": "PhoneMirrorWidget",
+      "displayName": "Phone Mirror",
+      "glyph": "▯",
+      "category": "Media",
+      "description": "Your phone's screen, live while mirroring runs; tap through to the phone",
+      "demo": {},
+      "defaultColSpan": 3,
+      "defaultRowSpan": 6,
+      "minSize": {
+        "w": 120,
+        "h": 120
+      },
+      "aspect": 0.5,
+      "supportedKinds": [],
+      "labelProps": false,
+      "rangeProps": false,
+      "colorProps": [
+        "frameColor"
+      ],
+      "specProps": [
+        "labelColor",
+        "valueColor"
+      ],
+      "editableProps": [
+        {
+          "key": "showFrame",
+          "label": "Frame",
+          "kind": "bool",
+          "def": true,
+          "section": "look"
+        }
+      ],
+      "defaultTapAction": "none"
+    },
+    {
       "type": "ShiftLightWidget",
       "displayName": "Shift Light",
       "glyph": "●",

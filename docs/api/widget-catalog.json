@@ -1308,6 +1308,43 @@
             "type": "VehicleWidget"
         },
         {
+            "aspect": 0.5,
+            "category": "Media",
+            "colorProps": [
+                "frameColor"
+            ],
+            "defaultColSpan": 3,
+            "defaultRowSpan": 6,
+            "defaultTapAction": "none",
+            "demo": {
+            },
+            "description": "Your phone's screen, live while mirroring runs; tap through to the phone",
+            "displayName": "Phone Mirror",
+            "editableProps": [
+                {
+                    "def": true,
+                    "key": "showFrame",
+                    "kind": "bool",
+                    "label": "Frame",
+                    "section": "look"
+                }
+            ],
+            "glyph": "▯",
+            "labelProps": false,
+            "minSize": {
+                "h": 120,
+                "w": 120
+            },
+            "rangeProps": false,
+            "specProps": [
+                "labelColor",
+                "valueColor"
+            ],
+            "supportedKinds": [
+            ],
+            "type": "PhoneMirrorWidget"
+        },
+        {
             "aspect": 1,
             "category": "Vehicle",
             "colorProps": [

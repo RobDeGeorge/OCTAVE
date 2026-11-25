@@ -497,7 +497,7 @@ Item {
                     id: volumePercentText
                     text: Math.round(volumeSlider.value) + "%"
                     color: App.Style.mediaRoomSeekColor
-                    // A third larger than the seek bar's times
+                    // The seek bar's times match it (positionText / durationText)
                     font.pixelSize: Math.round(App.Spacing.mediaRoomSliderDurationText * 1.35)
                     font.family: mediaRoom.globalFont
                     Layout.minimumWidth: App.Spacing.isPortrait ? 0 : dp(40)
@@ -1314,7 +1314,8 @@ Item {
                     Layout.column: 0
                     text: formatTime(mediaRoom.position)
                     color: App.Style.mediaRoomSeekColor
-                    font.pixelSize: App.Spacing.mediaRoomSliderDurationText
+                    // The size of the volume percentage at the top
+                    font.pixelSize: volumePercentText.font.pixelSize
                     font.family: mediaRoom.globalFont
                     Layout.minimumWidth: dp(40)  // Added minimum width for consistent layout
                 }
@@ -1460,7 +1461,8 @@ Item {
                     horizontalAlignment: seekGrid.portrait ? Text.AlignRight : Text.AlignLeft
                     text: formatTime(mediaRoom.duration)
                     color: App.Style.mediaRoomSeekColor
-                    font.pixelSize: App.Spacing.mediaRoomSliderDurationText
+                    // The size of the volume percentage at the top
+                    font.pixelSize: volumePercentText.font.pixelSize
                     font.family: mediaRoom.globalFont
                     Layout.minimumWidth: dp(40)  // Added minimum width for consistent layout
                 }
