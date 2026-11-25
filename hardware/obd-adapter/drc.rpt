@@ -1,5 +1,5 @@
 ** Drc report for obd-adapter.kicad_pcb **
-** Created on 2026-11-25T10:30:55 **
+** Created on 2026-11-25T12:50:46 **
 ** Report includes: Errors, Warnings, Exclusions **
 
 ** Found 8 DRC violations **
@@ -8,16 +8,16 @@
     @(73.4400 mm, 27.5000 mm): Footprint U4
 [silk_edge_clearance]: Silkscreen clipped by board edge
     Rule: board setup constraints silk; warning
-    @(80.0000 mm, 0.0000 mm): Segment on Edge.Cuts
-    @(79.4400 mm, 18.3000 mm): Polygon of U4 on F.Silkscreen
-[silk_edge_clearance]: Silkscreen clipped by board edge
-    Rule: board setup constraints silk; warning
     @(0.0000 mm, 0.0000 mm): Segment on Edge.Cuts
     @(69.7000 mm, 1.3500 mm): Segment of J2 on F.Silkscreen
 [silk_edge_clearance]: Silkscreen clipped by board edge
     Rule: board setup constraints silk; warning
     @(0.0000 mm, 0.0000 mm): Segment on Edge.Cuts
     @(79.1000 mm, 1.3500 mm): Segment of J2 on F.Silkscreen
+[silk_edge_clearance]: Silkscreen clipped by board edge
+    Rule: board setup constraints silk; warning
+    @(80.0000 mm, 0.0000 mm): Segment on Edge.Cuts
+    @(79.4400 mm, 18.3000 mm): Polygon of U4 on F.Silkscreen
 [via_dangling]: Via is not connected or connected on only one layer
     Local override; warning
     @(27.1472 mm, 42.4493 mm): Via [5V_BUCK] on F.Cu - B.Cu

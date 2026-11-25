@@ -22,15 +22,15 @@ PAPER.update({"A4": (297, 210), "A3": (420, 297), "A2": (594, 420)})
 # (page name, file suffix, blocks on it, what it shows)
 SHEETS = [
     ("Power", "power", ["power"],
-     "Battery input protection, 5 V buck, 5 V OR, 3.3 V LDO"),
+     "Battery input protection, 5.3 V buck, 5 V diode-OR of buck and USB, 3.3 V LDO"),
     ("Car plug and CAN", "car", ["car", "can"],
      "J1962 plug; HS-CAN and MS-CAN transceivers"),
     ("J1850", "j1850", ["j1850"],
-     "SAE J1850 VPW / PWM front end and its supply"),
+     "SAE J1850 VPW / PWM front end and its supply (plug pins 2 / 10)"),
     ("K-line and DLC switch", "iso", ["iso", "dlcsw"],
-     "ISO 9141 / 14230 K- and L-line; DLC_SW, the switched battery for them"),
+     "ISO 9141 / 14230 K- and L-line (plug pins 7 / 15); DLC_SW, the switched battery for them and J1850"),
     ("STM32", "mcu", ["mcu", "flash", "ui"],
-     "STM32G474: vehicle-side MCU, QSPI flash, SWD, buttons, LEDs, CONFIG switch"),
+     "STM32G474: vehicle-side MCU, QSPI flash, SWD, buttons, LED, CONFIG switch"),
     ("ESP32", "esp32", ["esp32", "espusb", "sd"],
      "ESP32 radio bridge, its USB serial port (CH340C on the hub), microSD"),
     ("USB and expansion", "usb", ["usb", "exp", "sense", "pod"],
@@ -99,6 +99,9 @@ class SheetWriter(SchWriter):
         self.root_uuid = root
         self.uuid = sheet_uuid(design, name)
         self.power = power
+        self.page = 0               # this page's number
+        self.label_nets = set()     # nets with a global label here
+        self.net_pages = {}         # net -> the pages its global labels are on (from a first pass)
 
     @property
     def path(self):
@@ -122,7 +125,8 @@ class SheetWriter(SchWriter):
                            ["exclude_from_sim", "no"], ["in_bom", "no"], ["on_board", "yes"], ["dnp", "no"],
                            ["uuid", Q(u)],
                            prop("Reference", ref, x, y, hide=True),
-                           prop("Value", net, x + ox, y + oy, angle=0),
+                           # (a field turns with its symbol: 90 on a symbol turned 90 / 270 reads level)
+                           prop("Value", net, x + ox, y + oy, angle=90 if rot in (90, 270) else 0),
                            prop("Footprint", "", x, y, hide=True),
                            prop("Datasheet", "", x, y, hide=True),
                            prop("Description", "", x, y, hide=True),
@@ -131,7 +135,7 @@ class SheetWriter(SchWriter):
                                           ["path", Q(self.path), ["reference", Q(ref)], ["unit", 1]]]]])
         # what it takes up: the symbol out along its pin, and its name
         ex, ey = x + dx * 3.2, y + dy * 3.2     # out from the pin end only, 1.4 mm either side
-        px, py = 1.4 * abs(dy), 1.4 * abs(dx)
+        px, py = 1.4 * abs(dy), 1.3 * abs(dx)
         self.note_box((min(x, ex) - px, min(y, ey) - py, max(x, ex) + px, max(y, ey) + py),
                       f"power {net} {key}", key, True)
         tx, ty = x + ox, y + oy
@@ -140,13 +144,31 @@ class SheetWriter(SchWriter):
     def global_label(self, net, x, y, angle, key):
         just = "left" if angle in (0, 90) else "right"
         u = stable_uuid(self.d.name, self.name, "glbl", key)
+        self.label_nets.add(net)
+        dx, dy = AWAY[angle]
+        # the other pages the net is on, "[2,6]", just past the label; a name with no pages after
+        # it is a node of this page only
+        others = sorted(self.net_pages.get(net, set()) - {self.page})
+        refs = "[" + ",".join(str(n) for n in others) + "]" if others else ""
+        far = text_w(net) + 2.6
         self.items.append(["global_label", Q(net), ["shape", "passive"], ["at", x, y, angle],
-                           ["fields_autoplaced", "yes"], ["effects", font(), ["justify", just]],
+                           ["effects", font(), ["justify", just]],
                            ["uuid", Q(u)],
                            ["property", Q("Intersheetrefs"), Q("${INTERSHEET_REFS}"), ["at", x, y, 0],
                             ["effects", font(), ["hide", "yes"]]]])
+        # (drawn as text, not with KiCad's own page lists: those show "[]" after a one-page name)
+        if refs:
+            self.items.append(["text", Q(refs), ["exclude_from_sim", "no"],
+                               ["at", x + dx * far, y + dy * far, 0 if dx else 90],
+                               ["effects", font(), ["justify", just]],
+                               ["uuid", Q(stable_uuid(self.d.name, self.name, "glblpages", key))]])
         b = label_box(net, x, y, angle)
-        dx, dy = AWAY[angle]           # the flag outline adds about 2 mm on its open end
+        # the flag outline adds about 2 mm on its open end, the page list its own length
+        grow = text_w(refs) + 0.8 if refs else 0
+        b = (b[0] - (grow if dx < 0 else 0), b[1] - (grow if dy < 0 else 0),
+             b[2] + (grow if dx > 0 else 0), b[3] + (grow if dy > 0 else 0))
+        if dx:                         # a level global label is a box centred on its wire
+            b = (b[0], y - 1.1, b[2], y + 1.1)
         b = (b[0] - (2 if dx < 0 else 0), b[1] - (2 if dy < 0 else 0),
              b[2] + (2 if dx > 0 else 0), b[3] + (2 if dy > 0 else 0))
         self.note_box(b, f"global label {net} {key}", key.split(".")[0])
@@ -277,6 +299,9 @@ def write_root(design, path, pages, title, rev, date, comments=()):
                       ["property", Q("Sheetfile"), Q(sheet_file(design, suffix)), ["at", x, y + H + 0.6, 0],
                        ["effects", font(), ["justify", "left", "top"], ["hide", "yes"]]],
                       ["instances", ["project", Q(design.name), ["path", Q(f"/{root}"), ["page", Q(str(n + 2))]]]]])
+        items.append(["text", Q(f"page {n + 2}"), ["exclude_from_sim", "no"], ["at", x + W, y - 0.9, 0],
+                      ["effects", font(), ["justify", "right", "bottom"]],
+                      ["uuid", Q(stable_uuid(design.name, "rootpage", name))]])
         # what is on it, wrapped inside the box
         words, lines, cur = what.split(), [], ""
         for wd in words:
@@ -314,15 +339,46 @@ def write_root(design, path, pages, title, rev, date, comments=()):
     arrow([(90, 94), (115, 94)], "CAN", "can-mcu")
     arrow([(90, 129), (102, 129), (102, 100), (115, 100)], "J1850", "j1850-mcu", at=(96, 128.5))
     arrow([(90, 164), (106, 164), (106, 104), (115, 104)], "K / L", "iso-mcu", at=(98, 163.5))
-    arrow([(180, 94), (200, 94)], "UART", "mcu-esp")
-    arrow([(147, 130), (147, 108)], "USB, I2C", "usb-mcu", at=(156, 121))
+    arrow([(180, 92), (200, 92)], "UART", "mcu-esp")
+    arrow([(200, 97), (180, 97)], "", "esp-mcu")
+    arrow([(147, 130), (147, 108)], "USB, I2C, pod UART", "usb-mcu", at=(162, 121))
+    arrow([(180, 134), (212, 134), (212, 104)], "USB (hub port 2), VBUS", "usb-esp", at=(196, 133))
+    arrow([(40, 104), (40, 115)], "", "plug-j1850")
+    items.append(["text", Q("pins 2 / 10 (7 / 15 on to K / L)"), ["exclude_from_sim", "no"], ["at", 42, 109, 0],
+                  ["effects", font(), ["justify", "left"]], ["uuid", Q(stable_uuid(design.name, "t", "plugj"))]])
+    arrow([(70, 150), (70, 139)], "", "dlcsw-j1850")
+    items.append(["text", Q("DLC_SW"), ["exclude_from_sim", "no"], ["at", 72, 146.5, 0],
+                  ["effects", font(), ["justify", "left"]], ["uuid", Q(stable_uuid(design.name, "t", "dlcsw"))]])
+    for i, line in enumerate((
+            "Connectors: J6 car plug, J2 USB-C, J11 pod bus, J9 panic button, J4 Qwiic,",
+            "J10 microSD, J1 SWD. Not fitted: J5 (EXP header), J8 (spare ESP32 pins).",
+            "Pod: a small sensor board on the four-wire pod bus.",
+            "DLC: the car's diagnostic connector. Panic button: a hidden button on a cable.",
+            "All CONFIG switches are off in the car.")):
+        items.append(["text", Q(line), ["exclude_from_sim", "no"], ["at", 190, 140 + i * 3.5, 0],
+                      ["effects", font(), ["justify", "left", "top"]],
+                      ["uuid", Q(stable_uuid(design.name, "rootinfo", i))]])
+    for i, line in enumerate((
+            "Supply: 12 V cars. Runs through a 6 V cold crank;",
+            "survives a reversed battery, a 28 V jump start and",
+            "a clamped load dump (33 V TVS, parts rated for its",
+            "47-50 V clamp). CAN and J1850 need the plug's 12 V.",
+            "Draw from the battery, calculated, not yet measured:",
+            "parked 0.6 mA (1.3-1.5 mA in a hot car); ESP32 on:",
+            "about 2 mA (BLE advertising), 70 mA (Wi-Fi).")):
+        items.append(["text", Q(line), ["exclude_from_sim", "no"], ["at", 200, 44 + i * 3.5, 0],
+                      ["effects", font(), ["justify", "left", "top"]],
+                      ["uuid", Q(stable_uuid(design.name, "rootsupply", i))]])
     items.append(["text", Q(title), ["exclude_from_sim", "no"], ["at", 25, 25, 0],
                   ["effects", font(4, True), ["justify", "left", "bottom"]],
                   ["uuid", Q(stable_uuid(design.name, "roottitle"))]])
-    items.append(["text", Q("Every net has the same name on every page and on the board: supply rails by "
-                            "power symbol, other nets by global label."),
-                  ["exclude_from_sim", "no"], ["at", 25, 30, 0], ["effects", font(), ["justify", "left", "top"]],
-                  ["uuid", Q(stable_uuid(design.name, "rootnote"))]])
+    for i, line in enumerate((
+            "Plugs into a car's OBD-II socket (J1962). The STM32 talks to every OBD-II bus (two CAN, J1850 VPW / PWM, K / L-line); the ESP32 relays to a phone or",
+            "head unit over Bluetooth / Wi-Fi. Fed from plug pin 16 (battery), or from USB-C alone on the bench (no CAN then). Every net has the same name on every",
+            "page and on the board. After a name, [3,6] lists the other pages its net is on; a name with no list is a node of that page only.")):
+        items.append(["text", Q(line), ["exclude_from_sim", "no"], ["at", 25, 28 + i * 3.2, 0],
+                      ["effects", font(), ["justify", "left", "top"]],
+                      ["uuid", Q(stable_uuid(design.name, "rootnote", i))]])
 
     tb = ["title_block", ["title", Q(title)], ["date", Q(date)], ["rev", Q(rev)], ["company", Q("OCTAVE")]]
     for i, c in enumerate(comments):
@@ -359,12 +415,33 @@ def write_all(design, proj_dir, title, rev, date, comments=()):
         return [f"power flags with no page: {sorted(POWER_FLAGS - done)}"]
     import drawn
     design_parts = {p.ref: p for p in design.parts}
+    # two passes: the first finds which pages each net's labels are on, the second draws the pages
+    # with that list after each label (so the room it takes is checked)
+    net_pages = {}
+    for final in (False, True):
+        power = PowerSymbols()
+        problems = []
+        seen = {}
+        _write_pages(design, proj_dir, title, rev, date, comments, blocks, root, power, flags_on,
+                     design_parts, problems, net_pages if final else {}, seen)
+        net_pages = seen
+    write_root(design, os.path.join(proj_dir, design.name + ".kicad_sch"), None, title, rev, date, comments)
+    return problems
+
+
+def _write_pages(design, proj_dir, title, rev, date, comments, blocks, root, power, flags_on,
+                 design_parts, problems, net_pages, seen):
+    import os
+    import drawn
     drawn_units, drawn_pages_units = {}, set()
-    for name, suffix, names, what in SHEETS:
+    for page, (name, suffix, names, what) in enumerate(SHEETS, 2):
         if name in drawn.PAGES:         # drawn by hand: parts placed, wires run (drawn.py)
-            w = SheetWriter(design, name, [blocks[n] for n in names], root, power, "A3")
+            w = SheetWriter(design, name, [blocks[n] for n in names], root, power, drawn.PAPER_OF.get(name, "A3"))
+            w.page, w.net_pages = page, net_pages
             if flags_on[name]:
-                w.power_flags(flags_on[name], x=25.4 if name == "Power" else 271.78, y=223.52)
+                fx = 25.4 if name == "Power" else 271.78
+                w.power_flags(flags_on[name], x=fx, y=223.52)
+                w.text("ERC power flags (not parts):", fx - 5.08, 212.09)
             D = drawn.Drawing(w, design)
             drawn.PAGES[name](D, design)
             for key in D.placed:
@@ -382,6 +459,8 @@ def write_all(design, proj_dir, title, rev, date, comments=()):
             problems += [f"{name}: {s}" for s in D.finish()]
             problems += [f"{name}: {s}" for s in w.check()]
             w.write(os.path.join(proj_dir, sheet_file(design, suffix)), title, rev, date, comments)
+            for net in w.label_nets:
+                seen.setdefault(net, set()).add(page)
             continue
         for paper in ("A3", "A2", "A1"):
             power.n0, power.f0 = power.n, power.flags
@@ -401,5 +480,3 @@ def write_all(design, proj_dir, title, rev, date, comments=()):
     missing = sorted(drawn_pages_units - set(drawn_units))
     if missing:
         problems.append(f"units not drawn on any page: {missing}")
-    write_root(design, os.path.join(proj_dir, design.name + ".kicad_sch"), None, title, rev, date, comments)
-    return problems

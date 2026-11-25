@@ -73,14 +73,17 @@ def TP(block, net):
 mcu = d.block("mcu", "STM32G474RET6: vehicle-side real-time engine")
 mcu.notes = [
     "FDCAN1 is not used: its pins clash with USB (PA11/PA12) and BOOT0 (PB8).",
-    "HS-CAN (J1962 6/14) = FDCAN2 PB12/PB13. MS-CAN (3/11) = FDCAN3 PB3/PB4.",
+    "HS-CAN (J1962 6/14) = FDCAN2 PB12/PB13, nets CAN1_*. MS-CAN (3/11) = FDCAN3 PB3/PB4, nets CAN2_*.",
     "J1850 on TIM3: CH1 VPW RX, CH2 PWM RX (input capture), CH3/CH4 TX Bus+/Bus- (output compare).",
     "K-line on LPUART1 (PC0 RX / PC1 TX, TXINV: the NPN inverts); 5-baud init bit-bangs PC1. ESP32 on USART2 + RTS/CTS.",
     "PC3 switches DLC_SW (battery to the J1850 supply, comparators, K/L pull-ups); PB2 picks 7.24 V VPW / 4.79 V PWM.",
-    "PB4/PB6 carry UCPD dead-battery pull-downs until firmware sets PWR_CR3.UCPD_DBDIS: both are safe low at reset.",
-    "DLC_SW_EN is on PC3, not PC10: the system bootloader may drive USART3 TX (PC10) and would switch DLC_SW on.",
+    "PB6 (ESP_PWR_EN) has the UCPD dead-battery pull-down until firmware sets PWR_CR3.UCPD_DBDIS: ESP32 off at reset.",
+    "PB4's (CAN2_TXD, where low is dominant) is kept off by R18, 10k from PA10 to GND (USB page).",
+    "DLC_SW_EN is on PC3; PC10 was avoided because the system bootloader may drive USART3 TX there.",
     "Firmware turns on the internal pull-ups of PA15 (USER button) and PC0 (KLINE_RX, an open-collector output).",
     "VDDA / VREF+ are on 3V3 (100n + 1u at the pins): the ADC only reads the battery divider.",
+    "Names: _M = the STM32 side of a 1k series resistor (ESP32 page); ESP_RTS / ESP_TX_MCU are named from the ESP32's side;",
+    "U2S = USB-to-serial (CH340C). EXP_PA5 / EXP_PC10 / EXP_PD2 also work the pod bus (RS-485 DE, /RE, POD_EN: USB page).",
 ]
 U(mcu, "MCU_ST_STM32G4:STM32G474RETx", "STM32G474RET6", "Package_QFP:LQFP-64_10x10mm_P0.5mm", {
     "VBAT": "3V3", "VDD": "3V3", "VSS": "GND", "VSSA": "GND", "VDDA": "3V3", "VREF+": "3V3",
@@ -150,11 +153,13 @@ _ref("D")
 usb = d.block("usb", "USB-C behind a hub: the STM32 (DFU, CDC serial to the Orange Pi) and the ESP32's serial port; bench power")
 usb.notes = ["5.1k on CC1/CC2 = sink. VBUS feeds the 5 V rail through a Schottky (bench power without a car).",
              "U18 CH334P (USB 2.0 hub, 4 ports, 2 used): port 3 is the STM32 (PA11 / PA12), port 2 the CH340C on the",
-             "ESP32's UART0. Both show up on the computer at once, with no firmware on either chip. (Port 3, not 1:",
-             "ports 2 and 3 leave the chip on one side, and the upstream pair, laid by hand, has the next side alone.)",
+             "ESP32's UART0. Both show up on the computer at once, with no firmware on either chip.",
+             "U2's clamp rail (pin 5) is on 3V3, not VBUS, as the hub's datasheet asks: on VBUS the hub's D+ pull-up would feed",
+             "a cable-less VBUS through the clamp.",
              "The hub runs from 3V3 (V5 and VDD33 both on it, as its datasheet advises for a hub on the board), so it is",
              "powered whenever the STM32 and the CH340C are: their D+ pull-ups never drive an unpowered chip. With no",
              "cable in it sleeps: 0.12 mA typical, 0.4 mA at most, added to what the board draws while parked.",
+             "RESET# (about 25k pull-up inside) and PGANG (pull-up inside: ganged over-current mode) are left open.",
              "Y2 12 MHz: the chip has load capacitors inside. (Crystal-free is an order option of the CH334, not the default.)"]
 d.add(usb, Part(_ref("J"), "Connector:USB_C_Receptacle_USB2.0_16P", "USB-C",
                 "Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12",
@@ -209,8 +214,8 @@ for mcu_net, esp_net in (("ESP_CTS_M", "ESP_CTS"), ("MCU_TX_ESP_M", "MCU_TX_ESP"
                          ("ESP_IO0_M", "ESP_IO0"), ("ESP_EN_M", "ESP_EN")):
     R(esp, "1k", mcu_net, esp_net)
 U(esp, "OCTAVE:TPS22918", "TPS22918", "Package_TO_SOT_SMD:SOT-23-6",
-  {"VIN": "3V3", "ON": "ESP_SW_ON", "CT": "ESP_PWR_CT", "VOUT": "3V3_ESP", "QOD": "3V3_ESP", "GND": "GND"})
-R(esp, "100k", "ESP_SW_ON", "GND")
+  {"VIN": "3V3", "ON": "ESP_PWR_ON", "CT": "ESP_PWR_CT", "VOUT": "3V3_ESP", "QOD": "3V3_ESP", "GND": "GND"})
+R(esp, "100k", "ESP_PWR_ON", "GND")
 C(esp, "1n", "ESP_PWR_CT", lcsc_key="C1n")
 C(esp, "1u", "3V3")
 _ref("J")   # J3 was the ESP_PROG header: the CH340C on the USB hub does its job; the number stays free
@@ -233,8 +238,10 @@ d.add(ex, Part(_ref("J"), "Connector_Generic:Conn_02x07_Odd_Even", "EXP",
 pw = d.block("power", "Power: J1962 pin 16 -> PTC -> TVS -> ideal diode -> 5.3 V buck; USB OR'd in; 3.3 V LDO")
 pw.notes = [
     "5.0SMDJ33CA (5 kW) is bidirectional on purpose: a unidirectional TVS would short a reversed battery through the PTC.",
+    "VBAT_IN = raw pin 16, VBAT_F = after the fuse, VBAT_P = after the ideal diode (reverse-protected). VBAT_SENSE = VBAT_F / 11.",
     "Everything on VBAT_P must survive the TVS clamp, 47 V at 25 C and about 50 V hot at worst: LM74700 65 V,",
-    "AO4264E 60 V, TPS54360B 60 V, caps 50 V, U19 48 V for 0.4 s. The LM317L (U11) has its own 30 V clamp (Q15).",
+    "AO4264E, TPS54360B, Q2 and F2 60 V, caps 50 V (no margin), the pod switch U19 (USB page) 48 V for 0.4 s (1-2 V short",
+    "in the worst hot pulse: accepted). The J1850 regulator U11 has its own 30 V clamp (Q15, J1850 page).",
     "TPS54360B: datasheet 600 kHz design (Fig. 32) with FB 68k/12k = 5.33 V, so 5V is ~4.9 V after the SS34 OR.",
     "EN left open (internal pull-up): the internal UVLO (~4.3 V) keeps the buck running through a 6 V cold crank.",
     "5V_BUCK (not the OR'd 5V) feeds everything on the vehicle side: CAN VCC, the VPW reference, the Bus- pull-up.",
@@ -322,8 +329,8 @@ d.add(car, Part(_ref("J"), "Connector_Generic:Conn_02x08_Top_Bottom", "OBD-II pl
 # ---------------------------------------------------------------- CAN
 can = d.block("can", "CAN FD: HS-CAN (J1962 6/14) and MS-CAN (3/11), TCAN1044V")
 can.notes = [
-    "STB pulled high: transceivers sit in standby (receive-only wake) until firmware drives STB low.",
-    "VCC from 5V_BUCK: CAN needs car / 12 V bench power (on USB alone the OR'd 5V is under the 4.5 V minimum).",
+    "STB (pin 8, drawn S) pulled high: transceivers sit in standby (receive-only wake) until firmware drives STB low.",
+    "VCC from 5V_BUCK: CAN needs car / 12 V bench power (on USB alone 5V_BUCK is off).",
     "No termination by default (the car has its own 2x120R). CONFIG switch 2 / 3 adds it, on a bench bus only.",
 ]
 for i, (h, l) in ((1, ("CAN1_H", "CAN1_L")), (2, ("CAN2_H", "CAN2_L"))):
@@ -340,8 +347,8 @@ for i, (h, l) in ((1, ("CAN1_H", "CAN1_L")), (2, ("CAN2_H", "CAN2_L"))):
 # ---------------------------------------------------------------- DLC_SW
 sw = d.block("dlcsw", "DLC_SW: switched battery for the legacy-bus front ends")
 sw.notes = [
-    "Off in sleep: the J1850 supply, the LM2901 and the K/L 510R pull-ups. STN's note: pull-ups left on DLC",
-    "draw current and can disturb the bus (engine stall). SI2309CDS 60 V P-FET high side, 12 V zener gate clamp,",
+    "Off in sleep: the J1850 supply, the LM2901 and the K/L 510R pull-ups. The STN11xx reference design notes that pull-ups left on",
+    "the bus draw current and can disturb it (engine stall). SI2309CDS 60 V P-FET high side, 12 V zener gate clamp,",
     "2N7002 level shift: Vgs = -7.4 V at 9 V battery, clamped at -12 V up to the TVS clamp (47-50 V).",
 ]
 d.add(sw, Part(_ref("Q"), "Transistor_FET:Q_PMOS_GSD", "SI2309CDS", SOT23,
@@ -360,12 +367,13 @@ TP(sw, "DLC_SW")
 jb = d.block("j1850", "SAE J1850 VPW (Bus+, J1962 pin 2) and PWM (Bus+ / Bus-, pins 2 / 10): STN-style discrete")
 jb.notes = [
     "Supply: LM317L 240/680/470R = 7.24 V (VPW); J1850_VSEL high shorts the 470R = 4.79 V (PWM).",
-    "Simulated over LM317L tolerance: Bus+ 6.42-7.54 V (VPW, spec 6.25-8) and 4.26-5.00 V (PWM, 3.80-5.25 assumed).",
-    "Bus+: 2N7002 -> AO3401A -> Schottky; 10k + Schottky bus load. Bus-: MMBT3904 sink, 10k + Schottky pull-up to 5 V.",
-    "RX: LM2901B on CMP_VCC (DLC_SW via 1k, 33 V zener; 38 V abs max). VPW: Bus+ vs 5V_BUCK x 47/65 = 3.85 V, active high.",
+    "Simulated over LM317L tolerance: Bus+ 6.42-7.54 V (VPW, spec 6.25-8) and 4.26-5.00 V (PWM, 3.80-5.25 assumed),",
+    "with the plug above about 9 V (10.8 V worst case, cold): below that the Q15 follower's drop takes Bus+ under 6.25 V.",
+    "Bus+: 2N7002 -> AO3401A -> Schottky; 10k + Schottky bus load. Bus-: MMBT3904 sink, 10k + Schottky pull-up to 5V_BUCK.",
+    "RX: LM2901B on CMP_VCC (DLC_SW via 1k, 33 V zener; 38 V abs max). VPW: Bus+ vs 5V_BUCK x 47/65 = 3.86 V, active high.",
     "PWM: Bus+ vs Bus-. Q7 base has 2.2k to GND: the bootloader's PC9 pull-up must not turn it on (Bus- low).",
     "Input clamps are 1N4148W (low leakage): Schottkys leak enough when hot to shift the thresholds behind 10k.",
-    "No wave shaping (none of the ELM/STN/OpenDiag designs do); a Rev A option is an RC on the P-FET gate.",
+    "No wave shaping (the published ELM / STN reference designs have none); a later option is an RC on Q6's gate.",
 ]
 # U11's input is VJ_IN: DLC_SW through an emitter follower clamped at 30 V (Q15, D31, R80, at the end of
 # this file), as the LM317L is rated 35 to 45 V input-to-output depending on the die and the TVS lets 47 V by
@@ -437,8 +445,8 @@ TP(jb, "VJ1850")
 # ---------------------------------------------------------------- ISO 9141 / KWP2000
 iso = d.block("iso", "ISO 9141-2 / ISO 14230 K-line (J1962 pin 7) and L-line (pin 15): STN-style discrete")
 iso.notes = [
-    "510R 2 W pull-ups (1.1 W with a line held low at a 24 V jump start) fed from DLC_SW through 1N4148W.",
-    "The diodes stop the car's own pull-up back-feeding the sleeping DLC_SW loads (that held K/L low with DLC_SW off).",
+    "510R 2 W pull-ups (1.5 W with a line held low at a 28 V jump start) fed from DLC_SW through 1N4148W.",
+    "The diodes stop the car's own pull-up back-feeding the sleeping DLC_SW loads (which would otherwise hold K/L low).",
     "MMBT3904 sinks, 470R base: TX high = line low.",
     "RX: LM2901 unit C, K vs DLC_SW/2 (10k/10k), K high -> KLINE_RX high (PC0's internal pull-up, set by firmware).",
 ]
@@ -462,8 +470,8 @@ _ref("R")   # R60 was KLINE_RX's 10k pull-up: PC0's internal pull-up (~40k, firm
 # (last in the file so the parts added in Rev 0 round 3 don't renumber the rest)
 eu = d.block("espusb", "ESP32 serial port on the USB hub (CH340C on UART0, auto-reset), reset / boot buttons")
 eu.notes = [
-    "Rev 0 had a second USB-C (J7) for this; the compact board has one port and a hub (U18, USB block), so",
-    "J7 and its ESD / CC / VBUS parts (R61, R62, U13, C44, D25) are gone and their references stay unused.",
+    "The ESP32's serial port is port 2 of the USB hub (U18, USB page): the one USB-C reaches both chips.",
+    "U2S_DTR high with U2S_RTS low pulls EN low (reset); U2S_RTS high with U2S_DTR low pulls IO0 low (boot); equal: neither.",
     "VBUS turns the ESP32's load switch on through a diode, so esptool works on a board whose STM32 is blank.",
     "CH340C runs from 3V3_ESP: it is off whenever the ESP32 is, so it can't back-power the module through RXD0.",
     "Auto-reset: the usual two-NPN cross pair on DTR/RTS drives EN and IO0 (esptool's default reset).",
@@ -490,7 +498,7 @@ for name, net in (("ESP_RST", "ESP_EN"), ("ESP_BOOT", "ESP_IO0")):
 # PB6's UCPD dead-battery pull-down (5.1k until PWR_CR3.UCPD_DBDIS) can't hold the switch off
 for src in ("ESP_PWR_EN", "VBUS"):
     d.add(eu, Part(_ref("D"), "Device:D", "1N4148W", "Diode_SMD:D_SOD-123",
-                    {"A": src, "K": "ESP_SW_ON"}, lcsc=LCSC["1N4148W"]))
+                    {"A": src, "K": "ESP_PWR_ON"}, lcsc=LCSC["1N4148W"]))
 
 # ---------------------------------------------------------------- CONFIG switch
 # One 4-way SMD DIP switch for the bench settings (it replaced three 2-pin jumpers and the BOOT0
@@ -500,7 +508,7 @@ for src in ("ESP_PWR_EN", "VBUS"):
 ui.notes.append("CONFIG (SW6): 1 ESP_ON, 2 CAN1 120R, 3 CAN2 120R, 4 BOOT0. All off in the car.")
 d.add(ui, Part(_ref("SW"), "Switch:SW_DIP_x04", "CONFIG",
                "Button_Switch_SMD:SW_DIP_SPSTx04_Slide_KingTek_DSHP04TS_W7.62mm_P1.27mm",
-               {"1": "ESP_ON_SW", "8": "ESP_PWR_EN", "2": "CAN1_TERM", "7": "CAN1_L",
+               {"1": "CFG1_3V3", "8": "ESP_PWR_EN", "2": "CAN1_TERM", "7": "CAN1_L",
                 "3": "CAN2_TERM", "6": "CAN2_L", "4": "3V3", "5": "BOOT0"}, lcsc=LCSC.get("DIP4")))
 
 # ---------------------------------------------------------------- ESP32 IO header
@@ -522,7 +530,7 @@ sn.notes = [
     "crash spikes while driving. INT1 -> PC14, INT2 -> PC15 (EXTI, wake from Stop).",
     "U16 ATECC608B (0x60) on the same bus: signs the frozen OBD speed window for traffic stop evidence.",
     "J9 panic button (hidden, on a cable): 2k series at the connector, then the ESD diode, a 5.1 V zener,",
-    "100k pull-up and 100n at the pin, so a cable shorted to the battery is limited to 4.5 mA into the zener.",
+    "100k pull-up and 100n at the pin, so a cable shorted to a 14.4 V battery is limited to 4.5 mA into the zener.",
     "PANIC_BTN = PC13 (WKUP2, wakes from Standby too). Closed = low.",
 ]
 U(sn, "OCTAVE:LIS2DH12", "LIS2DH12TR", "Package_LGA:LGA-12_2x2mm_P0.5mm",
@@ -579,7 +587,7 @@ R(eu, "1k", "VBUS", "GND")
 # R70: CONFIG switch 1 used to tie 3V3 straight to PB6; firmware driving PB6 low (ESP32 off) with the switch
 # on would short the rail through the pin. Through 1k that is 3.3 mA. With PB6's 5.1k dead-battery
 # pull-down still on (blank chip) PB6 sits at 2.76 V and ON at ~2.2 V, above the 1 V VIH.
-R(ui, "1k", "3V3", "ESP_ON_SW")
+R(ui, "1k", "3V3", "CFG1_3V3")
 
 # ---------------------------------------------------------------- pod bus (2026-11-23)
 # Created last so every earlier reference keeps its number. The adapter's end of the OCTAVE pod bus
@@ -587,12 +595,12 @@ R(ui, "1k", "3V3", "ESP_ON_SW")
 # but the fuse sits in the column over J11, on both sides of the board.
 pod = d.block("pod", "Pod bus: switched and fused battery voltage + RS-485 for a chain of pods")
 pod.notes = [
+    "Pods are small sensor boards daisy-chained on one four-wire cable (battery voltage + RS-485).",
     "J11 (JST GH): 1 POD_VIN, 2 RS-485 A, 3 RS-485 B, 4 GND. The adapter is one end of the chain: R77 terminates it.",
     "VBAT_P -> F2 (0.5 A, at the buck's input: the run across the board is fused) -> U19 -> POD_VIN.",
     "U19 TPS27S100A: a high-side switch that limits the current (R72 3k: 0.82 A, 0.59-1.05 A over tolerance and",
     "temperature) and shuts down hot, then retries: a pod cable shorted to ground is survived, at 0.14-0.24 A",
-    "for as long as POD_EN is on (firmware: off when the pods stop answering). (The discrete P-FET it replaced",
-    "would have burned before the polyfuse tripped: review 2026-11-24.)",
+    "for as long as POD_EN is on (firmware: off when the pods stop answering).",
     "POD_EN is PD2 (EXP_PD2 on J5) through 4.7k, off at reset (100k). Off, U19 draws under 2 uA. Its fault",
     "flag is not connected, and the adapter cannot measure the rail. U19 is rated 40 V, 48 V for 0.4 s.",
     "U17 THVD2450: +-70 V on A / B (a cable pinched against POD_VIN), IEC ESD and idle-bus failsafe inside:",
@@ -682,5 +690,5 @@ d.add(jb, Part(_ref("D"), "Device:D_Zener", "BZT52C30", "Diode_SMD:D_SOD-123",
                {"K": "VJ_B", "A": "GND"}, lcsc=LCSC["BZT52C30"]))
 R(jb, "1k", "DLC_SW", "VJ_B")
 C(jb, "100n", "VPW_REF")     # the VPW threshold: 13k of source impedance on a comparator input
-# C57: 100n at the hub's supply pins (it had 10u and 1u only)
+# C58: 100n at the hub's supply pins (it had 10u and 1u only)
 C(usb, "100n", "3V3")

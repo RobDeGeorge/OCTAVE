@@ -5847,7 +5847,7 @@
 ],
 "w": 150000,
 "layer": "F.Cu",
-"net": "ESP_ON_SW"
+"net": "CFG1_3V3"
 },
 {
 "via": [
@@ -5856,7 +5856,7 @@
 ],
 "d": 450000,
 "drill": 200000,
-"net": "ESP_ON_SW"
+"net": "CFG1_3V3"
 },
 {
 "via": [
@@ -5865,7 +5865,7 @@
 ],
 "d": 450000,
 "drill": 200000,
-"net": "ESP_ON_SW"
+"net": "CFG1_3V3"
 },
 {
 "via": [
@@ -5874,7 +5874,7 @@
 ],
 "d": 450000,
 "drill": 200000,
-"net": "ESP_ON_SW"
+"net": "CFG1_3V3"
 },
 {
 "trk": [
@@ -5885,7 +5885,7 @@
 ],
 "w": 150000,
 "layer": "B.Cu",
-"net": "ESP_ON_SW"
+"net": "CFG1_3V3"
 },
 {
 "trk": [
@@ -5896,7 +5896,7 @@
 ],
 "w": 150000,
 "layer": "B.Cu",
-"net": "ESP_ON_SW"
+"net": "CFG1_3V3"
 },
 {
 "trk": [
@@ -5907,7 +5907,7 @@
 ],
 "w": 150000,
 "layer": "In2.Cu",
-"net": "ESP_ON_SW"
+"net": "CFG1_3V3"
 },
 {
 "trk": [
@@ -5918,7 +5918,7 @@
 ],
 "w": 150000,
 "layer": "In2.Cu",
-"net": "ESP_ON_SW"
+"net": "CFG1_3V3"
 },
 {
 "trk": [
@@ -5929,7 +5929,7 @@
 ],
 "w": 150000,
 "layer": "In2.Cu",
-"net": "ESP_ON_SW"
+"net": "CFG1_3V3"
 },
 {
 "trk": [
@@ -5940,7 +5940,7 @@
 ],
 "w": 150000,
 "layer": "In3.Cu",
-"net": "ESP_ON_SW"
+"net": "CFG1_3V3"
 },
 {
 "trk": [
@@ -5951,7 +5951,7 @@
 ],
 "w": 150000,
 "layer": "In3.Cu",
-"net": "ESP_ON_SW"
+"net": "CFG1_3V3"
 },
 {
 "trk": [
@@ -5962,7 +5962,7 @@
 ],
 "w": 150000,
 "layer": "In3.Cu",
-"net": "ESP_ON_SW"
+"net": "CFG1_3V3"
 },
 {
 "trk": [
@@ -5973,7 +5973,7 @@
 ],
 "w": 150000,
 "layer": "In3.Cu",
-"net": "ESP_ON_SW"
+"net": "CFG1_3V3"
 },
 {
 "trk": [
@@ -5984,7 +5984,7 @@
 ],
 "w": 150000,
 "layer": "In3.Cu",
-"net": "ESP_ON_SW"
+"net": "CFG1_3V3"
 },
 {
 "trk": [
@@ -5995,7 +5995,7 @@
 ],
 "w": 150000,
 "layer": "In3.Cu",
-"net": "ESP_ON_SW"
+"net": "CFG1_3V3"
 },
 {
 "trk": [
@@ -6006,7 +6006,7 @@
 ],
 "w": 150000,
 "layer": "In3.Cu",
-"net": "ESP_ON_SW"
+"net": "CFG1_3V3"
 },
 {
 "trk": [
@@ -6017,7 +6017,7 @@
 ],
 "w": 150000,
 "layer": "In3.Cu",
-"net": "ESP_ON_SW"
+"net": "CFG1_3V3"
 },
 {
 "trk": [
@@ -6028,7 +6028,7 @@
 ],
 "w": 150000,
 "layer": "In3.Cu",
-"net": "ESP_ON_SW"
+"net": "CFG1_3V3"
 },
 {
 "trk": [
@@ -6039,7 +6039,7 @@
 ],
 "w": 150000,
 "layer": "In3.Cu",
-"net": "ESP_ON_SW"
+"net": "CFG1_3V3"
 },
 {
 "trk": [
@@ -6050,7 +6050,7 @@
 ],
 "w": 150000,
 "layer": "In3.Cu",
-"net": "ESP_ON_SW"
+"net": "CFG1_3V3"
 },
 {
 "trk": [
@@ -31079,7 +31079,7 @@
 ],
 "w": 150000,
 "layer": "B.Cu",
-"net": "ESP_SW_ON"
+"net": "ESP_PWR_ON"
 },
 {
 "trk": [
@@ -31090,7 +31090,7 @@
 ],
 "w": 150000,
 "layer": "B.Cu",
-"net": "ESP_SW_ON"
+"net": "ESP_PWR_ON"
 },
 {
 "trk": [
@@ -31101,7 +31101,7 @@
 ],
 "w": 150000,
 "layer": "B.Cu",
-"net": "ESP_SW_ON"
+"net": "ESP_PWR_ON"
 },
 {
 "trk": [
@@ -31112,7 +31112,7 @@
 ],
 "w": 150000,
 "layer": "B.Cu",
-"net": "ESP_SW_ON"
+"net": "ESP_PWR_ON"
 },
 {
 "trk": [
@@ -31123,7 +31123,7 @@
 ],
 "w": 150000,
 "layer": "B.Cu",
-"net": "ESP_SW_ON"
+"net": "ESP_PWR_ON"
 },
 {
 "trk": [
@@ -31134,7 +31134,7 @@
 ],
 "w": 150000,
 "layer": "B.Cu",
-"net": "ESP_SW_ON"
+"net": "ESP_PWR_ON"
 },
 {
 "trk": [
@@ -31145,7 +31145,7 @@
 ],
 "w": 150000,
 "layer": "B.Cu",
-"net": "ESP_SW_ON"
+"net": "ESP_PWR_ON"
 },
 {
 "trk": [
@@ -31156,7 +31156,7 @@
 ],
 "w": 150000,
 "layer": "B.Cu",
-"net": "ESP_SW_ON"
+"net": "ESP_PWR_ON"
 },
 {
 "trk": [
@@ -31167,7 +31167,7 @@
 ],
 "w": 150000,
 "layer": "B.Cu",
-"net": "ESP_SW_ON"
+"net": "ESP_PWR_ON"
 },
 {
 "trk": [
@@ -31178,7 +31178,7 @@
 ],
 "w": 150000,
 "layer": "B.Cu",
-"net": "ESP_SW_ON"
+"net": "ESP_PWR_ON"
 },
 {
 "trk": [
@@ -31189,7 +31189,7 @@
 ],
 "w": 150000,
 "layer": "B.Cu",
-"net": "ESP_SW_ON"
+"net": "ESP_PWR_ON"
 },
 {
 "trk": [
@@ -31200,7 +31200,7 @@
 ],
 "w": 150000,
 "layer": "B.Cu",
-"net": "ESP_SW_ON"
+"net": "ESP_PWR_ON"
 },
 {
 "trk": [
@@ -31211,7 +31211,7 @@
 ],
 "w": 150000,
 "layer": "B.Cu",
-"net": "ESP_SW_ON"
+"net": "ESP_PWR_ON"
 },
 {
 "trk": [
@@ -31222,7 +31222,7 @@
 ],
 "w": 150000,
 "layer": "B.Cu",
-"net": "ESP_SW_ON"
+"net": "ESP_PWR_ON"
 },
 {
 "via": [
