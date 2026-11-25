@@ -179,8 +179,8 @@ Item {
             spacing: dp(15)
 
 
-            // 4x2 Grid - 4 buttons on top, terminal + clear on bottom.
-            // Portrait: the buttons 2x2, Clear DTCs across, the terminal below.
+            // The terminal fills the left side; Read DTCs over Clear DTCs on the right.
+            // Portrait: the two buttons side by side, the terminal below.
             GridLayout {
                 id: diagGrid
                 readonly property bool portrait: App.Spacing.isPortrait
@@ -188,20 +188,21 @@ Item {
                 readonly property real buttonRowHeight: Math.max(dp(64), height * 0.13)
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                columns: portrait ? 2 : 4
-                rows: portrait ? 4 : 2
-                rowSpacing: dp(15)
-                columnSpacing: dp(15)
-
-                // Row 1: Read DTCs, Current DTCs, Read Status, Freeze Frame
+                // Width of the button column in landscape; the terminal takes the rest
+                readonly property real buttonColumnWidth: Math.max(dp(180), width * 0.24)
+                columns: 2
+                rows: 2
+                rowSpacing: App.Spacing.overallMargin
+                columnSpacing: App.Spacing.overallMargin
 
                 // Read DTCs Button
                 Rectangle {
-                    Layout.fillWidth: true
+                    Layout.fillWidth: diagGrid.portrait
+                    Layout.preferredWidth: diagGrid.portrait ? -1 : diagGrid.buttonColumnWidth
                     Layout.fillHeight: !diagGrid.portrait
                     Layout.preferredHeight: diagGrid.portrait ? diagGrid.buttonRowHeight : -1
-                    Layout.row: diagGrid.portrait ? 0 : 0
-                    Layout.column: diagGrid.portrait ? 0 : 0
+                    Layout.row: 0
+                    Layout.column: diagGrid.portrait ? 0 : 1
                     radius: dpMin(12, 2)
                     color: mouseAreaReadDTC.pressed ? Qt.darker(accentColor, 1.2) : accentColor
 
@@ -242,156 +243,14 @@ Item {
                     }
                 }
 
-                // Read Current DTCs Button
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: !diagGrid.portrait
-                    Layout.preferredHeight: diagGrid.portrait ? diagGrid.buttonRowHeight : -1
-                    Layout.row: diagGrid.portrait ? 0 : 0
-                    Layout.column: diagGrid.portrait ? 1 : 1
-                    radius: dpMin(12, 2)
-                    color: mouseAreaReadCurrentDTC.pressed ? Qt.darker(accentColor, 1.2) : accentColor
-
-                    Column {
-                        anchors.centerIn: parent
-                        width: parent.width - dp(16)
-                        spacing: Math.min(dp(8), parent.height * 0.06)
-
-                        Text {
-                            width: parent.width
-                            horizontalAlignment: Text.AlignHCenter
-                            text: "Current DTCs"
-                            font.pixelSize: Math.min(dp(32), parent.width * 0.16, parent.parent.height * 0.34)
-                            font.bold: true
-                            font.family: obdDiagnosticsPage.globalFont
-                            color: "white"
-                            elide: Text.ElideRight
-                        }
-
-                        Text {
-                            width: parent.width
-                            horizontalAlignment: Text.AlignHCenter
-                            text: "Active this drive cycle"
-                            font.pixelSize: Math.min(dp(18), parent.width * 0.09, parent.parent.height * 0.19)
-                            font.family: obdDiagnosticsPage.globalFont
-                            color: "white"
-                            opacity: 0.8
-                            elide: Text.ElideRight
-                        }
-                    }
-
-                    MouseArea {
-                        id: mouseAreaReadCurrentDTC
-                        anchors.fill: parent
-                        onClicked: {
-                            obdDiagnosticsPage.request("Reading current DTCs...", "[SCAN] Reading current drive cycle DTCs...", function() { obdManager.readCurrentDtc() })
-                        }
-                    }
-                }
-
-                // Read Status Button
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: !diagGrid.portrait
-                    Layout.preferredHeight: diagGrid.portrait ? diagGrid.buttonRowHeight : -1
-                    Layout.row: diagGrid.portrait ? 1 : 0
-                    Layout.column: diagGrid.portrait ? 0 : 2
-                    radius: dpMin(12, 2)
-                    color: mouseAreaReadStatus.pressed ? Qt.darker(accentColor, 1.2) : accentColor
-
-                    Column {
-                        anchors.centerIn: parent
-                        width: parent.width - dp(16)
-                        spacing: Math.min(dp(8), parent.height * 0.06)
-
-                        Text {
-                            width: parent.width
-                            horizontalAlignment: Text.AlignHCenter
-                            text: "Read Status"
-                            font.pixelSize: Math.min(dp(32), parent.width * 0.16, parent.parent.height * 0.34)
-                            font.bold: true
-                            font.family: obdDiagnosticsPage.globalFont
-                            color: "white"
-                            elide: Text.ElideRight
-                        }
-
-                        Text {
-                            width: parent.width
-                            horizontalAlignment: Text.AlignHCenter
-                            text: "CEL & DTC count"
-                            font.pixelSize: Math.min(dp(18), parent.width * 0.09, parent.parent.height * 0.19)
-                            font.family: obdDiagnosticsPage.globalFont
-                            color: "white"
-                            opacity: 0.8
-                            elide: Text.ElideRight
-                        }
-                    }
-
-                    MouseArea {
-                        id: mouseAreaReadStatus
-                        anchors.fill: parent
-                        onClicked: {
-                            obdDiagnosticsPage.request("Reading vehicle status...", "[SCAN] Reading vehicle status...", function() { obdManager.readStatus() })
-                        }
-                    }
-                }
-
-                // Freeze Frame Button (row 0, column 3)
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: !diagGrid.portrait
-                    Layout.preferredHeight: diagGrid.portrait ? diagGrid.buttonRowHeight : -1
-                    Layout.row: diagGrid.portrait ? 1 : 0
-                    Layout.column: diagGrid.portrait ? 1 : 3
-                    radius: dpMin(12, 2)
-                    color: mouseAreaFreezeFrame.pressed ? Qt.darker(accentColor, 1.2) : accentColor
-
-                    Column {
-                        anchors.centerIn: parent
-                        width: parent.width - dp(16)
-                        spacing: Math.min(dp(8), parent.height * 0.06)
-
-                        Text {
-                            width: parent.width
-                            horizontalAlignment: Text.AlignHCenter
-                            text: "Freeze Frame"
-                            font.pixelSize: Math.min(dp(32), parent.width * 0.16, parent.parent.height * 0.34)
-                            font.bold: true
-                            font.family: obdDiagnosticsPage.globalFont
-                            color: "white"
-                            elide: Text.ElideRight
-                        }
-
-                        Text {
-                            width: parent.width
-                            horizontalAlignment: Text.AlignHCenter
-                            text: "Snapshot at fault"
-                            font.pixelSize: Math.min(dp(18), parent.width * 0.09, parent.parent.height * 0.19)
-                            font.family: obdDiagnosticsPage.globalFont
-                            color: "white"
-                            opacity: 0.8
-                            elide: Text.ElideRight
-                        }
-                    }
-
-                    MouseArea {
-                        id: mouseAreaFreezeFrame
-                        anchors.fill: parent
-                        onClicked: {
-                            obdDiagnosticsPage.request("Reading freeze frame...", "[SCAN] Reading freeze frame data...", function() { obdManager.readFreezeFrame() })
-                        }
-                    }
-                }
-
-                // Row 2: Terminal Results Panel (3 cols), Clear DTCs (1 col)
-
-                // Terminal-style Results Panel (spans 3 columns)
+                // Terminal-style Results Panel (landscape: the left side, both rows)
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    Layout.row: diagGrid.portrait ? 3 : 1
+                    Layout.row: diagGrid.portrait ? 1 : 0
                     Layout.column: 0
-                    Layout.columnSpan: diagGrid.portrait ? 2 : 3
+                    Layout.rowSpan: diagGrid.portrait ? 1 : 2
+                    Layout.columnSpan: diagGrid.portrait ? 2 : 1
                     radius: dpMin(12, 2)
                     color: "#1a1a1a"
                     border.color: "#333333"
@@ -591,14 +450,14 @@ Item {
                     }
                 }
 
-                // Clear DTCs Button (row 1, column 3 - bottom right; portrait: full width under the buttons)
+                // Clear DTCs Button (bottom right; portrait: beside Read DTCs)
                 Rectangle {
-                    Layout.fillWidth: true
+                    Layout.fillWidth: diagGrid.portrait
+                    Layout.preferredWidth: diagGrid.portrait ? -1 : diagGrid.buttonColumnWidth
                     Layout.fillHeight: !diagGrid.portrait
                     Layout.preferredHeight: diagGrid.portrait ? diagGrid.buttonRowHeight : -1
-                    Layout.row: diagGrid.portrait ? 2 : 1
-                    Layout.column: diagGrid.portrait ? 0 : 3
-                    Layout.columnSpan: diagGrid.portrait ? 2 : 1
+                    Layout.row: diagGrid.portrait ? 0 : 1
+                    Layout.column: 1
                     radius: dpMin(12, 2)
                     color: mouseAreaClearDTC.pressed ? Qt.darker("#CC0000", 1.2) : "#CC0000"
 
