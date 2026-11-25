@@ -31,8 +31,8 @@ gy0 = gy - 20
 TOP = [("GPS  L80-R\n(antenna on top)", 19, gy - 6, 3), ("IMU", 40.5, 8.5 + gy0, 30), ("supercap\n(hand-fit)", 47, 6 + gy0, 36),
        ("BENCH header\n(not fitted)", 62, 2, 47), ("LoRa + Bluetooth  RAK4630\n(antennas: two IPEX on module)", 68, 12, 60)]
 BOT = [("GPS power switch\n+ backup diode", 40, 22 + gy0, 8), ("SWD", 40.3, L.H - 3, 23), ("Qwiic", 48.6, L.H - 2, 28),
-       ("12 V in: TVS,\nfuse, diode", 54, 31.5, 34), ("VIN / UART cable\nVIN, TX, RX, GND", 58, L.H - 2, 46),
-       ("USB-C", 69, L.H - 1.5, 60), ("3V3 regulator\n(40 V input)", 84, 33, 67), ("PAIR, RESET;\nLEDs above", 85.5, 27, 78),
+       ("12 V in: TVS, fuse,\ndiode; RS-485", 54, 31.5, 33), ("pod bus (J1)\nVIN, A, B, GND", 58, L.H - 2, 46),
+       ("USB-C", 69, L.H - 1.5, 58), ("pod bus (J7),\nEND switch above", 82, L.H - 2, 64), ("PAIR, RESET;\nLEDs above", 85.5, 27, 77),
        ("RANGE header\n(not fitted)", 92.6, 33, 88)]
 for t, x, y, tx in TOP:
     d.text((X(tx), 10), t, font=F, fill=BLUE)

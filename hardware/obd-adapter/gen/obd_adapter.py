@@ -521,8 +521,8 @@ sn.notes = [
     "U15 LIS2DH12 on the STM32 I2C bus (0x19, SA0 high): wake-on-motion while parked (tow / break-in),",
     "crash spikes while driving. INT1 -> PC14, INT2 -> PC15 (EXTI, wake from Stop).",
     "U16 ATECC608B (0x60) on the same bus: signs the frozen OBD speed window for traffic stop evidence.",
-    "J9 panic button (hidden, on a cable): 1k series at the connector, then the ESD diode, 10k pull-up",
-    "and 100n at the pin, so a cable shorted to +12 V is limited to ~8 mA into the clamp.",
+    "J9 panic button (hidden, on a cable): 2k series at the connector, then the ESD diode, a 5.1 V zener,",
+    "100k pull-up and 100n at the pin, so a cable shorted to the battery is limited to 4.5 mA into the zener.",
     "PANIC_BTN = PC13 (WKUP2, wakes from Standby too). Closed = low.",
 ]
 U(sn, "OCTAVE:LIS2DH12", "LIS2DH12TR", "Package_LGA:LGA-12_2x2mm_P0.5mm",
@@ -536,13 +536,13 @@ C(sn, "100n", "3V3")
 d.add(sn, Part(_ref("J"), "Connector_Generic:Conn_01x02", "PANIC",
                "Connector_JST:JST_SH_SM02B-SRSS-TB_1x02-1MP_P1.00mm_Horizontal",
                {"1": "PANIC_IN", "2": "GND"}, lcsc=LCSC.get("SH2")))
-# The clamp sits behind the 1k (REVIEW 48): ahead of it, a cable shorted to +12 V put the battery
+# The clamp sits behind the series resistor (REVIEW 48): ahead of it, a cable shorted to +12 V put the battery
 # straight across a 3.3 V diode
 d.add(sn, Part(_ref("D"), "Device:D_TVS", "ESD9B3.3ST5G", "Diode_SMD:D_SOD-923",
                {"1": "PANIC_BTN", "2": "GND"}, lcsc=LCSC["ESD9B3.3"]))
 # 2k, 1206 (0.25 W): with the cable shorted to the battery it carries 4.5 mA (0.04 W) for as long as that
 # lasts, under the 5 mA at which the zener D30 is specified (5.36 V at most); at a 28 V jump start, 0.26 W.
-# A closed button reads 0.55 V against the 10k pull-up.
+# A closed button reads 0.06 V against the 100k pull-up.
 R(sn, "2k", "PANIC_IN", "PANIC_BTN", fp="Resistor_SMD:R_1206_3216Metric", lcsc_key="R2k_1206")
 R(sn, "100k", "3V3", "PANIC_BTN")     # 100k: with the cable shorted to the battery D30 sits at 5.4 V; 10k would feed 0.2 mA into a parked 3V3 rail
 C(sn, "100n", "PANIC_BTN")

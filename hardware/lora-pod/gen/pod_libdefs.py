@@ -41,7 +41,7 @@ def symbols():
                     (10, "NC", NC), (11, "NC", NC)],
                    footprint="Package_LGA:LGA-14_3x2.5mm_P0.5mm_LayoutBorder3x4y",
                    desc="Automotive 6-axis IMU, I2C / SPI")
-    return [s for s in libdefs.SYMBOLS if str(s[1]).strip('"') == "TPS22918"] + [rak, ldo, asm]
+    return [s for s in libdefs.SYMBOLS if str(s[1]).strip('"') in ("TPS22918", "RS485_HD")] + [rak, ldo, asm]
 
 
 def rak4630_footprint(path):

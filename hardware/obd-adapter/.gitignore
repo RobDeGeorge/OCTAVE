@@ -12,3 +12,5 @@ verify/pins/*.xml
 ~*.lck
 # precheck.py scratch board
 obd-adapter-pre.*
+# scratch caches from the routing scripts
+gen/*.pkl

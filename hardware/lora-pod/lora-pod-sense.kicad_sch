@@ -2240,7 +2240,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "109e192d-545e-5e53-b794-2af6c353999b")
-		(property "Reference" "#PWR036"
+		(property "Reference" "#PWR038"
 			(at 20.32 30.48 0)
 			(hide yes)
 			(effects
@@ -2290,7 +2290,7 @@
 		(instances
 			(project "lora-pod"
 				(path "/c8085f09-0d89-59ec-b963-f77ec23732fa/3bdb105c-b8e7-5df2-8772-bab562058b9d"
-					(reference "#PWR036")
+					(reference "#PWR038")
 					(unit 1)
 				)
 			)
@@ -3020,7 +3020,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "e9eae882-6fa2-50ef-b728-ab43a9cf98a9")
-		(property "Reference" "#PWR037"
+		(property "Reference" "#PWR039"
 			(at 31.75 132.08 0)
 			(hide yes)
 			(effects
@@ -3070,7 +3070,7 @@
 		(instances
 			(project "lora-pod"
 				(path "/c8085f09-0d89-59ec-b963-f77ec23732fa/3bdb105c-b8e7-5df2-8772-bab562058b9d"
-					(reference "#PWR037")
+					(reference "#PWR039")
 					(unit 1)
 				)
 			)
@@ -3085,7 +3085,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "1d146002-9270-5657-81e4-d618851c02b5")
-		(property "Reference" "#PWR038"
+		(property "Reference" "#PWR040"
 			(at 39.37 132.08 0)
 			(hide yes)
 			(effects
@@ -3135,7 +3135,7 @@
 		(instances
 			(project "lora-pod"
 				(path "/c8085f09-0d89-59ec-b963-f77ec23732fa/3bdb105c-b8e7-5df2-8772-bab562058b9d"
-					(reference "#PWR038")
+					(reference "#PWR040")
 					(unit 1)
 				)
 			)
@@ -3247,7 +3247,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "418ff5fb-9719-5f29-807b-07456c28175e")
-		(property "Reference" "#PWR039"
+		(property "Reference" "#PWR041"
 			(at 90.17 132.08 0)
 			(hide yes)
 			(effects
@@ -3297,7 +3297,7 @@
 		(instances
 			(project "lora-pod"
 				(path "/c8085f09-0d89-59ec-b963-f77ec23732fa/3bdb105c-b8e7-5df2-8772-bab562058b9d"
-					(reference "#PWR039")
+					(reference "#PWR041")
 					(unit 1)
 				)
 			)
@@ -3409,7 +3409,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "d01195e7-2783-5961-ae2d-d3f9d0e0f43e")
-		(property "Reference" "#PWR040"
+		(property "Reference" "#PWR042"
 			(at 138.43 129.54 0)
 			(hide yes)
 			(effects
@@ -3459,7 +3459,7 @@
 		(instances
 			(project "lora-pod"
 				(path "/c8085f09-0d89-59ec-b963-f77ec23732fa/3bdb105c-b8e7-5df2-8772-bab562058b9d"
-					(reference "#PWR040")
+					(reference "#PWR042")
 					(unit 1)
 				)
 			)
@@ -3550,7 +3550,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "c38d2a23-e00c-59e2-aa24-d7b0bdf083ae")
-		(property "Reference" "#PWR041"
+		(property "Reference" "#PWR043"
 			(at 179.07 132.08 0)
 			(hide yes)
 			(effects
@@ -3600,7 +3600,7 @@
 		(instances
 			(project "lora-pod"
 				(path "/c8085f09-0d89-59ec-b963-f77ec23732fa/3bdb105c-b8e7-5df2-8772-bab562058b9d"
-					(reference "#PWR041")
+					(reference "#PWR043")
 					(unit 1)
 				)
 			)
@@ -3615,7 +3615,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "d66f282a-86b3-5ae9-b448-d43160110b08")
-		(property "Reference" "#PWR042"
+		(property "Reference" "#PWR044"
 			(at 186.69 132.08 0)
 			(hide yes)
 			(effects
@@ -3665,7 +3665,7 @@
 		(instances
 			(project "lora-pod"
 				(path "/c8085f09-0d89-59ec-b963-f77ec23732fa/3bdb105c-b8e7-5df2-8772-bab562058b9d"
-					(reference "#PWR042")
+					(reference "#PWR044")
 					(unit 1)
 				)
 			)
@@ -3756,7 +3756,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "6ef935ef-3f8b-53ce-94ca-63bdfaf6475e")
-		(property "Reference" "#PWR043"
+		(property "Reference" "#PWR045"
 			(at 224.79 132.08 0)
 			(hide yes)
 			(effects
@@ -3806,7 +3806,7 @@
 		(instances
 			(project "lora-pod"
 				(path "/c8085f09-0d89-59ec-b963-f77ec23732fa/3bdb105c-b8e7-5df2-8772-bab562058b9d"
-					(reference "#PWR043")
+					(reference "#PWR045")
 					(unit 1)
 				)
 			)
@@ -3821,7 +3821,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "ee3c751c-5a44-5897-9ef1-96b7736ce008")
-		(property "Reference" "#PWR044"
+		(property "Reference" "#PWR046"
 			(at 232.41 132.08 0)
 			(hide yes)
 			(effects
@@ -3871,7 +3871,7 @@
 		(instances
 			(project "lora-pod"
 				(path "/c8085f09-0d89-59ec-b963-f77ec23732fa/3bdb105c-b8e7-5df2-8772-bab562058b9d"
-					(reference "#PWR044")
+					(reference "#PWR046")
 					(unit 1)
 				)
 			)
@@ -4219,7 +4219,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "100d1262-d4d0-5b0c-8df7-fa3663103836")
-		(property "Reference" "#PWR045"
+		(property "Reference" "#PWR047"
 			(at 138.43 149.86 0)
 			(hide yes)
 			(effects
@@ -4269,7 +4269,7 @@
 		(instances
 			(project "lora-pod"
 				(path "/c8085f09-0d89-59ec-b963-f77ec23732fa/3bdb105c-b8e7-5df2-8772-bab562058b9d"
-					(reference "#PWR045")
+					(reference "#PWR047")
 					(unit 1)
 				)
 			)
@@ -4499,7 +4499,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "60e0e26d-8bfa-55c5-a9eb-6a854610222e")
-		(property "Reference" "#PWR046"
+		(property "Reference" "#PWR048"
 			(at 229.87 144.78 0)
 			(hide yes)
 			(effects
@@ -4549,7 +4549,7 @@
 		(instances
 			(project "lora-pod"
 				(path "/c8085f09-0d89-59ec-b963-f77ec23732fa/3bdb105c-b8e7-5df2-8772-bab562058b9d"
-					(reference "#PWR046")
+					(reference "#PWR048")
 					(unit 1)
 				)
 			)
@@ -4661,7 +4661,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "e0298fd1-462d-5537-9038-96b30ff77c19")
-		(property "Reference" "#PWR047"
+		(property "Reference" "#PWR049"
 			(at 41.91 162.56 0)
 			(hide yes)
 			(effects
@@ -4711,7 +4711,7 @@
 		(instances
 			(project "lora-pod"
 				(path "/c8085f09-0d89-59ec-b963-f77ec23732fa/3bdb105c-b8e7-5df2-8772-bab562058b9d"
-					(reference "#PWR047")
+					(reference "#PWR049")
 					(unit 1)
 				)
 			)
@@ -5550,7 +5550,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "bace6350-c0c6-58cf-a1ce-d8b8e68e0e89")
-		(property "Reference" "#PWR048"
+		(property "Reference" "#PWR050"
 			(at 31.75 241.3 0)
 			(hide yes)
 			(effects
@@ -5600,7 +5600,7 @@
 		(instances
 			(project "lora-pod"
 				(path "/c8085f09-0d89-59ec-b963-f77ec23732fa/3bdb105c-b8e7-5df2-8772-bab562058b9d"
-					(reference "#PWR048")
+					(reference "#PWR050")
 					(unit 1)
 				)
 			)
@@ -5615,7 +5615,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "ef4f8453-381b-5456-a348-3bd32bc0b2b7")
-		(property "Reference" "#PWR049"
+		(property "Reference" "#PWR051"
 			(at 39.37 241.3 0)
 			(hide yes)
 			(effects
@@ -5665,7 +5665,7 @@
 		(instances
 			(project "lora-pod"
 				(path "/c8085f09-0d89-59ec-b963-f77ec23732fa/3bdb105c-b8e7-5df2-8772-bab562058b9d"
-					(reference "#PWR049")
+					(reference "#PWR051")
 					(unit 1)
 				)
 			)
@@ -5756,7 +5756,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "2e6138f1-e0b6-5fd1-8c8a-0e0aea7e08a6")
-		(property "Reference" "#PWR050"
+		(property "Reference" "#PWR052"
 			(at 62.23 241.3 0)
 			(hide yes)
 			(effects
@@ -5806,7 +5806,7 @@
 		(instances
 			(project "lora-pod"
 				(path "/c8085f09-0d89-59ec-b963-f77ec23732fa/3bdb105c-b8e7-5df2-8772-bab562058b9d"
-					(reference "#PWR050")
+					(reference "#PWR052")
 					(unit 1)
 				)
 			)
@@ -5821,7 +5821,7 @@
 		(on_board yes)
 		(dnp no)
 		(uuid "b847cf0d-e5be-5e60-baef-1a75e80ecc87")
-		(property "Reference" "#PWR051"
+		(property "Reference" "#PWR053"
 			(at 69.85 241.3 0)
 			(hide yes)
 			(effects
@@ -5871,7 +5871,7 @@
 		(instances
 			(project "lora-pod"
 				(path "/c8085f09-0d89-59ec-b963-f77ec23732fa/3bdb105c-b8e7-5df2-8772-bab562058b9d"
-					(reference "#PWR051")
+					(reference "#PWR053")
 					(unit 1)
 				)
 			)

@@ -328,9 +328,13 @@ class Drawing:
         cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
         vis = [part.ref, part.value]
         f = pl.fields
-        if f == "auto":
+        if isinstance(f, tuple):    # ("at", x, y): the reference there, the value under it
+            spots = [(f[1], f[2]), (f[1], f[2] + 2.54)]
+        elif f == "auto":
             f = "above" if (x1 - x0) > (y1 - y0) and len(sym.unit_pins(pl.unit)) <= 2 else "right"
-        if f == "above":            # ref over the body, value under it
+        if isinstance(f, tuple):
+            pass
+        elif f == "above":            # ref over the body, value under it
             spots = [(cx, y0 - 1.6), (cx, y1 + 1.6)]
         elif f == "below":
             spots = [(cx, y1 + 1.6), (cx, y1 + 1.6 + 2.54)]
@@ -536,7 +540,7 @@ def power_page(D, design):
     d7 = D.part(ref("SS34", 1), xd7, ROW2 + 3.81, rot=270, fields="right")
     D.wire(d7["A"], (xd7, ROW2 + 12.7))
     D.label((xd7, ROW2 + 12.7), "VBUS", "down")
-    D.text("(from the STM32's USB-C)", xd7 - 8.89, ROW2 + 22.86)
+    D.text("(from the USB-C socket)", xd7 - 8.89, ROW2 + 22.86)
     xtp2 = hang_row([ref("10u", 1), ref("10u", 2)], xd7 + 17.78, ROW2)
     D.part(ref("5V"), xtp2, ROW2, fields="top")
     u8 = D.part(ref("AP2114H-3.3"), xtp2 + 17.78, ROW2, fields="top")
@@ -870,10 +874,463 @@ def iso_page(D, design):
     notes(D, design, "dlcsw", 210.82, 33.02)
 
 
+def _between(design, a, b):
+    """The two-pin part whose pin 1 is on net a and pin 2 on net b."""
+    hits = [p.ref for p in design.parts if p.pin_net() == {"1": a, "2": b}]
+    if len(hits) != 1:
+        raise KeyError(f"two-pin part {a} -> {b}: {hits}")
+    return hits[0]
+
+
+def _tie(D, pts, net, away):
+    """Pins side by side on one net: each a short stub out, a bar across, one power symbol."""
+    dx, dy = DIRS[away]
+    pts = sorted(set(pts))
+    ends = [(p[0] + dx * G, p[1] + dy * G) for p in pts]
+    for a, b in zip(pts, ends):
+        D.wire(a, b)
+    if len(ends) > 1:
+        D.wire(ends[0], ends[-1])
+    D.power(ends[len(ends) // 2], net, away)
+
+
+def _pin_labels(D, u, skip=(), length=5.08):
+    """A stub and a label on every signal pin of `u` not in `skip` (rails and open pins left alone)."""
+    nets = u.part.pin_net()
+    for num in u.pins:
+        if nets[num] and nets[num] not in RAILS and num not in skip and u.pins[num][0].name not in skip:
+            D.pin_lab(u, num, length=length)
+
+
+def _decoupling(D, refs, x, y, pitch=12.7):
+    """Capacitors in a row, each between its own rail and ground."""
+    for i, r in enumerate(refs):
+        nets = D.parts[r].pin_net()
+        c = D.part(r, x + i * pitch, y, fields="right")
+        D.power(c["1"], nets["1"])
+        D.power(c["2"], nets["2"])
+    return x + len(refs) * pitch
+
+
+def stm32_page(D, design):
+    """The MCU in the middle with a label on every signal pin (they fan out to every page), its
+    crystal wired at its pins, its supply pins tied; then each small circuit drawn as a group:
+    decoupling, flash, reset / buttons / BOOT0, SWD, the RGB LED, the CONFIG switch."""
+    mcu, fl, ui = _refs(design, "mcu"), _refs(design, "flash"), _refs(design, "ui")
+    D.text("STM32G474: vehicle-side MCU, QSPI flash, SWD, buttons, LED, CONFIG switch", 20.32, 15.24, size=3, bold=True)
+    notes(D, design, "mcu", 20.32, 22.86)
+
+    X, Y = 119.38, 111.76
+    u1 = D.part(mcu("STM32G474RET6"), X, Y, fields="bottomleft")
+    _tie(D, [u1[n] for n in ("1", "16", "32", "48", "64", "29")], "3V3", "up")
+    _tie(D, [u1["15"], u1["27"]], "GND", "down")
+    v = u1["VREF+"]
+    D.wire(v, (v[0] - 5.08, v[1]))
+    D.power((v[0] - 5.08, v[1]), "3V3")
+    _pin_labels(D, u1, skip=("PF0", "PF1"))
+    # the crystal at PF0 / PF1, a load capacitor each side
+    yc = 96.52
+    y1 = D.part(mcu("16MHz"), 55.88, yc, mirror="y", fields="top")
+    D.power(y1["2"], "GND")
+    D.wire(y1["1"], (68.58, yc), (68.58, u1["PF1"][1]), u1["PF1"])
+    D.wire(y1["3"], (43.18, yc), (43.18, u1["PF0"][1]), u1["PF0"])
+    D.hang(D.find("10p", {"1": "HSE_OUT"}), (64.77, yc), fields="right")
+    D.hang(D.find("10p", {"1": "HSE_IN"}), (46.99, yc), fields="left")
+    D.name((78.74, u1["PF1"][1]), "HSE_OUT", "down", length=2.54)
+    D.name((78.74, u1["PF0"][1]), "HSE_IN", "up", length=2.54)
+
+    D.text("Decoupling: 100n at each VDD pin, 4.7u bulk, 100n + 1u at VDDA / VREF+", 25.4, 182.88, size=1.8, bold=True)
+    _decoupling(D, [mcu("100n", 0), mcu("100n", 1), mcu("100n", 2), mcu("100n", 3), mcu("4.7u"), mcu("100n", 4), mcu("1u")],
+                30.48, 200.66)
+
+    # -- flash -------------------------------------------------------------------------------
+    D.text("16 MB QSPI NOR flash: store-and-forward buffer", 177.8, 60.96, size=1.8, bold=True)
+    notes(D, design, "flash", 177.8, 66.04)
+    u3 = D.part(fl("W25Q128JVSIQ"), 231.14, 93.98, fields="right")
+    D.power(u3["VCC"], "3V3")
+    D.power(u3["GND"], "GND")
+    _pin_labels(D, u3, skip=("1",))
+    cs = u3["1"]
+    D.wire(cs, (cs[0] - 15.24, cs[1]))
+    D.label((cs[0] - 15.24, cs[1]), "QSPI_NCS", "left")
+    D.hang(fl("10k"), (cs[0] - 7.62, cs[1]), to="3V3", direction="up", first="2", fields="left")
+    _decoupling(D, [fl("100n")], 269.24, 93.98)
+
+    # -- reset, user button, BOOT0 -----------------------------------------------------------
+    D.text("Reset, user button, BOOT0", 177.8, 124.46, size=1.8, bold=True)
+    ya = 139.7
+    D.label((182.88, ya), "NRST", "left")
+    D.wire((182.88, ya), (208.28, ya))
+    D.hang(mcu("100n", 5), (195.58, ya), fields="right")
+    D.hang(ui("RESET"), (208.28, ya), fields="right")
+    D.label((233.68, ya), "BTN_USER", "left")
+    D.wire((233.68, ya), (243.84, ya))
+    D.hang(ui("USER"), (243.84, ya), fields="right")
+    yb = 180.34
+    q14 = D.part(mcu("2N7002"), 213.36, yb, fields="right")
+    D.label((182.88, yb), "BOOT0", "left")
+    D.wire((182.88, yb), q14["G"])
+    D.hang(mcu("10k"), (195.58, yb), fields="left")
+    D.power(q14["S"], "GND")
+    D.lab(q14["D"], "ESP_EN", "up", length=2.54)
+    D.text("BOOT0 high (CONFIG switch 4) also holds the ESP32 in reset", 177.8, 200.66)
+
+    # -- SWD ---------------------------------------------------------------------------------
+    D.text("SWD: 2x5 1.27 mm Cortex debug header", 289.56, 60.96, size=1.8, bold=True)
+    j1 = D.part(ui("SWD"), 307.34, 91.44, fields="topright")
+    D.power(j1["1"], "3V3")
+    _tie(D, [j1["9"], j1["3"]], "GND", "down")
+    _pin_labels(D, j1)
+
+    # -- RGB LED -----------------------------------------------------------------------------
+    D.text("RGB LED (common anode)", 289.56, 124.46, size=1.8, bold=True)
+    d1 = D.part(ui("RGB"), 345.44, 154.94, fields="top")
+    a = d1["A"]
+    D.wire(a, (a[0] + 5.08, a[1]))
+    D.power((a[0] + 5.08, a[1]), "3V3")
+    for key, col, dy, stub in (("RK", "R", -12.7, "up"), ("GK", "G", 0, "down"), ("BK", "B", 12.7, "down")):
+        k = d1[key]
+        y = k[1] + dy
+        r = D.inline(_between(design, f"LED_{col}", f"LED_{col}_K"), (k[0] - 7.62, y), "left", first="2")
+        D.wire(k, (k[0] - 2.54, k[1]), (k[0] - 2.54, y), r["2"])
+        D.name((k[0] - 5.08, y), f"LED_{col}_K", stub, length=2.54)
+        D.lab(r["1"], f"LED_{col}", "left")
+
+    # -- CONFIG switch -----------------------------------------------------------------------
+    D.text("CONFIG switch (SW6), all off in the car", 289.56, 193.04, size=1.8, bold=True)
+    notes(D, design, "ui", 177.8, 210.82)
+    sw6 = D.part(ui("CONFIG"), 335.28, 223.52, fields="top")
+    _pin_labels(D, sw6, skip=("1",))
+    D.pin_lab(sw6, "4")
+    p1 = sw6["1"]
+    D.wire(p1, (p1[0] - 17.78, p1[1]))
+    D.label((p1[0] - 17.78, p1[1]), "ESP_ON_SW", "left")
+    D.hang(_between(design, "3V3", "ESP_ON_SW"), (p1[0] - 10.16, p1[1]), to="3V3", direction="up", first="2", fields="left")
+
+
+def esp32_page(D, design):
+    """Left: the module, its enable network and the series resistors to the STM32 at its pins, its
+    power switch under it. Right: the CH340C and the two-transistor auto-reset. Bottom: the card."""
+    B = lambda a, b: _between(design, a, b)      # noqa: E731
+    esp, usb, sd = _refs(design, "esp32"), _refs(design, "espusb"), _refs(design, "sd")
+    D.text("ESP32: radio bridge, its USB serial port, microSD", 20.32, 15.24, size=3, bold=True)
+    notes(D, design, "esp32", 20.32, 22.86)
+    notes(D, design, "espusb", 215.9, 22.86)
+
+    # -- the module --------------------------------------------------------------------------
+    D.text("ESP32-WROOM-32E: Bluetooth Classic SPP + BLE + Wi-Fi", 25.4, 55.88, size=1.8, bold=True)
+    u4 = D.part(esp("ESP32-WROOM-32E-N8"), 88.9, 109.22, fields=("at", 70.0, 147.32))
+    D.power(u4["VDD"], "3V3_ESP")
+    D.power(u4["GND"], "GND")
+    en = u4["EN"]
+    r14 = D.inline(B("ESP_EN_M", "ESP_EN"), (45.72, en[1]), "left", first="2", fields="top")
+    D.wire(en, r14["2"])
+    D.lab(r14["1"], "ESP_EN_M", "left")
+    D.hang(B("3V3_ESP", "ESP_EN"), (60.96, en[1]), to="3V3_ESP", direction="up", first="2", fields="left")
+    D.hang(esp("1u", 0), (53.34, en[1]), fields="left")
+    D.name((69.85, en[1]), "ESP_EN", "up", length=2.54)
+    io0 = u4["IO0"]
+    r13 = D.inline(B("ESP_IO0_M", "ESP_IO0"), (139.7, io0[1]), "right", first="2", fields="top")
+    D.wire(io0, r13["2"])
+    D.lab(r13["1"], "ESP_IO0_M", "right")
+    D.name((132.08, io0[1]), "ESP_IO0", "up", length=2.54)
+    tx = u4["IO16"]
+    r12 = D.inline(B("MCU_TX_ESP_M", "MCU_TX_ESP"), (139.7, tx[1]), "right", first="2", fields="top")
+    D.wire(tx, r12["2"])
+    D.lab(r12["1"], "MCU_TX_ESP_M", "right")
+    D.name((132.08, tx[1]), "MCU_TX_ESP", "up", length=2.54)
+    cts = u4["IO18"]
+    r11 = D.inline(B("ESP_CTS_M", "ESP_CTS"), (139.7, cts[1]), "right", first="2", fields="below")
+    D.wire(cts, r11["2"])
+    D.lab(r11["1"], "ESP_CTS_M", "right")
+    D.name((132.08, cts[1]), "ESP_CTS", "down", length=2.54)
+    _pin_labels(D, u4, skip=("EN", "IO0", "IO16", "IO18"))
+
+    D.text("J8 (not fitted): spare pins", 157.48, 121.92, size=1.8, bold=True)
+    j8 = D.part(esp("ESP_IO"), 177.8, 142.24, fields="right")
+    for num in j8.pins:
+        D.pin_lab(j8, num)
+
+    # -- its power switch --------------------------------------------------------------------
+    D.text("Power switch: on from the STM32 (PB6), CONFIG switch 1 or USB power", 25.4, 165.1, size=1.8, bold=True)
+    u5 = D.part(esp("TPS22918"), 88.9, 190.5, fields="top")
+    vin, on, ct, vout, qod = u5["VIN"], u5["ON"], u5["CT"], u5["VOUT"], u5["QOD"]
+    D.wire(vin, (45.72, vin[1]))
+    D.power((45.72, vin[1]), "3V3")
+    D.hang(esp("1u", 1), (55.88, vin[1]), fields="left")
+    ylo = 218.44
+    D.wire(on, (68.58, on[1]), (68.58, ylo), (45.72, ylo))
+    D.hang(esp("100k", 0), (58.42, ylo), fields="left")
+    D.hang(B("ESP_SW_ON", "VBUS"), (43.18, ylo), to="VBUS", direction="up", fields="right")
+    D.wire((45.72, ylo), (38.1, ylo))
+    d26 = D.inline(B("ESP_SW_ON", "ESP_PWR_EN"), (38.1, ylo), "left", fields="above")
+    D.lab(d26["2"], "ESP_PWR_EN", "left")
+    D.name((66.04, ylo), "ESP_SW_ON", "down", length=2.54)
+    D.wire(ct, (76.2, ct[1]), (76.2, 198.12))
+    D.hang(esp("1n"), (76.2, 198.12), fields="right")
+    D.name((76.2, 195.58), "ESP_PWR_CT", "right", length=2.54)
+    D.wire(vout, (129.54, vout[1]))
+    D.wire(qod, (104.14, qod[1]), (104.14, vout[1]))
+    D.power((129.54, vout[1]), "3V3_ESP")
+    g = u5["GND"]
+    D.wire(g, (g[0] + 2.54, g[1]))
+    D.power((g[0] + 2.54, g[1]), "GND")
+    D.hang(esp("22u"), (111.76, vout[1]), fields="right")
+    D.hang(esp("100n"), (121.92, vout[1]), fields="right")
+    D.text("(22u + 100n at the module's 3V3 pin)", 106.68, 205.74)
+    # the two loose resistors
+    D.text("ESP TX idle high", 129.54, 208.28)
+    r78 = D.part(B("3V3_ESP", "ESP_TX_MCU"), 137.16, 220.98, fields="right")
+    D.power(r78["1"], "3V3_ESP")
+    D.lab(r78["2"], "ESP_TX_MCU", "down", length=2.54)
+    D.text("VBUS bleed", 154.94, 208.28)
+    r69 = D.part(usb("1k", 1), 160.02, 220.98, fields="right")
+    D.power(r69["1"], "VBUS")
+    D.power(r69["2"], "GND")
+
+    # -- USB serial and auto-reset -----------------------------------------------------------
+    D.text("USB serial: CH340C on the hub's port 2, DTR / RTS auto-reset, reset and boot buttons", 215.9, 55.88, size=1.8, bold=True)
+    u14 = D.part(usb("CH340C"), 243.84, 101.6, fields="bottomleft")
+    vcc, v3 = u14["VCC"], u14["V3"]
+    D.wire(vcc, (210.82, vcc[1]))
+    D.wire(v3, (228.6, v3[1]), (228.6, vcc[1]))
+    D.power((218.44, vcc[1]), "3V3_ESP")
+    D.hang(usb("100n"), (210.82, vcc[1]), fields="left")
+    g = u14["GND"]
+    D.wire(g, (g[0] - 2.54, g[1]))
+    D.power((g[0] - 2.54, g[1]), "GND")
+    D.pin_lab(u14, "UD+")
+    D.pin_lab(u14, "UD-")
+    D.pin_lab(u14, "RXD")
+    t = u14["TXD"]
+    r63 = D.inline(B("U2S_TXD", "ESP_RXD0"), (274.32, t[1]), "right", fields="top")
+    D.wire(t, r63["1"])
+    D.lab(r63["2"], "ESP_RXD0", "right")
+    D.name((266.7, t[1]), "U2S_TXD", "up", length=2.54)
+    dtr, rts = u14["~{DTR}"], u14["~{RTS}"]
+    yd, yr = 132.08, 160.02
+    r64 = D.inline(B("U2S_DTR", "U2S_DTR_B"), (279.4, yd), "right")
+    r65 = D.inline(B("U2S_RTS", "U2S_RTS_B"), (279.4, yr), "right")
+    D.wire(dtr, (264.16, dtr[1]), (264.16, yd), r64["1"])
+    D.wire(rts, (259.08, rts[1]), (259.08, yr), r65["1"])
+    q10 = D.part(D.find("MMBT3904", {"1": "U2S_DTR_B"}), 299.72, yd, fields="right")
+    q11 = D.part(D.find("MMBT3904", {"1": "U2S_RTS_B"}), 299.72, yr, mirror="x", fields="right")
+    D.wire(r64["2"], q10["B"])
+    D.wire(r65["2"], q11["B"])
+    e10, e11 = q10["E"], q11["E"]
+    D.wire(e10, (e10[0], 142.24), (271.78, 142.24), (271.78, yr))
+    D.wire(e11, (e11[0], 149.86), (266.7, 149.86), (266.7, yd))
+    D.name((264.16, 119.38), "U2S_DTR", "right", length=2.54)
+    D.name((259.08, 124.46), "U2S_RTS", "left", length=2.54)
+    D.name((289.56, yd), "U2S_DTR_B", "up", length=2.54)
+    D.name((289.56, yr), "U2S_RTS_B", "down", length=2.54)
+    c10, c11 = q10["C"], q11["C"]
+    D.wire(c10, (c10[0], 121.92), (345.44, 121.92))
+    D.label((345.44, 121.92), "ESP_EN", "right")
+    D.hang(usb("ESP_RST"), (335.28, 121.92), fields="right")
+    D.wire(c11, (c11[0], 170.18), (345.44, 170.18))
+    D.label((345.44, 170.18), "ESP_IO0", "right")
+    D.hang(usb("ESP_BOOT"), (335.28, 170.18), fields="right")
+
+    # -- microSD -----------------------------------------------------------------------------
+    D.text("microSD on the ESP32 (SPI): backup store for the phone's traffic stop recordings", 177.8, 190.5, size=1.8, bold=True)
+    notes(D, design, "sd", 177.8, 195.58)
+    j10 = D.part(sd("microSD"), 220.98, 228.6, fields="topright")
+    for num in j10.pins:
+        D.pin_lab(j10, num)
+    rn = D.part(sd("4x10k"), 269.24, 220.98, fields="right")
+    _tie(D, [rn[n] for n in ("5", "6", "7", "8")], "3V3_ESP", "up")
+    for n in ("1", "2", "3", "4"):
+        D.pin_lab(rn, n, length=2.54)
+    r68 = D.part(B("3V3_ESP", "SD_DAT2"), 289.56, 219.71, fields="right")
+    D.power(r68["1"], "3V3_ESP")
+    D.lab(r68["2"], "SD_DAT2", "down", length=2.54)
+    _decoupling(D, [sd("10u"), sd("100n")], 307.34, 219.71)
+
+
+def usb_page(D, design):
+    """Top left: the USB-C socket, its clamp and the hub, the data pair drawn through. Top right: the
+    expansion connectors. Bottom left: accelerometer, secure element, panic input. Bottom right: the
+    pod bus (fuse -> high-side switch -> connector, and the RS-485 transceiver)."""
+    B = lambda a, b: _between(design, a, b)      # noqa: E731
+    usb, exp, sn, pod = _refs(design, "usb"), _refs(design, "exp"), _refs(design, "sense"), _refs(design, "pod")
+    D.text("USB, expansion, parked watch, pod bus", 20.32, 15.24, size=3, bold=True)
+    notes(D, design, "usb", 20.32, 22.86)
+
+    def side_tie(pts, net, x, at_top):
+        """Pins one above the other on one net: stubs to x, a bar, a power symbol at one end."""
+        pts = sorted(pts, key=lambda q: q[1])
+        for q in pts:
+            D.wire(q, (x, q[1]))
+        D.wire((x, pts[0][1]), (x, pts[-1][1]))
+        D.power((x, pts[0][1] if at_top else pts[-1][1]), net)
+
+    # -- USB-C -> clamp -> hub ---------------------------------------------------------------
+    D.text("One USB-C behind a hub: port 3 the STM32, port 2 the ESP32's serial port", 25.4, 53.34, size=1.8, bold=True)
+    j2 = D.part(usb("USB-C"), 40.64, 91.44, fields="topleft")
+    _tie(D, [j2["SH"], j2["A1"]], "GND", "down")
+    vb = j2["A4"]
+    D.wire(vb, (88.9, vb[1]))
+    D.power((88.9, vb[1]), "VBUS")
+    D.hang(usb("10u", 0), (81.28, vb[1]), fields="right")
+    D.pin_lab(j2, "A5")
+    D.pin_lab(j2, "B5")
+    yp, ym = j2["A6"][1], j2["B6"][1]           # the rows the pair runs on: D+ over D-
+    dm_a, dm_b, dp_a, dp_b = j2["A7"], j2["B7"], j2["A6"], j2["B6"]
+    D.wire(dm_a, (60.96, dm_a[1]), (60.96, dm_b[1]), dm_b)
+    D.wire(dp_a, (60.96, dp_a[1]), (60.96, dp_b[1]), dp_b)
+    u2 = D.part(usb("USBLC6-2SC6"), 91.44, yp, fields=("at", 91.44, 109.22))
+    u18 = D.part(usb("CH334P"), 132.08, yp + 7.62, fields="bottomright")
+    D.wire((60.96, dm_a[1]), (66.04, dm_a[1]), (66.04, ym), u2["3"])        # D- steps under D+
+    D.wire((60.96, yp), u2["1"])
+    D.wire(u2["6"], u18["DPU"])
+    D.wire(u2["4"], u18["DMU"])
+    D.power(u2["5"], "3V3")
+    D.power(u2["2"], "GND")
+    D.name((109.22, yp), "USB_DP", "up", length=2.54)        # (the clamp's two pins per line: a name each side)
+    D.name((76.2, yp), "USB_DP", "up", length=2.54)
+    D.name((73.66, ym), "USB_DM", "down", length=2.54)
+    D.name((101.6, ym), "USB_DM", "down", length=2.54)
+    v5, v33 = u18["V5"], u18["VDD33"]
+    D.wire(v5, (116.84, v5[1]), (116.84, v5[1] - 5.08))
+    D.wire(v33, (116.84, v33[1]), (116.84, v5[1]))
+    D.power((116.84, v5[1] - 5.08), "3V3")
+    D.power(u18["GND"], "GND")
+    _pin_labels(D, u18, skip=("DPU", "DMU", "XI", "XO"))
+    xi, xo = u18["XI"], u18["XO"]
+    y2 = D.part(usb("12MHz"), 111.76, 129.54, fields="top")
+    D.power(y2["2"], "GND")
+    D.wire(y2["3"], (116.84, 129.54), (116.84, xo[1]), xo)
+    D.wire(y2["1"], (104.14, 129.54), (104.14, xi[1]), xi)
+    D.name((104.14, 119.38), "HUB_XI", "left", length=2.54)
+    D.name((116.84, 121.92), "HUB_XO", "right", length=2.54)
+    D.text("CC pull-downs", 60.96, 147.32)
+    for i, cc in enumerate(("USB_CC1", "USB_CC2")):
+        r = D.part(B(cc, "GND"), 66.04 + i * 12.7, 134.62, fields="right")
+        D.lab(r["1"], cc, "up", length=2.54)
+        D.power(r["2"], "GND")
+    D.text("hub decoupling", 167.64, 81.28)
+    _decoupling(D, [usb("10u", 1), usb("1u"), usb("100n")], 172.72, 96.52)
+
+    # -- expansion ---------------------------------------------------------------------------
+    D.text("Expansion: Qwiic I2C and the EXP header (not fitted)", 228.6, 53.34, size=1.8, bold=True)
+    notes(D, design, "exp", 228.6, 58.42)
+    j4 = D.part(exp("Qwiic"), 251.46, 86.36, fields="right")
+    for n in j4.pins:
+        D.pin_lab(j4, n)
+    for i, net in enumerate(("I2C_SDA", "I2C_SCL")):
+        r = D.part(B("3V3", net), 276.86 + i * 12.7, 83.82, fields="right")
+        D.power(r["1"], "3V3")
+        D.lab(r["2"], net, "down", length=2.54)
+    j5 = D.part(exp("EXP"), 330.2, 88.9, fields="top")
+    for n in j5.pins:
+        D.pin_lab(j5, n)
+    r18 = D.part(B("EXP_PA10", "GND"), 373.38, 91.44, fields="right")
+    D.lab(r18["1"], "EXP_PA10", "up", length=2.54)
+    D.power(r18["2"], "GND")
+
+    # -- accelerometer, secure element, panic input ------------------------------------------
+    D.text("Parked watch and evidence: accelerometer, secure element, panic button", 25.4, 157.48, size=1.8, bold=True)
+    notes(D, design, "sense", 25.4, 162.56)
+    u15 = D.part(sn("LIS2DH12TR"), 50.8, 208.28, fields="bottomright")
+    side_tie([u15["9"], u15["10"], u15["2"], u15["3"]], "3V3", 38.1, True)
+    side_tie([u15["5"], u15["6"], u15["7"], u15["8"]], "GND", 38.1, False)
+    _pin_labels(D, u15)
+    _decoupling(D, [sn("100n", 0), sn("10u")], 91.44, 203.2)
+    u16 = D.part(sn("ATECC608B-SSHDA-T"), 132.08, 203.2, fields=("at", 152.4, 194.31))
+    D.power(u16["VCC"], "3V3")
+    D.power(u16["GND"], "GND")
+    _pin_labels(D, u16)
+    _decoupling(D, [sn("100n", 1)], 175.26, 205.74)
+    yb = 228.6
+    j9 = D.part(sn("PANIC"), 33.02, yb, mirror="y", fields="left")
+    p1, p2 = j9["1"], j9["2"]
+    D.wire(p2, (p2[0] + 2.54, p2[1]))
+    D.power((p2[0] + 2.54, p2[1]), "GND")
+    r66 = D.inline(B("PANIC_IN", "PANIC_BTN"), (50.8, p1[1]), "right", fields="top")
+    D.wire(p1, r66["1"])
+    D.name((45.72, p1[1]), "PANIC_IN", "down", length=2.54)
+    D.wire(r66["2"], (124.46, p1[1]))
+    D.label((124.46, p1[1]), "PANIC_BTN", "right")
+    D.hang(B("3V3", "PANIC_BTN"), (66.04, p1[1]), to="3V3", direction="up", first="2", fields="right")
+    D.hang(sn("100n", 2), (76.2, p1[1]), fields="right")
+    D.hang(sn("ESD9B3.3ST5G"), (88.9, p1[1]), first="1", fields="right")
+    D.hang(sn("BZT52C5V1"), (111.76, p1[1]), first="1", fields="right")
+
+    # -- pod bus -----------------------------------------------------------------------------
+    D.text("Pod bus: fused and switched battery voltage + RS-485 for a chain of pods", 190.5, 119.38, size=1.8, bold=True)
+    notes(D, design, "pod", 190.5, 124.46)
+    yv = 187.96
+    u19 = D.part(pod("TPS27S100APWPR"), 246.38, yv + 12.7, fields="bottomright")
+    D.power((193.04, yv), "VBAT_P")
+    f2 = D.inline(pod("0.5A 60V"), (198.12, yv), "right", fields="above")
+    D.wire((193.04, yv), f2["1"])
+    D.wire(f2["2"], u19["8"])
+    for n in ("9", "10"):
+        D.wire(u19[n], (233.68, u19[n][1]))
+    D.wire((233.68, yv), (233.68, u19["10"][1]))
+    D.hang(pod("1u", 0), (215.9, yv), fields="left")
+    D.name((226.06, yv), "POD_F", "up", length=2.54)
+    for key in ("EN", "DIAG_EN", "ILIM"):
+        D.pin_lab(u19, key)
+    for n in ("2", "15"):
+        D.wire(u19[n], (233.68, u19[n][1]))
+    D.wire((233.68, u19["2"][1]), (233.68, u19["15"][1]))
+    D.power((233.68, u19["15"][1]), "GND")
+    for n in ("6", "7"):
+        D.wire(u19[n], (259.08, u19[n][1]))
+    D.wire((259.08, yv), (259.08, u19["7"][1]))
+    j11 = D.part(pod("POD BUS"), 375.92, yv + 2.54, fields="right")
+    D.wire(u19["5"], j11["1"])
+    D.hang(pod("1u", 1), (269.24, yv), fields="right")
+    D.name((284.48, yv), "POD_VIN", "up", length=2.54)
+    u17 = D.part(pod("THVD2450DR"), 320.04, 213.36, fields="top")
+    a, b = u17["A"], u17["B"]
+    D.wire(a, (360.68, a[1]), (360.68, j11["2"][1]), j11["2"])
+    D.wire(b, (335.28, b[1]), (335.28, 220.98), (365.76, 220.98), (365.76, j11["3"][1]), j11["3"])
+    r77 = D.inline(pod("120"), (345.44, a[1]), "down", fields="right")
+    D.wire(r77["2"], (345.44, 220.98))
+    D.name((353.06, a[1]), "RS485_A", "up", length=2.54)
+    D.name((355.6, 220.98), "RS485_B", "down", length=2.54)
+    g4, mp = j11["4"], j11["MP"]
+    D.wire(g4, (368.3, g4[1]), (368.3, mp[1] + 2.54), (mp[0], mp[1] + 2.54), mp)
+    D.power((mp[0], mp[1] + 2.54), "GND")
+    vc, gn = u17["VCC"], u17["GND"]
+    D.wire(vc, (332.74, vc[1]), (332.74, vc[1] - 5.08))
+    D.power((332.74, vc[1] - 5.08), "3V3")
+    D.wire(gn, (332.74, gn[1]), (332.74, gn[1] + 7.62))
+    D.power((332.74, gn[1] + 7.62), "GND")
+    for key in ("DI", "DE", "RE"):
+        D.pin_lab(u17, key)
+    ro = u17["RO"]
+    r76 = D.inline(B("RS485_RO", "EXP_RX"), (302.26, ro[1]), "left", fields="below")
+    D.wire(ro, r76["1"])
+    D.lab(r76["2"], "EXP_RX", "left")
+    D.name((306.07, ro[1]), "RS485_RO", "down", length=2.54)
+    # the loose resistors of the pod bus
+    yr = 226.06
+    r = D.part(B("POD_ILIM", "GND"), 198.12, yr, fields="right")
+    D.lab(r["1"], "POD_ILIM", "up", length=2.54)
+    D.power(r["2"], "GND")
+    r = D.part(B("EXP_PA5", "GND"), 210.82, yr, fields="right")
+    D.lab(r["1"], "EXP_PA5", "up", length=2.54)
+    D.power(r["2"], "GND")
+    r = D.part(B("3V3", "EXP_PC10"), 223.52, yr, fields="right")
+    D.power(r["1"], "3V3")
+    D.lab(r["2"], "EXP_PC10", "down", length=2.54)
+    D.label((248.92, yr), "EXP_PD2", "left")
+    r79 = D.inline(B("EXP_PD2", "POD_EN"), (264.16, yr), "right", fields="top")
+    D.wire((248.92, yr), r79["1"])
+    D.hang(B("EXP_PD2", "GND"), (256.54, yr), fields="left")
+    D.lab(r79["2"], "POD_EN", "right")
+    _decoupling(D, [pod("100n")], 386.08, 223.52)
+
+
 # the K-line receiver's input clamp sits in the J1850 block of the netlist, but reads with the K-line
 PAGE_OF = {"D18": "K-line and DLC switch"}     # ref -> page, for a part drawn away from its block's page
 SPLIT = {"U12"}         # multi-unit parts whose units are drawn on more than one page (LM2901: K-line = unit C)
 
 
 PAGES = {"Power": power_page, "Car plug and CAN": car_can_page, "J1850": j1850_page,
-         "K-line and DLC switch": iso_page}
+         "K-line and DLC switch": iso_page, "STM32": stm32_page,
+         "ESP32": esp32_page, "USB and expansion": usb_page}

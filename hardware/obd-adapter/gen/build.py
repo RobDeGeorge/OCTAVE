@@ -22,7 +22,7 @@ NAME = "obd-adapter"
 SCH = os.path.join(PROJ, NAME + ".kicad_sch")
 PCB = os.path.join(PROJ, NAME + ".kicad_pcb")
 REV = "0"
-DATE = "2026-11-02"
+DATE = "2026-11-25"
 TITLE = "OCTAVE OBD adapter (bring-up board)"
 
 

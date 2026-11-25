@@ -32,9 +32,9 @@ SHEETS = [
     ("STM32", "mcu", ["mcu", "flash", "ui"],
      "STM32G474: vehicle-side MCU, QSPI flash, SWD, buttons, LEDs, CONFIG switch"),
     ("ESP32", "esp32", ["esp32", "espusb", "sd"],
-     "ESP32 radio bridge, its own USB-C / CH340C, microSD"),
+     "ESP32 radio bridge, its USB serial port (CH340C on the hub), microSD"),
     ("USB and expansion", "usb", ["usb", "exp", "sense", "pod"],
-     "STM32 USB-C, Qwiic, expansion header; accelerometer, secure element, panic button; pod bus"),
+     "One USB-C behind a hub, Qwiic, expansion header; accelerometer, secure element, panic button; pod bus"),
 ]
 
 # nets drawn with a power symbol rather than a label
@@ -291,7 +291,7 @@ def write_root(design, path, pages, title, rev, date, comments=()):
                           ["effects", font(), ["justify", "left", "top"]],
                           ["uuid", Q(stable_uuid(design.name, "roottext", name, i))]])
 
-    def arrow(pts, label, key):
+    def arrow(pts, label, key, at=None):
         items.append(["polyline", ["pts", *[["xy", px, py] for px, py in pts]],
                       ["stroke", ["width", 0.4], ["type", "default"]], ["fill", ["type", "none"]],
                       ["uuid", Q(stable_uuid(design.name, "arrow", key))]])
@@ -302,7 +302,7 @@ def write_root(design, path, pages, title, rev, date, comments=()):
         items.append(["polyline", ["pts", *[["xy", px, py] for px, py in head]],
                       ["stroke", ["width", 0.4], ["type", "default"]], ["fill", ["type", "none"]],
                       ["uuid", Q(stable_uuid(design.name, "arrowhead", key))]])
-        mx, my = (pts[0][0] + pts[-1][0]) / 2, (pts[0][1] + pts[-1][1]) / 2
+        mx, my = at or ((pts[0][0] + pts[-1][0]) / 2, (pts[0][1] + pts[-1][1]) / 2)
         items.append(["text", Q(label), ["exclude_from_sim", "no"], ["at", mx, my - 1.5, 0],
                       ["effects", font(), ["justify", "bottom"]],
                       ["uuid", Q(stable_uuid(design.name, "arrowtext", key))]])
@@ -310,12 +310,12 @@ def write_root(design, path, pages, title, rev, date, comments=()):
     arrow([(57, 80), (57, 68)], "", "plug-power")
     items.append(["text", Q("VBAT (pin 16)"), ["exclude_from_sim", "no"], ["at", 59, 75, 0],
                   ["effects", font(), ["justify", "left"]], ["uuid", Q(stable_uuid(design.name, "t", "vbat"))]])
-    arrow([(90, 54), (102, 54), (102, 88), (115, 88)], "5V / 3V3", "power-mcu")
+    arrow([(90, 54), (102, 54), (102, 88), (115, 88)], "5V / 3V3", "power-mcu", at=(110, 66))
     arrow([(90, 94), (115, 94)], "CAN", "can-mcu")
-    arrow([(90, 129), (102, 129), (102, 100), (115, 100)], "J1850", "j1850-mcu")
-    arrow([(90, 164), (106, 164), (106, 104), (115, 104)], "K / L", "iso-mcu")
+    arrow([(90, 129), (102, 129), (102, 100), (115, 100)], "J1850", "j1850-mcu", at=(96, 128.5))
+    arrow([(90, 164), (106, 164), (106, 104), (115, 104)], "K / L", "iso-mcu", at=(98, 163.5))
     arrow([(180, 94), (200, 94)], "UART", "mcu-esp")
-    arrow([(147, 130), (147, 108)], "USB, I2C", "usb-mcu")
+    arrow([(147, 130), (147, 108)], "USB, I2C", "usb-mcu", at=(156, 121))
     items.append(["text", Q(title), ["exclude_from_sim", "no"], ["at", 25, 25, 0],
                   ["effects", font(4, True), ["justify", "left", "bottom"]],
                   ["uuid", Q(stable_uuid(design.name, "roottitle"))]])

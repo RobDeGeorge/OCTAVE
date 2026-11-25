@@ -1,9 +1,9 @@
 """OCTAVE LoRa pod, Rev 0 (bring-up board): the netlist.
 
 The dash-top half of the LoRa car finder (TODO/lora-car-finder.md, step 4): a LoRa + Bluetooth MCU
-module, a GPS module with its own patch antenna and a 6-axis IMU. It runs from 5 to 16 V on one
-four-wire connector: 5 V and a UART from the OBD adapter, or the car's battery alone through an OBD
-power lead (standalone). Run build.py to regenerate the schematic and the board.
+module, a GPS module with its own patch antenna and a 6-axis IMU. It is a pod on the OCTAVE pod bus
+(../../pod-bus/README.md): four wires, battery voltage and RS-485, in on one connector and out on
+the other to the next pod. On an OBD power lead alone (two wires) it runs standalone. Run build.py to regenerate the schematic and the board.
 Pin plan and design notes: ../README.md.
 """
 
@@ -40,17 +40,21 @@ def D(block, value, a, k, lib="Device:D_Schottky", fp="Diode_SMD:D_SOD-123", not
 
 
 # ---------------------------------------------------------------- supply and the cable
-pw = d.block("power", "Supply: 5 to 16 V on the cable (OBD adapter or the car's battery), 3.3 V LDO, UART")
+pw = d.block("power", "Pod bus: battery voltage and RS-485 in and out, input protection, 3.3 V LDO")
 pw.notes = [
-    "J1 (JST GH): 1 VIN, 2 TX (pod to adapter), 3 RX (adapter to pod), 4 GND. 3.3 V logic. Standalone: 1 and 4 only.",
-    "VIN is the adapter's 5 V or the battery (OBD pin 16): F1 0.5 A, D1 clamps load dump at 38.9 V and trips F1",
-    "on a reversed lead, D2 blocks reverse current. U1 takes 40 V and draws 2.7 uA.",
+    "J1 and J7 (JST GH) are the same four nets, pin for pin: 1 VIN, 2 RS-485 A, 3 RS-485 B, 4 GND. Either is in or out.",
+    "VIN is the battery (OBD pin 16), switched and fused by the adapter, or a 5 V bench supply. This pod's own load",
+    "goes through F1 (0.5 A); the chain's current passes J1 to J7 on the board, ahead of F1.",
+    "D1 clamps a surge at 38.9 V and trips F1 on a reversed lead, D2 blocks reverse current. U1 takes 40 V, 2.7 uA.",
     "VBAT_SENSE = VIN_F x 0.180 (1M / 220k, 10 uA at 12.6 V): the battery, and the alternator charging (engine on).",
-    "POD_RX has a 100k pull-up: with no adapter the line idles high and the UART sees nothing.",
+    "U7 THVD2450: +-70 V on A / B (a cable pinched against VIN), IEC ESD and idle-bus failsafe inside, so no TVS",
+    "and no bias resistors on the bus. RS485_DE (100k down) and RS485_RE (100k up, active low) are separate:",
+    "both idle = shutdown, under 1 uA; listening costs 1.8 mA. POD_RX has a 100k pull-up for when RO floats.",
+    "SW3 puts the 120R terminator across A / B (both poles ON): on the last pod of the chain only.",
 ]
-d.add(pw, Part(_ref("J"), "Connector_Generic_MountingPin:Conn_01x04_MountingPin", "VIN / UART",
+d.add(pw, Part(_ref("J"), "Connector_Generic_MountingPin:Conn_01x04_MountingPin", "POD BUS",
                "Connector_JST:JST_GH_SM04B-GHS-TB_1x04-1MP_P1.25mm_Horizontal",
-               {"1": "VIN", "2": "CBL_TX", "3": "CBL_RX", "4": "GND", "MP": "GND"}, lcsc=LCSC["GH4"]))
+               {"1": "VIN", "2": "RS485_A", "3": "RS485_B", "4": "GND", "MP": "GND"}, lcsc=LCSC["GH4"]))
 d.add(pw, Part(_ref("F"), "Device:Polyfuse", "0.5A 30V", "Fuse:Fuse_1206_3216Metric",
                {"1": "VIN", "2": "VIN_F"}, lcsc=LCSC["PTC"]))
 D(pw, "SMBJ24A", "GND", "VIN_F", lib="Device:D_Zener", fp="Diode_SMD:D_SMB", note="unidirectional 24 V TVS")
@@ -63,12 +67,11 @@ C(pw, "10u", "3V3")
 R(pw, "1M", "VIN_F", "VBAT_SENSE")
 R(pw, "220k", "VBAT_SENSE", "GND")
 C(pw, "100n", "VBAT_SENSE")
-R(pw, "100", "POD_TX", "CBL_TX")
-R(pw, "100", "CBL_RX", "POD_RX")
+for _gone in ("R", "R"):       # R3 / R4, D3 / D4 were the plain-UART cable's series resistors and ESD diodes:
+    _ref(_gone)                 # their numbers stay unused so that every other reference keeps its own
 R(pw, "100k", "3V3", "POD_RX")
-for net in ("CBL_TX", "CBL_RX"):
-    d.add(pw, Part(_ref("D"), "Device:D_TVS", "ESD9B3.3ST5G", "Diode_SMD:D_SOD-923",
-                   {"1": net, "2": "GND"}, lcsc=LCSC["ESD9B3.3"]))
+for _gone in ("D", "D"):
+    _ref(_gone)
 
 # ---------------------------------------------------------------- USB-C
 usb = d.block("usb", "USB-C: the module's own USB (firmware update, console) and 5 V on the bench")
@@ -91,9 +94,10 @@ mcu.notes = [
     "Antennas: the two IPEX sockets on the module (LoRa bottom right, Bluetooth top left). RF pins not connected.",
     "One 3.3 V supply: VDD_NRF, VBAT_NRF, VBAT_SX and VBAT_IO_SX together, as the datasheet's note for 3.3 V.",
     "Fast signals on the pins Nordic allows above 10 kHz: I2C P0.13 / P0.14, GPS UART P0.15 / P0.16,",
-    "cable UART P0.19 / P0.20, SPI (ranging radio header) P0.17 / P0.21 / P0.24 / P0.25.",
+    "pod bus UART P0.19 (RX) / P0.20 (TX), SPI (ranging radio header) P0.17 / P0.21 / P0.24 / P0.25.",
     "Slow ones on the low-frequency pins: PAIR button P1.01, GNSS_EN P1.02 (off at reset: 100k to GND),",
-    "LEDs P1.03 / P1.04, GPS 1PPS P0.03, IMU INT1 / INT2 P0.02 / P0.28, VBAT_SENSE P0.31 (AIN7).",
+    "LEDs P1.03 / P1.04, GPS 1PPS P0.03, IMU INT1 / INT2 P0.02 / P0.28, VBAT_SENSE P0.31 (AIN7),",
+    "RS-485 driver enable P0.30 and receiver enable (active low) P0.26.",
     "The NFC pins (P0.09 / P0.10) are not connected.",
 ]
 d.add(mcu, Part(_ref("U"), "OCTAVE:RAK4630", "RAK4630-9-SM-I", "OCTAVE:RAK4630", {
@@ -103,7 +107,7 @@ d.add(mcu, Part(_ref("U"), "OCTAVE:RAK4630", "RAK4630-9-SM-I", "OCTAVE:RAK4630",
     "GND": "GND", "RF_BT": None, "RF_LoRa": None, "17": "NRST", "SWDCLK": "SWCLK", "SWDIO": "SWDIO",
     "VBAT_SX": "3V3", "VBAT_IO_SX": "3V3", "VDD_NRF": "3V3", "VBAT_NRF": "3V3",
     "23": "SPI_MISO", "24": "SPI_NSS", "25": "BTN_PAIR", "26": "GNSS_EN", "27": "LED_G", "28": "LED_R",
-    "29": "GNSS_PPS", "30": "IMU_INT1", "31": "IMU_INT2", "32": "RANGE_IRQ", "33": "EXP_P030", "34": "EXP_P026",
+    "29": "GNSS_PPS", "30": "IMU_INT1", "31": "IMU_INT2", "32": "RANGE_IRQ", "33": "RS485_DE", "34": "RS485_RE",
     "39": "VBAT_SENSE", "40": "EXP_AIN3", "41": "EXP_AIN2",
 }, lcsc=LCSC["RAK4630"]))
 C(mcu, "100n", "3V3")
@@ -118,7 +122,8 @@ ui = d.block("ui", "Debug, buttons, LEDs, bench and ranging-radio headers")
 ui.notes = [
     "SWD: 2x5 1.27 mm Cortex debug header (ST-Link V3 / J-Link).",
     "PAIR: P1.01 to GND, internal pull-up (no resistor on the board). It opens the pairing window.",
-    "J4 (DNP, 2.54 mm): the cable's four nets for a USB-UART dongle on the bench, 3V3 and three spare pins.",
+    "J4 (DNP, 2.54 mm): the bus's four nets, 3V3, the UART behind the RS-485 driver (a 3.3 V USB-UART dongle",
+    "can drive POD_RX while RS485_RE is high) and a spare pin.",
     "J5 (DNP, 2.54 mm): SPI, an interrupt and a spare pin for a ranging radio module (UWB or 2.4 GHz LoRa); 3.3 V only.",
 ]
 d.add(ui, Part(_ref("J"), "Connector:Conn_ARM_JTAG_SWD_10", "SWD",
@@ -135,12 +140,12 @@ for color, value in (("G", "330"), ("R", "1k")):
                    {"A": led_a, "K": "GND"}, lcsc=LCSC["LED" + color]))
 d.add(ui, Part(_ref("J"), "Connector_Generic:Conn_01x08", "BENCH",
                "Connector_PinHeader_2.54mm:PinHeader_1x08_P2.54mm_Vertical",
-               {"1": "GND", "2": "VIN", "3": "CBL_RX", "4": "CBL_TX", "5": "3V3", "6": "EXP_AIN2",
-                "7": "EXP_AIN3", "8": "EXP_P026"}, dnp=True))
+               {"1": "GND", "2": "VIN", "3": "RS485_A", "4": "RS485_B", "5": "3V3", "6": "POD_TX",
+                "7": "POD_RX", "8": "EXP_AIN2"}, dnp=True))
 d.add(ui, Part(_ref("J"), "Connector_Generic:Conn_01x08", "RANGE",
                "Connector_PinHeader_2.54mm:PinHeader_1x08_P2.54mm_Vertical",
                {"1": "GND", "2": "3V3", "3": "SPI_SCK", "4": "SPI_MISO", "5": "SPI_MOSI", "6": "SPI_NSS",
-                "7": "RANGE_IRQ", "8": "EXP_P030"}, dnp=True))
+                "7": "RANGE_IRQ", "8": "EXP_AIN3"}, dnp=True))
 
 # ---------------------------------------------------------------- GPS
 gn = d.block("gnss", "GPS: Quectel L80-R with its patch antenna, switched supply, backup supply")
@@ -187,3 +192,21 @@ C(im, "100n", "3V3")
 d.add(im, Part(_ref("J"), "Connector_Generic:Conn_01x04", "Qwiic",
                "Connector_JST:JST_SH_SM04B-SRSS-TB_1x04-1MP_P1.00mm_Horizontal",
                {"1": "GND", "2": "3V3", "3": "I2C_SDA", "4": "I2C_SCL"}, lcsc=LCSC["QWIIC"]))
+
+# ---------------------------------------------------------------- pod bus: second connector, RS-485
+# (in the power block; added last so that the references above keep their numbers)
+d.add(pw, Part(_ref("J"), "Connector_Generic_MountingPin:Conn_01x04_MountingPin", "POD BUS",
+               "Connector_JST:JST_GH_SM04B-GHS-TB_1x04-1MP_P1.25mm_Horizontal",
+               {"1": "VIN", "2": "RS485_A", "3": "RS485_B", "4": "GND", "MP": "GND"}, lcsc=LCSC["GH4"]))
+d.add(pw, Part(_ref("U"), "OCTAVE:RS485_HD", "THVD2450DR",
+               "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm",
+               {"RO": "POD_RX", "RE": "RS485_RE", "DE": "RS485_DE", "DI": "POD_TX", "GND": "GND",
+                "A": "RS485_A", "B": "RS485_B", "VCC": "3V3"}, lcsc=LCSC["THVD2450"]))
+C(pw, "100n", "3V3")
+R(pw, "100k", "RS485_DE", "GND")
+R(pw, "100k", "3V3", "RS485_RE")
+d.add(pw, Part(_ref("R"), "Device:R", "120", "Resistor_SMD:R_1206_3216Metric",
+               {"1": "RS485_A", "2": "RS485_TERM"}, lcsc=LCSC["R120_1206"]))
+d.add(pw, Part(_ref("SW"), "Switch:SW_DIP_x02", "END", "Button_Switch_SMD:SW_DIP_SPSTx02_Slide_KingTek_DSHP02TS_W7.62mm_P1.27mm",
+               {"1": "RS485_TERM", "2": "RS485_TERM", "3": "RS485_B", "4": "RS485_B"}, lcsc=LCSC["DIP2"],
+               note="both ON = 120R across the bus (last pod of the chain)"))

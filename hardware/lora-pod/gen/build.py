@@ -478,7 +478,7 @@ def route():
         return board.GetConnectivity().GetUnconnectedCount(False)
 
     freeroute("freerouting.log")
-    for i in range(2):
+    for i in range(3):
         left = unrouted()
         print(f"unrouted after pass {i + 1}: {left}")
         if not left:
@@ -497,6 +497,27 @@ def route():
     board.BuildConnectivity()
     if not board.GetConnectivity().GetUnconnectedCount(False):
         freeze()
+        _drop_dangling()
+
+
+def _drop_dangling():
+    """Take the vias DRC calls dangling (stubs Freerouting leaves behind) out of the frozen routing.
+    Removing them from the loaded board crashes pcbnew, so they go from the file: rebuild with
+    `pcb` and `route` afterwards."""
+    import re
+    spots = {(round(float(x) * 1e6), round(float(y) * 1e6)) for x, y in re.findall(
+        r"\[via_dangling\][^@]*@\(([\d.]+) mm, ([\d.]+) mm\)", open(os.path.join(PROJ, "drc.rpt")).read())}
+    if not spots:
+        return
+    with open(FROZEN) as f:
+        data = json.load(f)
+    keep = [it for it in data["items"] if "via" not in it or
+            not any(abs(it["via"][0] - x) < 200 and abs(it["via"][1] - y) < 200 for x, y in spots)]
+    print(f"dangling vias taken out of gen/routing.json: {len(data['items']) - len(keep)} "
+          f"(run `pcb` and `route` again to rebuild the board without them)")
+    data["items"] = keep
+    with open(FROZEN, "w") as f:
+        json.dump(data, f, indent=0)
 
 
 def _tkey(t):

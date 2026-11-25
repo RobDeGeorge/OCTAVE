@@ -1,6 +1,6 @@
 # TODO index — easiest to hardest
 
-**Last updated:** 2026-11-24 (home-dashboard.md added)
+**Last updated:** 2026-11-24 (the OBD adapter reworked into a compact two-sided board with the pod-bus connector on it: diy-obd-adapter.md, lora-car-finder.md; home-dashboard.md added; maps.md added)
 
 One file per deferred plan. Each file opens with a one-line **Goal**, lists only the work that is left, and gives every step an **Effort** (S under an hour, M one session, L several sessions, XL a new subsystem) and the device it needs. When a plan is finished, delete its file and its row here.
 
@@ -44,6 +44,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | [user-primitives.md](user-primitives.md) | Gauge groups that move as one (composites); code widgets only behind an opt-in. Presets are done | L (code widgets XL) | desktop |
 | [open-backend.md](open-backend.md) | The contract is done (2026-10-23); left: two small service follow-ups, the hardware checks noted along the way, and the core library / process split after v1.0 road time | S; library M; split L | desktop, Pi, phone, Android |
 | [traffic-stop-mode.md](traffic-stop-mode.md) | One trigger: the phone records its cameras, texts contacts with location and uploads encrypted pieces; the Pi and the OBD adapter keep backup copies | M spikes, then L–XL | S22, ESP32 + microSD, adapter |
+| [maps.md](maps.md) | OCTAVE's own map: one `locationManager` fed by a USB GPS dongle, the phone, the pod or the device, position in the black box, a map page on Qt Location, then an offline region file and Overture landmarks | L per step (XL overall) | desktop, USB GPS dongle, Pi, S22 |
 
 ## 4. New subsystems (XL)
 
@@ -54,4 +55,4 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | [carplay-native.md](carplay-native.md) | CarPlay from an iPhone on USB with no dongle, on a user-supplied Apple identity (spike first) | M research, L spike | iPhone on USB |
 | [carlinkit-dongle-port.md](carlinkit-dongle-port.md) | CarPlay / wireless Android Auto through a Carlinkit dongle | XL | $60 dongle, iPhone |
 | [diy-obd-adapter.md](diy-obd-adapter.md) | Our own all-protocol Bluetooth OBD adapter (STM32G474 + ESP32) with native fast mode, store-and-forward, optional sensor pod | M bench steps, then L–XL hardware | Nucleo + ECU sim, Jeep |
-| [lora-car-finder.md](lora-car-finder.md) | A dash pod on the OBD adapter makes the parked car a LoRa beacon; a keychain with GNSS and a compass points at it | L–XL hardware (pod board routed, no fab files; no dev boards) | the pod and adapter boards, Jeep |
+| [lora-car-finder.md](lora-car-finder.md) | A dash pod on the OBD adapter makes the parked car a LoRa beacon; a keychain with GNSS and a compass points at it | L–XL hardware (pod board routed; the adapter reworked compact with the pod-bus connector, with fab files; none for the pod) | the pod and adapter boards, Jeep |

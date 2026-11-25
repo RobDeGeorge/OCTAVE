@@ -328,6 +328,117 @@ def _quote(board, free, quiet=False):
     return []
 
 
+SNAP = 2.4          # box edges this near each other (mm) are drawn on one line ...
+NEAR = 4.0          # ... when their tiles are no further apart than this the other way
+
+
+def _square(rects, fixed=(), obstacles=(), anchors=()):
+    """The tiles' outlines, squared up: {name: box}. Each box starts half a gap outside its tile; edges
+    of neighbouring boxes that lie within SNAP of each other along an axis move out onto one shared line
+    (between the two tiles when they face each other), as long as no box then covers another box or a
+    `fixed` rectangle (reserved areas), and the moved edge is not mostly hidden under `obstacles`."""
+    import os
+    dbg = os.environ.get("OBD_SILKDBG")
+    g = layout.GAP / 2
+    box = {n: [r[0] - g, r[1] - g, r[2] + g, r[3] + g] for n, r in rects.items()}
+
+    def blocker(n, b):
+        for o, r in list(box.items()) + [(f"#{i}", r) for i, r in enumerate(fixed)]:
+            if o != n and b[0] < r[2] - 1e-6 and r[0] < b[2] - 1e-6 and b[1] < r[3] - 1e-6 and r[1] < b[3] - 1e-6:
+                return o
+        return None
+
+    def hidden(axis, line, lo, hi):     # the share of the line from lo to hi that would not be drawn
+        n = max(1, int((hi - lo) / 0.1))
+        bad = 0
+        for i in range(n + 1):
+            v = lo + (hi - lo) * i / n
+            x, y = (line, v) if axis == 0 else (v, line)
+            bad += any(o[0] - 0.25 < x < o[2] + 0.25 and o[1] - 0.25 < y < o[3] + 0.25 for o in obstacles)
+        return bad / (n + 1)
+
+    def near(a, b, axis):       # two tiles close enough across the other axis to be read together
+        p = 1 - axis
+        return max(rects[a][p], rects[b][p]) - min(rects[a][p + 2], rects[b][p + 2]) <= NEAR
+
+    def span(c):
+        lo = max([v for v, k, _ in c if k == 1], default=None)
+        hi = min([v for v, k, _ in c if k == -1], default=None)
+        return lo, hi
+
+    for _ in range(2):
+        for axis in (0, 1):
+            # (value, kind, name): kind -1 a low edge (the line may not go above it), +1 a high edge
+            edges = sorted([(rects[n][axis], -1, n) for n in rects] + [(rects[n][axis + 2], 1, n) for n in rects])
+            used, clusters = set(), []
+            for i, e in enumerate(edges):
+                if i in used:
+                    continue
+                c = [e]
+                used.add(i)
+                grew = True
+                while grew:         # (again after each addition: a later edge can be the link to an earlier one)
+                    grew = False
+                    for j in range(i + 1, len(edges)):
+                        f = edges[j]
+                        if f[0] - e[0] > SNAP:
+                            break
+                        if j in used or not any(near(f[2], m[2], axis) for m in c):
+                            continue
+                        lo, hi = span(c + [f])
+                        if lo is None or hi is None or hi - lo >= 2 * g - 1e-6:
+                            c.append(f)
+                            used.add(j)
+                            grew = True
+                clusters.append(c)
+            for c in clusters:
+                if len({n for _, _, n in c}) < 2:
+                    continue
+                lo, hi = span(c)
+                line = hi - g if lo is None else lo + g if hi is None else (lo + hi) / 2
+                before, on = {n: list(box[n]) for _, _, n in c}, set()
+                for _v, k, n in sorted(c, key=lambda e: abs(e[0] - line)):
+                    if abs(box[n][axis if k == -1 else axis + 2] - line) < 1e-6:
+                        on.add((k, n))
+                    b = list(box[n])
+                    i = axis if k == -1 else axis + 2
+                    if (k == -1 and line >= b[i] - 1e-6) or (k == 1 and line <= b[i] + 1e-6):
+                        continue        # never inwards
+                    b[i] = line
+                    why = blocker(n, b)
+                    if not why and not 0.5 <= line <= (_W if axis == 0 else _H) - 0.5:
+                        why = "the board edge"
+                    if not why and hidden(axis, line, b[1 - axis], b[3 - axis]) > 0.3:
+                        why = "parts under the line"
+                    if why:
+                        if dbg:
+                            print(f"square: {n} {'xy'[axis]}{'-' if k < 0 else '+'} stays at {box[n][i]:.2f}, not {line:.2f}: {why}")
+                    else:
+                        box[n] = b
+                        on.add((k, n))
+                while True:     # an edge that moved keeps its place only beside a neighbour on the same line
+                    alone = [(k, n) for k, n in on if not any(m != n and near(n, m, axis) for _, m in on)]
+                    if not alone:
+                        break
+                    for k, n in alone:
+                        i = axis if k == -1 else axis + 2
+                        box[n][i] = before[n][i]
+                        on.discard((k, n))
+    for b in box.values():      # a box edge just short of a drawn rectangle's facing edge takes its line
+        for a in anchors:
+            for axis in (0, 1):
+                p = 1 - axis
+                if b[p] < a[p + 2] and a[p] < b[p + 2]:
+                    if 0 < a[axis] - b[axis + 2] <= 0.6:
+                        b[axis + 2] = a[axis]
+                    if 0 < b[axis] - a[axis + 2] <= 0.6:
+                        b[axis] = a[axis + 2]
+    if dbg:
+        for n in sorted(box):
+            print("square:", n, [round(v, 2) for v in rects[n]], "->", [round(v, 2) for v in box[n]])
+    return {n: tuple(b) for n, b in box.items()}
+
+
 def _box(o, grow=0.0):
     b = o.GetBoundingBox()
     T = pcbnew.ToMM
@@ -546,8 +657,22 @@ def apply(board, fps, design, rev):
         rows = next(tl for tl in layout.TILES if tl[0] == name)[3]
         chips = [c for c in (s.lstrip("<").partition("@")[0] for row in rows for s in row) if re.match(r"^(U|J)\d+$", c)]
         tiles.append((on_back, (x0, y0, x1, y1), t, [c for c in chips if fps[c].Reference().IsVisible()]))
-        g = layout.GAP / 2
-        fences[on_back].append([(x0 - g, y0 - g), (x1 + g, y0 - g), (x1 + g, y1 + g), (x0 - g, y1 + g), (x0 - g, y0 - g)])
+    boxes = {}
+    for on_back in (False, True):
+        side = "B" if on_back else "F"
+        mine = {n: r for n, (sd, r) in layout.TILE_RECTS.items() if sd == side}
+        keep = list((layout.RESERVED if on_back else layout.RESERVED_TOP).values())
+        if on_back:     # the wizard's patch, found with the boxes as they start: no box grows over it
+            g = layout.GAP / 2
+            w, h = wizard_size()
+            spot = _Free([b for _, b in _obstacles(fps)[pcbnew.B_SilkS]] + [_glyphs(t) for t in back]
+                         + [(r[0] - g, r[1] - g, r[2] + g, r[3] + g) for r in mine.values()]).nearest(w + 0.2, h + 0.2, WIZARD_NEAR)
+            if spot:
+                keep.append((spot[0] - 0.3, spot[1] - 0.3, spot[0] + w + 0.5, spot[1] + h + 0.5))
+        boxes[on_back] = _square(mine, keep, [b for _, b in _obstacles(fps)[pcbnew.B_SilkS if on_back else pcbnew.F_SilkS]],
+                                 [] if on_back else [layout.RESERVED_TOP["exp"]])
+        for x0, y0, x1, y1 in boxes[on_back].values():
+            fences[on_back].append([(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)])
     for on_back, rect, t, chips in tiles:
         _tile_labels(fps, on_back, rect, t, chips)
 
@@ -572,7 +697,7 @@ def apply(board, fps, design, rev):
         t.Move(pcbnew.VECTOR2I(0, pcbnew.FromMM(y + 1.75) - b.GetTop()))
     # J5: the table, in three columns of condensed letters
     x0, y0, x1, y1 = layout.RESERVED_TOP["exp"]
-    fences[False].append([(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)])
+    fences[False].append([(_CX, y0), (x1, y0), (x1, y1), (_CX, y1), (_CX, y0)])     # (its left side on the CAN tiles' line)
     put("EXP (J5)", (x0 + x1) / 2, y0 + 0.75, 0, NORMAL)
     x = x0 + 0.4
     for col in range(3):
@@ -612,9 +737,8 @@ def apply(board, fps, design, rev):
     import copy
     strict = copy.copy(free)
     strict.occ = free.occ.copy()
-    for _name, (side, rect) in layout.TILE_RECTS.items():
-        if side == "B":
-            strict.block(rect, 0.0, False)
+    for rect in boxes[True].values():
+        strict.block(rect, 0.0, False)
     strict._sum()
     words = _quote(board, strict, quiet=True) or _quote(board, free)
     for word, box in words:
