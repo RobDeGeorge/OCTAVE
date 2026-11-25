@@ -211,5 +211,11 @@ jobs:
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa  # v3
         with:
           path: _site
+      # deploy-pages asks the API for the artifact uploaded a moment ago and,
+      # run straight after the upload in the same job, sometimes does not find
+      # it yet ("No artifacts named github-pages"; actions/deploy-pages#451).
+      # It failed that way twice on 2026-11-24, so give the listing a moment.
+      - name: Let the Pages artifact be listed
+        run: sleep 30
       - id: deployment
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e  # v4
