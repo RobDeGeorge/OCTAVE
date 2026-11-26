@@ -30,6 +30,7 @@ public final class ControlMessage {
     public static final int TYPE_OCTAVE_TAKE_BACK = 101;    // leave the in-use state
     public static final int TYPE_OCTAVE_SET_BIT_RATE = 102; // video bit rate in bps (adaptive quality)
     public static final int TYPE_OCTAVE_MEDIA = 103;        // PhoneMedia: action, argument
+    public static final int TYPE_OCTAVE_END = 104;          // the client stops on purpose: release the held audio now
 
     // TYPE_OCTAVE_MEDIA actions
     public static final int MEDIA_WATCH = 0;       // arg 1 = report the phone's media session, 0 = stop

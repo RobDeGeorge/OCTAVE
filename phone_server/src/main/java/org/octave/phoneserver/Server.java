@@ -5,6 +5,7 @@ import org.octave.phoneserver.audio.AudioCodec;
 import org.octave.phoneserver.audio.AudioDirectCapture;
 import org.octave.phoneserver.audio.AudioEncoder;
 import org.octave.phoneserver.audio.AudioPlaybackCapture;
+import org.octave.phoneserver.audio.HeldAudioCapture;
 import org.octave.phoneserver.audio.AudioRawRecorder;
 import org.octave.phoneserver.audio.AudioSource;
 import org.octave.phoneserver.control.ControlChannel;
@@ -112,6 +113,10 @@ public final class Server {
             persistentCapture.setPersistent(true);
         }
         final NewDisplayCapture sharedCapture = persistentCapture;
+        // The audio capture outlives a dropped client too (for a shorter
+        // while), so the phone's music plays on through a cable pull
+        final HeldAudioCapture heldAudio = sharedCapture != null && options.getAudio()
+                ? new HeldAudioCapture(createAudioCapture(options)) : null;
         final CleanUp finalCleanUp = cleanUp;
         final Handler mainHandler = new Handler(Looper.getMainLooper());
         final Throwable[] failure = new Throwable[1];
@@ -135,7 +140,7 @@ public final class Server {
                         Ln.i("Client reconnected; resuming the existing virtual display");
                     }
                     first = false;
-                    runSession(connection, options, finalCleanUp, sharedCapture, mainHandler);
+                    runSession(connection, options, finalCleanUp, sharedCapture, heldAudio, mainHandler);
                     if (sharedCapture == null) {
                         break;
                     }
@@ -144,6 +149,9 @@ public final class Server {
             } catch (Throwable t) {
                 failure[0] = t;
             } finally {
+                if (heldAudio != null) {
+                    heldAudio.requestRelease("the server is exiting");
+                }
                 MirrorKeeper.shutdown();
                 if (sharedCapture != null) {
                     sharedCapture.destroy();
@@ -184,8 +192,16 @@ public final class Server {
     }
 
     /** One client session: returns when the client is gone (sockets closed) or a processor failed. */
+    private static AudioCapture createAudioCapture(Options options) {
+        AudioSource audioSource = options.getAudioSource();
+        if (audioSource.isDirect()) {
+            return new AudioDirectCapture(audioSource);
+        }
+        return new AudioPlaybackCapture(options.getAudioDup());
+    }
+
     private static void runSession(DesktopConnection connection, Options options, CleanUp cleanUp, NewDisplayCapture sharedCapture,
-            Handler mainHandler) throws IOException, ConfigurationException {
+            HeldAudioCapture heldAudio, Handler mainHandler) throws IOException, ConfigurationException {
         boolean control = options.getControl();
         boolean video = options.getVideo();
         boolean audio = options.getAudio();
@@ -214,13 +230,7 @@ public final class Server {
 
             if (audio) {
                 AudioCodec audioCodec = options.getAudioCodec();
-                AudioSource audioSource = options.getAudioSource();
-                AudioCapture audioCapture;
-                if (audioSource.isDirect()) {
-                    audioCapture = new AudioDirectCapture(audioSource);
-                } else {
-                    audioCapture = new AudioPlaybackCapture(options.getAudioDup());
-                }
+                AudioCapture audioCapture = heldAudio != null ? heldAudio : createAudioCapture(options);
 
                 Streamer audioStreamer = new Streamer(connection.getAudioFd(), audioCodec, options.getSendCodecMeta(), options.getSendFrameMeta());
                 AsyncProcessor audioRecorder;

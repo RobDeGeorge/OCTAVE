@@ -77,6 +77,7 @@ constexpr quint8 kMsgOctaveSetKeeper = 100;
 constexpr quint8 kMsgOctaveTakeBack = 101;
 constexpr quint8 kMsgOctaveSetBitRate = 102;   // int32 bps (adaptive quality)
 constexpr quint8 kMsgOctaveMedia = 103;        // u8 action, int64 argument (phone_server PhoneMedia)
+constexpr quint8 kMsgOctaveEnd = 104;          // deliberate stop: release the held audio now
 // Device messages (server -> client on the control socket)
 constexpr quint8 kDevMsgClipboard = 0;
 constexpr quint8 kDevMsgAckClipboard = 1;
@@ -437,6 +438,11 @@ void ScrcpyClient::setKeeper(bool enabled, bool panelDark, int graceMs)
 void ScrcpyClient::takeBack()
 {
     sendControl(QByteArray(1, char(kMsgOctaveTakeBack)));
+}
+
+void ScrcpyClient::endSession()
+{
+    sendControl(QByteArray(1, char(kMsgOctaveEnd)));
 }
 
 void ScrcpyClient::mediaCommand(int action, qint64 argument)

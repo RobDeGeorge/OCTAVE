@@ -530,6 +530,13 @@ void PhoneMirrorManager::reportError(const QString &message)
         } else if (m_hadStream) {
             m_reconnectSinceMs = now;
             setSessionState(QStringLiteral("reconnecting"));
+            // First try at once, not a poll later: the phone keeps its music
+            // playing for kReconnectGraceMs (phone_server HeldAudioCapture),
+            // and a USB phone that also has Wi-Fi debugging is reachable now
+            QTimer::singleShot(0, this, [this]() {
+                if (m_sessionState == QLatin1String("reconnecting") && !isRunning() && !m_isStarting)
+                    startScrcpy();
+            });
         } else {
             setSessionState(QStringLiteral("waitingForPhone"));
         }
@@ -623,7 +630,9 @@ void PhoneMirrorManager::updateRetryTimer()
 {
     const bool reconnecting = m_sessionState == QLatin1String("reconnecting");
     const bool waiting = m_sessionState == QLatin1String("waitingForPhone");
-    if (!m_viewActive || (!reconnecting && !waiting)) {
+    // A dropped stream reconnects wherever the user is (phone music plays on
+    // other pages too); waiting for a phone that never streamed needs a view
+    if ((!m_viewActive && !reconnecting) || (!reconnecting && !waiting)) {
         m_retryTimer.stop();
         return;
     }
@@ -653,9 +662,12 @@ void PhoneMirrorManager::onRetryTick()
 
 void PhoneMirrorManager::restartIfPhoneBack()
 {
-    if (!m_viewActive || isRunning() || m_isStarting || m_deviceState != QLatin1String("device"))
+    if (isRunning() || m_isStarting || m_deviceState != QLatin1String("device"))
         return;
-    if (m_sessionState == QLatin1String("reconnecting") || m_sessionState == QLatin1String("waitingForPhone")) {
+    const bool reconnecting = m_sessionState == QLatin1String("reconnecting");
+    if (!m_viewActive && !reconnecting)
+        return;
+    if (reconnecting || m_sessionState == QLatin1String("waitingForPhone")) {
         qCInfo(lcPhoneMirror) << "The phone is back: restarting";
         startScrcpy();
     }
@@ -1339,6 +1351,10 @@ void PhoneMirrorManager::stopScrcpy()
     if (m_client) {
         ScrcpyClient *client = m_client;
         m_client = nullptr;
+        // A stop, not a drop: the phone pauses its music now (a dropped link
+        // keeps it playing for the reconnect)
+        if (client->isRunning())
+            client->endSession();
         client->stop();
         client->deleteLater();
         killStaleServer();

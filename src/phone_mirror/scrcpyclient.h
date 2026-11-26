@@ -136,6 +136,10 @@ public:
     // panel dark, grace window for a press from the locked state
     void setKeeper(bool enabled, bool panelDark, int graceMs);
     void takeBack();
+    // Tell the server this is a deliberate stop, not a link drop: it
+    // releases the phone's audio (pausing its music) at once instead of
+    // holding it for a reconnect (phone_server HeldAudioCapture)
+    void endSession();
     // OCTAVE extension (phone_server PhoneMedia): watch / drive the phone's media session
     enum MediaAction { MediaWatch = 0, MediaPlay = 1, MediaPause = 2, MediaPlayPause = 3,
                        MediaNext = 4, MediaPrevious = 5, MediaSeek = 6 /* argument: ms */,

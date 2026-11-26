@@ -852,6 +852,25 @@ private slots:
         QCOMPARE(states.count(), 2);
     }
 
+    void dropReconnectsAtOnceWithNoViewOpen()
+    {
+        // The phone keeps its music playing through a link drop for
+        // kReconnectGraceMs (phone_server HeldAudioCapture): the reconnect
+        // must not wait for a poll, nor for a page that shows the phone
+        PhoneMirrorManager m;
+        m.m_adbPath = kFakeAdb;
+        if (!m.nativeAvailable())
+            QSKIP("built without libavcodec");
+        m.m_hadStream = true;
+        m.setSessionState(QStringLiteral("streaming"));   // on the music page: no view
+
+        m.reportError(ScrcpyClient::disconnectedMessage(USB));      // cable pulled
+        QCOMPARE(m.sessionState(), QStringLiteral("reconnecting"));
+        QVERIFY(m.m_retryTimer.isActive());                          // retries with no view
+        QTRY_VERIFY_WITH_TIMEOUT(adbCalls("devices") >= 1, PhoneMirrorManager::kReconnectPollMs / 2);
+        m.stopScrcpy();
+    }
+
     void setupErrorsFailWithoutRetrying()
     {
         PhoneMirrorManager m;

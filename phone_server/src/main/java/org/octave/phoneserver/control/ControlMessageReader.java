@@ -59,6 +59,7 @@ public class ControlMessageReader {
             case ControlMessage.TYPE_OCTAVE_SET_KEEPER:
                 return ControlMessage.createOctaveSetKeeper(dis.readBoolean(), dis.readBoolean(), dis.readInt());
             case ControlMessage.TYPE_OCTAVE_TAKE_BACK:
+            case ControlMessage.TYPE_OCTAVE_END:
                 return ControlMessage.createEmpty(type);
             case ControlMessage.TYPE_OCTAVE_SET_BIT_RATE:
                 return ControlMessage.createOctaveSetBitRate(dis.readInt());

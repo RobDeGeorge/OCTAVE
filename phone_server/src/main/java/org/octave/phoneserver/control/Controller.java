@@ -4,6 +4,7 @@ import org.octave.phoneserver.AndroidVersions;
 import org.octave.phoneserver.AsyncProcessor;
 import org.octave.phoneserver.CleanUp;
 import org.octave.phoneserver.Options;
+import org.octave.phoneserver.audio.HeldAudioCapture;
 import org.octave.phoneserver.device.Device;
 import org.octave.phoneserver.device.DeviceApp;
 import org.octave.phoneserver.device.DisplayInfo;
@@ -357,6 +358,10 @@ public class Controller implements AsyncProcessor, VirtualDisplayListener {
                     phoneMedia = new PhoneMedia(sender);
                 }
                 phoneMedia.handle(msg.getAction(), msg.getMediaArg());
+                break;
+            case ControlMessage.TYPE_OCTAVE_END:
+                // Not a link drop: pause the music now rather than hold it
+                HeldAudioCapture.endRequested();
                 break;
             default:
                 // do nothing

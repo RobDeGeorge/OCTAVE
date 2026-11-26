@@ -349,6 +349,7 @@
               <tr><td>101</td><td><code>OCTAVE_TAKE_BACK</code></td><td>none</td><td>1 B</td><td><code>resumeMirroring()</code></td></tr>
               <tr><td>102</td><td><code>OCTAVE_SET_BIT_RATE</code></td><td><code>[i32 bps]</code></td><td>5 B</td><td>Adaptive quality, from the video thread (<code>VideoBitRate.java</code>: <code>MediaCodec.setParameters</code> on the running encoder, and the rate for every encoder created later)</td></tr>
               <tr><td>103</td><td><code>OCTAVE_MEDIA</code></td><td><code>[u8 action][i64 arg]</code></td><td>10 B</td><td><code>PhoneMedia</code>: action 0 WATCH (arg 1 = on, sent on connect), 1 PLAY, 2 PAUSE, 3 PLAY_PAUSE, 4 NEXT, 5 PREVIOUS, 6 SEEK (arg = ms), 7 SKIP_TO_QUEUE_ITEM (arg = 64-bit queue ID)</td></tr>
+              <tr><td>104</td><td><code>OCTAVE_END</code></td><td>none</td><td>1 B</td><td><code>endSession()</code>, from <code>stopScrcpy()</code> just before the client stops: a deliberate stop, so the server releases the held audio capture at once (and pauses the phone's media) instead of keeping it for a reconnect (<code>HeldAudioCapture.endRequested()</code>)</td></tr>
               <tr><td>1, 3, 4, 5..9, 11..</td><td>upstream text / scroll / back-or-screen-on / clipboard / panels / UHID / start-app / reset-video</td><td>as in scrcpy 3.3.4</td><td></td><td>parsed by the server, never sent</td></tr>
             </tbody>
           </table>
@@ -627,6 +628,18 @@
               push, forward, shell) passes <code>-s</code>, since a bare <code>adb shell</code>
               fails with "more than one device". Unplugging the cable mid-session drops into the normal quiet reconnect, which then finds the
               Wi-Fi serial and carries on (attaching to the persisted virtual display).</li>
+            <li><strong>Music plays on through a cable pull</strong> (since 2026-11-25): releasing the phone's audio capture hands its media
+              back to the phone's own speaker, so the server pauses the media when it releases the capture. A dropped link used to do
+              exactly that, and nothing started the music again after the Wi-Fi reconnect. Now the server keeps the capture between
+              sessions (<code>audio/HeldAudioCapture.java</code>, created once per server next to the persistent virtual display):
+              when the client goes it keeps reading and throws the sound away for up to <code>HOLD_MS</code> (10 s, the client's
+              <code>kReconnectGraceMs</code>), which keeps the phone's speaker silent and the music playing, and the next session reads on
+              from the same capture. Only when nobody comes back in time, the client sends <code>OCTAVE_END</code> (a deliberate stop),
+              or the server exits is the capture released and the media paused. The client side of the same thing: a drop mid-stream
+              starts the first reconnect at once rather than one poll later, and the reconnect retries run whichever page is on screen
+              (the music page, say), not only while a view shows the phone. What is heard: the song carries on in the car after a short
+              gap (the reconnect plus the Wi-Fi audio cushion), having played on silently on the phone meanwhile; nothing comes out of
+              the phone. A resize restart or Stop still pauses the music as before. Not yet timed on the S26 Ultra.</li>
             <li><strong>Bit rate</strong>: automatic, with no settings since 2026-11-25. Every session adapts (see <a href="#pm-adaptive">Adaptive quality</a>):
               USB starts at 16 Mbps with a ceiling of 32 (<code>kUsbStartBps</code> / <code>kUsbMaxBps</code>), Wi-Fi at 8 with a ceiling of 20
               (<code>kWifiStartBps</code> / <code>kWifiMaxBps</code>), never under 2 (<code>kAdaptiveMinBps</code>). The rate is cut as soon as
@@ -738,7 +751,8 @@
             Phone-side failures (unplugged, offline, USB debugging not authorized, Linux USB "no permissions") get the one-line
             <code>describeDeviceState()</code> text; the error page then asks for a probe (<code>refreshDeviceState()</code>) every 2 s
             while it is on screen and restarts on <code>deviceStateChanged</code> when the phone is back -- a nudged cable in a vehicle
-            is the normal case. Failures that retrying cannot fix (the video encoder) stop the loop.</p>
+            is the normal case. A drop in the middle of a stream (<code>reconnecting</code>, the last frame held) tries again at once and
+            then every second for 10 s whether or not the phone is on screen, since the phone's music plays on meanwhile. Failures that retrying cannot fix (the video encoder) stop the loop.</p>
           <p><strong>Encoder fallback</strong>: when the server logs a video encoder error (<code>Capture/encoding error</code>,
             <code>Video encoding error</code>, <code>Could not create (default) video encoder</code>) and the session drops within 5 s,
             the manager restarts once with <code>video_encoder=c2.android.avc.encoder</code> (Google's software encoder;
