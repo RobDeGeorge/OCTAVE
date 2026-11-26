@@ -24,6 +24,7 @@
 // Self-binding widget: no paramId (WidgetCatalog supportedKinds: []).
 import QtQuick 2.15
 import QtQuick.Controls 2.15
+import QtQuick.Effects
 import QtQuick.Window
 import QtMultimedia
 import "../.." as App
@@ -156,10 +157,20 @@ Item {
 
     // ── Live ──
     Item {
+        id: liveArea
         anchors.fill: parent
         anchors.margins: 1
         visible: root.live || root._holding
         clip: true
+        // Rounded like the frame: a clip alone is square, and the picture's
+        // corners stuck out past the frame's curve
+        layer.enabled: visible && liveMask.radius > 0
+        layer.effect: MultiEffect {
+            maskEnabled: true
+            maskSource: liveMaskSource
+            maskThresholdMin: 0.5
+            maskSpreadAtMin: 1.0
+        }
 
         VideoOutput {
             id: video
@@ -215,6 +226,20 @@ Item {
                 width: root.dp(48); height: width
                 running: root._waiting
             }
+        }
+    }
+
+    // The live picture's shape: the frame's inside edge
+    Item {
+        id: liveMaskSource
+        anchors.fill: liveArea
+        visible: false
+        layer.enabled: liveArea.layer.enabled
+        Rectangle {
+            id: liveMask
+            anchors.fill: parent
+            radius: Math.max(0, frame.radius - frame.border.width)
+            antialiasing: true
         }
     }
 
