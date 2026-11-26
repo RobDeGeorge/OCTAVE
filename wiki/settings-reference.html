@@ -171,6 +171,7 @@
             <tr><td><code>lastPlayedPosition</code></td><td>lastPlayedPosition</td><td>int</td><td>0</td><td>Milliseconds</td><td>Position to resume from</td></tr>
             <tr><td><code>mediaLastSource</code></td><td>mediaLastSource</td><td>QString</td><td>"local"</td><td>local / phone / androidauto</td><td>Which source owned the music when OCTAVE last ran (written by <code>nowPlaying</code>). <code>androidauto</code> with <code>mediaLastPlaying</code> resumes Android Auto on its next connect and skips local auto-play on startup</td></tr>
             <tr><td><code>mediaLastPlaying</code></td><td>mediaLastPlaying</td><td>bool</td><td>false</td><td></td><td>Whether that source was playing</td></tr>
+            <tr><td><code>phoneMirrorUsed</code></td><td>phoneMirrorUsed</td><td>bool</td><td>false</td><td></td><td>A phone has been mirrored on this install: set by the core at the first stream (<code>src/appcore.cpp</code>), and at startup on an older install that had <code>phoneMirrorEnabled</code> on or remembers a Wi-Fi phone. Home's <code>PhoneMirrorWidget</code> starts mirroring by itself only when it is true; until then nothing runs adb before Connect Phone is pressed, so a fresh install does not start the adb server (the Windows firewall prompt, 0.9.6-rc4). No switch in Settings</td></tr>
             <tr><td><code>lastPlayedPlaylist</code></td><td>lastPlayedPlaylist</td><td>QString</td><td>""</td><td>Playlist name</td><td>Playlist active at last save</td></tr>
           </tbody>
         </table>

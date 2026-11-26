@@ -591,6 +591,7 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("customThemes")]            = QJsonObject();
     d[QStringLiteral("mediaLastSource")]         = QStringLiteral("local");  // who owned the music: local | phone | androidauto (NowPlaying)
     d[QStringLiteral("mediaLastPlaying")]        = false;    // and whether it was playing
+    d[QStringLiteral("phoneMirrorUsed")]         = false;    // a phone has been mirrored here: Home starts mirroring by itself (set in appcore.cpp)
     d[QStringLiteral("androidAutoBackend")]      = QStringLiteral("dhu");      // "dhu" | "native" (OCTAVE is the head unit)
     d[QStringLiteral("androidAutoCertPath")]     = QString();  // head-unit certificate (PEM); "" = <config>/android-auto/headunit.crt + .key
     d[QStringLiteral("androidAutoResolution")]   = QStringLiteral("1280x720"); // 800x480 | 1280x720 | 1920x1080

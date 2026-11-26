@@ -795,6 +795,10 @@ time.sleep(4)   # an exit within 3 s of starting would count as a crash
     // started adb when it closed with no phone feature ever opened; on Windows
     // that raised the firewall prompt for adb (0.9.6-rc4, N1). A start and a
     // quit may ask adb for its version and nothing else.
+    // NOTE: skipped where a bundled adb sits beside the build
+    // (tools/platform-tools/, fetched on a developer's machine), so in
+    // practice CI is where this runs: 2026-11-25, Home's phone widget began
+    // starting the session at every launch and only CI saw it.
     void startingAndQuittingRunsNoAdbCommand()
     {
 #ifndef Q_OS_UNIX
@@ -836,6 +840,33 @@ time.sleep(4)   # an exit within 3 s of starting would count as a crash
                 QVERIFY2(call == QLatin1String("version") || call == QLatin1String("--version"),
                          qPrintable(args.join(QLatin1Char(' ')) + ": adb " + call));
         }
+
+        // Home is the phone, and starts mirroring by itself: but only where a
+        // phone has been mirrored before (the phoneMirrorUsed setting, set at
+        // the first stream). The runs above were a fresh install; this one is
+        // an install that has had a phone, and it does look for it.
+        QFile settings(tmp.filePath("OCTAVE/settingsConfigure.json"));
+        QVERIFY2(settings.open(QIODevice::ReadOnly), "the runs above saved no settings");
+        QJsonObject saved = QJsonDocument::fromJson(settings.readAll()).object();
+        settings.close();
+        QCOMPARE(saved.value("phoneMirrorUsed").toBool(true), false);
+        saved.insert("phoneMirrorUsed", true);
+        QVERIFY(settings.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        settings.write(QJsonDocument(saved).toJson());
+        settings.close();
+        QFile::remove(log);
+        QProcessEnvironment e = env(tmp);
+        e.insert("PATH", bin + QLatin1Char(':') + e.value("PATH"));
+        e.insert("FAKE_ADB_LOG", log);
+        QProcess app;
+        app.setProcessEnvironment(e);
+        app.setProcessChannelMode(QProcess::MergedChannels);
+        app.start(kApp, {"--smoke"});
+        QVERIFY2(finished(app), "did not exit within 60 s");
+        QVERIFY2(app.exitStatus() == QProcess::NormalExit && app.exitCode() == 0, qPrintable(QString::fromUtf8(app.readAll()).right(3000)));
+        QFile f(log);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        QVERIFY2(f.readAll().contains("devices"), "Home did not start mirroring on an install that has had a phone");
 #endif
     }
 

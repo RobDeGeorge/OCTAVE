@@ -270,6 +270,20 @@ void AppCore::wirePhoneMirror()
     phoneMirrorManager.setPhoneScreenOff(settingsManager.get_scrcpy_phone_screen_off());
     QObject::connect(&settingsManager, &SettingsManager::scrcpyPhoneScreenOffChanged,
                      &phoneMirrorManager, &PhoneMirrorManager::setPhoneScreenOff);
+    // Home starts mirroring by itself only once a phone has been mirrored
+    // here (PhoneMirrorWidget): any adb command starts the adb server, which
+    // a start with no phone feature ever used must not do (the Windows
+    // firewall prompt, 0.9.6-rc4). Installs from before the key count as
+    // used when mirroring was switched on or a Wi-Fi phone is remembered.
+    const QString usedKey = QStringLiteral("phoneMirrorUsed");
+    if (!settingsManager.get_setting(usedKey).toBool()
+            && (settingsManager.phoneMirrorEnabled() || !settingsManager.get_scrcpy_wireless_address().isEmpty()))
+        settingsManager.save_setting(usedKey, true);
+    QObject::connect(&phoneMirrorManager, &PhoneMirrorManager::sessionStateChanged, &settingsManager, [this, usedKey] {
+        if (phoneMirrorManager.sessionState() == QLatin1String("streaming")
+                && !settingsManager.get_setting(usedKey).toBool())
+            settingsManager.save_setting(usedKey, true);
+    });
     // Phone last connected over Wi-Fi: reconnected at startup, and kept
     // current when it is paired, moves to a new port, or is forgotten
     phoneMirrorManager.setWirelessAddress(settingsManager.get_scrcpy_wireless_address());

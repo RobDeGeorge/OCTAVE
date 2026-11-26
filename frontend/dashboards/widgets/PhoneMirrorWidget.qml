@@ -58,6 +58,14 @@ Item {
     // Always on where it can run: the phoneMirrorEnabled setting ("Show in
     // Nav Bar") is not consulted since 2026-11-25
     readonly property bool _shown: visible && _available
+    // ... once a phone has been mirrored here (the phoneMirrorUsed setting,
+    // set by the core at the first stream): until then nothing runs adb
+    // before Connect Phone is pressed. Any adb command starts the adb server,
+    // and on Windows that raises a firewall prompt (tst_boot holds this)
+    function _usedBefore() {
+        return typeof settingsManager !== "undefined" && !!settingsManager
+            && settingsManager.get_setting("phoneMirrorUsed") === true
+    }
     function _userStopped() {
         var w = _window()
         return !!w && w.phoneMirrorStopped === true
@@ -75,14 +83,14 @@ Item {
         // Started once the cell has its size (Home lays out over the first
         // moments): a start at a passing size would be restarted at the
         // final one, seconds without a picture
-        if (!_userStopped() && (_session === "idle" || _session === ""))
+        if (_usedBefore() && !_userStopped() && (_session === "idle" || _session === ""))
             startDelay.restart()
     }
     Timer {
         id: startDelay
         interval: 400
         onTriggered: {
-            if (!root._shown || root._userStopped() || !(root._session === "idle" || root._session === "")) return
+            if (!root._shown || !root._usedBefore() || root._userStopped() || !(root._session === "idle" || root._session === "")) return
             root._reportSize()
             phoneMirrorManager.startScrcpy()
         }

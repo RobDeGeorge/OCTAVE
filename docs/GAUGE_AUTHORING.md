@@ -355,9 +355,12 @@ The phone's screen in a cell, in `frontend/dashboards/widgets/`. Default span
 3 × 6 (a phone is tall). While phone mirroring runs it shows the live picture
 and passes touches through to the phone. Since 2026-11-25 it is the only place
 the phone is shown (no bottom-bar button, nothing opens the full-screen
-Phone Mirror page) while the flow is worked out. With Phone Mirror on it
-starts the session itself when it comes on screen (not after the user closed
-mirroring in this run: `mainWindow.phoneMirrorStopped`), keeps the manager's
+Phone Mirror page) while the flow is worked out. Once a phone has
+been mirrored on this install (the `phoneMirrorUsed` setting, set by the core
+at the first stream) it starts the session itself when it comes on screen (not
+after the user closed mirroring in this run: `mainWindow.phoneMirrorStopped`);
+before that nothing runs adb until Connect Phone is pressed, so a fresh
+install does not start the adb server (on Windows, a firewall prompt). It keeps the manager's
 phone retries running while shown (`setViewActive`), and reports its size
 (`setViewSize`) so an "auto" virtual display is drawn to fit it. Not live it
 says why: "Connecting to your phone…", "No phone connected" with Connect Phone
