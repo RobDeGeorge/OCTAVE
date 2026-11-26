@@ -7,6 +7,7 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QSignalSpy>
+#include <QTcpServer>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QtEndian>
@@ -52,6 +53,11 @@ private slots:
         qputenv("FAKE_ADB_LOG", m_tmp.filePath("adb.log").toUtf8());
         qputenv("FAKE_ADB_DEVICES", m_tmp.filePath("devices").toUtf8());
         qputenv("FAKE_ADB_GATE", m_tmp.filePath("gate").toUtf8());
+        // Never the machine's own USB bus: a developer's phone may be plugged in
+        QVERIFY(QDir().mkpath(m_tmp.filePath("usb")));
+        qputenv("OCTAVE_USB_SYSFS", m_tmp.filePath("usb").toUtf8());
+        // ... nor its adb server, which a developer's machine usually runs
+        qputenv("ANDROID_ADB_SERVER_PORT", "1");
     }
 
     void init()
@@ -598,6 +604,159 @@ private slots:
         m.selectDevice(USB2);
         QCOMPARE(m.m_persistScid, QString());
         m.stopScrcpy();
+    }
+
+    void usbPhoneIsMadeReachableOverWifi()
+    {
+        // The cable path: a phone on USB gets its Wireless debugging turned
+        // on and is connected over Wi-Fi with no pairing
+        PhoneMirrorManager m;
+        m.m_adbPath = kFakeAdb;
+        const QString state = m_tmp.filePath("wifi-state");
+        const QString mdns = m_tmp.filePath("mdns");
+        QFile::remove(state);
+        QFile f(mdns);
+        QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        f.write("adb-R5CT1234ABC-AbCdEf\t_adb-tls-connect._tcp\t" + TCP.toUtf8() + "\n");
+        f.close();
+        qputenv("FAKE_ADB_WIFI_STATE", state.toUtf8());
+        qputenv("FAKE_ADB_MDNS", mdns.toUtf8());
+        auto restore = qScopeGuard([] {
+            for (const char *name : {"FAKE_ADB_WIFI_STATE", "FAKE_ADB_MDNS", "FAKE_ADB_WLAN_IP", "FAKE_ADB_WIFI_REFUSED"})
+                qunsetenv(name);
+        });
+
+        // A phone with no Wi-Fi is left alone
+        QCOMPARE(m.enableWirelessDebugging(USB), QString());
+        QCOMPARE(adbCalls("put"), 0);
+
+        // The setting is written, the port found over mDNS, the phone connected
+        qputenv("FAKE_ADB_WLAN_IP", "192.168.1.5");
+        QCOMPARE(m.enableWirelessDebugging(USB), TCP);
+        QCOMPARE(adbCalls("put"), 1);
+        QCOMPARE(adbCalls("connect"), 1);
+        // Already on: not written again
+        QCOMPARE(m.enableWirelessDebugging(USB), TCP);
+        QCOMPARE(adbCalls("put"), 1);
+
+        // A phone that does not keep the setting: no search, no connect
+        QFile::remove(state);
+        qputenv("FAKE_ADB_WIFI_REFUSED", "1");
+        const int searches = adbCalls("mdns");
+        QCOMPARE(m.enableWirelessDebugging(USB), QString());
+        QCOMPARE(adbCalls("mdns"), searches);
+        qunsetenv("FAKE_ADB_WIFI_REFUSED");
+
+        // From a session start: in the background, the address remembered
+        QSignalSpy remembered(&m, &PhoneMirrorManager::wirelessAddressChanged);
+        int reads = adbCalls("ip");
+        m.startWirelessDebugging(USB, 29);   // Android 10 has no Wireless debugging
+        QTest::qWait(300);
+        QCOMPARE(adbCalls("ip"), reads);
+        m.startWirelessDebugging(USB, 37);
+        QTRY_COMPARE_WITH_TIMEOUT(remembered.count(), 1, 5000);
+        QCOMPARE(m.wirelessAddress(), TCP);
+        // ... and not again for the same phone moments later (a restart for a new size)
+        reads = adbCalls("ip");
+        m.startWirelessDebugging(USB, 37);
+        QTest::qWait(300);
+        QCOMPARE(adbCalls("ip"), reads);
+        QCOMPARE(remembered.count(), 1);
+    }
+
+    void pluggingAPhoneInStartsMirroring()
+    {
+#ifndef Q_OS_LINUX
+        QSKIP("the USB look is sysfs, Linux only");
+#else
+        // Found without adb: a USB interface of class ff / 42 / 01
+        const QString usb = m_tmp.filePath("usb");
+        auto interface = [&](const QString &name, const char *cls, const char *sub, const char *proto) {
+            QVERIFY(QDir().mkpath(usb + "/" + name));
+            const QPair<const char *, const char *> files[] = {
+                {"bInterfaceClass", cls}, {"bInterfaceSubClass", sub}, {"bInterfaceProtocol", proto}};
+            for (const auto &file : files) {
+                QFile f(usb + "/" + name + "/" + file.first);
+                QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+                f.write(QByteArray(file.second) + "\n");
+            }
+        };
+        auto unplug = qScopeGuard([&] { QDir(usb).removeRecursively(); QDir().mkpath(usb); });
+        interface("1-6:1.0", "06", "01", "01");   // MTP: a phone with USB debugging off
+        QVERIFY(QDir().mkpath(usb + "/1-6"));     // the device itself
+        QVERIFY(!PhoneMirrorManager::adbInterfaceOnUsb(usb));
+
+        PhoneMirrorManager m;
+        m.m_adbPath = kFakeAdb;
+        if (!m.nativeAvailable())
+            QSKIP("built without libavcodec");
+        m.setViewActive(true);
+        QVERIFY(m.m_usbWatchTimer.isActive());
+        m.checkUsbPhone();
+        QCOMPARE(m.sessionState(), QStringLiteral("idle"));
+        QCOMPARE(adbCalls("devices"), 0);   // no adb command with no such phone
+
+        interface("1-6:1.3", "ff", "42", "01");
+        QVERIFY(PhoneMirrorManager::adbInterfaceOnUsb(usb));
+        m.checkUsbPhone();
+        QCOMPARE(m.sessionState(), QStringLiteral("starting"));
+        QTRY_COMPARE_WITH_TIMEOUT(m.sessionState(), QStringLiteral("waitingForPhone"), 5000);   // the fake adb lists none
+        // Stopped with the phone still plugged in: not started again
+        m.stopScrcpy();
+        QCOMPARE(m.sessionState(), QStringLiteral("idle"));
+        m.checkUsbPhone();
+        QCOMPARE(m.sessionState(), QStringLiteral("idle"));
+        // Unplugged and plugged in again: started
+        QDir(usb + "/1-6:1.3").removeRecursively();
+        m.checkUsbPhone();
+        interface("1-6:1.3", "ff", "42", "01");
+        m.checkUsbPhone();
+        QCOMPARE(m.sessionState(), QStringLiteral("starting"));
+        m.stopScrcpy();
+        // Hidden: no watching
+        m.setViewActive(false);
+        QVERIFY(!m.m_usbWatchTimer.isActive());
+#endif
+    }
+
+    void aRunningAdbServerStartsMirroringAtLaunch()
+    {
+        // With an adb server already up, asking it for phones starts nothing
+        // new: the first look after launch starts the session (a phone that
+        // is connected over Wi-Fi), later looks do not
+        QVERIFY(!PhoneMirrorManager::adbServerRunning());
+        QTcpServer server;
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+        qputenv("ANDROID_ADB_SERVER_PORT", QByteArray::number(server.serverPort()));
+        auto restore = qScopeGuard([] { qputenv("ANDROID_ADB_SERVER_PORT", "1"); });
+        QVERIFY(PhoneMirrorManager::adbServerRunning());
+
+        PhoneMirrorManager m;
+        m.m_adbPath = kFakeAdb;
+        if (!m.nativeAvailable())
+            QSKIP("built without libavcodec");
+        m.setViewActive(true);
+        m.checkUsbPhone();
+        QCOMPARE(m.sessionState(), QStringLiteral("starting"));
+        m.stopScrcpy();
+        m.checkUsbPhone();
+        QCOMPARE(m.sessionState(), QStringLiteral("idle"));
+
+        // No server at launch: nothing, and a server that comes up later
+        // (our own, after Connect Phone) does not start it either
+        qputenv("ANDROID_ADB_SERVER_PORT", "1");
+        QTest::qWait(300);   // the first manager's probe, if it got that far
+        const int asked = adbCalls("devices");
+        PhoneMirrorManager fresh;
+        fresh.m_adbPath = kFakeAdb;
+        fresh.setViewActive(true);
+        fresh.checkUsbPhone();
+        QCOMPARE(fresh.sessionState(), QStringLiteral("idle"));
+        qputenv("ANDROID_ADB_SERVER_PORT", QByteArray::number(server.serverPort()));
+        fresh.checkUsbPhone();
+        QCOMPARE(fresh.sessionState(), QStringLiteral("idle"));
+        QTest::qWait(300);
+        QCOMPARE(adbCalls("devices"), asked);   // adb was not asked
     }
 
     void anotherPhoneInThePersistWindowStartsFresh()

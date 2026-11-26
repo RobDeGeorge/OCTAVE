@@ -1013,6 +1013,11 @@ private:
         e.insert("QT_QPA_PLATFORM", "offscreen");
         e.insert("XDG_CONFIG_HOME", tmp.path());   // never the real settings
         e.insert("HOME", tmp.path());
+        // Never the machine's own USB bus: a phone plugged into a developer's
+        // machine starts mirroring (PhoneMirrorManager::checkUsbPhone)
+        e.insert("OCTAVE_USB_SYSFS", tmp.path() + "/no-usb");
+        // ... as does an adb server that is already running there
+        e.insert("ANDROID_ADB_SERVER_PORT", "1");
         return e;
     }
 };

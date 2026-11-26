@@ -2,7 +2,7 @@
 
 **Goal:** one Android app that links the phone to the car and does what a shell process can't: traffic stop mode, phone GPS into OCTAVE, notifications / calls / battery on the head unit, keeping the mirror connected, and the car's status while you're away. Also a first-run walkthrough for the mirror (pure QML, no app needed).
 **Status:** deferred: scoped, not started. **Decided 2026-11-07: build a separate app** (`companion/`) rather than extending `phone_server/` for these features (see "Why an app").
-**Last updated:** 2026-11-09
+**Last updated:** 2026-11-25
 
 Already shipped: adb pairing and connect over Wi-Fi in the phone mirror via QR pairing (`f100f60`), with mDNS discovery (`phonemirrormanager.cpp:1218-1274`) and a remembered phone (`wirelessAddress`). Now-playing metadata ships through `phone_server`'s `PhoneMedia.java`. No app was needed for either.
 
@@ -19,7 +19,7 @@ Nothing here blocks daily use in the Jeep. A separate app is its own product (bu
 ## Constraints
 
 - **The mirror stays on `phone_server/`.** Screen capture with no consent dialog, virtual displays and touch injection need shell privileges. MediaProjection is not worth it (consent every session on Android 14+, no virtual display, FLAG_SECURE blackout).
-- **Wireless debugging after a reboot:** most devices turn it off, and the user must turn it back on. The app can detect that and prompt; it can't toggle it.
+- **Wireless debugging after a reboot or a network change:** Android turns it off. Checked on an S26 Ultra (Android 17) on 2026-11-25: writing the global setting `adb_wifi_enabled` = 1 from the adb shell turns it back on, and adb reconnects by itself. An app can write that setting once it holds `WRITE_SECURE_SETTINGS`, which OCTAVE can grant over adb during a mirror session (`pm grant`). **Not yet proven from an installed app**, nor on a Wi-Fi network the phone has not approved for wireless debugging (the car's access point may raise Android's prompt): spike both before building step 6 on it. Also checked that day: a key approved over USB is accepted over Wi-Fi with no QR pairing, which OCTAVE now uses (the cable path, `PhoneMirrorManager::startWirelessDebugging`); and an app cannot start the QR pairing itself, only open developer options scrolled to the Wireless debugging row (`android.settings.APPLICATION_DEVELOPMENT_SETTINGS` with the extra `:settings:fragment_args_key` = `toggle_adb_wireless`).
 - **Distribution: sideload / F-Droid, not Google Play.** Play limits `SEND_SMS` to default SMS apps and scrutinises notification access, and app-store removals are a real risk for traffic stop mode (Apple pulled ICEBlock-style apps in Oct 2025). Sign with the permanent APK key from `build.yml`'s Sign APK step.
 - **Android only, minSdk 30.** iPhone background limits would gut most features; iPhones get AirPlay (`iphone-airplay.md`) and nothing more.
 

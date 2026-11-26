@@ -221,6 +221,10 @@ public:
     static constexpr int kAutoMaxSide = 1920;
     // Port a USB phone's adbd is switched to for adb over TCP (setting scrcpyAutoWifi)
     static constexpr int kTcpipPort = 5555;
+    static constexpr int kWirelessDebuggingMinSdk = 30;   // Android 11
+    // The cable path is not repeated for a phone more often than this
+    // (a session restarts for a new size, a reconnect ...)
+    static constexpr qint64 kWirelessDebuggingIntervalMs = 30000;
     static constexpr int kNewDisplayMinSdk = 30;  // Android 11
     // adb discovery: bundled platform-tools, then PATH, then common SDK
     // locations, preferring the first new enough to pair (kAdbWirelessMinTools).
@@ -426,6 +430,33 @@ private:
     QString phoneWifiAddress(const QString &serial) const;
     // Worker thread: switch a USB phone to adb over TCP; returns "ip:port", "" if not possible
     QString enableTcpip(const QString &serial) const;
+    // Worker thread: the cable path. Turn on the phone's Wireless debugging
+    // (the adb_wifi_enabled setting, written from the shell) and connect to
+    // it; returns "ip:port", "" if not possible. Needs no pairing: a key the
+    // phone approved over USB is accepted over Wi-Fi too (checked on an S26
+    // Ultra, Android 17, 2026-11-25). Android switches Wireless debugging off
+    // again by itself when the phone leaves that Wi-Fi network or restarts.
+    QString enableWirelessDebugging(const QString &serial) const;
+    // Whether a phone with USB debugging on is plugged in, found without
+    // running adb (any adb command starts the adb server): a USB interface of
+    // class ff / subclass 42 / protocol 01 under `sysfsRoot`. Linux only;
+    // false elsewhere, where the first start is Connect Phone.
+    static bool adbInterfaceOnUsb(const QString &sysfsRoot);
+    // Whether an adb server already answers on this machine (a TCP connect to
+    // its port, ANDROID_ADB_SERVER_PORT or 5037; no adb command). With one
+    // running, asking adb for phones starts nothing new, so the first look
+    // after launch may start the session: a phone already connected over
+    // Wi-Fi is then mirrored without Connect Phone, on any OS.
+    static bool adbServerRunning();
+    // Every kUsbWatchMs while a view is active: a phone that was not there at
+    // the last look starts the session, so plugging in is all it takes (also
+    // on an install that has never had a phone). A phone that stays plugged in
+    // does not start it again after a stop.
+    void checkUsbPhone();
+    static constexpr int kUsbWatchMs = 2000;
+    // GUI thread: runs enableWirelessDebugging() for a USB session in the
+    // background (the session does not wait for it) and remembers the address
+    void startWirelessDebugging(const QString &serial, int sdk);
     // Size actually requested from the server: "WxH[/dpi]", "" = phone screen
     QString requestedDisplay() const;
     void restartSession();
@@ -459,6 +490,8 @@ private:
     bool m_autoWifi = false;
     int m_currentBitRate = 0;
     bool m_tcpipChecked = false;    // the auto-Wi-Fi step ran for the session being started
+    QString m_wirelessDebugSerial;  // USB phone the cable path last ran for ...
+    qint64 m_wirelessDebugAtMs = 0; // ... and when
     bool m_staleRetried = false;    // a failed Wi-Fi start already dropped its stale ip:port and retried
     int m_startGeneration = 0;      // bumped by stopScrcpy; a pending start checks it
     bool m_restarting = false;      // restartSession's stop: the state goes to "starting", not "idle"
@@ -500,6 +533,11 @@ private:
     bool m_hadStream = false;          // streamed since the last start / give-up
     qint64 m_reconnectSinceMs = 0;
     QTimer m_retryTimer;
+    // Plugging a phone in starts mirroring (checkUsbPhone), while a view shows it
+    QTimer m_usbWatchTimer;
+    bool m_usbPhoneSeen = false;    // an adb interface was on USB at the last look
+    bool m_adbServerLooked = false; // the one look for a running adb server is done
+    QString m_usbSysfsRoot = QStringLiteral("/sys/bus/usb/devices");   // OCTAVE_USB_SYSFS in tests
     void setSessionState(const QString &state);
     void updateRetryTimer();
     void onRetryTick();

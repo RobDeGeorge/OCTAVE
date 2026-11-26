@@ -359,8 +359,10 @@ Phone Mirror page) while the flow is worked out. Once a phone has
 been mirrored on this install (the `phoneMirrorUsed` setting, set by the core
 at the first stream) it starts the session itself when it comes on screen (not
 after the user closed mirroring in this run: `mainWindow.phoneMirrorStopped`);
-before that nothing runs adb until Connect Phone is pressed, so a fresh
-install does not start the adb server (on Windows, a firewall prompt). It keeps the manager's
+before that nothing runs adb until Connect Phone is pressed or, on Linux, a
+phone with USB debugging on is plugged in (the manager sees it on the USB bus
+without adb and starts the session), so a fresh install does not start the adb
+server (on Windows, a firewall prompt). It keeps the manager's
 phone retries running while shown (`setViewActive`), and reports its size
 (`setViewSize`) so an "auto" virtual display is drawn to fit it. Not live it
 says why: "Connecting to your phone…", "No phone connected" with Connect Phone

@@ -615,6 +615,34 @@
               (<code>kWifiStartBps</code> / <code>kWifiMaxBps</code>), never under 2 (<code>kAdaptiveMinBps</code>). The rate is cut as soon as
               frames start to queue, so a slow link or decoder costs sharpness rather than dropped or late frames.
               <code>scrcpyBitRateUsb</code> / <code>Wifi</code> / <code>Auto</code> are no longer read.</li>
+            <li><strong>Plugging in starts mirroring</strong> (since 2026-11-25, Linux): while a view shows the phone (<code>setViewActive(true)</code>)
+              the manager looks every 2 s (<code>checkUsbPhone()</code>, <code>kUsbWatchMs</code>) for a phone with USB debugging on, without
+              running adb: a USB interface of class <code>ff</code> / subclass <code>42</code> / protocol <code>01</code> in
+              <code>/sys/bus/usb/devices</code> (<code>adbInterfaceOnUsb()</code>). A phone that was not there at the last look starts the
+              session from <code>idle</code> or <code>failed</code>, also on an install that has never had a phone
+              (<code>phoneMirrorUsed</code> false), so there is no Connect Phone to press. A phone that stays plugged in does not start it
+              again after a stop. With no such phone no adb command runs, which keeps a plain start from starting the adb server. On Windows
+              and macOS there is no such look: the first start there is Connect Phone. One more look, on every OS, at the first tick after
+              launch only: if an adb server already answers on this machine (<code>adbServerRunning()</code>: a TCP connect to
+              <code>ANDROID_ADB_SERVER_PORT</code> or 5037, no adb command), asking it for phones starts nothing new, so the session is
+              started and a phone already connected over Wi-Fi is mirrored without Connect Phone. Tests point it away from the machine's own USB bus
+              with <code>OCTAVE_USB_SYSFS</code>.</li>
+            <li><strong>The cable path: Wi-Fi with no QR code</strong> (since 2026-11-25, always on, no setting; skipped while <code>scrcpyAutoWifi</code> is on):
+              when a session starts on a USB phone running Android 11 or newer, the manager also makes that phone reachable over Wi-Fi
+              (<code>startWirelessDebugging()</code>, on the wireless worker; the session does not wait for it). It reads the phone's Wi-Fi
+              address, turns on the phone's Wireless debugging by writing the <code>adb_wifi_enabled</code> global setting from the shell
+              when it is off, finds the connect port over mDNS (<code>connectPairedHost()</code>, up to 8 s), runs <code>adb connect</code>
+              and remembers the address as <code>wirelessAddress</code>. No pairing is needed: a key the phone approved over USB ("Allow USB
+              debugging?") is accepted by Wireless debugging too (checked on a Galaxy S26 Ultra, Android 17). So a new phone needs only
+              developer options, USB debugging and one cable session, never the Wireless debugging page or the QR code, and pulling the cable
+              carries on over Wi-Fi. It is not repeated for the same phone within 30 s (<code>kWirelessDebuggingIntervalMs</code>). A phone
+              with no Wi-Fi address, or one that does not keep the setting, is left as it was. Android switches Wireless debugging off again
+              by itself when the phone leaves that Wi-Fi network or restarts: then the cable (or the toggle on the phone) brings it back.
+              Not yet checked: a Wi-Fi network the phone has not approved for Wireless debugging, and phones other than the S26 Ultra.
+              <strong>Open problem (2026-11-25):</strong> twice that day the S26 Ultra refused the computer's key over Wi-Fi (the adb
+              server's log: <code>SSLV3_ALERT_CERTIFICATE_UNKNOWN</code>) while accepting it over USB, and the key was missing from the
+              phone's stored keys (<code>dumpsys adb</code>, <code>user_keys</code>); a USB reconnect brought it back. Writing the setting
+              off and on does not cause it. Until the cause is known, the Wi-Fi link made this way may not outlast the cable session.</li>
             <li><strong>Wi-Fi without re-pairing</strong> (<code>scrcpyAutoWifi</code>, off by default since 0.9.5: until the phone reboots, its adbd then accepts connections on whatever network it joins): before a USB session the manager
               reads the phone's Wi-Fi IPv4 from <code>ip -4 -o addr show</code> (a <code>wlan*</code> interface first, then a phone-run hotspot
               <code>swlan*</code> / <code>ap*</code>; mobile data and VPNs are skipped). If <code>service.adb.tcp.port</code> is not already 5555

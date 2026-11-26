@@ -11,6 +11,8 @@
 #include <QDateTime>
 #include <QCryptographicHash>
 #include <QDir>
+#include <QHostAddress>
+#include <QTcpSocket>
 #include <QFile>
 #include <QFileInfo>
 #include <QHash>
@@ -62,6 +64,10 @@ PhoneMirrorManager::PhoneMirrorManager(QObject *parent)
     m_queueArtTimer.setInterval(150);
     connect(&m_queueArtTimer, &QTimer::timeout, this, &PhoneMirrorManager::publishMediaQueue);
     connect(&m_retryTimer, &QTimer::timeout, this, &PhoneMirrorManager::onRetryTick);
+    if (qEnvironmentVariableIsSet("OCTAVE_USB_SYSFS"))
+        m_usbSysfsRoot = qEnvironmentVariable("OCTAVE_USB_SYSFS");
+    m_usbWatchTimer.setInterval(kUsbWatchMs);
+    connect(&m_usbWatchTimer, &QTimer::timeout, this, &PhoneMirrorManager::checkUsbPhone);
     // A probe saying the phone is back restarts a waiting session at once
     connect(this, &PhoneMirrorManager::deviceStateChanged, this, &PhoneMirrorManager::restartIfPhoneBack);
     connect(&m_resizeTimer, &QTimer::timeout, this, [this]() {
@@ -550,8 +556,67 @@ void PhoneMirrorManager::setViewActive(bool active)
         return;
     m_viewActive = active;
     updateRetryTimer();
+    // The first look comes one interval later: the view has its size by then
+    if (active && nativeAvailable())
+        m_usbWatchTimer.start();
+    else
+        m_usbWatchTimer.stop();
     if (active)
         restartIfPhoneBack();
+}
+
+bool PhoneMirrorManager::adbInterfaceOnUsb(const QString &sysfsRoot)
+{
+#ifdef Q_OS_LINUX
+    // Interfaces are the entries named "<bus>-<port>:<config>.<interface>"
+    const QDir dir(sysfsRoot);
+    auto attr = [&dir](const QString &entry, const char *name) {
+        QFile f(dir.filePath(entry + QLatin1Char('/') + QLatin1String(name)));
+        return f.open(QIODevice::ReadOnly) ? f.readAll().trimmed().toLower() : QByteArray();
+    };
+    const QStringList entries = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const QString &entry : entries) {
+        if (entry.contains(QLatin1Char(':')) && attr(entry, "bInterfaceClass") == "ff"
+                && attr(entry, "bInterfaceSubClass") == "42" && attr(entry, "bInterfaceProtocol") == "01")
+            return true;
+    }
+#else
+    Q_UNUSED(sysfsRoot)
+#endif
+    return false;
+}
+
+bool PhoneMirrorManager::adbServerRunning()
+{
+    bool ok = false;
+    int port = qEnvironmentVariableIntValue("ANDROID_ADB_SERVER_PORT", &ok);
+    if (!ok || port <= 0 || port > 65535)
+        port = 5037;
+    // Loopback: answered or refused at once
+    QTcpSocket socket;
+    socket.connectToHost(QHostAddress(QHostAddress::LocalHost), quint16(port));
+    const bool running = socket.waitForConnected(200);
+    socket.abort();
+    return running;
+}
+
+void PhoneMirrorManager::checkUsbPhone()
+{
+    const bool present = adbInterfaceOnUsb(m_usbSysfsRoot);
+    bool appeared = present && !m_usbPhoneSeen;
+    m_usbPhoneSeen = present;
+    // Once, at the first look after launch: later the server may be our own
+    if (!m_adbServerLooked) {
+        m_adbServerLooked = true;
+        appeared = appeared || adbServerRunning();
+    }
+    if (!appeared || isRunning() || m_isStarting)
+        return;
+    // waitingForPhone and reconnecting look for the phone themselves
+    if (m_sessionState != QLatin1String("idle") && m_sessionState != QLatin1String("failed"))
+        return;
+    qCInfo(lcPhoneMirror) << (present ? "A phone is plugged in: starting" : "An adb server is running: looking for a phone");
+    startScrcpy();
 }
 
 void PhoneMirrorManager::updateRetryTimer()
@@ -954,6 +1019,11 @@ void PhoneMirrorManager::continueStart(const StartPrep &prep, int generation)
         return;
     }
     m_tcpipChecked = false;
+    // The cable path: a phone on USB is also made reachable over Wi-Fi, so
+    // pulling the cable carries on wirelessly. Not with the legacy TCP mode
+    // on, which has already done that its own way.
+    if (!wireless && !m_autoWifi)
+        startWirelessDebugging(serial, prep.sdk);
     const QString jar = ScrcpyClient::bundledServerJar();
     if (jar.isEmpty()) {
         reportError(QStringLiteral("Bundled scrcpy server could not be extracted"));
@@ -1810,6 +1880,57 @@ QString PhoneMirrorManager::enableTcpip(const QString &serial) const
             qCWarning(lcPhoneMirror) << "Phone did not come back on USB after adb tcpip";
     }
     return ip + QLatin1Char(':') + port;
+}
+
+QString PhoneMirrorManager::enableWirelessDebugging(const QString &serial) const
+{
+    const QString ip = phoneWifiAddress(serial);
+    if (ip.isEmpty()) {
+        qCInfo(lcPhoneMirror) << "Phone has no Wi-Fi address; not turning on wireless debugging";
+        return {};
+    }
+    const QStringList global{QStringLiteral("-s"), serial, QStringLiteral("shell"), QStringLiteral("settings"),
+                             QStringLiteral("%1"), QStringLiteral("global"), QStringLiteral("adb_wifi_enabled")};
+    auto settings = [&](const QString &verb, const QStringList &more = {}) {
+        QStringList args = global;
+        args[4] = verb;
+        return runAdbFull(args + more, 5000).trimmed();
+    };
+    if (settings(QStringLiteral("get")) != QLatin1String("1")) {
+        qCInfo(lcPhoneMirror) << "Turning on wireless debugging on the phone";
+        settings(QStringLiteral("put"), {QStringLiteral("1")});
+        // Android turns it back off by itself where it does not allow it
+        if (settings(QStringLiteral("get")) != QLatin1String("1")) {
+            qCInfo(lcPhoneMirror) << "The phone did not keep wireless debugging on";
+            return {};
+        }
+    }
+    // The connect port is new every time; the phone advertises it over mDNS
+    const QString address = connectPairedHost(ip);
+    if (address.isEmpty())
+        qCInfo(lcPhoneMirror) << "Wireless debugging is on, but the phone was not found at" << ip;
+    return address;
+}
+
+void PhoneMirrorManager::startWirelessDebugging(const QString &serial, int sdk)
+{
+    if (sdk != 0 && sdk < kWirelessDebuggingMinSdk)
+        return;   // no Wireless debugging before Android 11
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (serial == m_wirelessDebugSerial && now - m_wirelessDebugAtMs < kWirelessDebuggingIntervalMs)
+        return;
+    m_wirelessDebugSerial = serial;
+    m_wirelessDebugAtMs = now;
+    runWirelessJob([this, serial]() {
+        const QString address = enableWirelessDebugging(serial);
+        QMetaObject::invokeMethod(this, [this, address]() {
+            if (address.isEmpty() || address == m_wirelessAddress)
+                return;
+            qCInfo(lcPhoneMirror) << "Remembering the phone for Wi-Fi at" << address;
+            m_wirelessAddress = address;
+            emit wirelessAddressChanged(address);
+        }, Qt::QueuedConnection);
+    }, false);
 }
 
 QString PhoneMirrorManager::connectPairedHost(const QString &host) const
