@@ -355,7 +355,8 @@ The phone's screen in a cell, in `frontend/dashboards/widgets/`. Default span
 3 × 6 (a phone is tall). While phone mirroring runs it shows the live picture
 and passes touches through to the phone. Since 2026-11-25 it is the only place
 the phone is shown (no bottom-bar button, nothing opens the full-screen
-Phone Mirror page) while the flow is worked out. Once a phone has
+Phone Mirror page) while the flow is worked out; since 2026-11-26 the Media
+Room can show it in its art corner as well. Once a phone has
 been mirrored on this install (the `phoneMirrorUsed` setting, set by the core
 at the first stream) it starts the session itself when it comes on screen (not
 after the user closed mirroring in this run: `mainWindow.phoneMirrorStopped`);
@@ -379,6 +380,8 @@ two readings on each side.
 | Property | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `showFrame` | bool | `true` | The reading cards' box around it. |
+| `cornerRadius` | real | 8 dp | The frame's corners; the live picture is rounded to match. |
+| `drivesDisplaySize` | bool | `true` | Off: a running session is shown as it is (letterboxed) instead of the phone's display being redrawn for this widget's shape; only a first start takes its size. The Media Room's art corner sets it off (since 2026-11-26), so moving between pages never restarts the session. Not in the catalog's `editableProps`. |
 | `frameColor`, `labelColor`, `valueColor` | color | theme | The editor exposes `frameColor`. |
 
 ### 3.16 `ShiftLightWidget` *(self-binding)*

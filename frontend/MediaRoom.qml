@@ -7,6 +7,7 @@ import QtQuick.Effects
 import QtQuick.Dialogs
 import "." as App
 import "settings" as Settings
+import "dashboards/widgets" as Widgets
 
 Item {
     // Local dp/dpMin wrappers — work around Qt Android singleton-function bug.
@@ -82,7 +83,33 @@ Item {
                 mediaRoom.animateTrackChange()
         }
     }
-    readonly property bool showMusicDevice: App.MusicDevicePreference.enabled && App.MusicDevicePreference.isAvailable()
+    readonly property bool showMusicDevice: !showPhoneMirrorArt && App.MusicDevicePreference.enabled && App.MusicDevicePreference.isAvailable()
+
+    // The art corner can show the phone's screen instead (picked on the art
+    // picker's ring; the mediaArtPhoneMirror setting), live and touchable
+    readonly property bool phoneMirrorAvailable: typeof phoneMirrorManager !== "undefined" && !!phoneMirrorManager
+                                                 && phoneMirrorManager.nativeAvailable
+    property bool artPhoneMirror: _readArtPhoneMirror()
+    readonly property bool showPhoneMirrorArt: artPhoneMirror && phoneMirrorAvailable
+    // The art corner's share of the row's width (the controls get the rest):
+    // the phone's screen is landscape, so it gets more than half
+    readonly property real _artShare: showPhoneMirrorArt ? 0.56 : (showMusicDevice ? 0.44 : 0.4)
+    // The phone's picture is drawn in a box of its own shape (no bands):
+    // the mirrored display's width / height, 16:9 until one is known
+    readonly property real _phoneAspect: {
+        var m = /^(\d+)x(\d+)$/.exec(phoneMirrorAvailable ? phoneMirrorManager.activeDisplaySize : "")
+        return m && Number(m[2]) > 0 ? Number(m[1]) / Number(m[2]) : 16 / 9
+    }
+    function _readArtPhoneMirror() {
+        return !!settingsManager && settingsManager.get_setting_with_default("mediaArtPhoneMirror", false) === true
+    }
+    Connections {
+        target: settingsManager
+        ignoreUnknownSignals: true
+        function onGenericSettingChanged(key) {
+            if (key === "mediaArtPhoneMirror") mediaRoom.artPhoneMirror = mediaRoom._readArtPhoneMirror()
+        }
+    }
 
     // Local or Spotify. Another phone app's shuffle belongs to that app: off
     // (and dimmed) meanwhile
@@ -579,8 +606,8 @@ Item {
                     // Portrait: the height the art leaves (see the art item)
                     Layout.fillHeight: true
                     Layout.fillWidth: mediaControlsGrid.portrait
-                    Layout.preferredWidth: mediaControlsGrid.portrait ? -1 : parent.width * (mediaRoom.showMusicDevice ? 0.56 : 0.6)
-                    Layout.maximumWidth: mediaControlsGrid.portrait ? Number.POSITIVE_INFINITY : parent.width * (mediaRoom.showMusicDevice ? 0.56 : 0.6)
+                    Layout.preferredWidth: mediaControlsGrid.portrait ? -1 : parent.width * (1 - mediaRoom._artShare)
+                    Layout.maximumWidth: mediaControlsGrid.portrait ? Number.POSITIVE_INFINITY : parent.width * (1 - mediaRoom._artShare)
                     Layout.leftMargin: dp(20)
                     Layout.rightMargin: mediaControlsGrid.portrait ? dp(20) : 0
                     spacing: mediaControlsGrid.portrait ? dp(10) : App.Spacing.mediaRoomSpacing * 2
@@ -617,7 +644,7 @@ Item {
                         // held by the height so the title keeps its room and
                         // never under the Spacing sizes. Portrait keeps those.
                         readonly property real columnRoom:
-                            mediaControlsContainer.width * (mediaRoom.showMusicDevice ? 0.56 : 0.6) - dp(28)
+                            mediaControlsContainer.width * (1 - mediaRoom._artShare) - dp(28)
                         readonly property int keySize: mediaControlsGrid.portrait
                             ? App.Spacing.mediaRoomKeySize
                             : Math.max(App.Spacing.mediaRoomKeySize,
@@ -1029,8 +1056,8 @@ Item {
                     Layout.row: 0
                     Layout.column: mediaControlsGrid.portrait ? 0 : 1
                     Layout.fillWidth: mediaControlsGrid.portrait
-                    Layout.preferredWidth: mediaControlsGrid.portrait ? -1 : parent.width * (mediaRoom.showMusicDevice ? 0.44 : 0.4)
-                    Layout.maximumWidth: mediaControlsGrid.portrait ? Number.POSITIVE_INFINITY : parent.width * (mediaRoom.showMusicDevice ? 0.44 : 0.4)
+                    Layout.preferredWidth: mediaControlsGrid.portrait ? -1 : parent.width * mediaRoom._artShare
+                    Layout.maximumWidth: mediaControlsGrid.portrait ? Number.POSITIVE_INFINITY : parent.width * mediaRoom._artShare
                     // Portrait: a square box as wide as the page, cut down to
                     // what the title and keys under it leave, so it shrinks
                     // rather than pushing them into the bottom bar
@@ -1079,7 +1106,7 @@ Item {
                         height: mediaControlsGrid.portrait ? Math.min(parent.width, parent.height) : parent.height
                         // Keep the carousel's transition/settled lifecycle alive for track analysis.
                         // Only its presentation is hidden while a device is successfully loaded.
-                        visible: !(musicDeviceLoader.item && musicDeviceLoader.item.ready)
+                        visible: !mediaRoom.showPhoneMirrorArt && !(musicDeviceLoader.item && musicDeviceLoader.item.ready)
 
                         // Settings bindings
                         // Portrait: nearly the page width, no side cards (no room for them)
@@ -1106,6 +1133,53 @@ Item {
                         onArtClicked: albumArtPopup.openPicker()
 
                         onArtLoadFailed: mediaRoom._displayAlbumArt = "./assets/missing_art.png"
+                    }
+
+                    // The phone's screen in the art's place, landscape, in a
+                    // box of the display's own shape. It does not size the
+                    // phone's display (Home does): moving between the pages
+                    // never restarts the session
+                    Loader {
+                        id: phoneArtLoader
+                        anchors.centerIn: parent
+                        width: Math.min(parent.width, parent.height * mediaRoom._phoneAspect)
+                        height: width / mediaRoom._phoneAspect
+                        active: mediaRoom.showPhoneMirrorArt
+                        sourceComponent: Widgets.PhoneMirrorWidget {
+                            drivesDisplaySize: false
+                            cornerRadius: mediaRoom.albumArtRadius
+                        }
+                    }
+                    // Every tap on the phone is the phone's: this opens the
+                    // art picker again. Off the picture, at its top right
+                    // (above it, or below when there is no room above)
+                    Item {
+                        objectName: "mediaArtPhonePickerButton"
+                        visible: phoneArtLoader.active
+                        width: dp(36); height: dp(24)
+                        x: phoneArtLoader.x + phoneArtLoader.width - width
+                        y: phoneArtLoader.y >= height + dp(6)
+                           ? phoneArtLoader.y - height - dp(6)
+                           : phoneArtLoader.y + phoneArtLoader.height + dp(6)
+                        z: 2
+                        Row {
+                            anchors.centerIn: parent
+                            spacing: dp(4)
+                            Repeater {
+                                model: 3
+                                Rectangle {
+                                    width: dp(5); height: width; radius: width / 2
+                                    color: App.Style.primaryTextColor
+                                    opacity: pickerTap.pressed ? 0.5 : 0.85
+                                }
+                            }
+                        }
+                        MouseArea {
+                            id: pickerTap
+                            anchors.fill: parent
+                            anchors.margins: -dp(8)
+                            onClicked: albumArtPopup.openPicker()
+                        }
                     }
 
                     Text {
@@ -1664,6 +1738,7 @@ Item {
         }
         onAboutToShow: {
             if (viewCarousel.item) {
+                viewCarousel.item.options = albumArtPopup.choices   // the phone may have come or gone
                 viewCarousel.item.show(albumArtPopup.currentChoice())
                 viewCarousel.item.forceActiveFocus()
             }
@@ -1671,17 +1746,27 @@ Item {
         // The ring's choices: the Music Player Object options, with "Vinyl"
         // after "Album art". Vinyl is the album art with the vinyl record
         // setting on, so the two of them set that switch as well.
+        // "Phone mirror" (last) shows the phone's screen there, while phone
+        // mirroring can run on this computer.
         readonly property var choices: {
             var list = App.MusicDevicePreference.options.slice()
             list.splice(list.indexOf("Album art") + 1, 0, "Vinyl")
+            if (mediaRoom.phoneMirrorAvailable) list.push("Phone mirror")
             return list
         }
         function currentChoice() {
+            if (mediaRoom.showPhoneMirrorArt) return "Phone mirror"
             var mode = App.MusicDevicePreference.mode
             return mode === "Album art" && settingsManager && settingsManager.vinylRecordMode ? "Vinyl" : mode
         }
         function use(value) {
             if (value === "") return
+            var phone = value === "Phone mirror"
+            if (phone !== mediaRoom.artPhoneMirror) {
+                mediaRoom.artPhoneMirror = phone
+                if (settingsManager) settingsManager.save_setting("mediaArtPhoneMirror", phone)
+            }
+            if (phone) { close(); return }
             var vinyl = value === "Vinyl"
             if (settingsManager && (vinyl || value === "Album art"))
                 settingsManager.vinylRecordMode = vinyl

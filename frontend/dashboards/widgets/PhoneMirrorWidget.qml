@@ -39,6 +39,12 @@ Item {
 
     // ── Features ────────────────────────────────────────────────────
     property bool showFrame: true    // the reading cards' box around it
+    property real cornerRadius: dp(8)
+    // The phone's virtual display is made for this widget's shape (an "auto"
+    // size restarts the session for a new shape). Off (the Media Room's art
+    // corner): a running session is shown as it is, letterboxed, so moving
+    // between pages never restarts it; only a first start takes this size.
+    property bool drivesDisplaySize: true
 
     // ── Style ───────────────────────────────────────────────────────
     property color frameColor: App.Style.obdBarColor
@@ -73,6 +79,7 @@ Item {
     }
     function _reportSize() {
         if (!_shown || width < 64 || height < 64) return
+        if (!drivesDisplaySize && _session !== "idle" && _session !== "") return
         var ratio = Screen.devicePixelRatio || 1
         phoneMirrorManager.setViewSize(Math.round(width * ratio), Math.round(height * ratio))
     }
@@ -149,7 +156,7 @@ Item {
     Rectangle {
         id: frame
         anchors.fill: parent
-        radius: root.dp(8)
+        radius: root.cornerRadius
         color: (root.live || root._holding) ? "black" : (root.showFrame ? App.Style.obdBoxBackground : "transparent")
         border.color: root.showFrame ? Qt.darker(root.frameColor, 1.4) : "transparent"
         border.width: 1

@@ -205,6 +205,69 @@ Item {
             }
         }
 
+        Slot {   // the phone's screen (the Media Room offers it while mirroring can run)
+            id: phoneSlot
+            index: root.options.indexOf("Phone mirror")
+            visible: index >= 0
+            radius: 62
+            readonly property real frontSide: 100 * root.unit / radius
+            Model {
+                source: "#Rectangle"
+                materials: PrincipledMaterial {
+                    lighting: PrincipledMaterial.NoLighting
+                    cullMode: Material.NoCulling
+                    alphaMode: PrincipledMaterial.Blend
+                    // A phone on its side with a lit screen, on a dark card
+                    baseColorMap: Texture {
+                        sourceItem: Rectangle {
+                            width: 512; height: 512
+                            color: "#14171c"
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 380; height: 210
+                                radius: 34
+                                color: "#08090b"
+                                border.color: "#c9ced6"
+                                border.width: 9
+                                Rectangle {
+                                    anchors.fill: parent
+                                    anchors.margins: 20
+                                    radius: 16
+                                    gradient: Gradient {
+                                        orientation: Gradient.Horizontal
+                                        GradientStop { position: 0.0; color: "#2f80ed" }
+                                        GradientStop { position: 1.0; color: "#7b4fd6" }
+                                    }
+                                    // Three app tiles
+                                    Row {
+                                        anchors.centerIn: parent
+                                        spacing: 26
+                                        Repeater {
+                                            model: 3
+                                            Rectangle { width: 54; height: 54; radius: 14; color: Qt.rgba(1, 1, 1, 0.85) }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Rounded corners, as the art card has
+                    opacityChannel: Material.R
+                    opacityMap: Texture {
+                        sourceItem: Rectangle {
+                            width: 512; height: 512
+                            color: "black"
+                            Rectangle {
+                                anchors.fill: parent
+                                color: "white"
+                                radius: Math.min(width / 2, width * root.artCornerRadius / Math.max(1, phoneSlot.frontSide))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         Slot {   // the album art as a record (the Vinyl setting)
             index: root.options.indexOf("Vinyl")
             visible: index >= 0

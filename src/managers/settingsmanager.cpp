@@ -616,6 +616,8 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("settingsMenuVisibility")]     = menuVis;
 
     d[QStringLiteral("musicDeviceModel")] = QStringLiteral("Album art");
+    // The Media Room's art corner shows the phone's screen (its art picker)
+    d[QStringLiteral("mediaArtPhoneMirror")] = false;
 
     // Gesture
     d[QStringLiteral("gestureMapping")]          = QJsonObject::fromVariantMap(GestureVocabulary::defaultMapping());
