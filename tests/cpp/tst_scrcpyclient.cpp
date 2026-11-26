@@ -14,6 +14,8 @@
 #include <QTcpSocket>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QVideoFrame>
+#include <QVideoSink>
 #include <QtEndian>
 
 #include <atomic>
@@ -340,6 +342,24 @@ private slots:
         c.client.injectTouch(0, ScrcpyClient::ActionDown, 10, 20);
         QVERIFY(waitUntil([&] { return srv.controlBytes().size() >= 32; }));
         QCOMPARE(int(quint8(srv.controlBytes().at(0))), 2);   // inject touch event
+    }
+
+    void aSinkTakenLaterShowsTheLastFrameAtOnce()
+    {
+        // The phone sends a frame only when its screen changes: a view that
+        // takes the sink on a still screen (the Media Room's art corner, Home
+        // again) must show the last picture at once, not stay black waiting
+        requireDecoder();
+        const Stream first = loadStream("grey_64x48.h264");
+        FakeServer srv(script(first), kW, kH);   // these frames, then nothing
+        Session c(srv.port());
+        QVERIFY(waitUntil([&] { return c.client.frameCount() >= quint64(first.packets.size() - 1); }));
+        QTRY_VERIFY(c.client.m_shownFrame.isValid());   // delivered with no sink attached
+        QVideoSink sink;
+        c.client.setVideoSink(&sink);
+        QVERIFY(sink.videoFrame().isValid());           // before any new frame
+        QCOMPARE(sink.videoFrame().width(), kW);
+        QCOMPARE(sink.videoFrame().height(), kH);
     }
 
     void attachFollowsTheRunningServer()

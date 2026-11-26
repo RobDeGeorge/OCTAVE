@@ -1146,6 +1146,7 @@ Item {
                         height: width / mediaRoom._phoneAspect
                         active: mediaRoom.showPhoneMirrorArt
                         sourceComponent: Widgets.PhoneMirrorWidget {
+                            sinkOwnerName: "mediaArt"
                             drivesDisplaySize: false
                             cornerRadius: mediaRoom.albumArtRadius
                         }
@@ -1179,6 +1180,32 @@ Item {
                             anchors.fill: parent
                             anchors.margins: -dp(8)
                             onClicked: albumArtPopup.openPicker()
+                        }
+                    }
+                    // The phone's Home key (a mirrored phone has no nav bar
+                    // the user can reach), opposite the dots: top left
+                    Item {
+                        objectName: "mediaArtPhoneHomeButton"
+                        visible: phoneArtLoader.active && !!phoneMirrorManager && phoneMirrorManager.isRunning
+                        width: dp(36); height: dp(24)
+                        x: phoneArtLoader.x
+                        y: phoneArtLoader.y >= height + dp(6)
+                           ? phoneArtLoader.y - height - dp(6)
+                           : phoneArtLoader.y + phoneArtLoader.height + dp(6)
+                        z: 2
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: dp(16); height: width; radius: width / 2
+                            color: "transparent"
+                            border.color: App.Style.primaryTextColor
+                            border.width: Math.max(1.5, dp(2))
+                            opacity: phoneHomeTap.pressed ? 0.5 : 0.85
+                        }
+                        MouseArea {
+                            id: phoneHomeTap
+                            anchors.fill: parent
+                            anchors.margins: -dp(8)
+                            onClicked: phoneMirrorManager.pressHome()
                         }
                     }
 

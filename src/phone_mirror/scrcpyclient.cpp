@@ -265,6 +265,9 @@ ScrcpyClient::~ScrcpyClient()
 void ScrcpyClient::setVideoSink(QObject *sink)
 {
     m_sink = qobject_cast<QVideoSink *>(sink);
+    // The new view shows the phone at once, not after the phone's next frame
+    if (m_sink && m_shownFrame.isValid())
+        m_sink->setVideoFrame(m_shownFrame);
 }
 
 bool ScrcpyClient::isNetworkSerial(const QString &serial)
@@ -1300,7 +1303,10 @@ void ScrcpyClient::deliverFrame()
         frame = m_latestFrame;
         m_latestFrame = QVideoFrame();
     }
-    if (frame.isValid() && m_sink)
+    if (!frame.isValid())
+        return;
+    m_shownFrame = frame;   // kept for a sink that attaches later (setVideoSink)
+    if (m_sink)
         m_sink->setVideoFrame(frame);
 }
 

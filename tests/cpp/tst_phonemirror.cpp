@@ -10,6 +10,7 @@
 #include <QTcpServer>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QVideoSink>
 #include <QtEndian>
 
 #include <memory>
@@ -877,6 +878,42 @@ private slots:
         QCOMPARE(m.m_retryTimer.interval(), PhoneMirrorManager::kWaitPollMs);
         QVERIFY(!m.m_hadStream);
         QCOMPARE(states.count(), 2);
+    }
+
+    void handingTheSinkOverKeepsTheStream()
+    {
+        // A hand-over (Home's widget to the Media Room's art corner) asks the
+        // phone for nothing: a fresh-frame request restarts its encoder, and
+        // on a locked phone a restart ended the stream (2026-11-26). The same
+        // sink again changes nothing
+        PhoneMirrorManager m;
+        QVideoSink home, media;
+        QSignalSpy changed(&m, &PhoneMirrorManager::videoSinkChanged);
+        m.setVideoSink(&home);
+        m.setVideoSink(&home);                  // the same view again
+        QCOMPARE(changed.count(), 1);
+        m.setVideoSink(nullptr);                // Home gives it up ...
+        m.setVideoSink(&media);                 // ... the Media Room takes it
+        QCOMPARE(m.videoSink(), &media);
+        QCOMPARE(changed.count(), 3);
+    }
+
+    void aDestroyedSinkIsLetGo()
+    {
+        // The Media Room's art corner switched away from the phone destroyed
+        // its VideoOutput while it still held the sink, and the next frame
+        // went to freed memory (crash 2026-11-26): the manager lets go of a
+        // destroyed sink and says so, so another view can take the picture
+        PhoneMirrorManager m;
+        auto sink = std::make_unique<QVideoSink>();
+        m.setVideoSink(sink.get());
+        QSignalSpy changed(&m, &PhoneMirrorManager::videoSinkChanged);
+        sink.reset();
+        QCOMPARE(m.videoSink(), nullptr);
+        QCOMPARE(changed.count(), 1);
+        QVideoSink next;
+        m.setVideoSink(&next);                  // no stale connection in the way
+        QCOMPARE(m.videoSink(), &next);
     }
 
     void dropReconnectsAtOnceWithNoViewOpen()

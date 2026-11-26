@@ -15,6 +15,7 @@
 // docs/PHONE_MIRROR_NATIVE_PLAN.md and were verified against scrcpy v3.3.4.
 
 #include <QObject>
+#include <QPointer>
 #include <QString>
 #include <QVideoFrame>
 #include <QLoggingCategory>
@@ -239,8 +240,15 @@ private:
     QString m_videoEncoder;
     std::mutex m_sendMutex;
 
-    QVideoSink *m_sink = nullptr;
+    // Weak: the sink belongs to a QML VideoOutput, which can be destroyed
+    // (a Loader switched off) before it hands the sink back
+    QPointer<QVideoSink> m_sink;
     QVideoFrame m_latestFrame;
+    // GUI thread: the last frame handed on (or dropped for want of a sink),
+    // given at once to a sink that attaches later. The phone sends a frame
+    // only when its screen changes, so a view that took the sink on a still
+    // screen stayed black until something moved
+    QVideoFrame m_shownFrame;
     std::mutex m_frameMutex;
 
     // Audio: PCM s16le 48 kHz stereo from the audio socket, played through

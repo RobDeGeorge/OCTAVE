@@ -900,13 +900,30 @@ void PhoneMirrorManager::setAutoWifi(bool enabled)
 
 void PhoneMirrorManager::setVideoSink(QObject *sink)
 {
+    if (sink == m_videoSink)
+        return;   // the same view again: nothing to hand over, no encoder restart
+    qCInfo(lcPhoneMirror) << "Video sink" << (sink ? "set" : "cleared")
+                          << "(the picture goes to" << (sink ? "a view)" : "nothing)");
+    if (m_videoSink)
+        disconnect(m_videoSink, &QObject::destroyed, this, nullptr);
     m_videoSink = sink;
-    if (m_client)
-        m_client->setVideoSink(sink);
-    // The phone sends a frame only when its screen changes: ask for one now,
-    // or a view taking the sink back shows an old picture until then
+    // A view destroyed without giving the sink back (the Media Room's art
+    // corner switched to something else): let go of it, and let another
+    // view take the picture
     if (sink)
-        requestVideoKeyframe();
+        connect(sink, &QObject::destroyed, this, [this] {
+            qCInfo(lcPhoneMirror) << "Video sink destroyed by its view";
+            if (m_client)
+                m_client->setVideoSink(nullptr);
+            emit videoSinkChanged();
+        });
+    if (m_client)
+        m_client->setVideoSink(sink);   // shows the last frame there at once
+    // No fresh-frame request: the client decodes on with no view and hands
+    // a new view the latest frame itself. The request restarts the phone's
+    // encoder, and on a locked phone (2026-11-26, S26 Ultra) a restart could
+    // end the stream: no frame came after it, so the picture froze and every
+    // touch seemed to do nothing
     emit videoSinkChanged();
 }
 

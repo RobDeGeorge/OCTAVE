@@ -179,7 +179,7 @@
               <tr><td><code>isRunning</code></td><td><code>bool</code></td><td>A client thread is up (true from <code>start()</code>, not only after the handshake)</td></tr>
               <tr><td><code>displaySize</code></td><td><code>str</code></td><td><code>""</code> (the phone's own screen) or <code>"auto"</code>: a virtual display at the view's size (<code>autoDisplaySize</code>: scaled to fit 1920 on the long side, snapped down to multiples of 8 as scrcpy does). Since 2026-11-25 <code>setDisplaySize()</code> reads any size as <code>"auto"</code></td></tr>
               <tr><td><code>activeDisplaySize</code></td><td><code>str</code></td><td>Size actually in use once connected; <code>""</code> when mirroring the phone screen (also when the phone's SDK is below 30 / Android 11, in which case the virtual display is skipped with a warning)</td></tr>
-              <tr><td><code>videoSink</code></td><td><code>QObject</code></td><td>QML assigns <code>VideoOutput.videoSink</code> in <code>Component.onCompleted</code>; decoded frames go straight to it</td></tr>
+              <tr><td><code>videoSink</code></td><td><code>QObject</code></td><td>QML assigns <code>VideoOutput.videoSink</code> in <code>Component.onCompleted</code>; decoded frames go straight to it. One sink at a time: the view on screen holds it (Home's and the Media Room's <code>PhoneMirrorWidget</code>, the full-screen page). Setting the same sink again does nothing; a new one is given the last decoded frame at once (the client decodes on with no view). A hand-over asks the phone for nothing: a fresh-frame request restarts its encoder, and on a locked phone a restart could end the stream (2026-11-26: the picture froze after a hand-over to the Media Room and every touch seemed dead). Every change is logged (<code>Video sink set</code> / <code>cleared</code>; the widget logs <code>PhoneMirrorWidget &lt;home|mediaArt&gt; takes / gives up the video sink</code>)</td></tr>
               <tr><td><code>frameWidth</code>, <code>frameHeight</code></td><td><code>int</code></td><td>Decoded frame size (from the codec meta, updated if the decoder reports a different size)</td></tr>
               <tr><td><code>audioActive</code></td><td><code>bool</code></td><td>The audio socket delivered codec id <code>"raw"</code> and PCM is being played through OCTAVE</td></tr>
               <tr><td><code>audioPlaying</code></td><td><code>bool</code></td><td>The phone is producing sound right now (peak above the threshold within the last 1.5 s); drives ducking</td></tr>
@@ -384,7 +384,13 @@
             GPU does the colour conversion in <code>VideoOutput</code>. The frame is stored as "latest" under a mutex and
             <code>frameReady</code> is emitted; a queued slot on the GUI thread pulls the latest frame and calls
             <code>QVideoSink::setVideoFrame()</code>, so a slow GUI thread coalesces rather than queues frames. The client never
-            clears the sink: the last frame stays on the <code>VideoOutput</code> across a reconnect.</p>
+            clears the sink: the last frame stays on the <code>VideoOutput</code> across a reconnect. It also keeps the last frame it
+            handed on (<code>m_shownFrame</code>, also when no sink was attached) and gives it to a sink that attaches later
+            (<code>setVideoSink</code>): the phone sends a frame only when its screen changes, so before 2026-11-26 a view that took the
+            sink on a still screen stayed black. That is what the Media Room's phone did when picked from a 3D player: the old widget
+            set the sink twice, two encoder restarts 2&nbsp;ms apart, and no frame came after them. A widget now sets the sink only when it
+            is not already its own, and one on screen takes a sink nobody holds (a page shown for a moment by <code>Main.qml</code>'s
+            pre-render used to take it and let go, leaving Home with a frozen picture).</p>
           <p>Why libavcodec and not <code>QMediaPlayer::setSourceDevice()</code>: Qt's FFmpeg backend refuses a raw Annex-B
             <code>QIODevice</code> (<code>FormatError "Could not open file"</code> after 1.5 MB fed, Phase 0 spike). OCTAVE therefore links
             libavcodec/libavutil when CMake finds them (<code>OCTAVE_HAVE_FFMPEG</code>, pkg-config on Linux/macOS, vcpkg on Windows;

@@ -45,6 +45,9 @@ Item {
     // corner): a running session is shown as it is, letterboxed, so moving
     // between pages never restarts it; only a first start takes this size.
     property bool drivesDisplaySize: true
+    // Names this widget in the log ("home", "mediaArt") when it takes or
+    // gives up the phone's one video sink
+    property string sinkOwnerName: "home"
 
     // ── Style ───────────────────────────────────────────────────────
     property color frameColor: App.Style.obdBarColor
@@ -119,13 +122,33 @@ Item {
     Component.onDestruction: _releaseSink()
     function _syncSink() {
         if (!_hasManager) return
-        if (_wantSink) phoneMirrorManager.videoSink = video.videoSink
-        else _releaseSink()
+        if (_wantSink) {
+            if (phoneMirrorManager.videoSink !== video.videoSink) {
+                console.info("PhoneMirrorWidget", sinkOwnerName, "takes the video sink (" + Math.round(width) + "x" + Math.round(height) + ")")
+                phoneMirrorManager.videoSink = video.videoSink
+            }
+        } else {
+            _releaseSink()
+        }
     }
     // Only when it is still ours: the full-screen page may have taken it
     function _releaseSink() {
-        if (_hasManager && phoneMirrorManager.videoSink === video.videoSink)
+        if (_hasManager && phoneMirrorManager.videoSink === video.videoSink) {
+            console.info("PhoneMirrorWidget", sinkOwnerName, "gives up the video sink")
             phoneMirrorManager.videoSink = null
+        }
+    }
+    // A sink nobody holds goes to a widget that wants it. Each takes it only
+    // when its own wish changes, so one that stayed on screen while another
+    // took the sink and then let go (a page shown for a moment by Main.qml's
+    // pre-render) was left with a frozen picture and every touch ignored
+    // (no picture, no contentRect to map the touch through)
+    Connections {
+        target: root._hasManager ? phoneMirrorManager : null
+        function onVideoSinkChanged() {
+            if (root._wantSink && !phoneMirrorManager.videoSink)
+                Qt.callLater(root._syncSink)
+        }
     }
 
     readonly property bool _connecting: _session === "starting" || _session === "reconnecting"
@@ -205,8 +228,12 @@ Item {
             function send(points, action) {
                 for (var i = 0; i < points.length; ++i) {
                     var p = points[i], rp = rawPos(p)
-                    if (action === 0)
+                    if (action === 0) {
                         _ignored[p.pointId] = !rp || rp.x < 0 || rp.x > 1 || rp.y < 0 || rp.y > 1
+                        if (!rp)
+                            console.info("PhoneMirrorWidget", root.sinkOwnerName, "dropped a touch: no picture to map it through (sink "
+                                         + (phoneMirrorManager.videoSink === video.videoSink ? "ours" : "not ours") + ")")
+                    }
                     if (_ignored[p.pointId]) {
                         if (action === 1) delete _ignored[p.pointId]
                         continue

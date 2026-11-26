@@ -9,6 +9,7 @@
 #ifndef Q_OS_MOBILE
 
 #include <QObject>
+#include <QPointer>
 #include <QString>
 #include <QStringList>
 #include <QVariantMap>
@@ -501,7 +502,7 @@ private:
     bool m_restarting = false;      // restartSession's stop: the state goes to "starting", not "idle"
 
     ScrcpyClient *m_client = nullptr;
-    QObject *m_videoSink = nullptr;
+    QPointer<QObject> m_videoSink;   // weak: a view can be destroyed while holding it
     int m_frameWidth = 0;
     int m_frameHeight = 0;
     bool m_isStarting = false;
