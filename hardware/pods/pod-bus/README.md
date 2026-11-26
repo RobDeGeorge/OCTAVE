@@ -1,8 +1,8 @@
 # OCTAVE pod bus: what a compatible pod needs
 
-Pods are small boards (a LoRa beacon, a temperature probe, an accelerometer...) daisy-chained on one four-wire cable back to the OBD adapter. This sheet is the contract: a board that follows it can be plugged anywhere in the chain.
+This is the wired link of the OCTAVE pod standard (`../README.md`, which has the rules every pod keeps to). Wired pods are small boards (a LoRa beacon, a temperature probe, an accelerometer...) daisy-chained on one four-wire cable back to the OBD adapter. This sheet is the contract: a board that follows it can be plugged anywhere in the chain.
 
-**Status (2026-11-24): draft 0.1.** The electrical rules below are built into two boards, neither ordered: the LoRa pod (`../lora-pod/`) and the OBD adapter, which has the controller's end inside its outline, J11 on its bottom edge (`../obd-adapter/README.md`, "Pod bus"; that board was reworked on 2026-11-24 and has no fab files yet). The protocol is an outline, not a design. Nothing here has been measured; every current and length is an estimate until a chain has run.
+**Status (2026-11-24): draft 0.1.** The electrical rules below are built into two boards, neither ordered: the LoRa pod (`../lora-pod/`) and the OBD adapter, which has the controller's end inside its outline, J11 on its bottom edge (`../../obd-adapter/README.md`, "Pod bus"; that board was reworked on 2026-11-24 and has no fab files yet). The protocol is an outline, not a design. Nothing here has been measured; every current and length is an estimate until a chain has run.
 
 ## The chain
 

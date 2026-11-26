@@ -591,7 +591,7 @@ R(ui, "1k", "3V3", "CFG1_3V3")
 
 # ---------------------------------------------------------------- pod bus (2026-11-23)
 # Created last so every earlier reference keeps its number. The adapter's end of the OCTAVE pod bus
-# (../../pod-bus/README.md): battery voltage and RS-485 on a JST GH, for a chain of pods. Everything
+# (../../pods/pod-bus/README.md): battery voltage and RS-485 on a JST GH, for a chain of pods. Everything
 # but the fuse sits in the column over J11, on both sides of the board.
 pod = d.block("pod", "Pod bus: switched and fused battery voltage + RS-485 for a chain of pods")
 pod.notes = [

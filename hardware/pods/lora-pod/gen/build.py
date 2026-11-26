@@ -7,7 +7,7 @@
     python3 build.py view     # pictures of the board in view/
 
 Uses the system python3 (pcbnew lives there), not the repo venv, and the generator modules of
-the OBD adapter (../../obd-adapter/gen): the design model, the schematic and board writers.
+the OBD adapter (../../../obd-adapter/gen): the design model, the schematic and board writers.
 """
 
 import glob
@@ -19,7 +19,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROJ = os.path.dirname(HERE)
-SHARED = os.path.normpath(os.path.join(PROJ, "..", "obd-adapter", "gen"))
+SHARED = os.path.normpath(os.path.join(PROJ, "..", "..", "obd-adapter", "gen"))
 LIB = os.path.join(PROJ, "lib")
 NAME = "lora-pod"
 SCH = os.path.join(PROJ, NAME + ".kicad_sch")

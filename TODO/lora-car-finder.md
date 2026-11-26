@@ -1,7 +1,7 @@
 # LoRa car finder (the car as a beacon, a keychain that points at it)
 
 **Goal:** a dash-mounted pod wired to the OBD adapter makes the parked car a LoRa beacon that knows its own position, and an electronic keychain shows a needle that always points at the car, like a compass that points home.
-**Status:** active: the pod board is designed up to placement (`hardware/lora-pod/`, 2026-11-23): schematic ERC clean, board placed and routed (DRC: 0 unconnected, 2 cosmetic warnings), no fab files, no firmware. Nothing bought, no numbers measured. Every current and range figure below is an estimate.
+**Status:** active: the pod board is designed up to placement (`hardware/pods/lora-pod/`, 2026-11-23): schematic ERC clean, board placed and routed (DRC: 0 unconnected, 2 cosmetic warnings), no fab files, no firmware. Nothing bought, no numbers measured. Every current and range figure below is an estimate.
 **Last updated:** 2026-11-23
 
 ## Decisions of 2026-11-23 (they override the text below where it differs)
@@ -11,7 +11,7 @@
 - **Keychain and phone:** the pod's module is a RAK4630 (nRF52840 + SX1262), which adds Bluetooth LE for a phone and is the chip the keychain table names, so pod and keychain can share firmware. STM32WL is dropped.
 - **Any car, not only the TJ:** nothing on the pod is vehicle-specific. 915 MHz parts are for the Americas; Europe takes the 868 MHz variant of the same module.
 - **Ranging for the last 50 m** (garages) is not in v1, but the pod has an unfitted SPI header (`RANGE`) to try a UWB or SX1280 module on Rev 0.
-- **Pods are a family, daisy-chained (decided later the same day):** the cable is the OCTAVE pod bus, not a UART: four wires, battery voltage (not 5 V) and RS-485, in on one connector of a pod and out on the other, a 120 Ω terminator behind an `END` switch on every pod. The rules for a compatible pod are in `hardware/pod-bus/README.md`; the LoRa pod is the first one built to them. This replaces "Four wires ... 5 V, ground, UART each way" and "The pod is powered by the adapter. Regulated 5 V" under "Decisions made", and the UART in "Adapter side".
+- **Pods are a family, daisy-chained (decided later the same day):** the cable is the OCTAVE pod bus, not a UART: four wires, battery voltage (not 5 V) and RS-485, in on one connector of a pod and out on the other, a 120 Ω terminator behind an `END` switch on every pod. The rules for a compatible pod are in `hardware/pods/pod-bus/README.md`; the LoRa pod is the first one built to them. This replaces "Four wires ... 5 V, ground, UART each way" and "The pod is powered by the adapter. Regulated 5 V" under "Decisions made", and the UART in "Adapter side".
 - **The adapter has its end of the pod bus (2026-11-24):** the connector (J11), a fused and switched battery rail and the RS-485 transceiver on USART1. It was first put on a lobe stepping out of Rev 0's bottom edge; the same night the whole adapter was reworked into a compact two-sided board (80 x 55 mm since its second pass, six layers, one USB-C, no mounting holes) with the pod bus inside the outline. Where that board stands: `hardware/obd-adapter/README.md`.
 - **The keychain is not in the first order.**
 - **Tow / theft behaviour:** decided once the boards are in hand.
@@ -119,6 +119,6 @@ Limits to design the UI around: GNSS is good to 3 to 5 m, so near the car the ne
 
 1 (go / no-go, and pod versus plug) → 2 → 3 → 4 and 5 in either order → 6 → 7. Steps 1 to 3 need no custom PCB and do not wait on the adapter.
 
-Next: review the compact adapter board (`hardware/obd-adapter/README.md`, top) and regenerate its fab outputs; then the pod board's fab outputs and a human look at its copper (`hardware/lora-pod/README.md`, "Before ordering"); then the bus protocol (`hardware/pod-bus/README.md`) with steps 2 and 3, which need no hardware.
+Next: review the compact adapter board (`hardware/obd-adapter/README.md`, top) and regenerate its fab outputs; then the pod board's fab outputs and a human look at its copper (`hardware/pods/lora-pod/README.md`, "Before ordering"); then the bus protocol (`hardware/pods/pod-bus/README.md`) with steps 2 and 3, which need no hardware.
 
 Delete this file (and its README row) when done.

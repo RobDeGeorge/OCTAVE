@@ -1,6 +1,6 @@
 # OCTAVE LoRa pod, Rev 0
 
-The dash-top half of the LoRa car finder (`TODO/lora-car-finder.md`, step 4): the parked car's position, beaconed over LoRa, with Bluetooth for a phone. It is the first pod on the OCTAVE pod bus (`../pod-bus/README.md`): battery voltage and RS-485 on four wires, in on one connector and out on the other. Rev 0 is a bring-up board: room to probe, unfitted headers for the things still undecided.
+The dash-top half of the LoRa car finder (`TODO/lora-car-finder.md`, step 4): the parked car's position, beaconed over LoRa, with Bluetooth for a phone. It is an OCTAVE pod (`../README.md`) on the wired link, the first on the pod bus (`../pod-bus/README.md`): battery voltage and RS-485 on four wires, in on one connector and out on the other. Rev 0 is a bring-up board: room to probe, unfitted headers for the things still undecided.
 
 **Status (2026-11-23):** schematic generated, ERC clean (0 errors, 0 warnings). Board placed and **routed** (again the same day, after the cable changed from a plain UART to the pod bus): 0 unconnected pads, schematic and board agree, 2 DRC warnings, both cosmetic (the USB-C socket's outline runs off the board edge). The route is the autorouter's and has passed the rule check, not a person's eye. No fab files, no firmware. Not reviewed by a human. Nothing has been measured.
 
@@ -54,7 +54,7 @@ Fast signals are on the pins Nordic allows above 10 kHz; the slow ones are on th
 | `gen/pod_parts.py` | LCSC numbers, checked against JLCPCB on 2026-11-23. |
 | `gen/pod_layout.py` | Placement: every part's position. |
 | `gen/pod_libdefs.py` | Project symbols (RAK4630, TPS7B82, ASM330LHH, the RS-485 transceiver) and the RAK4630 footprint. |
-| `gen/build.py` | `python3 build.py sch`, then `pcb`, `route`, `view` (system `python3`, KiCad 10, Freerouting 2.5 as for the adapter). Uses the OBD adapter's generator modules (`../obd-adapter/gen`). |
+| `gen/build.py` | `python3 build.py sch`, then `pcb`, `route`, `view` (system `python3`, KiCad 10, Freerouting 2.5 as for the adapter). Uses the OBD adapter's generator modules (`../../obd-adapter/gen`). |
 | `gen/routing.json` | The routing, frozen: `route` replays it and refuses if a part moved. `POD_REROUTE=1` routes afresh (about 3 minutes), then run `pcb` and `route` once more: the first pass takes the autorouter's stub vias out of the file. The autorouter does not give the same result twice; one run in three so far left a pad of the IMU open and had to be repeated. |
 | `gen/review.py` | The annotated top view in `view/`. |
 | `lib/3dmodels/` | LCSC models of the two modules, fetched with easyeda2kicad. |
@@ -67,6 +67,6 @@ Fast signals are on the pins Nordic allows above 10 kHz; the slow ones are on th
 - The RAK4630 footprint's land positions come from the LCSC footprint and its numbering from the datasheet's figure 1: check it against a module or the datasheet's figure 5 before ordering.
 - Thermal: the modules and the GPS are rated to 85 °C; a dash top in the sun passes 80 °C. Find a supercap rated for it.
 - Firmware obligations so far: drive `GNSS_RXD_M` low while `GNSS_EN` is low; `GNSS_EN` is off at reset (100k); shut the RS-485 transceiver down while parked.
-- The other end of the pod bus is J11 on the OBD adapter's bottom edge (`../obd-adapter/README.md`, "Pod bus"). That board was reworked into a compact two-sided one on 2026-11-24: see its README for where it stands.
+- The other end of the pod bus is J11 on the OBD adapter's bottom edge (`../../obd-adapter/README.md`, "Pod bus"). That board was reworked into a compact two-sided one on 2026-11-24: see its README for where it stands.
 - R3, R4, D3 and D4 do not exist (they were the plain-UART cable's parts): the numbering has those gaps on purpose.
 - US 915 MHz rules (hopping or a 500 kHz channel) and whether the module's FCC grant covers the antenna used: not verified.

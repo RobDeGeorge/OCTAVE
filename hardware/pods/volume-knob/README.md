@@ -1,6 +1,6 @@
 # OCTAVE wireless volume knob, Rev 0
 
-A battery-powered knob for OCTAVE's volume: an ESP32-C3, a rotary encoder with a push switch, a ring of 12 addressable RGB LEDs and a rechargeable cell on a 47 mm round board. It talks ESP-NOW to the ESP32-S3 USB dongle OCTAVE already supports (`src/managers/esp32volumemanager.cpp`: `+N` / `-N` / `M` lines one way, volume, mute and colour the other), so the app needs no change. Built for a Jeep parked in Arizona: every part is rated to 80 C or more.
+A battery-powered knob for OCTAVE's volume: an ESP32-C3, a rotary encoder with a push switch, a ring of 12 addressable RGB LEDs and a rechargeable cell on a 47 mm round board. It talks ESP-NOW to the ESP32-S3 USB dongle OCTAVE already supports (`src/managers/esp32volumemanager.cpp`: `+N` / `-N` / `M` lines one way, volume, mute and colour the other), so the app needs no change. It is an OCTAVE pod (`../README.md`) on the radio link. Built for a Jeep parked in Arizona: every part is rated to 80 C or more.
 
 **Status:** generated, routed and checked by rule (ERC 0 errors, DRC 0 clearance errors, 0 unconnected, schematic and board agree), by two datasheet audits of the netlist, one review of the circuit and one of the routed layout, whose findings are fixed (see "What the reviews changed"). A third audit (five independent reviews against the makers' datasheets: pin numbers and land patterns, the power chain, the module and what firmware needs of it, the manufacturing files, the routed copper and the mechanics) found no wrong pin, footprint or rotation; what it changed is in the same section, and those last changes are themselves unreviewed. Not reviewed by a person, not ordered, no firmware. Read "Before ordering".
 
@@ -48,7 +48,7 @@ Pins: GPIO0 encoder A (wake), 1 encoder B (wake), 3 switch (wake), 4 cell voltag
 | `renders/` | Generated pictures of the board |
 
 ```bash
-cd hardware/volume-knob/gen
+cd hardware/pods/volume-knob/gen
 python3 build.py sch      # symbols, schematic, ERC
 python3 build.py pcb      # board with placement
 python3 build.py route    # replays gen/routing.json, pours, DRC
