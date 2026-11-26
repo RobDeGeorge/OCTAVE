@@ -631,8 +631,9 @@ cannot be hidden. The choice is one line in `<config>/dashboards/.home`.
   turns the classic Home's settings (`homeOBDParameters`, `homeVehicleCard`)
   into a user dashboard "My Home" when they
   differ from the defaults. Those settings are deprecated.
-- **Taps.** Switched off for now (`HomeDashboard.tapsOpenPages`, false since
-  2026-11-24: Home opens nothing on a tap). Only Home sets `DashboardRenderer.interactive`. A tap on a cell
+- **Taps.** Only the music card opens a page for now
+  (`HomeDashboard.tapActionsThatOpen`, `["media"]` since 2026-11-26; all were
+  off from 2026-11-24). Only Home sets `DashboardRenderer.interactive`. A tap on a cell
   emits `cellTapped(action, index)`: the cell's `props.tapAction`, else its
   type's catalog `defaultTapAction`, else `obd` for a PID-bound cell
   (`sensors` for an IMU reading), never for `none`. Home opens the music

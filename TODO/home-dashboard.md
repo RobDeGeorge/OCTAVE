@@ -22,7 +22,7 @@ What exists: `frontend/HomeDashboard.qml` (loaded by `frontend/MainMenu.qml`), `
 1. **The Pi check.** **Effort:** S. **Needs:** Pi, in the Jeep.
    - Home idle and while driving, dashboard against classic (switch in Settings): CPU of the `octave` process and frame time (`--profile`, or `top`). The cells are async `Loader`s with `clip`, the compass is a `Canvas`, the blurred art is a `MultiEffect` layer.
    - The migration on the Jeep's real config: the first start should write "My Home" from the card list in use there (no shift light: Home no longer gets one by itself).
-   - A press held on the touchscreen opens the editor; a tap on each widget opens its page (off since 2026-11-24, `HomeDashboard.tapsOpenPages`: decide whether it comes back); the progress bar seeks without opening the player.
+   - A press held on the touchscreen opens the editor; a tap on each widget opens its page (off since 2026-11-24; the music card opens the music page again since 2026-11-26, `HomeDashboard.tapActionsThatOpen`: decide the other widgets); the progress bar seeks without opening the player.
    - With the adapter unplugged: "No vehicle connected" over the readings and its Connect button.
 2. **The phone check.** **Effort:** S. **Needs:** S22.
    - Portrait Home on the phone's size; the music prompt and the Connect button reachable; long-press does not fight scrolling titles.

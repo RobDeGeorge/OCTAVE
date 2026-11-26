@@ -7,8 +7,8 @@
 // Display > Home Screen picks the one shown here.
 //
 // A tap on a widget can open its page (music, the OBD menu, Sensors, the
-// vehicle settings; the action DashboardRenderer.cellTapped() gives). That
-// is switched off for now: tapsOpenPages.
+// vehicle settings; the action DashboardRenderer.cellTapped() gives). Only
+// the music card does for now: tapActionsThatOpen.
 //
 // With nothing connected the widgets would only read "--", so this page lays
 // the first-run prompts over them: "No vehicle connected" + Connect over the
@@ -74,12 +74,13 @@ Item {
         wanted: home.visible && renderer.usesImu
     }
 
-    // Off while the new Home is being worked out (2026-11-24): a tap on a
-    // widget or beside a prompt goes nowhere. The prompts' own buttons still
-    // work.
-    property bool tapsOpenPages: false
+    // Which taps open a page. All were off while the new Home was worked
+    // out (2026-11-24); the music card opens the music page since 2026-11-26
+    // (Rob). A tap on any other widget, or beside a prompt, goes nowhere; the
+    // prompts' own buttons always work.
+    property var tapActionsThatOpen: ["media"]
     function openAction(action) {
-        if (!stackView || !tapsOpenPages) return
+        if (!stackView || tapActionsThatOpen.indexOf(action) < 0) return
         if (action === "media") {
             var page = (typeof settingsManager !== "undefined" && settingsManager) ? settingsManager.musicButtonDefaultPage : "mediaRoom"
             stackView.openPage(page === "mediaPlayer" ? "MediaPlayer.qml" : "MediaRoom.qml")
