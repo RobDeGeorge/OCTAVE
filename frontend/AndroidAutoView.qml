@@ -190,6 +190,8 @@ Item {
         EmbeddedDhuItem {
             id: embeddedDhu
             anchors.fill: parent
+            // Every touch is the phone's: no page swipe (Main.qml pageSwipe)
+            readonly property bool octaveNoPageSwipe: true
 
             Component.onCompleted: {
                 if (androidAutoManager) {

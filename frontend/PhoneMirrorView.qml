@@ -16,6 +16,8 @@ Item {
 
     id: phoneMirrorView
     objectName: "phoneMirrorView"
+    // No page swipe anywhere on the phone's page (Main.qml pageSwipe)
+    readonly property bool octaveNoPageSwipe: true
     property StackView stackView
     property var mainWindow: null
     width: parent ? parent.width : 0

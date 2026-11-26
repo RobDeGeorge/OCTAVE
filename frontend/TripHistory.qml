@@ -852,6 +852,8 @@ Item {
 
                         Canvas {
                             id: chart
+                            // Zoomed, a sideways drag pans: no page swipe (Main.qml pageSwipe)
+                            readonly property bool octaveNoPageSwipe: tripHistoryPage.zoomed
                             anchors.fill: parent
                             anchors.topMargin: dp(30)
                             anchors.margins: dp(8)

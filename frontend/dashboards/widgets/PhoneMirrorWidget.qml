@@ -36,6 +36,9 @@ Item {
     readonly property var octaveSupportedKinds: []   // self-binding, no PID
     // Every tap is the widget's own (the phone, or its buttons)
     function octaveConsumesTap(x, y) { return true }
+    // A swipe that starts anywhere on it never changes page (Main.qml
+    // pageSwipe), live or not: a sideways stroke here is the phone's
+    readonly property bool octaveNoPageSwipe: true
 
     // ── Features ────────────────────────────────────────────────────
     property bool showFrame: true    // the reading cards' box around it

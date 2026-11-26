@@ -200,6 +200,8 @@ Item {
     Item {
         anchors.fill: view3d
         enabled: root.interactive
+        // Dragging turns the vehicle: no page swipe here (Main.qml pageSwipe)
+        readonly property bool octaveNoPageSwipe: true
         PinchHandler {
             id: scenePinch
             target: null

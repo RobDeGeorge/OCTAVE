@@ -504,13 +504,75 @@ ApplicationWindow {
                 windowHeight: mainWindow.height
             }
 
-            // Disable transitions for better performance
-            pushEnter: null
-            pushExit: null
-            popEnter: null
-            popExit: null
-            replaceEnter: null
-            replaceExit: null
+            // No transitions for taps (a page change is instant). A swipe
+            // (pageSwipe) slides the new page in over the old one, which
+            // shrinks back and dims beneath it: screens laid on each other.
+            // The slides are XAnimators (render thread, smooth while the GUI
+            // thread shows the page); the shrink and dim are NumberAnimations,
+            // as a Scale/OpacityAnimator in the exit transition blanked the
+            // old page from the first frame (Qt 6.12). Push or pop depends on
+            // the stack, not the direction, so all six take the same pair.
+            property bool slideActive: false
+            property int slideSign: 1          // +1: the new page comes from the right
+            readonly property int slideMs: 320
+            clip: slideActive
+            pushEnter: slideActive ? slideEnter : null
+            pushExit: slideActive ? slideExit : null
+            popEnter: slideActive ? slideEnter : null
+            popExit: slideActive ? slideExit : null
+            replaceEnter: slideActive ? slideEnter : null
+            replaceExit: slideActive ? slideExit : null
+            onBusyChanged: if (!busy) slideActive = false
+
+            // Open a section by swipe: the page slides in from that side
+            function slideTo(sign, open) {
+                slideSign = sign
+                slideActive = true
+                open()
+                if (!busy)
+                    slideActive = false   // nothing was pushed or popped
+            }
+
+            property Transition slideEnter: Transition {
+                SequentialAnimation {
+                    PropertyAction { property: "z"; value: 2 }
+                    PropertyAction { property: "scale"; value: 1 }
+                    PropertyAction { property: "opacity"; value: 1 }
+                    XAnimator {
+                        from: stackView.slideSign * stackView.width
+                        to: 0
+                        duration: stackView.slideMs
+                        easing.type: Easing.OutCubic
+                    }
+                }
+            }
+            property Transition slideExit: Transition {
+                SequentialAnimation {
+                    PropertyAction { property: "z"; value: 1 }
+                    ParallelAnimation {
+                        XAnimator {
+                            from: 0
+                            to: -stackView.slideSign * stackView.width * 0.2
+                            duration: stackView.slideMs
+                            easing.type: Easing.OutCubic
+                        }
+                        NumberAnimation { property: "scale"; from: 1; to: 0.92; duration: stackView.slideMs; easing.type: Easing.OutCubic }
+                        NumberAnimation { property: "opacity"; from: 1; to: 0.35; duration: stackView.slideMs; easing.type: Easing.OutCubic }
+                    }
+                    // Hidden now: put it back as it was for its next visit
+                    PropertyAction { property: "x"; value: 0 }
+                    PropertyAction { property: "scale"; value: 1 }
+                    PropertyAction { property: "opacity"; value: 1 }
+                }
+            }
+        }
+
+        // What shows behind a page as it shrinks back under a sliding one
+        Rectangle {
+            anchors.fill: stackView
+            z: 0.5
+            color: "black"
+            visible: stackView.slideActive
         }
 
         // Pre-build the pages the nav buttons open, so even the first press
@@ -825,6 +887,79 @@ ApplicationWindow {
             PointHandler {
                 id: pointProbe
                 onActiveChanged: inputActivity.lastPress = Date.now()
+            }
+        }
+
+        // Swipe left / right on a page: the next / previous bottom-bar
+        // section, what a tap on that button does (no wrap at the ends,
+        // nothing on a page no button owns). Passive like inputActivity: the
+        // page still gets every touch, and a swipe that starts on something
+        // that drags sideways itself (a slider, a list that scrolls
+        // sideways, the phone's screen, a MouseArea with preventStealing, or
+        // an item with `octaveNoPageSwipe: true`) is left to it.
+        Item {
+            id: pageSwipe
+            objectName: "pageSwipe"
+            anchors.fill: stackView
+            z: 999990
+            property point _start
+            property point _last
+            property double _startTime: 0
+            property bool _blocked: true
+
+            PointHandler {
+                id: swipeProbe
+                acceptedButtons: Qt.LeftButton
+                onActiveChanged: {
+                    if (active) {
+                        pageSwipe._start = point.position
+                        pageSwipe._last = point.position
+                        pageSwipe._startTime = Date.now()
+                        pageSwipe._blocked = pageSwipe.blockedAt(point.scenePosition)
+                    } else {
+                        pageSwipe.finish()
+                    }
+                }
+                onPointChanged: if (active) pageSwipe._last = point.position
+            }
+
+            function _ownsSideways(it) {
+                if (it.octaveNoPageSwipe === true) return true   // even while disabled
+                if (!it.visible || !it.enabled) return false
+                if (it.preventStealing === true) return true                          // a MouseArea that drags
+                if (it.maximumTouchPoints !== undefined) return true                  // MultiPointTouchArea (phone mirror)
+                if (it.orientation === Qt.Horizontal && it.value !== undefined) return true  // Slider
+                if (it.first !== undefined && it.second !== undefined && it.orientation === Qt.Horizontal) return true  // RangeSlider
+                if (it.path !== undefined && it.interactive === true) return true    // PathView
+                if (it.flickableDirection !== undefined && it.interactive === true    // Flickable / ListView
+                        && it.flickableDirection !== Flickable.VerticalFlick
+                        && it.contentWidth > it.width + 1) return true
+                return false
+            }
+            function blockedAt(scenePos) {
+                var it = stackView.currentItem
+                for (var depth = 0; it && depth < 64; ++depth) {
+                    if (_ownsSideways(it)) return true
+                    var p = it.mapFromItem(null, scenePos.x, scenePos.y)
+                    it = it.childAt(p.x, p.y)
+                }
+                return !stackView.currentItem
+            }
+            function finish() {
+                if (_blocked || stackView.busy) return
+                var dx = _last.x - _start.x, dy = _last.y - _start.y
+                var dt = Date.now() - _startTime
+                // A quick, clearly sideways stroke over a good part of the page
+                if (dt > 700 || Math.abs(dx) < Math.max(App.Spacing.dp(90), width * 0.18)
+                        || Math.abs(dx) < Math.abs(dy) * 2)
+                    return
+                var sections = bottomBar.navSections
+                var i = sections.indexOf(bottomBar.activeSection)
+                if (i < 0) return
+                var next = i + (dx < 0 ? 1 : -1)   // finger to the left: the section to the right
+                if (next < 0 || next >= sections.length) return
+                console.info("[NAV] Swipe", dx < 0 ? "left" : "right", "to", sections[next])
+                stackView.slideTo(dx < 0 ? 1 : -1, bottomBar.navButtons[sections[next]].open)
             }
         }
 
