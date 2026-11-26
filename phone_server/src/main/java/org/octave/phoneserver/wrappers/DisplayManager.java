@@ -199,6 +199,36 @@ public final class DisplayManager {
         }
     }
 
+    /**
+     * OCTAVE: the display's brightness as the brightness controller has it
+     * (0..1), or NaN if it cannot be read (before Android 12, or refused).
+     */
+    public float getBrightness(int displayId) {
+        try {
+            Method method = manager.getClass().getMethod("getBrightness", int.class);
+            return (float) method.invoke(manager, displayId);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            Ln.w("Could not read the display brightness: " + e);
+            return Float.NaN;
+        }
+    }
+
+    /**
+     * OCTAVE: what the brightness slider sends while it is dragged: a level
+     * that is not saved, NaN to clear it (the controller goes back to the
+     * real level and sends that to the panel). False if refused.
+     */
+    public boolean setTemporaryBrightness(int displayId, float brightness) {
+        try {
+            Method method = manager.getClass().getMethod("setTemporaryBrightness", int.class, float.class);
+            method.invoke(manager, displayId, brightness);
+            return true;
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            Ln.w("Could not set a temporary display brightness: " + e);
+            return false;
+        }
+    }
+
     public DisplayListenerHandle registerDisplayListener(DisplayListener listener, Handler handler) {
         try {
             Class<?> displayListenerClass = Class.forName("android.hardware.display.DisplayManager$DisplayListener");

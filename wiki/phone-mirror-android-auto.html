@@ -484,9 +484,10 @@
           <p><strong>Idle timeout</strong>: a woken lock screen overrides the phone's screen timeout with a few seconds
             (<code>mUserActivityTimeoutOverrideFromWindowManager=5000</code> on a Galaxy S-series), and <code>stay_awake</code> only holds
             while the phone is charging. Left alone, a cradled locked phone therefore dozed every ~5 s; each doze blanked the mirror for
-            a moment and looked like a power press, so the panel was relit. While enabled, awake and not in use, the keeper calls
+            a moment and looked like a power press, so the panel was relit. While enabled and awake the keeper calls
             <code>IPowerManager.userActivity()</code> every 1.5 s (the shell holds <code>DEVICE_POWER</code>), so the only dozes left
-            are real power presses.</p>
+            are real power presses. Since 2026-11-25 that includes the in-use state: before, an unlocked phone on Wi-Fi (off the charger,
+            so no <code>stay_awake</code>) ran its normal timeout, dimmed, dozed and was woken again, which showed as a brightness dip.</p>
           <p><strong>Decisions</strong> (what a power press meant):</p>
           <ul>
             <li><strong>Start</strong>: an awake, unlocked phone is in the user's hand (in use); an awake, locked one is in the cradle and
@@ -494,7 +495,10 @@
             <li><strong>Press while locked</strong> (phone in the cradle): wake it, then <em>force the panel on</em> once interactive (the wake
               alone does not reliably relight a SurfaceControl-dark panel; commit <code>2cdd28e</code>). The forced relight only runs while
               <code>panelDark</code> is on: setting the power mode bypasses the brightness controller and wakes a Galaxy S22 dim, so a
-              phone the keeper never darkened is left alone. Leave it lit for the
+              phone the keeper never darkened is left alone (since 2026-11-25 it also runs when a press darkened the panel). Since 2026-11-26 every forced relight is followed, 300 ms later, by what a touch of the brightness slider does: a
+              temporary level 1 % off the controller's own (<code>DisplayManagerGlobal.setTemporaryBrightness</code>), cleared 100 ms later,
+              so the controller sends its real level to the panel again. Without it the S26 Ultra's panel stayed very dim while its
+              slider said 70 %, until the slider was touched. The log line is <code>Mirror keeper: brightness re-sent to the panel</code>. Leave it lit for the
               <strong>8 s grace window</strong>. If the keyguard is dismissed in that window (or at any time), or the phone turns out to be
               unlocked already (a lock-after delay had not run), or the button is pressed <em>again</em> within grace + 2 s (nothing
               visible happened for them the first time, so they are trying to get in), the phone is <strong>in use</strong>: panel on, locks
@@ -502,7 +506,11 @@
             <li><strong>In use</strong>: the mirror keeps working (DeX on the virtual display is independent of the panel). It ends when the
               keyguard re-engages (lock shortcut or lock-after delay: grace, then blank) or on <code>OCTAVE_TAKE_BACK</code>.</li>
             <li><strong>Press while in use</strong>: the user is putting the phone down -- no grace, the panel-off goes out before the wake
-              and again the instant the phone is interactive, so it never relights.</li>
+              and again the instant the phone is interactive, so it never relights. With or without <code>panelDark</code>.</li>
+            <li><strong>Press with the panel lit, <code>panelDark</code> off</strong> (since 2026-11-25): "screen off", as on any phone. The
+              phone must stay awake for the mirror, so it is woken with its panel dark; the next press is the locked case above and
+              lights it again (forced, since the keeper darkened it). Before, the wake left the panel lit and the phone could not be put
+              to sleep while mirrored.</li>
             <li>In-use is <strong>edge-triggered</strong> on the keyguard transition (locked &rarr; unlocked enters, unlocked &rarr; locked leaves);
               a level check raced Samsung's 5 s lock-after delay and undid <code>resumeMirroring()</code> on the next poll (commit <code>e1fa1c4</code>).</li>
           </ul>
@@ -639,7 +647,9 @@
               starts the first reconnect at once rather than one poll later, and the reconnect retries run whichever page is on screen
               (the music page, say), not only while a view shows the phone. What is heard: the song carries on in the car after a short
               gap (the reconnect plus the Wi-Fi audio cushion), having played on silently on the phone meanwhile; nothing comes out of
-              the phone. A resize restart or Stop still pauses the music as before. Not yet timed on the S26 Ultra.</li>
+              the phone. The manager keeps the phone's track (<code>mediaActive</code>, title, art) through the quiet
+              reconnect, so the music page does not flash its empty state; it is cleared only if the reconnect gives up
+              (<code>reconnecting</code> to anything but <code>streaming</code>). A resize restart or Stop still pauses the music as before. Not yet timed on the S26 Ultra.</li>
             <li><strong>Bit rate</strong>: automatic, with no settings since 2026-11-25. Every session adapts (see <a href="#pm-adaptive">Adaptive quality</a>):
               USB starts at 16 Mbps with a ceiling of 32 (<code>kUsbStartBps</code> / <code>kUsbMaxBps</code>), Wi-Fi at 8 with a ceiling of 20
               (<code>kWifiStartBps</code> / <code>kWifiMaxBps</code>), never under 2 (<code>kAdaptiveMinBps</code>). The rate is cut as soon as

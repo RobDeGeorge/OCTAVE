@@ -438,6 +438,33 @@ private slots:
         QVERIFY(!m.mediaActive() && !m.m_mediaAvailable && m.m_mediaTitle.isEmpty() && m.mediaArtUrl().isEmpty());
     }
 
+    void cablePullKeepsTheSongUntilTheReconnectGivesUp()
+    {
+        // The music plays on through a link drop: the music page must not
+        // flash "nothing playing" while the session comes back over Wi-Fi
+        PhoneMirrorManager m;
+        m.onMediaState(mediaState(true));
+        m.m_hadStream = true;
+        m.setSessionState(QStringLiteral("streaming"));
+        QSignalSpy active(&m, &PhoneMirrorManager::mediaActiveChanged);
+
+        m.onDisconnected(ScrcpyClient::disconnectedMessage(USB));   // cable pulled
+        QCOMPARE(m.sessionState(), QStringLiteral("reconnecting"));
+        QVERIFY(m.mediaActive() && m.m_mediaPlaying && m.m_mediaTitle == "Song");
+        m.onDisconnected(m.describeDeviceState("none"));            // a retry found no phone yet
+        QVERIFY(m.mediaActive());
+        m.setSessionState(QStringLiteral("streaming"));             // back over Wi-Fi
+        QVERIFY(m.mediaActive());
+        QCOMPARE(active.count(), 0);
+
+        m.onDisconnected(ScrcpyClient::disconnectedMessage(USB));
+        m.m_reconnectSinceMs -= PhoneMirrorManager::kReconnectGraceMs + 1;
+        m.onRetryTick();                                            // gave up
+        QCOMPARE(m.sessionState(), QStringLiteral("waitingForPhone"));
+        QVERIFY(!m.mediaActive() && m.m_mediaTitle.isEmpty());
+        m.stopScrcpy();
+    }
+
     // ── Probes and notices ──────────────────────────────────────────────
     void devicesListAndNotices()
     {

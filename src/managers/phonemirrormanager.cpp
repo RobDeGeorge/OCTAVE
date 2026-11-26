@@ -551,7 +551,13 @@ void PhoneMirrorManager::setSessionState(const QString &state)
 {
     if (state != m_sessionState) {
         qCInfo(lcPhoneMirror) << "Session:" << m_sessionState << "->" << state;
+        // A quiet reconnect kept the phone's media (onDisconnected); one that
+        // ends anywhere but a new stream lets it go
+        const bool reconnectEnded = m_sessionState == QLatin1String("reconnecting")
+                                    && state != QLatin1String("streaming");
         m_sessionState = state;
+        if (reconnectEnded)
+            resetMedia();
         emit sessionStateChanged();
     }
     updateRetryTimer();
@@ -1265,7 +1271,16 @@ void PhoneMirrorManager::onDisconnected(const QString &disconnectReason)
         reason = kEncoderGaveUp;
     }
     resetPhoneState();
-    resetMedia();
+    // A link drop mid-stream goes to a quiet reconnect (reportError), and the
+    // phone's music plays on meanwhile (phone_server HeldAudioCapture): keep
+    // what is playing, or the music page flashes its "nothing playing" state
+    // for the second it takes to come back. Cleared if the reconnect gives up
+    // (setSessionState).
+    const QString kind = errorKindFor(reason);
+    const bool quietDrop = (kind == QLatin1String("device") || kind == QLatin1String("noPhone"))
+                           && (m_hadStream || m_sessionState == QLatin1String("reconnecting"));
+    if (!quietDrop)
+        resetMedia();
     const bool wasReady = m_ready;
     m_ready = false;
     m_isStarting = false;

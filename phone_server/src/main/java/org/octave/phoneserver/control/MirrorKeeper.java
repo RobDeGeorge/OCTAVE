@@ -30,9 +30,14 @@ import android.view.KeyEvent;
  * panel is blanked;</li>
  * <li>press while in use: the user is putting the phone down; blank the panel
  * before the wake and again as soon as the phone is interactive;</li>
+ * <li>without the panel-dark policy, a press with the panel lit is "screen
+ * off" as on any phone: woken with the panel dark; the next press is the
+ * locked case above and lights it;</li>
  * <li>keyguard dismissed at any time: in use; keyguard re-engaged while
  * interactive (lock shortcut / lock-after delay): grace, then blank.</li>
  * </ul>
+ * While mirrored the idle timer is reset every 1.5 s, in use or not, so the
+ * screen never dims or times out (stay_awake only works on the charger).
  * The panel is blanked with SurfaceControl's power mode (the phone stays
  * awake), which CleanUp restores when the session ends. Every state change
  * is reported to the client as a DeviceMessage so it can show what is going
@@ -72,7 +77,8 @@ public final class MirrorKeeper {
     private boolean blankOnWake;
     private long lastWakeMs;
     private long lastDozeMs = -1;   // uptime ms of the last observed doze
-    private boolean relightOnWake;  // force the panel on once interactive again
+    private boolean relightOnWake;  // the panel may be on again once interactive
+    private boolean forceRelight;   // ... and must be forced on (it was dark)
     private long lastUserActivityMs;
 
     private final Runnable pollRunnable = this::poll;
@@ -218,10 +224,22 @@ public final class MirrorKeeper {
                 setInUse(false);
                 graceDeadline = -1;
                 lastDozeMs = -1;
-                blankOnWake = panelDark;
-                if (blankOnWake) {
-                    setPanel(false);
-                }
+                // Dark even without the panel-dark policy: they pressed the
+                // button to turn the screen off, so it goes off
+                blankOnWake = true;
+                setPanel(false);
+                wake();
+            } else if (!panelDark && !panelIsDark) {
+                // The panel is lit (no panel-dark policy): the press means
+                // "screen off", as on any phone. The phone has to stay awake
+                // for the mirror, so it is woken with its panel dark; the next
+                // press lights it again (below)
+                Ln.i("Mirror keeper: power pressed with the panel lit; waking it, panel dark");
+                graceDeadline = -1;
+                lastDozeMs = -1;
+                blankOnWake = true;
+                relightOnWake = false;
+                setPanel(false);
                 wake();
             } else {
                 long now = android.os.SystemClock.uptimeMillis();
@@ -229,6 +247,7 @@ public final class MirrorKeeper {
                 lastDozeMs = now;
                 blankOnWake = false;
                 relightOnWake = true;
+                forceRelight = panelDark || panelIsDark;
                 if (again) {
                     // Second press inside the window: nothing visible happened
                     // for them the first time, so they are trying to get in.
@@ -250,11 +269,12 @@ public final class MirrorKeeper {
                 setPanel(false);
             } else if (relightOnWake) {
                 // Do not trust the wake to relight a SurfaceControl-dark panel.
-                // Only when the panel-dark policy is on: forcing the power mode
-                // bypasses the brightness controller and wakes the panel dim
-                // (Galaxy S22), so a phone we never darkened is left alone.
+                // Only when we darkened it (policy or a press): forcing the
+                // power mode bypasses the brightness controller and wakes the
+                // panel dim (Galaxy S22), so a phone we never darkened is left alone.
                 relightOnWake = false;
-                if (panelDark) {
+                if (forceRelight) {
+                    forceRelight = false;
                     panelIsDark = true;
                     setPanel(true);
                 }
@@ -271,8 +291,10 @@ public final class MirrorKeeper {
             }
         }
 
-        if (!asleep && enabled && !inUse) {
-            // Mirrored and not in the user's hand: never let it time out
+        if (!asleep && enabled) {
+            // Mirrored: never let it dim or time out, in the user's hand too.
+            // Over USB stay_awake does this, but only on the charger: on Wi-Fi
+            // the screen dimmed, slept, and was woken again (a brightness dip)
             long now = android.os.SystemClock.uptimeMillis();
             if (now - lastUserActivityMs >= USER_ACTIVITY_MS) {
                 lastUserActivityMs = now;
@@ -346,7 +368,39 @@ public final class MirrorKeeper {
             if (cleanUp != null) {
                 cleanUp.setRestoreDisplayPower(!on);
             }
+            if (on) {
+                handler.removeCallbacks(nudgeBrightness);
+                handler.removeCallbacks(releaseBrightness);
+                handler.postDelayed(nudgeBrightness, BRIGHTNESS_NUDGE_DELAY_MS);
+            }
         }
+    }
+
+    // Forcing the panel's power mode on bypasses the brightness controller:
+    // the panel lit very dim while the phone's slider said 70 % (Galaxy S26
+    // Ultra, 2026-11-26; S22 before), until the slider was touched. Do what a
+    // touch of the slider does: a temporary level a hair off the real one,
+    // then clear it, so the controller sends its real level to the panel again.
+    private static final long BRIGHTNESS_NUDGE_DELAY_MS = 300;
+    private static final long BRIGHTNESS_NUDGE_HOLD_MS = 100;
+
+    private final Runnable nudgeBrightness = this::doNudgeBrightness;
+    private final Runnable releaseBrightness = this::doReleaseBrightness;
+
+    private void doNudgeBrightness() {
+        if (panelIsDark) {
+            return;
+        }
+        float level = ServiceManager.getDisplayManager().getBrightness(0);
+        float nudge = Float.isNaN(level) ? 0.5f : (level > 0.5f ? level - 0.01f : level + 0.01f);
+        if (ServiceManager.getDisplayManager().setTemporaryBrightness(0, nudge)) {
+            Ln.i("Mirror keeper: brightness re-sent to the panel (level " + level + ")");
+            handler.postDelayed(releaseBrightness, BRIGHTNESS_NUDGE_HOLD_MS);
+        }
+    }
+
+    private void doReleaseBrightness() {
+        ServiceManager.getDisplayManager().setTemporaryBrightness(0, Float.NaN);
     }
 
     private void report() {
