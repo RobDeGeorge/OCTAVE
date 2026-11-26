@@ -426,12 +426,29 @@
               measured ~10 dB under local music on the Pi; the phone's own volume is deliberately never touched (an earlier
               attempt used <code>adb shell media volume</code>, which does not exist on the test handset and would leave the phone at
               maximum after a crash; commit <code>19c3b10</code>).</li>
-            <li>Chunks are <strong>queued</strong> with a cap of 48000 bytes (~250 ms); when the GUI thread falls behind the oldest are dropped
-              so audio stays close to the picture. <code>audioReady</code> wakes a queued slot on the GUI thread.</li>
-            <li>On the GUI thread a <code>QAudioSink</code> (48 kHz, stereo, Int16, default output device, ~200 ms device buffer) is
-              created lazily; chunks are written only while <code>bytesFree()</code> allows, never blocking. <code>setVolume()</code>
-              from <code>VolumeController</code> sets the sink volume, so the knob and mute apply. If the default device is missing or
+            <li>Chunks are <strong>queued</strong> for the GUI thread (<code>audioReady</code> wakes a queued slot there); the audio thread's
+              own limit is 2 s, against a GUI thread that stopped taking audio at all.</li>
+            <li>On the GUI thread a <code>QAudioSink</code> (48 kHz, stereo, Int16, default output device) is created lazily; chunks are
+              written only while <code>bytesFree()</code> allows, never blocking. <code>setVolume()</code> from
+              <code>VolumeController</code> sets the sink volume, so the knob and mute apply. If the default device is missing or
               refuses the format, a warning is logged and audio is silently skipped.</li>
+            <li><strong>The cushion</strong> (<span class="file-path">src/phone_mirror/audiocushion.h</span>, since 2026-11-25; rules only, tested by
+              <code>tst_audiocushion</code>): how much sound is kept ahead of the speaker. Audio shares one adb link with the picture and is
+              played from the GUI thread, so a late packet or a busy GUI thread stops the music unless enough is already queued. Before
+              that date the buffer was a fixed 200 ms and anything more than about 450 ms late was dropped, which on a Wi-Fi link meant
+              gaps and skips in songs (in the Jeep; and measured on a home network with an S26 Ultra: stalls of 0.3 to 0.45 s a few times
+              a minute, the audio arriving late in a burst, not lost). Now: audio is held back until the target is queued (at the start
+              and after the output ran dry), the device buffer is opened at the target (PulseAudio and PipeWire play once it is full),
+              and each time the output runs dry mid-stream the target doubles, up to 800 ms (<code>kMaxMs</code>); the sink is reopened at
+              the new size. USB starts at 200 ms (<code>kStartMs</code>), Wi-Fi at 400 (<code>PhoneMirrorManager::kWifiAudioCushionMs</code>).
+              It never shrinks during a run (that would cut sound), and the manager hands what a link needed to the next session
+              (<code>setAudioCushionMs()</code>, one value for USB and one for Wi-Fi), so a restart does not learn it again. A silence of
+              2 s or more is the link dropping or the phone going quiet, not jitter, and changes nothing. A late burst is kept up to 600 ms
+              over the target (<code>kSlackMs</code>); beyond that the oldest is dropped so the sound cannot keep falling behind. The cost
+              is that sound trails the picture and the controls by up to the cushion. The log says what happened:
+              <code>phone audio ran dry (N this session); keeping X ms ahead from now on</code>, <code>phone audio arrived N ms late in
+              one burst; dropped the oldest</code>, and at the end of a session <code>phone audio: N underruns, X ms dropped, cushion Y
+              ms</code>. Not done: the audio still shares adb's one stream with the video, and is still written from the GUI thread.</li>
             <li>The same GUI slot turns "sound seen" into <code>audioPlaying = true</code> and (re)arms a single-shot <strong>1.5 s</strong>
               release timer; silence longer than that drops it. Long enough to bridge the gaps between navigation sentences,
               short enough that music comes back promptly after a prompt.</li>

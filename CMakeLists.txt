@@ -453,6 +453,7 @@ qt_add_executable(octave
     src/sim/imufeed.cpp
     src/phone_mirror/scrcpyclient.h
     src/phone_mirror/adaptivebitrate.h
+    src/phone_mirror/audiocushion.h
     src/phone_mirror/scrcpyclient.cpp
     src/util/h264decoder.h
     src/util/h264decoder.cpp

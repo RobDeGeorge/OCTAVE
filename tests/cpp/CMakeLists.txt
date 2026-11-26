@@ -46,6 +46,7 @@ octave_add_test(tst_dtcdescriptions SOURCES managers/dtcdescriptions.h managers/
 octave_add_test(tst_licensetexts SOURCES util/licensetexts.h util/licensetexts.cpp)
 octave_add_license_texts(tst_licensetexts)
 octave_add_test(tst_adaptivebitrate)
+octave_add_test(tst_audiocushion)
 octave_add_test(tst_settingsmanager SOURCES managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
 if(UNIX)   # the crash path it tests is the POSIX one (signals); each case re-runs the binary as a child
     octave_add_test(tst_logger SOURCES util/logger.h util/logger.cpp managers/settingsmanager.h managers/settingsmanager.cpp LIBS Qt6::Gui)
@@ -187,7 +188,7 @@ if(OCTAVE_HAVE_FFMPEG)
     list(APPEND _mirror_defines OCTAVE_HAVE_FFMPEG)
 endif()
 octave_add_test(tst_scrcpyclient
-    SOURCES phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h util/h264decoder.h util/h264decoder.cpp
+    SOURCES phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h phone_mirror/audiocushion.h util/h264decoder.h util/h264decoder.cpp
     LIBS ${_mirror_libs}
     DEFINES ${_mirror_defines})
 if(WIN32 AND OCTAVE_HAVE_FFMPEG)
@@ -195,7 +196,7 @@ if(WIN32 AND OCTAVE_HAVE_FFMPEG)
 endif()
 octave_add_test(tst_phonemirror
     SOURCES managers/phonemirrormanager.h managers/phonemirrormanager.cpp service/staticfiles.h service/staticfiles.cpp
-            phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h util/h264decoder.h util/h264decoder.cpp
+            phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h phone_mirror/audiocushion.h util/h264decoder.h util/h264decoder.cpp
             phone_mirror/qrcodegen.hpp phone_mirror/qrcodegen.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
     LIBS ${_mirror_libs}
@@ -211,7 +212,7 @@ octave_add_test(tst_nowplaying
             managers/spotifymanager.h managers/spotifymanager.cpp managers/spotifyapi.h managers/spotifyapi.cpp
             managers/mediamanager.h managers/mediamanager.cpp util/folderbrowser.h util/folderbrowser.cpp service/staticfiles.h service/staticfiles.cpp util/units.h util/units.cpp
             managers/phonemirrormanager.h managers/phonemirrormanager.cpp
-            phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h util/h264decoder.h util/h264decoder.cpp
+            phone_mirror/scrcpyclient.h phone_mirror/scrcpyclient.cpp phone_mirror/adaptivebitrate.h phone_mirror/audiocushion.h util/h264decoder.h util/h264decoder.cpp
             phone_mirror/qrcodegen.hpp phone_mirror/qrcodegen.cpp
             managers/settingsmanager.h managers/settingsmanager.cpp
     LIBS ${_mirror_libs} Qt6::Concurrent ${_taglib}

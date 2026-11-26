@@ -222,6 +222,9 @@ public:
     // Port a USB phone's adbd is switched to for adb over TCP (setting scrcpyAutoWifi)
     static constexpr int kTcpipPort = 5555;
     static constexpr int kWirelessDebuggingMinSdk = 30;   // Android 11
+    // Phone audio kept ahead of the speaker at the start of a Wi-Fi session
+    // (USB starts at AudioCushion::kStartMs); it grows from there when needed
+    static constexpr int kWifiAudioCushionMs = 400;
     // The cable path is not repeated for a phone more often than this
     // (a session restarts for a new size, a reconnect ...)
     static constexpr qint64 kWirelessDebuggingIntervalMs = 30000;
@@ -490,6 +493,7 @@ private:
     bool m_autoWifi = false;
     int m_currentBitRate = 0;
     bool m_tcpipChecked = false;    // the auto-Wi-Fi step ran for the session being started
+    int m_audioCushionMs[2] = {0, 0};   // phone-audio cushion learned this run: [USB, Wi-Fi] (0 = the default)
     QString m_wirelessDebugSerial;  // USB phone the cable path last ran for ...
     qint64 m_wirelessDebugAtMs = 0; // ... and when
     bool m_staleRetried = false;    // a failed Wi-Fi start already dropped its stale ip:port and retried

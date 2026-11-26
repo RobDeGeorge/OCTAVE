@@ -22,6 +22,8 @@
 #include <QVariantMap>
 #include <QList>
 
+#include "audiocushion.h"
+
 #include <atomic>
 #include <functional>
 #include <mutex>
@@ -102,6 +104,11 @@ public:
     // pick now differs from the one it has.
     void setAudioOutputDevice(const QString &id);
     bool audioActive() const { return m_audioActive.load(); }
+    // How much phone audio is kept ahead of the speaker (audiocushion.h):
+    // grows when the output runs dry. Set before start() to carry what an
+    // earlier session on this link learned. GUI thread.
+    int audioCushionMs() const;
+    void setAudioCushionMs(int ms);
     // The phone is producing sound right now (level above kAudioSignalThreshold
     // within the last kAudioHoldMs); drives ducking of OCTAVE's other sources
     bool audioPlaying() const { return m_audioPlaying; }
@@ -151,6 +158,7 @@ signals:
     void frameReady();                          // a decoded frame is waiting (GUI thread pulls it)
     void audioReady();                          // PCM chunks are queued (GUI thread writes them)
     void audioStateChanged(bool active);        // phone audio is (not) being played through OCTAVE
+    void audioCushionChanged(int ms);           // the output ran dry: more is kept ahead from now on
     void audioPlayingChanged(bool playing);     // the phone is (not) producing sound (GUI thread)
     // PCM just written to the audio sink, bufferedMs still queued ahead of
     // it in the sink (GUI thread); feeds the live visualizer
@@ -246,6 +254,7 @@ private:
     QList<QByteArray> m_audioQueue;
     qsizetype m_audioQueueBytes = 0;
     std::mutex m_audioMutex;
+    AudioCushion m_audioCushion;   // GUI thread
     QAudioSink *m_audioSink = nullptr;
     QIODevice *m_audioIo = nullptr;
     QString m_audioDeviceId;

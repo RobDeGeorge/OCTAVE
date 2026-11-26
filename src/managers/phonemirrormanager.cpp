@@ -1061,6 +1061,14 @@ void PhoneMirrorManager::continueStart(const StartPrep &prep, int generation)
     }
     m_client = new ScrcpyClient(m_adbPath, jar, this);
     m_client->setVideoSink(m_videoSink);
+    // What this kind of link needed last time, so a restart (a new window
+    // size, a reconnect) does not learn it again through more gaps
+    // Wi-Fi starts higher: stalls of 0.3 to 0.45 s came a few times a minute
+    // even on a home network (S26 Ultra, 2026-11-25)
+    m_client->setAudioCushionMs(std::max(m_audioCushionMs[wireless ? 1 : 0], wireless ? kWifiAudioCushionMs : 0));
+    connect(m_client, &ScrcpyClient::audioCushionChanged, this, [this, wireless](int ms) {
+        m_audioCushionMs[wireless ? 1 : 0] = ms;
+    });
     connect(m_client, &ScrcpyClient::connected, this, &PhoneMirrorManager::onConnected, Qt::QueuedConnection);
     connect(m_client, &ScrcpyClient::disconnected, this, &PhoneMirrorManager::onDisconnected, Qt::QueuedConnection);
     connect(m_client, &ScrcpyClient::frameSizeChanged, this, [this](int w, int h) {
