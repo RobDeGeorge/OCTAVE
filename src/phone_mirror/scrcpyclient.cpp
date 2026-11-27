@@ -78,6 +78,14 @@ constexpr quint8 kMsgOctaveTakeBack = 101;
 constexpr quint8 kMsgOctaveSetBitRate = 102;   // int32 bps (adaptive quality)
 constexpr quint8 kMsgOctaveMedia = 103;        // u8 action, int64 argument (phone_server PhoneMedia)
 constexpr quint8 kMsgOctaveEnd = 104;          // deliberate stop: release the held audio now
+constexpr quint8 kMsgOctavePing = 105;         // every kPingIntervalMs; the server answers kDevMsgOctavePong
+// A link that dies without closing (the phone left the Wi-Fi network, the
+// access point went away) leaves every socket open: adb only notices after
+// the kernel's TCP timeout, a quarter of an hour. So the client pings, and
+// once the server has answered one, this long without an answer ends the
+// session as a dropped link. The server does the same with the pings.
+constexpr int kPingIntervalMs = 2000;
+constexpr int kLinkDeadMs = 8000;
 // Device messages (server -> client on the control socket)
 constexpr quint8 kDevMsgClipboard = 0;
 constexpr quint8 kDevMsgAckClipboard = 1;
@@ -87,6 +95,7 @@ constexpr quint8 kDevMsgOctaveMediaState = 101;   // the phone's media session (
 constexpr quint8 kDevMsgOctaveMediaArt = 102;     // u32 length + JPEG (0 = no art)
 constexpr quint8 kDevMsgOctaveMediaQueue = 103;   // i64 active id, title, u16 count, [i64 id, title, subtitle, art uri]
 constexpr quint8 kDevMsgOctaveMediaQueueArt = 104; // art uri, u32 length + JPEG (0 = unreadable)
+constexpr quint8 kDevMsgOctavePong = 105;         // no payload
 // A dozing phone streams pure black frames until it is woken. Rather than
 // flash the dash black, a run of all-black frames is held back (the last good
 // frame stays on screen) for this long, or for as long as the manager says
@@ -295,6 +304,7 @@ bool ScrcpyClient::start(const QString &serial, const QString &displaySize,
 #endif
     m_serial = serial;
     m_stopping = false;
+    m_linkLost = false;
     m_frameCount = 0;
     m_startBitRate = bitRate;
     m_thread = std::thread([this, displaySize, maxFps, bitRate, audio, stayAwake, attachScid]() {
@@ -803,8 +813,8 @@ void ScrcpyClient::session(QString displaySize, int maxFps, int bitRate, bool au
     qCInfo(lcScrcpyClient) << "removed forward tcp:" << m_port;
     m_port = 0;
     if (m_running.exchange(false)) {
-        // Ended without a fail(): the peer closed the stream
-        if (!m_stopping.exchange(true))
+        // Ended without a fail(): the peer closed the stream, or stopped answering
+        if (!m_stopping.exchange(true) || m_linkLost.load())
             emit disconnected(disconnectedMessage(m_serial));
     }
 }
@@ -955,11 +965,40 @@ void ScrcpyClient::deviceMessageLoop(qintptr fd)
 {
     // Device messages from the server (phone_server DeviceMessageWriter)
     char hdr[8];
+    qint64 lastPing = 0;
+    qint64 lastAnswer = nowMs();
+    bool answered = false;   // a server from before the ping never answers: no verdict on it
     while (!m_stopping.load()) {
+        // Wait for the next message in short steps, pinging meanwhile
+        bool readable = false;
+        while (!readable && !m_stopping.load()) {
+            const qint64 now = nowMs();
+            if (now - lastPing >= kPingIntervalMs) {
+                lastPing = now;
+                sendControl(QByteArray(1, char(kMsgOctavePing)));
+            }
+            if (answered && now - lastAnswer > kLinkDeadMs) {
+                qCWarning(lcScrcpyClient) << "no answer from the phone for" << (now - lastAnswer) / 1000.0
+                                          << "s: the link is dead";
+                m_linkLost = true;
+                m_stopping = true;   // ends the video and audio loops; the teardown reports a drop
+                return;
+            }
+#ifdef Q_OS_WIN
+            WSAPOLLFD pfd{static_cast<SOCKET>(fd), POLLRDNORM, 0};
+            readable = ::WSAPoll(&pfd, 1, 250) > 0;
+#else
+            struct pollfd pfd{static_cast<int>(fd), POLLIN, 0};
+            readable = ::poll(&pfd, 1, 250) > 0;
+#endif
+        }
         if (!recvExactFd(fd, hdr, 1, m_stopping))
             return;
         const quint8 type = quint8(hdr[0]);
-        if (type == kDevMsgClipboard) {
+        if (type == kDevMsgOctavePong) {
+            answered = true;
+            lastAnswer = nowMs();
+        } else if (type == kDevMsgClipboard) {
             if (!recvExactFd(fd, hdr, 4, m_stopping)) return;
             const quint32 n = qFromBigEndian<quint32>(hdr);
             QByteArray skip(int(qMin<quint32>(n, 1u << 18)), 0);

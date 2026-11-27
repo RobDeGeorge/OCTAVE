@@ -79,6 +79,8 @@ public class DeviceMessageWriter {
                 dos.writeInt(art.length);
                 dos.write(art);
                 break;
+            case DeviceMessage.TYPE_OCTAVE_PONG:
+                break;   // the type byte is all of it
             default:
                 throw new ControlProtocolException("Unknown event type: " + type);
         }

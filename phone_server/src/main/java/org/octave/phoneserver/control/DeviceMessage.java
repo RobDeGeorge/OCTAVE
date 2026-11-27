@@ -12,6 +12,7 @@ public final class DeviceMessage {
     public static final int TYPE_OCTAVE_MEDIA_ART = 102;
     public static final int TYPE_OCTAVE_MEDIA_QUEUE = 103;
     public static final int TYPE_OCTAVE_MEDIA_QUEUE_ART = 104;
+    public static final int TYPE_OCTAVE_PONG = 105;   // the answer to ControlMessage.TYPE_OCTAVE_PING; no payload
 
     private int type;
     private String text;
@@ -77,6 +78,12 @@ public final class DeviceMessage {
         DeviceMessage event = new DeviceMessage();
         event.type = TYPE_OCTAVE_MEDIA_QUEUE;
         event.mediaQueue = queue;
+        return event;
+    }
+
+    public static DeviceMessage createOctavePong() {
+        DeviceMessage event = new DeviceMessage();
+        event.type = TYPE_OCTAVE_PONG;
         return event;
     }
 

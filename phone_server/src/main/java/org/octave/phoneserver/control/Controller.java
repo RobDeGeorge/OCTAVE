@@ -263,6 +263,10 @@ public class Controller implements AsyncProcessor, VirtualDisplayListener {
         sender.join();
     }
 
+    // OCTAVE: see TYPE_OCTAVE_PING
+    private static final int PING_TIMEOUT_MS = 8000;
+    private boolean pingSeen;
+
     private boolean handleEvent() throws IOException {
         ControlMessage msg;
         try {
@@ -362,6 +366,16 @@ public class Controller implements AsyncProcessor, VirtualDisplayListener {
             case ControlMessage.TYPE_OCTAVE_END:
                 // Not a link drop: pause the music now rather than hold it
                 HeldAudioCapture.endRequested();
+                break;
+            case ControlMessage.TYPE_OCTAVE_PING:
+                // The client pings every 2 s. Once it has, silence means the
+                // link is dead: stop waiting (and stop keeping the phone
+                // awake for a client that is not there)
+                if (!pingSeen) {
+                    pingSeen = true;
+                    controlChannel.setReadTimeout(PING_TIMEOUT_MS);
+                }
+                sender.send(DeviceMessage.createOctavePong());
                 break;
             default:
                 // do nothing

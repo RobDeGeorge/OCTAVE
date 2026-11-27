@@ -708,9 +708,10 @@
         <h3 id="pm-persist">Dropped Links</h3>
         <p>
           In a car the phone gets picked up, put down, and its cable nudged. Each time, the USB link drops for a
-          moment. Three things make that nearly invisible:
+          moment. Over Wi-Fi the link can fade as well. Four things make that nearly invisible:
         </p>
         <ul>
+          <li><strong>Both sides notice a dead link within seconds.</strong> A cable that comes out closes the connection, and both sides see it at once. A Wi-Fi link that fades out does not: the connection stays open and silent, and the operating system only gives up after many minutes. So OCTAVE sends the phone a ping every 2 seconds and the phone answers. When OCTAVE gets no answer for 8 seconds, it treats the link as dropped and starts reconnecting. When the phone gets no ping for 8 seconds, it ends the session, and stops keeping itself awake for a head unit that is no longer there.</li>
           <li><strong>The server waits for OCTAVE to come back.</strong> In Desktop mode the server does not exit when its client disappears. It keeps the virtual display, with your apps as you left them, for 60 seconds, and a client that reconnects in that time picks it up. Without this you would land on an empty desktop after every blip. OCTAVE only reattaches to the same phone, whichever link it comes back on, so a cable pull can carry on over Wi-Fi.</li>
           <li><strong>The music keeps playing.</strong> The server also keeps its hold on the phone's sound for 10 seconds, throwing it away. The phone's speaker stays silent and the song carries on when OCTAVE is back. A stop you asked for releases it at once and pauses the phone's music.</li>
           <li><strong>OCTAVE reconnects quietly.</strong> After a drop in the middle of a stream it tries again at once, then every second for 10 seconds, whichever page is on screen, since the phone's music may be playing. The phone window keeps the last picture, and the music controls keep the track. After 10 seconds it gives up being quiet and waits for the phone, looking every 2 seconds while a phone window is on screen.</li>

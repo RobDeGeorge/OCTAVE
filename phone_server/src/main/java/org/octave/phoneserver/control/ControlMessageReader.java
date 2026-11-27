@@ -60,6 +60,7 @@ public class ControlMessageReader {
                 return ControlMessage.createOctaveSetKeeper(dis.readBoolean(), dis.readBoolean(), dis.readInt());
             case ControlMessage.TYPE_OCTAVE_TAKE_BACK:
             case ControlMessage.TYPE_OCTAVE_END:
+            case ControlMessage.TYPE_OCTAVE_PING:
                 return ControlMessage.createEmpty(type);
             case ControlMessage.TYPE_OCTAVE_SET_BIT_RATE:
                 return ControlMessage.createOctaveSetBitRate(dis.readInt());

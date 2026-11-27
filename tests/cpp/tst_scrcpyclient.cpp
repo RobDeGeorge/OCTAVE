@@ -29,6 +29,7 @@
 #include <unistd.h>
 #endif
 
+#include <chrono>
 #include "phone_mirror/scrcpyclient.h"
 
 namespace {
@@ -273,6 +274,49 @@ private slots:
         QCOMPARE(arts, (QList<QByteArray>{QByteArray("\xff\xd8\xff"), QByteArray()}));
     }
 
+    void aLinkThatStopsAnsweringIsADrop()
+    {
+        // The phone left the network: every socket stays open and silent.
+        // The client pings; once the server has answered, 8 s without an
+        // answer ends the session as a dropped link.
+        ScrcpyClient client(kFakeAdb, "/nonexistent.jar");
+        int fds[2];
+        QVERIFY(::socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0);
+        client.m_controlFd = fds[1];
+        const char pong = char(105);
+        QCOMPARE(::write(fds[0], &pong, 1), ssize_t(1));
+        QElapsedTimer timer;
+        timer.start();
+        client.deviceMessageLoop(fds[1]);   // returns when it gives the link up
+        const qint64 took = timer.elapsed();
+        client.m_controlFd = -1;
+        QVERIFY(client.m_linkLost.load());
+        QVERIFY(client.m_stopping.load());
+        QVERIFY2(took >= 7500 && took < 12000, qPrintable(QString::number(took)));
+        char buf[64];
+        const ssize_t n = ::recv(fds[0], buf, sizeof buf, MSG_DONTWAIT);
+        QVERIFY(n >= 3);   // a ping every 2 s
+        for (ssize_t i = 0; i < n; ++i)
+            QCOMPARE(int(quint8(buf[i])), 105);
+        ::close(fds[0]);
+        ::close(fds[1]);
+
+        // A server that never answered a ping (one from before the ping) gets no verdict
+        ScrcpyClient old(kFakeAdb, "/nonexistent.jar");
+        QVERIFY(::socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0);
+        old.m_controlFd = fds[1];
+        std::thread closer([&] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(9000));
+            ::shutdown(fds[0], SHUT_RDWR);
+        });
+        old.deviceMessageLoop(fds[1]);      // returns at end of stream, not before
+        closer.join();
+        old.m_controlFd = -1;
+        QVERIFY(!old.m_linkLost.load());
+        ::close(fds[0]);
+        ::close(fds[1]);
+    }
+
     void mediaCommandWireFormat()
     {
         ScrcpyClient client(kFakeAdb, "/nonexistent.jar");
@@ -340,8 +384,15 @@ private slots:
         QVERIFY(c.reasons().isEmpty());
         // The control socket is live: a touch reaches the server as 32 bytes
         c.client.injectTouch(0, ScrcpyClient::ActionDown, 10, 20);
-        QVERIFY(waitUntil([&] { return srv.controlBytes().size() >= 32; }));
-        QCOMPARE(int(quint8(srv.controlBytes().at(0))), 2);   // inject touch event
+        // (after the ping the client sends as soon as the session is up: one byte, 105)
+        auto withoutPings = [&] {
+            QByteArray bytes = srv.controlBytes();
+            while (bytes.startsWith(char(105)))
+                bytes.remove(0, 1);
+            return bytes;
+        };
+        QVERIFY(waitUntil([&] { return withoutPings().size() >= 32; }));
+        QCOMPARE(int(quint8(withoutPings().at(0))), 2);   // inject touch event
     }
 
     void aSinkTakenLaterShowsTheLastFrameAtOnce()
