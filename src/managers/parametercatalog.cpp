@@ -147,6 +147,17 @@ const Row kRows[] = {
         {"HYBRID_BATTERY_VOLTAGE", "Hybrid Battery Voltage", "", "V", 0.0, 900.0, "voltage", 1, Source::Obd, ""},
         {"HYBRID_BATTERY_CURRENT", "Hybrid Battery Current", "", "A", -500.0, 500.0, "bidirectional", 1, Source::Obd, ""},
         {"EV_BATTERY_HEALTH", "EV Battery Health", "", "%", 0.0, 100.0, "percentage", 1, Source::Obd, ""},
+        // Worked out from the readings above (derivedparameters.h), not polled
+        {"ENGINE_POWER", "Horsepower", "HP", "hp", 0.0, 400.0, "numeric", 0, Source::Derived, ""},
+        {"ENGINE_TORQUE", "Torque", "TQ", "lb·ft", 0.0, 400.0, "numeric", 0, Source::Derived, ""},
+        {"FUEL_ECONOMY", "Fuel Economy", "MPG", "MPG", 0.0, 60.0, "numeric", 1, Source::Derived, ""},
+        {"FUEL_FLOW", "Fuel Flow", "", "gal/h", 0.0, 15.0, "numeric", 2, Source::Derived, ""},
+        {"BOOST", "Boost", "", "psi", -15.0, 30.0, "bidirectional", 1, Source::Derived, ""},
+        {"TRIP_DISTANCE", "Trip Distance", "TRIP", "mi", 0.0, 500.0, "numeric", 1, Source::Derived, ""},
+        {"TRIP_FUEL_USED", "Trip Fuel Used", "", "gal", 0.0, 20.0, "numeric", 2, Source::Derived, ""},
+        {"TRIP_FUEL_ECONOMY", "Trip Average", "AVG", "MPG", 0.0, 60.0, "numeric", 1, Source::Derived, ""},
+        {"FUEL_RANGE", "Range", "", "mi", 0.0, 500.0, "numeric", 0, Source::Derived, ""},
+        {"ZERO_TO_SIXTY", "0-60 Time", "0-60", "s", 0.0, 20.0, "numeric", 1, Source::Derived, ""},
         {"PITCH", "Pitch", "", "°", -90.0, 90.0, "bidirectional", 1, Source::Imu, ""},
         {"ROLL", "Roll", "", "°", -180.0, 180.0, "bidirectional", 1, Source::Imu, ""},
         {"HEADING", "Heading", "", "°", 0.0, 360.0, "numeric", 1, Source::Imu, ""},
@@ -165,6 +176,8 @@ QString groupFor(const char *idRaw, const char *kind, ParameterCatalog::Source s
     const QString id = QString::fromLatin1(idRaw);
     if (source == ParameterCatalog::Source::Imu)
         return QStringLiteral("Sensors");
+    if (source == ParameterCatalog::Source::Derived)
+        return QStringLiteral("Calculated");
     static const QStringList speed{"SPEED", "TRANSMISSION_GEAR_RATIO", "RECOMMENDED_GEAR", "ODOMETER"};
     static const QStringList electrical{"CONTROL_MODULE_VOLTAGE", "ELM_VOLTAGE", "HYBRID_BATTERY_REMAINING",
                                         "HYBRID_BATTERY_VOLTAGE", "HYBRID_BATTERY_CURRENT", "EV_BATTERY_HEALTH"};
@@ -282,7 +295,7 @@ QStringList ParameterCatalog::groups()
 {
     QStringList g{QStringLiteral("Engine"), QStringLiteral("Fuel & air"), QStringLiteral("Temperatures"),
                   QStringLiteral("Electrical"), QStringLiteral("Speed & motion"), QStringLiteral("Emissions"),
-                  QStringLiteral("Diagnostics"), QStringLiteral("Sensors")};
+                  QStringLiteral("Diagnostics"), QStringLiteral("Calculated"), QStringLiteral("Sensors")};
     if (std::any_of(all().cbegin(), all().cend(), [](const Parameter &p) { return p.custom; }))
         g.append(QStringLiteral("Custom"));
     return g;
@@ -293,6 +306,15 @@ QStringList ParameterCatalog::obdIds()
     QStringList ids;
     for (const Parameter &p : all())
         if (p.source == Source::Obd && p.aliasOf.isEmpty())
+            ids.append(p.id);
+    return ids;
+}
+
+QStringList ParameterCatalog::derivedIds()
+{
+    QStringList ids;
+    for (const Parameter &p : all())
+        if (p.source == Source::Derived)
             ids.append(p.id);
     return ids;
 }
@@ -308,7 +330,8 @@ QVariantMap ParameterCatalog::toVariant(const Parameter &p)
         {QStringLiteral("max"), p.max},
         {QStringLiteral("kind"), p.kind},
         {QStringLiteral("decimals"), p.decimals},
-        {QStringLiteral("source"), p.source == Source::Imu ? QStringLiteral("imu") : QStringLiteral("obd")},
+        {QStringLiteral("source"), p.source == Source::Imu ? QStringLiteral("imu")
+                                   : p.source == Source::Derived ? QStringLiteral("derived") : QStringLiteral("obd")},
         {QStringLiteral("aliasOf"), p.aliasOf},
         {QStringLiteral("group"), p.group},
         {QStringLiteral("custom"), p.custom},

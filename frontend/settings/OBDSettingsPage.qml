@@ -79,6 +79,12 @@ Item {
               var n = tripRecorder.trips.length
               return { state: n + (n === 1 ? " drive" : " drives") }
           } },
+        { cardId: "obd_engine", title: "Engine & Tank", component: engineContent,
+          summary: function() {
+              if (!settingsManager) return {}
+              var l = settingsManager.engineDisplacement
+              return l > 0 ? { state: l.toFixed(1) + " L" } : {}
+          } },
         { cardId: "obd_advanced", title: "Advanced", component: advancedContent,
           summary: function() {
               if (typeof busMonitor !== "undefined" && busMonitor && busMonitor.active)
@@ -90,6 +96,73 @@ Item {
               return n === 0 ? {} : { state: n + (n === 1 ? " custom reading" : " custom readings") }
           } }
     ]
+
+    // ── Engine & Tank: what the calculated readings can't ask the car
+    Component {
+        id: engineContent
+        ColumnLayout {
+            width: parent ? parent.width : 0
+            spacing: App.Spacing.rowSpacing
+
+            SettingLabel { text: "Engine size" }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: App.Spacing.overallSpacing
+                SettingsSlider {
+                    id: engineSizeSlider
+                    Layout.fillWidth: true
+                    from: 0
+                    to: 8
+                    stepSize: 0.1
+                    value: settingsManager ? settingsManager.engineDisplacement : 0
+                    valueDisplay: value > 0 ? value.toFixed(1) + " L" : "Not set"
+                    onMoved: if (settingsManager) settingsManager.engineDisplacement = Math.round(value * 10) / 10
+                }
+                Text {
+                    text: engineSizeSlider.value > 0 ? engineSizeSlider.value.toFixed(1) + " L" : "Not set"
+                    color: App.Style.primaryTextColor
+                    font.pixelSize: App.Spacing.overallText
+                    font.family: App.Style.fontFamily
+                    font.bold: true
+                    Layout.preferredWidth: dp(80)
+                    horizontalAlignment: Text.AlignRight
+                }
+            }
+            SettingDescription {
+                text: "Horsepower and MPG on a car with no air flow sensor"
+            }
+
+            SettingsDivider {}
+
+            SettingLabel { text: "Fuel tank" }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: App.Spacing.overallSpacing
+                SettingsSlider {
+                    id: fuelTankSlider
+                    Layout.fillWidth: true
+                    from: 5
+                    to: 40
+                    stepSize: 0.5
+                    value: settingsManager ? settingsManager.fuelTankCapacity : 15
+                    valueDisplay: value.toFixed(1) + " gal"
+                    onMoved: if (settingsManager) settingsManager.fuelTankCapacity = Math.round(value * 2) / 2
+                }
+                Text {
+                    text: fuelTankSlider.value.toFixed(1) + " gal"
+                    color: App.Style.primaryTextColor
+                    font.pixelSize: App.Spacing.overallText
+                    font.family: App.Style.fontFamily
+                    font.bold: true
+                    Layout.preferredWidth: dp(80)
+                    horizontalAlignment: Text.AlignRight
+                }
+            }
+            SettingDescription {
+                text: "For the range reading"
+            }
+        }
+    }
 
     // ── Advanced: the two tools few people need, one card under the other
     Component {

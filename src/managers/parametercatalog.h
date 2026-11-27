@@ -9,8 +9,8 @@
 #include <QVariantMap>
 
 /**
- * @brief Display metadata for every value a gauge can show: the OBD PIDs
- *        and the BerryIMU readings.
+ * @brief Display metadata for every value a gauge can show: the OBD PIDs,
+ *        the readings derived from them and the BerryIMU readings.
  *
  * One table, read by C++ (the poller, the black box) and by every frontend
  * (QML through OBDParameterModel, others through the bridge). The ids are the
@@ -35,12 +35,14 @@ class ParameterCatalog : public QObject
     // black box, the poller, Trip History).
     Q_PROPERTY(QVariantList displayParameters READ displayParameters NOTIFY displayParametersChanged)
     // The `group` values in the order pickers list them: the car's systems
-    // ("Engine", "Fuel & air", ...), then "Sensors" (the IMU) and, when the
+    // ("Engine", "Fuel & air", ...), "Calculated" (the derived readings),
+    // then "Sensors" (the IMU) and, when the
     // custom PID file has any, "Custom"
     Q_PROPERTY(QStringList groups READ groups CONSTANT)
 
 public:
-    enum class Source { Obd, Imu };
+    // Derived: worked out from other readings (derivedparameters.h)
+    enum class Source { Obd, Imu, Derived };
 
     struct Parameter {
         QString id;          // "COOLANT_TEMP"
@@ -76,6 +78,7 @@ public:
     static const Parameter *find(const QString &id);   // nullptr if unknown
     static QStringList imuIds();
     static QStringList obdIds();                        // polled OBD ids (no aliases)
+    static QStringList derivedIds();
     static QStringList groups();
 
     QVariantList parameters() const;

@@ -53,16 +53,23 @@ QList<PidKey> OBDManager::customKeys(const QHash<QString, QSet<QString>> &demand
 
 QList<PidKey> OBDManager::buildPidsToWatch() const
 {
-    return pidsToWatch(m_paramDemand, m_vehicleSupportedParameters) + customKeys(m_paramDemand);
+    return pidsToWatch(m_paramDemand, m_vehicleSupportedParameters, m_derivedConfig) + customKeys(m_paramDemand);
 }
 
 QList<PidKey> OBDManager::pidsToWatch(const QHash<QString, QSet<QString>> &demand,
-                                      const QStringList &vehicleSupported)
+                                      const QStringList &vehicleSupported,
+                                      const DerivedParameters::Config &derived)
 {
     QSet<QString> wanted;
     for (auto it = demand.constBegin(); it != demand.constEnd(); ++it)
         wanted.unite(it.value());
     wanted.subtract(imuParamIds());
+    const QSet<QString> supported(vehicleSupported.cbegin(), vehicleSupported.cend());
+    // A derived reading is polled as the readings it is worked out from
+    for (const QString &id : QSet<QString>(wanted)) {
+        if (DerivedParameters::isDerived(id))
+            wanted.unite(DerivedParameters::inputs(id, supported, derived));
+    }
     // An alias is polled as its target
     for (const QString &id : QSet<QString>(wanted)) {
         const ParameterCatalog::Parameter *p = ParameterCatalog::find(id);
@@ -73,7 +80,6 @@ QList<PidKey> OBDManager::pidsToWatch(const QHash<QString, QSet<QString>> &deman
     // Filter to this session's scan once it produced a result; an unknown or
     // empty result filters nothing (the adapter answers NO DATA, which the
     // decode paths already ignore).
-    const QSet<QString> supported(vehicleSupported.cbegin(), vehicleSupported.cend());
     auto ok = [&supported](const QString &id) { return supported.isEmpty() || supported.contains(id); };
 
     QList<PidKey> pids;
@@ -141,11 +147,12 @@ void OBDManager::setBackgroundDemand(const QString &consumer, const QStringList 
 
 QList<PidKey> OBDManager::backgroundPidsToWatch(const QHash<QString, QSet<QString>> &demand,
                                                 const QList<PidKey> &foreground,
-                                                const QStringList &vehicleSupported)
+                                                const QStringList &vehicleSupported,
+                                                const DerivedParameters::Config &derived)
 {
     if (demand.isEmpty())
         return {};
-    QList<PidKey> pids = pidsToWatch(demand, vehicleSupported);
+    QList<PidKey> pids = pidsToWatch(demand, vehicleSupported, derived);
     // pidsToWatch() always appends the heartbeat; the foreground list has it
     const QSet<QString> supported(vehicleSupported.cbegin(), vehicleSupported.cend());
     const PidKey heartbeat = (supported.isEmpty() || supported.contains(QStringLiteral("RPM")))
@@ -158,7 +165,8 @@ QList<PidKey> OBDManager::backgroundPidsToWatch(const QHash<QString, QSet<QStrin
 
 QList<PidKey> OBDManager::buildBackgroundPids(const QList<PidKey> &foreground) const
 {
-    QList<PidKey> pids = backgroundPidsToWatch(m_backgroundDemand, foreground, m_vehicleSupportedParameters);
+    QList<PidKey> pids = backgroundPidsToWatch(m_backgroundDemand, foreground, m_vehicleSupportedParameters,
+                                               m_derivedConfig);
     for (const PidKey &key : customKeys(m_backgroundDemand)) {
         if (!foreground.contains(key))
             pids.append(key);
@@ -166,9 +174,36 @@ QList<PidKey> OBDManager::buildBackgroundPids(const QList<PidKey> &foreground) c
     return pids;
 }
 
+void OBDManager::setDerivedConfig(double displacementL, double tankGallons)
+{
+    DerivedParameters::Config config;
+    config.displacementL = displacementL > 0.0 ? displacementL : 0.0;
+    config.tankGallons = tankGallons > 0.0 ? tankGallons : 0.0;
+    if (config == m_derivedConfig)
+        return;
+    m_derivedConfig = config;
+    m_derived.setConfig(config);
+    // Which derived readings the car has, and what they need polled
+    setVehicleSupport(m_scannedParameters, m_vehicleScanComplete);
+    m_demandDebounce.start();
+}
+
+void OBDManager::publishSample(const QString &paramId, float value)
+{
+    emit parameterSampled(paramId, value);
+    const QList<DerivedParameters::Sample> derived = m_derived.ingest(paramId, value, QDateTime::currentMSecsSinceEpoch());
+    for (const DerivedParameters::Sample &s : derived)
+        emit parameterSampled(s.first, s.second);
+}
+
 void OBDManager::setVehicleSupport(const QStringList &names, bool complete)
 {
+    m_scannedParameters = names;
     QStringList sorted = withAliases(names);
+    // The readings worked out from the ones this car reports
+    const QSet<QString> scanned(names.cbegin(), names.cend());
+    sorted += DerivedParameters::available(scanned, m_derivedConfig);
+    m_derived.setSupported(scanned);
     // The scan can't see custom PIDs: the user's file says this car has them
 #ifndef Q_OS_ANDROID
     if (!sorted.isEmpty()) {
@@ -236,7 +271,7 @@ void OBDManager::onWorkerExtendedData(const QString &paramId, float value)
 {
     m_lastDataReceived = QDateTime::currentMSecsSinceEpoch();
     emit obdParameterChanged(paramId, value);
-    emit parameterSampled(paramId, value);
+    publishSample(paramId, value);
 }
 
 void OBDManager::refresh_values()

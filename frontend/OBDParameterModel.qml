@@ -7,7 +7,7 @@ QtObject {
     // ── All parameters with display metadata ─────────────────────────
     // From the C++ ParameterCatalog (src/managers/parametercatalog.h), the
     // one table for every frontend: {id, title, shortTitle, unit, min, max,
-    // kind, decimals, source ("obd" | "imu"), aliasOf}. `kind` declares
+    // kind, decimals, source ("obd" | "imu" | "derived"), aliasOf}. `kind` declares
     // widget compatibility:
     //   "percentage"    — 0–100 % unidirectional
     //   "temperature"   — °C temperature (may go negative, but treated by theme)

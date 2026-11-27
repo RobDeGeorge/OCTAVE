@@ -141,6 +141,25 @@ private slots:
         QCOMPARE(baseNames(pids), (QStringList{"FUEL_LEVEL", "RPM"}));
     }
 
+    void derivedReadingIsPolledAsItsInputs()
+    {
+        // Fuel economy is worked out, not asked for: on a car with an air
+        // flow sensor that is speed and MAF, on one that reports its fuel
+        // rate that instead
+        QCOMPARE(baseNames(OBDManager::pidsToWatch({{"home", {"FUEL_ECONOMY"}}}, {"RPM", "SPEED", "MAF", "FUEL_ECONOMY"})),
+                 (QStringList{"MAF", "RPM", "SPEED"}));
+        QCOMPARE(baseNames(OBDManager::pidsToWatch({{"home", {"FUEL_ECONOMY"}}},
+                                                   {"RPM", "SPEED", "MAF", "FUEL_RATE", "FUEL_ECONOMY"})),
+                 (QStringList{"FUEL_RATE", "RPM", "SPEED"}));
+        // A car with neither needs its engine's size (speed-density)
+        const QStringList old{"RPM", "SPEED", "INTAKE_PRESSURE", "INTAKE_TEMP"};
+        QCOMPARE(baseNames(OBDManager::pidsToWatch({{"home", {"ENGINE_POWER"}}}, old)), QStringList{"RPM"});
+        DerivedParameters::Config sized;
+        sized.displacementL = 4.0;
+        QCOMPARE(baseNames(OBDManager::pidsToWatch({{"home", {"ENGINE_POWER"}}}, old, sized)),
+                 (QStringList{"INTAKE_PRESSURE", "INTAKE_TEMP", "RPM"}));
+    }
+
     void heartbeatFallsBackToElmVoltageWithoutRpm()
     {
         QCOMPARE(baseNames(OBDManager::pidsToWatch({}, {"SPEED", "ELM_VOLTAGE"})), QStringList{"ELM_VOLTAGE"});

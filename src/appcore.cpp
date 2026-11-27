@@ -196,6 +196,15 @@ void AppCore::wireGauges()
     QObject::connect(&settingsManager, &SettingsManager::gaugeSpeedUnitChanged, &parameterCatalog, applyGaugeUnits);
     QObject::connect(&settingsManager, &SettingsManager::sensorAltitudeUnitChanged, &parameterCatalog, applyGaugeUnits);
 
+    // The derived readings (horsepower, fuel economy, range, ...) take the
+    // engine's size and the tank's from the settings
+    auto applyDerivedConfig = [this] {
+        obdManager.setDerivedConfig(settingsManager.engineDisplacement(), settingsManager.fuelTankCapacity());
+    };
+    applyDerivedConfig();
+    QObject::connect(&settingsManager, &SettingsManager::engineDisplacementChanged, &obdManager, applyDerivedConfig);
+    QObject::connect(&settingsManager, &SettingsManager::fuelTankCapacityChanged, &obdManager, applyDerivedConfig);
+
     // Value store: the latest value of every PID and IMU reading, one
     // notifying key per id (OBDParameterModel and the gauges bind to it)
     QObject::connect(&obdManager, &OBDManager::parameterSampled, &paramStore, &ParameterStore::ingest);

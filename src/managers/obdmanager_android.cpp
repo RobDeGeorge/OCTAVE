@@ -332,6 +332,7 @@ void OBDManager::queryAndroidSupportedPids()
 void OBDManager::finalizeAndroidConnection()
 {
     m_connected = true;
+    m_derived.connected(QDateTime::currentMSecsSinceEpoch());
     m_androidReconnectAttempts = 0;
     qDebug() << "[OBD] Android: connected with"
              << m_androidSupportedPids.size() << "supported PIDs";
@@ -505,7 +506,7 @@ void OBDManager::processAndroidResponse(const QString &response)
             // the black box and the value store listen to parameterSampled
             for (const auto &v : ELM327Protocol::decodeExtendedPid(ext->mode, ext->pid, ext->dataBytes)) {
                 emit obdParameterChanged(v.first, static_cast<float>(v.second));
-                emit parameterSampled(v.first, static_cast<float>(v.second));
+                publishSample(v.first, static_cast<float>(v.second));
             }
             m_lastDataReceived = QDateTime::currentMSecsSinceEpoch();
         }

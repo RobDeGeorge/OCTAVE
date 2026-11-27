@@ -4629,6 +4629,18 @@ func (o SettingsManager) SetFuelTankCapacity(value float64) (v float64, err erro
 	return
 }
 
+// GetEngineDisplacement reads the property "engineDisplacement" (double, writable).
+func (o SettingsManager) GetEngineDisplacement() (v float64, err error) {
+	err = o.c.Get("settingsManager", "engineDisplacement", &v)
+	return
+}
+
+// SetEngineDisplacement writes the property "engineDisplacement" and returns the value read back.
+func (o SettingsManager) SetEngineDisplacement(value float64) (v float64, err error) {
+	err = o.c.Set("settingsManager", "engineDisplacement", value, &v)
+	return
+}
+
 // GetBlackBoxEnabled reads the property "blackBoxEnabled" (bool, writable).
 func (o SettingsManager) GetBlackBoxEnabled() (v bool, err error) {
 	err = o.c.Get("settingsManager", "blackBoxEnabled", &v)
@@ -5498,6 +5510,11 @@ func (o SettingsManager) SaveObdAutoReconnectAttempts(attempts int) error {
 // Deprecated: use the fuelTankCapacity property; goes in protocol 5
 func (o SettingsManager) SaveFuelTankCapacity(capacity float64) error {
 	return o.c.Call("settingsManager", "save_fuel_tank_capacity", nil, capacity)
+}
+
+// SetEngineDisplacementCall calls setEngineDisplacement(double).
+func (o SettingsManager) SetEngineDisplacementCall(litres float64) error {
+	return o.c.Call("settingsManager", "setEngineDisplacement", nil, litres)
 }
 
 // SaveBlackBoxEnabled calls save_black_box_enabled(bool).

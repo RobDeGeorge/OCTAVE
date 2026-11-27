@@ -46,6 +46,7 @@ def main():
         ("Core (default-enabled)", lambda r: r[0] in core),
         ("More single-value OBD PIDs", lambda r: r[8] == "Obd" and r[0] not in core and r[0] not in multi),
         ("Multi-value OBD PIDs (0x61 and up, via obdParameterChanged)", lambda r: r[0] in multi),
+        ("Calculated readings (worked out from the PIDs above, not polled)", lambda r: r[8] == "Derived"),
         ("Sensor parameters (BerryIMU, not OBD)", lambda r: r[8] == "Imu"),
     ]
     out = [BEGIN, ""]

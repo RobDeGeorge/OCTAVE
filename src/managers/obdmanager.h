@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <functional>
 
+#include "derivedparameters.h"
 #include "elm327protocol.h"
 #include "obdconnectionworker.h"
 #include "settingsmanager.h"
@@ -344,6 +345,13 @@ public:
     // scan can't see them), and counts as supported by the vehicle.
     void setCustomPids(const QList<CustomPidRequest> &pids);
 
+    // What the derived readings (derivedparameters.h: horsepower, fuel
+    // economy, range, ...) can't learn from the car: the engine's size in
+    // litres and the tank's in US gallons, 0 for not known. Changes which
+    // of them this car has (vehicleSupportedParameters) and what is polled
+    // for them.
+    void setDerivedConfig(double displacementL, double tankGallons);
+
     // The bus monitor (busmonitor.h): the adapter only listens ("ATMA") and
     // every message it hears goes to the sink. Polling pauses meanwhile and
     // resumes when it stops; any other request (trouble codes, a scan) ends
@@ -357,13 +365,16 @@ public:
     // The poll list for a demand set (consumer -> parameter ids) and this
     // session's scan result: what buildPidsToWatch() uses. Static so the
     // rules can be tested without a connection.
+    // A derived reading is polled as the inputs `derived` gives it.
     static QList<PidKey> pidsToWatch(const QHash<QString, QSet<QString>> &demand,
-                                     const QStringList &vehicleSupported);
+                                     const QStringList &vehicleSupported,
+                                     const DerivedParameters::Config &derived = {});
     // The background poll list for a background demand set: the same rules,
     // minus the heartbeat and minus every PID already in `foreground`.
     static QList<PidKey> backgroundPidsToWatch(const QHash<QString, QSet<QString>> &demand,
                                                const QList<PidKey> &foreground,
-                                               const QStringList &vehicleSupported);
+                                               const QStringList &vehicleSupported,
+                                               const DerivedParameters::Config &derived = {});
     // A scan result plus every catalog alias whose target it contains
     // (TIMING_ADVANCE -> also IGNITION_TIMING); vehicleSupportedParameters
     // is published through this
@@ -626,6 +637,13 @@ private:
     QStringList m_vehicleSupportedParameters;
     bool m_vehicleScanComplete = false;
     void setVehicleSupport(const QStringList &names, bool complete);
+    // The derived readings: the last scan as the car gave it (they are
+    // added to it again when the engine or tank size changes), and every
+    // reading on its way out through parameterSampled passes publishSample()
+    DerivedParameters m_derived;
+    DerivedParameters::Config m_derivedConfig;
+    QStringList m_scannedParameters;
+    void publishSample(const QString &paramId, float value);
 
     // Queue a worker slot by name; logs and returns false when there is no
     // worker (Android drives the adapter from this thread instead).

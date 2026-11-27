@@ -165,6 +165,8 @@
             <tr><td><code>blackBoxEnabled</code></td><td>Record every drive</td><td>bool</td><td>true</td><td>true, false</td><td>Records every drive for Trip History.</td></tr>
             <tr><td><code>blackBoxSweepAll</code></td><td>Record everything the car reports</td><td>bool</td><td>true</td><td>true, false</td><td>Also records the readings that are not on screen.</td></tr>
             <tr><td><code>blackBoxMaxMB</code></td><td>Storage cap</td><td>int</td><td>500</td><td>50 to 5000; clamped</td><td>Space for recorded drives in megabytes. The oldest drives are deleted first.</td></tr>
+            <tr><td><code>engineDisplacement</code></td><td>Engine size</td><td>number</td><td>0</td><td>0 to 20; clamped. 0 means not set</td><td>The engine's size in litres. With it, horsepower and fuel economy can be estimated on a car with no air flow sensor (<a href="obd-manager.html#calculated">Calculated Readings</a>).</td></tr>
+            <tr><td><code>fuelTankCapacity</code></td><td>Fuel tank</td><td>number</td><td>15.0</td><td>Not checked; the slider goes from 5 to 40</td><td>The fuel tank's size in US gallons, for the range reading.</td></tr>
           </tbody>
         </table>
         <p>
@@ -401,7 +403,6 @@
             <tr><td><code>albumArtCornerRadius</code></td><td></td><td>int</td><td>16</td><td>2 to 32; clamped</td><td>Not used any more, for the same reason.</td></tr>
             <tr><td><code>showAlbumArtShadow</code></td><td></td><td>bool</td><td>true</td><td>true, false</td><td>Not used any more: the album art always has its shadow.</td></tr>
             <tr><td><code>settingsLayoutStyle</code></td><td></td><td>text</td><td>Sidebar</td><td>Carousel, Sidebar, Hub, Dashboard; anything else refused</td><td>Not used any more: Settings has one layout.</td></tr>
-            <tr><td><code>fuelTankCapacity</code></td><td></td><td>number</td><td>15.0</td><td>Not checked</td><td>Not used any more: nothing reads the tank size.</td></tr>
             <tr id="obd-parameters"><td><code>obdParameters</code></td><td></td><td>object</td><td>123 reading ids, 20 of them true</td><td>Reading id to true or false</td><td>Not used any more: OCTAVE asks the car for <a href="obd-manager.html#watcher-system">what is on screen</a>, not for a fixed list.</td></tr>
             <tr><td><code>directoryHistory</code></td><td></td><td>list</td><td>[]</td><td>Up to 10 folders</td><td>Not used any more: it held recently used music folders.</td></tr>
             <tr><td><code>pinnedSettings</code></td><td></td><td>list</td><td>[]</td><td>Ids from the settings registry</td><td>Not used any more by the app's own screen: see below.</td></tr>

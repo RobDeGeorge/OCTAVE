@@ -734,7 +734,7 @@ The pre-Phase-2 path — create `frontend/dashboards/MyDashboard.qml` and regist
 
 ---
 
-## 6. All 129 parameter IDs (120 OBD + 1 alias + 8 IMU)
+## 6. All 139 parameter IDs (120 OBD + 1 alias + 10 calculated + 8 IMU)
 
 Copy `id` verbatim into `paramId`. `min`/`max` are what the primitive will
 default to; `Short` is the home-card label; `Decimals` is what plain-text
@@ -755,6 +755,21 @@ the car reports. Decoders live in `ELM327Protocol::extendedPidTable()` in
 `tests/cpp/tst_elm327protocol.cpp` checks that every id has a settings
 default and a catalog entry. Boost pressure is absolute (subtract
 `BAROMETRIC_PRESSURE` for gauge boost).
+
+**Calculated readings** (horsepower, torque, fuel economy, fuel flow, boost,
+the trip's distance / fuel / average, range, the 0-60 time) are not asked of
+the car: `OBDManager` works them out from the PIDs it reads
+(`src/managers/derivedparameters.{h,cpp}`) and sends them through
+`parameterSampled` like any other id, so a gauge binds one by `paramId` the
+same way. Demand for one polls its inputs. The vehicle gate applies: a car
+has a calculated reading when it reports the PIDs one of its ways needs
+(horsepower: the engine's torque figures, else `MAF`, else `INTAKE_PRESSURE`
++ `INTAKE_TEMP` + `RPM` with the engine size set in Settings > OBD > Engine &
+Tank; `FUEL_RANGE` also needs the tank size from there). Units are fixed:
+hp, lb·ft, MPG, US gallons, miles, psi. `BOOST` is gauge pressure, negative
+for vacuum. `TRIP_FUEL_ECONOMY` and `FUEL_RANGE` have no value until a
+quarter mile is driven; `ZERO_TO_SIXTY` gets one each time the car goes from
+a standstill to 60 mph without lifting. The air-based ways assume petrol.
 
 **Sensor parameters** are fed into `paramStore` by the
 `berryIMU` manager instead of `obdManager`, but are otherwise identical: any
@@ -901,6 +916,21 @@ polled as PID 0x0E and counts as supported whenever timing advance does.
 | `HYBRID_BATTERY_VOLTAGE` | Hybrid Battery Voltage |  | V | 0 | 900 | voltage | 1 |
 | `HYBRID_BATTERY_CURRENT` | Hybrid Battery Current |  | A | -500 | 500 | bidirectional | 1 |
 | `EV_BATTERY_HEALTH` | EV Battery Health |  | % | 0 | 100 | percentage | 1 |
+
+### Calculated readings (worked out from the PIDs above, not polled) (10)
+
+| `paramId` | Title | Short | Unit | Min | Max | Kind | Decimals |
+| --- | --- | --- | --- | ---: | ---: | --- | ---: |
+| `ENGINE_POWER` | Horsepower | HP | hp | 0 | 400 | numeric | 0 |
+| `ENGINE_TORQUE` | Torque | TQ | lb·ft | 0 | 400 | numeric | 0 |
+| `FUEL_ECONOMY` | Fuel Economy | MPG | MPG | 0 | 60 | numeric | 1 |
+| `FUEL_FLOW` | Fuel Flow |  | gal/h | 0 | 15 | numeric | 2 |
+| `BOOST` | Boost |  | psi | -15 | 30 | bidirectional | 1 |
+| `TRIP_DISTANCE` | Trip Distance | TRIP | mi | 0 | 500 | numeric | 1 |
+| `TRIP_FUEL_USED` | Trip Fuel Used |  | gal | 0 | 20 | numeric | 2 |
+| `TRIP_FUEL_ECONOMY` | Trip Average | AVG | MPG | 0 | 60 | numeric | 1 |
+| `FUEL_RANGE` | Range |  | mi | 0 | 500 | numeric | 0 |
+| `ZERO_TO_SIXTY` | 0-60 Time | 0-60 | s | 0 | 20 | numeric | 1 |
 
 ### Sensor parameters (BerryIMU, not OBD) (8)
 

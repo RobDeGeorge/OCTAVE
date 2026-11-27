@@ -42,7 +42,7 @@ private slots:
     void idsAreUniqueAndComplete()
     {
         const auto &all = ParameterCatalog::all();
-        QCOMPARE(all.size(), 129);
+        QCOMPARE(all.size(), 139);
         QSet<QString> seen;
         for (const auto &p : all) {
             QVERIFY2(!seen.contains(p.id), qPrintable(p.id));
@@ -52,7 +52,7 @@ private slots:
             QVERIFY2(QStringList({"percentage", "temperature", "voltage", "pressure",
                                   "bidirectional", "numeric"}).contains(p.kind),
                      qPrintable(p.id + " " + p.kind));
-            QVERIFY2(p.decimals == 0 || p.decimals == 1, qPrintable(p.id));
+            QVERIFY2(p.decimals >= 0 && p.decimals <= 2, qPrintable(p.id));
             if (!p.aliasOf.isEmpty())
                 QVERIFY2(ParameterCatalog::find(p.aliasOf), qPrintable(p.id + " -> " + p.aliasOf));
         }
@@ -180,13 +180,14 @@ private slots:
     void invokablesForQml()
     {
         ParameterCatalog catalog;
-        QCOMPARE(catalog.parameters().size(), 129);
+        QCOMPARE(catalog.parameters().size(), 139);
         const QVariantMap rpm = catalog.info("RPM");
         QCOMPARE(rpm.value("title").toString(), QStringLiteral("Engine RPM"));
         QCOMPARE(rpm.value("shortTitle").toString(), QStringLiteral("RPM"));
         QCOMPARE(rpm.value("decimals").toInt(), 0);
         QCOMPARE(rpm.value("source").toString(), QStringLiteral("obd"));
         QCOMPARE(catalog.info("PITCH").value("source").toString(), QStringLiteral("imu"));
+        QCOMPARE(catalog.info("ENGINE_POWER").value("source").toString(), QStringLiteral("derived"));
         QCOMPARE(catalog.info("COOLANT_TEMP").value("unit").toString(), QString::fromUtf8("°C"));
         QVERIFY(catalog.info("NOPE").isEmpty());
         QVERIFY(catalog.contains("BARO_TEMP"));

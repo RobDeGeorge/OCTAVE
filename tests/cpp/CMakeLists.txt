@@ -38,7 +38,8 @@ set(OCTAVE_OBD_MANAGER_SOURCES
     managers/obdmanager.h managers/obdmanager.cpp
     managers/obdmanager_connection.cpp managers/obdmanager_polling.cpp
     managers/obdmanager_diagnostics.cpp managers/obdmanager_android.cpp
-    managers/obdconnectionworker.h managers/obdconnectionworker.cpp)
+    managers/obdconnectionworker.h managers/obdconnectionworker.cpp
+    managers/derivedparameters.h managers/derivedparameters.cpp)
 
 octave_add_test(tst_elm327protocol SOURCES managers/elm327protocol.cpp managers/parametercatalog.h managers/parametercatalog.cpp)
 octave_add_test(tst_dtcdescriptions SOURCES managers/dtcdescriptions.h managers/dtcdescriptions.cpp)
@@ -56,6 +57,8 @@ octave_add_test(tst_shiftlightmanager SOURCES managers/shiftlightmanager.h manag
 octave_add_test(tst_parametercatalog
     SOURCES managers/parametercatalog.h managers/parametercatalog.cpp managers/elm327protocol.cpp
     LIBS Qt6::Gui Qt6::Qml)
+octave_add_test(tst_derivedparameters
+    SOURCES managers/derivedparameters.h managers/derivedparameters.cpp managers/parametercatalog.h managers/parametercatalog.cpp)
 octave_add_test(tst_custompids
     SOURCES managers/custompids.h managers/custompids.cpp managers/parametercatalog.h managers/parametercatalog.cpp
             managers/elm327protocol.cpp managers/settingsmanager.h managers/settingsmanager.cpp

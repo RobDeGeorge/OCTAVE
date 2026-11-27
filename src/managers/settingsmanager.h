@@ -246,6 +246,9 @@ class SettingsManager : public QObject
     Q_PROPERTY(QString gaugeSpeedUnit READ gaugeSpeedUnit WRITE save_gauge_speed_unit NOTIFY gaugeSpeedUnitChanged)
     Q_PROPERTY(int obdAutoReconnectAttempts READ obdAutoReconnectAttempts WRITE save_obd_auto_reconnect_attempts NOTIFY obdAutoReconnectAttemptsChanged)
     Q_PROPERTY(float fuelTankCapacity READ fuelTankCapacity WRITE save_fuel_tank_capacity NOTIFY fuelTankCapacityChanged)
+    // Engine size in litres, 0 for not set: lets horsepower and fuel economy
+    // be estimated on a car with no air flow sensor (derivedparameters.h)
+    Q_PROPERTY(double engineDisplacement READ engineDisplacement WRITE setEngineDisplacement NOTIFY engineDisplacementChanged)
     // Black box (TripRecorder): record every drive, also sweep PIDs that are
     // not on screen, and the on-disk cap for the history (database + files)
     Q_PROPERTY(bool blackBoxEnabled READ blackBoxEnabled WRITE save_black_box_enabled NOTIFY blackBoxEnabledChanged)
@@ -393,6 +396,7 @@ public:
     QString gaugeSpeedUnit() const;
     int obdAutoReconnectAttempts() const;
     float fuelTankCapacity() const;
+    double engineDisplacement() const;
     bool blackBoxEnabled() const;
     bool blackBoxSweepAll() const;
     int blackBoxMaxMB() const;
@@ -540,6 +544,7 @@ signals:
     void gaugeSpeedUnitChanged();
     void obdAutoReconnectAttemptsChanged(int value);
     void fuelTankCapacityChanged(float value);
+    void engineDisplacementChanged(double value);
     void blackBoxEnabledChanged(bool value);
     void blackBoxSweepAllChanged(bool value);
     void blackBoxMaxMBChanged(int value);
@@ -677,6 +682,7 @@ public slots:
     void save_gauge_speed_unit(const QString &unit);   // ignored unless "mph" or "km/h"
     void save_obd_auto_reconnect_attempts(int attempts);
     void save_fuel_tank_capacity(float capacity);
+    void setEngineDisplacement(double litres);
     void save_black_box_enabled(bool enabled);
     void save_black_box_sweep_all(bool enabled);
     void setHomeVehicleCard(bool enabled);

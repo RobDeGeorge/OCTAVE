@@ -189,6 +189,7 @@ bool fixDeviceId(QVariant &v)
     X(bottomBarOrientation, QMetaType::QString, QStringLiteral("bottom"), any(), N_STR(bottomBarOrientationChanged), "save_bottom_bar_orientation", Plain) \
     X(showBottomBarMediaControls, QMetaType::Bool, false, any(), N_BOOL(showBottomBarMediaControlsChanged), "save_show_bottom_bar_media_controls", Plain) \
     X(fuelTankCapacity, QMetaType::Double, 15.0, any(), N_FLOAT(fuelTankCapacityChanged), "save_fuel_tank_capacity", Plain) \
+    X(engineDisplacement, QMetaType::Double, 0.0, clampTo(0.0, 20.0), N_DOUBLE(engineDisplacementChanged), "setEngineDisplacement", Plain) \
     X(blackBoxEnabled, QMetaType::Bool, true, any(), N_BOOL(blackBoxEnabledChanged), "save_black_box_enabled", Plain) \
     X(blackBoxSweepAll, QMetaType::Bool, true, any(), N_BOOL(blackBoxSweepAllChanged), "save_black_box_sweep_all", Plain) \
     X(homeVehicleCard, QMetaType::Bool, true, any(), N_BOOL(homeVehicleCardChanged), "setHomeVehicleCard", Plain) \
@@ -1183,6 +1184,7 @@ QString SettingsManager::gaugeTempUnit() const { return row(R_gaugeTempUnit).toS
 QString SettingsManager::gaugeSpeedUnit() const { return row(R_gaugeSpeedUnit).toString(); }
 int SettingsManager::obdAutoReconnectAttempts() const { return row(R_obdAutoReconnectAttempts).toInt(); }
 float SettingsManager::fuelTankCapacity() const { return static_cast<float>(row(R_fuelTankCapacity).toDouble()); }
+double SettingsManager::engineDisplacement() const { return row(R_engineDisplacement).toDouble(); }
 bool SettingsManager::blackBoxEnabled() const { return row(R_blackBoxEnabled).toBool(); }
 bool SettingsManager::blackBoxSweepAll() const { return row(R_blackBoxSweepAll).toBool(); }
 bool SettingsManager::homeVehicleCard() const { return row(R_homeVehicleCard).toBool(); }
@@ -1422,6 +1424,7 @@ void SettingsManager::save_gauge_temp_unit(const QString &unit) { setRow(R_gauge
 void SettingsManager::save_gauge_speed_unit(const QString &unit) { setRow(R_gaugeSpeedUnit, unit); }
 void SettingsManager::save_obd_auto_reconnect_attempts(int attempts) { setRow(R_obdAutoReconnectAttempts, attempts); }
 void SettingsManager::save_fuel_tank_capacity(float capacity) { setRow(R_fuelTankCapacity, static_cast<double>(capacity)); }
+void SettingsManager::setEngineDisplacement(double litres) { setRow(R_engineDisplacement, litres); }
 void SettingsManager::save_black_box_enabled(bool enabled) { setRow(R_blackBoxEnabled, enabled); }
 void SettingsManager::save_black_box_sweep_all(bool enabled) { setRow(R_blackBoxSweepAll, enabled); }
 void SettingsManager::setHomeVehicleCard(bool enabled) { setRow(R_homeVehicleCard, enabled); }

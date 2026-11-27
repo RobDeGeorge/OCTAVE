@@ -217,7 +217,7 @@ void OBDManager::emitParameterSignal(const QString &signalName, float value)
     }
     const auto id = m_signalToParamId.constFind(signalName);
     if (id != m_signalToParamId.constEnd())
-        emit parameterSampled(id.value(), value);
+        publishSample(id.value(), value);
 }
 
 bool OBDManager::invokeWorker(const char *method)

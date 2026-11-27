@@ -511,6 +511,7 @@ void OBDManager::onWorkerInitComplete(bool success, const QString &message)
 
     if (success) {
         m_connected = true;
+        m_derived.connected(QDateTime::currentMSecsSinceEpoch());
         m_connectionAttempts = 0;
         m_reconnectingAfterDiagnostic = false;
         m_waitingForVehicle = false;

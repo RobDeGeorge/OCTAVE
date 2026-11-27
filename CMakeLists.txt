@@ -351,6 +351,8 @@ qt_add_executable(octave
     src/managers/networkmanager.cpp
     src/managers/volumecontroller.h
     src/managers/volumecontroller.cpp
+    src/managers/derivedparameters.h
+    src/managers/derivedparameters.cpp
     src/managers/custompids.h
     src/managers/custompids.cpp
     src/managers/busmonitor.h

@@ -723,6 +723,18 @@
             "scope": "settings"
         },
         {
+            "kind": "slot",
+            "name": "setEngineDisplacement",
+            "params": [
+                {
+                    "name": "litres",
+                    "type": "double"
+                }
+            ],
+            "returns": "",
+            "scope": "settings"
+        },
+        {
             "deprecated": "use the blackBoxEnabled property; goes in protocol 5",
             "kind": "slot",
             "name": "save_black_box_enabled",
@@ -2440,6 +2452,15 @@
         },
         {
             "constant": false,
+            "name": "engineDisplacement",
+            "notify": "engineDisplacementChanged",
+            "readable": true,
+            "scope": "settings",
+            "type": "double",
+            "writable": true
+        },
+        {
+            "constant": false,
             "name": "blackBoxEnabled",
             "notify": "blackBoxEnabledChanged",
             "readable": true,
@@ -3284,6 +3305,15 @@
                 {
                     "name": "value",
                     "type": "float"
+                }
+            ]
+        },
+        {
+            "name": "engineDisplacementChanged",
+            "params": [
+                {
+                    "name": "value",
+                    "type": "double"
                 }
             ]
         },

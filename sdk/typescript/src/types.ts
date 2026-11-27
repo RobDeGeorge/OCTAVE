@@ -1615,6 +1615,8 @@ export interface SettingsManager {
     obdAutoReconnectAttempts: number
     /** float, writable, notify fuelTankCapacityChanged */
     fuelTankCapacity: number
+    /** double, writable, notify engineDisplacementChanged */
+    engineDisplacement: number
     /** bool, writable, notify blackBoxEnabledChanged */
     blackBoxEnabled: boolean
     /** bool, writable, notify blackBoxSweepAllChanged */
@@ -1818,6 +1820,7 @@ export interface SettingsManager {
     save_obd_auto_reconnect_attempts: { args: [attempts: number]; returns: void }
     /** @deprecated use the fuelTankCapacity property; goes in protocol 5 */
     save_fuel_tank_capacity: { args: [capacity: number]; returns: void }
+    setEngineDisplacement: { args: [litres: number]; returns: void }
     /** @deprecated use the blackBoxEnabled property; goes in protocol 5 */
     save_black_box_enabled: { args: [enabled: boolean]; returns: void }
     /** @deprecated use the blackBoxSweepAll property; goes in protocol 5 */
@@ -2051,6 +2054,7 @@ export interface SettingsManager {
     gaugeSpeedUnitChanged: []
     obdAutoReconnectAttemptsChanged: [value: number]
     fuelTankCapacityChanged: [value: number]
+    engineDisplacementChanged: [value: number]
     blackBoxEnabledChanged: [value: boolean]
     blackBoxSweepAllChanged: [value: boolean]
     blackBoxMaxMBChanged: [value: number]

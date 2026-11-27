@@ -30,6 +30,7 @@
             <li><a href="#watcher-system">Which Readings Get Polled</a></li>
             <li><a href="#staying-connected">Staying Connected</a></li>
             <li><a href="#supported-parameters">What Can Be Read</a></li>
+            <li><a href="#calculated">Calculated Readings</a></li>
             <li><a href="#diagnostics">Trouble Codes</a></li>
             <li><a href="#black-box">Black Box: Trip Recorder</a></li>
             <li><a href="#shift-light">Shift Light</a></li>
@@ -140,6 +141,8 @@
             <tr><td>Record every drive</td><td><code>blackBoxEnabled</code></td><td>on</td><td>The <a href="#black-box">black box</a>.</td></tr>
             <tr><td>Record everything the car reports</td><td><code>blackBoxSweepAll</code></td><td>on</td><td>Also record readings that are not on screen.</td></tr>
             <tr><td>Storage cap</td><td><code>blackBoxMaxMB</code></td><td>500</td><td>Space for recorded drives, 50 to 5000 MB. The oldest drives are deleted first.</td></tr>
+            <tr><td>Engine size</td><td><code>engineDisplacement</code></td><td>0 (not set)</td><td>The engine's size in litres. Needed for horsepower and fuel economy on a car with no air flow sensor. See <a href="#calculated">Calculated Readings</a>.</td></tr>
+            <tr><td>Fuel tank</td><td><code>fuelTankCapacity</code></td><td>15</td><td>The tank's size in US gallons, for the range reading.</td></tr>
           </tbody>
         </table>
         <p>
@@ -318,7 +321,7 @@
         <!-- Supported parameters -->
         <h2 id="supported-parameters">What Can Be Read</h2>
         <p>
-          OCTAVE knows 129 readings. Every one has an id in capitals, such as <code>RPM</code> or
+          OCTAVE knows 139 readings. Every one has an id in capitals, such as <code>RPM</code> or
           <code>COOLANT_TEMP</code>, and that id is what you use everywhere: in a dashboard, in
           <code>setParameterDemand</code>, in the black box's files.
         </p>
@@ -328,6 +331,7 @@
             <tr><td>Standard readings</td><td>83</td><td><code>RPM</code>, <code>SPEED</code>, <code>COOLANT_TEMP</code>, <code>ENGINE_LOAD</code>, <code>THROTTLE_POS</code>, <code>FUEL_LEVEL</code>, <code>INTAKE_TEMP</code>, <code>MAF</code>, fuel trims, oxygen sensors, catalyst temperatures, and <code>ELM_VOLTAGE</code> (battery voltage measured by the adapter itself)</td></tr>
             <tr><td>Newer readings</td><td>37</td><td>Found on newer cars: torque, <code>BOOST_PRESSURE_A</code>, <code>ODOMETER</code>, <code>TRANSMISSION_GEAR_RATIO</code>, fuel rate, hybrid battery voltage and current</td></tr>
             <tr><td>Alias</td><td>1</td><td><code>IGNITION_TIMING</code>, another name for <code>TIMING_ADVANCE</code></td></tr>
+            <tr><td>Calculated</td><td>10</td><td>Worked out by OCTAVE, not asked of the car: horsepower, fuel economy, range and more. See <a href="#calculated">Calculated Readings</a></td></tr>
             <tr><td>IMU</td><td>8</td><td><code>PITCH</code>, <code>ROLL</code>, <code>HEADING</code> and so on, from the <a href="hardware-managers.html">BerryIMU</a>, not from the car</td></tr>
           </tbody>
         </table>
@@ -339,7 +343,7 @@
         <ul>
           <li>No car supports all of them. An older car may answer 15; a new one 60.</li>
           <li>Raw values are in &deg;C and mph. Gauges show them in the units chosen in Settings &gt; Display (&deg;F, km/h).</li>
-          <li>Boost pressure is absolute: subtract <code>BAROMETRIC_PRESSURE</code> for what a boost gauge shows.</li>
+          <li><code>BOOST_PRESSURE_A</code> is absolute pressure. The calculated <code>BOOST</code> is what a boost gauge shows.</li>
           <li>Some newer PIDs carry several readings in one reply (PID <code>70</code> gives both actual and commanded boost). They are polled once and decoded into each reading.</li>
         </ul>
         <p>
@@ -353,6 +357,48 @@
           To add a standard reading to OCTAVE: add its decoder to the table in
           <span class="file-path">elm327protocol.cpp</span> and a row to
           <span class="file-path">parametercatalog.cpp</span>. A test fails if you add one without the other.
+        </p>
+
+        <h2 id="calculated">Calculated Readings</h2>
+        <p>
+          A car does not report its horsepower or its fuel economy. OCTAVE works them out from the readings the car
+          does give. A calculated reading has an id like any other, so a gauge, a dashboard or the black box uses it
+          the same way.
+        </p>
+        <table>
+          <thead><tr><th>Id</th><th>Reading</th><th>Unit</th><th>Worked out from</th></tr></thead>
+          <tbody>
+            <tr><td><code>ENGINE_POWER</code></td><td>Horsepower</td><td>hp</td><td>Torque and engine speed. On a car that does not report torque: air flow.</td></tr>
+            <tr><td><code>ENGINE_TORQUE</code></td><td>Torque</td><td>lb&middot;ft</td><td>The engine's own torque figures (<code>ACTUAL_ENGINE_TORQUE</code>, a percentage, times <code>REFERENCE_TORQUE</code>, less <code>ENGINE_FRICTION_TORQUE</code> when the car reports it). Otherwise horsepower and engine speed.</td></tr>
+            <tr><td><code>FUEL_FLOW</code></td><td>Fuel flow</td><td>gal/h</td><td><code>FUEL_RATE</code>, else <code>ENGINE_FUEL_RATE_GS</code>, else air flow.</td></tr>
+            <tr><td><code>FUEL_ECONOMY</code></td><td>Fuel economy right now</td><td>MPG</td><td>Speed and fuel flow. 0 at a standstill, 99.9 at most.</td></tr>
+            <tr><td><code>BOOST</code></td><td>Boost, negative for vacuum</td><td>psi</td><td><code>INTAKE_PRESSURE</code> less <code>BAROMETRIC_PRESSURE</code> (sea level when the car has no barometer).</td></tr>
+            <tr><td><code>TRIP_DISTANCE</code></td><td>Distance this drive</td><td>mi</td><td>Speed, added up over time.</td></tr>
+            <tr><td><code>TRIP_FUEL_USED</code></td><td>Fuel burnt this drive</td><td>gal</td><td>Fuel flow, added up over time.</td></tr>
+            <tr><td><code>TRIP_FUEL_ECONOMY</code></td><td>Average for this drive</td><td>MPG</td><td>The two above. No value for the first quarter mile.</td></tr>
+            <tr><td><code>FUEL_RANGE</code></td><td>Range</td><td>mi</td><td><code>FUEL_LEVEL</code>, the tank's size and the drive's average.</td></tr>
+            <tr><td><code>ZERO_TO_SIXTY</code></td><td>The last 0 to 60 mph time</td><td>s</td><td>Speed. Timed from a standstill; lifting off cancels the run.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          <strong>Air flow</strong> is the <code>MAF</code> reading. A car with no air flow sensor (many older ones)
+          measures manifold pressure instead. For such a car OCTAVE estimates air flow from
+          <code>INTAKE_PRESSURE</code>, <code>INTAKE_TEMP</code>, engine speed and the engine's size, which you set in
+          Settings &gt; OBD &gt; Engine &amp; Tank. The tank's size, for range, is set there too.
+        </p>
+        <p>Worth knowing:</p>
+        <ul>
+          <li>A car has a calculated reading only when it reports what the reading needs. The others are not offered, like any reading the car lacks.</li>
+          <li>Each reading uses the best way the car allows, and only that one, so its values are consistent for a whole drive.</li>
+          <li>Figures from the engine's own torque or fuel rate are good. Figures from air flow are estimates: they assume petrol, and horsepower from air flow is about right at full throttle and reads high at a cruise.</li>
+          <li>The trip readings start again on a new drive. A reconnect within five minutes continues the same drive.</li>
+          <li>Units are fixed: hp, lb&middot;ft, MPG, US gallons, miles and psi.</li>
+          <li>Showing a calculated reading polls the readings it needs. Nothing extra is sent to the car for the reading itself.</li>
+        </ul>
+        <p>
+          The work is done in <span class="file-path">derivedparameters.cpp</span>. <code>OBDManager</code> passes
+          every decoded reading through it and sends the results out in <code>parameterSampled</code>, so nothing
+          downstream can tell a calculated reading from a polled one.
         </p>
 
         <!-- Diagnostics -->
@@ -570,6 +616,7 @@
             <tr><td><span class="file-path">elm327protocol.{h,cpp}</span></td><td>Requests, the PID tables, decoders, reply parsing.</td></tr>
             <tr><td><span class="file-path">rfcommsocket.{h,cpp}</span></td><td>The direct Bluetooth socket (Linux).</td></tr>
             <tr><td><span class="file-path">obdadapterfinder.{h,cpp}</span>, <span class="file-path">src/platform/bluezpairer.{h,cpp}</span></td><td>Scan, pair, trust, connect.</td></tr>
+            <tr><td><span class="file-path">derivedparameters.{h,cpp}</span></td><td>The calculated readings: which a car can have, what each needs polled, the sums. Tested by <code>tst_derivedparameters</code>.</td></tr>
             <tr><td><span class="file-path">parameterstore</span>, <span class="file-path">parametercatalog</span></td><td>The latest values; the title, unit and range of every reading.</td></tr>
             <tr><td><span class="file-path">triprecorder</span>, <span class="file-path">tripstore</span></td><td>The black box and its database.</td></tr>
             <tr><td><span class="file-path">custompids</span>, <span class="file-path">busmonitor</span>, <span class="file-path">shiftlightmanager</span>, <span class="file-path">dtcdescriptions</span></td><td>As named.</td></tr>
