@@ -1909,7 +1909,11 @@ void PhoneMirrorManager::setCarWifi(const QString &name, const QString &password
 
 QString PhoneMirrorManager::watcherScript(const CarWifi &wifi)
 {
-    // Plain sh, no awk (Android's toybox has had one only since Android 15).
+    // Plain sh for Android's mksh, which is stricter than bash or dash: an
+    // unquoted "(" inside ${...} is "no closing quote" there (the first
+    // version never ran on the phone for it). tst_phonemirror runs the
+    // script through mksh where one is installed. No awk either (Android's
+    // toybox has had one only since Android 15).
     // `cmd wifi list-scan-results` prints "BSSID Frequency RSSI Age(sec) SSID
     // Flags"; RSSI may read "-41(0:-43/1:-45)". Every command here was run
     // from a detached shell on an S26 Ultra (Android 17) on 2026-11-26.
@@ -1934,7 +1938,7 @@ QString PhoneMirrorManager::watcherScript(const CarWifi &wifi)
         "  *\"Wifi is not connected\"*)\n"
         "    if cmd wifi list-scan-results 2>/dev/null | grep -F \" $name \" | {\n"
         "      while read -r bssid freq rssi age rest; do\n"
-        "        rssi=${rssi%%(*}; age=${age%%.*}\n"
+        "        rssi=${rssi%%[!0-9-]*}; age=${age%%.*}\n"
         "        if [ \"$age\" -lt %1 ] 2>/dev/null && [ \"$rssi\" -ge %2 ] 2>/dev/null; then exit 0; fi\n"
         "      done; exit 1; }; then\n"
         "      join\n"

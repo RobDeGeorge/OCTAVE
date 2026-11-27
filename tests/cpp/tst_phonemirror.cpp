@@ -20,6 +20,7 @@
 #include <unistd.h>
 #endif
 
+#include <QStandardPaths>
 #include <QTemporaryFile>
 #include <QProcess>
 #include "managers/phonemirrormanager.h"
@@ -866,6 +867,12 @@ private slots:
         file.write(script.toUtf8());
         file.close();
         QCOMPARE(QProcess::execute("sh", {"-n", file.fileName()}), 0);
+        // Android's shell is mksh, which rejects what bash and dash accept: an
+        // unquoted "(" inside ${...} kept the first version from ever running
+        QVERIFY(!script.contains("%%("));
+        const QString mksh = QStandardPaths::findExecutable("mksh");
+        if (!mksh.isEmpty())
+            QCOMPARE(QProcess::execute(mksh, {"-n", file.fileName()}), 0);
 #endif
 
         PhoneMirrorManager m;
