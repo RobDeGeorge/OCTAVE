@@ -624,6 +624,10 @@ void PhoneMirrorManager::checkUsbPhone()
         m_adbServerLooked = true;
         appeared = appeared || adbServerRunning();
     }
+    if (present && appeared && (isRunning() || m_isStarting) && ScrcpyClient::isNetworkSerial(m_serial)) {
+        cablePluggedInOnWifi();
+        return;
+    }
     if (!appeared || isRunning() || m_isStarting)
         return;
     // waitingForPhone and reconnecting look for the phone themselves
@@ -1961,6 +1965,54 @@ void PhoneMirrorManager::maybeReconnectWireless()
             // port, or another of its networks)
             if (!reached.isEmpty() && !m_wirelessAddress.isEmpty())
                 rememberWireless(reached);
+        }, Qt::QueuedConnection);
+    }, false);
+}
+
+QString PhoneMirrorManager::waitForUsbSerial(int waitMs) const
+{
+    for (int waited = 0; ; waited += 500) {
+        const Probe probe = probeDevices();
+        for (const auto &row : probe.rows)
+            if (row.second == QLatin1String("device") && !ScrcpyClient::isNetworkSerial(row.first))
+                return row.first;
+        if (waited >= waitMs)
+            return {};
+        QThread::msleep(500);
+    }
+}
+
+void PhoneMirrorManager::cablePluggedInOnWifi()
+{
+    if (!m_ready) {
+        // Not streaming yet: nothing to lose, start again on the cable
+        qCInfo(lcPhoneMirror) << "A phone is plugged in while starting over Wi-Fi: starting on the cable";
+        m_restarting = true;
+        stopScrcpy();
+        m_restarting = false;
+        const int gen = m_startGeneration;
+        QTimer::singleShot(kUsbSettleMs, this, [this, gen]() {
+            if (gen == m_startGeneration)
+                startScrcpy();
+        });
+        return;
+    }
+    if (m_carWifi.name.isEmpty())
+        return;
+    qCInfo(lcPhoneMirror) << "A phone is plugged in while mirroring over Wi-Fi: checking its network";
+    const CarWifi carWifi = m_carWifi;
+    const QList<Subnet> subnets = localSubnets();
+    const bool tcpip = m_autoWifi;
+    runWirelessJob([this, carWifi, subnets, tcpip]() {
+        const QString serial = waitForUsbSerial(8000);
+        // Moving the phone drops the Wi-Fi link the session is on; the
+        // session comes back on the cable, kept alive by the phone meanwhile
+        if (serial.isEmpty() || !joinCarWifi(serial, carWifi, subnets, hostedCarSubnets(carWifi.name)))
+            return;
+        const QString address = tcpip ? enableTcpip(serial) : enableWirelessDebugging(serial);
+        QMetaObject::invokeMethod(this, [this, address]() {
+            if (!address.isEmpty())
+                rememberWireless(address);
         }, Qt::QueuedConnection);
     }, false);
 }

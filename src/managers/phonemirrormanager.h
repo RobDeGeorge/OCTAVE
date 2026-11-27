@@ -506,6 +506,17 @@ private:
     // does not start it again after a stop.
     void checkUsbPhone();
     static constexpr int kUsbWatchMs = 2000;
+    // A phone plugged in while the session is on Wi-Fi. A start still in
+    // flight moves to the cable (the plug-in restarts the phone's adb
+    // service, which leaves a Wi-Fi start hanging). A running session is
+    // left alone; with Car Wi-Fi set the phone is put on the car's network
+    // in the background, and the session follows it as after any dropped link.
+    void cablePluggedInOnWifi();
+    // adb needs a moment before it lists a phone that was just plugged in
+    static constexpr int kUsbSettleMs = 1500;
+    // Worker thread: the first phone on a cable that adb lists as ready
+    // ("" after `waitMs` without one)
+    QString waitForUsbSerial(int waitMs) const;
     // GUI thread: runs enableWirelessDebugging() for a USB session in the
     // background (the session does not wait for it) and remembers the address
     void startWirelessDebugging(const QString &serial, int sdk);

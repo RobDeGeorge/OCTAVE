@@ -797,6 +797,51 @@ private slots:
         QCOMPARE(adbCalls("connect-network"), 4);
     }
 
+    void pluggingInWhileMirroringOverWifiMovesThePhone()
+    {
+        // In the driveway: mirroring over the Wi-Fi at home, then the cable goes in
+        PhoneMirrorManager m;
+        m.m_adbPath = kFakeAdb;
+        const QString joined = m_tmp.filePath("car-join");
+        const QString state = m_tmp.filePath("wifi-state");
+        const QString mdns = m_tmp.filePath("mdns");
+        QFile::remove(joined);
+        QFile::remove(state);
+        QFile f(mdns);
+        QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        f.write("adb-R5CT1234ABC-AbCdEf\t_adb-tls-connect._tcp\t10.42.0.30:33659\n");
+        f.close();
+        qputenv("FAKE_ADB_CAR_JOIN", joined.toUtf8());
+        qputenv("FAKE_ADB_CAR_IP", "10.42.0.30");
+        qputenv("FAKE_ADB_WLAN_IP", "192.168.1.5");
+        qputenv("FAKE_ADB_WIFI_STATE", state.toUtf8());
+        qputenv("FAKE_ADB_MDNS", mdns.toUtf8());
+        auto restore = qScopeGuard([] {
+            for (const char *name : {"FAKE_ADB_CAR_JOIN", "FAKE_ADB_CAR_IP", "FAKE_ADB_WLAN_IP", "FAKE_ADB_WIFI_STATE",
+                                     "FAKE_ADB_MDNS"})
+                qunsetenv(name);
+        });
+        m.m_testSubnets = {{QHostAddress("192.168.1.2"), 24}, {QHostAddress("10.42.0.1"), 24}};
+        m.m_testCarSubnets = {{QHostAddress("10.42.0.1"), 24}};
+        m.m_testSubnetsSet = true;
+        m.m_serial = TCP;
+        m.m_ready = true;
+        setDevices(TCP + "\tdevice\n" + USB + "\tdevice\n");
+
+        // No Car Wi-Fi: a running session is left as it is
+        m.cablePluggedInOnWifi();
+        QTest::qWait(300);
+        QCOMPARE(adbCalls("devices"), 0);
+
+        m.setCarWifi("OCTAVE-Jeep", "secret pass");
+        QSignalSpy remembered(&m, &PhoneMirrorManager::wirelessAddressChanged);
+        m.cablePluggedInOnWifi();
+        QTRY_COMPARE_WITH_TIMEOUT(remembered.count(), 1, 8000);
+        QCOMPARE(adbCalls("connect-network"), 1);
+        QCOMPARE(m.wirelessAddress(), QString("10.42.0.30:33659"));
+        QCOMPARE(adbCalls("app_process"), 0);   // the session itself was not restarted
+    }
+
     void thePhoneIsRememberedOnEveryNetwork()
     {
         PhoneMirrorManager m;   // no adb: nothing is tried
