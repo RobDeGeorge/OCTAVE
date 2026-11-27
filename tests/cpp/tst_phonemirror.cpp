@@ -692,6 +692,158 @@ private slots:
         QCOMPARE(remembered.count(), 1);
     }
 
+    void carWifiWords()
+    {
+        using M = PhoneMirrorManager;
+        QCOMPARE(M::shellQuote("OCTAVE-Jeep"), QString("'OCTAVE-Jeep'"));
+        QCOMPARE(M::shellQuote("Rob's car; rm -rf /"), QString("'Rob'\\''s car; rm -rf /'"));
+        QCOMPARE(M::carWifiCommand({"My Car", "pass word"}, true).join(' '),
+                 QString("cmd wifi connect-network 'My Car' wpa2 'pass word' -r persistent"));
+        QCOMPARE(M::carWifiCommand({"Open", ""}, false).join(' '), QString("cmd wifi connect-network 'Open' open"));
+
+        const QList<M::Subnet> nets{{QHostAddress("192.168.0.14"), 24}, {QHostAddress("10.42.0.1"), 24}};
+        QVERIFY(M::onSubnet("10.42.0.30", nets));
+        QVERIFY(M::onSubnet("192.168.0.117", nets));
+        QVERIFY(!M::onSubnet("192.168.1.5", nets));
+        QVERIFY(!M::onSubnet("", nets));
+
+        // Those on a network this machine is on, in order; the most recent one is always tried
+        const QStringList known{"100.64.0.9:5555", "10.42.0.30:5555", "172.16.0.4:5555", "192.168.0.117:40001"};
+        QCOMPARE(M::reconnectOrder(known, nets),
+                 (QStringList{"10.42.0.30:5555", "192.168.0.117:40001", "100.64.0.9:5555"}));
+        QCOMPARE(M::reconnectOrder({"10.42.0.30:5555"}, {}), QStringList{"10.42.0.30:5555"});
+        QCOMPARE(M::reconnectOrder({}, nets), QStringList());
+
+        // This machine's own access point for the car's network, from `iw dev`
+        const QString iw = "phy#0\n\tInterface ap0\n\t\tifindex 5\n\t\tssid OCTAVE-Jeep\n\t\ttype AP\n"
+                           "\t\tchannel 44 (5220 MHz)\n\tInterface wlan0\n\t\tssid Bigfoots Cave\n\t\ttype managed\n"
+                           "\tInterface wlan1\n\t\tssid OCTAVE-Jeep\n\t\ttype managed\n";
+        QCOMPARE(M::accessPointInterfaces(iw, "OCTAVE-Jeep"), QStringList{"ap0"});
+        QCOMPARE(M::accessPointInterfaces(iw, "Bigfoots Cave"), QStringList());
+        QCOMPARE(M::accessPointInterfaces(QString(), "OCTAVE-Jeep"), QStringList());
+    }
+
+    void aPhoneOnACableIsPutOnTheCarWifi()
+    {
+        PhoneMirrorManager m;
+        m.m_adbPath = kFakeAdb;
+        const QString joined = m_tmp.filePath("car-join");
+        QFile::remove(joined);
+        qputenv("FAKE_ADB_CAR_JOIN", joined.toUtf8());
+        qputenv("FAKE_ADB_CAR_IP", "10.42.0.30");
+        auto restore = qScopeGuard([] {
+            for (const char *name : {"FAKE_ADB_CAR_JOIN", "FAKE_ADB_CAR_IP", "FAKE_ADB_WLAN_IP", "FAKE_ADB_WIFI_NO_R"})
+                qunsetenv(name);
+        });
+        const QList<PhoneMirrorManager::Subnet> nets{{QHostAddress("192.168.1.2"), 24}, {QHostAddress("10.42.0.1"), 24}};
+        const PhoneMirrorManager::CarWifi car{"OCTAVE-Jeep", "secret pass"};
+
+        // No car Wi-Fi set: the phone is not even asked for its address
+        QVERIFY(!m.joinCarWifi(USB, {}, nets, {}));
+        QCOMPARE(adbCalls("ip"), 0);
+
+        // A phone this machine already reaches stays on its network
+        qputenv("FAKE_ADB_WLAN_IP", "192.168.1.5");
+        QVERIFY(!m.joinCarWifi(USB, car, nets, {}));
+        QCOMPARE(adbCalls("connect-network"), 0);
+
+        // ... unless this machine hosts the car's Wi-Fi (the head unit in the
+        // driveway): then the phone goes on it, off the Wi-Fi at home
+        const QList<PhoneMirrorManager::Subnet> carNets{{QHostAddress("10.42.0.1"), 24}};
+        QVERIFY(m.joinCarWifi(USB, car, nets, carNets));
+        QCOMPARE(adbCalls("connect-network"), 1);
+        // Already on it: left alone
+        QVERIFY(!m.joinCarWifi(USB, car, nets, carNets));
+        QCOMPARE(adbCalls("connect-network"), 1);
+        QFile::remove(joined);
+        QFile::remove(m_tmp.filePath("adb.log"));
+
+        // A phone on a network that is not ours (or on none) is moved, with a fixed address
+        qputenv("FAKE_ADB_WLAN_IP", "172.16.0.9");
+        QVERIFY(m.joinCarWifi(USB, car, nets, {}));
+        QCOMPARE(adbCalls("connect-network"), 1);
+        QCOMPARE(adbCalls("persistent"), 1);
+        QCOMPARE(adbCalls("'OCTAVE-Jeep'"), 1);
+        QCOMPARE(m.phoneWifiAddress(USB), QString("10.42.0.30"));
+
+        // An Android without -r: once more without it
+        QFile::remove(joined);
+        qunsetenv("FAKE_ADB_WLAN_IP");
+        qputenv("FAKE_ADB_WIFI_NO_R", "1");
+        QVERIFY(m.joinCarWifi(USB, car, nets, {}));
+        QCOMPARE(adbCalls("connect-network"), 3);
+        QCOMPARE(adbCalls("persistent"), 2);
+
+        // From a session start: joined first, then made reachable there and remembered
+        QFile::remove(joined);
+        qunsetenv("FAKE_ADB_WIFI_NO_R");
+        const QString state = m_tmp.filePath("wifi-state");
+        const QString mdns = m_tmp.filePath("mdns");
+        QFile::remove(state);
+        QFile f(mdns);
+        QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        f.write("adb-R5CT1234ABC-AbCdEf\t_adb-tls-connect._tcp\t10.42.0.30:33659\n");
+        f.close();
+        qputenv("FAKE_ADB_WIFI_STATE", state.toUtf8());
+        qputenv("FAKE_ADB_MDNS", mdns.toUtf8());
+        auto restoreWifi = qScopeGuard([] { qunsetenv("FAKE_ADB_WIFI_STATE"); qunsetenv("FAKE_ADB_MDNS"); });
+        m.m_testSubnets = nets;
+        m.m_testSubnetsSet = true;
+        m.setCarWifi(" OCTAVE-Jeep ", "secret pass");
+        QSignalSpy remembered(&m, &PhoneMirrorManager::wirelessAddressChanged);
+        m.startWirelessDebugging(USB, 37);
+        QTRY_COMPARE_WITH_TIMEOUT(remembered.count(), 1, 8000);
+        QCOMPARE(m.wirelessAddress(), QString("10.42.0.30:33659"));
+        QCOMPARE(adbCalls("connect-network"), 4);
+    }
+
+    void thePhoneIsRememberedOnEveryNetwork()
+    {
+        PhoneMirrorManager m;   // no adb: nothing is tried
+        m.setKnownWireless({"192.168.0.117:5555", "10.42.0.30:33245"});
+        m.setWirelessAddress("192.168.0.117:5555");
+        QCOMPARE(m.knownWireless(), (QStringList{"192.168.0.117:5555", "10.42.0.30:33245"}));
+
+        // Reached on the car's network at a new port: first, and the old port there is gone
+        QSignalSpy changed(&m, &PhoneMirrorManager::wirelessAddressChanged);
+        m.rememberWireless("10.42.0.30:33659");
+        QCOMPARE(changed.count(), 1);
+        QCOMPARE(m.wirelessAddress(), QString("10.42.0.30:33659"));
+        QCOMPARE(m.knownWireless(), (QStringList{"10.42.0.30:33659", "192.168.0.117:5555"}));
+        m.rememberWireless("10.42.0.30:33659");
+        QCOMPARE(changed.count(), 1);
+
+        // Never more than kKnownWirelessMax
+        for (int i = 1; i <= 10; ++i)
+            m.rememberWireless(QStringLiteral("10.0.%1.2:5555").arg(i));
+        QCOMPARE(m.knownWireless().size(), PhoneMirrorManager::kKnownWirelessMax);
+        QCOMPARE(m.knownWireless().first(), QString("10.0.10.2:5555"));
+
+        // Forget drops them all
+        m.forgetWireless();
+        QCOMPARE(m.wirelessAddress(), QString());
+        QCOMPARE(m.knownWireless(), QStringList());
+    }
+
+    void reconnectTriesEachNetworkThisMachineIsOn()
+    {
+        // Home address saved first, but the phone is on the car's Wi-Fi now
+        PhoneMirrorManager m;
+        m.m_testSubnets = {{QHostAddress("192.168.0.14"), 24}, {QHostAddress("10.42.0.1"), 24}};
+        m.m_testSubnetsSet = true;
+        m.setKnownWireless({"192.168.0.117:5555", "10.42.0.30:5555"});
+        m.setWirelessAddress("192.168.0.117:5555");
+        qputenv("FAKE_ADB_CONNECT_ONLY", "10.42.0.30:5555");
+        auto restore = qScopeGuard([] { qunsetenv("FAKE_ADB_CONNECT_ONLY"); });
+        m.m_adbPath = kFakeAdb;
+        QSignalSpy changed(&m, &PhoneMirrorManager::wirelessAddressChanged);
+        m.maybeReconnectWireless();
+        QTRY_COMPARE_WITH_TIMEOUT(changed.count(), 1, 8000);
+        QCOMPARE(m.wirelessAddress(), QString("10.42.0.30:5555"));
+        QCOMPARE(m.knownWireless(), (QStringList{"10.42.0.30:5555", "192.168.0.117:5555"}));
+        QTRY_VERIFY(!m.m_autoConnectRunning);
+    }
+
     void pluggingAPhoneInStartsMirroring()
     {
 #ifndef Q_OS_LINUX

@@ -597,6 +597,9 @@ QJsonObject SettingsManager::buildDefaultSettings() const
     d[QStringLiteral("androidAutoResolution")]   = QStringLiteral("1280x720"); // 800x480 | 1280x720 | 1920x1080
     d[QStringLiteral("androidAutoFps")]          = 30;         // 30 | 60
     d[QStringLiteral("androidAutoDpi")]          = 160;        // Android Auto UI density
+    d[QStringLiteral("carWifiName")]             = QString();  // the Wi-Fi the head unit hosts for the phone; a phone on a cable is put on it (PhoneMirrorManager)
+    d[QStringLiteral("carWifiPassword")]         = QString();  // its WPA2 password; "" = an open network
+    d[QStringLiteral("scrcpyWirelessKnown")]     = QJsonArray();  // every ip:port the phone was reached at over Wi-Fi, most recent first
     d[QStringLiteral("airPlayEnabled")]          = false;      // advertise OCTAVE as an AirPlay receiver (AirPlayManager)
     d[QStringLiteral("airPlayName")]             = QStringLiteral("OCTAVE");   // what an iPhone lists under Screen Mirroring
     d[QStringLiteral("airPlayRequirePin")]       = true;       // a new iPhone types the on-screen PIN once

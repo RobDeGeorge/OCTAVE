@@ -286,9 +286,28 @@ void AppCore::wirePhoneMirror()
     });
     // Phone last connected over Wi-Fi: reconnected at startup, and kept
     // current when it is paired, moves to a new port, or is forgotten
+    // (scrcpyWirelessKnown: every network it was reached on, the car's and
+    // the one at home, so it is found on whichever it is on now)
+    const QString knownKey = QStringLiteral("scrcpyWirelessKnown");
+    phoneMirrorManager.setKnownWireless(settingsManager.get_setting(knownKey).toStringList());
     phoneMirrorManager.setWirelessAddress(settingsManager.get_scrcpy_wireless_address());
     QObject::connect(&phoneMirrorManager, &PhoneMirrorManager::wirelessAddressChanged,
-                     &settingsManager, &SettingsManager::save_scrcpy_wireless_address);
+                     &settingsManager, [this, knownKey](const QString &address) {
+        settingsManager.save_scrcpy_wireless_address(address);
+        if (settingsManager.get_setting(knownKey).toStringList() != phoneMirrorManager.knownWireless())
+            settingsManager.save_setting(knownKey, phoneMirrorManager.knownWireless());
+    });
+    // The car's Wi-Fi, which a phone on a cable is put on (carWifiName / carWifiPassword)
+    auto carWifi = [this] {
+        phoneMirrorManager.setCarWifi(settingsManager.get_setting(QStringLiteral("carWifiName")).toString(),
+                                      settingsManager.get_setting(QStringLiteral("carWifiPassword")).toString());
+    };
+    carWifi();
+    QObject::connect(&settingsManager, &SettingsManager::genericSettingChanged, &phoneMirrorManager,
+                     [carWifi](const QString &key) {
+        if (key.startsWith(QLatin1String("carWifi")))
+            carWifi();
+    });
 #endif
 }
 

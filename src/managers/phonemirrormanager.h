@@ -8,6 +8,7 @@
 
 #ifndef Q_OS_MOBILE
 
+#include <QHostAddress>
 #include <QObject>
 #include <QPointer>
 #include <QString>
@@ -201,6 +202,34 @@ public:
     static QString qrPairingPayload(const QString &service, const QString &password);
     // "192.168.1.5:5555" -> "192.168.1.5", "[fe80::1]:5555" -> "fe80::1"
     static QString hostOf(const QString &address);
+    // The car's Wi-Fi: the network the head unit hosts for the phone
+    // (settings carWifiName / carWifiPassword; no password = an open network).
+    // At a cable session a phone that this machine cannot reach over Wi-Fi
+    // is put on it, so it never has to be picked on the phone.
+    struct CarWifi { QString name; QString password; };
+    void setCarWifi(const QString &name, const QString &password);
+    // The words of `adb shell` that make the phone join it and save it:
+    // "cmd wifi connect-network '<name>' wpa2 '<password>' [-r persistent]".
+    // `fixedAddress` asks for the same MAC address on every join, so the
+    // network hands the phone the same IP address each time.
+    static QStringList carWifiCommand(const CarWifi &wifi, bool fixedAddress);
+    // One word for the phone's shell, whatever characters it holds
+    static QString shellQuote(const QString &word);
+    // A network this machine is on: its own address there and the prefix length
+    struct Subnet { QHostAddress address; int prefix = 0; };
+    static bool onSubnet(const QString &ip, const QList<Subnet> &subnets);
+    // The interfaces in `iw dev` output that are access points for the network `ssid`
+    static QStringList accessPointInterfaces(const QString &iwDev, const QString &ssid);
+    // Every "ip:port" the phone was reached at over Wi-Fi, most recent first,
+    // one per host (setting scrcpyWirelessKnown): the car's network and the
+    // one at home, say. wirelessAddress is the first of them.
+    QStringList knownWireless() const { return m_knownWireless; }
+    void setKnownWireless(const QStringList &addresses);
+    static constexpr int kKnownWirelessMax = 6;
+    // The order in which they are tried: those on a network this machine is
+    // on, then the most recent one if it is elsewhere (a phone behind a
+    // router or a VPN)
+    static QStringList reconnectOrder(const QStringList &known, const QList<Subnet> &subnets);
     // How long a shown QR code waits for the phone to scan it
     static constexpr int kQrPairingTimeoutMs = 120000;
     // Factor other sources should currently apply: duck level while the phone
@@ -430,6 +459,25 @@ private:
     // Runs on m_wirelessPool (one job at a time); ui jobs drive wirelessBusy
     void runWirelessJob(std::function<void()> job, bool ui);
     void maybeReconnectWireless();
+    // GUI thread: `address` is where the phone was just reached. It becomes
+    // wirelessAddress and the first of the known addresses, replacing any
+    // other on the same host (Wireless debugging moves to a new port).
+    void rememberWireless(const QString &address);
+    // The networks this machine is on (m_testSubnets in a test)
+    QList<Subnet> localSubnets() const;
+    // Worker thread: put a USB phone on the car's Wi-Fi and wait until it
+    // has an address there (up to kCarWifiJoinMs). True when it joined.
+    // Where this machine hosts that network itself (`carSubnets`, the head
+    // unit in the car) the phone always goes on it, also from the Wi-Fi at
+    // home that both are on: the session then never depends on a network
+    // the car drives away from. Elsewhere a phone this machine can already
+    // reach (`subnets`) is left where it is.
+    bool joinCarWifi(const QString &serial, const CarWifi &wifi, const QList<Subnet> &subnets,
+                     const QList<Subnet> &carSubnets) const;
+    // Worker thread: the networks of this machine's own access points named
+    // `name` (Linux: `iw dev`; none elsewhere, or when it hosts no such network)
+    QList<Subnet> hostedCarSubnets(const QString &name) const;
+    static constexpr int kCarWifiJoinMs = 10000;
     // Worker thread: the phone's Wi-Fi IPv4 address ("" when it has none)
     QString phoneWifiAddress(const QString &serial) const;
     // Worker thread: switch a USB phone to adb over TCP; returns "ip:port", "" if not possible
@@ -562,6 +610,11 @@ private:
     qint64 m_fatalCauseAtMs = 0;
 
     QString m_wirelessAddress;
+    QStringList m_knownWireless;                  // every address the phone was reached at, most recent first
+    CarWifi m_carWifi;
+    QList<Subnet> m_testSubnets;                  // tests: stands in for this machine's networks
+    QList<Subnet> m_testCarSubnets;               // tests: the networks this machine hosts as the car's
+    bool m_testSubnetsSet = false;
     QString m_connectionType;
     QThreadPool m_wirelessPool;
     int m_wirelessJobs = 0;                       // UI-started jobs in flight (GUI thread)

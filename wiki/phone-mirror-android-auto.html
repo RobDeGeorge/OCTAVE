@@ -178,20 +178,40 @@
         <p>
           The phone and OCTAVE must be on the same network. OCTAVE does not create one. At home that is your router. In
           a car it is usually an access point the head unit runs and the phone joins; the phone reports that network as
-          having no internet and keeps using mobile data for its apps, which is what you want. There are three ways to
-          get a phone onto Wi-Fi:
+          having no internet and keeps using mobile data for its apps, which is what you want.
+        </p>
+        <p>
+          <strong>Tell OCTAVE about the car's network and it puts the phone on it.</strong> Type the network's name and
+          password under Settings &gt; Phone &gt; Phone Mirror &gt; <strong>Car Wi-Fi</strong>. From then on, when you
+          plug a phone into the head unit, OCTAVE makes the phone join that network. You never pick it on the phone
+          and nothing asks you to confirm. This happens in the driveway too, where both are on your Wi-Fi at home:
+          the phone moves to the car's network, so mirroring does not stop when you drive out of reach of the house.
+          While it is on the car's network the phone uses mobile data. Needs Android 11 or newer.
+        </p>
+        <p>
+          A computer that does not host the network itself (OCTAVE on a desk, say) only moves a phone it cannot
+          reach over Wi-Fi. A phone on the same Wi-Fi as that computer is left there.
+        </p>
+        <p>
+          One limit: Android does not rejoin a network with no internet by itself. After the phone has been away
+          from the car, plug it in for a moment and it is back on the car's Wi-Fi.
+        </p>
+        <p>
+          There are three ways to make a phone reachable over Wi-Fi:
         </p>
         <table>
           <thead><tr><th>Way</th><th>What you do</th><th>Good to know</th></tr></thead>
           <tbody>
-            <tr><td><strong>After a cable session</strong> (automatic)</td><td>Nothing. Whenever a session starts on a USB phone with Android 11 or newer, OCTAVE also switches on the phone's Wireless debugging and connects to it.</td><td>Pull the cable and mirroring carries on. Android turns Wireless debugging off again when the phone restarts or leaves that Wi-Fi network; one more cable session brings it back.</td></tr>
+            <tr><td><strong>After a cable session</strong> (automatic)</td><td>Nothing. Whenever a session starts on a USB phone with Android 11 or newer, OCTAVE also switches on the phone's Wireless debugging and connects to it.</td><td>Pull the cable and mirroring carries on. With Car Wi-Fi set, the phone is put on the car's network first. A phone restart turns Wireless debugging off; one more cable session brings it back.</td></tr>
             <tr><td><strong>QR code</strong></td><td>Settings &gt; Phone &gt; Phone Mirror &gt; Wireless &gt; <strong>Pair a Phone</strong>. On the phone: Settings &gt; Developer options &gt; Wireless debugging &gt; <em>Pair device with QR code</em>, and point the camera at OCTAVE's screen.</td><td>No cable at all. Android 11 or newer. The code expires after two minutes.</td></tr>
             <tr><td><strong>Stay Wireless After USB</strong> (a setting, off by default)</td><td>Turn it on, then plug the phone in once.</td><td>Works on older phones and when the phone itself is the hotspot. Until the phone restarts it accepts debugging connections on any network it joins, so use it only on networks you trust.</td></tr>
           </tbody>
         </table>
         <p>
-          OCTAVE remembers the last phone it reached over Wi-Fi and reconnects to it by itself. The Wireless card shows
-          it ("Remembered: &hellip;"). <strong>Forget</strong> disconnects it and stops reconnecting; to revoke it
+          OCTAVE remembers the last phone it reached over Wi-Fi and reconnects to it by itself. It remembers the
+          phone's address on each network it was reached on, the car's and the one at home, and tries every one that
+          OCTAVE is on now. The Wireless card shows the most recent
+          ("Remembered: &hellip;"). <strong>Forget</strong> disconnects it and stops reconnecting; to revoke it
           completely, also remove OCTAVE from the phone's paired devices under Wireless debugging. When a phone is on
           both a cable and Wi-Fi, the cable is used.
         </p>
@@ -244,6 +264,7 @@
           <thead><tr><th>Setting</th><th>Key</th><th>Default</th><th>What it does</th></tr></thead>
           <tbody>
             <tr><td>Wireless: Pair a Phone, Forget</td><td><code>scrcpyWirelessAddress</code></td><td>none</td><td>The phone last reached over Wi-Fi, as <code>ip:port</code>. OCTAVE writes it; you only pair or forget.</td></tr>
+            <tr><td>Car Wi-Fi</td><td><code>carWifiName</code>, <code>carWifiPassword</code></td><td>empty</td><td>The network the head unit hosts. A phone on a cable is put on it. See <a href="#pm-wifi">Without a Cable</a>. No password means an open network.</td></tr>
             <tr><td>Display Mode</td><td><code>scrcpyDisplaySize</code></td><td><code>"auto"</code> (Desktop (DeX))</td><td><code>"auto"</code> is the separate desktop, always drawn at the size of OCTAVE's phone window. <code>""</code> is Mirror Phone.</td></tr>
             <tr><td>Text Size</td><td><code>scrcpyDisplayDpi</code></td><td>0 (Auto)</td><td>How large the desktop draws its text and icons, 120 to 400 dpi. Desktop mode only. Changing it restarts the session.</td></tr>
             <tr><td>Stay Wireless After USB</td><td><code>scrcpyAutoWifi</code></td><td>off</td><td>See <a href="#pm-wifi">Without a Cable</a>. Applies at the next cable session.</td></tr>
@@ -710,10 +731,11 @@
           for Wi-Fi. The manager's only job is to get the phone into adb's list of devices and keep it there.
         </p>
         <ul>
+          <li><strong>Joining the car's Wi-Fi.</strong> Before either cable step below, the manager reads the phone's Wi-Fi address over the cable. With Car Wi-Fi set, it first asks whether this machine hosts that network: on Linux, an access point with that name in <code>iw dev</code>. If it does, the phone must be on that network. If it does not, any network this machine is on will do. When the phone's address does not fit, the manager runs <code>cmd wifi connect-network</code> in the phone's shell with the network's name and password, then waits up to 10 seconds for the phone to get an address there. The command asks for a fixed MAC address (<code>-r persistent</code>), so the network gives the phone the same IP address every time. An Android that does not know that option is asked again without it. Joined this way, the network does not become the phone's route to the internet.</li>
           <li><strong>After a cable session.</strong> A computer the phone approved over USB is accepted by its Wireless debugging too, with no pairing. So OCTAVE reads the phone's Wi-Fi address over the cable, switches Wireless debugging on, finds its port, and connects. The session does not wait for this.</li>
           <li><strong>QR pairing.</strong> OCTAVE shows a QR code holding a random service name and password, in the format Android Studio uses. The phone scans it and announces a pairing service under that name on the network. OCTAVE finds it, runs <code>adb pair</code> and then <code>adb connect</code>, and reports the outcome with the <code>wirelessResult</code> signal. Needs platform-tools 30 or newer; with an older adb pairing fails at once and says so.</li>
           <li><strong>Stay Wireless After USB</strong> runs <code>adb tcpip 5555</code> before a USB session. This restarts the phone's adb service, so the session starts a couple of seconds later. The phone then listens on port 5555 on every network until it restarts, which is why the setting carries a warning.</li>
-          <li><strong>Reconnecting.</strong> At startup, and whenever no phone is found, the manager tries the remembered address, at most every 5 seconds. Wireless debugging takes a new port each time it is switched on, so when the saved address fails OCTAVE looks the phone up on the network (mDNS) and remembers the new port.</li>
+          <li><strong>Reconnecting.</strong> At startup, and whenever no phone is found, the manager tries the remembered addresses, at most every 5 seconds. It keeps one address for each network the phone was reached on (up to six, the <code>scrcpyWirelessKnown</code> setting) and tries those on a network this machine is on now, most recent first. Wireless debugging takes a new port each time it is switched on, so when a saved address fails OCTAVE looks the phone up on the network (mDNS) and remembers the new port.</li>
           <li><strong>Finding phones on the network</strong> uses adb's own mDNS. Where the installed adb was built without it, OCTAVE falls back to <code>avahi-browse</code> on Linux, if it is installed.</li>
         </ul>
 

@@ -12,6 +12,7 @@
 #include <QCryptographicHash>
 #include <QDir>
 #include <QHostAddress>
+#include <QNetworkInterface>
 #include <QTcpSocket>
 #include <QFile>
 #include <QFileInfo>
@@ -1036,14 +1037,14 @@ void PhoneMirrorManager::continueStart(const StartPrep &prep, int generation)
         // a couple of seconds. The session starts once it is back.
         m_isStarting = true;
         const int gen = ++m_startGeneration;
-        runWirelessJob([this, serial, gen]() {
+        const CarWifi carWifi = m_carWifi;
+        const QList<Subnet> subnets = localSubnets();
+        runWirelessJob([this, serial, gen, carWifi, subnets]() {
+            joinCarWifi(serial, carWifi, subnets, hostedCarSubnets(carWifi.name));
             const QString address = enableTcpip(serial);
             QMetaObject::invokeMethod(this, [this, address, gen]() {
-                if (!address.isEmpty() && address != m_wirelessAddress) {
-                    qCInfo(lcPhoneMirror) << "Remembering the phone for Wi-Fi at" << address;
-                    m_wirelessAddress = address;
-                    emit wirelessAddressChanged(address);
-                }
+                if (!address.isEmpty())
+                    rememberWireless(address);
                 if (gen != m_startGeneration)
                     return;   // stopped meanwhile
                 m_isStarting = false;
@@ -1339,10 +1340,8 @@ void PhoneMirrorManager::onDisconnected(const QString &disconnectReason)
                 if (gen != m_startGeneration)
                     return;   // stopped meanwhile
                 m_isStarting = false;
-                if (!reached.isEmpty() && reached != stale && m_wirelessAddress == stale) {
-                    m_wirelessAddress = reached;
-                    emit wirelessAddressChanged(reached);
-                }
+                if (!reached.isEmpty() && m_knownWireless.contains(stale))
+                    rememberWireless(reached);
                 startScrcpy();
             }, Qt::QueuedConnection);
         }, false);
@@ -1835,12 +1834,92 @@ void PhoneMirrorManager::setWirelessAddress(const QString &address)
     const QString value = address.trimmed();
     if (value == m_wirelessAddress)
         return;
-    m_wirelessAddress = value;
-    emit wirelessAddressChanged(value);
-    if (!value.isEmpty()) {
-        m_lastAutoConnectMs = 0;
-        maybeReconnectWireless();
+    if (value.isEmpty()) {
+        m_wirelessAddress.clear();
+        m_knownWireless.clear();
+        emit wirelessAddressChanged(value);
+        return;
     }
+    rememberWireless(value);
+    m_lastAutoConnectMs = 0;
+    maybeReconnectWireless();
+}
+
+void PhoneMirrorManager::setKnownWireless(const QStringList &addresses)
+{
+    // The current address stays first; one address per host, as rememberWireless keeps it
+    QStringList known;
+    QStringList hosts;
+    auto add = [&](const QString &address) {
+        const QString value = address.trimmed();
+        const QString host = hostOf(value);
+        if (value.isEmpty() || hosts.contains(host) || known.size() >= kKnownWirelessMax)
+            return;
+        hosts.append(host);
+        known.append(value);
+    };
+    add(m_wirelessAddress);
+    for (const QString &address : addresses)
+        add(address);
+    m_knownWireless = known;
+}
+
+void PhoneMirrorManager::rememberWireless(const QString &address)
+{
+    const QString host = hostOf(address);
+    QStringList known{address};
+    for (const QString &other : std::as_const(m_knownWireless))
+        if (hostOf(other) != host && known.size() < kKnownWirelessMax)
+            known.append(other);
+    if (known == m_knownWireless && address == m_wirelessAddress)
+        return;
+    qCInfo(lcPhoneMirror) << "Remembering the phone for Wi-Fi at" << address;
+    m_knownWireless = known;
+    m_wirelessAddress = address;
+    emit wirelessAddressChanged(address);
+}
+
+void PhoneMirrorManager::setCarWifi(const QString &name, const QString &password)
+{
+    m_carWifi = CarWifi{name.trimmed(), password};
+}
+
+QList<PhoneMirrorManager::Subnet> PhoneMirrorManager::localSubnets() const
+{
+    if (m_testSubnetsSet)
+        return m_testSubnets;
+    QList<Subnet> out;
+    const auto interfaces = QNetworkInterface::allInterfaces();
+    for (const QNetworkInterface &iface : interfaces) {
+        if (!(iface.flags() & QNetworkInterface::IsUp) || (iface.flags() & QNetworkInterface::IsLoopBack))
+            continue;
+        const auto entries = iface.addressEntries();
+        for (const QNetworkAddressEntry &entry : entries)
+            if (entry.ip().protocol() == QAbstractSocket::IPv4Protocol && entry.prefixLength() > 0)
+                out.append(Subnet{entry.ip(), entry.prefixLength()});
+    }
+    return out;
+}
+
+bool PhoneMirrorManager::onSubnet(const QString &ip, const QList<Subnet> &subnets)
+{
+    const QHostAddress address(ip);
+    if (address.isNull())
+        return false;
+    return std::any_of(subnets.cbegin(), subnets.cend(), [&](const Subnet &s) {
+        return address.isInSubnet(s.address, s.prefix);
+    });
+}
+
+QStringList PhoneMirrorManager::reconnectOrder(const QStringList &known, const QList<Subnet> &subnets)
+{
+    QStringList order;
+    for (const QString &address : known)
+        if (onSubnet(hostOf(address), subnets))
+            order.append(address);
+    if (!known.isEmpty() && !order.contains(known.first()))
+        order.append(known.first());
+    return order;
 }
 
 void PhoneMirrorManager::maybeReconnectWireless()
@@ -1853,31 +1932,158 @@ void PhoneMirrorManager::maybeReconnectWireless()
         return;
     m_lastAutoConnectMs = now;
     m_autoConnectRunning = true;
-    const QString saved = m_wirelessAddress;
-    runWirelessJob([this, saved]() {
+    // The phone may be on any network it was reached on before (the car's,
+    // the one at home): each of them this machine is on now is tried
+    const QStringList candidates = reconnectOrder(m_knownWireless, localSubnets());
+    runWirelessJob([this, candidates]() {
         QString msg;
-        bool ok = adbConnect(saved, &msg);
-        QString reached = ok ? saved : QString();
-        if (!ok) {
+        QString reached;
+        for (const QString &saved : candidates) {
+            if (adbConnect(saved, &msg)) {
+                reached = saved;
+                break;
+            }
             // Wireless debugging picks a new port every time it is switched
             // on; the phone advertises the current one over mDNS.
             const QString fresh = mdnsConnectAddressFor(hostOf(saved));
-            if (!fresh.isEmpty() && fresh != saved && adbConnect(fresh, &msg))
+            if (!fresh.isEmpty() && fresh != saved && adbConnect(fresh, &msg)) {
                 reached = fresh;
+                break;
+            }
         }
         if (!reached.isEmpty())
             qCInfo(lcPhoneMirror) << "Reconnected to the phone over Wi-Fi at" << reached;
         else
-            qCDebug(lcPhoneMirror) << "Wi-Fi phone" << saved << "not reachable:" << msg;
-        QMetaObject::invokeMethod(this, [this, saved, reached]() {
+            qCDebug(lcPhoneMirror) << "Wi-Fi phone not reachable at" << candidates << ":" << msg;
+        QMetaObject::invokeMethod(this, [this, reached]() {
             m_autoConnectRunning = false;
-            // The phone moved to a new port: remember that one
-            if (!reached.isEmpty() && reached != saved && m_wirelessAddress == saved) {
-                m_wirelessAddress = reached;
-                emit wirelessAddressChanged(reached);
-            }
+            // Not forgotten meanwhile: remember where it was found (a new
+            // port, or another of its networks)
+            if (!reached.isEmpty() && !m_wirelessAddress.isEmpty())
+                rememberWireless(reached);
         }, Qt::QueuedConnection);
     }, false);
+}
+
+QString PhoneMirrorManager::shellQuote(const QString &word)
+{
+    QString quoted = word;
+    quoted.replace(QLatin1Char('\''), QLatin1String("'\\''"));
+    return QLatin1Char('\'') + quoted + QLatin1Char('\'');
+}
+
+QStringList PhoneMirrorManager::carWifiCommand(const CarWifi &wifi, bool fixedAddress)
+{
+    QStringList words{QStringLiteral("cmd"), QStringLiteral("wifi"), QStringLiteral("connect-network"),
+                      shellQuote(wifi.name)};
+    if (wifi.password.isEmpty())
+        words << QStringLiteral("open");
+    else
+        words << QStringLiteral("wpa2") << shellQuote(wifi.password);
+    if (fixedAddress)
+        words << QStringLiteral("-r") << QStringLiteral("persistent");
+    return words;
+}
+
+QStringList PhoneMirrorManager::accessPointInterfaces(const QString &iwDev, const QString &ssid)
+{
+    // "\tInterface ap0" opens a block; "\t\tssid OCTAVE-Jeep" and "\t\ttype AP" are inside it
+    QStringList out;
+    QString iface;
+    bool named = false;
+    bool ap = false;
+    auto close = [&] {
+        if (!iface.isEmpty() && named && ap)
+            out.append(iface);
+    };
+    const QStringList lines = iwDev.split(QLatin1Char('\n'));
+    for (const QString &raw : lines) {
+        const QString line = raw.trimmed();
+        if (line.startsWith(QLatin1String("Interface "))) {
+            close();
+            iface = line.mid(10).trimmed();
+            named = ap = false;
+        } else if (line.startsWith(QLatin1String("ssid "))) {
+            named = line.mid(5) == ssid;
+        } else if (line.startsWith(QLatin1String("type "))) {
+            ap = line.mid(5).trimmed() == QLatin1String("AP");
+        }
+    }
+    close();
+    return out;
+}
+
+QList<PhoneMirrorManager::Subnet> PhoneMirrorManager::hostedCarSubnets(const QString &name) const
+{
+    if (m_testSubnetsSet)
+        return m_testCarSubnets;
+    QList<Subnet> out;
+#ifdef Q_OS_LINUX
+    const QString iw = QStandardPaths::findExecutable(
+        QStringLiteral("iw"), {QStringLiteral("/usr/sbin"), QStringLiteral("/sbin"), QStringLiteral("/usr/bin")});
+    if (name.isEmpty() || iw.isEmpty())
+        return out;
+    QProcess proc;
+    proc.start(iw, {QStringLiteral("dev")});
+    if (!proc.waitForFinished(3000)) {
+        proc.kill();
+        proc.waitForFinished(1000);
+        return out;
+    }
+    const QStringList interfaces = accessPointInterfaces(QString::fromUtf8(proc.readAllStandardOutput()), name);
+    for (const QString &iface : interfaces) {
+        const auto entries = QNetworkInterface::interfaceFromName(iface).addressEntries();
+        for (const QNetworkAddressEntry &entry : entries)
+            if (entry.ip().protocol() == QAbstractSocket::IPv4Protocol && entry.prefixLength() > 0)
+                out.append(Subnet{entry.ip(), entry.prefixLength()});
+    }
+#else
+    Q_UNUSED(name)
+#endif
+    return out;
+}
+
+bool PhoneMirrorManager::joinCarWifi(const QString &serial, const CarWifi &wifi, const QList<Subnet> &subnets,
+                                     const QList<Subnet> &carSubnets) const
+{
+    if (wifi.name.isEmpty())
+        return false;
+    // In the car (this machine hosts the network) the phone belongs on the
+    // car's Wi-Fi even when both are on the Wi-Fi at home: that one is gone
+    // at the end of the street. Anywhere else a phone this machine can
+    // already reach (the Wi-Fi at home, or a hotspot the phone runs that
+    // this machine has joined) is left where it is.
+    const QList<Subnet> &wanted = carSubnets.isEmpty() ? subnets : carSubnets;
+    if (onSubnet(phoneWifiAddress(serial), wanted))
+        return false;
+    // The phone's own shell joins the network and saves it: no prompt, and
+    // nothing to pick on the phone. Joined this way the network does not
+    // become the phone's route to the internet, which stays on mobile data
+    // (S26 Ultra, Android 17, 2026-11-26). Android 11 or newer.
+    qCInfo(lcPhoneMirror) << "Putting the phone on the car's Wi-Fi" << wifi.name;
+    const QStringList shell{QStringLiteral("-s"), serial, QStringLiteral("shell")};
+    int code = -1;
+    QString out = runAdbFull(shell + carWifiCommand(wifi, true), 10000, &code);
+    static const QRegularExpression refused(QStringLiteral("unknown|invalid|usage|exception"),
+                                            QRegularExpression::CaseInsensitiveOption);
+    if (code != 0 || out.contains(refused)) {
+        // An Android whose `cmd wifi` has no -r: join with the address it picks
+        out = runAdbFull(shell + carWifiCommand(wifi, false), 10000, &code);
+        if (code != 0 || out.contains(refused)) {
+            qCInfo(lcPhoneMirror) << "The phone did not join the car's Wi-Fi:" << out.trimmed().left(200);
+            return false;
+        }
+    }
+    for (int waited = 0; waited < kCarWifiJoinMs; waited += 500) {
+        const QString ip = phoneWifiAddress(serial);
+        if (onSubnet(ip, wanted)) {
+            qCInfo(lcPhoneMirror) << "The phone is on the car's Wi-Fi at" << ip;
+            return true;
+        }
+        QThread::msleep(500);
+    }
+    qCInfo(lcPhoneMirror) << "The phone did not show up on the car's Wi-Fi" << wifi.name;
+    return false;
 }
 
 QString PhoneMirrorManager::phoneWifiAddress(const QString &serial) const
@@ -1977,14 +2183,14 @@ void PhoneMirrorManager::startWirelessDebugging(const QString &serial, int sdk)
         return;
     m_wirelessDebugSerial = serial;
     m_wirelessDebugAtMs = now;
-    runWirelessJob([this, serial]() {
+    const CarWifi carWifi = m_carWifi;
+    const QList<Subnet> subnets = localSubnets();
+    runWirelessJob([this, serial, carWifi, subnets]() {
+        joinCarWifi(serial, carWifi, subnets, hostedCarSubnets(carWifi.name));
         const QString address = enableWirelessDebugging(serial);
         QMetaObject::invokeMethod(this, [this, address]() {
-            if (address.isEmpty() || address == m_wirelessAddress)
-                return;
-            qCInfo(lcPhoneMirror) << "Remembering the phone for Wi-Fi at" << address;
-            m_wirelessAddress = address;
-            emit wirelessAddressChanged(address);
+            if (!address.isEmpty())
+                rememberWireless(address);
         }, Qt::QueuedConnection);
     }, false);
 }
@@ -2006,16 +2212,20 @@ QString PhoneMirrorManager::connectPairedHost(const QString &host) const
 
 void PhoneMirrorManager::forgetWireless()
 {
-    const QString addr = m_wirelessAddress;
+    QStringList known = m_knownWireless;
+    if (!m_wirelessAddress.isEmpty() && !known.contains(m_wirelessAddress))
+        known.prepend(m_wirelessAddress);
     if (m_connectionType == QLatin1String("wifi"))
         stopScrcpy();
     m_wirelessAddress.clear();
+    m_knownWireless.clear();
     emit wirelessAddressChanged(QString());
-    if (addr.isEmpty())
+    if (known.isEmpty())
         return;
-    qCInfo(lcPhoneMirror) << "Forgetting the Wi-Fi phone at" << addr;
-    runWirelessJob([this, addr]() {
-        runAdbFull({QStringLiteral("disconnect"), addr}, 5000);
+    qCInfo(lcPhoneMirror) << "Forgetting the Wi-Fi phone at" << known;
+    runWirelessJob([this, known]() {
+        for (const QString &addr : known)
+            runAdbFull({QStringLiteral("disconnect"), addr}, 5000);
     }, false);
 }
 

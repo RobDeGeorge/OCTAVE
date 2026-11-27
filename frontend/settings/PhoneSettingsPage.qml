@@ -227,6 +227,36 @@ Flickable {
                 }
             }
 
+            // The network the head unit hosts (the reference box: hostapd on
+            // ap0). At a cable session the manager puts the phone on it from
+            // the phone's own shell, so it is never picked on the phone.
+            SettingCategory {
+                title: "Car Wi-Fi"
+                visible: mirrorColumn.ready
+                description: "The Wi-Fi this head unit hosts. A phone on a cable joins it by itself, then stays connected without the cable."
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.rowSpacing
+
+                    SettingsTextField {
+                        objectName: "carWifiNameField"
+                        Layout.fillWidth: true
+                        text: settingsManager ? settingsManager.get_setting_with_default("carWifiName", "") : ""
+                        placeholderText: "Network name"
+                        onEditingFinished: if (settingsManager) settingsManager.save_setting("carWifiName", text.trim())
+                    }
+                    SettingsTextField {
+                        objectName: "carWifiPasswordField"
+                        Layout.fillWidth: true
+                        text: settingsManager ? settingsManager.get_setting_with_default("carWifiPassword", "") : ""
+                        placeholderText: "Password"
+                        echoMode: TextInput.PasswordEchoOnEdit
+                        onEditingFinished: if (settingsManager) settingsManager.save_setting("carWifiPassword", text)
+                    }
+                }
+            }
+
             SettingCategory {
                 title: "Display Mode"
                 description: mirrorColumn.desktopMode
