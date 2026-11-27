@@ -777,9 +777,27 @@ private slots:
         QCOMPARE(adbCalls("connect-network"), 3);
         QCOMPARE(adbCalls("persistent"), 2);
 
-        // From a session start: joined first, then made reachable there and remembered
+        // A phone whose Wi-Fi is switched off: switched on first, then joined
         QFile::remove(joined);
         qunsetenv("FAKE_ADB_WIFI_NO_R");
+        const QString wifiOff = m_tmp.filePath("wifi-off");
+        QFile off(wifiOff);
+        QVERIFY(off.open(QIODevice::WriteOnly));
+        off.close();
+        qputenv("FAKE_ADB_WIFI_OFF", wifiOff.toUtf8());
+        auto restoreOff = qScopeGuard([] { qunsetenv("FAKE_ADB_WIFI_OFF"); });
+        QVERIFY(m.joinCarWifi(USB, car, nets, {}));
+        QCOMPARE(adbCalls("set-wifi-enabled"), 1);
+        QVERIFY(!QFile::exists(wifiOff));
+        QCOMPARE(adbCalls("connect-network"), 4);
+        // ... and one whose Wi-Fi is on is not asked to
+        QFile::remove(joined);
+        QVERIFY(m.joinCarWifi(USB, car, nets, {}));
+        QCOMPARE(adbCalls("set-wifi-enabled"), 1);
+        QCOMPARE(adbCalls("connect-network"), 5);
+
+        // From a session start: joined first, then made reachable there and remembered
+        QFile::remove(joined);
         const QString state = m_tmp.filePath("wifi-state");
         const QString mdns = m_tmp.filePath("mdns");
         QFile::remove(state);
@@ -797,7 +815,7 @@ private slots:
         m.startWirelessDebugging(USB, 37);
         QTRY_COMPARE_WITH_TIMEOUT(remembered.count(), 1, 8000);
         QCOMPARE(m.wirelessAddress(), QString("10.42.0.30:33659"));
-        QCOMPARE(adbCalls("connect-network"), 4);
+        QCOMPARE(adbCalls("connect-network"), 6);
     }
 
     void aRefusedWifiTransportIsConnectedAfresh()

@@ -2329,6 +2329,26 @@ bool PhoneMirrorManager::joinCarWifi(const QString &serial, const CarWifi &wifi,
     qCInfo(lcPhoneMirror) << "Putting the phone on the car's Wi-Fi" << wifi.name;
     const QStringList shell{QStringLiteral("-s"), serial, QStringLiteral("shell")};
     int code = -1;
+    // A phone whose Wi-Fi is switched off joins nothing, and says nothing
+    // about it: connect-network answers as usual (Pi, S26 Ultra, 2026-11-27).
+    // Plugged into the car with Car Wi-Fi set, it is switched on
+    const QStringList status{QStringLiteral("cmd"), QStringLiteral("wifi"), QStringLiteral("status")};
+    const QLatin1String off("Wifi is disabled");
+    if (runAdbFull(shell + status, 5000, &code).contains(off)) {
+        qCInfo(lcPhoneMirror) << "The phone's Wi-Fi is switched off: switching it on";
+        runAdbFull(shell + QStringList{QStringLiteral("cmd"), QStringLiteral("wifi"),
+                                       QStringLiteral("set-wifi-enabled"), QStringLiteral("enabled")},
+                   5000, &code);
+        bool on = false;
+        for (int waited = 0; waited < kWifiSwitchOnMs && !on; waited += 500) {
+            QThread::msleep(500);
+            on = !runAdbFull(shell + status, 5000, &code).contains(off);
+        }
+        if (!on) {
+            qCInfo(lcPhoneMirror) << "The phone's Wi-Fi stayed off: it cannot join the car's Wi-Fi";
+            return false;
+        }
+    }
     QString out = runAdbFull(shell + carWifiCommand(wifi, true), 10000, &code);
     static const QRegularExpression refused(QStringLiteral("unknown|invalid|usage|exception"),
                                             QRegularExpression::CaseInsensitiveOption);

@@ -506,6 +506,7 @@ private:
     // `name` (Linux: `iw dev`; none elsewhere, or when it hosts no such network)
     QList<Subnet> hostedCarSubnets(const QString &name) const;
     static constexpr int kCarWifiJoinMs = 10000;
+    static constexpr int kWifiSwitchOnMs = 5000;   // a phone's Wi-Fi switch, once asked to turn on
     // Worker thread: the phone's Wi-Fi IPv4 address ("" when it has none)
     QString phoneWifiAddress(const QString &serial) const;
     // Worker thread: switch a USB phone to adb over TCP; returns "ip:port", "" if not possible

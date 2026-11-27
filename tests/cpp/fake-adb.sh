@@ -15,6 +15,8 @@
 #   FAKE_ADB_MDNS       file listed by `adb mdns services` while that setting is 1
 #   FAKE_ADB_CAR_JOIN   file `cmd wifi connect-network` writes FAKE_ADB_CAR_IP to; while it
 #                       exists the phone's Wi-Fi address is its contents (it joined the car's Wi-Fi)
+#   FAKE_ADB_WIFI_OFF   file that, while it exists, is the phone's Wi-Fi switch being off:
+#                       `cmd wifi status` says so, `cmd wifi set-wifi-enabled enabled` removes it
 #   FAKE_ADB_WIFI_NO_R  `cmd wifi connect-network` refuses the -r option (an older Android)
 #   FAKE_ADB_WATCHER    file holding the version of the Wi-Fi watcher that runs on the phone
 #   FAKE_ADB_UNAUTH     file naming a Wi-Fi address adb holds as "unauthorized" (get-state);
@@ -87,10 +89,18 @@ shell)
         *"echo removed"*) rm -f "$FAKE_ADB_WATCHER"; echo removed ;;
         esac
         ;;
+    *"cmd wifi status"*)
+        if [ -n "$FAKE_ADB_WIFI_OFF" ] && [ -f "$FAKE_ADB_WIFI_OFF" ]; then echo "Wifi is disabled"
+        else echo "Wifi is enabled"; fi
+        echo "Wifi scanning is always available"
+        ;;
+    *"cmd wifi set-wifi-enabled enabled"*) [ -n "$FAKE_ADB_WIFI_OFF" ] && rm -f "$FAKE_ADB_WIFI_OFF" ;;
     *"cmd wifi connect-network"*)
         case "$*" in
         *"-r persistent"*) [ -n "$FAKE_ADB_WIFI_NO_R" ] && { echo "Unknown option: -r"; exit 255; } ;;
         esac
+        # A phone whose Wi-Fi is switched off answers the same and joins nothing
+        if [ -n "$FAKE_ADB_WIFI_OFF" ] && [ -f "$FAKE_ADB_WIFI_OFF" ]; then echo "Connection initiated"; exit 0; fi
         [ -n "$FAKE_ADB_CAR_JOIN" ] && echo "$FAKE_ADB_CAR_IP" > "$FAKE_ADB_CAR_JOIN"
         echo "Connection initiated"
         ;;
