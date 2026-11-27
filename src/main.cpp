@@ -26,12 +26,6 @@
 #include <QElapsedTimer>
 #include <QImage>
 #include <QtQml/qqml.h>
-#ifdef OCTAVE_HAVE_WEBENGINE
-#include <QtWebEngineQuick/qtwebenginequickglobal.h>
-#endif
-#ifdef OCTAVE_HAVE_WEBVIEW
-#include <QtWebView/QtWebView>
-#endif
 #ifdef OCTAVE_HAVE_FFMPEG
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -779,22 +773,6 @@ int main(int argc, char *argv[])
         qWarning("--headless is for desktop and the Pi; ignored");
 #endif
 
-#ifdef OCTAVE_HAVE_WEBENGINE
-#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
-    // Chromium's GPU initialization can crash in Mesa on Wayland when GBM
-    // falls back to Vulkan. The offline wiki needs no GPU acceleration;
-    // disable it only for WebEngine, leaving Qt Quick's renderer unchanged.
-    QByteArray chromiumFlags = qgetenv("QTWEBENGINE_CHROMIUM_FLAGS");
-    if (!chromiumFlags.split(' ').contains("--disable-gpu")) {
-        chromiumFlags.append(" --disable-gpu");
-        qputenv("QTWEBENGINE_CHROMIUM_FLAGS", chromiumFlags.trimmed());
-    }
-#endif
-    QtWebEngineQuick::initialize();
-#endif
-#ifdef OCTAVE_HAVE_WEBVIEW
-    QtWebView::initialize();   // Android: must precede QGuiApplication
-#endif
     QGuiApplication app(argc, argv);
     app.setOrganizationName("OCTAVE");
     app.setApplicationName("OCTAVE");
@@ -899,32 +877,16 @@ int main(int argc, char *argv[])
     ctx->setContextProperty("hasQuick3D", hasQuick3D);
     ctx->setContextProperty("hasQuick3DAssetUtils", hasQuick3DAssetUtils);
 
-    // Prefer editable documentation alongside the checkout; packaged desktop
-    // builds fall back to the offline copy embedded in the executable.
-#ifdef OCTAVE_HAVE_WEBENGINE
-    ctx->setContextProperty("wikiViewerAvailable", true);
-    const QString localWiki = frontendDir.absoluteFilePath("../wiki/index.html");
-    ctx->setContextProperty("wikiHomeUrl", QFile::exists(localWiki)
-        ? QUrl::fromLocalFile(QDir::cleanPath(localWiki))
-        : QUrl(QStringLiteral("qrc:/wiki/index.html")));
-#elif defined(OCTAVE_HAVE_WEBVIEW)
-    // Android: the native WebView reads the wiki copied into the APK's assets
-    // (android/assets/wiki). Only asset URLs work here — no qrc:/, no assets:/.
-    ctx->setContextProperty("wikiViewerAvailable", true);
-    ctx->setContextProperty("wikiHomeUrl", QUrl(QStringLiteral("file:///android_asset/wiki/index.html")));
-#else
-    // No web view in this build: "Open Wiki" hands the published wiki to the
-    // system's browser (frontend/settings/AboutPage.qml). In the browser demo
-    // that is the wiki published beside the page (.../OCTAVE/ -> .../OCTAVE/wiki/),
-    // wherever the page is served from
-    ctx->setContextProperty("wikiViewerAvailable", false);
+    // "Open Wiki" (frontend/settings/AboutPage.qml) hands the published wiki
+    // to the system's browser. In the browser demo that is the wiki published
+    // beside the page (.../OCTAVE/ -> .../OCTAVE/wiki/), wherever the page is
+    // served from
 #ifdef OCTAVE_WASM
     const QUrl pageUrl(QString::fromStdString(
         emscripten::val::global("location")["href"].as<std::string>()));
     ctx->setContextProperty("wikiHomeUrl", pageUrl.resolved(QUrl(QStringLiteral("wiki/index.html"))));
 #else
     ctx->setContextProperty("wikiHomeUrl", QUrl(QStringLiteral("https://robdegeorge.com/OCTAVE/wiki/")));
-#endif
 #endif
 
     // ---- Developer tooling (inactive unless --dev / --profile) ----

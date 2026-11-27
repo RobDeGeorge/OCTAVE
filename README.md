@@ -318,7 +318,6 @@ OCTAVE stands on a lot of other people's work.
 | [Qt 6](https://www.qt.io/) (Core, Gui, Qml, Quick, Quick Controls 2, Multimedia, Network, Concurrent, SerialPort, Bluetooth) | The whole application: UI, audio playback, networking, serial and Bluetooth OBD |
 | Qt Quick 3D, Quick 3D Asset Utils, Quick Timeline | The 3D Jeep and the music-device scenes |
 | Qt DBus | BlueZ pairing on Linux |
-| Qt WebEngine / Qt WebView | The offline wiki reader (desktop / Android) |
 | Qt Sensors | The phone's motion sensors on Android |
 | [TagLib](https://taglib.org/) | Reading tags and embedded album art |
 | [FFmpeg](https://ffmpeg.org/) (libavcodec, libavutil) | Decoding the phone mirror's H.264 stream |

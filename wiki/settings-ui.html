@@ -106,7 +106,7 @@
           <li><strong>Go back</strong> from a card by tapping its title bar (the arrow and the name at the top), or by tapping the Settings button on the navigation bar again.</li>
           <li><strong>Some screens take you straight to the right card.</strong> The Connect button on the OBD page opens OBD &gt; Connection. The phone widget on Home opens Phone &gt; Phone Mirror. The vehicle card on Home opens Device &gt; Vehicle. The music screens' Spotify button opens Media &gt; Spotify until you are signed in.</li>
           <li><strong>An orange dot</strong> on the About tile means an update is available.</li>
-          <li><strong>Open Wiki</strong> (About &gt; Documentation) opens this wiki inside OCTAVE, with the navigation bar still usable. Go to another page and come back with the Settings button, and the wiki is where you left it; tap Settings while reading and it closes. A build with no web view opens the wiki in your browser instead and says so under the button.</li>
+          <li><strong>Open Wiki</strong> (About &gt; Documentation) opens this wiki in your browser. It needs an internet connection.</li>
         </ul>
 
         <!-- Visibility -->
@@ -389,7 +389,7 @@
             <tr><td>Open Settings on a card, from anywhere</td><td><code>mainWindow.navigateToSettings(section, cardId)</code>, for example <code>navigateToSettings("obdSettings", "obd_connection")</code>. It works whether or not Settings is already open.</td></tr>
             <tr><td>Open a card when Settings is the current page</td><td><code>openTile(cardId)</code> on the Settings page. If the tiles are still loading, the card opens when they are ready.</td></tr>
             <tr><td>Know which card is open</td><td><code>openTileId()</code>: the <code>cardId</code>, or an empty string.</td></tr>
-            <tr><td>Close the open card</td><td><code>navigateToHub()</code>. The navigation bar's Settings button calls <code>handleSettingsButton()</code>, which closes the wiki reader if it is open and otherwise does this.</td></tr>
+            <tr><td>Close the open card</td><td><code>navigateToHub()</code>. The navigation bar's Settings button calls it.</td></tr>
             <tr><td>Open About</td><td><code>navigateToCategory("about")</code>, or <code>openTile("section:about")</code>.</td></tr>
           </tbody>
         </table>
@@ -437,7 +437,6 @@
           <li id="orientation-rebuild"><strong>Changing Nav Bar Position rebuilds Settings.</strong> The grid was laid out for the old shape of the screen, so when <code>bottomBarOrientation</code> changes while Settings is open, <span class="file-path">Main.qml</span> notes the open card (<code>openTileId()</code>), builds a fresh Settings page a moment later, swaps it in and destroys the old one. The new page is given the card as <code>initialTile</code> and reopens it once the tiles have loaded, so you stay in Display &gt; Layout, where the switch is. If Settings is not on screen, its cached copy is simply thrown away.</li>
           <li><strong>A card's contents exist only while it is open.</strong> The pages are loaded for the life of the Settings screen, but with <code>renderCards: false</code>, so none of their cards are built until a tile is tapped. A page's own stacked list of cards (the <code>Repeater</code> at the bottom of each page file) is for a host that shows the page by itself; nothing does today.</li>
           <li id="persistence"><strong>A <code>SettingsCard</code> with a <code>cardId</code> is collapsible</strong> and remembers whether it was open, in the <code>expandedCards</code> setting (through <span class="file-path">ExpandedCards.js</span>). The Settings screen does not use this now: its cards are either popups or always open.</li>
-          <li><strong>The wiki reader stays alive behind other pages.</strong> While another page is shown it is made zero-sized as well as hidden, because an open Qt popup swallows touches inside its area even when invisible.</li>
           <li><strong>Unused fields.</strong> <code>pageModel</code> entries also carry <code>icon</code>, <code>iconSource</code>, <code>group</code> and <code>subSections</code>. The grid uses none of them. The <code>settingsLayoutStyle</code> setting is likewise not read by the screen.</li>
           <li id="now-playing-studio"><strong>The Now Playing look editor is not in Settings.</strong> It opens from the Media Room; see <a href="pages.html#nowplayingstudio">Pages &amp; Views</a>.</li>
         </ul>
@@ -451,7 +450,6 @@
             <tr><td><span class="file-path">SettingsSidebarLayout.qml</span></td><td>The grid of all tiles, the column captions, the popup, <code>movedCards</code>.</td></tr>
             <tr><td><span class="file-path">settings/DisplaySettingsPage.qml</span>, <span class="file-path">MediaSettingsPage.qml</span>, <span class="file-path">OBDSettingsPage.qml</span>, <span class="file-path">PhoneSettingsPage.qml</span>, <span class="file-path">AccessoriesSettingsPage.qml</span>, <span class="file-path">DeviceSettingsPage.qml</span></td><td>One page per section: its tiles and cards.</td></tr>
             <tr><td><span class="file-path">settings/AboutPage.qml</span></td><td>The About card.</td></tr>
-            <tr><td><span class="file-path">settings/WikiPopup.qml</span>, <span class="file-path">WikiWebView.qml</span>, <span class="file-path">WikiNativeView.qml</span></td><td>The in-app wiki reader: the popup, the desktop view (Qt WebEngine) and the Android view (the phone's own web view).</td></tr>
             <tr><td><span class="file-path">settings/SettingsTile.qml</span>, <span class="file-path">SettingsTilePage.qml</span>, <span class="file-path">SettingsCardPopup.qml</span></td><td>The tile, the grid, the card popup.</td></tr>
             <tr><td>The other files in <span class="file-path">settings/</span></td><td>The boxes and controls, one file each, named as in <a href="#components">The Controls</a>.</td></tr>
             <tr><td><span class="file-path">BottomBar.qml</span></td><td>The Settings button and the Toggle View panel.</td></tr>

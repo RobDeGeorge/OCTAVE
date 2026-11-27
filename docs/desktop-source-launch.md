@@ -15,5 +15,3 @@ This entry runs the C++ app. Close the existing app before relaunching to test a
 ## First-run testing: OCTAVE (Fresh)
 
 **OCTAVE (Fresh)** (`~/.local/share/applications/octave-fresh.desktop`) runs the same script with `OCTAVE_FRESH=1`. The build is identical; the app then starts with `HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME` and `XDG_STATE_HOME` pointed at a new empty `/tmp/octave-fresh.*` folder, so every launch is a brand-new user's first run: no settings, no music library, no trip history, no logs. The folder is deleted when the app exits. The launch log still goes to the real `~/.local/state/octave/desktop-launch.log` (its first line names the throwaway folder). From a terminal: `OCTAVE_FRESH=1 scripts/octave-desktop.sh`.
-
-On Linux, the app disables GPU acceleration inside the embedded wiki browser before WebEngine initializes. This avoids a Mesa crash during Chromium's Wayland/GBM-to-Vulkan fallback. Qt Quick keeps its normal hardware rendering. Existing `QTWEBENGINE_CHROMIUM_FLAGS` are preserved.

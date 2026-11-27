@@ -94,7 +94,7 @@ jobs:
           version: '6.7.3'
           host: 'linux'
           target: 'desktop'
-          modules: 'qtmultimedia qtserialport qtconnectivity qt5compat qtquick3d qtshadertools qtquicktimeline qtwebview'
+          modules: 'qtmultimedia qtserialport qtconnectivity qt5compat qtquick3d qtshadertools qtquicktimeline'
           cache: true
 
       # The ctests that run an SDK or a starter template against a headless
@@ -697,7 +697,7 @@ jobs:
           host: 'linux'
           target: 'android'
           arch: 'android_arm64_v8a'
-          modules: 'qtmultimedia qtserialport qtconnectivity qtsensors qt5compat qtshadertools qtquick3d qtquicktimeline qtwebview'
+          modules: 'qtmultimedia qtserialport qtconnectivity qtsensors qt5compat qtshadertools qtquick3d qtquicktimeline'
 
       - name: Set up Android SDK + NDK
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407  # v3
@@ -729,10 +729,10 @@ jobs:
           # disk for dev convenience; replace it with a real copy before the
           # APK build runs, otherwise QML asset loads (assets:/frontend/Main.qml)
           # return empty and the app crashes on launch with "Failed to load
-          # Main.qml". Same fix for the wiki symlink.
+          # Main.qml".
           set -e
           cd android/assets
-          for link in frontend wiki; do
+          for link in frontend; do
             if [ -L "$link" ]; then
               target=$(readlink -f "$link")
               echo "Dereferencing $link -> $target"
@@ -823,11 +823,6 @@ jobs:
             exit 1
           fi
           echo "$LIBS" | grep -E 'Quick3D|QuickTimeline|assetimporters|ssl_3|crypto_3' || echo "(no Quick3D libraries bundled)"
-          # The offline wiki reader: Qt WebView + the wiki copied into assets/
-          if ! echo "$LIBS" | grep -q libQt6WebView_ || ! unzip -Z1 "$APK" | grep -q '^assets/wiki/index.html$'; then
-            echo "::error::APK lacks Qt WebView or assets/wiki/index.html — the wiki reader would be unavailable"
-            exit 1
-          fi
 
       - name: Sign APK
         env:

@@ -222,7 +222,7 @@ build/tests/cpp/tst_obdsim                      <span class="cmt"># or run its p
         </p>
         <pre><code>~/Qt/6.7.3/gcc_64/bin/qmllint -I frontend frontend/YourFile.qml</code></pre>
         <p>Better, build and run the tests against 6.7.3 itself:</p>
-        <pre><code>aqt install-qt linux desktop 6.7.3 linux_gcc_64 -m qtmultimedia qtserialport qtconnectivity qt5compat qtquick3d qtshadertools qtquicktimeline qtwebview
+        <pre><code>aqt install-qt linux desktop 6.7.3 linux_gcc_64 -m qtmultimedia qtserialport qtconnectivity qt5compat qtquick3d qtshadertools qtquicktimeline
 Q=~/Qt/6.7.3/gcc_64
 cmake -S . -B build-qt673 -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH=$Q
 cmake --build build-qt673 -j8

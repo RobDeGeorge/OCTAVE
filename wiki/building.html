@@ -259,7 +259,7 @@ cmake --build build -j8
         <table>
           <thead><tr><th>Piece</th><th>Version</th></tr></thead>
           <tbody>
-            <tr><td>Qt for Android</td><td>6.7.3, kit <code>android_arm64_v8a</code>, plus the desktop kit of the same version for the build tools. Modules: the Quick Start ones plus <code>qtsensors</code> and <code>qtwebview</code>.</td></tr>
+            <tr><td>Qt for Android</td><td>6.7.3, kit <code>android_arm64_v8a</code>, plus the desktop kit of the same version for the build tools. Modules: the Quick Start ones plus <code>qtsensors</code>.</td></tr>
             <tr><td>Java</td><td>JDK 17</td></tr>
             <tr><td>Android NDK</td><td><code>26.1.10909125</code></td></tr>
             <tr><td>Android SDK</td><td><code>platforms;android-33</code>, <code>build-tools;33.0.2</code></td></tr>
@@ -283,11 +283,11 @@ adb install build-android/android-build/build/outputs/apk/debug/android-build-de
         <h3>What goes into the APK</h3>
         <ul>
           <li>The app's package name is <code>org.octave.app</code>. The version name and code come from the version in <span class="file-path">CMakeLists.txt</span> (0.9.6 becomes code 906). Android only installs an update with a higher code.</li>
-          <li>The QML and the wiki, from <span class="file-path">android/assets/</span>. In the repository those two entries are symlinks to <span class="file-path">frontend/</span> and <span class="file-path">wiki/</span>. An APK cannot hold a symlink, so the release job replaces them with real copies before it builds.</li>
+          <li>The QML, from <span class="file-path">android/assets/</span>. In the repository that entry is a symlink to <span class="file-path">frontend/</span>. An APK cannot hold a symlink, so the release job replaces it with a real copy before it builds.</li>
           <li>OpenSSL, from <span class="file-path">android/openssl/</span>. Qt for Android does not include it, and without it nothing can use HTTPS.</li>
           <li>Qt Quick 3D's model importer. Without it no 3D model loads.</li>
         </ul>
-        <p>The release job fails if the APK lacks OpenSSL, the model importer, the wiki or the Qt WebView library that shows it.</p>
+        <p>The release job fails if the APK lacks OpenSSL or the model importer.</p>
         <h3>Signing</h3>
         <p>
           Android only installs an update over an app signed with the same key. Releases are signed with one
@@ -417,7 +417,6 @@ python3 packaging/wasm/serve.py /tmp/octave-site 8080   <span class="cmt"># then
             <tr><td><a href="phone-mirror-android-auto.html#aa-native">Built-in Android Auto</a> (<code>OCTAVE_HAVE_NATIVE_AA</code>)</td><td>The above and OpenSSL (desktop)</td><td><code>Native Android Auto receiver (OpenSSL + libavcodec): ON</code></td><td>Android Auto works only through Google's desktop head unit program.</td></tr>
             <tr><td>AirPlay (<code>OCTAVE_HAVE_AIRPLAY</code>)</td><td>Both of the above and libplist (Linux only)</td><td><code>AirPlay receiver (UxPlay + libplist + libavcodec): ON</code></td><td>No AirPlay.</td></tr>
             <tr><td>3D vehicle view</td><td>The <code>qtquick3d</code> Qt module, and <code>qtquicktimeline</code> for the 3D music players in the Media Room</td><td><code>QtQuick3D found</code></td><td>The 3D View card is greyed out.</td></tr>
-            <tr><td>Wiki reader in the app</td><td>Qt WebEngine on desktop, the <code>qtwebview</code> module on Android</td><td></td><td>The reader says it is unavailable.</td></tr>
           </tbody>
         </table>
         <p>

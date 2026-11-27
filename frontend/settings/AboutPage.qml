@@ -9,12 +9,6 @@ Flickable {
     // Accepted for parity with the tile pages; About has no cards to skip.
     property bool renderCards: true
     property var stackView: null
-    property var wikiHost: null
-
-    WikiPopup {
-        id: wikiPopup
-        contentArea: aboutPage.stackView
-    }
 
     // Full text of LICENSE / NOTICE / a component's license for the licenses card
     Popup {
@@ -92,33 +86,6 @@ Flickable {
         }
     }
 
-    function registerWikiPopup() {
-        if (wikiHost && wikiHost.activeWikiPopup === wikiPopup)
-            wikiHost.activeWikiPopup = null
-        wikiHost = stackView && stackView.currentItem
-                && stackView.currentItem.objectName === "settingsMenu"
-                ? stackView.currentItem : null
-        wikiPopup.navigationOwner = wikiHost || aboutPage
-        if (wikiHost && typeof wikiHost.registerWikiPopup === "function")
-            wikiHost.registerWikiPopup(wikiPopup)
-    }
-    onStackViewChanged: registerWikiPopup()
-    Component.onCompleted: registerWikiPopup()
-    Connections {
-        target: aboutPage.stackView
-        ignoreUnknownSignals: true
-        function onCurrentItemChanged() {
-            // SettingsMenu can finish loading About before StackView promotes
-            // it to currentItem. Adopt it as soon as that promotion happens.
-            if (!aboutPage.wikiHost && aboutPage.stackView.currentItem
-                    && aboutPage.stackView.currentItem.objectName === "settingsMenu")
-                aboutPage.registerWikiPopup()
-        }
-    }
-    Component.onDestruction: {
-        if (wikiHost && wikiHost.activeWikiPopup === wikiPopup)
-            wikiHost.activeWikiPopup = null
-    }
     // Local dp/dpMin wrappers — work around Qt Android singleton-function bug.
     function dp(size) { return Math.round(size * (App.Spacing.effectiveScale || 1.0)) }
     function dpMin(size, floor) { return Math.max(floor, Math.round(size * (App.Spacing.effectiveScale || 1.0))) }
@@ -621,12 +588,6 @@ Flickable {
 
                 Text {
                     Layout.fillWidth: true
-                    // Builds with no web view (the browser demo, a desktop
-                    // build without Qt WebEngine) open the published wiki in
-                    // the browser instead of the reader
-                    readonly property bool external: !(typeof wikiViewerAvailable !== "undefined" && wikiViewerAvailable)
-                                                     && typeof wikiHomeUrl !== "undefined" && String(wikiHomeUrl) !== ""
-                    visible: external
                     text: Qt.platform.os === "wasm" ? "Opens in a new tab." : "Opens in your browser."
                     color: App.Style.secondaryTextColor
                     font.pixelSize: App.Spacing.overallText * 0.9
@@ -639,13 +600,7 @@ Flickable {
                     text: "Open Wiki"
                     Layout.fillWidth: true
                     Layout.preferredHeight: aboutPage.dp(44)
-                    onClicked: {
-                        if (!(typeof wikiViewerAvailable !== "undefined" && wikiViewerAvailable)
-                                && typeof wikiHomeUrl !== "undefined" && String(wikiHomeUrl) !== "")
-                            Qt.openUrlExternally(wikiHomeUrl)
-                        else
-                            wikiPopup.open()
-                    }
+                    onClicked: Qt.openUrlExternally(wikiHomeUrl)
                 }
             }
 

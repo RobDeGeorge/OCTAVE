@@ -1,6 +1,6 @@
 // QML fixtures in tests/fixtures/, each run by qmlfixturehost in its own
 // process against the C++ managers: the 3D music device scenes and their
-// shared preference, the shift light editor, and the offline wiki viewer.
+// shared preference, and the shift light editor.
 
 #include <QProcess>
 #include <QTemporaryDir>
@@ -51,31 +51,6 @@ private slots:
         QVERIFY2(code == 0 && output.contains("SHIFT_LIGHT_EDITOR_PASS"), qPrintable(output));
         for (const char *bad : {"ReferenceError", "TypeError", "Unable to assign", "is not defined", "Cannot read property"})
             QVERIFY2(!output.contains(QLatin1String(bad)), qPrintable(output));
-    }
-
-    void offlineWiki_data()
-    {
-        QTest::addColumn<bool>("available");
-        QTest::newRow("viewer available") << true;
-        QTest::newRow("viewer unavailable") << false;
-    }
-
-    void offlineWiki()
-    {
-        QFETCH(bool, available);
-#ifndef OCTAVE_HAVE_WEBENGINE
-        if (available)
-            QSKIP("built without Qt WebEngine: the in-app wiki viewer is unavailable");
-#endif
-        QTemporaryDir tmp;
-        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-        env.insert("XDG_CONFIG_HOME", tmp.path());
-        env.insert("QT_QUICK_CONTROLS_STYLE", "Basic");
-        // The same browser rendering policy as the app's entry point
-        env.insert("QTWEBENGINE_CHROMIUM_FLAGS", (env.value("QTWEBENGINE_CHROMIUM_FLAGS") + " --disable-gpu").trimmed());
-        const auto [code, output] = run({kRepo + "/tests/fixtures/WikiSmoke.qml", tmp.path(),
-                                         available ? "true" : "false"}, env, 45000);
-        QVERIFY2(code == 0 && output.contains("WIKI_SMOKE_PASS"), qPrintable(output));
     }
 
 private:

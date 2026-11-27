@@ -31,7 +31,6 @@
             <li><a href="#fitting">Fitting the Controls</a></li>
             <li><a href="#active-highlight">Which Section Is Current</a></li>
             <li><a href="#animation-pattern">Taps and the Swipe Slide</a></li>
-            <li><a href="#wiki-reader">Home and Settings with the Wiki Reader Open</a></li>
             <li><a href="#adding-button">Adding a Button</a></li>
             <li><a href="#no-page-swipe">Keeping a Swipe for Your Own Item</a></li>
             <li><a href="#files">Files and Tests</a></li>
@@ -321,17 +320,6 @@
           <li><strong>The squish runs on the render thread</strong>, so it keeps moving while the main thread is busy opening a page. The price: it plays in full on every tap and does not hold while the finger stays down. The music keys do no page work, so they simply squish while pressed and act on release.</li>
           <li><strong>A tap is an instant cut; a swipe slides.</strong> The page stack has no transitions except during a swipe. Then the new page comes in from the side over 320&nbsp;ms, on top of the old one, which drifts back, shrinks a little and dims over black.</li>
           <li>Pages opened from the bar are built once and reused; see <a href="frontend-overview.html#page-cache">the page cache</a>.</li>
-        </ul>
-
-        <h2 id="wiki-reader">Home and Settings with the Wiki Reader Open</h2>
-        <p>
-          Settings &gt; About can open this wiki in a reader. If you leave Settings while the reader is open, OCTAVE
-          keeps your place:
-        </p>
-        <ul>
-          <li><strong>Home</strong> does not clear the page stack as it normally does. It leaves that Settings page where it is and shows Home above it, reusing a Home page that is already there.</li>
-          <li><strong>Settings</strong>, from another section, goes back down to that same Settings page with the reader still open, and does not open a new one.</li>
-          <li><strong>Settings</strong>, tapped while the reader is showing, closes the reader and lands on About.</li>
         </ul>
 
         <h2 id="adding-button">Adding a Button</h2>

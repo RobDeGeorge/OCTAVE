@@ -168,16 +168,6 @@ Rectangle {
         _pushSensorPage("SensorHome.qml")
     }
 
-    function persistentWikiSettings() {
-        for (var i = stackView.depth - 1; i > 0; --i) {
-            var item = stackView.get(i)
-            if (item && item.objectName === "settingsMenu"
-                    && item.activeWikiPopup && item.activeWikiPopup.opened)
-                return item
-        }
-        return null
-    }
-
     function openHomeSection() {
         // Already on Home with the phone shown there (PhoneMirrorWidget):
         // Home again takes the phone to its own home screen
@@ -185,45 +175,15 @@ Rectangle {
             phoneMirrorManager.pressHome()
             return
         }
-        var savedSettings = persistentWikiSettings()
-        if (!savedSettings) {
-            while (stackView.depth > 1)
-                stackView.pop()
-            return
-        }
-
-        // Reuse a Home page already above the preserved Settings page.
-        for (var i = stackView.depth - 1; i > 0; --i) {
-            var item = stackView.get(i)
-            if (item === savedSettings)
-                break
-            if (item && item.objectName === "mainMenu") {
-                if (stackView.currentItem !== item)
-                    stackView.pop(item)
-                return
-            }
-        }
-
-        stackView.openPage("MainMenu.qml", {
-            mainWindow: bottomBar.mainWindow,
-            windowWidth: bottomBar.mainWindow.width,
-            windowHeight: bottomBar.mainWindow.height
-        })
+        while (stackView.depth > 1)
+            stackView.pop()
     }
 
     function openSettingsSection() {
         var currentItem = stackView.currentItem
         if (currentItem && currentItem.objectName === "settingsMenu") {
-            if (typeof currentItem.handleSettingsButton === "function")
-                currentItem.handleSettingsButton()
-            else if (typeof currentItem.navigateToHub === "function")
+            if (typeof currentItem.navigateToHub === "function")
                 currentItem.navigateToHub()
-            return
-        }
-
-        var savedSettings = persistentWikiSettings()
-        if (savedSettings) {
-            stackView.pop(savedSettings)
             return
         }
 

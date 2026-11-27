@@ -40,7 +40,7 @@ Item {
     }
 
     // There are no section pages any more. About is the one section shown as
-    // a single card, so asking for it (e.g. closing the wiki) opens that card.
+    // a single card, so asking for it opens that card.
     function navigateToCategory(section) {
         if (section === "about" && contentArea.detailCardId !== "section:about")
             contentArea.openTile("section:about", null)

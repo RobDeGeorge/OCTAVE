@@ -17,7 +17,6 @@ Item {
 
     property string currentSection: ""
     property bool updateAvailable: networkManager && networkManager.updateStatus === "update-available"
-    property var activeWikiPopup: null
 
     // Central page model — single source of truth for all pages
     // NOTE: `source` paths are relative to frontend/ (consumed by layout Loaders in frontend/)
@@ -146,20 +145,6 @@ Item {
         if (layoutLoader.item && typeof layoutLoader.item.navigateToHub === "function") {
             layoutLoader.item.navigateToHub()
         }
-    }
-
-    function registerWikiPopup(popup) {
-        activeWikiPopup = popup
-    }
-
-    function handleSettingsButton() {
-        if (activeWikiPopup && activeWikiPopup.opened) {
-            activeWikiPopup.close()
-            if (currentSection !== "about")
-                navigateToCategory("about")
-            return
-        }
-        navigateToHub()
     }
 
     function navigateToCategory(section) {
