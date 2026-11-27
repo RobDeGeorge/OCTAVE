@@ -17,7 +17,7 @@ cd examples/frontends/console
 ~/venvs/octave-console/bin/python -m octave_console    # --host H --port P --tab live|obd|trips|library|dash|car|phone|system|settings|api
 ```
 
-Over the network (OCTAVE started with `--service-bind`), protocol 2 wants the console paired: it shows a pair screen, you type the 6-digit code from OCTAVE's Settings > Service > Pair a device, and the token is kept in `$XDG_CONFIG_HOME/octave-console/tokens.json` (mode 0600, one per host:port; `--token-file` elsewhere, `--token` or `OCTAVE_TOKEN` to pass one). A revoked token is forgotten and it asks again. On the head unit itself nothing is asked while `serviceLoopbackOpen` is on (the default). Covers and export downloads send the token as `Authorization: Bearer`, never in a URL.
+Over the network (OCTAVE started with `--service-bind`), protocol 2 wants the console paired: it shows a pair screen, you type the 6-digit code from OCTAVE's Settings > Device > Developer > Service > Pair a device, and the token is kept in `$XDG_CONFIG_HOME/octave-console/tokens.json` (mode 0600, one per host:port; `--token-file` elsewhere, `--token` or `OCTAVE_TOKEN` to pass one). A revoked token is forgotten and it asks again. On the head unit itself nothing is asked while `serviceLoopbackOpen` is on (the default). Covers and export downloads send the token as `Authorization: Bearer`, never in a URL.
 
 Start it before or after OCTAVE: until the service answers, the status line shows NO LINK and it retries every second. It reconnects the same way if OCTAVE restarts. Needs Python 3.10 or newer and a terminal of about 120x32 or more.
 
@@ -58,7 +58,7 @@ python3 -m pip install --target vendor textual pillow
 cp -r ../../../sdk/python/octave_client vendor/
 ```
 
-Keep a `.venv` for development outside this folder (as Run does) or delete it before installing. Then on the head unit: Settings > Device > Frontends > **Install from folder** (this folder), and **Try** (a timed trial that goes back by itself) or **Use** (from the next start). Over the service: `frontendManager.installFromFolder(path)`, then `tryFrontend(id, seconds)` or `setActive(id)`.
+Keep a `.venv` for development outside this folder (as Run does) or delete it before installing. Then on the head unit: Settings > Device > Developer > Frontends > **Install from folder** (this folder), and **Try** (a timed trial that goes back by itself) or **Use** (from the next start). Over the service: `frontendManager.installFromFolder(path)`, then `tryFrontend(id, seconds)` or `setActive(id)`.
 
 As the screen there is no terminal, so `launch.py` checks the token with one `hello`, logs the result (OCTAVE relays it into its log as `[org.octave.example.console] console: ...`), and opens a full-screen terminal emulator running the console: the first of kitty, foot, alacritty, gnome-terminal, konsole, xfce4-terminal and xterm on PATH, or the command in `OCTAVE_CONSOLE_TERMINAL` (e.g. `xterm -fullscreen -e`). The console reads `OCTAVE_HOST`, `OCTAVE_PORT` and `OCTAVE_TOKEN` from its environment (the flags still win); the token holds exactly the manifest's scopes, and while it is the screen nothing else on the head unit gets in without one (pair other tools with `octave --pair-code`). Its exit code is passed back: Q (0) quits OCTAVE, a crash restarts it. Run from a terminal, `python3 launch.py` just starts the console (with this folder's `.venv` when there is one, else `vendor/`).
 

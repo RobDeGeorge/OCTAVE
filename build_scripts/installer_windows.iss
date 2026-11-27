@@ -83,9 +83,9 @@ Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=
 ; gone now.
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=all dir=in program=""{app}\platform-tools\adb.exe"""; Flags: runhidden; RunOnceId: "DeleteAdbPromptRules"; Check: IsAdminInstallMode
 
-[UninstallDelete]
-; Clean up user data on uninstall (optional - remove if you want to preserve settings)
-Type: filesandordirs; Name: "{userappdata}\OCTAVE"
+; No [UninstallDelete] of {userappdata}\OCTAVE: an uninstall keeps the settings,
+; dashboards, trip history and logs unless the user says to delete them
+; (RemoveUserData in [Code]); a silent uninstall always keeps them.
 
 ; No Visual C++ Redistributable check: CI deploys the VC runtime DLLs
 ; (msvcp140, vcruntime140, ...) app-local next to OCTAVE.exe, so a clean
@@ -363,6 +363,27 @@ begin
     end;
 end;
 
+// %APPDATA%\OCTAVE holds what the user made: settings, dashboards, the trip
+// history, logs. Uninstalling used to delete it without a word, so removing
+// the app to reinstall it lost everything. Now it is kept unless the user
+// answers Yes here; the default answer, and a silent uninstall, keep it.
+procedure RemoveUserData;
+var
+  Dir: String;
+begin
+  Dir := ExpandConstant('{userappdata}\OCTAVE');
+  if UninstallSilent or not DirExists(Dir) then
+    Exit;
+  if SuppressibleMsgBox('Also delete your OCTAVE settings, dashboards, trip history and logs?' + #13#10 + #13#10
+                        + Dir + #13#10 + #13#10
+                        + 'Choose No to keep them for a later install.',
+                        mbConfirmation, MB_YESNO or MB_DEFBUTTON2, IDNO) = IDYES then
+  begin
+    Log('Removing user data in ' + Dir);
+    DelTree(Dir, True, True, True);
+  end;
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usUninstall then
@@ -372,5 +393,8 @@ begin
     StopBundledAdb;
   end
   else if CurUninstallStep = usPostUninstall then
+  begin
     RemoveAdbLeftovers;
+    RemoveUserData;
+  end;
 end;

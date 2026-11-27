@@ -41,7 +41,6 @@
       title: "Reference & Guides",
       links: [
         { href: "settings-reference.html", label: "Settings Reference" },
-        { href: "signals-slots-reference.html", label: "Signals & Slots API" },
         { href: "api-reference.html", label: "Service API Reference" },
         { href: "writing-a-frontend.html", label: "Writing a Frontend" },
         { href: "frontend-gallery.html", label: "Frontend Gallery" },

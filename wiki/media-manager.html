@@ -13,872 +13,491 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Media Manager</div>
           <h1 class="page-title">Media Manager</h1>
-          <p class="page-subtitle">Local media playback engine with QMediaPlayer, folder-based playlists, a persistent tag store, cover-art caching, album-art colour theming, volume routing and playback recovery</p>
+          <p class="page-subtitle">How OCTAVE plays music: adding your songs, playlists, the Media Room, Spotify, volume, and how it all works underneath</p>
         </div>
 
         <nav class="toc">
           <h3>Table of Contents</h3>
           <ul class="toc-list">
-            <li><a href="#overview">Overview</a></li>
-            <li><a href="#backends">Platforms</a></li>
-            <li><a href="#supported-formats">Supported Audio Formats</a></li>
-            <li><a href="#qmediaplayer">QMediaPlayer Integration</a></li>
-            <li><a href="#library-scanning">Library Scanning</a></li>
-            <li><a href="#metadata-caching">Metadata Caching and the Tag Store</a></li>
-            <li><a href="#album-art">Album Art Extraction</a></li>
-            <li><a href="#color-extraction">Color Extraction and Theming</a></li>
-            <li><a href="#playback-control">Playback Control</a></li>
-            <li><a href="#shuffle-repeat">Shuffle Logic</a></li>
-            <li><a href="#playlist-management">Playlist Management</a></li>
-            <li><a href="#display-names">Display Names</a></li>
-            <li><a href="#volume-mute">Volume, Mute and Ducking</a></li>
-            <li><a href="#playback-resume">Playback State Resume</a></li>
-            <li><a href="#precaching">Neighbor Pre-caching</a></li>
-            <li><a href="#error-recovery">Error Recovery</a></li>
+            <li><a href="#overview">What It Does</a></li>
+            <li><a href="#adding-music">Adding Your Music</a></li>
+            <li><a href="#playing">Playing Music</a></li>
+            <li><a href="#playlist-management">Playlists</a></li>
+            <li><a href="#media-room">The Media Room</a></li>
             <li><a href="#spotify">Spotify</a></li>
-            <li><a href="#signals">Signals</a></li>
-            <li><a href="#slots">Slots</a></li>
-            <li><a href="#threading">Threading</a></li>
-            <li><a href="#design-decisions">Design Decisions</a></li>
-            <li><a href="#extending">How to Modify / Extend</a></li>
+            <li><a href="#volume-mute">Volume</a></li>
+            <li><a href="#settings-keys">Settings</a></li>
+            <li><a href="#how-it-works">How It Works</a></li>
+            <li><a href="#library-scanning">How the Library Is Read</a></li>
+            <li><a href="#metadata-caching">Tags and Covers</a></li>
+            <li><a href="#playback-resume">Resuming After a Restart</a></li>
+            <li><a href="#error-recovery">Files That Will Not Play</a></li>
+            <li><a href="#now-playing">Which Source Has the Music</a></li>
+            <li><a href="#spotify-internals">How Spotify Is Connected</a></li>
+            <li><a href="#backends">Android and the Browser Demo</a></li>
+            <li><a href="#troubleshooting">When Something Goes Wrong</a></li>
+            <li><a href="#files">Files, API and Tests</a></li>
+            <li><a href="#design-decisions">Why It Is Built This Way</a></li>
             <li><a href="#related">Related Pages</a></li>
           </ul>
         </nav>
 
         <!-- Overview -->
-        <h2 id="overview">Overview</h2>
+        <h2 id="overview">What It Does</h2>
         <p>
-          The <code>MediaManager</code> class (<span class="file-path">src/managers/mediamanager.{h,cpp}</span>) handles all
-          local audio file playback for OCTAVE. It wraps Qt's <code>QMediaPlayer</code> and <code>QAudioOutput</code>,
-          turns the sub-folders of the music folder into playlists, keeps a metadata and album-art cache backed by a
-          persistent tag store on disk, extracts dominant colors from album art for the "Album Art Capture" theme, and
-          provides shuffle, skip, playback resume and automatic recovery from unplayable files.
+          OCTAVE plays the music files you already own. You point it at a folder, and every sub-folder of that folder
+          becomes a playlist. It reads each song's artist, album and cover from the file, remembers where you stopped,
+          and carries on from there the next time the car starts.
         </p>
         <p>
-          It is registered as a QML context property named <code>mediaManager</code> in
-          <span class="file-path">src/main.cpp</span>. All playback controls
-          are Slots and every state change is broadcast with a Signal, so the QML in
-          <span class="file-path">frontend/MediaRoom.qml</span>, <span class="file-path">MediaPlayer.qml</span>,
-          <span class="file-path">BottomBar.qml</span>, <span class="file-path">MainMenu.qml</span> and the
-          <span class="file-path">dashboards/widgets/NowPlayingWidget.qml</span> binds to the same API.
-        </p>
-
-        <span class="platform-badge all">All Platforms</span>
-
-        <!-- Platforms -->
-        <h2 id="backends">Platforms</h2>
-        <table>
-          <thead><tr><th>Implementation</th><th>Platforms</th><th>Tag / cover reader</th></tr></thead>
-          <tbody>
-            <tr><td><span class="file-path">src/managers/mediamanager.{h,cpp}</span></td><td><span class="platform-badge all">All</span></td><td><strong>TagLib</strong> on desktop (<code>TagLib::FileRef</code> for tags, format-specific readers for pictures). On Android the CMake define <code>Q_OS_MOBILE</code> (set for <code>ANDROID</code> builds in <span class="file-path">CMakeLists.txt</span>) compiles TagLib out; tags and covers come from <code>OctaveAndroid::readMetadata()</code> / <code>extractAlbumArt()</code> in <span class="file-path">src/platform/androidmediabridge.h</span> (JNI). Any other mobile target falls back to the file name with "Unknown Artist" / "Unknown Album". Which reader is used is <code>OCTAVE_TAGLIB</code> (<span class="file-path">mediamanager.h</span>): desktop and the browser demo (WebAssembly), which reads tags and covers with TagLib from the parts of each file read in the browser (<code>openTags()</code> gives TagLib a <code>WebMusicLibrary::tagStream()</code> there) and whose library is a folder picked in the browser and played from <code>blob:</code> URLs (<code>pickBrowserLibrary</code>, <a href="building.html#wasm">Building &gt; WebAssembly</a>).</td></tr>
-          </tbody>
-        </table>
-
-        <!-- Supported Formats -->
-        <h2 id="supported-formats">Supported Audio Formats</h2>
-        <p>The following file extensions are recognized during library scanning (<code>MediaManager::s_audioExtensions</code>, with a file-local copy <code>s_audioExts</code> used by <code>hasAudioExtension()</code>):</p>
-        <pre><code><span class="cmt">// src/managers/mediamanager.cpp</span>
-<span class="str">".mp3"</span>, <span class="str">".m4a"</span>, <span class="str">".mp4"</span>, <span class="str">".flac"</span>, <span class="str">".ogg"</span>, <span class="str">".opus"</span>, <span class="str">".wav"</span></code></pre>
-        <p>
-          The list accepts <code>.mp4</code>: an audio-only MP4 file is the same container as <code>.m4a</code> with a
-          different extension. The
-          display-name and metadata fallbacks strip any of these extensions (and only these).
-        </p>
-        <p>The desktop TagLib readers handle the formats below; none extracts WAV art. Actual playback also depends on the codecs available to Qt Multimedia. The dispatch lives in <code>_read_tags(filePath, baseName)</code> (tags) and <code>_extract_art_for(filePath, albumId)</code> (cover); a file that fails to open yields the file-name title with "Unknown Artist" / "Unknown Album":</p>
-        <table>
-          <thead><tr><th>Format</th><th>TagLib (desktop)</th></tr></thead>
-          <tbody>
-            <tr><td>MP3</td><td>Title / artist / album / length via <code>FileRef</code>; cover from the first ID3v2 <code>APIC</code> frame</td></tr>
-            <tr><td>M4A / MP4 / AAC</td><td>Tags via <code>FileRef</code>; cover from the first <code>covr</code> item (<code>TagLib::MP4::File</code>)</td></tr>
-            <tr><td>FLAC</td><td>Tags via <code>FileRef</code>; cover from <code>TagLib::FLAC::File::pictureList()</code></td></tr>
-            <tr><td>Ogg Vorbis</td><td>Tags via <code>FileRef</code>; cover from the Xiph comment's <code>pictureList()</code> (<code>TagLib::Ogg::Vorbis::File</code>)</td></tr>
-            <tr><td>Opus</td><td>Tags via <code>FileRef</code>; cover from the Xiph comment's <code>pictureList()</code>. <code>_extract_album_art_ogg</code> picks the reader by extension -- <code>TagLib::Ogg::Opus::File</code> for <code>.opus</code>, since the Vorbis reader rejects an Opus stream -- and shares the picture handling</td></tr>
-            <tr><td>WAV</td><td>Tags and length via <code>FileRef</code>; no cover</td></tr>
-          </tbody>
-        </table>
-
-        <!-- QMediaPlayer Integration -->
-        <h2 id="qmediaplayer">QMediaPlayer Integration</h2>
-        <p>
-          The constructor creates one <code>QMediaPlayer</code> with one <code>QAudioOutput</code> and starts it at
-          volume 0.5 (the real startup volume is applied a moment later by <code>VolumeController</code>, see
-          <a href="#volume-mute">Volume</a>).
+          It can also be the remote for <strong>Spotify</strong> (experimental): your Spotify playlists appear in the
+          same list as your own, and the Spotify app on your phone does the playing. A mirrored phone or Android Auto
+          can take over the music too; those are described on the
+          <a href="phone-mirror-android-auto.html">Phone Mirror &amp; Android Auto</a> page.
         </p>
         <p>
-          <strong>Output device.</strong> A <code>QAudioOutput</code> stays bound to the device that was the system
-          default when it was created, so an output that disappears and returns (HDMI audio across a display sleep,
-          a USB DAC) used to leave playback silently on the old device. The constructor therefore creates a
-          <code>QMediaDevices</code> and connects <code>audioOutputsChanged</code> to <code>_apply_output_device()</code>,
-          which is also called when <code>settingsManager.audioOutputDevice</code> changes. It plays to the output picked
-          in Settings &gt; Media &gt; <strong>Audio Output</strong> (a <code>QAudioDevice</code> id) while that device is
-          plugged in, and to <code>QMediaDevices::defaultAudioOutput()</code> otherwise or when nothing is picked
-          (<span class="file-path">src/util/audiooutput.h</span>, shared with the phone mirror's audio). It switches only
-          when the device differs (a null device is ignored), logs "Audio output changed, now using: ...", and emits
-          <code>audioOutputsChanged()</code>. QML binds to <code>audioOutputs</code> (every output as
-          <code>{id, name, isDefault}</code>) and <code>currentAudioOutput</code> (the name of the one in use).
+          This page starts with how to use it and gets more technical as it goes. Stop reading whenever you have what
+          you came for.
         </p>
-        <pre><code><span class="cmt">// src/managers/mediamanager.cpp — constructor</span>
-m_player = <span class="kw">new</span> <span class="cls">QMediaPlayer</span>(<span class="kw">this</span>);
-m_audioOutput = <span class="kw">new</span> <span class="cls">QAudioOutput</span>(<span class="kw">this</span>);
-m_player-&gt;<span class="fn">setAudioOutput</span>(m_audioOutput);
-m_audioOutput-&gt;<span class="fn">setVolume</span>(<span class="num">0.5f</span>);
 
-<span class="cmt">// Re-pick the output (picked one, else the system default) when outputs change</span>
-m_mediaDevices = <span class="kw">new</span> <span class="cls">QMediaDevices</span>(<span class="kw">this</span>);
-<span class="fn">connect</span>(m_mediaDevices, &amp;<span class="cls">QMediaDevices</span>::audioOutputsChanged, <span class="kw">this</span>, &amp;<span class="cls">MediaManager</span>::_apply_output_device);
-
-<span class="fn">connect</span>(m_player, &amp;<span class="cls">QMediaPlayer</span>::durationChanged,    <span class="kw">this</span>, &amp;<span class="cls">MediaManager</span>::durationChanged);
-<span class="fn">connect</span>(m_player, &amp;<span class="cls">QMediaPlayer</span>::positionChanged,    <span class="kw">this</span>, &amp;<span class="cls">MediaManager</span>::positionChanged);
-<span class="fn">connect</span>(m_player, &amp;<span class="cls">QMediaPlayer</span>::mediaStatusChanged, <span class="kw">this</span>, &amp;<span class="cls">MediaManager</span>::_handle_media_status);
-<span class="fn">connect</span>(m_player, &amp;<span class="cls">QMediaPlayer</span>::errorOccurred,      <span class="kw">this</span>, &amp;<span class="cls">MediaManager</span>::_handle_player_error);
-<span class="fn">connect</span>(m_player, &amp;<span class="cls">QMediaPlayer</span>::playbackStateChanged, <span class="kw">this</span>,
-        [<span class="kw">this</span>](<span class="cls">QMediaPlayer</span>::PlaybackState state) { <span class="kw">emit</span> <span class="fn">playbackStateChanged</span>(<span class="kw">static_cast</span>&lt;<span class="kw">int</span>&gt;(state)); });
-
-<span class="cmt">// Position timer (100 ms) as a safety net for backends whose</span>
-<span class="cmt">// QMediaPlayer::positionChanged is coarse. It only runs while playing.</span>
-m_positionTimer.<span class="fn">setInterval</span>(<span class="num">100</span>);
-<span class="fn">connect</span>(&amp;m_positionTimer, &amp;<span class="cls">QTimer</span>::timeout, <span class="kw">this</span>, &amp;<span class="cls">MediaManager</span>::_update_position);
-<span class="fn">connect</span>(<span class="kw">this</span>, &amp;<span class="cls">MediaManager</span>::playStateChanged, <span class="kw">this</span>, [<span class="kw">this</span>](<span class="kw">bool</span> playing) {
-    <span class="kw">if</span> (playing) m_positionTimer.<span class="fn">start</span>(); <span class="kw">else</span> m_positionTimer.<span class="fn">stop</span>();
-});</code></pre>
-        <p>Connected signals from QMediaPlayer:</p>
-        <ul>
-          <li><code>durationChanged</code> / <code>positionChanged</code> - forwarded directly to QML as the manager's own signals of the same name</li>
-          <li><code>mediaStatusChanged</code> - routed to <code>_handle_media_status()</code>: <code>EndOfMedia</code> advances to the next track, <code>LoadedMedia</code> / <code>BufferedMedia</code> apply a pending seek left by <code>_reseat_source()</code> (if the source still matches) and reset the recovery counters, <code>StalledMedia</code> / <code>InvalidMedia</code> trigger <a href="#error-recovery">recovery</a></li>
-          <li><code>errorOccurred</code> - also triggers recovery (ignored while nothing is playing)</li>
-          <li><code>playbackStateChanged</code> - forwarded as <code>playbackStateChanged(int)</code> with the raw <code>QMediaPlayer::PlaybackState</code> value (0 stopped, 1 playing, 2 paused); the manager's own <code>playStateChanged(bool)</code> remains the signal the QML actually binds</li>
-        </ul>
+        <!-- Adding music -->
+        <h2 id="adding-music">Adding Your Music</h2>
         <p>
-          The 100&nbsp;ms <code>QTimer</code> re-emits <code>positionChanged(position)</code> while the player's
-          <code>playbackState()</code> is <code>PlayingState</code>, as a safety net for multimedia backends whose native
-          <code>positionChanged</code> is coarse. It is started and stopped from <code>playStateChanged</code>, so a
-          paused or idle app does not wake ten times a second (commit <code>ee5a23e</code>).
+          With no music, the music screens and Home's music card show <strong>No Music Loaded</strong> and a
+          <strong>Connect Music</strong> button.
         </p>
-
-        <!-- Library Scanning -->
-        <h2 id="library-scanning">Library Scanning</h2>
-        <p>
-          The library root comes from SettingsManager's <code>mediaFolder</code> setting. The stored default is the
-          empty string, which resolves to the user's Music folder
-          (<code>QStandardPaths::MusicLocation</code>; on Android
-          <code>/storage/emulated/0/Music</code>) and is created if missing. The manager's own built-in
-          <code>&lt;app dir&gt;/media</code> directory is therefore only the
-          initial value of <code>m_mediaDir</code> before settings are wired, and what <code>getDefaultMediaDir()</code>
-          reports. Wiring happens in <code>setSettingsManager()</code> (called from <code>appcore.cpp</code>; the
-          <code>connect_settings_manager()</code> slot is a no-op kept for <span class="file-path">Main.qml</span>), which calls <code>setLibraryRoot()</code>,
-          connects <code>mediaFolderChanged</code> to it, and schedules <code>_restore_playback_state()</code> 500&nbsp;ms later.
-        </p>
-        <p><code>scanLibrary(resetDisplayNames)</code> is synchronous on the GUI thread, guarded by a re-entrancy flag, and emits <code>scanProgress</code> lines (<code>[SCAN]</code>, <code>[PATH]</code>, <code>[FOUND]</code>, <code>[DONE]</code>, ...) that the Media settings page shows terminal-style. The algorithm:</p>
         <ol class="steps">
-          <li>Clear the playlists, the in-memory metadata and album-art maps, the All Music path map and the stats cache (and the display names if <code>resetDisplayNames</code> is true; internal callers pass <code>false</code>, while the settings-page "Rescan" button and the Android scan that runs once the <code>READ_MEDIA_AUDIO</code> permission is granted use <code>true</code>)</li>
-          <li>Audio files directly in the root become the <strong>"Unsorted"</strong> playlist</li>
-          <li>Every immediate, non-hidden sub-folder becomes a playlist named after the folder, <em>including empty folders</em>, so a user-created playlist survives a rescan after its last song was moved out</li>
-          <li>Every file is also appended to the combined <strong>"All Music"</strong> playlist (<code>isCombined</code>). A file name already seen in another folder is renamed <code>"&lt;folder&gt; - &lt;file&gt;"</code> for that playlist, and <code>m_allMusicFilePaths</code> remembers which directory each name lives in</li>
-          <li>Playlist names are ordered "All Music", "Unsorted", then the rest case-insensitively</li>
-          <li><code>_auto_strip_display_names()</code> cleans the file names that do not yet have a <a href="#display-names">display name</a></li>
-          <li>If a playlist was active before the rescan it is re-selected and the playing index restored, then <code>playlistsChanged</code> is emitted once, after all state is settled</li>
+          <li>Put your songs in one folder on the device. Sort them into sub-folders if you want playlists: a folder named <code>Road Trip</code> becomes the playlist "Road Trip".</li>
+          <li>Tap <strong>Connect Music</strong>, then <strong>Local Music</strong>, and pick that folder. (The same sheet offers <strong>Spotify</strong> and <strong>Phone</strong> where they are available.)</li>
+          <li>OCTAVE reads the folder at once. The songs appear in the music library.</li>
         </ol>
         <p>
-          <strong>Android:</strong> after the root scan the manager also walks the app's own external-files
-          Music directory (<code>OctaveAndroid::getAppMusicDir()</code>), the place files can be put under scoped
-          storage without extra permissions, and merges each of its sub-folders into the playlist of the same name (or adds it as a new one).
-          <code>_get_file_path()</code> accepts that directory as a second valid root, and
-          <code>playFileAtPath()</code> has a filename-only fallback for the same reason.
+          You can change the folder later in Settings &gt; Media &gt; Library &amp; Playback &gt;
+          <strong>Library Folder</strong>: type a path or tap <strong>Browse</strong>. Until you pick one, OCTAVE uses
+          your system's Music folder. After copying new songs into the folder, tap <strong>Scan</strong> there.
         </p>
-        <p>
-          <code>getMediaFiles(emitSignal)</code> is the older flat listing of the current <code>m_mediaDir</code>, used as a fallback by shuffle and sorting
-          when no playlist is selected. QML no longer calls it: for "All Music" <code>m_mediaDir</code> is the library
-          root, so over a library of subfolders it emitted an empty <code>mediaListChanged</code> that emptied the music
-          list and put Home back to "No Music Loaded"; <span class="file-path">MediaPlayer.qml</span> loads
-          <code>getCurrentSongList()</code> on each visit instead. Both it and <code>scanLibrary(resetDisplayNames)</code> can be called from QML
-          with or without their boolean: the methods have default arguments.
-        </p>
-
-        <div class="info-box info">
-          <div class="info-box-title">Path Safety</div>
-          <code>_get_file_path()</code> rejects names containing a <code>..</code> path component or starting with a
-          separator, resolves All Music names through <code>m_allMusicFilePaths</code>, and then requires the result to
-          be inside the library root (<code>_is_safe_path()</code>, which compares canonical
-          paths). <code>createPlaylist()</code>, <code>moveSongToPlaylist()</code>, <code>deleteSong()</code> and
-          <code>deletePlaylist()</code> apply the same check to every path they touch, and the two special playlists
-          "All Music" and "Unsorted" cannot be deleted.
-        </div>
-
-        <!-- Metadata Caching -->
-        <h2 id="metadata-caching">Metadata Caching and the Tag Store</h2>
-        <p>
-          A per-track lookup (<code>getBand</code>, <code>getAlbum</code>, <code>getFormattedDuration</code>, the
-          "now playing" metadata) goes through <code>_cache_metadata(filename)</code>, which fills an
-          in-memory map (<code>m_metadataCache</code>, filename &rarr; title, artist,
-          album, duration in seconds). The map holds the whole selected playlist (it is not capped) and is
-          cleared on every <code>selectPlaylist()</code> and <code>scanLibrary()</code>.
-        </p>
-        <p>
-          The playlist as a whole is read in the <strong>background</strong>: <code>selectPlaylist()</code> starts a
-          tag pass (<code>_warm_metadata()</code>) on a worker thread, which takes each track from the persistent tag
-          store when its size and modification time still match and reads the file's tags otherwise. When it is done
-          the map has every track and the statistics are computed and sent as <code>totalDurationChanged</code>,
-          <code>albumCountChanged</code> and <code>artistCountChanged</code>. Until then
-          <code>getTotalDuration()</code> / <code>getAlbumCount()</code> / <code>getArtistCount()</code> return
-          the previous (or zero) values at once, and <code>sortMediaFiles()</code> sorts tracks whose tags have
-          not arrived as "Unknown Album" / "Unknown Artist": neither opens a file on the GUI thread, so a view
-          should listen to the three signals and sort again when they come (<span class="file-path">MediaPlayer.qml</span>
-          does). A playlist change or a rescan abandons the pass under way. On mobile builds without TagLib the tags
-          come from the platform and are still read in place. The pass delivers in batches of 50 tracks, each merged
-          into the map and the tag store as it arrives; the store is written about 2 s after the first batch, every 30 s
-          while the pass runs, at its end and when the manager is destroyed, so a library too big to read within one drive
-          resumes where it stopped. While the pass is reading a playlist the per-row getters (<code>getBand()</code>,
-          <code>getAlbum()</code>, <code>getFormattedDuration()</code>) return placeholders for tracks not yet read and
-          open no file; <span class="file-path">MediaPlayer.qml</span> re-reads its visible rows once a second until
-          <code>totalDurationChanged</code> arrives.
-        </p>
-        <p>
-          Behind it sits the <strong>persistent tag store</strong> <code>&lt;app data&gt;/metadata_cache.json</code>
-          (the app-data directory from <code>SettingsManager::getAppDataDir()</code>,
-          e.g. <code>~/.config/OCTAVE/</code> on Linux), introduced in commit <code>1232538</code>:
-        </p>
-        <pre><code>{
-  <span class="str">"version"</span>: <span class="num">1</span>,
-  <span class="str">"files"</span>: {
-    <span class="str">"Artist - Song.mp3"</span>: {
-      <span class="str">"title"</span>: <span class="str">"Song"</span>, <span class="str">"artist"</span>: <span class="str">"Artist"</span>, <span class="str">"album"</span>: <span class="str">"Album"</span>,
-      <span class="str">"duration"</span>: <span class="num">245</span>,             <span class="cmt">// seconds</span>
-      <span class="str">"size"</span>: <span class="num">6021384</span>, <span class="str">"mtime"</span>: <span class="num">1757000000</span>   <span class="cmt">// validation: bytes, seconds since epoch</span>
-    }
-  }
-}</code></pre>
-        <p>How the store is used:</p>
-        <ul>
-          <li><code>_cache_metadata()</code> first asks <code>_meta_from_store()</code>. An entry is served without opening the audio file if the file still exists and its size and integer mtime match. After the first run, scrolling a list or opening the media page therefore no longer opens every file with TagLib.</li>
-          <li>A stale entry is removed when that filename is looked up and its size/mtime check fails. There is no full-library pruning pass for the tag store, so entries for files no longer requested can remain on disk.</li>
-          <li>Only on a miss does <code>_cache_metadata_from_file()</code> read the tags; the result is written back with <code>_meta_to_store()</code>.</li>
-          <li>Writes are coalesced: a single-shot 2&nbsp;s timer is restarted on every change and <code>_save_meta_store()</code> writes the compact JSON once, atomically (<code>QSaveFile</code>), so a power cut leaves the old store or the new one. The dirty flag is only cleared when the write succeeded, so a failed write is retried on the next change or at shutdown.</li>
-          <li>Shutdown flushes it explicitly: <code>flushMetadataStore()</code> is called from <code>AppCore::shutdown()</code>, which <code>main.cpp</code>'s <code>aboutToQuit</code> handler runs (the destructor also saves).</li>
-        </ul>
-        <p>
-          Tag strings are sanitized (control characters replaced by spaces, whitespace collapsed, truncated to 200
-          characters with "...") by <code>_sanitize_metadata()</code>. It works per Unicode code point, so emoji
-          (surrogate pairs) and zero-width joiners in joined emoji are kept, a lone surrogate becomes a space, and the
-          cut never splits an emoji; <code>_read_tags()</code> sanitizes every
-          format. Missing tags fall back
-          to the file's base name for the title and to "Unknown Artist" / "Unknown Album".
-        </p>
-
-        <!-- Album Art Extraction -->
-        <h2 id="album-art">Album Art Extraction</h2>
-        <p>
-          <code>getAlbumArt(filename)</code> returns a <code>file://</code> URL to a cover image written into the temp
-          directory: <code>&lt;app dir&gt;/temp</code> on desktop,
-          the app-data <code>temp/</code> folder on Android. Cover filenames are derived from the album identifier:
-          <code>cover_&lt;sha256(albumId + "_0")[:16]&gt;.&lt;jpg|png|gif|img&gt;</code>. The extension follows the
-          picture's MIME type; only the first embedded picture is used.
-        </p>
-
-        <h3>Album ID</h3>
-        <p>
-          <code>_get_album_id()</code> keys covers by <code>"{album}_{artist}"</code> so every track of an album shares
-          one file. When the album tag is missing the key becomes <code>"Unknown Album_{artist}_{filename}"</code>,
-          because a folder of loose single tracks usually has a different cover per track and they must not all share the
-          first one. If metadata cannot be read at all, a 16-hex-digit SHA-256 of the file name is used.
-        </p>
-
-        <h3>Lookup Order</h3>
-        <ol class="steps">
-          <li>Bump the album's access count (<code>m_accessCount</code>)</li>
-          <li>Return the URL from the in-memory map <code>m_albumArtCache</code> (albumId &rarr; URL) if present</li>
-          <li>Run <code>_manage_cache()</code>: when the map already holds 500 entries (<code>m_maxCacheFiles</code>), the entry with the <em>lowest access count</em> (other than the one being added) is removed from the map and its file deleted</li>
-          <li><code>_cached_art_url_for(albumId)</code>: if a cover file with that hash already exists in the temp dir from <em>any earlier run</em>, use it without opening the audio file</li>
-          <li>Otherwise open the audio file and extract the first picture (<code>_extract_art_for()</code> dispatches on extension to the TagLib readers in the <a href="#supported-formats">format table</a>; on Android the JNI bridge supplies the picture) and write it if no non-empty cover file exists yet. Cover files are written atomically (<code>QSaveFile</code>); a zero-byte cover left by an older build is treated as missing and rewritten</li>
-          <li>Store the URL in the map and return it (empty string if the file has no picture)</li>
-        </ol>
-
-        <h3>Covers Survive Restarts</h3>
-        <p>
-          Until commit <code>1232538</code> the temp directory was wiped at startup and at quit, so every cover was a
-          fresh tag read plus JPEG write on each boot. Now the directory is kept and step 4 above finds a previous run's
-          cover by hash. Because the in-memory map starts empty on every launch, <code>_manage_cache()</code> can only
-          bound the covers the current run has seen; commit <code>43432c3</code> therefore added
-          <code>_prune_cover_dir()</code>, which runs once in the constructor and deletes the least recently
-          <em>read</em> <code>cover_*</code> files beyond the 500 limit (<code>QFileInfo::lastRead()</code>), so covers of removed tracks do not accumulate forever.
-          <code>_clear_temp_files()</code> still exists as a slot but nothing calls it any more.
-        </p>
-
-        <h3>Populate Tags and Covers Together</h3>
-        <p>
-          When <code>_cache_metadata_from_file()</code> has to open a file for its tags it also extracts the cover in
-          the same cache-population operation (<code>_extract_art_for()</code> after <code>_read_tags()</code>; these may open the audio file separately, and cover extraction is skipped when
-          the album's cover is already known or found by hash), so the <code>getAlbumArt()</code> call that follows in
-          a QML binding is an instant map hit. Entries served from the tag store skip this step on purpose; their cover is found by the hash fast
-          path.
-        </p>
-
-        <!-- Color Extraction -->
-        <h2 id="color-extraction">Color Extraction and Theming</h2>
-        <p>
-          When the "Album Art Capture" theme is active, MediaManager extracts dominant colors from the current cover
-          and generates a complete theme palette. It uses Qt's <code>QImage</code> only. MediaManager does the
-          extraction; <a href="signals-slots-reference.html#nowPlaying"><code>NowPlaying</code></a> decides when (the
-          live source's art changed, or the theme was chosen) and calls <code>extractColorsFromAlbumArt(filename)</code>
-          for a local track or <code>extractColorsFromImage(url)</code> for the phone's art.
-        </p>
-
-        <h3>Extraction Pipeline</h3>
-        <ol class="steps">
-          <li><code>extractColorsFromAlbumArt()</code> resolves the cover through <code>getAlbumArt()</code>. A repeat request for the same file within 2&nbsp;s is dropped: restoring playback and the 1&nbsp;s startup timer both ask for the same file and one extraction is enough</li>
-          <li>The image work runs on a worker: <code>QtConcurrent::run()</code> with a <code>QFutureWatcher&lt;QString&gt;</code>. Each request increments a job counter; when a job finishes it is applied only if no newer job was started, so a fast skip through tracks applies only the last theme</li>
-          <li><code>_extract_album_colors()</code> converts the cover to RGBA8888 and scales it to 50&times;50 pixels with a smooth transformation (2500 pixels)</li>
-          <li><code>_kmeans_colors()</code> finds k=5 centroids with at most 10 iterations, seeded with a fixed generator (<code>std::mt19937(42)</code>) so the same cover always yields the same palette</li>
-          <li>Centroids are sorted by vibrancy (HSV saturation &times; value, most vibrant first)</li>
-          <li>The image is classed dark when the average luminance (<code>0.299R + 0.587G + 0.114B</code>) of the first 1000 pixels is below 0.5</li>
-          <li><code>_generate_theme_from_colors()</code> builds the theme JSON and <code>_apply_album_colors()</code> (GUI thread) hands it to <code>settingsManager.set_album_art_colors(json)</code>. That updates the <code>albumArtColors</code> property, and <span class="file-path">Main.qml</span> feeds it to <code>Style.updateAlbumArtTheme()</code>. The <code>albumColorsExtracted</code> signal is only emitted when no SettingsManager is wired</li>
-        </ol>
-
-        <h3>Theme Generation</h3>
-        <p>
-          <code>_generate_theme_from_colors()</code> takes the sorted palette (primary, secondary, tertiary, quaternary;
-          missing entries repeat the previous one) and derives:
-        </p>
-        <ul>
-          <li><code>base</code>, <code>baseAlt</code> - dark images: primary at 15% / 22% brightness; light images: primary at 250% brightness desaturated to 30%, then 92% of that</li>
-          <li><code>accent</code> - primary with saturation &times;1.4 and brightness &times;1.2; three further accents from the other centroids with progressively smaller boosts, and two dimmer "nav" variants (70% / 75%)</li>
-          <li><code>text.primary</code>, <code>text.secondary</code> - near-white (245 / 210) on backgrounds whose WCAG relative luminance is below 0.3, otherwise near-black (25 / 60)</li>
-          <li><code>states.hover</code>, <code>states.paused</code>, <code>states.playing</code> - brightness steps of the base</li>
-          <li><code>sliders.volume</code>, <code>sliders.media</code>, <code>sliders.settings</code> - accents 1-3</li>
-          <li><code>bottombar.*</code> - 14 keys (<code>previous</code>, <code>play</code>, <code>pause</code>, <code>next</code>, <code>volume</code>, <code>shuffle</code>, <code>toggleShade</code>, <code>homeButton</code>, <code>obdButton</code>, <code>mediaButton</code>, <code>settingsButton</code>, <code>sensorButton</code>, <code>androidAutoButton</code>, <code>phoneMirrorButton</code>)</li>
-          <li><code>mediaroom.*</code> - player control colors (play/pause use the accent at 110% brightness)</li>
-          <li><code>mainmenu.mediaContainer</code> - second accent at 60% brightness</li>
-          <li><code>obd.boxBackground</code>, <code>obd.barColor</code>, <code>obd.labelColor</code>, <code>obd.valueColor</code> - gauge colors against <code>baseAlt</code></li>
-        </ul>
-        <p>
-          Every icon/accent color is passed through <code>ensureIconContrast()</code>, which targets a contrast
-          ratio of 3.0 against the background, trying brightness factors 1.3 to 3.0 (dark base) or 0.7 to 0.2
-          (light base) and falling back to a muted gold <code>(200, 180, 130)</code> or a dark brown
-          <code>(50, 40, 30)</code>. Colors that already pass are capped at 85% brightness by
-          <code>capBrightness()</code> (with saturation nudged &times;1.1) to avoid washed-out pastels. The final capped or fallback colour is not rechecked, so this is a heuristic rather than a guaranteed minimum contrast.
-        </p>
-
-        <!-- Playback Control -->
-        <h2 id="playback-control">Playback Control</h2>
-
-        <h3>Playing a File</h3>
-        <p><code>playFile(filename)</code> does the following:</p>
-        <ol class="steps">
-          <li>If no playlist order exists yet, build one: shuffled when shuffle is on, otherwise alphabetical by the sort key (lower-cased, punctuation and underscores stripped: <code>[^\w\s]|_</code>)</li>
-          <li>Locate the file in the playlist and set <code>m_currentIndex</code>; if it is not there and shuffle is off, rebuild the alphabetical list; if it is still missing, play the first entry instead</li>
-          <li>Resolve the path with <code>_get_file_path()</code> (All Music aware); a missing file (deleted, moved, unmounted USB stick) is logged and skipped via <code>_skip_bad_track(advance=true)</code>, the same path as an unplayable track</li>
-          <li><code>setSource()</code> + <code>play()</code>, set the playing flags, re-apply mute (setting a source can reset the output volume), emit <code>playStateChanged(true)</code></li>
-          <li>Pre-populate the metadata and cover caches and emit <code>metadataChanged</code> <em>before</em> <code>currentMediaChanged</code>, so the QML bindings that fire on the latter get instant cache hits instead of doing tag I/O during the render phase</li>
-          <li>Emit <code>durationFormatChanged</code> via <code>getFormattedDuration()</code>, then start the 80&nbsp;ms <a href="#precaching">pre-cache timer</a></li>
-        </ol>
-
-        <h3>Track Navigation</h3>
+        <p>How the folder turns into playlists:</p>
         <table>
-          <thead>
-            <tr><th>Slot</th><th>Behavior</th></tr>
-          </thead>
+          <thead><tr><th>In the folder</th><th>In OCTAVE</th></tr></thead>
           <tbody>
-            <tr><td><code>nextTrack()</code></td><td>Advances the index by 1 (wraps around), calls <code>playFile()</code>, restarts the debounced state save. Also called on <code>EndOfMedia</code></td></tr>
-            <tr><td><code>previousTrack()</code></td><td>Decrements the index by 1 (wraps around), calls <code>playFile()</code>, restarts the debounced state save</td></tr>
-            <tr><td><code>togglePlay()</code></td><td>If no source is set, plays the current file. If playing, pauses and saves state. If paused, checks for a bad media status (<code>InvalidMedia</code>, <code>NoMedia</code>, <code>StalledMedia</code>) and forces recovery instead of resuming. If the pause lasted at least 30&nbsp;s (<code>kLongPauseMs</code>) and the file exists, it reloads the track at its current position with <code>_reseat_source()</code> before <code>play()</code>, re-applies mute and emits <code>playStateChanged(true)</code> without the state check (the source is still loading). Otherwise, after <code>play()</code> it verifies <code>playbackState()</code> is <code>PlayingState</code> and forces recovery if not</td></tr>
-            <tr><td><code>pause()</code></td><td>Pauses the player, emits <code>playStateChanged(false)</code>, starts the debounced state save, remembers the volume for unmute</td></tr>
-            <tr><td><code>setPosition(ms)</code></td><td>Seeks to a position in milliseconds</td></tr>
+            <tr><td>A sub-folder</td><td>A playlist with the folder's name. An empty folder is an empty playlist.</td></tr>
+            <tr><td>Songs directly in the folder</td><td>The playlist <strong>Unsorted</strong>.</td></tr>
+            <tr><td>Everything</td><td>The playlist <strong>All Music</strong>, which holds every song of every folder.</td></tr>
+            <tr><td>Folders inside a sub-folder</td><td>Not read. OCTAVE looks one level down only.</td></tr>
+            <tr><td>Folders whose name starts with a dot</td><td>Skipped.</td></tr>
           </tbody>
         </table>
 
-        <h3>Peek Methods (No Side Effects on Playback)</h3>
+        <h3 id="supported-formats">File types</h3>
+        <p>
+          OCTAVE lists files ending in <code>.mp3</code>, <code>.m4a</code>, <code>.mp4</code> (audio-only),
+          <code>.flac</code>, <code>.ogg</code>, <code>.opus</code> and <code>.wav</code>. Whether a file then plays
+          depends on the codecs your system gives Qt. Covers are read from inside the file for every type except WAV.
+          A file with no tags is shown by its file name, with "Unknown Artist" and "Unknown Album".
+        </p>
+
+        <!-- Playing -->
+        <h2 id="playing">Playing Music</h2>
+        <p>
+          The music button in the bottom bar opens the music section. It has two screens, and tapping the button again
+          switches between them:
+        </p>
+        <ul>
+          <li><strong>The library</strong>: the list of songs in one playlist.</li>
+          <li><strong>The <a href="#media-room">Media Room</a></strong>: the song that is playing, large, with its cover and controls.</li>
+        </ul>
+        <p>In the library:</p>
+        <ul>
+          <li>The <strong>PLAYLIST</strong> box at the top right picks which playlist is shown.</li>
+          <li>The top left shows what the playlist holds: songs, albums, artists and total playing time.</li>
+          <li><strong>Tap a song</strong> to play it. OCTAVE then opens the Media Room, unless "Return to Library After Picking a Song" is on.</li>
+          <li>Tap <strong>TITLE</strong>, <strong>ARTIST</strong> or <strong>ALBUM</strong> above the list to sort by that column; tap again to reverse it. On an upright screen the album column is left out.</li>
+          <li><strong>Press and hold a song</strong> for its actions: <strong>Move to playlist</strong> and <strong>Delete song</strong>.</li>
+        </ul>
+        <p>
+          Play, pause, next, previous and shuffle are in the bottom bar on every page, and on the wireless knob and the
+          gesture sensor if you have them. At the end of a playlist OCTAVE starts again from the top. There is no
+          repeat-one mode. With shuffle on, the song that is playing carries on and the rest of the playlist follows in
+          a random order.
+        </p>
+        <p>
+          The title shown for a song is its file name, tidied: the artist's name, track numbers and leftovers such as
+          "(Official Audio)" are removed. Artist and album come from the file's tags. The files themselves are never
+          renamed. <strong>Clean Titles</strong> in Settings &gt; Media tidies every title again.
+        </p>
+
+        <!-- Playlists -->
+        <h2 id="playlist-management">Playlists</h2>
+        <p>
+          A playlist is a folder, so everything you do to a playlist in OCTAVE happens to the folder on disk, and
+          anything you do to the folders with a file manager shows up in OCTAVE after a Scan.
+        </p>
         <table>
-          <thead>
-            <tr><th>Slot</th><th>Returns</th></tr>
-          </thead>
+          <thead><tr><th>To do this</th><th>Do this</th><th>What happens on disk</th></tr></thead>
           <tbody>
-            <tr><td><code>getCurrentFile()</code></td><td>Current filename. If no playlist order exists yet it builds the alphabetical one and returns its first entry without playing it</td></tr>
-            <tr><td><code>getNextTrackName()</code> / <code>getPreviousTrackName()</code></td><td>Neighbor filenames (wrap around)</td></tr>
-            <tr><td><code>getNextTrackAlbumArt()</code> / <code>getPreviousTrackAlbumArt()</code></td><td>Cover URL of a neighbor</td></tr>
-            <tr><td><code>getNeighborAlbumArts()</code></td><td><code>[prevArtUrl, nextArtUrl]</code> in a single call; <span class="file-path">MediaRoom.qml</span> uses it for the side cards of the carousel to halve the QML-bridge crossings</td></tr>
-            <tr><td><code>isPlaying()</code>, <code>isPaused()</code>, <code>getDuration()</code>, <code>getPosition()</code></td><td>Playback flags and the player's duration / position in ms</td></tr>
+            <tr><td>Make a playlist</td><td>Tap <strong>+</strong> beside the PLAYLIST box, type a name, tap <strong>Create</strong>.</td><td>An empty folder is created in the library folder.</td></tr>
+            <tr><td>Move a song</td><td>Press and hold the song, tap <strong>Move to playlist</strong>, pick one.</td><td>The file moves to that folder. If a file of that name is already there, the moved one gets " (1)" added.</td></tr>
+            <tr><td>Delete a song</td><td>Press and hold the song, tap <strong>Delete song</strong>, then <strong>Delete</strong>.</td><td>The file is removed for good.</td></tr>
+            <tr><td>Delete a playlist</td><td>Open the PLAYLIST box, press and hold the playlist, confirm.</td><td>The folder <em>and every song in it</em> are removed for good.</td></tr>
           </tbody>
         </table>
-
-        <!-- Shuffle Logic -->
-        <h2 id="shuffle-repeat">Shuffle Logic</h2>
         <p>
-          Shuffle is a toggle (<code>m_shuffle</code> / <code>_shuffle</code>); there is no repeat mode, playback simply
-          wraps around the playlist. <code>toggleShuffle()</code> works on the selected playlist's file list
-          (<code>_get_current_playlist_files()</code>), not on a directory scan, so shuffling "All Music" shuffles
-          every folder:
+          <strong>All Music</strong> and <strong>Unsorted</strong> cannot be deleted, and a song cannot be moved to
+          All Music (it is not a folder). If the song being moved or deleted is the one playing, playback stops first.
+        </p>
+
+        <!-- Media Room -->
+        <h2 id="media-room">The Media Room</h2>
+        <p>
+          The Media Room shows what is playing, whichever source it comes from: your files, Spotify, a mirrored phone
+          or Android Auto. On it are the cover, the title, artist and album, previous / play / next, a volume slider
+          with a mute button, the seek bar, shuffle, and a visualizer that moves with the music.
         </p>
         <ul>
-          <li><strong>On:</strong> the files are shuffled (<code>std::shuffle</code> with a <code>std::random_device</code>-seeded <code>mt19937</code> / <code>random.shuffle</code>), the currently playing song is swapped to position 0 and the index reset to 0, so playback continues from the current song into a random order</li>
-          <li><strong>Off:</strong> the alphabetical order is rebuilt and the index set to the current song's position in it</li>
-          <li>Afterwards <code>shuffleStateChanged</code> and <code>mediaListChanged(newOrder)</code> are emitted, in that order, so QML reads the new order</li>
+          <li><strong>Tap the cover</strong> to choose what that corner shows: Album art, Vinyl, a 3D record player, MP3 player, CD player, cassette player or iPod, or (where phone mirroring can run) <strong>Phone mirror</strong>, which puts the phone's live, touchable screen there. The choice needs Qt's 3D modules; without them a tap does nothing.</li>
+          <li><strong>The customize button</strong> at the top right opens the look editor. See <a href="pages.html#nowplayingstudio">Pages</a>.</li>
+          <li>Shuffle is dimmed while a phone app other than Spotify has the music: that app's shuffle is its own.</li>
         </ul>
         <p>
-          Every toggle is saved through <code>settingsManager.save_last_shuffle_state()</code>. On startup
-          <code>_restore_playback_state()</code> re-enables shuffle only when the <code>persistShuffleState</code>
-          setting is on and <code>lastShuffleState</code> was true; it then shuffles the restored playlist with the last
-          played song at the front (see <a href="settings-reference.html">Settings Reference</a>).
+          The <a href="theme-system.html#album-art-capture">Album Art Capture</a> theme recolours the whole app from
+          the cover of the song that is playing.
         </p>
 
-        <!-- Playlist Management -->
-        <h2 id="playlist-management">Playlist Management</h2>
-        <p>
-          Playlists are folders. The manager keeps:
-        </p>
-        <ul>
-          <li><code>m_playlists</code> / <code>_playlists</code> - name &rarr; <code>{name, path, files, songCount, isCombined}</code></li>
-          <li><code>m_playlistNames</code> - ordered names ("All Music", "Unsorted", then alphabetical)</li>
-          <li><code>m_currentPlaylistName</code>, <code>m_currentPlaylist</code> (the ordered or shuffled file list actually played), <code>m_currentIndex</code></li>
-          <li><code>m_libraryRoot</code> - the resolved <code>mediaFolder</code></li>
-        </ul>
-        <p>
-          <code>selectPlaylist(name)</code> switches <code>m_mediaDir</code> to the folder (or the root for All Music),
-          sorts the files alphabetically (or, when shuffle is on, shuffles them with the current song first, so shuffle
-          survives playlist selection and library rescans), resets the index, clears the in-memory metadata map, recalculates the library
-          statistics (<code>totalDurationChanged</code>, <code>albumCountChanged</code>, <code>artistCountChanged</code>,
-          computed from cached durations and distinct non-"Unknown" album / artist tags) and emits
-          <code>currentPlaylistChanged</code> and <code>mediaListChanged</code>.
-        </p>
-
-        <h3>"All Music" Playlist</h3>
-        <p>
-          The combined playlist spans every folder, so <code>_get_file_path()</code> looks the directory up in
-          <code>m_allMusicFilePaths</code> first. A duplicate that was renamed <code>"&lt;folder&gt; - &lt;file&gt;"</code>
-          during the scan is mapped back to its real name when the prefixed file does not exist on disk;
-          <code>_get_original_filename()</code> does the same for display purposes and for moves.
-        </p>
-
-        <h3>Editing</h3>
-        <table>
-          <thead><tr><th>Slot</th><th>What it does</th></tr></thead>
-          <tbody>
-            <tr><td><code>createPlaylist(name)</code></td><td>Creates <code>&lt;root&gt;/&lt;name&gt;</code> (rejects separators, <code>..</code>, hidden names; reuses an existing <em>empty</em> folder), then rescans</td></tr>
-            <tr><td><code>moveSongToPlaylist(file, playlist)</code></td><td>Renames the file into the target folder, appending <code>" (n)"</code> on collision, stops playback if it was the loaded song (playing or paused), then rescans. Returns false if the file already lives in that folder</td></tr>
-            <tr><td><code>deleteSong(file)</code></td><td>Stops playback if it was the loaded song (playing or paused), deletes the file and its display name, rescans, emits <code>songDeleted(file)</code></td></tr>
-            <tr><td><code>deletePlaylist(name)</code></td><td>Recursively deletes the folder (never "All Music" / "Unsorted"), rescans, and selects the first playlist if the deleted one was active</td></tr>
-            <tr><td><code>getMovablePlaylistNames()</code></td><td>All names except "All Music" (valid move targets)</td></tr>
-            <tr><td><code>getSongPlaylistName(file)</code></td><td>The playlist folder the file actually lives in, even when viewed through "All Music"; empty if unknown</td></tr>
-            <tr><td><code>playFileAtPath(path)</code></td><td>Rescan, find the file by directory (or by filename in any playlist), select its playlist and play it. Nothing in the bundled UI calls it; it is there for service clients</td></tr>
-          </tbody>
-        </table>
-
-        <!-- Display names -->
-        <h2 id="display-names">Display Names</h2>
-        <p>
-          <code>getDisplayName(filename)</code> returns a cleaned title for lists and the now-playing views. The map
-          <code>m_displayNames</code> is persisted as <code>&lt;app data&gt;/display_names.json</code> (written atomically
-          with <code>QSaveFile</code>) so cleaned names survive restarts. <code>_strip_single_filename()</code> removes the extension, the artist name(s) from the
-          tags (split on <code>/</code> and <code>;</code>), leading track numbers (<code>^\d{1,3}\s*[-._)\s]\s*</code>),
-          a list of common upload junk such as <code>(Official Audio)</code>, <code>[HD]</code>, <code>(feat. ...)</code>,
-          and leftover separators. <code>_auto_strip_display_names()</code> runs at the end of every scan for files that
-          have no entry yet; the settings page's "Clean Titles" button (<code>stripFilenames()</code>) re-strips every
-          file and reports each change through <code>scanProgress</code>. Without an entry, the fallback strips any recognised audio
-          extension.
-        </p>
-
-        <!-- Volume and Mute -->
-        <h2 id="volume-mute">Volume, Mute and Ducking</h2>
-
-        <h3>The Volume Curve and VolumeController</h3>
-        <p>
-          The UI works in percent (0-100); <code>QAudioOutput</code> takes a linear 0.0-1.0. OCTAVE maps between them
-          with a <strong>quadratic curve</strong>, <code>linear = (percent / 100)&sup2;</code>, implemented once in
-          <span class="file-path">src/managers/volumecontroller.{h,cpp}</span> (<code>VolumeController::toLinearStatic()</code>). The <code>VolumeController</code>
-          QObject, registered as the QML context property <code>volumeController</code>, is the <em>single entry point</em>
-          for changing the volume: the BottomBar and MediaRoom sliders, the gesture sensor and the ESP32 knob all call
-          <code>volumeController.applyVolume(percent)</code>, which clamps, stores the percent as the
-          in-memory <code>currentVolume</code> (not saved; a restart starts at <code>startUpVolume</code>), computes the linear value and fans it out. <code>toLinear(percent)</code>
-          exposes the pure math to QML.
-        </p>
-        <pre><code><span class="cmt">// src/managers/volumecontroller.cpp</span>
-<span class="kw">float</span> <span class="cls">VolumeController</span>::<span class="fn">toLinearStatic</span>(<span class="kw">float</span> percent)
-{
-    <span class="kw">const float</span> pct = std::<span class="fn">clamp</span>(percent, <span class="num">0.0f</span>, <span class="num">100.0f</span>);
-    <span class="kw">const float</span> normalized = pct / <span class="num">100.0f</span>;
-    <span class="kw">return</span> normalized * normalized;   <span class="cmt">// (pct / 100)^2.0</span>
-}</code></pre>
-        <p>The fan-out:</p>
-        <ul>
-          <li><code>applyVolume()</code> emits <code>volumeApplied(percent, linear)</code> and knows no manager; <code>AppCore::wireVolume</code> (<span class="file-path">src/appcore.cpp</span>) connects it to <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code>, Android Auto and AirPlay, <code>spotifyManager.setVolume(percent)</code> while Spotify is the source (see <a href="#spotify">Spotify</a>), and <code>esp32VolumeManager.send_volume_update(percent)</code> (desktop builds).</li>
-        </ul>
-        <p>
-          <span class="file-path">appcore.cpp</span> calls <code>applyVolume(settingsManager.currentVolume)</code> once at startup after every manager
-          exists, which is what replaces the constructor's 0.5 placeholder.
-        </p>
-
-        <h3>Volume State Inside MediaManager</h3>
-        <p>
-          The user's volume (<code>m_volume</code>), the mute flag and a <em>ducking factor</em>
-          are kept separately; one helper (<code>applyOutputVolume()</code>) computes
-          what the <code>QAudioOutput</code> actually gets: <code>0</code> while muted, otherwise
-          <code>volume &times; duck</code>. <code>getVolume()</code> reports the user's volume, never the ducked or muted
-          output level.
-        </p>
-        <pre><code><span class="cmt">// src/managers/mediamanager.cpp</span>
-<span class="kw">void</span> <span class="cls">MediaManager</span>::<span class="fn">setVolume</span>(<span class="kw">float</span> volume)
-{
-    volume = <span class="fn">qBound</span>(<span class="num">0.0f</span>, volume, <span class="num">1.0f</span>);
-    m_volume = volume;
-    <span class="fn">applyOutputVolume</span>();
-    <span class="kw">emit</span> <span class="fn">volumeChanged</span>(volume);
-}
-
-<span class="kw">void</span> <span class="cls">MediaManager</span>::<span class="fn">applyOutputVolume</span>()
-{
-    m_audioOutput-&gt;<span class="fn">setVolume</span>(m_isMuted ? <span class="num">0.0f</span> : m_volume * m_duckCurrent);
-}</code></pre>
-
-        <h3>Ducking</h3>
-        <p>
-          <code>setDucking(factor)</code> (commit <code>5834d9d</code>) temporarily attenuates the output
-          while another source needs to be heard: today the mirrored phone's audio (a navigation prompt, a call). The
-          <a href="phone-mirror-android-auto.html">PhoneMirrorManager</a> measures each PCM chunk's peak, sets
-          <code>audioPlaying</code> with a 1.5&nbsp;s release hold, and emits <code>duckingChanged(factor)</code> (the
-          <code>scrcpyAudioDuckLevel</code> setting, default 0.1 = -20&nbsp;dB, or 1.0 when the phone is silent or
-          <code>scrcpyAudioDuckEnabled</code> is off); <span class="file-path">appcore.cpp</span> connects that signal to <code>mediaManager.setDucking</code>.
-          The factor is ramped with a <code>QVariantAnimation</code> (<code>OutCubic</code>): 80&nbsp;ms attack so a
-          prompt is not stepped on, 500&nbsp;ms release so music does not jump back up between sentences. Volume changes
-          and mute keep working while ducked.
-        </p>
-
-        <h3>Mute</h3>
-        <p>
-          MediaManager does not own mute. The rules (toggle, the 150&nbsp;ms debounce, "raising the volume unmutes",
-          "unmute at 0 restores the startup volume") live in
-          <a href="signals-slots-reference.html#volumeController">VolumeController</a>; <span class="file-path">main.cpp</span>
-          connects <code>VolumeController::mutedChanged</code> to <code>setMuted(bool)</code>, which only stores the flag
-          and calls <code>applyOutputVolume()</code>. <code>isMuted()</code> reports that mirrored flag. Because mute is
-          applied by <code>applyOutputVolume()</code> rather than by overwriting the volume, a volume change while muted
-          updates <code>m_volume</code> silently and unmuting plays at exactly the level every slider shows.
-        </p>
-        <p>
-          <code>playFile()</code>, <code>togglePlay()</code> and recovery re-apply <code>setVolume(0)</code> on the
-          output after <code>setSource()</code>, which can reset the output level.
-        </p>
-
-        <!-- Playback Resume -->
-        <h2 id="playback-resume">Playback State Resume</h2>
-        <p>
-          The current song, position (ms) and playlist name are saved through
-          <code>settingsManager.save_playback_state()</code>. To avoid a disk write on every rapid track change, saves go
-          through a <strong>1&nbsp;s single-shot debounce timer</strong> (<code>m_saveStateTimer</code>): next / previous
-          restart it, pause and play-toggle restart it, only the last call wins. While a track is playing the position
-          is also saved every <strong>10&nbsp;s</strong> (<code>m_positionSaveTimer</code>, running only while playing),
-          so a power cut mid-song, which is how a car normally stops, resumes within seconds of where it was.
-        </p>
-        <pre><code><span class="cmt">// src/managers/mediamanager.cpp — constructor</span>
-m_saveStateTimer.<span class="fn">setInterval</span>(<span class="num">1000</span>);
-m_saveStateTimer.<span class="fn">setSingleShot</span>(<span class="kw">true</span>);
-<span class="fn">connect</span>(&amp;m_saveStateTimer, &amp;<span class="cls">QTimer</span>::timeout, <span class="kw">this</span>, &amp;<span class="cls">MediaManager</span>::_save_playback_state_now);</code></pre>
-        <p>
-          At shutdown the state is flushed immediately: <span class="file-path">Main.qml</span> calls
-          <code>mediaManager._save_playback_state()</code> on close, <code>AppCore::shutdown()</code> (run by <code>main.cpp</code>'s <code>aboutToQuit</code>
-          handler) calls it again before <code>settingsManager.flushPendingSave()</code>, and the destructor flushes a
-          pending debounced save. <code>_save_playback_state()</code> is a <code>Q_INVOKABLE</code> alias of
-          <code>_save_playback_state_now()</code> that saves immediately.
-        </p>
-        <p>
-          <code>_restore_playback_state()</code> runs 500&nbsp;ms after the settings manager is wired: it restores
-          shuffle if persisted, selects the last playlist, checks the song is still in it, sets the source
-          <em>without</em> playing, emits <code>currentMediaChanged</code> and the metadata so the UI shows the track,
-          seeks to the saved position after 100&nbsp;ms, and only if the <code>autoPlayOnStartup</code> setting is on
-          schedules playback 500&nbsp;ms after restoration (the delay lets the audio system initialize and avoids crackling).
-        </p>
-
-        <!-- Precaching -->
-        <h2 id="precaching">Neighbor Pre-caching</h2>
-        <p>
-          80&nbsp;ms after a track change (<code>m_precacheTimer</code>, single-shot),
-          <code>_precache_neighbors_start()</code> warms the metadata and cover caches for the tracks at offsets
-          <strong>-3 to +3</strong> around the current index, so the carousel's side cards and the next skip are instant.
-          The index uses Euclidean modulo, skips the current track and de-duplicates: commit <code>aa2dacb</code> fixed a
-          crash when spamming "next" on a two-track playlist, where the truncating <code>%</code> produced a negative
-          index (<code>-1 % 2 == -1</code>) and <code>QList::at()</code> asserted; a playlist shorter than the window now
-          queues each neighbor once instead of six redundant jobs. It also bails on the "no current track"
-          sentinel (<code>-1</code>) or an index that outlived a playlist shrink.
-        </p>
-        <p>The desktop build uses a three-phase, race-free model (since commit <code>1232538</code>): phase 1 on a worker reads tags (<code>_read_tags()</code>) for neighbors not already in the map or the tag store; phase 2 on the GUI thread inserts them (and writes them to the store), then hands the neighbors still lacking a cover to a second worker that only writes cover files (<code>_extract_art_for()</code>); phase 3 on the GUI thread records the URLs. The GUI thread is therefore the sole owner of the metadata and album-art maps, and the workers never touch them.</p>
-        <ul>
-          <li><strong>Desktop:</strong> <code>QtConcurrent</code> workers, results delivered through <code>QFutureWatcher</code>. The earlier version mutated the hashes from the worker while list delegates were reading them.</li>
-          <li><strong>Mobile:</strong> <code>_precache_tracks()</code> runs synchronously on the GUI thread, using the platform tag reader.</li>
-        </ul>
-
-        <!-- Error Recovery -->
-        <h2 id="error-recovery">Error Recovery</h2>
-        <p>
-          MediaManager recovers automatically from playback failures:
-        </p>
-        <ul>
-          <li><strong>EndOfMedia</strong> - calls <code>nextTrack()</code></li>
-          <li><strong>StalledMedia / InvalidMedia</strong> and <strong>player errors</strong> - call <code>_attempt_playback_recovery()</code>, but only while something is playing; a stopped player keeps reporting its last failure, so those events are ignored (commits <code>2884c65</code>, <code>1e5f585</code>)</li>
-          <li><strong>LoadedMedia / BufferedMedia</strong> - the file decodes, which is what "recovered" actually means: any pending seek from <code>_reseat_source()</code> is applied, the attempt counters are reset and, if there were attempts, "Playback recovered" is logged</li>
-        </ul>
-        <pre><code><span class="cmt">// src/managers/mediamanager.cpp</span>
-<span class="kw">static constexpr int</span> kMaxRecoveryAttempts = <span class="num">2</span>;        <span class="cmt">// per file, then skip it</span>
-<span class="kw">static constexpr int</span> kMaxConsecutiveBadTracks = <span class="num">10</span>;   <span class="cmt">// then stop instead of looping the library</span>
-
-<span class="kw">void</span> <span class="cls">MediaManager</span>::<span class="fn">_attempt_playback_recovery</span>(<span class="kw">bool</span> force)
-{
-    <span class="kw">if</span> (!m_isPlaying &amp;&amp; !force)
-        <span class="kw">return</span>;
-    <span class="kw">const</span> <span class="cls">QString</span> currentFile = <span class="fn">get_current_file</span>();
-    <span class="cmt">// ... reset the attempt counter when the file changed ...</span>
-    <span class="kw">if</span> (++m_recoveryAttempts &gt; kMaxRecoveryAttempts) {
-        <span class="fn">_skip_bad_track</span>();
-        <span class="kw">return</span>;
-    }
-    <span class="kw">const</span> <span class="cls">qint64</span> position = m_player-&gt;<span class="fn">position</span>();
-    <span class="cmt">// Clear then re-set the source: Qt does not reload (or re-report an</span>
-    <span class="cmt">// error for) a source identical to the current one.</span>
-    <span class="fn">_reseat_source</span>(filePath, position);      <span class="cmt">// seek deferred to LoadedMedia</span>
-    <span class="kw">if</span> (wasPlaying)
-        m_player-&gt;<span class="fn">play</span>();
-    <span class="kw">if</span> (m_isMuted)
-        m_audioOutput-&gt;<span class="fn">setVolume</span>(<span class="num">0.0f</span>);
-    <span class="kw">emit</span> <span class="fn">playStateChanged</span>(m_isPlaying);
-}</code></pre>
-        <p>
-          Recovery is capped (commit <code>2884c65</code>, seen on the Pi with 14 tag-only MP3 stubs). After
-          <strong>2 attempts on the same file</strong> the track is skipped (<code>_skip_bad_track()</code> &rarr;
-          <code>nextTrack()</code>): a tag-only stub or a truncated MP3 never becomes playable. A missing file skips
-          immediately and counts toward the same limit. After <strong>10 unplayable tracks in a row</strong> (or the whole playlist, if shorter) playback
-          stops, the source is cleared so no further status events arrive, and <code>playStateChanged(false)</code> is
-          emitted instead of looping the library. <code>togglePlay()</code> passes <code>force</code> so a user pressing
-          play on a bad state still gets a recovery attempt. The limits are the constants
-          <code>kMaxRecoveryAttempts</code> / <code>kMaxConsecutiveBadTracks</code> in <span class="file-path">mediamanager.cpp</span>.
-        </p>
-
-        <h3>Reseating the source</h3>
-        <p>
-          <code>_reseat_source(file, ms)</code> reloads a track at a position, which gives the player a fresh audio
-          sink. It clears the source first (Qt does not reload a source identical to the current one), then sets it
-          again. The seek is <strong>deferred</strong>: a <code>setPosition()</code> issued straight after
-          <code>setSource()</code> is dropped and playback restarts at 0, which also affected recovery before this
-          change. The pending <code>(file, ms)</code> (<code>m_pendingSeekFile</code> / <code>m_pendingSeekMs</code>) is stored before the second <code>setSource()</code>, because
-          <code>LoadedMedia</code> can arrive during that call, and <code>_handle_media_status()</code> applies it on
-          <code>LoadedMedia</code> / <code>BufferedMedia</code> only if the player's source is still that file. A
-          position of 0 sets no pending seek.
-        </p>
-        <p>
-          Both recovery and the long-pause resume in <code>togglePlay()</code> use it. The long-pause path exists
-          because on the Orange Pi, resuming after a long pause sometimes produced no sound while the player reported
-          <code>PlayingState</code>; only skipping to another track brought audio back. <code>pause()</code> and
-          <code>togglePlay()</code> record when playback paused (<code>m_pausedSince</code>); a resume after 30&nbsp;s or more reloads the track instead of calling a plain
-          <code>play()</code>.
-        </p>
-
-        <!-- Signals -->
+        <!-- Spotify -->
         <h2 id="spotify">Spotify</h2>
         <p>
-          Spotify is not played by <code>MediaManager</code>: <a href="signals-slots-reference.html#spotifyManager"><code>spotifyManager</code></a>
-          reads the user's library over the Spotify Web API and remote-controls the Spotify app on the phone (or any
-          Spotify device). The music menu's playlist dropdown lists Liked Songs, the
-          user's playlists and saved albums under a <strong>Spotify</strong> heading after the local playlists; picking one
-          shows its songs in the same table and rows as a local playlist (<span class="file-path">frontend/MediaPlayer.qml</span>);
-          tapping one plays it on the phone and, once Spotify has taken the command, <code>nowPlaying</code> makes Spotify
-          the source, so the Media Room, bottom bar, knob and gestures control it. Album Art Capture follows its covers.
+          Spotify support is experimental. OCTAVE does not play Spotify's audio itself: the Spotify app on your phone
+          (or any other Spotify device) plays, and OCTAVE is its remote. Controlling playback needs
+          <strong>Spotify Premium</strong>.
         </p>
+        <h3>Setting it up</h3>
         <p>
-          The button left of the dropdown says where Spotify plays and moves it to another device
-          (<code>devices</code>, <code>transferTo</code>). With no device active a play wakes the active one, else a phone,
-          else the first listed. A play that fails leaves the music that was on alone, and
-          <code>commandFailed</code> puts the reason in the app-wide notice, on whichever page the driver is.
+          Spotify only lets an app sign in the accounts its owner has listed, so each OCTAVE user registers their own
+          free "app" with Spotify once. A build made with <code>-DOCTAVE_SPOTIFY_CLIENT_ID=&lt;id&gt;</code> already
+          has one, and skips steps 1 to 3.
         </p>
+        <ol class="steps">
+          <li>At developer.spotify.com, create an app that uses the Web API.</li>
+          <li>Open Settings &gt; Media &gt; <strong>Spotify</strong> in OCTAVE. Copy the <strong>Redirect URI</strong> shown there into the Spotify app's settings (<code>http://127.0.0.1:43821/callback</code> on a computer or head unit; the page's own address in the browser demo). Add your Spotify account under User Management.</li>
+          <li>Paste the app's <strong>Client ID</strong> (32 letters and digits) into the Client ID field.</li>
+          <li>Tap <strong>Connect Spotify</strong> and finish signing in in the browser that opens. The card then says "Signed in as" and your name.</li>
+        </ol>
         <p>
-          Mirroring with Spotify on the mirrored phone, the phone source and the Spotify source are two remotes for one
-          player: the phone keeps the controls, with its audio on OCTAVE's volume, and neither hand-off pauses the music
-          (<code>NowPlaying::phoneRunsSpotify</code>).
+          The Connect Music sheet's <strong>Spotify</strong> row and the "Set Up Spotify&hellip;" / "Connect
+          Spotify&hellip;" entry in the PLAYLIST box both lead to this card. In the browser demo the Client ID can also
+          be given in the address, <code>?spotify=&lt;Client ID&gt;</code>, because pasting into a field is unreliable
+          on a phone.
         </p>
-        <p>
-          Shuffle is Spotify's while it is the source or the mirrored phone's app: <code>nowPlaying.canShuffle</code>,
-          <code>shuffled</code> and <code>toggleShuffle()</code> follow it, so the Media Room and bottom bar buttons work
-          and show its state, including a change made in the Spotify app. Any other phone app keeps its own shuffle.
-        </p>
-        <p>
-          The cover never drops out in a track change: <code>nowPlaying</code> holds a remote source's last cover for
-          1.5&nbsp;s when told there is none (<code>kArtClearHoldMs</code>; its art arrives after its track), and Spotify's
-          single empty report between tracks is ignored, it takes two polls in a row to count as stopped. Local art is known
-          at once, so none means none.
-        </p>
-        <p>
-          Closing OCTAVE pauses Spotify when it is OCTAVE's music (the source, or the mirrored phone's app), so it doesn't
-          play on with nothing left to stop it: <code>AppCore::shutdown</code> calls
-          <code>NowPlaying::pauseSpotifyBeforeExit</code>, which waits for Spotify's answer for at most 2.5 s, as the main
-          loop has ended by then. Spotify playing on another device while something else owns the music is left alone. A
-          power cut or a crash runs no shutdown, so nothing can be sent.
-        </p>
-        <p>
-          No network at start, or an outage, is normal in a car: requests waiting for a token are answered as failed, polling
-          carries on, and the first good poll fetches the library that didn't come. The session survives; only Spotify
-          revoking it (<code>invalid_grant</code>) signs OCTAVE out. <span class="file-path">spotify.json</span> is written
-          atomically, as the refresh token rotates about hourly.
-        </p>
-        <p>
-          Volume: while Spotify is the source, OCTAVE's volume (slider, knob, gestures, mute) sets the Spotify device's own
-          volume (<code>spotifyManager.setVolume</code>, the raw percent: the device applies its own curve; mute is 0&nbsp;%).
-          A device that keeps its volume to itself (Spotify reports <code>supports_volume: false</code>) is left alone.
-        </p>
-        <p>Limits, all Spotify's:</p>
+        <h3>Using it</h3>
         <ul>
-          <li>Controlling playback needs Spotify Premium.</li>
-          <li>A Development Mode Spotify app signs in only the accounts added under User Management in its dashboard, a handful at most, and its owner needs Premium. One shared app can't serve the public, so each user sets up their own (Settings &gt; Media &gt; Spotify).</li>
-          <li>Spotify lists the songs of a playlist only when the user owns or collaborates on it; other playlists can be played but not opened.</li>
-          <li>No audio reaches OCTAVE, so the visualizer stays flat.</li>
+          <li>The PLAYLIST box gains a <strong>Spotify</strong> heading under your own playlists, with Liked Songs, your playlists and your saved albums. Pick one and its songs fill the same list.</li>
+          <li>Tap a song to play it. Once Spotify has accepted, the Media Room, the bottom bar, the knob and gestures all control Spotify, shuffle included.</li>
+          <li>The button to the left of the PLAYLIST box names the device Spotify is playing on (or says <strong>Choose device</strong>). Tap it to move playback to another device. If nothing is listed, open Spotify on your phone.</li>
+          <li>If no device is active when you press play, OCTAVE wakes one: the active one if any, else a phone, else the first in the list.</li>
+          <li>OCTAVE's volume and mute set the Spotify device's own volume. Some phones do not allow that; OCTAVE says so and leaves them alone.</li>
+          <li>Closing OCTAVE pauses Spotify, so the phone does not play on with nothing to stop it. A power cut cannot do that.</li>
+        </ul>
+        <h3>Limits</h3>
+        <ul>
+          <li>Playback control needs Spotify Premium.</li>
+          <li>Spotify gives the song list only for playlists you own or collaborate on. A playlist you merely follow shows "Spotify doesn't share the songs of playlists you follow" with a <strong>Play</strong> button that plays it from the top.</li>
+          <li>Liked Songs lists at most 1000 songs.</li>
+          <li>No sound reaches OCTAVE, so the visualizer stays flat.</li>
+          <li>A command that fails (no device, no Premium, no network) shows a notice with the reason on whichever page you are, and the music that was playing is left alone.</li>
+          <li>Not available in the frontend playground of the browser demo.</li>
         </ul>
         <p>
-          Setting up: create an app at developer.spotify.com (Web API), add the redirect URIs
-          <code>http://127.0.0.1:43821/callback</code> (desktop and head unit) and the browser demo's address
-          (<code>https://robdegeorge.com/OCTAVE/</code>), add the account under User Management, then either build with
-          <code>-DOCTAVE_SPOTIFY_CLIENT_ID=&lt;id&gt;</code> or paste the Client ID in Settings &gt; Media &gt; Spotify and
-          press Connect Spotify. In the browser build the ID can also come in the address,
-          <code>https://robdegeorge.com/OCTAVE/?spotify=&lt;Client ID&gt;</code> (saved in the browser, then dropped from the
-          address bar): pasting into a text field is unreliable there on a phone.
+          While you mirror a phone that is itself running Spotify, the phone keeps the controls and nothing is paused
+          when OCTAVE switches between the two: they are two remotes for the same player.
         </p>
 
-        <h2 id="signals">Signals</h2>
-        <table>
-          <thead>
-            <tr><th>Signal</th><th>Type</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>playbackStateChanged</code></td><td>int</td><td>Raw <code>QMediaPlayer</code> playback state, forwarded on every change: 0 stopped, 1 playing, 2 paused</td></tr>
-            <tr><td><code>playStateChanged</code></td><td>bool</td><td>True when playing, False when paused/stopped; also drives the position timer (whose <code>positionChanged</code> reports also drive the waveform analyzer, through <code>appcore.cpp</code>)</td></tr>
-            <tr><td><code>currentMediaChanged</code></td><td>str</td><td>Filename of the now-playing (or restored) track (<code>nowPlaying</code> follows it, and through its art the Album Art Capture colours)</td></tr>
-            <tr><td><code>mediaListChanged</code></td><td>list</td><td>New ordered file list after a playlist selection, shuffle toggle, strip or scan</td></tr>
-            <tr><td><code>metadataChanged</code></td><td>str, str, str</td><td>Title, artist, album for the current track</td></tr>
-            <tr><td><code>durationChanged</code></td><td>int</td><td>Track duration in milliseconds (from QMediaPlayer)</td></tr>
-            <tr><td><code>durationFormatChanged</code></td><td>str</td><td>Duration formatted as "M:SS" (emitted by <code>getFormattedDuration</code>)</td></tr>
-            <tr><td><code>positionChanged</code></td><td>int</td><td>Playback position in milliseconds (QMediaPlayer plus the 100 ms timer while playing)</td></tr>
-            <tr><td><code>volumeChanged</code></td><td>float</td><td>User volume level (0.0-1.0, linear)</td></tr>
-            <tr><td><code>shuffleStateChanged</code></td><td>bool</td><td>Shuffle toggled on/off (or restored at startup)</td></tr>
-            <tr><td><code>albumColorsExtracted</code></td><td>str</td><td>Theme JSON; only used when no SettingsManager is wired (normally the colors go through <code>settingsManager.albumArtColors</code>)</td></tr>
-            <tr><td><code>playlistsChanged</code></td><td>(none)</td><td>Playlist list rebuilt by a scan</td></tr>
-            <tr><td><code>currentPlaylistChanged</code></td><td>str</td><td>Active playlist name changed</td></tr>
-            <tr><td><code>scanProgress</code></td><td>str</td><td>Terminal-style feedback during library scan and filename stripping</td></tr>
-            <tr><td><code>totalDurationChanged</code></td><td>str</td><td>Formatted "H:MM:SS" total duration of the selected playlist</td></tr>
-            <tr><td><code>albumCountChanged</code></td><td>int</td><td>Number of unique albums in the selected playlist</td></tr>
-            <tr><td><code>artistCountChanged</code></td><td>int</td><td>Number of unique artists in the selected playlist</td></tr>
-            <tr><td><code>songDeleted</code></td><td>str</td><td>A file was removed via <code>deleteSong()</code></td></tr>
-            <tr><td><code>audioOutputsChanged</code></td><td>(none)</td><td>The output list or the output in use changed (notify of <code>audioOutputs</code> / <code>currentAudioOutput</code>)</td></tr>
-          </tbody>
-        </table>
-
-        <!-- Slots -->
-        <h2 id="slots">Slots</h2>
-        <p><strong>Names:</strong> the camelCase name is the one to use (<code>next_track</code> is <code>nextTrack</code>, <code>get_album</code> is <code>getAlbum</code>, <code>is_scanning</code> is <code>isScanning</code>): same parameters, same result, same permission. The tables below show the camelCase names. The older snake_case name of each still works through protocol&nbsp;4, is marked <code>deprecated</code> in <code>describe</code> and <span class="file-path">docs/api/</span>, and goes in protocol&nbsp;5. The full list with each note is in the <a href="api-reference.html">API reference</a>.</p>
-        <table>
-          <thead>
-            <tr><th>Slot</th><th>Signature</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>playFile</code></td><td>(str)</td><td>Play a specific file by filename</td></tr>
-            <tr><td><code>nextTrack</code> / <code>previousTrack</code></td><td>()</td><td>Skip within the current order (wraps)</td></tr>
-            <tr><td><code>togglePlay</code></td><td>()</td><td>Toggle play/pause with bad-state recovery</td></tr>
-            <tr><td><code>pause</code></td><td>()</td><td>Pause playback</td></tr>
-            <tr><td><code>setPosition</code></td><td>(int)</td><td>Seek to position in ms</td></tr>
-            <tr><td><code>getPosition</code> / <code>getDuration</code></td><td>() -&gt; float</td><td>Position / duration in ms</td></tr>
-            <tr><td><code>isPlaying</code> / <code>isPaused</code> / <code>isMuted</code> / <code>isShuffled</code></td><td>() -&gt; bool</td><td>State flags</td></tr>
-            <tr><td><code>setMuted</code></td><td>(bool)</td><td>Follow <code>VolumeController::mutedChanged</code> (wired in <span class="file-path">src/appcore.cpp</span>); call <code>volumeController.toggleMute()</code> instead from QML and handlers</td></tr>
-            <tr><td><code>toggleShuffle</code></td><td>()</td><td>Toggle shuffle, persist via SettingsManager</td></tr>
-            <tr><td><code>setVolume</code></td><td>(float)</td><td>Set the user volume (0.0-1.0 linear); call <code>volumeController.applyVolume(percent)</code> instead from QML and handlers</td></tr>
-            <tr><td><code>getVolume</code></td><td>() -&gt; float</td><td>User's volume (ignores mute and ducking)</td></tr>
-            <tr><td><code>extractColorsFromImage</code></td><td>(str)</td><td>Extract the Album Art Capture palette from an image path or <code>file://</code> URL, used for mirrored-phone artwork</td></tr>
-            <tr><td><code>setDucking</code></td><td>(float)</td><td>Temporarily attenuate output (1.0 = none); ramped 80 ms in / 500 ms out</td></tr>
-            <tr><td><code>getCurrentFile</code></td><td>() -&gt; str</td><td>Current filename (initializes the order if needed, never plays)</td></tr>
-            <tr><td><code>getNextTrackName</code> / <code>getPreviousTrackName</code></td><td>() -&gt; str</td><td>Peek at neighbors</td></tr>
-            <tr><td><code>getNextTrackAlbumArt</code> / <code>getPreviousTrackAlbumArt</code> / <code>getNeighborAlbumArts</code></td><td>() -&gt; str / list</td><td>Neighbor cover URLs; the list form returns <code>[prevArt, nextArt]</code></td></tr>
-            <tr><td><code>getMediaFiles</code></td><td>(bool emitSignal=true) -&gt; list</td><td>Flat listing of the current media directory (emits <code>mediaListChanged</code> by default); callable with or without the bool from QML</td></tr>
-            <tr><td><code>getAlbumArt</code></td><td>(str) -&gt; str</td><td>Cover <code>file://</code> URL for a filename, or ""</td></tr>
-            <tr><td><code>getBand</code> / <code>getAlbum</code></td><td>(str) -&gt; str</td><td>Artist / album from metadata</td></tr>
-            <tr><td><code>getFormattedDuration</code></td><td>(str) -&gt; str</td><td>"M:SS" duration string (also emits <code>durationFormatChanged</code>)</td></tr>
-            <tr><td><code>getDisplayName</code></td><td>(str) -&gt; str</td><td>Cleaned display name</td></tr>
-            <tr><td><code>getTotalDuration</code> / <code>getAlbumCount</code> / <code>getArtistCount</code></td><td>() -&gt; str / int</td><td>Library statistics for the selected playlist. Returns at once: while the playlist's tags are still being read in the background these are the previous values, and the three <code>*Changed</code> signals carry the result</td></tr>
-            <tr><td><code>invalidateStatsCache</code></td><td>()</td><td>Force recalculation of library statistics</td></tr>
-            <tr><td><code>sortMediaFiles</code></td><td>(str column, bool ascending) -&gt; list</td><td>Current list sorted by "title", "album" or "artist". Opens no file: tracks whose tags have not been read yet sort as "Unknown ..."; sort again on <code>totalDurationChanged</code></td></tr>
-            <tr><td><code>extractColorsFromAlbumArt</code></td><td>(str)</td><td>Run the k-means theme extraction for a file's cover</td></tr>
-            <tr><td><code>scanLibrary</code></td><td>(bool resetDisplayNames=true)</td><td>Rescan the library root into playlists (emits <code>scanProgress</code>, <code>playlistsChanged</code>); callable with or without the bool from QML</td></tr>
-            <tr><td><code>setLibraryRoot</code></td><td>(str)</td><td>Set and scan a new root, select its first playlist (connected to <code>mediaFolderChanged</code>)</td></tr>
-            <tr><td><code>selectPlaylist</code></td><td>(str)</td><td>Switch the active playlist ("All Music" spans every folder)</td></tr>
-            <tr><td><code>getPlaylistNames</code> / <code>getCurrentPlaylistName</code> / <code>getCurrentSongList</code> / <code>getMovablePlaylistNames</code></td><td>() -&gt; list / str</td><td>Playlist queries</td></tr>
-            <tr><td><code>createPlaylist</code> / <code>deletePlaylist</code></td><td>(str) -&gt; bool</td><td>Create or remove a playlist folder</td></tr>
-            <tr><td><code>moveSongToPlaylist</code></td><td>(str, str) -&gt; bool</td><td>Move a file into another playlist folder</td></tr>
-            <tr><td><code>deleteSong</code></td><td>(str) -&gt; bool</td><td>Delete a file from disk (emits <code>songDeleted</code>)</td></tr>
-            <tr><td><code>getSongPlaylistName</code></td><td>(str) -&gt; str</td><td>Playlist folder a file lives in</td></tr>
-            <tr><td><code>playFileAtPath</code></td><td>(str) -&gt; bool</td><td>Play a file by absolute path (selects its playlist)</td></tr>
-            <tr><td><code>getFullFilePath</code> / <code>getSongFilePath</code></td><td>(str) -&gt; str</td><td>Absolute path for a filename (the former returns "" for a missing file; used by the audio analyzer)</td></tr>
-            <tr><td><code>getDefaultMediaDir</code> / <code>getMediaFolderName</code></td><td>() -&gt; str</td><td>Built-in default directory / name of the current media directory</td></tr>
-            <tr><td><code>browseMusicFolders</code></td><td>(path) -&gt; map</td><td>Folder picker for remote UIs (<span class="file-path">src/util/folderbrowser.{h,cpp}</span>): <code>""</code> = the browse roots (<code>~/Music</code>, not the home folder, <code>/media</code>, <code>/mnt</code>, <code>/run/media</code>, <code>/storage</code>, the current music folder unless it is <code>/</code>); inside them the sub-folders and audio files by name; anything whose canonical path is outside them an <code>error</code></td></tr>
-            <tr><td><code>pickBrowserLibrary</code></td><td>() -&gt; bool</td><td>Browser demo only: opens the browser's folder picker (call from a tap) and makes the folder picked the library for the visit, then returns true (<span class="file-path">src/platform/wasm/weblibrary.{h,cpp}</span>, <a href="building.html#wasm">Building &gt; WebAssembly</a>). Everywhere else does nothing and returns false, and the QML "Browse" buttons open their <code>FolderDialog</code> instead. Scope <code>files</code></td></tr>
-            <tr><td><code>stripFilenames</code></td><td>()</td><td>Re-clean every display name, reporting via <code>scanProgress</code></td></tr>
-            <tr><td><code>flushMetadataStore</code></td><td>()</td><td>Write the tag store now if dirty (called at shutdown)</td></tr>
-            <tr><td><code>_save_playback_state</code></td><td>()</td><td>Save song / position / playlist immediately; called from <span class="file-path">Main.qml</span> on close</td></tr>
-            <tr><td><code>connect_settings_manager</code></td><td>(QObject)</td><td>No-op kept for <span class="file-path">Main.qml</span>; the wiring (library root, restore, theme) is done by <code>setSettingsManager()</code> in <code>appcore.cpp</code></td></tr>
-            <tr><td><code>_clear_temp_files</code></td><td>()</td><td>Delete every file in the temp dir; retained for compatibility, no longer called</td></tr>
-          </tbody>
-        </table>
-
-        <!-- Threading -->
-        <h2 id="threading">Threading</h2>
+        <!-- Volume -->
+        <h2 id="volume-mute">Volume</h2>
         <p>
-          MediaManager lives on the GUI thread and all of its slots are called there. Work that leaves the thread:
+          One volume, shown as 0 to 100 %, sets every output at once: your music, phone audio, Android Auto, AirPlay,
+          Spotify's device and the knob's light ring. Raising the volume while muted unmutes, and pressing mute at
+          0 % brings back the startup volume.
+        </p>
+        <div class="info-box warning">
+          <div class="info-box-title">Rule: every volume change goes through <code>volumeController</code></div>
+          Screens, hardware handlers and service clients call <code>volumeController.applyVolume(percent)</code> and
+          <code>volumeController.toggleMute()</code>, and show <code>percent</code>, <code>muted</code> and
+          <code>effectivelyMuted</code>. Never call a manager's own <code>setVolume</code> / <code>setMuted</code>, and
+          never do the percent-to-loudness maths yourself: an output set on the side drifts away from the slider. The
+          curve and the routing are described under <a href="architecture.html#volume-system">Architecture</a>.
+        </div>
+        <p>
+          When a mirrored phone or Android Auto speaks (a navigation prompt, a call), your music is turned down for as
+          long as it speaks and comes back up afterwards. This "ducking" is separate from the volume: the slider does
+          not move. Its settings are on the <a href="phone-mirror-android-auto.html">Phone Mirror</a> page.
+        </p>
+
+        <!-- Settings -->
+        <h2 id="settings-keys">Settings</h2>
+        <p>All of these are in Settings &gt; Media &gt; Library &amp; Playback. The key is the name in the settings file.</p>
+        <table>
+          <thead><tr><th>Setting</th><th>Key</th><th>Default</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td>Library Folder</td><td><code>mediaFolder</code></td><td>empty</td><td>The folder your music is in. Empty means the system's Music folder. <strong>Scan</strong> reads it again; <strong>Clean Titles</strong> tidies the song titles.</td></tr>
+            <tr><td>Startup Volume</td><td><code>startUpVolume</code></td><td>32 %</td><td>The volume OCTAVE starts at. The volume you leave it at is not kept across a restart.</td></tr>
+            <tr><td>Audio Output</td><td><code>audioOutputDevice</code></td><td>System default</td><td>Where music and phone audio play. If the output you picked is unplugged, OCTAVE uses the system default until it is back.</td></tr>
+            <tr><td>Autoplay on Startup</td><td><code>autoPlayOnStartup</code></td><td>off</td><td>Start playing the last song when OCTAVE starts. Off: the song is loaded at its place and waits for you.</td></tr>
+            <tr><td>Remember Shuffle</td><td><code>persistShuffleState</code></td><td>off</td><td>Keep shuffle on across a restart.</td></tr>
+            <tr><td>Open Music to the Library</td><td><code>musicButtonDefaultPage</code></td><td>off</td><td>The music button opens the library first, not the Media Room.</td></tr>
+            <tr><td>Return to Library After Picking a Song</td><td><code>returnToLibraryAfterSelection</code></td><td>off</td><td>Stay in the library after tapping a song.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          Keys OCTAVE keeps for itself: the last song, position and playlist, <code>musicDeviceModel</code>,
+          <code>vinylRecordMode</code> and <code>mediaArtPhoneMirror</code> (what the Media Room's cover corner shows).
+          <code>startUpVolume</code> is stored as a 0 to 1 loudness, 0.1 by default. The complete list is the
+          <a href="settings-reference.html">Settings Reference</a>.
+        </p>
+
+        <!-- How it works -->
+        <h2 id="how-it-works">How It Works</h2>
+        <p>
+          From here on the page is for people who want to know what happens underneath, or who are changing the code.
+        </p>
+        <p>
+          Several things can make music in OCTAVE, but only one at a time, and every screen should look and behave the
+          same whichever it is. So the screens do not talk to the players. They talk to one object,
+          <code>nowPlaying</code>, which knows which source has the music and passes the controls on to it.
+        </p>
+        <table>
+          <thead><tr><th>Piece</th><th>Job</th></tr></thead>
+          <tbody>
+            <tr><td><code>mediaManager</code></td><td>The local library and player: reads the folder, builds the playlists, reads tags and covers, and plays files through Qt's <code>QMediaPlayer</code>.</td></tr>
+            <tr><td><code>spotifyManager</code></td><td>Spotify over its Web API: sign-in, your library, and remote control of the device that plays.</td></tr>
+            <tr><td><code>nowPlaying</code></td><td>What is playing right now and its controls, whichever source has them. Its <code>source</code> is <code>"local"</code>, <code>"phone"</code>, <code>"androidauto"</code> or <code>"spotify"</code>.</td></tr>
+            <tr><td><code>volumeController</code></td><td>The one volume and the one mute, sent to every output.</td></tr>
+          </tbody>
+        </table>
+        <pre class="diagram">
+   Media Room, bottom bar, Home's music card, knob, gestures
+                |  title, artist, cover, position          |  volume, mute
+                |  play / pause, next, previous, seek      |
+         +------+------+                          +--------+---------+
+         | nowPlaying  |                          | volumeController |
+         +------+------+                          +--------+---------+
+                |  to the source that has the music        |  to every output
+     +----------+-----------+--------------+               |
+     |          |           |              |               |
+ mediaManager  phone     Android Auto  spotifyManager  &lt;-----+
+ (your files)  mirror                  (remote for
+                                        the Spotify app)
+        </pre>
+        <p>
+          The library screen is the exception: it lists and edits local files, so it calls <code>mediaManager</code>
+          directly (and <code>spotifyManager</code> for a Spotify list). All four objects are context properties in
+          QML and service objects in the <a href="api-reference.html">service API</a> under the same names.
+        </p>
+
+        <!-- Library scanning -->
+        <h2 id="library-scanning">How the Library Is Read</h2>
+        <ol class="steps">
+          <li><strong>List the folder.</strong> The scan lists the library folder and each sub-folder, by file extension only. No file is opened, so it is quick. It runs at startup, when the folder setting changes, on <strong>Scan</strong>, and after every playlist edit.</li>
+          <li><strong>Build the playlists.</strong> "All Music" first, "Unsorted" second, then the folders in alphabetical order. If two folders hold a file of the same name, the second appears in All Music as "<em>folder</em> - <em>file</em>".</li>
+          <li><strong>Tidy the titles</strong> of songs that have none yet.</li>
+          <li><strong>Keep your place.</strong> The playlist and song that were selected stay selected.</li>
+          <li><strong>Read the tags in the background</strong>, for the selected playlist (next section).</li>
+        </ol>
+        <p>
+          The scan reports what it finds line by line through the <code>scanProgress</code> signal; the
+          <strong>Scan Log</strong> at the bottom of Settings &gt; Media &gt; Library &amp; Playback shows those lines
+          after a Scan or Clean Titles.
+        </p>
+        <div class="info-box info">
+          <div class="info-box-title">Nothing outside the library folder</div>
+          Songs are named by file name, never by a path the caller chooses. A name with <code>..</code> in it or a
+          leading slash is refused, and every create, move and delete checks that the result is inside the library
+          folder. This matters because the same calls are open to paired devices over the service API.
+        </div>
+
+        <!-- Tags and covers -->
+        <h2 id="metadata-caching">Tags and Covers</h2>
+        <p>
+          Reading a song's tags means opening the file, and a library has thousands. On a head unit's SD card that is
+          slow, so OCTAVE does it once and remembers the answer.
         </p>
         <ul>
-          <li><strong>Neighbor pre-cache</strong> - QtConcurrent workers, results marshalled back through <code>QFutureWatcher</code> (desktop; synchronous on mobile); the caches are written only on the GUI thread, see <a href="#precaching">above</a></li>
-          <li><strong>Colour extraction</strong> - QtConcurrent + <code>QFutureWatcher&lt;QString&gt;</code>; only the newest job is applied</li>
-          <li><strong>Library scanning and tag reads on demand</strong> stay synchronous on the GUI thread; the tag store makes a warm scan cheap</li>
+          <li><strong>The tag store.</strong> Title, artist, album and length of every song read so far are kept in <code>metadata_cache.json</code> in the <a href="settings-manager.html">config folder</a>. An entry is used as long as the file's size and modification time are unchanged; otherwise the file is read again.</li>
+          <li><strong>Background reading.</strong> When a playlist is selected, a worker thread goes through it, taking each song from the store or reading the file. Until it is done, rows show placeholders and the song / album / artist counts show the previous values; the screens fill in when <code>totalDurationChanged</code>, <code>albumCountChanged</code> and <code>artistCountChanged</code> arrive. A view that sorts by artist or album should sort again then.</li>
+          <li><strong>It survives being cut off.</strong> The store is written every 30 seconds while a pass runs, so a library too big to read in one drive carries on where it stopped.</li>
+          <li><strong>Titles.</strong> The tidied titles are kept in <code>display_names.json</code> beside it.</li>
+        </ul>
+        <h3 id="album-art">Covers</h3>
+        <p>
+          <code>mediaManager.getAlbumArt(file)</code> returns a <code>file://</code> address of the song's cover, or an
+          empty string if it has none. The picture is taken from inside the audio file the first time and saved as
+          <code>cover_&lt;hash&gt;</code> in a <code>temp</code> folder (beside the program when that is writable, in
+          the user's app-data folder for an installed build and on Android). The hash is made from the album and
+          artist, so every song of an album shares one cover file and a cover from an earlier run is found without
+          opening the audio file. A song with no album tag gets a cover of its own. At most 500 covers are kept; the
+          least recently used are deleted.
+        </p>
+        <p>
+          After each track change the tags and covers of the three songs before and after it are fetched in the
+          background, so the Media Room's side cards and the next skip are instant.
+        </p>
+
+        <!-- Resume -->
+        <h2 id="playback-resume">Resuming After a Restart</h2>
+        <p>
+          A car stops by cutting the power, not by closing the app. So the song, the playlist and the position are
+          saved a second after every skip or pause, and <strong>every 10 seconds while a song plays</strong>. After a
+          power cut you are at most 10 seconds from where you were.
+        </p>
+        <p>
+          At startup the last playlist is selected and the last song loaded at its position, paused. It plays by itself
+          only with <strong>Autoplay on Startup</strong> on. Shuffle comes back only with <strong>Remember
+          Shuffle</strong> on. If the song is no longer in the playlist, nothing is loaded.
+        </p>
+
+        <!-- Error recovery -->
+        <h2 id="error-recovery">Files That Will Not Play</h2>
+        <p>
+          Some files cannot be played: a file that was cut short, a file with tags and no audio, a file on a USB stick that
+          was pulled out. OCTAVE never gets stuck on one.
+        </p>
+        <ul>
+          <li>A file that stalls or fails is reloaded at the same position, <strong>twice</strong>. Then it is skipped.</li>
+          <li>A file that is missing is skipped at once.</li>
+          <li>After <strong>10 bad files in a row</strong> (or the whole playlist, if it is shorter) playback stops, so a broken library is not cycled forever.</li>
+          <li>Resuming after a pause of <strong>30 seconds or more</strong> reloads the song at its position first. On some audio systems a long-paused player reports "playing" and makes no sound; a fresh load always works.</li>
+        </ul>
+        <p>Each skip and each give-up is written to the log with the file's name.</p>
+
+        <!-- Now playing -->
+        <h2 id="now-playing">Which Source Has the Music</h2>
+        <p>
+          <code>nowPlaying</code> decides who owns the music. Only something the user did changes the owner:
+        </p>
+        <ul>
+          <li><strong>Playing a local song</strong> takes the music. A phone or Spotify that was playing is paused.</li>
+          <li><strong>The mirrored phone</strong> takes it when it takes the media controls.</li>
+          <li><strong>Android Auto</strong> asks, and gets it only after a user action aimed at it.</li>
+          <li><strong>Spotify</strong> takes it when you play something from OCTAVE and Spotify accepts, or when it starts by itself while nothing else is playing. It never takes over music that another source is playing.</li>
         </ul>
         <p>
-          The <code>QMediaPlayer</code> backend decodes on its own threads and reports back through the signals listed
-          under <a href="#qmediaplayer">QMediaPlayer Integration</a>.
+          A phone and Spotify report their position only now and then, so <code>nowPlaying</code> counts it forward
+          in between. Their covers arrive a moment after the track does, so the previous cover is held for up to 1.5
+          seconds and no "missing art" picture flashes during a track change.
+        </p>
+
+        <!-- Spotify internals -->
+        <h2 id="spotify-internals">How Spotify Is Connected</h2>
+        <ul>
+          <li><strong>Sign-in</strong> is OAuth with PKCE, which needs no secret in the program. On a computer OCTAVE opens the system browser and waits for Spotify's answer on <code>127.0.0.1:43821</code>. In the browser demo the page goes to Spotify and reads the answer when it comes back.</li>
+          <li><strong>The session</strong> is kept in <code>spotify.json</code> in the config folder (the browser's storage in the demo). Only Spotify revoking it signs OCTAVE out.</li>
+          <li><strong>The player's state</strong> is polled: every 2 seconds while playing, every 6 while idle. One empty answer is ignored, because Spotify gives one between tracks.</li>
+          <li><strong>No network is normal in a car.</strong> Requests fail quietly, polling carries on, and the first poll that works fetches the library that did not come at startup.</li>
+          <li><strong>Volume</strong> is sent as OCTAVE's plain percent (the device has its own curve), at most about three times a second while a slider is dragged. Mute sends 0 %.</li>
+        </ul>
+
+        <!-- Platforms -->
+        <h2 id="backends">Android and the Browser Demo</h2>
+        <table>
+          <thead><tr><th>Where</th><th>What is different</th></tr></thead>
+          <tbody>
+            <tr><td>Linux, Windows, macOS, Raspberry Pi</td><td>Nothing: this page as written. Tags and covers are read with the TagLib library.</td></tr>
+            <tr><td>Android</td><td>OCTAVE asks for permission to read your audio files the first time, and scans again once you allow it. Tags and covers come from Android itself. The app's own Music folder is read as well as the library folder.</td></tr>
+            <tr><td>Browser demo</td><td>A web page cannot see your disk, so <strong>Browse</strong> and <strong>Local Music</strong> open the browser's folder picker. The folder you pick is the library for that visit only. Songs play straight from your disk and are not uploaded; only the small parts of each file that hold its tags and cover are read when you pick. See <a href="building.html#wasm">Building</a>.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          From code, <code>mediaManager.pickBrowserLibrary()</code> opens the browser's picker and returns true; on
+          every other platform it does nothing and returns false, which is how the Browse buttons know to open the
+          ordinary folder dialog. A remote frontend that cannot show a dialog uses
+          <code>browseMusicFolders(path)</code> to list the folders a library may be picked from.
+        </p>
+
+        <!-- Troubleshooting -->
+        <h2 id="troubleshooting">When Something Goes Wrong</h2>
+        <ol class="steps">
+          <li><strong>"No Music Loaded".</strong> Check the folder in Settings &gt; Media &gt; Library &amp; Playback, tap <strong>Scan</strong> and read the Scan Log: it names the path and every playlist found. Remember that only the folder and one level of sub-folders are read. A red line under the folder field means the folder could not be used.</li>
+          <li><strong>A song is skipped or will not play.</strong> The file is damaged or in a codec your system lacks. The log names it ("Giving up on ...").</li>
+          <li><strong>Wrong artist or album.</strong> OCTAVE shows the file's tags. Fix the tags with a tag editor; the changed file is read again by itself. <code>metadata_cache.json</code> is only a cache and can be deleted.</li>
+          <li><strong>Odd titles.</strong> Tap <strong>Clean Titles</strong>.</li>
+          <li><strong>No sound.</strong> Check Settings &gt; Media &gt; <strong>Audio Output</strong>, which says where OCTAVE is playing.</li>
+          <li><strong>Spotify.</strong> The Spotify card in Settings &gt; Media shows the last problem in red, in plain words (wrong Redirect URI, account not under User Management, Premium needed).</li>
+          <li><strong>The log files.</strong> The categories are <code>octave.media</code>, <code>octave.nowplaying</code> and <code>octave.spotify</code>. See <a href="architecture.html#logging">Architecture</a> for where the logs are.</li>
+        </ol>
+        <p>More problems and fixes are on the <a href="troubleshooting.html">Troubleshooting</a> page.</p>
+
+        <!-- Files -->
+        <h2 id="files">Files, API and Tests</h2>
+        <table>
+          <thead><tr><th>File (under <code>src/managers/</code> unless a path is given)</th><th>What is in it</th></tr></thead>
+          <tbody>
+            <tr><td><span class="file-path">mediamanager.{h,cpp}</span></td><td>The library, playlists, tags, covers, the player, resume and recovery, and the Album Art Capture colours.</td></tr>
+            <tr><td><span class="file-path">nowplaying.{h,cpp}</span></td><td>What is playing and which source owns the music.</td></tr>
+            <tr><td><span class="file-path">spotifymanager.{h,cpp}</span>, <span class="file-path">spotifyapi.{h,cpp}</span></td><td>Spotify: the session and polling; building requests and reading replies (no network, so it is tested alone).</td></tr>
+            <tr><td><span class="file-path">volumecontroller.{h,cpp}</span></td><td>The volume curve, mute and its rules.</td></tr>
+            <tr><td><span class="file-path">src/appcore.cpp</span></td><td>Where the four are created and wired to each other and to every output.</td></tr>
+            <tr><td><span class="file-path">src/util/audiooutput.h</span>, <span class="file-path">src/util/folderbrowser.{h,cpp}</span></td><td>Choosing the output device; the folder listing for remote frontends.</td></tr>
+            <tr><td><span class="file-path">src/platform/androidmediabridge.h</span></td><td>Tags and covers on Android.</td></tr>
+            <tr><td><span class="file-path">src/platform/wasm/weblibrary.{h,cpp}</span></td><td>The browser demo's library.</td></tr>
+            <tr><td><span class="file-path">frontend/</span> <code>MediaPlayer</code> (the library), <code>MediaRoom</code>, <code>MusicEmptyPrompt</code>, <code>BottomBar</code>, <code>settings/MediaSettingsPage</code></td><td>The screens.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          <strong>API.</strong> Every property, method and signal of
+          <a href="api-reference.html#mediaManager"><code>mediaManager</code></a>,
+          <a href="api-reference.html#nowPlaying"><code>nowPlaying</code></a>,
+          <a href="api-reference.html#spotifyManager"><code>spotifyManager</code></a> and
+          <a href="api-reference.html#volumeController"><code>volumeController</code></a> is listed in the API
+          reference, which is generated from the code. Use the camelCase method names (<code>nextTrack</code>,
+          <code>getAlbum</code>); the snake_case ones (<code>next_track</code>, <code>get_album</code>) are older
+          names for the same methods and are deprecated. The calls most code needs:
+        </p>
+        <table>
+          <thead><tr><th>To do this</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td>Show what is playing</td><td><code>nowPlaying.title</code>, <code>artist</code>, <code>album</code>, <code>artUrl</code>, <code>playing</code>, <code>positionMs</code>, <code>durationMs</code>, <code>hasTrack</code>, <code>source</code></td></tr>
+            <tr><td>Control it</td><td><code>nowPlaying.togglePlay()</code>, <code>next()</code>, <code>previous()</code>, <code>seek(ms)</code>, <code>toggleShuffle()</code> (check <code>canSeek</code>, <code>canShuffle</code>)</td></tr>
+            <tr><td>Change the volume</td><td><code>volumeController.applyVolume(percent)</code>, <code>toggleMute()</code>; show <code>percent</code>, <code>muted</code>, <code>effectivelyMuted</code></td></tr>
+            <tr><td>List the playlists and songs</td><td><code>mediaManager.getPlaylistNames()</code>, <code>selectPlaylist(name)</code>, <code>getCurrentSongList()</code>; listen to <code>playlistsChanged</code> and <code>mediaListChanged</code></td></tr>
+            <tr><td>Show a song in a list</td><td><code>getDisplayName(file)</code>, <code>getBand(file)</code> (the artist), <code>getAlbum(file)</code>, <code>getFormattedDuration(file)</code>, <code>getAlbumArt(file)</code></td></tr>
+            <tr><td>Play a local song</td><td><code>mediaManager.playFile(file)</code></td></tr>
+            <tr><td>Sort the list</td><td><code>sortMediaFiles(column, ascending)</code> with <code>"title"</code>, <code>"artist"</code> or <code>"album"</code></td></tr>
+            <tr><td>Edit playlists</td><td><code>createPlaylist(name)</code>, <code>moveSongToPlaylist(file, playlist)</code>, <code>deleteSong(file)</code>, <code>deletePlaylist(name)</code></td></tr>
+            <tr><td>Read the folder again</td><td><code>scanLibrary()</code>; progress in <code>scanProgress(line)</code></td></tr>
+            <tr><td>Browse Spotify</td><td><code>spotifyManager.playlists</code>, <code>albums</code>, <code>openCollection(uri)</code>, <code>collectionTracks</code>, <code>playCollection(uri, index)</code></td></tr>
+            <tr><td>Choose Spotify's device</td><td><code>spotifyManager.devices</code>, <code>transferTo(deviceId)</code>, <code>deviceName</code></td></tr>
+          </tbody>
+        </table>
+        <p>
+          <strong>Tests</strong> (<span class="file-path">tests/cpp/</span>, run with <code>ctest</code>):
+          <code>tst_mediamanager</code>, <code>tst_nowplaying</code>, <code>tst_spotifyapi</code>,
+          <code>tst_volumecontroller</code>, <code>tst_folderbrowser</code>.
         </p>
 
         <!-- Design decisions -->
-        <h2 id="design-decisions">Design Decisions</h2>
-        <table>
-          <thead><tr><th>Choice</th><th>Why (from code comments and commit history)</th></tr></thead>
-          <tbody>
-            <tr><td><strong>QMediaPlayer + QAudioOutput</strong> rather than a custom decoder</td><td>Qt Multimedia provides the playback interface across targets; the selected backend and supported codecs depend on the Qt build and platform. One manager class serves the build targets through the same signals. The manager only adds what Qt lacks: the position timer as a safety net for backends whose <code>positionChanged</code> is coarse, and the recovery logic for files Qt cannot decode.</td></tr>
-            <tr><td><strong>Folders as playlists</strong></td><td>The music folder's sub-folders are the only source of truth: there is no playlist database to keep in sync, every edit (<code>createPlaylist</code>, <code>moveSongToPlaylist</code>, <code>delete_*</code>) is a plain filesystem operation followed by a rescan, and "All Music" is the union. The scanner keeps empty folders on purpose "so user-created playlists survive a rescan (e.g. after moving the last song out)".</td></tr>
-            <tr><td><strong>Persistent tag store on disk</strong> (<code>metadata_cache.json</code>)</td><td>Reading tags is file I/O per track; on the Pi's SD card, scrolling a list or opening the media page opened every file with TagLib on every run. Tags rarely change, and size + mtime is a cheap, sufficient validity check (commit <code>1232538</code>).</td></tr>
-            <tr><td><strong>Content-addressed covers kept across runs</strong></td><td>The cover of an album is the same bytes every time; wiping the temp dir at start and quit made every cover a fresh tag read + JPEG write on each boot. Hashing the album id makes the file name derivable without opening the audio file, and the startup prune bounds the directory once the in-memory LRU can no longer see earlier runs (<code>43432c3</code>).</td></tr>
-            <tr><td><strong>Colour extraction off the GUI thread</strong></td><td>k-means over a 50&times;50 cover takes ~0.3&nbsp;s on a desktop and closer to a second on the Pi; doing it in the <code>currentMediaChanged</code> handler froze the track-change animation. A job counter makes a fast skip through tracks apply only the last theme, and the 2&nbsp;s dedupe removes the startup double-fire (restore + the 1&nbsp;s timer).</td></tr>
-            <tr><td><strong>Fixed k-means seed</strong></td><td>The same cover must produce the same theme every time it is played. The seed lives in a local <code>std::mt19937</code>, so it does not affect the shuffle order.</td></tr>
-            <tr><td><strong>Caches populated before <code>currentMediaChanged</code></strong></td><td>QML bindings on the now-playing track run during the render phase; pre-filling the metadata and cover caches moves the disk I/O out of binding evaluation so the carousel animation starts without blocking the scene graph.</td></tr>
-            <tr><td><strong>GUI thread as sole owner of the caches</strong></td><td>The first QtConcurrent pre-cache mutated <code>QHash</code>es from the worker while list delegates were reading them. Splitting the work into "read files on the worker, insert on the GUI thread" keeps the speed without a mutex around every lookup.</td></tr>
-            <tr><td><strong>Quadratic volume curve in one place</strong></td><td>Per the <code>VolumeController</code> header, <code>(percent/100)&sup2;</code> "gives a more natural perceptual response than linear at low volumes", and "every audio output in the app must use this same curve or they will drift out of sync when the user moves the slider". Before <code>VolumeController</code> existed the curve was hard-coded at several call sites and the outputs drifted out of sync whenever one site changed; centralizing math and dispatch means changing the curve is a one-line edit in <code>toLinearStatic()</code>.</td></tr>
-            <tr><td><strong>Volume, mute and ducking as separate state</strong></td><td>Before ducking, mute read the output level back as "the volume to restore", so a ducked or muted output could be persisted as the user's volume. Computing the output from three independent values in one function removed that class of bug (<code>5834d9d</code>).</td></tr>
-            <tr><td><strong>Recovery cap, skip, then stop</strong></td><td>Qt neither reloads nor re-reports an error for a source identical to the current one, so the old "re-set the same URL" recovery left a broken file silently stuck at 0:00 with the pause icon, logging "recovery successful" unconditionally. A library of tag-only stubs must be skipped, not retried forever, and if every track is bad the player must stop rather than cycle the library (<code>2884c65</code>). "Recovered" is only claimed when the player actually reaches <code>LoadedMedia</code>.</td></tr>
-            <tr><td><strong>Debounced state and store writes</strong></td><td>Spamming next/previous or scrolling a list must not turn into a disk write per event on an SD card; a 1&nbsp;s (playback state) and 2&nbsp;s (tag store) single-shot timer coalesce bursts, and shutdown flushes both explicitly.</td></tr>
-            <tr><td><strong>Position timer only while playing</strong></td><td>A 100&nbsp;ms timer that runs forever keeps an idle head unit waking ten times a second for nothing; tying it to <code>playStateChanged</code> costs nothing while playing (<code>ee5a23e</code>).</td></tr>
-          </tbody>
-        </table>
-
-        <!-- How to Extend -->
-        <h2 id="extending">How to Modify / Extend</h2>
-
-        <h3>Adding a New Audio Format</h3>
-        <ol class="steps">
-          <li>Add the extension to <code>s_audioExtensions</code> <em>and</em> the file-local <code>s_audioExts</code> list in <span class="file-path">mediamanager.cpp</span></li>
-          <li>Tags already come from <code>TagLib::FileRef</code>; add a picture reader to <code>_extract_art_for()</code> if the container embeds art</li>
-          <li>Update the <a href="#supported-formats">format table</a> above</li>
-        </ol>
-
-        <h3>Adding a New Playback Feature</h3>
-        <ol class="steps">
-          <li>Add the signal, state variable and slot to <code>MediaManager</code> (<code>Q_INVOKABLE</code> or a public slot, plus the signal) in <span class="file-path">mediamanager.h</span></li>
-          <li>Emit the signal when state changes; grep the QML for the new symbol and confirm the manager defines it</li>
-          <li>If the feature should persist, add a corresponding setting to <code>SettingsManager</code></li>
-          <li>Update <a href="signals-slots-reference.html">Signals &amp; Slots Reference</a> and this page</li>
-        </ol>
+        <h2 id="design-decisions">Why It Is Built This Way</h2>
+        <ul>
+          <li><strong>Folders are the playlists.</strong> There is no playlist database to get out of step with the disk. Every edit is a plain file operation followed by a scan, and you can arrange your music with any file manager.</li>
+          <li><strong>One object for "what is playing".</strong> Screens bind to <code>nowPlaying</code> and never ask which source is live. Adding a source (Spotify was the latest) changes no screen.</li>
+          <li><strong>One source owns the music, and only the user changes the owner.</strong> Nothing starts playing over something else by itself.</li>
+          <li><strong>One volume, one place.</strong> When each output did its own maths, they drifted apart whenever one changed. Volume, mute and ducking are also kept as three separate values, so a muted or ducked level is never mistaken for the volume the user chose.</li>
+          <li><strong>Tags are read once and kept on disk.</strong> Tags rarely change, and size plus modification time is a cheap and sufficient check. Opening every file on every start made the head unit crawl.</li>
+          <li><strong>Covers are named by a hash of the album.</strong> The file name can be worked out without opening the audio file, so covers survive restarts.</li>
+          <li><strong>File reading stays off the main thread.</strong> Tags, covers and the Album Art Capture colours are worked out on worker threads and handed back; only the main thread touches the caches, so no lock is needed and list scrolling never waits on a disk.</li>
+          <li><strong>Save often, in small writes.</strong> Power cuts are the normal way a car stops. Position every 10 seconds, the tag store every 30, each written atomically so a cut leaves the old file or the new one.</li>
+          <li><strong>Give up on bad files.</strong> Two tries, then skip; ten skips, then stop. "Recovered" is only claimed when the player has really loaded the file.</li>
+          <li><strong>Spotify is a remote, not a player.</strong> The Web API controls the Spotify app and hands out no audio. That is why the visualizer is flat and why a Spotify device must be on.</li>
+        </ul>
 
         <!-- Related Pages -->
         <div class="related-pages" id="related">
           <h3>Related Pages</h3>
+          <a href="pages.html" class="related-link">Pages &amp; Views</a>
+          <a href="phone-mirror-android-auto.html" class="related-link">Phone Mirror &amp; Android Auto</a>
           <a href="audio-analyzer.html" class="related-link">Audio Analyzer</a>
-          <a href="settings-manager.html" class="related-link">Settings Manager</a>
-          <a href="settings-reference.html" class="related-link">Settings Reference</a>
-          <a href="phone-mirror-android-auto.html" class="related-link">Phone Mirror</a>
           <a href="theme-system.html" class="related-link">Theme System</a>
-          <a href="signals-slots-reference.html" class="related-link">Signals &amp; Slots Reference</a>
+          <a href="settings-reference.html" class="related-link">Settings Reference</a>
+          <a href="api-reference.html" class="related-link">Service API Reference</a>
+          <a href="troubleshooting.html" class="related-link">Troubleshooting</a>
           <a href="architecture.html" class="related-link">Architecture Overview</a>
         </div>
 

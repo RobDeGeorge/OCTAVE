@@ -13,1238 +13,620 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / OBD Manager</div>
           <h1 class="page-title">OBD Manager</h1>
-          <p class="page-subtitle">OBD-II vehicle diagnostics: a threaded ELM327 connection worker, 83 base commands and 37 extended values, DTC reading, an Android BLE bridge, and the parameter model that feeds every gauge</p>
+          <p class="page-subtitle">How OCTAVE reads your car: connecting an adapter, live readings, trouble codes, the black box, and how it all works underneath</p>
         </div>
 
         <nav class="toc">
           <h3>Table of Contents</h3>
           <ul class="toc-list">
-            <li><a href="#overview">Overview</a></li>
-            <li><a href="#architecture">Architecture and Files</a></li>
-            <li><a href="#qml-consumers">QML Consumers</a></li>
-            <li><a href="#connection-flow">Connection Flow</a></li>
-            <li><a href="#threaded-worker">Threaded Connection Worker</a></li>
-            <li><a href="#elm-init">ELM327 Init Sequence and Vehicle Probe</a></li>
-            <li><a href="#poll-loop">Poll Loop and Pacing</a></li>
-            <li><a href="#port-lifecycle">Port Lifecycle: Never Leave a Dead Port Open</a></li>
-            <li><a href="#speed-optimizations">Speed Optimizations</a></li>
-            <li><a href="#device-discovery">Device Discovery</a></li>
-            <li><a href="#unified-adapter-api">Unified Adapter API</a></li>
-            <li><a href="#adapter-finder">Adapter Finder: Scan, Pair, Connect</a></li>
-            <li><a href="#auto-reconnect">Auto-Reconnect and Passive Scanning</a></li>
-            <li><a href="#data-watchdog">Data Watchdog</a></li>
-            <li><a href="#supported-parameters">Supported OBD Parameters</a></li>
-            <li><a href="#watcher-system">Which PIDs Get Polled</a></li>
-            <li><a href="#custom-pids">Custom PIDs (manufacturer-specific readings)</a></li>
-            <li><a href="#bus-monitor">Bus Monitor (listen only)</a></li>
+            <li><a href="#overview">What It Does</a></li>
+            <li><a href="#connecting">Connecting a Car</a></li>
+            <li><a href="#status">What the Status Means</a></li>
+            <li><a href="#using">What You Can Do Once Connected</a></li>
+            <li><a href="#settings-keys">Settings</a></li>
+            <li><a href="#how-it-works">How It Works</a></li>
+            <li><a href="#connection-flow">How a Connection Is Made</a></li>
+            <li><a href="#adapter-finder">Finding and Pairing an Adapter</a></li>
+            <li><a href="#watcher-system">Which Readings Get Polled</a></li>
+            <li><a href="#staying-connected">Staying Connected</a></li>
+            <li><a href="#supported-parameters">What Can Be Read</a></li>
+            <li><a href="#diagnostics">Trouble Codes</a></li>
             <li><a href="#black-box">Black Box: Trip Recorder</a></li>
-            <li><a href="#vehicle-scanning">Vehicle Scanning</a></li>
-            <li><a href="#diagnostics">Diagnostics (DTC)</a></li>
-            <li><a href="#android-ble">Android: BLE via OctaveOBDBridge</a></li>
-            <li><a href="#elm327-protocol">ELM327 Protocol Module</a></li>
-            <li><a href="#protocol-logging">Protocol Logging</a></li>
-            <li><a href="#parameter-model">OBDParameterModel and IMU Parameters</a></li>
-            <li><a href="#shift-light">Shift Light, Full-Screen Flash and Aura</a></li>
-            <li><a href="#demo-mode">Demo and Simulated Data</a></li>
-            <li><a href="#settings-keys">Settings Keys</a></li>
-            <li><a href="#signals">Signals and Properties</a></li>
-            <li><a href="#slots">Slots</a></li>
-            <li><a href="#design-decisions">Design Decisions</a></li>
+            <li><a href="#shift-light">Shift Light</a></li>
+            <li><a href="#custom-pids">Custom PIDs</a></li>
+            <li><a href="#bus-monitor">Bus Monitor</a></li>
+            <li><a href="#android-ble">Android</a></li>
+            <li><a href="#browser">Browser Demo</a></li>
+            <li><a href="#simulated-adapter">Simulated Car</a></li>
+            <li><a href="#protocol-logging">When Something Goes Wrong</a></li>
+            <li><a href="#files">Files, API and Tests</a></li>
+            <li><a href="#design-decisions">Why It Is Built This Way</a></li>
             <li><a href="#related">Related Pages</a></li>
           </ul>
         </nav>
 
         <!-- Overview -->
-        <h2 id="overview">Overview</h2>
+        <h2 id="overview">What It Does</h2>
         <p>
-          <code>OBDManager</code> provides real-time vehicle data over the OBD-II port through an ELM327-compatible
-          adapter. It lives in <span class="file-path">src/managers/obdmanager.h</span> and the
-          <span class="file-path">obdmanager*.cpp</span> files beside it (see the table below), talks ELM327 directly,
-          and is registered as the QML context property <code>obdManager</code>. On desktop an
-          <code>OBDConnectionWorker</code> owns a serial port or direct RFCOMM transport on its own thread; on Android the
-          same class switches (behind <code>#ifdef Q_OS_ANDROID</code>) to a BLE GATT link provided by the Java helper
-          <span class="file-path">android/src/org/octave/app/OctaveOBDBridge.java</span>.
+          Every car sold since the late 1990s has an OBD-II port, usually under the dashboard. Plug a small
+          <strong>ELM327 adapter</strong> into it and OCTAVE can ask the car's computer questions: engine speed, coolant
+          temperature, fuel level, what the check-engine light is about. The OBD manager is the part of OCTAVE that
+          holds that conversation. Everything on screen that shows a number from the car gets it from here.
         </p>
         <p>
-          The QML (<code>OBDMenu</code>, <code>OBDHome</code>, <code>OBDDiagnostics</code>, <code>HomeOBDView</code>, the OBD
-          settings page and the <a href="gauges-dashboards.html">gauge/dashboard system</a>) sees the same signals, slots
-          and properties on every platform. Where the desktop and Android paths differ, this page says so explicitly.
+          It works with any ELM327-compatible adapter: Bluetooth or USB on Linux, Windows, macOS and the Raspberry Pi,
+          Bluetooth LE on Android, and Bluetooth LE or USB in the browser demo. There is also a simulated car, so you
+          can try all of it with no adapter at all.
         </p>
-
-        <span class="platform-badge all">All Platforms</span>
-        <span class="platform-badge android">Android: Java BLE bridge</span>
-
-        <!-- Architecture -->
-        <h2 id="architecture">Architecture and Files</h2>
-        <table>
-          <thead>
-            <tr><th>File</th><th>Platform</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><span class="file-path">src/managers/obdmanager.{h,cpp}</span></td><td><span class="platform-badge all">All</span></td><td><code>OBDManager</code>, one class in several files, all on the main thread. This one: construction, the signal dispatch table, the status properties and the small getters.</td></tr>
-            <tr><td><span class="file-path">src/managers/obdmanager_connection.cpp</span></td><td><span class="platform-badge all">All</span></td><td>Finding the adapter and holding the link: port discovery, the connection attempt and its teardown, retries, the stale-data watchdog, the unified adapter API, the Linux <code>rfcomm bind</code>.</td></tr>
-            <tr><td><span class="file-path">src/managers/obdmanager_polling.cpp</span></td><td><span class="platform-badge all">All</span></td><td>What is polled: demand, the poll list built from it, the readings coming back, the vehicle scan.</td></tr>
-            <tr><td><span class="file-path">src/managers/obdmanager_diagnostics.cpp</span></td><td><span class="platform-badge all">All</span></td><td>Diagnostic mode, trouble codes, the MIL, freeze frame, the VIN, the bus monitor's manager side.</td></tr>
-            <tr><td><span class="file-path">src/managers/obdmanager_android.cpp</span></td><td><span class="platform-badge android">Android</span></td><td>The Android BLE state machine (<code>#ifdef Q_OS_ANDROID</code>; empty elsewhere).</td></tr>
-            <tr><td><span class="file-path">src/managers/obdconnectionworker.{h,cpp}</span></td><td><span class="platform-badge all">All</span></td><td><code>OBDConnectionWorker</code> (worker thread: <code>QSerialPort</code> or another transport, init, polling, DTC, scan, bus monitor). <span class="file-path">obdmanager.h</span> includes it.</td></tr>
-            <tr><td><span class="file-path">src/managers/elm327protocol.{h,cpp}</span></td><td><span class="platform-badge all">All</span></td><td>Static <code>ELM327Protocol</code> class (init commands, PID table with a <code>commandName</code> column, parsers, <code>elmVoltageRequest()</code> / <code>parseElmVoltage()</code>, <code>supportedCommandNames()</code>), <code>ResponseBuffer</code>, and the <code>octave.elm327</code> logging category.</td></tr>
-            <tr><td><span class="file-path">android/src/org/octave/app/OctaveOBDBridge.java</span></td><td><span class="platform-badge android">Android</span></td><td>Static Java class wrapping <code>BluetoothGatt</code>. Called from C++ via <code>QJniObject</code>: <code>connect</code>, <code>disconnect</code>, <code>write</code>, <code>stateCode</code>, <code>pollResponse</code>, <code>pollLog</code>, <code>lastError</code>, <code>lastEvent</code>, <code>bondedDevices</code> (paired adapters as <code>"MAC|name"</code>).</td></tr>
-            <tr><td><span class="file-path">src/managers/obdadapterfinder.{h,cpp}</span>, <span class="file-path">src/platform/bluezpairer.{h,cpp}</span></td><td><span class="platform-badge all">All; full flow on Linux</span></td><td><code>OBDAdapterFinder</code> (QML <code>obdAdapterFinder</code>): Bluetooth discovery, PIN pairing through BlueZ, trust, SPP channel lookup, then hand-off to <code>connectDirect()</code>. See <a href="#adapter-finder">Adapter Finder</a>.</td></tr>
-            <tr><td><span class="file-path">frontend/OBDAdapterSheet.qml</span></td><td><span class="platform-badge all">QML</span></td><td>The "Connect Vehicle" sheet the finder drives.</td></tr>
-            <tr><td><span class="file-path">frontend/OBDParameterModel.qml</span></td><td><span class="platform-badge all">QML</span></td><td>Singleton every gauge binds to: catalog metadata, <code>liveValue(id)</code> over the C++ <code>paramStore</code>, demo mode and the vehicle gate (see <a href="#parameter-model">below</a>).</td></tr>
-            <tr><td><span class="file-path">src/sim/simelm327.{h,cpp}</span>, <span class="file-path">src/sim/carsim.{h,cpp}</span></td><td><span class="platform-badge desktop">Simulator</span></td><td>Simulated ELM327 <code>QIODevice</code> and car physics for <code>octave --sim</code> (and <code>--dev</code>, or the simulated adapter), plugged in below the real manager through <code>OBDConnectionWorker::setCustomTransport()</code> (<code>addCustomTransport()</code> registers one beside it) + <code>OBDManager::setPortOverride("sim://elm327")</code> by <code>Simulator</code> (the <code>sim</code> object). Built in every configuration, inert unless started.</td></tr>
-            <tr><td><span class="file-path">src/platform/wasm/webbluetooth.{h,cpp}</span>, <span class="file-path">src/platform/wasm/obdadapterfinder_wasm.cpp</span></td><td><span class="platform-badge all">Browser</span></td><td>The browser demo's real adapter: a Bluetooth LE ELM327 over Web Bluetooth (Chrome / Edge). The browser's chooser picks it, a JS helper carries the GATT link (same vendor profiles as <code>OctaveOBDBridge.java</code>), and a <code>QIODevice</code> on port <code>webbt://&lt;id&gt;</code> (<code>addCustomTransport()</code>) feeds the unchanged worker. See <a href="building.html">Building</a> &gt; WebAssembly.</td></tr>
-            <tr><td><span class="file-path">src/platform/wasm/webserial.{h,cpp}</span>, <span class="file-path">src/platform/wasm/webport.{h,cpp}</span></td><td><span class="platform-badge all">Browser</span></td><td>The browser demo's adapter on a USB cable (or a Bluetooth Classic one paired in the system), over Web Serial (Chrome / Edge on a computer): the browser's port chooser from the sheet's "Pick USB Adapter", 38400 baud, port <code>webserial://&lt;id&gt;</code>. <code>WebPortChannel</code> is the main-thread-to-worker pipe it shares with Web Bluetooth.</td></tr>
-          </tbody>
-        </table>
-
-        <pre class="diagram">
-Desktop                                   Android
-+---------------------+                   +-------------------+
-| OBDManager          |                   | OBDManager        |
-| (main thread)       |                   | (main thread,     |
-+----------+----------+                   |  Q_OS_ANDROID)    |
-           | QThread "obd-worker"         +---------+---------+
-+----------+----------+                             | QJniObject
-| OBDConnectionWorker |                   +---------+---------+
-|  QSerialPort 38400  |                   | OctaveOBDBridge   |
-|  or RfcommSocket    |                   |  BluetoothGatt    |
-|  ELM327Protocol     |                   |  ISSC/FFF0/FFE0   |
-+----------+----------+                   +---------+---------+
-           |                                        | BLE notify
-  /dev/rfcomm* (bound by the manager on             |
-  Linux), ttyUSB*, COM*, /dev/tty.*,                |
-  rfcomm://MAC                                      |
-           |                                        |
-+----------+----------------------------------------+---------+
-|        ELM327 adapter  ->  OBD-II port  ->  vehicle ECU      |
-+-------------------------------------------------------------+
-        </pre>
-
-        <!-- QML consumers -->
-        <h2 id="qml-consumers">QML Consumers</h2>
-        <table>
-          <thead><tr><th>QML file</th><th>What it uses</th></tr></thead>
-          <tbody>
-            <tr><td><span class="file-path">frontend/OBDParameterModel.qml</span></td><td>Serves the C++ <code>paramStore</code> (fed from <code>parameterSampled</code> in <span class="file-path">appcore.cpp</span>) as <code>liveValue(id)</code> and the <code>ParameterCatalog</code> metadata. Gauges, the parameter-card grid and home cards read this shared model; the global RPM overlays also listen directly to <code>rpmChanged</code>.</td></tr>
-            <tr><td><span class="file-path">frontend/OBDMenu.qml</span></td><td>Parameter-card grid (one card per parameter the connected vehicle supports; registers the <code>"cards"</code> poll demand), the RPM/shift-light settings popup. While no adapter is connected (<code>obdConnected</code>) the page shows "No vehicle connected" and a "Connect" button (<code>obdConnectButton</code>) that opens <code>OBDAdapterSheet</code>.</td></tr>
-            <tr><td><span class="file-path">frontend/OBDAdapterSheet.qml</span></td><td>Everything on <code>obdAdapterFinder</code>; in fallback mode <code>availableAdapters</code>, <code>scan()</code> and <code>connectToAdapter()</code>; <code>connected</code> closes the sheet 1.5 s after the adapter comes up.</td></tr>
-            <tr><td><span class="file-path">frontend/OBDHome.qml</span></td><td>Status row bound to <code>connectionStatusChanged</code> / <code>connectionStatusDetailChanged</code> and the sub-page buttons; while <code>connected</code> is false, only "No vehicle connected" and the "Connect" button (<code>OBDConnectButton</code>).</td></tr>
-            <tr><td><span class="file-path">frontend/OBDDiagnostics.qml</span></td><td><code>enterDiagnosticMode()</code> on creation and on every <code>visible</code> transition, <code>exitDiagnosticMode()</code> when hidden or destroyed, plus <code>readDtc</code> / <code>readCurrentDtc</code> / <code>readStatus</code> / <code>readFreezeFrame</code> / <code>clearDtc</code>.</td></tr>
-            <tr><td><span class="file-path">frontend/HomeOBDView.qml</span></td><td>Home-screen cards for the parameters in <code>homeOBDParameters</code>, plus the RPM card's shift-light disc.</td></tr>
-            <tr><td><span class="file-path">frontend/Main.qml</span></td><td>Connects <code>obdManager.rpmChanged</code> by hand in <code>Component.onCompleted</code> to drive the global full-screen flash and aura overlays.</td></tr>
-            <tr><td><span class="file-path">frontend/settings/OBDSettingsPage.qml</span></td><td>Connection card (a <code>status</code> string seeded from <code>getConnectionStatus()</code> and refreshed by <code>onConnectionStatusChanged</code>, <code>connectionDetail</code>, <code>connectionProgress</code>, <code>resetConnection()</code>), a 60-line Connection Log, the adapter list bound to <code>availableAdapters</code>, <code>connectToAdapter()</code> (the "Go" button), <code>connectDirect()</code> (the Linux-only "Direct" button beside it), a "Find Bluetooth Adapters" button that opens <code>OBDAdapterSheet</code>, <code>platformHint()</code>, fast mode, auto-reconnect attempts and the parameter toggles. The status dot's colour map is keyed on the full <code>connectionStatusChanged</code> vocabulary (including <code>Reconnecting</code>, <code>Connection Failed</code>, <code>Stale Connection</code> and the Android BLE states).</td></tr>
-          </tbody>
-        </table>
-
-        <h2 id="simulated-adapter">Simulated Adapter</h2>
-        <p>Open <strong>Connect Vehicle</strong> and choose <strong>Simulated car</strong>. This entry is always available, including with Bluetooth off, on desktop, mobile and WebAssembly. It starts an automatic demo drive through the real ELM327 parser and poller, plus simulated IMU motion; no developer flags are required. <code>obdManager.simulated</code> identifies demo data, and the OBD settings page shows a Simulated label beside the connection status (the OBD pages themselves no longer do, since their title and status rows went on 2026-11-24). Choosing hardware or closing the connection stops the demo motion. The saved hardware adapter is preserved, so a restart returns to the normal hardware configuration.</p>
-        <p>Service frontends can select it with <code>obdManager.connectToAdapter("sim://elm327")</code>. Both adapter lists include it. Android sends this custom transport through the worker instead of the Java Bluetooth bridge.</p>
-
-        <!-- Connection Flow -->
-        <h2 id="connection-flow">Connection Flow</h2>
         <p>
-          The main-thread lifecycle is driven by four <code>QTimer</code>s created in the constructor:
+          This page starts with how to use it and gets more technical as it goes. Stop reading whenever you have what
+          you came for.
         </p>
-        <table>
-          <thead><tr><th>Timer</th><th>Interval</th><th>Purpose</th></tr></thead>
-          <tbody>
-            <tr><td><code>m_startupTimer</code></td><td>50 ms single-shot</td><td>Defers the first scan + connection attempt out of the constructor so app startup is not blocked.</td></tr>
-            <tr><td><code>m_deviceScannerTimer</code></td><td>10 s</td><td>Passive port discovery while disconnected; stopped once connected.</td></tr>
-            <tr><td><code>m_portChangeTimer</code></td><td>1 s single-shot</td><td>Debounces <code>obdBluetoothPortChanged</code> from settings into one <code>reconnect()</code>.</td></tr>
-            <tr><td><code>m_dataWatchdogTimer</code></td><td>5 s</td><td>Stale-connection detection (30 s without data).</td></tr>
-          </tbody>
-        </table>
 
+        <!-- Connecting -->
+        <h2 id="connecting">Connecting a Car</h2>
         <ol class="steps">
-          <li><strong>Startup</strong>: the 50 ms timer fires <code>onStartupTimer()</code>: scan for ports, start the 10 s scanner, call <code>startConnection()</code>.</li>
-          <li><strong>Guard</strong>: the <code>m_isConnecting</code> flag (main thread only, like all of the manager's state) drops re-entrant attempts ("Already connecting -- skipping"). <code>cleanupConnection()</code> clears the flag, because the attempt it abandons has its <code>initComplete</code> disconnected and would never clear it. Before 2026-10-03 a <code>reconnect()</code> during an attempt left OBD stuck in "Connecting" with no worker. The abandoned worker logs <em>connect to X abandoned (superseded by a newer connect)</em> on <code>octave.elm327</code>. The attempt counter increments and the UI gets <code>connectionStatusChanged("Connecting")</code>, <code>connectionStatusDetailChanged("Attempt N...")</code>, <code>connectionProgressChanged(10)</code>.</li>
-          <li><strong>Port check</strong>: <code>checkPortExists()</code>. Unix: the device file exists; Windows: the port is listed by <code>QSerialPortInfo::availablePorts()</code>; Android: the configured string matches the MAC regex <code>^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$</code>. A missing port emits <code>"Device Not Found"</code>, <code>devicePresenceChanged(false)</code>, and schedules auto-reconnect.</li>
-          <li><strong>Worker</strong>: progress 15, <code>"Found &lt;port&gt;, connecting..."</code>, then a fresh <code>OBDConnectionWorker</code> is moved to a new <code>QThread</code> and its <code>started</code> signal invokes the blocking connect (<a href="#threaded-worker">next section</a>). On Android the manager skips this and calls <code>startAndroidConnection()</code> instead.</li>
-          <li><strong>Result</strong> (delivered to the main thread by queued signals):
-            <ul>
-              <li>Success: <code>m_connected = true</code>, attempts reset, <code>"Connected"</code> + progress 100, polling starts, the data watchdog starts, the device scanner stops, and <code>scanVehicle()</code> is queued 2 s later.</li>
-              <li>Adapter but no vehicle: <code>"No Vehicle"</code> / <code>"Connected to adapter, waiting for vehicle..."</code>, progress 50, then auto-reconnect scheduling. (The init worked but the RPM probe returned nothing.)</li>
-              <li>Failure: <code>"Connection Failed"</code> / <code>"Could not connect to OBD adapter"</code>, progress 0, auto-reconnect scheduling.</li>
-            </ul>
-          </li>
-          <li><strong>Post-diagnostic retries</strong>: when <code>m_reconnectingAfterDiagnostic</code> is set, a failed attempt retries every 2 s up to 3 times even if auto-reconnect is disabled in settings.</li>
+          <li>Plug the adapter into the car's OBD-II port and turn the ignition on. Most adapters only have power with the ignition on.</li>
+          <li>In OCTAVE, open the <strong>OBD</strong> section. With no car connected it shows "No vehicle connected" and a <strong>Connect Vehicle</strong> button.</li>
+          <li>Tap it. The <strong>Connect Vehicle</strong> sheet opens and lists what it can find.</li>
+          <li>Tap your adapter. OCTAVE remembers it and reconnects by itself from then on.</li>
+        </ol>
+        <p>What the sheet can do depends on the device OCTAVE runs on:</p>
+        <table>
+          <thead><tr><th>Device</th><th>How to connect</th></tr></thead>
+          <tbody>
+            <tr><td>Linux, Raspberry Pi, Orange Pi</td><td>Tap <strong>Pick Bluetooth Adapter</strong>. OCTAVE scans, pairs (it tries the usual PINs for you) and connects. You do not need to pair in the system settings first. A USB adapter appears in the list by itself.</td></tr>
+            <tr><td>Windows, macOS</td><td>Pair the adapter in the system's Bluetooth settings first, then pick it from the sheet. A USB adapter appears in the list by itself.</td></tr>
+            <tr><td>Android</td><td>Pair the adapter in Android's Bluetooth settings first. The first time you connect, Android asks for the Bluetooth permission: allow it, then pick the adapter again. The adapter must be a Bluetooth <em>LE</em> one.</td></tr>
+            <tr><td>Browser demo</td><td><strong>Pick Bluetooth Adapter</strong> (a Bluetooth LE adapter) or <strong>Pick USB Adapter</strong>, in Chrome or Edge. See <a href="#browser">Browser Demo</a>.</td></tr>
+            <tr><td>Any device</td><td><strong>Simulated car</strong> is always in the sheet. See <a href="#simulated-adapter">Simulated Car</a>.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          If the sheet finds nothing, plug the adapter in, turn the ignition on and scan again. If your adapter has an
+          unusual name, tap <strong>Show All Devices</strong>: the sheet normally lists only devices that look like OBD
+          adapters. You can also type an address by hand in Settings &gt; OBD &gt; Connection &gt;
+          <strong>Enter Address Manually</strong>: a serial port (<code>/dev/ttyUSB0</code>, <code>COM3</code>) or a
+          Bluetooth address (<code>AA:BB:CC:DD:EE:FF</code>).
+        </p>
+
+        <!-- Status -->
+        <h2 id="status">What the Status Means</h2>
+        <p>The OBD page and Settings &gt; OBD &gt; Connection show one of these:</p>
+        <table>
+          <thead><tr><th>Status</th><th>Meaning</th><th>What to do</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Connected</strong></td><td>The adapter and the car are both answering.</td><td>Nothing.</td></tr>
+            <tr><td><strong>Connecting</strong></td><td>An attempt is running. The first one on an older car can take 20 seconds while the adapter works out which protocol the car speaks.</td><td>Wait.</td></tr>
+            <tr><td><strong>No Vehicle</strong></td><td>The adapter answers but the car does not.</td><td>Turn the ignition on. OCTAVE tries again every 10 seconds.</td></tr>
+            <tr><td><strong>Device Not Found</strong></td><td>The saved adapter is not there.</td><td>Check that it is plugged in and powered, or pick another.</td></tr>
+            <tr><td><strong>Connection Failed</strong></td><td>The adapter was found but did not answer.</td><td>Unplug it and plug it back in. Read the Connection Log.</td></tr>
+            <tr><td><strong>Stale Connection</strong></td><td>Connected, but no reading for 30 seconds.</td><td>Nothing: OCTAVE reconnects by itself.</td></tr>
+            <tr><td><strong>Reconnecting</strong></td><td>Coming back from the Trouble Codes page.</td><td>Wait a second or two.</td></tr>
+            <tr><td><strong>Disconnected</strong></td><td>No attempt is running.</td><td>Tap Connect Vehicle.</td></tr>
+            <tr><td><strong>Error</strong></td><td>OCTAVE could not set up the Bluetooth link on Linux.</td><td>Read the Connection Log: it says what to fix.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          The <strong>Connection Log</strong> in Settings &gt; OBD &gt; Connection shows the last 60 steps of the
+          connection in plain words: which port was opened, how many setup commands the adapter answered, what the car
+          said to the first request. It is the first place to look when a connection fails.
+        </p>
+
+        <!-- Using -->
+        <h2 id="using">What You Can Do Once Connected</h2>
+        <table>
+          <thead><tr><th>Feature</th><th>Where</th><th>What it is</th></tr></thead>
+          <tbody>
+            <tr><td>Live Data</td><td>OBD &gt; Live Data</td><td>A card for every reading your car supports. OCTAVE asks the car what it supports after connecting, so a car without a fuel pressure sensor shows no fuel pressure card.</td></tr>
+            <tr><td>Home</td><td>Home</td><td>The gauges on your Home screen. See <a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>.</td></tr>
+            <tr><td><a href="#diagnostics">Trouble Codes</a></td><td>OBD &gt; Trouble Codes</td><td>Read and clear the codes behind the check-engine light.</td></tr>
+            <tr><td><a href="#black-box">Trip History</a></td><td>OBD &gt; Trip History</td><td>Every drive is recorded. Look at any reading over any drive, and at trends over months.</td></tr>
+            <tr><td><a href="#shift-light">Shift light</a></td><td>Tap the RPM card in Live Data</td><td>Colours and flashes at engine speeds you choose.</td></tr>
+            <tr><td><a href="#custom-pids">Custom PIDs</a></td><td>Settings &gt; OBD &gt; Advanced</td><td>Readings specific to your make of car, such as transmission temperature.</td></tr>
+            <tr><td><a href="#bus-monitor">Bus Monitor</a></td><td>Settings &gt; OBD &gt; Advanced</td><td>Watch the raw messages on the car's network.</td></tr>
+          </tbody>
+        </table>
+
+        <!-- Settings -->
+        <h2 id="settings-keys">Settings</h2>
+        <p>All of these are in Settings &gt; OBD. The key is the name in the settings file.</p>
+        <table>
+          <thead><tr><th>Setting</th><th>Key</th><th>Default</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td>Adapter</td><td><code>obdBluetoothPort</code></td><td>none</td><td>The adapter to use: a port or a Bluetooth address. Picking one in the sheet sets it. When empty, OCTAVE tries <code>/dev/rfcomm0</code> (Linux), <code>COM3</code> (Windows) or <code>/dev/tty.OBD</code> (macOS).</td></tr>
+            <tr><td>Fast Polling</td><td><code>obdFastMode</code></td><td>on</td><td>Ask as fast as the adapter can answer. Turn it off if readings drop out: not every car keeps up.</td></tr>
+            <tr><td>Auto Reconnect</td><td><code>obdAutoReconnectAttempts</code></td><td>0</td><td>How many times to retry a failed connection straight away (0 to 10). At 0 OCTAVE still reconnects when the adapter shows up again. See <a href="#staying-connected">Staying Connected</a>.</td></tr>
+            <tr><td>Record every drive</td><td><code>blackBoxEnabled</code></td><td>on</td><td>The <a href="#black-box">black box</a>.</td></tr>
+            <tr><td>Record everything the car reports</td><td><code>blackBoxSweepAll</code></td><td>on</td><td>Also record readings that are not on screen.</td></tr>
+            <tr><td>Storage cap</td><td><code>blackBoxMaxMB</code></td><td>500</td><td>Space for recorded drives, 50 to 5000 MB. The oldest drives are deleted first.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          Other keys OCTAVE keeps for itself: <code>obdSavedAdapters</code> (adapters you have connected to),
+          <code>supportedOBDParameters</code> (what the last car supported), <code>obdCardStyleCircular</code> (round
+          Live Data cards), <code>lastOBDPage</code> and the shift light's <code>rpm_*</code> keys. The complete list
+          is the <a href="settings-reference.html">Settings Reference</a>.
+        </p>
+
+        <!-- How it works -->
+        <h2 id="how-it-works">How It Works</h2>
+        <p>
+          From here on the page is for people who want to know what happens underneath, or who are changing the code.
+        </p>
+        <p>
+          An ELM327 is a simple device. You send it a line of text, it asks the car, and it sends a line of text back.
+          It can only do one thing at a time. To ask for engine speed OCTAVE sends <code>010C</code> ("mode 01, reading
+          0C") and gets back something like <code>41 0C 1A F8</code>, which decodes to 1726 RPM. Each kind of reading
+          has a number like <code>0C</code>, called a <strong>PID</strong>.
+        </p>
+        <p>Four pieces do the work:</p>
+        <table>
+          <thead><tr><th>Piece</th><th>Job</th></tr></thead>
+          <tbody>
+            <tr><td><code>OBDManager</code></td><td>The part the rest of the app talks to (<code>obdManager</code> in QML and the service API). It decides when to connect, what to ask for and what the status is. It runs on the main thread and never waits on the adapter.</td></tr>
+            <tr><td><code>OBDConnectionWorker</code></td><td>Does the actual talking, on its own thread, so a slow adapter never freezes the screen. It owns the port from the moment it opens until it closes.</td></tr>
+            <tr><td><code>ELM327Protocol</code></td><td>Knows the language: how to write each request and decode each reply. No I/O, so it is tested without a car.</td></tr>
+            <tr><td><code>paramStore</code></td><td>Holds the latest value of every reading. Gauges read from here, never from the manager.</td></tr>
+          </tbody>
+        </table>
+        <pre class="diagram">
+  gauges, cards, Home          black box
+        ^                          ^
+        |  latest value            |  every reading
+  +-----+------+                   |
+  | paramStore | &lt;-----------------+------ parameterSampled(id, value)
+  +------------+                                    ^
+                                                    |
+                                          +---------+---------+
+                                          |    OBDManager     |  main thread
+                                          +---------+---------+
+                                                    |  requests and results, queued
+                                          +---------+---------+
+                                          | OBDConnectionWorker|  its own thread
+                                          +---------+---------+
+                                                    |  text over serial / Bluetooth
+                                          ELM327 adapter -&gt; OBD-II port -&gt; car
+        </pre>
+        <p>
+          Android is the one exception: there the worker is replaced by a small Java Bluetooth LE helper, described
+          under <a href="#android-ble">Android</a>. The rest of the app cannot tell the difference.
+        </p>
+
+        <!-- Connection flow -->
+        <h2 id="connection-flow">How a Connection Is Made</h2>
+        <ol class="steps">
+          <li><strong>Look for the adapter.</strong> At startup, and every 10 seconds while not connected, the manager lists the ports that could be an adapter (<a href="#device-discovery">the list per platform</a> is below). If the saved adapter is not among them the status is <em>Device Not Found</em>.</li>
+          <li><strong>Open it.</strong> A new worker opens the port at 38400 baud, or opens a Bluetooth socket (<a href="#direct-bluetooth">Direct Bluetooth</a>).</li>
+          <li><strong>Set the adapter up.</strong> Seven commands: reset (<code>ATZ</code>), echo off, linefeeds off, spaces off, headers off, adaptive timing, automatic protocol (<code>ATSP0</code>). A command with no answer is sent once more.</li>
+          <li><strong>Check that a car is there.</strong> The worker asks for engine speed and waits up to 20 seconds, because this first request is when the adapter searches for the car's protocol. Only a real RPM reply counts. A car with no engine speed (some electric cars) is asked which readings it supports instead. No answer means <em>No Vehicle</em>, and the worker lets go of the port.</li>
+          <li><strong>Read the VIN</strong> once, and work out the make and model year from it (<code>vin</code>, <code>vehicleMake</code>, <code>vehicleModelYear</code>). Many older cars do not report one; the fields stay empty.</li>
+          <li><strong>Start polling.</strong> The status becomes <em>Connected</em>.</li>
+          <li><strong>Ask the car what it supports</strong>, two seconds later. The answer (<code>vehicleSupportedParameters</code>) decides which cards Live Data shows and removes unsupported readings from the poll list. It describes the car connected right now: it is cleared on every disconnect and never loaded from a previous session.</li>
         </ol>
 
-        <!-- Threaded Worker -->
-        <h2 id="threaded-worker">Threaded Connection Worker</h2>
-        <h3><code>OBDConnectionWorker</code> owns the serial port for the whole session</h3>
-        <p>
-          The worker is a long-lived object: it creates the <code>QSerialPort</code> (or an <code>RfcommSocket</code> for an
-          <code>rfcomm://</code> port) on its own thread
-          (<code>38400</code> baud, 8N1, no flow control, 4 KB read buffer), runs the init sequence, then keeps polling,
-          answering DTC requests and running scans until <code>doDisconnect()</code>. The thread is named
-          <code>obd-worker</code> so it is attributable in <code>top -H</code>. Every request from the main thread is a
-          <code>QMetaObject::invokeMethod(..., Qt::QueuedConnection)</code>, every result comes back as a queued signal:
-        </p>
+        <h3 id="device-discovery">Where the manager looks for adapters</h3>
         <table>
-          <thead><tr><th>Worker signal</th><th>Handled by</th><th>Effect on the main thread</th></tr></thead>
+          <thead><tr><th>Platform</th><th>Looked at</th></tr></thead>
           <tbody>
-            <tr><td><code>initComplete(bool, message)</code></td><td><code>onWorkerInitComplete</code></td><td>Success/"adapter"/failure branch of the connection flow above (the word <em>adapter</em> in the message selects "No Vehicle").</td></tr>
-            <tr><td><code>dataReceived(signalName, value)</code></td><td><code>onWorkerDataReceived</code></td><td>Stamps <code>m_lastDataReceived</code> and dispatches to the matching parameter signal via <code>m_signalDispatch</code> (a <code>QHash&lt;QString, std::function&gt;</code> built once in <code>buildSignalDispatch()</code>).</td></tr>
-            <tr><td><code>connectionLost(reason)</code></td><td><code>onWorkerConnectionLost</code></td><td><code>"Disconnected"</code>, watchdog stopped, scanner restarted, auto-reconnect scheduled.</td></tr>
-            <tr><td><code>dtcResult</code>, <code>dtcCleared</code>, <code>milStatus</code>, <code>freezeFrame</code></td><td><code>onWorkerDtc*</code></td><td>Cached and re-emitted as the public diagnostic signals (codes become <code>{code, description: ""}</code> maps).</td></tr>
-            <tr><td><code>scanProgress</code>, <code>scanComplete</code>, <code>scanOutput</code></td><td><code>onWorkerScan*</code></td><td>Forwarded; <code>scanComplete</code> also persists the list through <code>save_supported_obd_parameters()</code>.</td></tr>
-          </tbody>
-        </table>
-
-        <!-- ELM init -->
-        <h2 id="elm-init">ELM327 Init Sequence and Vehicle Probe</h2>
-        <p>
-          The init table is <code>ELM327Protocol::initCommands()</code> (timeouts in ms):
-        </p>
-        <pre><code>ATZ    1500 ms   <span class="cmt"># reset (needs the long timeout)</span>
-ATE0    500 ms   <span class="cmt"># echo off</span>
-ATL0    300 ms   <span class="cmt"># linefeeds off</span>
-ATS0    300 ms   <span class="cmt"># spaces off</span>
-ATH0    300 ms   <span class="cmt"># headers off</span>
-ATAT2   300 ms   <span class="cmt"># aggressive adaptive timing</span>
-ATSP0   500 ms   <span class="cmt"># auto protocol</span></code></pre>
-        <p>
-          <strong>Desktop</strong> (<code>sendInitSequence()</code>): each command is sent with
-          <code>sendCommand()</code> and its own timeout, except that <code>ATZ</code> gets at least 5 s: a bound
-          <code>/dev/rfcommN</code> opens instantly, but the kernel only brings the Bluetooth link up on the first write,
-          so the reset's answer also includes the link-up (about 2.2 s for a NEXAS in the Jeep). An <code>ATZ</code> reply without <em>ELM</em> only logs a warning
-          (clones omit the banner), and the function always returns <code>true</code>. The real test is the vehicle probe
-          that follows: one <code>010C</code> (RPM) request that waits up to the connection timeout (<code>m_timeout</code>, 5 s
-          unless <code>setConnectionTimeout()</code> changed it).
-          An empty reply, <code>NO DATA</code> or
-          <code>UNABLE</code> means "adapter but no vehicle": the worker <em>releases the port</em> and emits
-          <code>initComplete(false, "Connected to adapter, no vehicle response")</code>. The poll list is built from consumer demand by <code>buildPidsToWatch()</code> (see <a href="#watcher-system">Which PIDs Get Polled</a>).
-        </p>
-        <p>
-          <strong>Android</strong>: the same table is walked by a single-shot <code>QTimer</code>
-          (<code>sendNextAndroidInitCommand()</code> / <code>onAndroidInitStep()</code>): each command is written, the timer
-          armed with that command's timeout, and the next command sent when the timer fires <em>regardless of whether a
-          reply arrived</em>. After <code>ATSP0</code> the code sends <code>0100</code>; while still connecting, each
-          supported-PID bitmap whose bit 32 is set chains the next range (<code>0120</code>, <code>0140</code>,
-          <code>0160</code>, up to <code>01C0</code>) so the supported set covers the extended PIDs too. 2 s after <code>0100</code> it calls
-          <code>finalizeAndroidConnection()</code>.
-        </p>
-
-        <!-- Poll loop -->
-        <h2 id="poll-loop">Poll Loop and Pacing</h2>
-        <p>
-          <code>startPolling()</code> starts <code>m_pollTimer</code> (constructed with the worker as parent, so <code>moveToThread()</code> carries it along; before 2026-10-03 it stayed on the GUI thread and Qt refused to start it with &ldquo;Timers cannot be started from another thread&rdquo;) on the worker thread with interval <strong>0 ms</strong>
-          when <code>obdFastMode</code> is on (the default -- "poll as fast as possible") or
-          <strong>50 ms</strong> otherwise. Each tick (<code>onPollTimer()</code>) sends the next PID in round-robin order with
-          a <strong>500 ms</strong> timeout, parses it with <code>ELM327Protocol::parseResponse()</code> /
-          <code>decodePid()</code>, and emits <code>dataReceived</code>. The <code>ELM_VOLTAGE</code> pseudo-PID
-          (<code>kElmVoltageKey</code>) is special-cased: the tick sends <code>ATRV</code> instead and parses the
-          <code>"12.6V"</code> text reply with <code>parseElmVoltage()</code> into <code>elmVoltageChanged</code>. Because <code>sendCommand()</code> blocks inside the
-          tick, the effective rate is one PID per adapter round-trip. In fast mode each single-value poll carries the
-          ELM327 response count (<code>010C1</code>, <code>formatPidRequest(mode, pid, 1)</code>): the adapter answers at
-          the first ECU's reply instead of waiting out its timeout for more ECUs, which is most of the round trip on a
-          Bluetooth LE adapter. Multi-value PIDs (multi-frame on CAN) go without it, and an adapter that answers
-          <code>?</code> loses it for the rest of the connection. On CAN (the connect asks <code>ATDPN</code>;
-          <code>ELM327Protocol::isCanProtocol()</code>) fast mode also puts up to six consecutive single-value Mode 01
-          PIDs in one request (<code>010C0D05</code>, <code>formatMultiPidRequest()</code>), split by
-          <code>parseMultiPidResponse()</code> with the table's byte counts (0x50 stays out: 4 bytes on the wire, 1 in
-          the table); a PID that can't join (ATRV, a multi-value PID) waits in <code>m_deferred</code> and is polled on its own
-          next, while the batch fills from the PIDs after it; a repeat ends the batch. An ECU that
-          answers one PID per request three times running ends batching for the connection. The simulator answers
-          multi-PID requests too. On CAN every module answers a functional request, and some refuse
-          (<code>7F0112</code>): the supported-PID scan joins every ECU's bitmap
-          (<code>supportedPidsFromLines()</code>, logged as <code>vehicle reports N supported PIDs</code>), and single
-          polls and <code>0101</code> pick their own line with <code>parseResponseLines()</code>. Reading only the last
-          line found no PIDs on a 2022 Hyundai. The scan asks <code>0100</code> up to three times before calling a car
-          empty. <code>sendCommand()</code> drops bytes waiting before it writes (a timed-out reply's tail would
-          otherwise answer the next command, and every answer after it would be one behind); an init command with no
-          answer is sent once more, <code>ATZ</code> is followed by 200 ms for the adapter to finish, and a vehicle check
-          cut short (<code>STOPPED</code>) is asked once more. The vehicle check passes only on an RPM reply
-          (<code>41 0C</code>): after a reconnect with the ignition off, <code>STOPPED</code> passed for an answer and left
-          a "Connected" link with no data until the 30 s watchdog. 10 s into a connection and every 30 s after, the worker logs
-          <code>OBD polling: N requests in 30 s (x/s), M values (y/s), round trip mean ... ms, max ... ms; ... NO DATA, ... unanswered</code>
-          at info level, so a user's log shows the poll rate; the data watchdog's reconnect (30 s without a value) and
-          connect / reconnect requests are logged there too.
-        </p>
-        <p>
-          <code>sendCommand()</code> clears the <code>ResponseBuffer</code>, logs <code>TX</code>, writes + flushes, then loops
-          until <code>timeoutMs</code>:
-        </p>
-        <ul>
-          <li><code>waitForReadyRead(100)</code> returned bytes with a complete <code>&gt;</code>-terminated response: log
-            <code>RX</code> with the round-trip time and return. Bytes without the prompt yet: loop again
-            <em>immediately</em> ("productive read: the prompt is probably next, do not pace") -- pacing here cost 100 ms per
-            PID because the ELM327 often sends the data and the prompt as separate chunks (<code>ee5a23e</code>).</li>
-          <li>Readable but <strong>zero bytes</strong> 50 times in a row: the port is dead (see next section) --
-            <code>stopPolling()</code>, <code>releasePort()</code>, <code>connectionLost("Adapter stopped responding")</code>.</li>
-          <li>The port's error is cleared before every command (<code>QSerialPort</code> errors are sticky; before
-            2026-10-03, one transient error during rfcomm link-up made every later init command fail in the same
-            millisecond). Only a fatal error (<code>ResourceError</code>, <code>DeviceNotFoundError</code>,
-            <code>PermissionError</code>, <code>NotOpenError</code>) breaks out; anything else is cleared and the wait
-            continues. <code>onSerialError</code> reports <code>ResourceError</code> / <code>DeviceNotFoundError</code> as
-            <code>connectionLost</code>, and logs every error except <code>TimeoutError</code> on <code>octave.elm327</code>
-            at WARNING, alongside the port open result (INFO / WARNING), so a failed connect is visible without debug logging.</li>
-          <li>Every iteration that delivered no data sleeps out the remainder of 100 ms, so the loop never spins faster than
-            ~10 Hz while waiting.</li>
-        </ul>
-        <p>
-          On timeout a <code>WARNING</code> is logged (<code>octave.elm327</code>) and whatever partial response the buffer
-          holds is returned. <code>refreshValues()</code> simply queues one extra <code>onPollTimer()</code> tick.
-        </p>
-
-        <!-- Port lifecycle -->
-        <h2 id="port-lifecycle">Port Lifecycle: Never Leave a Dead Port Open</h2>
-        <p>
-          On Linux an rfcomm node whose remote is gone (adapter unpaired, engine off) keeps <code>POLLIN</code>
-          set while <code>read()</code> returns 0 bytes. <code>QSerialPort</code> has no "readable but empty means
-          disconnected" handling, so an open port leaves a read notifier armed in the worker thread's event loop
-          that spins at 100&nbsp;% of a core between commands -- with no OCTAVE frame on the stack, which is why
-          guards inside <code>sendCommand()</code> alone cannot fix it. Measured on the Orange Pi with strace: ~20,000
-          ppoll+read pairs per second. Three commits on 2026-09-09 closed this in layers:
-        </p>
-        <ul>
-          <li><code>953f85f</code>: sleep out the remainder of the 100 ms wait instead of re-polling immediately, stop on a
-            real port error, name the worker threads.</li>
-          <li><code>5d76a03</code>: apply the 100 ms floor to <em>readable-but-empty</em> polls too (the first guard only
-            covered <code>waitForReadyRead()</code> returning false), and abandon a command after 50 consecutive empty reads.</li>
-          <li><code>0404f7b</code>: <code>releasePort()</code> (close + <code>deleteLater</code> + clear buffer) on every
-            init-failure path -- open failure, init failure, and <em>"Connected to adapter, no vehicle response"</em> -- so
-            nothing holds the port open while OCTAVE is not actively talking to a live adapter.</li>
-        </ul>
-        <p>
-          If <code>obd-worker</code> ever shows up hot in <code>top -H</code> again, check whether an rfcomm fd is still held
-          (<code>ls -l /proc/&lt;pid&gt;/fd | grep rfcomm</code>) before reading any loop.
-        </p>
-
-        <!-- Speed Optimizations -->
-        <h2 id="speed-optimizations">Speed Optimizations</h2>
-
-        <table>
-          <thead><tr><th>Concern</th><th>Behaviour</th></tr></thead>
-          <tbody>
-            <tr><td>Command delay</td><td>Poll timer interval 0 ms (fast mode) / 50 ms. The worker's <code>setTimeout()</code> value (<code>m_timeout</code>, from <code>setConnectionTimeout()</code>) bounds only the vehicle-verify RPM probe; the other per-command timeouts are hard-coded (init table, 500 ms poll, 3-5 s diagnostics).</td></tr>
-            <tr><td>Protocol caching</td><td>None. <code>ATSP0</code> (auto) is sent on every init; the ELM327 does its own search.</td></tr>
-            <tr><td>Adaptive timing</td><td><code>ATAT2</code> in the init table.</td></tr>
-            <tr><td>Watchdog stamp</td><td>Every <code>dataReceived</code> updates <code>m_lastDataReceived</code> (cheap: one <code>qint64</code> store).</td></tr>
-          </tbody>
-        </table>
-
-        <!-- Device Discovery -->
-        <h2 id="device-discovery">Device Discovery</h2>
-        <p>
-          <code>scanForDevices()</code> runs at startup, every 10 s while disconnected,
-          and on demand (<code>scan()</code>, <code>refreshPorts()</code>, <code>getAvailablePorts()</code>):
-        </p>
-        <table>
-          <thead>
-            <tr><th>Platform</th><th>Scanned</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>Windows</td><td>All COM ports via <code>QSerialPortInfo</code>; a port is included if its description contains bluetooth, obd, elm, serial or usb, or its name starts with <code>COM</code> (in practice: every COM port).</td></tr>
-            <tr><td>macOS</td><td><code>/dev/tty.OBD*</code>, <code>/dev/tty.Bluetooth*</code>, <code>/dev/cu.OBD*</code>, <code>/dev/cu.Bluetooth*</code>, <code>/dev/tty.usbserial*</code>, <code>/dev/cu.usbserial*</code>, <code>/dev/tty.*ELM*</code>, <code>/dev/cu.*ELM*</code></td></tr>
-            <tr><td>Linux / Pi</td><td><code>/dev/rfcomm*</code>, <code>/dev/ttyUSB*</code>, <code>/dev/ttyACM*</code> (<code>/dev/ttyS*</code> deliberately excluded: hardware UARTs are almost never OBD adapters and produced many false positives)</td></tr>
-            <tr><td>Android</td><td><code>listAndroidPairedDevices()</code>: the phone's bonded (paired) devices from <code>OctaveOBDBridge.bondedDevices()</code> (<code>BluetoothAdapter.getBondedDevices()</code> over JNI, entries <code>"MAC|name"</code>); the names are kept in <code>m_androidDeviceNames</code> so the adapter rows read <em>name · MAC</em>. The list is empty while Bluetooth is off or the runtime <code>BLUETOOTH_CONNECT</code> grant is missing -- the bridge requests it on the first Connect tap, and the 10 s scanner fills the rows in afterwards. No active discovery -- <code>QBluetoothDeviceDiscoveryAgent</code> historically crashed on Android, and the bonded list is enough for "pair once, reconnect by MAC".</td></tr>
+            <tr><td>Linux / Pi</td><td><code>/dev/rfcomm*</code>, <code>/dev/ttyUSB*</code>, <code>/dev/ttyACM*</code>. Not <code>/dev/ttyS*</code>: hardware serial ports are almost never OBD adapters.</td></tr>
+            <tr><td>Windows</td><td>Every COM port.</td></tr>
+            <tr><td>macOS</td><td><code>/dev/tty.*</code> and <code>/dev/cu.*</code> entries named OBD, Bluetooth, usbserial or ELM.</td></tr>
+            <tr><td>Android</td><td>The devices paired in Android's Bluetooth settings. The list is empty until the Bluetooth permission is granted.</td></tr>
           </tbody>
         </table>
         <p>
-          Results are de-duplicated and sorted. Only when the list <em>changes</em> does the manager emit
-          <code>availablePortsChanged(list)</code> and <code>availableAdaptersChanged(list of maps)</code>, and -- if not
-          connected and the configured port is now present -- reset the attempt counter and start a connection; if the
-          configured port is absent it emits <code>"Device at X not found. Available: ..."</code> as the detail text.
+          The result is <code>obdManager.availableAdapters</code>: a list of <code>{name, identifier, kind}</code>, with
+          a readable name such as "USB ELM327 &middot; /dev/ttyUSB0". The same list is used on every platform, so the
+          screens never need to know which platform they are on. To connect to one, call
+          <code>obdManager.connectToAdapter(identifier)</code>: it saves the adapter and connects at once.
         </p>
-        <div class="info-box info">
-          <div class="info-box-title">Android: pair first, then tap Connect once</div>
-          Until the app holds <code>BLUETOOTH_CONNECT</code> the bonded list comes back empty, so on a fresh install the
-          adapter rows are blank; the first Connect tap makes the Java bridge request the permission, after which the
-          paired adapters appear as <em>name · MAC</em> rows and can be tapped like any other adapter. The manual MAC entry
-          field remains as a fallback (the earlier <code>requestAndroidBluetoothPermission()</code> path, which gated
-          the list behind Qt's permission cache, has been removed).
-        </div>
 
-        <!-- Unified adapter API -->
-        <h2 id="unified-adapter-api">Unified Adapter API</h2>
+        <!-- Adapter finder -->
+        <h2 id="adapter-finder">Finding and Pairing an Adapter</h2>
         <p>
-          The OBD settings page renders identically on every OS. All platform variation (BLE on Android,
-          <code>rfcomm bind</code> on Linux/Pi, COM enumeration on Windows, <code>/dev/tty.*</code> on macOS) lives inside
-          the manager. QML also uses <code>platformHint()</code> for platform-specific hints and visibility, including the Linux Direct button. The adapter-facing API:
+          On desktop Linux (the Pi and Orange Pi included) OCTAVE can find and pair a Bluetooth adapter itself, so
+          nobody has to open the system's Bluetooth settings or know a MAC address. This is
+          <code>obdAdapterFinder</code>, and it is what the Connect Vehicle sheet drives:
         </p>
-        <table>
-          <thead>
-            <tr><th>Slot / Property</th><th>Signature</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>availableAdapters</code></td><td>property: QVariantList</td><td>List of <code>{name, identifier, kind}</code> maps built from the discovered ports. <code>kind</code> is classified by regex/prefix: <code>ble</code> (MAC), <code>bt-direct</code> (<code>rfcomm://</code>), <code>serial-rfcomm</code> (<code>/dev/rfcomm</code>), <code>serial-usb</code> (<code>/dev/ttyUSB</code>, <code>/dev/ttyACM</code>), <code>tty</code> (<code>/dev/tty.</code>, <code>/dev/cu.</code>), <code>com</code> (<code>COM</code>), else <code>serial</code>. Names: <em>Bluetooth · MAC</em> (on Android <em>&lt;device name&gt; · MAC</em> when the bonded-device listing supplied a name), <em>Bluetooth (bound) · /dev/rfcommN</em>, <em>Bluetooth (direct) · MAC</em> (plus <em>ch N</em> when the channel isn't 1), <em>USB ELM327 · /dev/ttyUSBn</em>, <em>Serial · COMn</em>.</td></tr>
-            <tr><td><code>availableAdaptersChanged</code></td><td>signal(QVariantList)</td><td>Emitted alongside <code>availablePortsChanged</code> with the rich shape.</td></tr>
-            <tr><td><code>scan</code></td><td>()</td><td>Trigger a discovery sweep. Alias of <code>refreshPorts()</code>.</td></tr>
-            <tr><td><code>connectToAdapter</code></td><td>(QString identifier)</td><td>For <code>sim://elm327</code>, starts the shared demo without saving the port. For hardware: trims, classifies, logs <code>connect → &lt;name&gt;</code> to the connection log, saves the identifier with <code>save_obd_bluetooth_port()</code> (and <code>add_obd_saved_adapter()</code> for MACs and <code>rfcomm://</code> URLs), runs the rfcomm bind on Linux when given a MAC (asynchronously; <code>forceConnect()</code> follows once the bind succeeds), otherwise calls <code>forceConnect()</code> directly. The QML calls this for adapter-row taps, saved-adapter chips and the manual-entry "Go" button.</td></tr>
-            <tr><td><code>connectDirect</code></td><td>(QString mac, int channel = 1)</td><td>Linux: turns a MAC into <code>rfcomm://&lt;MAC&gt;[/&lt;channel&gt;]</code> (an <code>rfcomm://</code> URL is passed through) and hands it to <code>connectToAdapter()</code>, which saves it and calls <code>forceConnect()</code> with no bind. Anything else logs <em>Direct connect needs a Bluetooth MAC</em>. The settings page's "Direct" button (Linux only) calls it with the entry field's text. See <a href="#direct-bluetooth">Direct Bluetooth</a>.</td></tr>
-            <tr><td><code>platformHint</code></td><td>() -&gt; QString</td><td><code>"windows"</code> / <code>"macos"</code> / <code>"linux"</code> / <code>"android"</code>. The QML uses it for entry hints and to show the Direct button on Linux. (The QML also has an <code>"ios"</code> branch; the manager does not return it today.)</td></tr>
-            <tr><td><code>connectionLogLineAppended</code></td><td>signal(QString)</td><td>One-line-at-a-time live log (added in <code>542b446</code>). The manager keeps the last <code>kConnectionLogLines</code> (60) in the <code>connectionLog</code> property (notify <code>connectionLogChanged</code>, <code>clearConnectionLog()</code> empties it), which <code>OBDHome</code> and the settings page both bind, so a page built after a failed connect still shows it; until open-backend #10 each page kept its own buffer (40 and 60 lines) from the lines emitted while it existed. Sources: <code>connectToAdapter</code>, the rfcomm bind steps, the direct Bluetooth connect and every worker connect attempt (<code>OBDConnectionWorker::logLine</code>: "Opened &lt;port&gt;", with a custom transport's <code>objectName</code> in brackets when set, e.g. the GATT characteristics Web Bluetooth picked; "ELM327: N of 7 setup commands answered (ATZ: &hellip;)"; "Vehicle check (010C): &lt;answer&gt;" (that first request waits at least 20 s, as it is the adapter's protocol search, and a timeout shows the partial reply), so "No Vehicle" can be told apart from a silent adapter), and every Android BLE state transition via <code>logAndroid()</code>, which also mirrors the line into <code>connectionStatusDetailChanged</code>.</td></tr>
-          </tbody>
-        </table>
-
-        <div class="info-box info">
-          <div class="info-box-title">Linux/Pi: automatic <code>rfcomm bind</code></div>
-          <p>
-            <code>startRfcommBind()</code>: if any <code>/dev/rfcomm0</code>..<code>7</code>
-            already exists it is used as-is ("using existing", no check that it is bound to the same MAC -- surfacing
-            the real open() failure was judged better than guessing). Otherwise it runs
-            <code>rfcomm bind 0 &lt;mac&gt; 1</code> (channel 1 is the hard-coded fallback; the adapter finder can discover a different channel), waits up to
-            1 s for the node to appear, and saves <code>/dev/rfcomm0</code> as the active port so the worker opens the node,
-            not the MAC. A missing binary, non-zero exit or missing node is reported to the connection log with a fix
-            ("add user to bluetooth group, or run <code>sudo rfcomm bind 0 &lt;mac&gt;</code> once and enter /dev/rfcomm0"),
-            and the status becomes <code>"Error"</code> / <em>rfcomm bind failed -- see Connection Log</em>. A missing binary is
-            detected through <code>QProcess::FailedToStart</code>.
-          </p>
-          <p>
-            The bind never blocks the GUI thread: it is an async <code>QProcess</code> killed by a 5 s timer, after which the
-            manager polls for the node every 100 ms. A timeout or crash counts as failure, and a newer
-            <code>connectToAdapter()</code> call supersedes an in-flight bind (its result is ignored). Once bound,
-            <code>forceConnect()</code> is called from the completion handler.
-          </p>
-        </div>
-
-        <h3 id="direct-bluetooth">Direct Bluetooth (<code>rfcomm://</code>, Linux)</h3>
-        <p>
-          A port of the form <code>rfcomm://&lt;MAC&gt;</code> or <code>rfcomm://&lt;MAC&gt;/&lt;channel&gt;</code> (channel 1 by
-          default) skips the bound <code>/dev/rfcommN</code> node and opens a Bluetooth Classic RFCOMM socket straight to the
-          adapter. It needs no <code>rfcomm bind</code> (root), connects explicitly with a timeout and a real error
-          (<em>Host is down</em>, <em>Connection refused</em>), and nothing else on the system (blueman) can release it
-          underneath us. It came out of 2026-10-03 on the Pi: the NEXAS (classic SPP, channel 1) never connected through
-          <code>/dev/rfcomm0</code>, but a raw socket reached it in about 1.1 s and the Jeep's ECU answered.
-        </p>
-        <ul>
-          <li><span class="file-path">src/managers/rfcommsocket.{h,cpp}</span>, class
-            <code>RfcommSocket</code> (a <code>QIODevice</code> over an <code>AF_BLUETOOTH</code> socket; the three
-            constants and <code>sockaddr_rc</code> are spelled out so the build needs no libbluetooth-dev). The worker
-            picks it in <code>doConnect()</code> when <code>RfcommSocket::isUrl(port)</code> and otherwise calls
-            <code>openSerialPort()</code>. Everything after that talks through <code>m_io</code>, whichever device is open.
-            <code>connectTo()</code> waits up to <code>max(10, timeout)</code> s in 100 ms slices, so a reconnect can
-            abandon it. An <em>EBUSY</em> (one link per channel, still held by the previous worker or by a process with
-            <code>/dev/rfcommN</code> open) is retried every 250 ms for up to 3 s, since switching transports releases the
-            old link on its own thread. A hang-up or failed read sets <code>isBroken()</code>, which <code>sendCommand()</code> turns into
-            <code>connectionLost</code>. On other platforms <code>connectTo()</code> fails with <em>only supported on
-            Linux</em>.</li>
-          <li><code>checkPortExists</code> only validates the URL, since there is no node to look
-            for. The passive device scan (every 10 s) retries a configured <code>rfcomm://</code> adapter whenever we're
-            not connected, connecting, closed or in diagnostic mode. The dongle is usually only powered with the ignition
-            on, and while it's off the connect fails within a few seconds (<em>Host is down</em>).</li>
-        </ul>
-
-        <!-- Adapter Finder -->
-        <h2 id="adapter-finder">Adapter Finder: Scan, Pair, Connect</h2>
-        <p>
-          <code>OBDAdapterFinder</code> (QML <code>obdAdapterFinder</code>, <span class="file-path">src/managers/obdadapterfinder.{h,cpp}</span>,
-          with BlueZ pairing in <span class="file-path">src/platform/bluezpairer.{h,cpp}</span>) lets someone connect an adapter without knowing its MAC or
-          pairing it in the OS first. The "Connect Vehicle" button on the empty Parameter Cards page and "Find Bluetooth
-          Adapters" in Settings &rarr; OBD &rarr; Connection both open <span class="file-path">frontend/OBDAdapterSheet.qml</span>, which starts a scan.
-          Phase 1 of <span class="file-path">TODO/obd-adapter-discovery.md</span>: the full flow runs on desktop Linux (Pi / Orange Pi included).
-          On every other platform <code>supported</code> is false and the sheet lists <code>obdManager.availableAdapters</code> instead
-          (the ports and paired devices the OS already knows), with an "OBD Settings" shortcut.
-        </p>
-        <p>
-          <strong>Startup never waits on BlueZ.</strong> The QtBluetooth objects (<code>QBluetoothLocalDevice</code>, the
-          discovery agent, <code>BluezPairer</code>) are created only once <code>org.bluez</code> is owned on the system bus,
-          a check the bus daemon answers at once (<code>isServiceRegistered</code>, which never activates a service). A
-          <code>QDBusServiceWatcher</code> creates them when BlueZ appears later. Creating them eagerly, as 0.9.5-rc1 did,
-          made <code>QBluetoothLocalDevice</code>'s constructor D-Bus-activate an <code>org.bluez</code> that never came up
-          (BlueZ installed, no adapter or <code>bluetoothd</code> stopped), which blocked the GUI thread for about 45 s before
-          the window appeared. Without BlueZ, <code>bluetoothOn</code> is false and <code>startScan()</code> reports
-          "Bluetooth is not available: the Bluetooth service is not running."
-        </p>
-        <ol>
-          <li><strong>Scan</strong> (<code>startScan()</code>): <code>QBluetoothDeviceDiscoveryAgent</code>, Classic + LE, 15 s. Unnamed
-            devices (BlueZ names them after their address) are dropped. <code>likelyObd</code> is set when the name matches the
-            common ELM327 adapters (OBDII / OBD2 / V-LINK / OBDLink / Vgate iCar / Veepeak / BAFX / Konnwei / NEXAS / LELink /
-            Viecar / ...) or a BLE device advertises one of the ELM327 BLE services (FFF0, FFE0/FFE1, ISSC). The sheet shows
-            likely adapters only, sorted by signal, with "Show All Devices (N)" for the rest. A dual-mode adapter keeps every
-            mode seen during the scan (the NEXAS reports Classic once and LE-only afterwards).</li>
-          <li><strong>Pair</strong> (<code>connectAdapter(address)</code>, Classic only): the scan stops, then <code>BluezPairer</code>
-            registers its own <code>org.bluez.Agent1</code> on the system bus and calls <code>Device1.Pair()</code>. BlueZ sends the
-            PIN request to the agent of the client that called <code>Pair()</code>, so OCTAVE answers it and the desktop's
-            own PIN dialog never appears. On <em>AuthenticationFailed</em> it retries with the next PIN: 1234, 0000, 6789, 1111.
-            Already-paired devices skip this step.</li>
-          <li><strong>Trust</strong>: <code>Device1.Trusted = true</code>, so the adapter reconnects later without being asked again. If
-            pairing failed but the adapter answered (refused PIN, timeout), it is still trusted and the connection is tried
-            anyway, because some adapters (the NEXAS) accept RFCOMM from a trusted host without pairing. If that connection
-            also fails, the pairing error is shown.</li>
-          <li><strong>Channel</strong>: an SDP lookup for the Serial Port service (<code>QBluetoothServiceDiscoveryAgent</code>, 8 s);
-            channel 1 if it finds nothing.</li>
-          <li><strong>Hand-off</strong>: <code>obdManager.connectDirect(mac, channel)</code> (see <a href="#direct-bluetooth">Direct
-            Bluetooth</a>), and <code>add_obd_saved_adapter(name, url)</code> so the saved chip shows the adapter's name. The
-            finder then follows <code>connectionStatusChanged</code>. It ignores the <em>Disconnected</em> that
-            <code>forceConnect()</code> emits first, then reports <em>Connected to &lt;name&gt;</em>, <em>... isn't answering,
-            turn the ignition on</em> (<code>No Vehicle</code>), or the failure.</li>
+        <ol class="steps">
+          <li><strong>Scan</strong> for 15 seconds. Devices whose name looks like an ELM327 (OBDII, V-LINK, OBDLink, Vgate, Veepeak, NEXAS and so on) are marked as likely adapters and shown first.</li>
+          <li><strong>Pair.</strong> OCTAVE answers the PIN request itself, trying 1234, 0000, 6789 and 1111 in turn, so no system dialog appears.</li>
+          <li><strong>Trust</strong> the adapter, so it reconnects later without asking. If pairing fails but the adapter answered, OCTAVE tries to connect anyway: some adapters accept a trusted host without pairing.</li>
+          <li><strong>Find the channel</strong> the adapter's serial service is on (channel 1 if it does not say).</li>
+          <li><strong>Connect</strong> with <code>obdManager.connectDirect(mac, channel)</code> and save the adapter under its name.</li>
         </ol>
         <p>
-          BLE-only devices are listed but greyed out on desktop ("Bluetooth LE adapters aren't supported on this device yet"):
-          the desktop OBD worker has no GATT transport. BLE ELM327 adapters connect on Android through
-          <a href="#android-ble">OctaveOBDBridge</a>. Signals and properties are listed in
-          <a href="signals-slots-reference.html#obdAdapterFinder">the signals &amp; slots reference</a>.
+          On other platforms the finder reports <code>supported: false</code> and the sheet lists
+          <code>availableAdapters</code> instead. Bluetooth LE adapters are listed but greyed out on desktop, which
+          cannot talk to them yet; they work on Android and in the browser. OCTAVE never waits for the Bluetooth
+          service at startup: if it is not running, the sheet says so and the rest of the app carries on.
         </p>
 
-        <!-- Auto-Reconnect -->
-        <h2 id="auto-reconnect">Auto-Reconnect and Passive Scanning</h2>
+        <h3 id="direct-bluetooth">Direct Bluetooth (Linux)</h3>
         <p>
-          <code>scheduleAutoReconnect()</code> reads
-          <code>obdAutoReconnectAttempts</code> from settings (0 = disabled, which is the default; 1-10 = max attempts).
-          The backoff is linear and capped:
-        </p>
-        <pre><code><span class="kw">int</span> delay = qMin(<span class="num">10</span>, <span class="num">2</span> + m_connectionAttempts * <span class="num">2</span>);   <span class="cmt">// 4 s, 6 s, 8 s, 10 s, 10 s ... after attempt 1, 2, 3, 4, ...</span>
-QTimer::singleShot(delay * <span class="num">1000</span>, <span class="kw">this</span>, &amp;OBDManager::startConnection);</code></pre>
-        <p>
-          When auto-reconnect is disabled, or the attempt count reaches the maximum, the manager emits
-          <em>"Auto-reconnect disabled"</em> / <em>"Max retries reached. Scanning..."</em> and falls back to the 10 s device
-          scanner. An adapter that answers while the vehicle does not (ignition off) is retried on the scanner's 10 s tick; with
-          a limit set the count is kept across ticks, so the limit holds while the car sleeps, and a ports query
-          (<code>getAvailablePorts()</code>, <code>refreshPorts()</code>, <code>scan()</code>) never starts an attempt. For serial device nodes, passive scanning re-attempts a connection when the discovered
-          port list changes and the configured port is in it. Direct <code>rfcomm://</code> connections are an exception:
-          they retry on every 10 s scan while disconnected, even when the configured attempt limit is zero. For a serial-node connection, an adapter that is
-          plugged in but has no vehicle response is tried once at startup and then left alone until the user taps
-          Connect, changes the port, or the port disappears and reappears. A <code>m_forceStopReconnect</code> flag set
-          by <code>close()</code> blocks all scheduling during shutdown.
+          There are two ways to reach a Bluetooth Classic adapter on Linux. The old way binds it to a device file
+          (<code>/dev/rfcomm0</code>) with the <code>rfcomm</code> tool, which usually needs root. The direct way opens
+          a Bluetooth socket straight to the adapter. Direct is what the finder uses, and it is better in three ways:
+          it needs no root, it fails with a real error ("Host is down") within a few seconds, and no other program can
+          take the link away. A direct adapter is saved as <code>rfcomm://&lt;MAC&gt;</code>, or
+          <code>rfcomm://&lt;MAC&gt;/&lt;channel&gt;</code> when the channel is not 1. The <strong>Direct</strong>
+          button in Settings &gt; OBD does the same with an address you type.
         </p>
         <p>
-          While connected, a lost link is detected by the worker's serial errors and the empty-read detector
-          (<a href="#poll-loop">Poll Loop</a>), which report <code>connectionLost</code>.
+          If you give OCTAVE a bare MAC address the old way is used: it runs <code>rfcomm bind</code> for you, or uses
+          an existing <code>/dev/rfcomm0</code> to <code>7</code> if there is one. If that fails the status is
+          <em>Error</em> and the Connection Log says how to fix it (usually: add your user to the
+          <code>bluetooth</code> group).
         </p>
 
-        <!-- Data Watchdog -->
-        <h2 id="data-watchdog">Data Watchdog</h2>
+        <!-- Watcher system -->
+        <h2 id="watcher-system">Which Readings Get Polled</h2>
         <p>
-          On desktop, every 5 s while connected and at least one PID is being watched, the watchdog compares the last-data timestamp
-          with now. More than <strong>30 s</strong> without a timestamp refresh triggers status
-          <code>"Stale Connection"</code> / <em>"No data received, reconnecting..."</em>, the connection is cleaned up, the
-          attempt counter reset, and a fresh attempt starts 100 ms later.
+          The adapter answers one question at a time, and a round trip takes tens of milliseconds. Asking for all 120
+          readings in turn would make every gauge crawl. So OCTAVE only asks for <strong>what is on screen</strong>.
         </p>
-        <pre><code>m_dataWatchdogTimer.setInterval(<span class="num">5000</span>);
-<span class="kw">static constexpr int</span> DATA_WATCHDOG_TIMEOUT_MS = <span class="num">30000</span>;</code></pre>
         <p>
-          The timestamp is refreshed whenever decoded base or extended values arrive. This detects missing callbacks or values, not every kind of vehicle failure.
-          The watchdog is paused on entering diagnostic mode so DTC work cannot trigger a false reconnect.
-          On Android it is never started; the BLE path has its own per-PID watchdog (<a href="#android-ble">below</a>).
+          Each page tells the manager which readings it shows: <code>obdManager.setParameterDemand("myPage", ids)</code>.
+          An empty list takes the request back. The manager joins everyone's lists into one poll list and the worker
+          goes round it. Switching pages changes the list a quarter of a second later, with no reconnect. The rules:
         </p>
-
-        <!-- Supported Parameters -->
-        <h2 id="supported-parameters">Supported OBD Parameters</h2>
+        <ul>
+          <li>Readings the car does not support are left out, once the car has said what it supports.</li>
+          <li><strong>Engine speed is always polled</strong>, whatever is on screen. It keeps the shift light working everywhere and proves the link is alive. On a car with no engine speed, the adapter's voltage reading takes its place.</li>
+          <li>Readings that do not come from the car (pitch, roll, heading and the other <a href="hardware-managers.html">IMU</a> values) are ignored here.</li>
+        </ul>
         <p>
-          The numbers differ by layer, so here they are exactly:
+          There is a second, low-priority list: <code>setBackgroundDemand(consumer, ids)</code>. The worker polls
+          <strong>one</strong> background reading after each full round of the on-screen list. The
+          <a href="#black-box">black box</a> uses it to record everything the car supports, at the cost of one extra
+          request per round instead of slowing every gauge.
         </p>
-        <table>
-          <thead><tr><th>Layer</th><th>Count</th><th>Where</th></tr></thead>
-          <tbody>
-            <tr><td>Parameter signals on <code>OBDManager</code></td><td><strong>84</strong> <code>float</code> signals</td><td>83 base command names + <code>ignitionTimingChanged</code>, which is emitted together with <code>timingAdvanceChanged</code> from the same PID (one entry of the signal dispatch table).</td></tr>
-            <tr><td>Base PID-table entries</td><td><strong>83</strong></td><td><code>ELM327Protocol::pidTable()</code> has 82 Mode-01 entries from OCTAVE's base command set, at their standard SAE J1979 PID numbers, plus <code>ELM_VOLTAGE</code> under the pseudo-key <code>kElmVoltageKey</code> <code>{0, 0}</code> (the adapter's own <code>ATRV</code>). Each <code>PidEntry</code> carries a <code>commandName</code> (the established OBD command name, e.g. <code>COOLANT_TEMP</code>), so the settings names, scan vocabulary and poll list all come from the one table.</td></tr>
-            <tr><td>Legacy parameter-setting names</td><td><strong>83</strong></td><td><code>getAllParameterNames()</code> returns the same 83 base names, derived from <code>pidTable()</code> and sorted. This list excludes the 37 extended values.</td></tr>
-            <tr><td>Extended PID table</td><td><strong>23 PIDs / 37 values</strong></td><td>Multi-value entries in <code>extendedPidTable()</code>; values use <code>obdParameterChanged(paramId, value)</code>.</td></tr>
-            <tr><td><code>ParameterCatalog</code> (= <code>OBDParameterModel.allParameters</code>)</td><td><strong>129</strong></td><td>84 base OBD ids (83 commands plus the alias <code>IGNITION_TIMING</code>, <code>aliasOf: "TIMING_ADVANCE"</code>) + 37 extended values + 8 BerryIMU ids. Its 120 polled OBD ids equal the decoder ids (<code>tst_parametercatalog</code>). The alias is polled as its target and published in <code>vehicleSupportedParameters</code> whenever the target is (<code>OBDManager::withAliases</code>).</td></tr>
-          </tbody>
-        </table>
+        <h3>Fast polling</h3>
+        <p>With <code>obdFastMode</code> on (the default) the worker asks again as soon as an answer arrives, and uses two tricks:</p>
+        <ul>
+          <li>It tells the adapter to expect one reply (<code>010C1</code>), so the adapter answers at once and does not wait to see if another computer in the car replies too. On Bluetooth LE this wait is most of the round trip.</li>
+          <li>On cars with a CAN bus (most cars since 2008) it asks for up to six readings in one request.</li>
+        </ul>
+        <p>
+          Both are dropped for the rest of the connection if the adapter or the car does not understand them. With fast
+          polling off the worker waits 50 ms between requests and asks for one reading at a time. Every 30 seconds the
+          worker writes the poll rate to the log (<code>OBD polling: N requests in 30 s ...</code>).
+        </p>
 
-        <h3>Original 17 commands (enabled by default) -- 18 signals</h3>
-        <p>These are the legacy <code>obdParameters</code> defaults. They no longer determine the live poll set, which follows consumer demand and vehicle support (see <a href="#watcher-system">Which PIDs Get Polled</a>).</p>
-        <table>
-          <thead>
-            <tr><th>Parameter</th><th>Command / PID</th><th>Signal</th><th>Decoder (protocol table)</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>Coolant Temperature</td><td><code>COOLANT_TEMP</code> / 01 05</td><td><code>coolantTempChanged</code></td><td>A - 40</td></tr>
-            <tr><td>Control Module Voltage</td><td><code>CONTROL_MODULE_VOLTAGE</code> / 01 42</td><td><code>voltageChanged</code></td><td>(256A + B) / 1000</td></tr>
-            <tr><td>Engine Load</td><td><code>ENGINE_LOAD</code> / 01 04</td><td><code>engineLoadChanged</code></td><td>A * 100 / 255</td></tr>
-            <tr><td>Throttle Position</td><td><code>THROTTLE_POS</code> / 01 11</td><td><code>throttlePositionChanged</code></td><td>A * 100 / 255</td></tr>
-            <tr><td>Intake Air Temperature</td><td><code>INTAKE_TEMP</code> / 01 0F</td><td><code>intakeAirTempChanged</code></td><td>A - 40</td></tr>
-            <tr><td>Timing Advance</td><td><code>TIMING_ADVANCE</code> / 01 0E</td><td><code>timingAdvanceChanged</code> + <code>ignitionTimingChanged</code></td><td>A / 2 - 64</td></tr>
-            <tr><td>Mass Air Flow</td><td><code>MAF</code> / 01 10</td><td><code>massAirFlowChanged</code></td><td>(256A + B) / 100</td></tr>
-            <tr><td>Vehicle Speed</td><td><code>SPEED</code> / 01 0D</td><td><code>speedMPHChanged</code></td><td>A * 0.621371 (km/h to mph)</td></tr>
-            <tr><td>Engine RPM</td><td><code>RPM</code> / 01 0C</td><td><code>rpmChanged</code></td><td>(256A + B) / 4</td></tr>
-            <tr><td>Air/Fuel Ratio</td><td><code>COMMANDED_EQUIV_RATIO</code> / 01 44</td><td><code>airFuelRatioChanged</code></td><td>(256A + B) / 32768 &times; 14.7 -- the commanded lambda scaled to a gasoline AFR (<code>decAirFuelRatio</code>). The AFR gauge spans 10-18.</td></tr>
-            <tr><td>Fuel Level</td><td><code>FUEL_LEVEL</code> / 01 2F</td><td><code>fuelLevelChanged</code></td><td>A * 100 / 255</td></tr>
-            <tr><td>Intake Manifold Pressure</td><td><code>INTAKE_PRESSURE</code> / 01 0B</td><td><code>intakeManifoldPressureChanged</code></td><td>A (kPa)</td></tr>
-            <tr><td>Short Term Fuel Trim 1</td><td><code>SHORT_FUEL_TRIM_1</code> / 01 06</td><td><code>shortTermFuelTrimChanged</code></td><td>(A - 128) * 100 / 128</td></tr>
-            <tr><td>Long Term Fuel Trim 1</td><td><code>LONG_FUEL_TRIM_1</code> / 01 07</td><td><code>longTermFuelTrimChanged</code></td><td>(A - 128) * 100 / 128</td></tr>
-            <tr><td>O2 Sensor B1S1</td><td><code>O2_B1S1</code> / 01 14</td><td><code>oxygenSensorVoltageChanged</code></td><td>A / 200</td></tr>
-            <tr><td>Fuel Pressure</td><td><code>FUEL_PRESSURE</code> / 01 0A</td><td><code>fuelPressureChanged</code></td><td>A * 3</td></tr>
-            <tr><td>Oil Temperature</td><td><code>OIL_TEMP</code> / 01 5C</td><td><code>engineOilTempChanged</code></td><td>A - 40</td></tr>
-          </tbody>
-        </table>
-
-        <h3>Other base commands (66, legacy default disabled)</h3>
-        <p>PID numbers are the standard Mode 01 assignments: narrow-band O2 <code>0x14</code>-<code>0x1B</code> (B1S1..B1S4, B2S1..B2S4), wide-range O2 voltage <code>0x24</code>-<code>0x2B</code> and current <code>0x34</code>-<code>0x3B</code> (bytes C/D: <code>(256C + D) &times; 8 / 65535</code> V, <code>(256C + D) / 256 - 128</code> mA), catalyst temperatures <code>0x3C</code> B1S1 / <code>0x3D</code> B2S1 / <code>0x3E</code> B1S2 / <code>0x3F</code> B2S2, throttle C <code>0x48</code>, accelerator E/F <code>0x4A</code>/<code>0x4B</code>, throttle actuator <code>0x4C</code>, evap absolute/alternate <code>0x53</code>/<code>0x54</code>, secondary O2 trims <code>0x55</code>-<code>0x58</code>, fuel-rail absolute pressure <code>0x59</code>.</p>
-        <table>
-          <thead>
-            <tr><th>Category</th><th>Parameters</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>Engine / Timing</td><td><code>RUN_TIME</code>, <code>ABSOLUTE_LOAD</code>, <code>COMMANDED_EGR</code>, <code>EGR_ERROR</code>, <code>ETHANOL_PERCENT</code></td></tr>
-            <tr><td>Fuel System</td><td><code>FUEL_RAIL_PRESSURE_VAC</code>, <code>FUEL_RAIL_PRESSURE_DIRECT</code>, <code>FUEL_RAIL_PRESSURE_ABS</code>, <code>FUEL_RATE</code>, <code>FUEL_INJECT_TIMING</code>, <code>EVAPORATIVE_PURGE</code>, <code>FUEL_TYPE</code></td></tr>
-            <tr><td>Throttle / Accelerator</td><td><code>RELATIVE_THROTTLE_POS</code>, <code>THROTTLE_POS_B</code>, <code>THROTTLE_POS_C</code>, <code>ACCELERATOR_POS_D</code>/<code>E</code>/<code>F</code>, <code>THROTTLE_ACTUATOR</code>, <code>RELATIVE_ACCEL_POS</code></td></tr>
-            <tr><td>O2 Sensors (narrow-band)</td><td><code>O2_B1S2</code>, <code>O2_B1S3</code>, <code>O2_B1S4</code>, <code>O2_B2S1</code>, <code>O2_B2S2</code>, <code>O2_B2S3</code>, <code>O2_B2S4</code></td></tr>
-            <tr><td>O2 Sensors (wide-range)</td><td><code>O2_S1_WR_VOLTAGE</code> .. <code>O2_S8_WR_VOLTAGE</code>, <code>O2_S1_WR_CURRENT</code> .. <code>O2_S8_WR_CURRENT</code></td></tr>
-            <tr><td>O2 / Fuel Trims</td><td><code>SHORT_O2_TRIM_B1</code>, <code>LONG_O2_TRIM_B1</code>, <code>SHORT_O2_TRIM_B2</code>, <code>LONG_O2_TRIM_B2</code>, <code>SHORT_FUEL_TRIM_2</code>, <code>LONG_FUEL_TRIM_2</code></td></tr>
-            <tr><td>Catalyst Temperatures</td><td><code>CATALYST_TEMP_B1S1</code>, <code>B1S2</code>, <code>B2S1</code>, <code>B2S2</code></td></tr>
-            <tr><td>Environmental</td><td><code>BAROMETRIC_PRESSURE</code>, <code>AMBIANT_AIR_TEMP</code> (the established command name's spelling), <code>EVAP_VAPOR_PRESSURE</code>, <code>EVAP_VAPOR_PRESSURE_ABS</code>, <code>EVAP_VAPOR_PRESSURE_ALT</code></td></tr>
-            <tr><td>Distance / Time</td><td><code>DISTANCE_W_MIL</code>, <code>DISTANCE_SINCE_DTC_CLEAR</code>, <code>WARMUPS_SINCE_DTC_CLEAR</code>, <code>RUN_TIME_MIL</code>, <code>TIME_SINCE_DTC_CLEARED</code></td></tr>
-            <tr><td>Other</td><td><code>MAX_MAF</code>, <code>HYBRID_BATTERY_REMAINING</code>, <code>ELM_VOLTAGE</code></td></tr>
-          </tbody>
-        </table>
-
-        <div class="info-box info">
-          <div class="info-box-title">All 83 names poll</div>
-          <p>
-            Earlier builds carried three hand-copied <code>pidToCommand</code> maps (desktop connect, scan, Android)
-            that covered only 60 of the names, mis-numbered several PIDs (O2 B1S3/B1S4 and B2S1-S4, the catalyst
-            temperatures, throttle/accelerator C-F, the evap pressures) and mapped <code>0x59</code> to
-            <code>LONG_O2_TRIM_B2</code>, so 22 parameter signals never fired. The maps are gone: the single
-            <code>ELM327Protocol::buildPidTable()</code> now names every entry, <code>OBDManager::buildPidsToWatch()</code>
-            iterates it, and the narrow-band S3/S4 sensors, the 16 wide-range O2 PIDs, the secondary O2 trims,
-            <code>FUEL_RAIL_PRESSURE_ABS</code> and <code>ELM_VOLTAGE</code> all reach QML.
-          </p>
+        <!-- Staying connected -->
+        <h2 id="staying-connected">Staying Connected</h2>
+        <p>A car is a rough place for a connection: the ignition goes off, the adapter loses power, Bluetooth drops. Three things keep OCTAVE connected without anyone touching it.</p>
+        <ul>
+          <li><strong>The 10-second scan.</strong> While not connected, the manager looks for the saved adapter every 10 seconds and connects when it appears. This is what reconnects you when you start the car, and it works with Auto Reconnect at 0. An adapter that answers while the car does not (ignition off) is tried again on the same tick.</li>
+          <li><strong>Auto Reconnect</strong> (<code>obdAutoReconnectAttempts</code>, 1 to 10). After a failure the manager retries after 4, 6, 8, then 10 seconds, up to the number you set, then goes back to the 10-second scan. It is off by default because the scan is enough for most setups.</li>
+          <li id="data-watchdog"><strong>The watchdog.</strong> Every 5 seconds while connected, the manager checks when the last reading arrived. After 30 seconds with none, the status is <em>Stale Connection</em> and the connection is made again from scratch.</li>
+        </ul>
+        <p>
+          When a live link drops by itself, <code>connectionLostUnexpectedly(reason)</code> is emitted and the screen
+          shows a notice. Disconnecting on purpose, changing adapter, and the watchdog's quiet restart do not show one.
+        </p>
+        <div class="info-box warning" id="port-lifecycle">
+          <div class="info-box-title">Rule: never hold a port open that nobody is answering on</div>
+          On Linux, a Bluetooth serial port whose other end is gone looks permanently "readable" while delivering no
+          bytes, and Qt's serial port will spin a whole CPU core on it. So the worker closes the port on every failure:
+          it would not open, the adapter did not answer, or the car did not answer. It also treats 50 empty reads in a
+          row as a dead adapter. If the <code>obd-worker</code> thread ever shows up hot in <code>top -H</code>, check
+          for a held port first: <code>ls -l /proc/&lt;pid&gt;/fd | grep rfcomm</code>.
         </div>
 
-        <h3 id="multi-value-pids">Extended PIDs 0x61 and up (37 values from 23 PIDs)</h3>
+        <!-- Supported parameters -->
+        <h2 id="supported-parameters">What Can Be Read</h2>
         <p>
-          The extended table adds values from PIDs 0x61–0xB2 beyond OCTAVE's 83 base commands. Several replies contain multiple values and support bits. They are decoded from one table, <code>ELM327Protocol::extendedPidTable()</code>:
-          each value names its data
-          bytes, any required support bit in byte A, and the minimum reply length. Values with a required support
-          bit are skipped when that bit is clear. The mappings below describe the checked-in decoders, covered by <code>decodeExtendedPid</code> and <code>everyExtendedParameterIsWired</code> in <span class="file-path">tests/cpp/tst_elm327protocol.cpp</span>;
-          they are not a claim that every vehicle implements them. EGT 0x78/0x79, turbo RPM/temperature 0x74–0x76,
-          exhaust pressure 0x73, DPF 0x7A–0x7C and the gear number in 0xA4 are not included.
-        </p>
-        <p>
-          Values reach QML through one signal, <code>obdParameterChanged(paramId, value)</code>, instead of a
-          signal per parameter; <code>parameterSampled</code> carries it into <code>paramStore</code> like any other id. Replies longer
-          than one CAN frame are joined by <code>parseResponseLines()</code>. The vehicle scan reads the
-          <code>0160</code>-<code>01C0</code> support bitmaps too, so it can report these PIDs. Boost pressure is absolute; subtract <code>BAROMETRIC_PRESSURE</code>
-          for gauge boost.
+          OCTAVE knows 129 readings. Every one has an id in capitals, such as <code>RPM</code> or
+          <code>COOLANT_TEMP</code>, and that id is what you use everywhere: in a dashboard, in
+          <code>setParameterDemand</code>, in the black box's files.
         </p>
         <table>
-          <thead>
-            <tr><th>Group</th><th>Parameters (mode/PID)</th></tr>
-          </thead>
+          <thead><tr><th>Group</th><th>Count</th><th>Examples</th></tr></thead>
           <tbody>
-            <tr><td>Torque</td><td><code>DEMAND_ENGINE_TORQUE</code> (01 61), <code>ACTUAL_ENGINE_TORQUE</code> (01 62), <code>ENGINE_FRICTION_TORQUE</code> (01 8E), <code>REFERENCE_TORQUE</code> (01 63)</td></tr>
-            <tr><td>Boost</td><td><code>BOOST_PRESSURE_A</code> (01 70), <code>BOOST_PRESSURE_A_COMMANDED</code> (01 70), <code>WASTEGATE_A</code> (01 72), <code>WASTEGATE_A_COMMANDED</code> (01 72)</td></tr>
-            <tr><td>Air</td><td><code>MAF_SENSOR_A</code> (01 66), <code>MAF_SENSOR_B</code> (01 66), <code>INTAKE_TEMP_B1S1</code> (01 68), <code>INTAKE_TEMP_B1S2</code> (01 68), <code>INTAKE_TEMP_B2S1</code> (01 68), <code>MANIFOLD_SURFACE_TEMP</code> (01 84)</td></tr>
-            <tr><td>Temperature</td><td><code>COOLANT_TEMP_SENSOR_1</code> (01 67), <code>COOLANT_TEMP_SENSOR_2</code> (01 67)</td></tr>
-            <tr><td>Throttle</td><td><code>THROTTLE_POS_G</code> (01 8D), <code>THROTTLE_ACTUATOR_A_COMMANDED</code> (01 6C), <code>RELATIVE_THROTTLE_A</code> (01 6C)</td></tr>
-            <tr><td>EGR</td><td><code>EGR_A_COMMANDED</code> (01 69), <code>EGR_A_ACTUAL</code> (01 69), <code>EGR_A_ERROR</code> (01 69)</td></tr>
-            <tr><td>Fuel</td><td><code>FUEL_RAIL_PRESSURE_A</code> (01 6D), <code>FUEL_RAIL_PRESSURE_A_COMMANDED</code> (01 6D), <code>FUEL_RAIL_TEMP_A</code> (01 6D), <code>ENGINE_FUEL_RATE_GS</code> (01 9D), <code>VEHICLE_FUEL_RATE_GS</code> (01 9D), <code>CYLINDER_FUEL_RATE</code> (01 A2), <code>EXHAUST_FLOW_RATE</code> (01 9E)</td></tr>
-            <tr><td>Drivetrain</td><td><code>TRANSMISSION_GEAR_RATIO</code> (01 A4), <code>RECOMMENDED_GEAR</code> (01 65)</td></tr>
-            <tr><td>Distance and time</td><td><code>ODOMETER</code> (01 A6), <code>ENGINE_RUN_TIME_TOTAL</code> (01 7F), <code>ENGINE_IDLE_TIME_TOTAL</code> (01 7F)</td></tr>
-            <tr><td>Hybrid / EV</td><td><code>HYBRID_BATTERY_VOLTAGE</code> (01 9A), <code>HYBRID_BATTERY_CURRENT</code> (01 9A), <code>EV_BATTERY_HEALTH</code> (01 B2)</td></tr>
+            <tr><td>Standard readings</td><td>83</td><td><code>RPM</code>, <code>SPEED</code>, <code>COOLANT_TEMP</code>, <code>ENGINE_LOAD</code>, <code>THROTTLE_POS</code>, <code>FUEL_LEVEL</code>, <code>INTAKE_TEMP</code>, <code>MAF</code>, fuel trims, oxygen sensors, catalyst temperatures, and <code>ELM_VOLTAGE</code> (battery voltage measured by the adapter itself)</td></tr>
+            <tr><td>Newer readings</td><td>37</td><td>Found on newer cars: torque, <code>BOOST_PRESSURE_A</code>, <code>ODOMETER</code>, <code>TRANSMISSION_GEAR_RATIO</code>, fuel rate, hybrid battery voltage and current</td></tr>
+            <tr><td>Alias</td><td>1</td><td><code>IGNITION_TIMING</code>, another name for <code>TIMING_ADVANCE</code></td></tr>
+            <tr><td>IMU</td><td>8</td><td><code>PITCH</code>, <code>ROLL</code>, <code>HEADING</code> and so on, from the <a href="hardware-managers.html">BerryIMU</a>, not from the car</td></tr>
           </tbody>
         </table>
-
-        <h3 id="vin">Vehicle identity (VIN)</h3>
         <p>
-          After a successful connect the manager attempts to read Mode 09 PID 02 once (desktop: <code>OBDConnectionWorker::doReadVin()</code>
-          before polling starts; Android: the first poll slot) and
-          expose <code>vin</code>, <code>vehicleMake</code> and <code>vehicleModelYear</code> with <code>vinChanged</code>;
-          <code>readVin()</code> reads it again. <code>parseVin()</code> accepts the CAN multi-frame
-          reply and the five numbered pre-CAN messages. <code>decodeVin()</code> takes the make from the
-          world manufacturer identifier (first 3 characters, about 120 entries, then a 2-character fallback) and the model year
-          from position 10 (30-year cycle; an alphabetic position 7 selects 2010+). An unsupported or invalid VIN response leaves <code>vin</code> and <code>vehicleMake</code> empty and <code>vehicleModelYear</code> at 0. The OBD settings Connection card shows a
-          <em>Vehicle</em> row when a VIN is known.
-        </p>
-
-        <!-- Watcher System -->
-        <h2 id="watcher-system">Which PIDs Get Polled</h2>
-        <p>
-          Polling is <strong>demand-driven</strong>: OCTAVE polls what is on screen, not a list of parameters switched on
-          in settings. Every consumer registers the parameter ids it shows with
-          <code>obdManager.setParameterDemand(consumer, ids)</code> (an empty list removes the consumer). The QML
-          consumers are <code>"homeDashboard"</code> (the PIDs of the dashboard Home shows), <code>"dashboard"</code> (a dashboard previewed from a browser, on the OBD page), <code>"cards"</code> (every supported PID
-          while Parameter Cards is open), <code>"home"</code> (the classic Home's OBD tiles) and
-          <code>"carMenu"</code> (RPM and SPEED for the 3D Jeep's engine and driveline while CarMenu is on screen).
-        </p>
-        <p>The poll set is built by <code>buildPidsToWatch()</code>:</p>
-        <ul>
-          <li>Union of every consumer's ids. BerryIMU ids (<code>PITCH</code>, <code>ROLL</code>, <code>HEADING</code>, ...) and unknown ids are dropped.</li>
-          <li>Filtered to <code>vehicleSupportedParameters</code> once this session's scan produced a result (an unknown or empty result filters nothing).</li>
-          <li>A multi-value PID (0x61+) is polled when any of its signals is wanted.</li>
-          <li><strong>Heartbeat</strong>: <code>RPM</code> is always polled (<code>ELM_VOLTAGE</code> when the car has no RPM), which keeps the data watchdog fed and the global RPM shift light working on every screen.</li>
-        </ul>
-        <p>
-          A second, low-priority list comes from <code>setBackgroundDemand(consumer, ids)</code>: the same rules
-          (<code>OBDManager::backgroundPidsToWatch()</code>) minus the heartbeat and minus anything already in the
-          foreground. The worker polls <strong>one background PID after each full pass of the foreground list</strong>
-          (plain round-robin over the background list when the foreground is empty), so a 40-PID sweep costs the live
-          gauges one request per cycle instead of slowing every gauge to a crawl. The only consumer is the
-          <a href="#black-box">black box</a>, which asks for every PID the vehicle scan found. Android interleaves the
-          same way in <code>pollNextAndroidPid()</code>.
-        </p>
-        <p>
-          Changes are debounced for <strong>250 ms</strong> (one re-watch per page switch) and applied live, without a
-          reconnect. A scan completing also re-applies the set, since the supported filter changed.
-        </p>
-        <h3><code>buildPidsToWatch()</code> / <code>applyPollList()</code></h3>
-        <p>
-          The rules themselves are the public static <code>OBDManager::pidsToWatch(demand, vehicleSupported)</code>, which
-          <code>buildPidsToWatch()</code> calls with the current state; <code>tst_obdmanager</code> pins them.
-        </p>
-        <p>
-          <code>startConnection()</code> hands the current <code>QList&lt;PidKey&gt;</code> (sorted by PID so the
-          round-robin order is deterministic) to the worker before the thread starts. The debounce timer calls
-          <code>applyPollList()</code>: while connected it rebuilds the list and queues
-          <code>OBDConnectionWorker::updatePidsToWatch()</code>, which swaps it in place. On Android it calls
-          <code>rebuildAndroidPollList()</code> (additionally filtered by the 0100 bitmap, falling back to ATRV) and restarts
-          the response-driven chain if it had died. While disconnected the change applies to the next connection; in
-          diagnostic mode it is deferred to the reconnect <code>exitDiagnosticMode()</code> performs anyway.
-        </p>
-        <p>
-          The per-parameter <code>obdParameters</code> enable settings no longer drive polling. The keys are still read
-          and written (<code>enableAllSupported()</code> / <code>enableScannedParameters()</code> keep working) so
-          existing settings files stay compatible.
-        </p>
-
-        <!-- Vehicle Scanning -->
-        <!-- Custom PIDs -->
-        <h2 id="custom-pids">Custom PIDs (manufacturer-specific readings)</h2>
-        <p>
-          Readings the standard PIDs don't carry (transmission temperature, oil level, ...) come from a file the user
-          edits, <span class="file-path">&lt;config&gt;/custom-pids.json</span>; the user guide with the file format and
-          the formula language is <span class="file-path">docs/CUSTOM_PIDS.md</span>. Each entry is an id, display
-          metadata, a read-by-identifier request (mode <code>22</code> with a two-byte id, or <code>21</code> with one
-          byte), an optional ECU <code>header</code> and a Torque-style <code>formula</code> over the reply's data bytes
-          (<code>A-40</code>, <code>(A*256+B)/10</code>, <code>SIGNED(A)</code>, <code>{A:0}</code>, <code>&amp; | &lt;&lt; &gt;&gt;</code>).
-          Reading only: any other mode is refused when the file is read, the request is built by OCTAVE from the mode and
-          id, and a header is three or six hex digits, so nothing in the file reaches the adapter as written.
+          The full list, with each reading's title, unit and range, is in the
+          <a href="api-reference.html#parameters">API reference</a> and in
+          <span class="file-path">docs/GAUGE_AUTHORING.md</span>. Worth knowing:
         </p>
         <ul>
-          <li><span class="file-path">src/managers/custompids.{h,cpp}</span>: <code>PidFormula</code> (compiles a formula to postfix steps; <code>evaluate(bytes)</code> gives no value for a short reply or a division by zero), <code>CustomPids::parse()</code> (the file: a bad entry is skipped with a line in <code>errors</code>, the rest load; at most 64) and the <code>customPids</code> object (experimental: <code>file</code>, <code>fileExists</code>, <code>pids</code>, <code>errors</code>, <code>createExample()</code>).</li>
-          <li>The file is read once, when <code>AppCore</code> constructs <code>customPids</code>, before anything reads the parameter catalog: <code>ParameterCatalog::addCustom()</code> appends the rows (<code>custom: true</code>, group <code>Custom</code>) and refuses once the table has been read, as other threads read it without a lock. So an edit takes a restart.</li>
-          <li><code>OBDManager::setCustomPids()</code> gets the requests (<code>CustomPidRequest</code>: id, mode, pid, header, decoder). A custom PID is in the poll list, as key <code>{kCustomPidMode, index}</code>, while its id is demanded (foreground or background), whatever the vehicle scan found; once a scan has a result the custom ids are added to <code>vehicleSupportedParameters</code>, so the gauges' support gate passes them and the black box sweeps them.</li>
-          <li><code>OBDConnectionWorker::pollCustom()</code>: with a header, <code>ATSH&lt;header&gt;</code>, the request (<code>ELM327Protocol::formatDataRequest</code>, 1 s, no response count: replies are often multi-frame), then <code>ATSH&lt;default&gt;</code> again before it returns, so the standard PIDs, trouble codes and the scan never run under another ECU's address. The default comes from <code>ELM327Protocol::defaultHeader(ATDPN)</code>: <code>7DF</code> (11-bit CAN), <code>DB33F1</code> (29-bit CAN), <code>686AF1</code> (J1850 VPW, ISO 9141-2), <code>616AF1</code> (J1850 PWM). Where it isn't known (KWP2000, J1939, user CAN) an entry with a header is not polled. If the restore fails twice the worker reports a lost connection: the reconnect's <code>ATZ</code> resets the header.</li>
-          <li>The value goes out as <code>extendedDataReceived</code> &rarr; <code>obdParameterChanged(id, value)</code> + <code>parameterSampled</code>, the path of the multi-value PIDs, so <code>paramStore</code>, every gauge and the black box take it unchanged.</li>
-          <li>An entry unanswered three times in a row (<code>kCustomMissLimit</code>) is tried once every 30 s (<code>kCustomRetryMs</code>) from then on, with a line in the connection log.</li>
-          <li>The simulated car (<span class="file-path">src/sim/simelm327.cpp</span>) tracks <code>ATSH</code>: its transmission ECU at <code>7E1</code> answers <code>22 1940</code> (fluid temperature, one byte, &deg;C + 40), its engine ECU answers <code>22 2000</code> (battery millivolts) and is silent while another ECU is addressed, which is how <span class="file-path">tests/cpp/tst_obdsim.cpp</span> proves the header goes back. <span class="file-path">tests/cpp/tst_custompids.cpp</span> covers the formulas, the file and the request / reply helpers.</li>
-          <li>Not on the Android BLE path (<code>rebuildAndroidPollList()</code> drops the custom keys). UI: Settings &gt; OBD &gt; Advanced &gt; Custom PIDs, and group Custom in the dashboard editor's PID picker.</li>
+          <li>No car supports all of them. An older car may answer 15; a new one 60.</li>
+          <li>Raw values are in &deg;C and mph. Gauges show them in the units chosen in Settings &gt; Display (&deg;F, km/h).</li>
+          <li>Boost pressure is absolute: subtract <code>BAROMETRIC_PRESSURE</code> for what a boost gauge shows.</li>
+          <li>Some newer PIDs carry several readings in one reply (PID <code>70</code> gives both actual and commanded boost). They are polled once and decoded into each reading.</li>
         </ul>
+        <p>
+          Values leave the manager in one signal, <code>parameterSampled(id, value)</code>, fired once for every
+          decoded reading. <code>paramStore</code> and the black box both listen to it. The store passes values on to
+          the screen at most about 30 times a second, which is as fast as a needle needs. To read a value in QML use
+          <code>OBDParameterModel.liveValue(id)</code>; see
+          <a href="gauges-dashboards.html#parameter-model">Gauges &amp; Dashboards</a>.
+        </p>
+        <p>
+          To add a standard reading to OCTAVE: add its decoder to the table in
+          <span class="file-path">elm327protocol.cpp</span> and a row to
+          <span class="file-path">parametercatalog.cpp</span>. A test fails if you add one without the other.
+        </p>
 
-        <!-- Bus monitor -->
-        <h2 id="bus-monitor">Bus Monitor (listen only)</h2>
+        <!-- Diagnostics -->
+        <h2 id="diagnostics">Trouble Codes</h2>
         <p>
-          <code>BusMonitor</code> (<span class="file-path">src/managers/busmonitor.{h,cpp}</span>, QML context property
-          <code>busMonitor</code>, experimental) shows every message the adapter hears on the vehicle bus as a table
-          with one row per message id: how often it comes, its latest bytes, and which of them changed within the last
-          second. It is for finding out which message carries what (press the brake, see which byte moves). The user
-          guide is <span class="file-path">docs/BUS_MONITOR.md</span>; the card is Settings &gt; OBD &gt; Advanced &gt; Bus Monitor.
+          OBD &gt; Trouble Codes reads what is behind the check-engine light: the stored codes, the pending ones (seen
+          once, not yet confirmed), whether the light is on, and the <strong>freeze frame</strong>, which is the set of
+          readings the car saved at the moment the fault happened. Each code comes with a description: its meaning for
+          common codes, otherwise what the code's letters and digits say (which system, generic or make-specific).
+          <strong>Clear</strong> erases the codes and turns the light off. If the fault is still there, the light comes
+          back.
         </p>
         <p>
-          Listen only: the adapter is put in its monitor mode (<code>ATMA</code>), in which it transmits nothing and on
-          CAN does not acknowledge frames (<code>ATCSM1</code>). Nothing in OCTAVE can send a message to the bus, and
-          the filter is checked to be hex digits and <code>X</code> before it reaches <code>ATCRA</code>
-          (<code>ELM327Protocol::busFilter()</code>).
+          The adapter can do only one thing at a time, so while the Trouble Codes page is open, live readings stop.
+          The page calls <code>enterDiagnosticMode()</code> when it appears and <code>exitDiagnosticMode()</code> when
+          it goes. On leaving, OCTAVE reconnects from scratch (status <em>Reconnecting</em>, about a second) so the
+          adapter is back in a known state; it tries up to three times even with Auto Reconnect at 0.
         </p>
-        <ul>
-          <li><code>OBDManager::startBusMonitor(filter)</code> / <code>stopBusMonitor()</code> / <code>canMonitorBus()</code> (C++ only, not in the service API) queue <code>OBDConnectionWorker::doStartBusMonitor()</code> / <code>doStopBusMonitor()</code>; what is heard comes back through the <code>BusSink</code> the manager was given (<code>setBusSink()</code>), which <code>BusMonitor</code> implements.</li>
-          <li>Starting: polling stops, then <code>ATH1</code> (each line starts with the message id), on CAN <code>ATCSM1</code>, <code>ATCAF0</code> (data bytes as they are) and, with a filter, <code>ATCRA&lt;filter&gt;</code>, then <code>ATMA</code>. A timer on the worker thread (<code>onMonitorTimer()</code>) reads what the adapter prints, <code>ELM327Protocol::parseMonitorLine()</code> turns each line into a <code>BusFrame</code> (11-bit id: 3 digits; 29-bit: 8; J1850 / ISO 9141-2 / KWP2000: the three header bytes, 6), and batches go out every 50 ms.</li>
-          <li><code>BUFFER FULL</code>: the bus is faster than the link to the adapter (38400 baud carries about 200 messages a second). The adapter drops back to its prompt; the worker counts an overrun and sends <code>ATMA</code> again. Four returns to the prompt with nothing heard in between end monitoring with the adapter's last line as the note.</li>
-          <li>Stopping: one space (any byte ends monitor mode; a carriage return at the prompt would repeat <code>ATMA</code>), then <code>ATH0</code>, <code>ATCAF1</code> and <code>ATAR</code> are put back and polling resumes. If the adapter won't take them the connection is dropped and re-made from <code>ATZ</code>. A disconnect while listening ends monitor mode first (one byte, 300 ms at most), and every connect sends one space and drains the reply before <code>ATZ</code>, so an adapter left listening by a crash or a power cut of the head unit connects at the first attempt (<code>aTeardownWhileListeningStopsTheAdapter</code>, <code>anAdapterLeftListeningConnectsAtOnce</code>).</li>
-          <li>While it listens the adapter can't answer requests: live readings and the black box pause, and the data watchdog is off (<code>OBDManager::onWorkerBusMonitor()</code>). <code>sendCommand()</code> ends monitoring before it writes, so any other request (trouble codes, the vehicle scan two seconds after connecting, a custom PID) stops it with the note "Stopped for another request".</li>
-          <li><code>BusMonitor</code> keeps at most 1024 ids, rebuilds <code>ids</code> four times a second, and can record to <span class="file-path">&lt;config&gt;/history/bus/bus-&lt;date&gt;-&lt;time&gt;.log</span> in the can-utils log format (<code>(1731600000.123000) can0 0C9#0000000000000000</code>), which candump, SavvyCAN and Wireshark read. Not in the browser build (<code>canRecord</code> false).</li>
-          <li>The simulated car (<span class="file-path">src/sim/simelm327.cpp</span>) answers <code>ATMA</code> with six made-up broadcast messages of an 11-bit bus that follow the car (<code>0C9</code> engine speed and pedal every 20 ms, <code>1F5</code> gear, <code>3E9</code> speed, <code>4C1</code> temperatures, <code>4D1</code> fuel, <code>120</code> odometer every second), honours <code>ATCRA</code>, reports <code>BUFFER FULL</code> every 500 unfiltered messages, and with <code>ATH1</code> left on puts the answering ECU&rsquo;s id (<code>7E8</code>, or <code>7E9</code> after <code>ATSH7E1</code>) and a length byte in front of every one-frame reply and prints a longer reply as its CAN frames (<code>7E8 10 14 49 02 01 ...</code>, <code>7E8 21 ...</code>), as a real adapter does (<code>headersOnMultiFrameRepliesCarryTheEcuId</code>). Tests: <code>tst_obdsim</code> (<code>busMonitorListensAndPutsTheAdapterBack</code>), <code>tst_elm327protocol</code> (<code>monitorLines</code>, <code>busFilters</code>).</li>
-          <li>Limits: not on the Android BLE path (<code>available</code> stays false); the older buses are not filtered at the adapter; many cars built since about 2010 keep internal traffic behind a gateway, so the OBD port shows nothing until something asks.</li>
-        </ul>
+        <p>Trouble codes are not available on Android yet.</p>
 
         <!-- Black box -->
         <h2 id="black-box">Black Box: Trip Recorder</h2>
         <p>
-          <code>TripRecorder</code> (<span class="file-path">src/managers/triprecorder.{h,cpp}</span>, QML context
-          property <code>tripRecorder</code>) records every decoded OBD value of every drive, with its time, into a
-          SQLite database (SQLite compiled in from <span class="file-path">third_party/sqlite/</span>, no Qt Sql
-          driver plugin involved), and writes each drive out as a CSV + JSON pair when it ends. It is the vehicle's black box:
-          the pages on screen decide what is polled fast, the recorder makes sure everything the car supports is
-          recorded at least slowly, and a power cut loses at most the last two seconds.
+          OCTAVE records every reading of every drive, with its time. You do not start or stop it. Trip History
+          (OBD &gt; Trip History) shows the drives; see <a href="pages.html#triphistory">Pages</a> for the viewer.
         </p>
-        <h3>Data path</h3>
         <ul>
-          <li><code>OBDManager::parameterSampled(paramId, value)</code> fires once for every decoded reading (base PIDs,
-            multi-value PIDs and <code>ELM_VOLTAGE</code>), keyed by the <code>OBDParameterModel</code> id. The recorder
-            is its only consumer today; it never touches the 84 per-parameter signals.</li>
-          <li>On top of the on-screen demand, the recorder registers a <strong>background demand</strong>
-            (<code>setBackgroundDemand("blackbox", vehicleSupportedParameters)</code>, see
-            <a href="#watcher-system">Which PIDs Get Polled</a>) so every PID the scan found is swept, one per pass of the
-            foreground list. Off with the <code>blackBoxSweepAll</code> setting.</li>
-          <li>Readings are coalesced on the GUI thread (a value that has not changed is stored again only every 5 s, so a
-            held value still shows as held) and handed to <code>TripStore</code>
-            (<span class="file-path">src/managers/tripstore.{h,cpp}</span>) on its own thread every 2 s or 1000 samples,
-            one transaction per batch.</li>
-          <li>Trip boundaries: a trip <strong>starts</strong> on the first <code>RPM &gt; 0</code> reading (any reading
-            when the scan says the car has no RPM PID) and <strong>ends</strong> after 2 min of RPM 0, 2 min without the
-            adapter (a shorter dropout is logged as an event and does not split the trip), when recording is switched
-            off, on <code>tripRecorder.endTripNow()</code> (no button in the viewer), or at shutdown (<code>shutdown()</code> blocks until the files are written,
-            before <code>obdManager.close()</code>). Within a trip, sample times are start + monotonic elapsed, so an NTP
-            step on the head unit cannot fold the trace.</li>
-          <li>Events (<code>disconnected</code> / <code>reconnected</code> / <code>connection_lost</code>, <code>mil</code>,
-            <code>dtc</code>, <code>dtc_clear</code>, <code>trip_end</code> with its reason) go into the same trip.</li>
+          <li><strong>A drive starts</strong> at the first reading with the engine running.</li>
+          <li><strong>A drive ends</strong> after 2 minutes with the engine stopped, 2 minutes without the adapter, when you turn recording off, or when OCTAVE closes. A shorter dropout is noted in the drive and does not split it.</li>
+          <li><strong>Everything is recorded</strong>, not only what is on screen: the recorder asks for every reading the car supports through the <a href="#watcher-system">background list</a>. Turn "Record everything the car reports" off to record only what the screen asked for.</li>
+          <li><strong>A power cut loses at most 2 seconds.</strong> Readings are written to disk every 2 seconds. A drive cut short is finished off at the next start.</li>
+          <li><strong>Events are kept too:</strong> disconnects, the check-engine light coming on, codes read and cleared.</li>
         </ul>
-        <h3>On disk</h3>
+        <p>A value that is not changing is stored once every 5 seconds, so a steady reading does not fill the disk. Expect about 3 MB per hour of driving.</p>
+        <h3>The files</h3>
+        <p>Under <code>history/</code> in the <a href="settings-manager.html">config folder</a>:</p>
         <table>
-          <thead><tr><th>Path (under <code>&lt;config&gt;/history/</code>)</th><th>What</th></tr></thead>
+          <thead><tr><th>File</th><th>What</th></tr></thead>
           <tbody>
-            <tr><td><code>blackbox.sqlite</code> (+ <code>-wal</code>)</td><td>Tables <code>trips</code> (id = start time in ms, start/end, VIN, make, year, sample count, summary JSON, file base, <code>simulated</code> = a drive of the simulated car, shown as "simulated car" in Trip History), <code>params</code> (interned ids), <code>samples(trip_id, ts_ms, param_id, value)</code> indexed by trip / parameter / time, <code>events</code>, <code>meta</code> (schema 2; an older database is brought up when it is opened). A file that is damaged or not a database is renamed <code>blackbox.sqlite.damaged-&lt;time&gt;</code> and a new one started; the per-trip files are untouched. WAL, <code>synchronous=FULL</code> (each 2 s batch is fsynced, so a hard power cut loses at most one batch), incremental auto-vacuum.</td></tr>
-            <tr><td><code>trips/&lt;yyyy-MM-dd_HH-mm-ss&gt;.csv</code></td><td>Every sample of the drive in time order: <code>timestamp_ms,time,elapsed_s,parameter,value,unit</code> (the unit from <code>ParameterCatalog</code>, last so readers that go by column position keep working). Written with <code>QSaveFile</code> when the trip ends.</td></tr>
-            <tr><td><code>trips/&lt;stamp&gt;.json</code></td><td>The summary: start/end, duration, sample and parameter counts, distance (trapezoid over the speed trace, gaps over 10 s skipped), max speed / RPM / coolant / oil temp, min and max voltage, fuel level first / last / used, per-parameter <code>{id, title, unit, count, min, max, avg, first, last}</code> (title and unit from <code>ParameterCatalog</code>), the events, <code>clean</code> (false when recovered after a power cut), and <code>health</code> / <code>healthVersion</code> (below).</td></tr>
+            <tr><td><code>blackbox.sqlite</code></td><td>The database with every sample of every drive. Tables: <code>trips</code>, <code>params</code>, <code>samples</code>, <code>events</code>, <code>meta</code>. A damaged file is renamed and a new one started.</td></tr>
+            <tr><td><code>trips/&lt;date&gt;_&lt;time&gt;.csv</code></td><td>One drive, written when it ends, for a spreadsheet: <code>timestamp_ms, time, elapsed_s, parameter, value, unit</code>.</td></tr>
+            <tr><td><code>trips/&lt;date&gt;_&lt;time&gt;.json</code></td><td>The drive's summary: start, end, distance, maximum speed and RPM, fuel used, the minimum / maximum / average of every reading, the events, and the health numbers below.</td></tr>
           </tbody>
         </table>
         <p>
-          On start the store finalises any trip left open (<code>recoverOpenTrips()</code>: end = last sample, empty
-          shells dropped), then prunes the oldest closed trips until the database and files fit the
-          <code>blackBoxMaxMB</code> cap (default 500 MB; about 3 MB per hour of driving with the full sweep). If the
-          database cannot be opened (read-only or full file system, a broken config directory) <code>storeReady</code>
-          stays false, <code>lastError</code> carries the reason, the OBD Home tile and the Black Box settings card say
-          "unavailable", and nothing is recorded: the recorder never pretends. "Export"
-          copies a drive's pair into <code>Downloads/OCTAVE-trips/</code> (the way to get a file off a phone); on desktop
-          "Open folder" opens <code>trips/</code>.
+          <strong>Export</strong> in Trip History copies a drive's two files to <code>Downloads/OCTAVE-trips/</code>,
+          which is how you get one off a phone. On a computer, <strong>Open folder</strong> opens <code>trips/</code>.
+          When the storage cap is reached the oldest drives are deleted. If the database cannot be opened (a full or
+          read-only disk), the Black Box card says "unavailable" with the reason, and nothing is recorded.
         </p>
-        <p>
-          The viewer is <a href="pages.html#triphistory">TripHistory.qml</a> (OBD Home &rarr; Trip History); the controls
-          are the <strong>Black Box</strong> card in the OBD settings. Settings: <code>blackBoxEnabled</code>,
-          <code>blackBoxSweepAll</code>, <code>blackBoxMaxMB</code>. QML API:
-          <a href="signals-slots-reference.html#tripRecorder">Signals &amp; Slots &rarr; TripRecorder</a>. Tests:
-          <code>tst_triprecorder</code>. To look at the page without driving, <code>tools/trips/make_mock_trip.py</code>
-          writes a realistic mock drive into the database (see <a href="development.html#repo-map">Development</a>).
-        </p>
-
         <h3 id="health-trends">Health across drives</h3>
         <p>
-          When a trip is summarised, <code>TripStore::computeHealth()</code> works out a few numbers from its samples in
-          one pass (each reading judged against the latest value of the others) and keeps them in the summary as
-          <code>health</code>, so a trend over months is a read of the summaries, never a scan of the samples. Trips
-          summarised before a number existed (an older <code>healthVersion</code>, <code>kHealthVersion</code> in
-          <span class="file-path">tripstore.cpp</span>) get it worked out and stored on the first trend query that
-          reaches them.
+          At the end of each drive OCTAVE works out a few numbers that say something about the car's health. The Trends
+          view in Trip History compares your last three drives with the ones before and flags a number that is out of
+          its usual range or has moved, with a note on what usually causes it.
         </p>
         <table>
-          <thead><tr><th>Id</th><th>What</th><th>Usual range</th><th>Flagged when</th></tr></thead>
+          <thead><tr><th>Number</th><th>What</th><th>Usual range</th><th>Flagged when</th></tr></thead>
           <tbody>
-            <tr><td><code>warmupMin</code></td><td>Minutes from a cold start (first coolant reading under 40 °C) to 70 °C</td><td>&mdash;</td><td>2 min longer than before</td></tr>
-            <tr><td><code>settledCoolant</code></td><td>Average coolant after the first 10 minutes, on drives of 15 minutes or more</td><td>80&ndash;105 °C</td><td>outside the range, or 5 °C moved</td></tr>
-            <tr><td><code>idleVoltage</code></td><td><code>CONTROL_MODULE_VOLTAGE</code> while stopped at 400&ndash;1100 RPM</td><td>13.0&ndash;14.8 V</td><td>outside the range, or 0.3 V lower</td></tr>
-            <tr><td><code>chargingVoltage</code></td><td>The same above 1300 RPM</td><td>13.4&ndash;14.8 V</td><td>outside the range, or 0.3 V lower</td></tr>
-            <tr><td><code>idleRpm</code></td><td>RPM while stopped once warm (coolant 70 °C or more)</td><td>&mdash;</td><td>100 RPM moved</td></tr>
-            <tr><td><code>ltft1</code>, <code>ltft2</code></td><td>Long-term fuel trim, bank 1 / 2, once warm (cold readings are open loop)</td><td>&plusmn;10 %</td><td>outside the range, or 4 points moved</td></tr>
+            <tr><td>Warm-up time</td><td>Minutes from a cold start (under 40 &deg;C) to 70 &deg;C</td><td>&mdash;</td><td>2 minutes longer than before</td></tr>
+            <tr><td>Running temperature</td><td>Average coolant after the first 10 minutes, on drives of 15 minutes or more</td><td>80&ndash;105 &deg;C</td><td>outside the range, or moved 5 &deg;C</td></tr>
+            <tr><td>Idle voltage</td><td>Voltage while stopped at 400&ndash;1100 RPM</td><td>13.0&ndash;14.8 V</td><td>outside the range, or 0.3 V lower</td></tr>
+            <tr><td>Charging voltage</td><td>Voltage above 1300 RPM</td><td>13.4&ndash;14.8 V</td><td>outside the range, or 0.3 V lower</td></tr>
+            <tr><td>Idle speed</td><td>RPM while stopped, once warm</td><td>&mdash;</td><td>moved 100 RPM</td></tr>
+            <tr><td>Long-term fuel trim</td><td>Bank 1 and 2, once warm</td><td>&plusmn;10 %</td><td>outside the range, or moved 4 points</td></tr>
           </tbody>
         </table>
         <p>
-          <code>tripRecorder.requestHealthTrends(days)</code> returns each number per trip over a window with a verdict:
-          the average of the last three drives (<code>recent</code>) against the usual range and against the average of
-          the drives before them (<code>baseline</code>, once there are three), as <code>status</code> <code>ok</code> /
-          <code>watch</code> / <code>none</code> plus a <code>note</code> saying what usually causes it.
-          <code>requestParamTrend(paramId, days)</code> gives any recorded parameter's min / average / max per trip.
-          Shown on Trip History's <a href="pages.html#triphistory">Trends</a> view. To try it without months of driving,
-          <code>tools/trips/make_mock_trip.py --drives 40 --days 60 --drift thermostat</code> (or <code>alternator</code>,
-          <code>lean</code>) writes weeks of drives with a part wearing out over the second half.
-        </p>
-
-        <h2 id="vehicle-scanning">Vehicle Scanning</h2>
-        <p>
-          On desktop, <code>scanVehicle()</code> runs automatically 2 s after a successful connection. The API is also
-          callable directly, but the current QML has no manual scan button. It emits terminal-style lines through <code>scanOutputChanged</code> (<code>[SCAN]</code>, <code>[INFO]</code>,
-          <code>[OK] NAME</code>, a <code>====</code> summary), progress through <code>scanProgressChanged(pct, "Checking NAME...")</code>,
-          and finishes with <code>supportedCommandsChanged(list)</code> + <code>scanCompleteChanged(list)</code> +
-          <code>scanProgressChanged(100, "Found N supported parameters")</code>. The list is persisted under the
-          <code>supportedOBDParameters</code> settings key. The same list (base command names plus multi-value signal ids,
-          in <code>OBDParameterModel</code> vocabulary) becomes this session's
-          <code>vehicleSupportedParameters</code> and sets <code>vehicleScanComplete</code> (true even for an empty
-          result); both reset on disconnect, connection loss and <code>close()</code>, and are never loaded from the
-          persisted key, so they always describe the car connected right now. They drive the QML "supported by this
-          vehicle" gate and filter the poll set.
-        </p>
-        <ul>
-          <li><strong>Desktop</strong>: <code>doScanVehicle()</code> on the worker pauses polling, sends <code>0100</code>,
-            <code>0120</code>, <code>0140</code>, ... <code>01E0</code> (stopping at the first range whose bitmap does not
-            set bit 32 = "next range supported"), collects the supported PID numbers with
-            <code>parseSupportedPids()</code>, and builds the final result through <code>supportedCommandNames()</code>:
-            base command names and extended value IDs whose PIDs are supported, plus <code>ELM_VOLTAGE</code>.
-            An entirely empty bitmap result returns an empty list. Polling resumes afterwards.</li>
-          <li><strong>Android</strong>: no worker, so <code>scanVehicle()</code> answers from the supported-PID bitmaps read
-            during connect (<code>ELM327Protocol::supportedCommandNames(m_androidSupportedPids)</code>), emitting the same
-            <code>[SCAN]</code> / <code>[INFO]</code> / <code>[OK]</code> / <code>[DONE]</code> lines and completing through
-            <code>onWorkerScanComplete()</code> (which clears <code>m_isScanning</code> and persists the list), answering
-            from what connect already learned. An empty bitmap set reports <em>No supported
-            PIDs found</em>. The automatic post-connect scan is still desktop-only (it hangs off
-            <code>onWorkerInitComplete</code>). Android has no automatic scan report or QML scan button; the live poll
-            list still uses the initializer's supported-PID bitmaps.</li>
-        </ul>
-
-        <!-- Diagnostics -->
-        <h2 id="diagnostics">Diagnostics (DTC)</h2>
-        <p>
-          The Diagnostics page owns a <em>diagnostic mode</em>: it calls <code>enterDiagnosticMode()</code> when created
-          and whenever it becomes visible again (a <code>StackView</code> push does not destroy the page), and
-          <code>exitDiagnosticMode()</code> when hidden or destroyed. On desktop:
-        </p>
-        <table>
-          <thead><tr><th></th><th>Behaviour</th></tr></thead>
-          <tbody>
-            <tr><td>Enter</td><td>Stops the watchdog and queues <code>stopPolling</code> on the worker; DTC work uses the same port and worker.</td></tr>
-            <tr><td>Queries</td><td>Each <code>read_*</code> queues <code>doRead*</code> on the worker, which pauses polling, sends raw <code>03</code> / <code>07</code> / <code>020200</code> (5 s), <code>04</code> (5 s), <code>0101</code> (3 s, byte A: bit 7 = MIL, bits 0-6 = count), parses every line of the reply with <code>parseDtcResponse()</code> / <code>parseFreezeFrameDtc()</code>, and resumes polling. Descriptions are empty strings.</td></tr>
-            <tr><td>Thread safety</td><td>Results come back as queued worker signals.</td></tr>
-            <tr><td>Exit</td><td>Status <code>"Reconnecting"</code>, <code>m_isConnecting</code> cleared, full reconnect after 1 s via <code>delayedReconnectAfterDiagnostic()</code> with <code>m_reconnectingAfterDiagnostic</code> set (up to 3 retries regardless of the auto-reconnect setting).</td></tr>
-            <tr><td>Result shape</td><td><code>dtcCodesChanged</code> carries a list of <code>{code, description}</code> maps.</td></tr>
-          </tbody>
-        </table>
-        <p>
-          <strong>No transition state</strong>: <code>enterDiagnosticMode</code> stops the watchdog and polling and
-          sets <code>m_diagnosticMode</code> in one call on the main thread, with no blocking I/O, so there is no
-          "entering" state for a second call to meet. A second enter is ignored ("Already in diagnostic mode"), and
-          an exit outside diagnostic mode does nothing.
-        </p>
-
-        <!-- Android -->
-        <h2 id="android-ble">Android: BLE via OctaveOBDBridge</h2>
-        <p>
-          On Android the desktop worker is never created. <code>startAndroidConnection()</code> validates the MAC
-          (missing/invalid gives <code>"No MAC Address"</code> / <em>Enter your ELM327 MAC in OBD Settings, then tap Connect</em>),
-          resets the BLE state, and calls <code>OctaveOBDBridge.connect(context, mac)</code> through <code>QJniObject</code>.
-          From then on a <strong>50 ms</strong> <code>QTimer</code> (<code>onAndroidBlePoll()</code>) drains the bridge:
-        </p>
-        <ol class="steps">
-          <li><code>pollLog()</code> up to 50 lines per tick: <code>W|</code> lines become <code>qCWarning(lcElm327) "[BLE] ..."</code>, <code>I|</code> lines <code>qCInfo</code> -- so a BLE drop in the car lands in <code>octave-cpp.log</code> and the Diagnostics export instead of only logcat (<code>3858c5c</code>).</li>
-          <li><code>pollResponse()</code> until empty: each notification chunk is fed to the same <code>ResponseBuffer</code>, and every complete <code>&gt;</code>-terminated response goes to <code>processAndroidResponse()</code>.</li>
-          <li><code>stateCode()</code>: only on a transition. <code>0 DISCONNECTED</code> (log <code>lastEvent</code>, status <em>Disconnected</em>, reconnect if we were connected), <code>1 CONNECTING</code>, <code>2 DISCOVERING</code> (progress 50, <em>Discovering services...</em>), <code>3 READY</code> (progress 70, <em>Initializing ELM327...</em>, start the init state machine after 500 ms), <code>4 ERROR</code> (log <code>lastError</code>, <em>BLE error</em>, reconnect).</li>
-        </ol>
-        <p>
-          <strong>Inside the Java bridge</strong>: <code>BluetoothAdapter.getRemoteDevice(mac)</code> then
-          <code>connectGatt(ctx, autoConnect=false, callback, TRANSPORT_LE)</code>; on connect it runs service discovery and
-          tries three vendor profiles in priority order -- <strong>ISSC Transparent UART</strong>
-          (<code>49535343-FE7D-...</code>, separate notify/write characteristics; NEXAS, Vgate iCar Pro, OBDLink CX),
-          <strong>FFF0</strong> (FFF1 notify + FFF2 write, or a single read/notify/write FFF1; Konnwei, some BAFX), and
-          <strong>FFE0/FFE1</strong> (one characteristic both ways; HM-10 style clones). The first one with both roles wins;
-          notifications are enabled through the CCCD descriptor and the state flips to READY. Writes use
-          <code>WRITE_TYPE_NO_RESPONSE</code> when the characteristic allows it. Incoming bytes are queued in a
-          <code>ConcurrentLinkedQueue</code> (GATT callbacks run on a Binder thread; the manager polls from the Qt main thread).
-          Verified end-to-end on a NEXAS adapter over the FFF0 path (<code>f1901d9</code>).
-        </p>
-        <p>
-          <strong>Permissions</strong> (<code>08e8245</code>): on API 31+ <code>connect()</code> checks
-          <code>BLUETOOTH_CONNECT</code> / <code>BLUETOOTH_SCAN</code>; if either is missing it casts the context to
-          <code>Activity</code>, calls <code>requestPermissions()</code> (request code 7301) so the system dialog appears,
-          sets the error <em>"Requesting Bluetooth permission -- tap Allow, then tap Connect again"</em>, goes to state ERROR
-          and returns false. Fresh installs (CI sideloads, Play builds) therefore get a working second tap instead of a
-          silent <code>SecurityException</code> from <code>connectGatt()</code>. The same grant unlocks
-          <code>bondedDevices()</code>, so the adapter list populates right after it. The older
-          <code>requestAndroidBluetoothPermission()</code> (which wrestled Qt's <code>QBluetoothPermission</code> cache) has
-          been removed.
-        </p>
-        <p>
-          <strong>Writes</strong>: <code>writeAndroidBytes()</code> drops data unless the last seen state is READY and
-          chunks every write to 20 bytes (the default 23-byte ATT MTU minus 3). <strong>Init</strong>: the timer-driven
-          sequence described above, then <code>0100</code> and a 2 s wait. <strong>Finalize</strong>:
-          <code>m_connected = true</code>, <em>Connected</em>, progress 100, and <code>rebuildAndroidPollList()</code> builds
-          the poll list: <code>buildPidsToWatch()</code> (consumer demand plus heartbeat, extended values included) intersected with the
-          supported-PID bitmaps collected through PID C0 if the vehicle answered them (<code>ELM_VOLTAGE</code> always passes); an empty result
-          falls back to <code>ELM_VOLTAGE</code> (<code>ATRV</code>) alone. Because connect chains <code>0120</code>/<code>0140</code>/<code>0160</code>, requested
-          PIDs at or above <code>0x21</code> (<code>FUEL_LEVEL</code>, <code>CONTROL_MODULE_VOLTAGE</code>,
-          <code>OIL_TEMP</code>) survive the intersection and are polled. <strong>Polling</strong> is response-driven: <code>pollNextAndroidPid()</code> writes one request
-          and arms a 500 ms single-shot watchdog; the next request goes out when a response is decoded or the watchdog
-          fires. Ten consecutive watchdog fires (5 s stale) flush the response buffer. <strong>Reconnect</strong> after an
-          unexpected DISCONNECTED/ERROR: up to 3 attempts, delay <code>min(2000 * n, 10000)</code> ms, counter reset on
-          success.
-        </p>
-        <div class="info-box warning">
-          <div class="info-box-title">What the Android path does not do</div>
-          <p>
-            <code>readDtc</code>, <code>readCurrentDtc</code>, <code>readStatus</code>, <code>clearDtc</code> and
-            <code>readFreezeFrame</code> go through <code>invokeWorker()</code>, which logs <em>"no worker thread on this
-            transport, ignoring"</em> once per call and returns; <code>refreshValues</code> is likewise a no-op without a
-            worker. <code>enterDiagnosticMode</code> only stops the watchdog. The data watchdog does not apply (the BLE
-            path has its own per-PID watchdog); the 10 s device scanner runs and is what refreshes the bonded-device rows.
-          </p>
-        </div>
-
-        <!-- ELM327 protocol -->
-        <h2 id="elm327-protocol">ELM327 Protocol Module</h2>
-        <p>
-          <span class="file-path">src/managers/elm327protocol.{h,cpp}</span> is pure protocol code (no I/O): the 83 PID
-          entries (82 mode-01 commands plus <code>ELM_VOLTAGE</code>), the extended table, decoders, error tokens and
-          public parsing helpers. The desktop worker, the Android path and the dev-mode simulator all use it;
-          <span class="file-path">tests/cpp/tst_elm327protocol.cpp</span> covers it without a vehicle.
-        </p>
-        <h3>PID table</h3>
-        <p>
-          Maps <code>(mode, pid)</code> to <code>(name, signalName, commandName, decoder, expectedBytes)</code>;
-          <code>commandName</code> is the established OBD command name (python-obd's vocabulary, e.g. <code>COOLANT_TEMP</code>,
-          <code>AMBIANT_AIR_TEMP</code>), i.e. the settings key and the scan-result vocabulary.
-          The decoder takes the data bytes after the <code>41 XX</code> header:
-        </p>
-        <pre><code><span class="kw">static double</span> <span class="fn">decRpm</span>(<span class="kw">const</span> QVector&lt;uint8_t&gt; &amp;a) {
-    <span class="kw">return</span> std::round((a[<span class="num">0</span>] * <span class="num">256.0</span> + a[<span class="num">1</span>]) / <span class="num">4.0</span> * <span class="num">10.0</span>) / <span class="num">10.0</span>;
-}
-t[{<span class="num">1</span>, <span class="num">0x0C</span>}] = {<span class="str">"RPM"</span>, <span class="str">"rpmChanged"</span>, <span class="str">"RPM"</span>, decRpm, <span class="num">2</span>};
-t[kElmVoltageKey] = {<span class="str">"ELM Voltage"</span>, <span class="str">"elmVoltageChanged"</span>, <span class="str">"ELM_VOLTAGE"</span>, <span class="kw">nullptr</span>, <span class="num">0</span>};   <span class="cmt">// {0, 0}: "ATRV", text reply</span></code></pre>
-        <p>
-          The 16 wide-range O2 entries are generated in a loop (<code>O2_S1_WR_VOLTAGE</code> .. <code>O2_S8_WR_VOLTAGE</code> at
-          <code>0x24</code>-<code>0x2B</code>, <code>O2_S1_WR_CURRENT</code> .. <code>O2_S8_WR_CURRENT</code> at
-          <code>0x34</code>-<code>0x3B</code>, four data bytes each; the lambda ratio in bytes A/B is ignored and the
-          voltage / current is decoded from C/D as <code>(256C + D) &times; 8 / 65535</code> V and
-          <code>(256C + D) / 256 - 128</code> mA).
-        </p>
-        <h3>Functions</h3>
-        <table>
-          <thead>
-            <tr><th>Function</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>formatPidRequest(mode, pid)</code></td><td><code>"%02X%02X\r"</code>, e.g. <code>010C\r</code>.</td></tr>
-            <tr><td><code>parseResponse(raw)</code></td><td>Rejects any line containing <code>NO DATA</code>, <code>UNABLE TO CONNECT</code>, <code>ERROR</code>, <code>?</code>, <code>STOPPED</code>, <code>BUS INIT: ...ERROR</code> (logged at debug), strips spaces, hex-decodes, and returns <code>(mode - 0x40, pid, data bytes)</code>; fewer than two bytes is "unparseable".</td></tr>
-            <tr><td><code>decodePid(mode, pid, bytes)</code></td><td>Looks up the table; a short response logs a WARNING with the byte counts; decoder exceptions log a WARNING (with <code>what()</code>) and return nothing. The <code>ELM_VOLTAGE</code> entry has no decoder and returns nothing here.</td></tr>
-            <tr><td><code>elmVoltageRequest()</code>, <code>parseElmVoltage(raw)</code></td><td><code>"ATRV\r"</code> and its reply: lower-case, strip the trailing <code>v</code>, convert to a number; <code>"12.6V"</code> &rarr; 12.6, anything else logs at debug and returns nothing.</td></tr>
-            <tr><td><code>supportedCommandNames(set)</code></td><td>Sorted base command names and extended parameter IDs whose mode-01 PID is in the vehicle's supported set; <code>ELM_VOLTAGE</code> is always included.</td></tr>
-            <tr><td><code>parseSupportedPids(bytes)</code></td><td>32-bit bitmap, MSB first, into 1-based PID offsets relative to the queried base.</td></tr>
-            <tr><td><code>parseDtcResponse(lines, mode)</code></td><td>Takes every line of the reply (<code>ResponseBuffer::lastLines()</code>). Joins CAN multi-frame replies (<code>00A</code>, <code>0:…</code>, <code>1:…</code>), keeps one message per ECU, checks the response mode (<code>43</code> / <code>47</code> / <code>4A</code>), drops the CAN DTC-count byte (CAN data is an odd byte count; pre-CAN is always 6 bytes), reads 2-byte chunks, skips <code>0000</code>, builds <code>P/C/B/U</code> + 4 digits and de-duplicates across ECUs. Covered by <code>parseDtcResponse</code> in <span class="file-path">tests/cpp/tst_elm327protocol.cpp</span>.</td></tr>
-            <tr><td><code>parseFreezeFrameDtc(lines)</code></td><td>Reads the DTC from a Mode 02 PID 02 frame 0 reply (<code>42 02 00 hi lo</code>).</td></tr>
-            <tr><td><code>parseResponseLines(lines, mode, pid)</code></td><td>Like <code>parseResponse</code>, from every line of a reply: joins a CAN multi-frame answer and returns the first message answering <code>mode</code>/<code>pid</code>. Used for the multi-value PIDs.</td></tr>
-            <tr><td><code>decodeExtendedPid(mode, pid, bytes)</code></td><td><code>[(paramId, value), ...]</code> from <code>extendedPidTable()</code>, skipping values whose support bit is clear or whose bytes are missing. Covered by <code>decodeExtendedPid</code> in <span class="file-path">tests/cpp/tst_elm327protocol.cpp</span>.</td></tr>
-            <tr><td><code>parseVin(lines)</code>, <code>decodeVin(vin)</code></td><td>Mode 09 PID 02 reply to the 17-character VIN (<code>""</code> for <code>NO DATA</code>), and VIN to make + model year. See <a href="#vin">Vehicle identity</a>.</td></tr>
-          </tbody>
-        </table>
-        <h3>ResponseBuffer</h3>
-        <p>
-          Accumulates bytes until a <code>&gt;</code> prompt. It trims to the last 1 KB if it grows past 4 KB without a
-          prompt (corrupt stream guard), splits the response on <code>\r</code>, and returns the last non-empty line that is
-          not an <code>AT</code> echo and not <code>OK</code>. That is why echo-on adapters and the <code>SEARCHING...</code>
-          line preceding a first reply do not break parsing.
-        </p>
-        <pre><code><span class="kw">void</span> ResponseBuffer::<span class="fn">feed</span>(<span class="kw">const</span> QByteArray &amp;data) {
-    m_buffer.append(data);
-    <span class="kw">if</span> (m_buffer.size() &gt; <span class="num">4096</span>)          <span class="cmt">// no '&gt;' prompt for too long: trim</span>
-        m_buffer = m_buffer.right(<span class="num">1024</span>);
-}
-
-std::optional&lt;QString&gt; ResponseBuffer::<span class="fn">getResponse</span>() {
-    <span class="kw">int</span> idx = m_buffer.indexOf(<span class="str">'&gt;'</span>);
-    <span class="kw">if</span> (idx == -<span class="num">1</span>)
-        <span class="kw">return</span> std::nullopt;
-    QString response = QString::fromLatin1(m_buffer.left(idx)).trimmed();
-    m_buffer = m_buffer.mid(idx + <span class="num">1</span>);
-    QStringList lines = <span class="cmt">/* split on '\r', non-empty trimmed lines (also kept for lastLines()) */</span>;
-    <span class="kw">for</span> (<span class="kw">int</span> i = lines.size() - <span class="num">1</span>; i &gt;= <span class="num">0</span>; --i)
-        <span class="kw">if</span> (!lines[i].startsWith(<span class="str">"AT"</span>) &amp;&amp; lines[i] != <span class="str">"OK"</span>)
-            <span class="kw">return</span> lines[i];
-    <span class="kw">return</span> lines.isEmpty() ? QString() : lines.last();
-}</code></pre>
-
-        <!-- Protocol logging -->
-        <h2 id="protocol-logging">Protocol Logging</h2>
-        <p>
-          A failed OBD session can be reconstructed from the logs (commit <code>86c8c3c</code>). The
-          <code>octave.elm327</code> category logs <code>TX</code>/<code>RX</code> lines (response truncated to 200 chars, with
-          the round-trip time) from <code>OBDConnectionWorker::sendCommand</code>, a WARNING when a command gets no response
-          within its timeout, and in <code>ELM327Protocol</code> adapter error responses and unparseable responses at debug,
-          short responses and decoder failures at warning. On Android the Java bridge's queued event/error lines are
-          forwarded as <code>[BLE] ...</code> INFO/WARNING lines by the 50 ms poll. Debug-level lines need <code>--debug</code>
-          (see the logging section of <a href="architecture.html#logging">Architecture</a>). The live in-app
-          <a href="#unified-adapter-api">connection log</a> is a separate, user-facing channel.
-        </p>
-
-        <!-- Parameter model -->
-        <h2 id="parameter-model">OBDParameterModel and IMU Parameters</h2>
-        <p>
-          Values flow through the C++ <a href="signals-slots-reference.html#paramStore"><code>paramStore</code></a>
-          (<span class="file-path">src/managers/parameterstore.{h,cpp}</span>, a <code>QQmlPropertyMap</code> with one notifying
-          key per id). <span class="file-path">src/appcore.cpp</span> feeds it from <code>parameterSampled(id, value)</code>, which
-          <code>OBDManager</code> emits for every decoded value, single- and multi-value, on the desktop worker path and on Android
-          alike, and from the IMU's <code>pitchChanged</code> .. <code>baroTempChanged</code> signals for <code>PITCH</code>,
-          <code>ROLL</code>, <code>HEADING</code>, <code>ALTITUDE</code>, <code>ACCEL_MAG</code>, <code>LATERAL_G</code>,
-          <code>LONGITUDINAL_G</code> and <code>BARO_TEMP</code> (see <a href="hardware-managers.html">Hardware Managers</a>). The IMU
-          values are ordinary parameters from that point on: any gauge can bind them, the PID picker lists them, demo mode sweeps
-          them. An alias (<code>IGNITION_TIMING</code>) is written whenever its target (<code>TIMING_ADVANCE</code>) arrives.
-          <span class="file-path">frontend/OBDParameterModel.qml</span> serves it to every reader through
-          <code>liveValue(id)</code> (<code>paramStore[id]</code>, or the demo sweep); it has no per-signal handlers and no copy of the
-          values.
-        </p>
-        <p>
-          <strong>Coalesced writes</strong> (<code>486a809</code>, moved into the store): <code>ingest()</code> only records the
-          value and arms a one-shot 33 ms timer; the fold writes the pending values and emits <code>changed(ids)</code> once.
-          The IMU alone fires about 420 orientation/gauge signals per second (7 signals at 60 Hz), plus barometer updates --
-          copying a whole dictionary on each one pegged the QML thread at 100 % on an idle Orange Pi (V4 string allocation + GC
-          churn, found with py-spy). Values now land at most ~30 times a second and only while data arrives, and a binding on
-          <code>paramStore[id]</code> re-evaluates only for its own id.
-          <code>hasParameter(id)</code>, <code>getParamInfo(id)</code>, <code>parameterInfo</code> (with short titles for the
-          home cards) and <code>allParameters</code> (the C++ <code>ParameterCatalog</code>: id, title, short title, unit, min, max, <code>kind</code>, decimals) are documented on the
-          <a href="gauges-dashboards.html#parameter-model">Gauges &amp; Dashboards</a> page.
+          From code: <code>tripRecorder.requestHealthTrends(days)</code> and
+          <code>requestParamTrend(paramId, days)</code>. To see the page without months of driving,
+          <code>tools/trips/make_mock_trip.py --drives 40 --days 60 --drift thermostat</code> writes weeks of drives
+          with a part wearing out (also <code>alternator</code>, <code>lean</code>).
         </p>
 
         <!-- Shift light -->
-        <h2 id="shift-light">Shift Light, Full-Screen Flash and Aura</h2>
+        <h2 id="shift-light">Shift Light</h2>
         <p>
-          The rules live in <a href="signals-slots-reference.html#shiftLightManager"><code>ShiftLightManager</code></a>
-          (<span class="file-path">src/managers/shiftlightmanager.{h,cpp}</span>), fed by <code>rpmChanged</code> in
-          <code>main.cpp</code>; the QML below only draws its <code>activeFlag</code> and <code>lit</code>. Its configuration is a list of <em>flags</em>
-          stored as a JSON string under the <code>rpm_flags</code> setting and edited in the RPM settings popup inside
-          <span class="file-path">frontend/OBDMenu.qml</span>. Each flag is
-          <code>{rpmLow, rpmHigh, color, flash, flashSpeed, fullScreenFlash, fullScreenFlashOpacity, auraFlash, auraFlashOpacity, auraSpread}</code>
-          (new flags default to <code>flash: false</code>, <code>flashSpeed: 100</code>, <code>fullScreenFlashOpacity: 0.5</code>,
-          <code>auraFlashOpacity: 0.6</code>, <code>auraSpread: 0.18</code>); the popup keeps the list sorted by
-          <code>rpmLow</code>, keeps <code>rpmLow &lt;= rpmHigh</code> and clamps ranges to <code>rpm_max_rpm</code> (default 8000).
-          The manager migrates the old single-<code>rpm</code> format once on load to <code>rpmLow = rpm</code>,
-          <code>rpmHigh = rpm_max_rpm</code> (the redline, not "no limit") and writes it back.
+          A shift light tells you when to change gear without looking at the tachometer. In OCTAVE it is a list of
+          <strong>flags</strong>. Each flag is a range of engine speed, a colour and an effect. Tap the RPM card in
+          Live Data to edit them.
+        </p>
+        <table>
+          <thead><tr><th>Effect</th><th>What you see</th></tr></thead>
+          <tbody>
+            <tr><td>Lamp</td><td>A coloured light on the RPM card and on the Shift Light dashboard widget.</td></tr>
+            <tr><td>Flash</td><td>The light blinks, at a speed you set.</td></tr>
+            <tr><td>Full-screen flash</td><td>The whole screen is tinted in the flag's colour. Touches still go through.</td></tr>
+            <tr><td>Aura</td><td>A glow around the edges of the screen that leaves the middle readable.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          When ranges overlap, the flag lower in the list wins. The full-screen flash and the aura appear on every
+          page, not just the OBD one, which is why engine speed is always polled. The rules live in C++
+          (<code>shiftLightManager</code>): the screens only draw its <code>activeFlag</code> and <code>lit</code>, so
+          every lamp and overlay blinks in step. The flags are stored as JSON in the <code>rpm_flags</code> setting;
+          each is <code>{rpmLow, rpmHigh, color, flash, flashSpeed, fullScreenFlash, fullScreenFlashOpacity,
+          auraFlash, auraFlashOpacity, auraSpread}</code>.
+        </p>
+
+        <!-- Custom PIDs -->
+        <h2 id="custom-pids">Custom PIDs</h2>
+        <p>
+          The standard readings are the ones every make agreed on. Your car knows much more (transmission temperature,
+          oil level, individual wheel speeds), but each make keeps those under its own numbers. If you know the number
+          and the formula for your car (forums and Torque PID lists are the usual source), you can add it.
+        </p>
+        <p>
+          Custom readings live in <code>custom-pids.json</code> in the config folder. Settings &gt; OBD &gt; Advanced
+          &gt; Custom PIDs has a <strong>Create starter file</strong> button and shows any entry that was skipped and
+          why. Each entry is an id, a title and unit, the request, optionally which computer in the car to ask
+          (<code>header</code>), and a formula over the reply's bytes such as <code>A-40</code> or
+          <code>(A*256+B)/10</code>. The file format and the formula language are in
+          <span class="file-path">docs/CUSTOM_PIDS.md</span>.
         </p>
         <ul>
-          <li><strong>Active flag</strong>: the last flag (highest priority) whose <code>[rpmLow, rpmHigh]</code> range contains the current RPM, only while <code>rpm_shift_light_enabled</code> is on. <code>activeFlag</code> has every field filled in (defaults above; <code>fullScreenFlashOpacity</code> falls back to <code>rpm_fullscreen_flash_opacity</code>).</li>
-          <li><strong>Flash</strong>: one C++ timer at the flag's <code>flashSpeed</code> toggles <code>lit</code>, so the card disc and both overlays flash in step; a newly active flag always starts lit.</li>
-          <li><strong>Card indicator</strong> (<span class="file-path">HomeOBDView.qml</span>): a disc on the RPM home card (<code>rpm_show_on_home_card</code>) coloured by the active flag, with glow (<code>rpm_glow_size</code>, <code>rpm_glow_intensity</code>), size (<code>rpm_shift_light_size</code>), colour transition (<code>rpm_color_transition_speed</code>), optional 800 ms pulse (<code>rpm_pulse_enabled</code>), dark while not <code>lit</code>.</li>
-          <li><strong>Global full-screen flash</strong> (<span class="file-path">Main.qml</span>, <code>globalFullScreenFlash</code>): a <code>z: 999999</code> rectangle over the whole window in the flag colour at the flag's <code>fullScreenFlashOpacity</code> (fallback <code>rpm_fullscreen_flash_opacity</code>), visible while <code>lit</code> and the flag has <code>fullScreenFlash</code>; <code>enabled: false</code> so touches pass through.</li>
-          <li><strong>Aura overlay</strong> (<code>globalAuraFlash</code>): the same trigger with <code>auraFlash</code>, but rendered as four edge gradients (top/bottom/left/right) that fade from the flag colour to transparent over <code>auraSpread</code> of the window (default 18 %) at <code>auraFlashOpacity</code> -- a perimeter glow that leaves the centre readable.</li>
+          <li>A custom reading behaves like any other: it has a Live Data card, works in a dashboard and is recorded by the black box.</li>
+          <li>The file is read once at startup. Restart OCTAVE after editing it.</li>
+          <li><strong>Read only.</strong> Only read requests (modes 22 and 21) are accepted, and OCTAVE builds the request itself from the numbers in the file. Nothing in the file is sent to the car as written.</li>
+          <li>After asking another computer in the car, the worker always points the adapter back at the default one before doing anything else.</li>
+          <li>A reading that goes unanswered three times in a row is then tried only every 30 seconds.</li>
+          <li>Not on Android yet.</li>
+        </ul>
+
+        <!-- Bus monitor -->
+        <h2 id="bus-monitor">Bus Monitor</h2>
+        <p>
+          The computers in a car talk to each other all the time on a shared network, the bus. The Bus Monitor
+          (Settings &gt; OBD &gt; Advanced) shows that traffic: one row per message id, how often it comes, its latest
+          bytes, and which bytes just changed. It is for finding out which message carries what: press the brake and
+          see which byte moves. The guide is <span class="file-path">docs/BUS_MONITOR.md</span>.
+        </p>
+        <ul>
+          <li><strong>Listen only.</strong> The adapter is put in its monitor mode, in which it transmits nothing. OCTAVE has no way to send a message to the bus.</li>
+          <li>While it listens, the adapter cannot answer questions, so live readings and the black box pause. Any other request (trouble codes, a custom PID) ends listening.</li>
+          <li>A filter narrows it to one message id or a pattern (hex digits, with <code>X</code> for "any").</li>
+          <li>Recording writes a log under <code>history/bus/</code> in the format candump, SavvyCAN and Wireshark read.</li>
+          <li>A busy bus is faster than the adapter's link (about 200 messages a second at 38400 baud). The adapter then reports <code>BUFFER FULL</code>; OCTAVE counts it and carries on. Use a filter.</li>
+          <li>Many cars built since about 2010 keep their internal traffic behind a gateway, so the OBD port stays silent. That is the car, not OCTAVE.</li>
+          <li>Not on Android. No recording in the browser demo.</li>
+        </ul>
+
+        <!-- Android -->
+        <h2 id="android-ble">Android</h2>
+        <p>
+          On Android, OCTAVE talks to a Bluetooth LE adapter through a small Java helper
+          (<span class="file-path">OctaveOBDBridge.java</span>) and not through the worker. Qt's own Bluetooth support
+          refused to work on recent Android versions even with every permission granted, so OCTAVE goes straight to
+          Android's Bluetooth API.
+        </p>
+        <ul>
+          <li><strong>Adapters:</strong> Bluetooth LE ELM327s. The helper recognises the three common kinds without any setting (ISSC, FFF0 and FFE0 services: NEXAS, Vgate iCar Pro, OBDLink CX, Konnwei, Veepeak and HM-10 based clones).</li>
+          <li><strong>Pairing:</strong> pair in Android's settings. OCTAVE lists paired devices and does not scan.</li>
+          <li><strong>Permission:</strong> the first connection asks for Bluetooth permission. Allow it and pick the adapter again.</li>
+          <li><strong>Same readings, same polling rules</strong> as everywhere else, including the black box.</li>
+          <li><strong>Reconnecting:</strong> after a dropped link it retries up to 3 times, then waits for you.</li>
+        </ul>
+        <p>Not on Android yet: trouble codes, custom PIDs, the bus monitor.</p>
+        <p>
+          Extra statuses appear while connecting on Android: <em>Connecting BLE...</em>, <em>Discovering
+          services...</em>, <em>Initializing ELM327...</em>, <em>Querying PIDs...</em>, and for failures <em>No MAC
+          Address</em>, <em>BLE connect failed</em> and <em>BLE error</em>.
+        </p>
+
+        <!-- Browser -->
+        <h2 id="browser">Browser Demo</h2>
+        <p>
+          The <a href="building.html">browser build</a> can talk to a real adapter in Chrome or Edge:
+        </p>
+        <ul>
+          <li><strong>Pick Bluetooth Adapter:</strong> a Bluetooth LE ELM327, over Web Bluetooth. On Linux this needs Chrome's experimental web platform features flag; the sheet says so.</li>
+          <li><strong>Pick USB Adapter:</strong> an adapter on a USB cable, over Web Serial, on a computer.</li>
         </ul>
         <p>
-          The manager re-reads every <code>rpm_*</code> setting whenever <code>settingsManager.genericSettingChanged</code>
-          reports one, so editor changes apply live. Tests: <span class="file-path">tests/cpp/tst_shiftlightmanager.cpp</span>.
+          Both feed the same worker as the desktop app, so everything on this page applies. The page opens with no car;
+          pick "Simulated car" to see it move.
         </p>
 
-        <!-- Demo -->
-        <h2 id="demo-mode">Demo and Simulated Data</h2>
-        <table>
-          <thead><tr><th>Mechanism</th><th>Scope</th><th>How it works</th></tr></thead>
-          <tbody>
-            <tr><td><code>OBDParameterModel.simulationActive</code></td><td>Dashboard editor "Demo data" button</td><td>Pure QML: every parameter sweeps a sine between its min and max with a per-parameter period (4-16 s) and phase, 10 Hz. While active, <code>liveValue()</code> serves the sweep instead of <code>paramStore</code>; on deactivation the real readings are back at once, so fake ones never linger. The editor forces it off in <code>Component.onDestruction</code>.</td></tr>
-            <tr><td><code>SimElm327Device</code> + <code>CarSim</code> (<span class="file-path">src/dev/</span>)</td><td>Dev mode (<code>octave --dev</code>, Debug builds)</td><td>Keeps the real manager and swaps the adapter underneath it: a <code>QIODevice</code> answering the AT init, every Mode 01 PID of the protocol tables (encoded with the inverse of the shipped decoders, all reported supported), DTC modes 03/04/07/0A, the freeze-frame DTC and a CAN multi-frame VIN. Bluetooth-like 35&ndash;70 ms replies with 2 % <code>NO DATA</code> in realistic mode; dropouts close the device so the real lost-link and reconnect paths run. Driven by the keyboard and the <code>sim_*</code> command-server actions (<a href="development.html#mock-obd">Development</a>).</td></tr>
-          </tbody>
-        </table>
-
-        <!-- Settings keys -->
-        <h2 id="settings-keys">Settings Keys</h2>
-        <table>
-          <thead><tr><th>Key</th><th>Default</th><th>Used by</th></tr></thead>
-          <tbody>
-            <tr><td><code>obdBluetoothPort</code></td><td>empty -&gt; per-platform default <code>/dev/rfcomm0</code>, <code>COM3</code>, <code>/dev/tty.OBD</code>, Android: none (MAC required)</td><td>Configured port/MAC; <code>obdBluetoothPortChanged</code> triggers the 1 s debounced reconnect, which is skipped when the new port is already the one the live or in-flight connection uses (<code>m_activePort</code>). <code>connectToAdapter()</code> saves the port and connects at once, so without the skip the debounce killed its fresh attempt mid-handshake.</td></tr>
-            <tr><td><code>obdFastMode</code></td><td><code>true</code></td><td>Poll timer interval: 0 ms when on, 50 ms when off. On, polls also ask for a single reply (<code>010C1</code>) and, on CAN, carry up to six PIDs each.</td></tr>
-            <tr><td><code>blackBoxEnabled</code></td><td><code>true</code></td><td><a href="#black-box">Trip recorder</a> on / off; turning it off ends the trip being recorded.</td></tr>
-            <tr><td><code>blackBoxSweepAll</code></td><td><code>true</code></td><td>Register every scanned PID as background demand so the record covers PIDs not on screen.</td></tr>
-            <tr><td><code>blackBoxMaxMB</code></td><td><code>500</code></td><td>Cap (50&ndash;5000 MB) for the database plus trip files; oldest closed trips are pruned first.</td></tr>
-            <tr><td><code>obdAutoReconnectAttempts</code></td><td><code>0</code></td><td>Backoff attempts, clamped 0-10.</td></tr>
-            <tr><td><code>obdParameters</code></td><td>map, filled lazily with defaults</td><td><code>get_obd_parameter_enabled</code> / <code>save_obd_parameter_enabled</code> (800 ms debounce, then <code>obdParametersChanged</code>).</td></tr>
-            <tr><td><code>supportedOBDParameters</code></td><td><code>[]</code></td><td>Last scan result.</td></tr>
-            <tr><td><code>homeOBDParameters</code></td><td>list</td><td>Which parameters the home screen shows.</td></tr>
-            <tr><td><code>obdSavedAdapters</code></td><td><code>"[]"</code></td><td>MACs remembered by <code>connectToAdapter</code> as quick-connect chips.</td></tr>
-            <tr><td><code>rpm_flags</code>, <code>rpm_max_rpm</code>, <code>rpm_shift_light_enabled</code>, <code>rpm_show_on_home_card</code>, <code>rpm_shift_light_size</code>, <code>rpm_glow_size</code>, <code>rpm_glow_intensity</code>, <code>rpm_color_transition_speed</code>, <code>rpm_pulse_enabled</code>, <code>rpm_fullscreen_flash_opacity</code></td><td><code>"[]"</code>, 8000, true, true, 0.5, 0.6, 0.6, 100, false, 0.5</td><td>Shift light (generic <code>save_setting</code> / <code>get_setting_with_default</code> keys).</td></tr>
-            <tr><td><code>obdCardStyleCircular</code></td><td><code>false</code></td><td>Parameter-card grid: circular gauges instead of square cards.</td></tr>
-            <tr><td><code>lastOBDPage</code></td><td><code>""</code></td><td>Last visited OBD sub-page indicator on <code>OBDHome</code>.</td></tr>
-          </tbody>
-        </table>
-        <p>Full schema: <a href="settings-reference.html">Settings Reference</a>.</p>
-
-        <!-- Signals -->
-        <h2 id="signals">Signals and Properties</h2>
-
-        <h3>Connection signals</h3>
-        <table>
-          <thead>
-            <tr><th>Signal</th><th>Type</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>connectionStatusChanged</code></td><td>QString</td><td>Coarse status. Values emitted by the code: <code>Connecting</code>, <code>Connected</code>, <code>No Vehicle</code>, <code>Connection Failed</code>, <code>Device Not Found</code>, <code>Disconnected</code>, <code>Stale Connection</code>, <code>Reconnecting</code>, <code>Error</code>; Android also <code>No MAC Address</code>, <code>Connecting BLE...</code>, <code>Discovering services...</code>, <code>Initializing ELM327...</code>, <code>Querying PIDs...</code>, <code>BLE connect failed</code>, <code>BLE error</code>. OBDManager emits all three status signals through <code>setConnectionStatus()</code> / <code>setConnectionDetail()</code> / <code>setConnectionProgress()</code>, which store the value before emitting: Qt notifies QML bindings before connected slots, so (until 2026-10-29) a cache filled by a slot left <code>connectionStatus</code> / <code>connectionState</code> one change behind in QML (a connected car read "Connecting").</td></tr>
-            <tr><td><code>connectionStatusDetailChanged</code></td><td>QString</td><td>Human-readable detail line.</td></tr>
-            <tr><td><code>connectionLostUnexpectedly</code></td><td>QString reason</td><td>A live link dropped on its own: the worker's <code>connectionLost</code> while connected (port error, adapter stopped responding, a custom transport closing), or the Android BLE bridge reporting DISCONNECTED while connected. Not emitted for <code>disconnect</code>, port changes, diagnostic-mode switches or shutdown, which tear the worker down (or clear <code>m_connected</code>) first. <span class="file-path">Main.qml</span> turns it into the <a href="components.html#error-toast">ErrorToast</a> notice. The data watchdog's "Stale Connection" restart (no parsed data for <code>DATA_WATCHDOG_TIMEOUT_MS</code>) doesn't emit it: that also fires with the key on and the engine off, so an adapter that keeps answering without data reconnects silently.</td></tr>
-            <tr><td><code>connectionProgressChanged</code></td><td>int</td><td>0-100 (10 attempt, 15 port found, 20 BLE connect started, 50 no-vehicle / BLE discovering, 70 BLE ready, 80 ELM327 init done over BLE, 100 connected).</td></tr>
-            <tr><td><code>devicePresenceChanged</code></td><td>bool</td><td>Whether the configured port/device exists.</td></tr>
-            <tr><td><code>availablePortsChanged</code></td><td>QVariantList</td><td>Discovered port identifiers (strings).</td></tr>
-            <tr><td><code>availableAdaptersChanged</code></td><td>QVariantList</td><td>Same discovery as <code>{name, identifier, kind}</code> maps.</td></tr>
-            <tr><td><code>connectionLogLineAppended</code></td><td>QString</td><td>One connection log line; <code>connectionLog</code> keeps the last 60.</td></tr>
-            <tr><td><code>connectionLogChanged</code></td><td>&mdash;</td><td><code>connectionLog</code> changed (a line added, the oldest dropped, or cleared).</td></tr>
-            <tr><td><code>supportedCommandsChanged</code></td><td>QVariantList</td><td>Vehicle-supported command names after a scan.</td></tr>
-            <tr><td><code>scanProgressChanged</code></td><td>int, QString</td><td>Scan progress and message.</td></tr>
-            <tr><td><code>scanCompleteChanged</code></td><td>QVariantList</td><td>Scan results (same list as above).</td></tr>
-            <tr><td><code>scanOutputChanged</code></td><td>QString</td><td>Terminal-style scan output line.</td></tr>
-          </tbody>
-        </table>
-
-        <h3>Diagnostic signals</h3>
-        <table>
-          <thead>
-            <tr><th>Signal</th><th>Type</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>dtcCodesChanged</code></td><td>QVariantList</td><td><code>[{code, description}, ...]</code> (description is an empty string).</td></tr>
-            <tr><td><code>dtcCountChanged</code></td><td>int</td><td>Number of DTCs.</td></tr>
-            <tr><td><code>milStatusChanged</code></td><td>bool</td><td>Check Engine Light status.</td></tr>
-            <tr><td><code>dtcClearResult</code></td><td>bool, QString</td><td>Success flag and message.</td></tr>
-            <tr><td><code>freezeFrameChanged</code></td><td>QVariantList</td><td>Freeze-frame DTCs, the same <code>{code, description}</code> maps plus <code>values</code>: what freeze frame 0 recorded, <code>{paramId: value}</code> in native units (Mode 02 PIDs 04-20 that the frame's bitmap lists and OCTAVE decodes). <code>description</code> (here and in <code>dtcCodesChanged</code>) comes from <span class="file-path">src/managers/dtcdescriptions.{h,cpp}</span>: the meaning of common generic SAE codes, otherwise only what the code's structure says (system, generic or manufacturer-specific, powertrain area).</td></tr>
-            <tr><td><code>vinChanged</code></td><td>QString</td><td>VIN read (or cleared); <code>vin</code>, <code>vehicleMake</code>, <code>vehicleModelYear</code> notify on it.</td></tr>
-            <tr><td><code>obdParameterChanged</code></td><td>QString, float</td><td>A value from a <a href="#multi-value-pids">multi-value PID</a>: parameter id and value.</td></tr>
-            <tr><td><code>parameterSampled</code></td><td>QString, float</td><td>Every decoded reading (base, multi-value and <code>ELM_VOLTAGE</code>) by parameter id, one emission per reading. Consumed by the <a href="#black-box">black box</a>.</td></tr>
-          </tbody>
-        </table>
-
-        <h3>Base parameter signals (84) and extended values</h3>
+        <!-- Simulated car -->
+        <h2 id="simulated-adapter">Simulated Car</h2>
         <p>
-          Each is a <code>float</code> signal named <code>{parameter}Changed</code>, except the two legacy names
-          <code>distanceSinceCodesCleared</code> and <code>warmupsSinceCodesCleared</code> (no <em>Changed</em> suffix) -- the
-          model handlers are spelled to match. Extended values use <code>obdParameterChanged(QString, float)</code>, vehicle identity uses <code>vinChanged(QString)</code>, and scan-state changes emit <code>vehicleSupportedParametersChanged()</code>. See <a href="#supported-parameters">Supported OBD Parameters</a>.
+          <strong>Simulated car</strong> in the Connect Vehicle sheet is a made-up car that drives itself. It is always
+          there, on every platform, with Bluetooth off. It is not a set of fake numbers painted on the screen: it is a
+          simulated ELM327 plugged in underneath the real manager, so the real connection, polling, decoding, trouble
+          codes, custom PIDs and bus monitor all run. That makes it the right way to try OCTAVE, to build a dashboard,
+          or to develop a frontend without sitting in a car.
         </p>
+        <ul>
+          <li>Settings &gt; OBD shows "Simulated" beside the status, and <code>obdManager.simulated</code> is true.</li>
+          <li>Drives recorded from it are marked "simulated car" in Trip History.</li>
+          <li>Your real adapter stays saved. Picking it again, or restarting, goes back to it.</li>
+          <li>From code: <code>obdManager.connectToAdapter("sim://elm327")</code>.</li>
+          <li>From the command line: <code>octave --sim</code>, or <code>octave --headless --sim</code> with no screen. See <a href="development.html">Development</a>.</li>
+        </ul>
 
-        <h3>Properties</h3>
+        <!-- Logging -->
+        <h2 id="protocol-logging">When Something Goes Wrong</h2>
+        <ol class="steps">
+          <li><strong>The Connection Log</strong> (Settings &gt; OBD &gt; Connection). Look for the "Vehicle check" line: "no answer" means the adapter is not talking to the car, which is nearly always the ignition.</li>
+          <li><strong>The log files.</strong> Failed connects, lost links, the poll rate and Android's Bluetooth events are written to <code>octave-cpp.log</code> without any special setting. See <a href="architecture.html#logging">Architecture</a> for where the logs are.</li>
+          <li><strong>The full conversation.</strong> Run with <code>--debug</code> and every line sent to and received from the adapter is logged (<code>TX</code> / <code>RX</code>, with the round-trip time) under the <code>octave.elm327</code> category.</li>
+        </ol>
+        <p>Common problems and their fixes are on the <a href="troubleshooting.html">Troubleshooting</a> page.</p>
+
+        <!-- Files -->
+        <h2 id="files">Files, API and Tests</h2>
         <table>
-          <thead><tr><th>Property</th><th>Type</th><th>Description</th></tr></thead>
+          <thead><tr><th>File (under <code>src/managers/</code> unless a path is given)</th><th>What is in it</th></tr></thead>
           <tbody>
-            <tr><td><code>connectionDetail</code></td><td>QString</td><td>Last detail message (cached from the signal so the settings card can bind declaratively; added in <code>78ab72c</code>).</td></tr>
-            <tr><td><code>connectionProgress</code></td><td>int</td><td>Last progress percent.</td></tr>
-            <tr><td><code>availableAdapters</code></td><td>QVariantList</td><td>Rich adapter list.</td></tr>
-            <tr><td><code>connectionStatus</code></td><td>QString</td><td>Last <code>connectionStatusChanged</code> value, initially <code>"Disconnected"</code> (cached from the signal like <code>connectionDetail</code>; the cache connection is made first so handlers of the same signal already see the new value).</td></tr>
-            <tr><td><code>vin</code>, <code>vehicleMake</code>, <code>vehicleModelYear</code></td><td>QString / QString / int</td><td>Decoded vehicle identity; empty strings and year 0 when unknown. Notify: <code>vinChanged</code>.</td></tr>
-            <tr><td><code>vehicleSupportedParameters</code>, <code>vehicleScanComplete</code></td><td>QStringList / bool</td><td>Support results for the current connection; reset on disconnect. Notify: <code>vehicleSupportedParametersChanged</code>.</td></tr>
-            <tr><td><code>connected</code></td><td>bool</td><td><code>Q_PROPERTY</code> convenience over <code>isConnected()</code>. No QML uses it.</td></tr>
+            <tr><td><span class="file-path">obdmanager.{h,cpp}</span></td><td><code>OBDManager</code>: construction, status, the small getters. The class is one class in five files.</td></tr>
+            <tr><td><span class="file-path">obdmanager_connection.cpp</span></td><td>Finding the adapter, connecting, retries, the watchdog.</td></tr>
+            <tr><td><span class="file-path">obdmanager_polling.cpp</span></td><td>Demand, the poll list, readings coming back, the vehicle scan.</td></tr>
+            <tr><td><span class="file-path">obdmanager_diagnostics.cpp</span></td><td>Trouble codes, freeze frame, the VIN, the bus monitor's manager side.</td></tr>
+            <tr><td><span class="file-path">obdmanager_android.cpp</span></td><td>The Android Bluetooth LE path. Empty on other platforms.</td></tr>
+            <tr><td><span class="file-path">obdconnectionworker.{h,cpp}</span></td><td>The worker thread: the port, setup, polling, every request.</td></tr>
+            <tr><td><span class="file-path">elm327protocol.{h,cpp}</span></td><td>Requests, the PID tables, decoders, reply parsing.</td></tr>
+            <tr><td><span class="file-path">rfcommsocket.{h,cpp}</span></td><td>The direct Bluetooth socket (Linux).</td></tr>
+            <tr><td><span class="file-path">obdadapterfinder.{h,cpp}</span>, <span class="file-path">src/platform/bluezpairer.{h,cpp}</span></td><td>Scan, pair, trust, connect.</td></tr>
+            <tr><td><span class="file-path">parameterstore</span>, <span class="file-path">parametercatalog</span></td><td>The latest values; the title, unit and range of every reading.</td></tr>
+            <tr><td><span class="file-path">triprecorder</span>, <span class="file-path">tripstore</span></td><td>The black box and its database.</td></tr>
+            <tr><td><span class="file-path">custompids</span>, <span class="file-path">busmonitor</span>, <span class="file-path">shiftlightmanager</span>, <span class="file-path">dtcdescriptions</span></td><td>As named.</td></tr>
+            <tr><td><span class="file-path">android/src/org/octave/app/OctaveOBDBridge.java</span></td><td>Android's Bluetooth LE helper.</td></tr>
+            <tr><td><span class="file-path">src/sim/</span></td><td>The simulated car and its ELM327.</td></tr>
+            <tr><td><span class="file-path">src/platform/wasm/</span> (<code>webbluetooth</code>, <code>webserial</code>, <code>webport</code>)</td><td>The browser's adapters.</td></tr>
+            <tr><td><span class="file-path">frontend/</span> <code>OBDHome</code>, <code>OBDMenu</code>, <code>OBDDiagnostics</code>, <code>TripHistory</code>, <code>OBDAdapterSheet</code>, <code>OBDParameterModel</code>, <code>settings/OBDSettingsPage</code></td><td>The screens.</td></tr>
           </tbody>
         </table>
-
-        <!-- Slots -->
-        <h2 id="slots">Slots</h2>
-        <p><strong>Names:</strong> the camelCase name is the one to use (<code>next_track</code> is <code>nextTrack</code>, <code>get_album</code> is <code>getAlbum</code>, <code>is_scanning</code> is <code>isScanning</code>): same parameters, same result, same permission. The tables below show the camelCase names. The older snake_case name of each still works through protocol&nbsp;4, is marked <code>deprecated</code> in <code>describe</code> and <span class="file-path">docs/api/</span>, and goes in protocol&nbsp;5. The full list with each note is in the <a href="api-reference.html">API reference</a>.</p>
+        <p>
+          <strong>API.</strong> Every property, method and signal of <code>obdManager</code>,
+          <code>obdAdapterFinder</code>, <code>tripRecorder</code>, <code>customPids</code>, <code>busMonitor</code>,
+          <code>shiftLightManager</code>, <code>paramStore</code> and <code>parameterCatalog</code> is listed in the
+          <a href="api-reference.html#obdManager">API reference</a>, which is generated from the code and so is never
+          out of date. The ones most code needs:
+        </p>
         <table>
-          <thead>
-            <tr><th>Slot</th><th>Signature</th><th>Description</th></tr>
-          </thead>
+          <thead><tr><th>To do this</th><th>Use</th></tr></thead>
           <tbody>
-            <tr><td><code>reconnect</code></td><td>()</td><td>Clean up, reset the attempt counter, start a fresh connection.</td></tr>
-            <tr><td><code>forceConnect</code></td><td>()</td><td>Same, but also clears a wedged <code>m_isConnecting</code> flag first (added so a BLE attempt that never reported back cannot block every later Connect tap). The Connect button and <code>connectToAdapter</code> end here.</td></tr>
-            <tr><td><code>resetConnection</code></td><td>()</td><td>Alias of <code>forceConnect</code>; used by the settings page's Connect button.</td></tr>
-            <tr><td><code>close</code></td><td>()</td><td>Sets the force-stop flag, stops timers, cleans up, and (unless already there) emits <code>connectionStatusChanged("Disconnected")</code>, so <code>connected</code>, <code>connectionState</code> and <code>connectionStatus</code> notify. No auto-reconnect follows; <code>resetConnection()</code> connects again. Called from <code>aboutToQuit</code>.</td></tr>
-            <tr><td><code>isConnected</code></td><td>() -&gt; bool</td><td>Connection flag. Also exposed as camelCase <code>isConnected()</code>.</td></tr>
-            <tr><td><code>getConnectionStatus</code></td><td>() -&gt; QString</td><td>The last <code>connectionStatusChanged</code> value (<code>"Disconnected"</code> before any attempt, then <code>"Connecting"</code>, <code>"Connected"</code>, <code>"No Vehicle"</code>, ...), the label the pages show; <code>connectionState</code> classifies it.</td></tr>
-            <tr><td><code>connectionState</code></td><td>property ConnectionState (notify <code>connectionStatusChanged</code>)</td><td><code>Q_ENUM ConnectionState { Disconnected, Connecting, Connected, NoVehicle, Failed }</code> from the status text (<code>stateFor()</code>: every BLE step, Reconnecting and Stale Connection are Connecting; Device Not Found, Connection Failed, Error, No MAC Address and the BLE failures are Failed; unknown text is Failed). QML imports <code>OCTAVE.OBD 1.0</code> (registered in <code>main.cpp</code>) for <code>OBDManager.Connecting</code> etc.; the settings page, its widget, OBDHome and the OBD menu's connect button colour and animate by it (<code>tst_obdmanager</code> lists every emitted string).</td></tr>
-            <tr><td><code>scan</code>, <code>refreshPorts</code>, <code>getAvailablePorts</code></td><td>() / () -&gt; QVariantList</td><td>Discovery sweep; the last also returns the port list.</td></tr>
-            <tr><td><code>connectToAdapter</code>, <code>platformHint</code></td><td>(QString) / () -&gt; QString</td><td>See <a href="#unified-adapter-api">Unified Adapter API</a>.</td></tr>
-            <tr><td><code>setTargetAddress</code></td><td>(QString)</td><td>Persists the identifier via <code>save_obd_bluetooth_port</code>; the port-change debounce then reconnects. Fallback path in the QML when <code>connectToAdapter</code> is absent.</td></tr>
-            <tr><td><code>checkDevicePresence</code></td><td>() -&gt; bool</td><td>Re-checks the configured port and emits <code>devicePresenceChanged</code>.</td></tr>
-            <tr><td><code>setConnectionTimeout</code></td><td>(int)</td><td>5-60 s (default 5): the wait for the vehicle-verify RPM probe. Runtime only -- there is no <code>obdConnectionTimeout</code> settings key.</td></tr>
-            <tr><td><code>setAutoReconnect</code></td><td>(bool)</td><td>Deprecated no-op; use <code>obdAutoReconnectAttempts</code>.</td></tr>
-            <tr><td><code>scanVehicle</code>, <code>isScanning</code>, <code>getAllParameterNames</code>, <code>getSupportedCommands</code>, <code>enableScannedParameters</code>, <code>enableAllSupported</code></td><td>various</td><td>See <a href="#vehicle-scanning">Vehicle Scanning</a>.</td></tr>
-            <tr><td><code>enterDiagnosticMode</code>, <code>exitDiagnosticMode</code>, <code>isDiagnosticMode</code>, <code>readDtc</code>, <code>readCurrentDtc</code>, <code>readStatus</code>, <code>clearDtc</code>, <code>readFreezeFrame</code>, <code>getDtcCodes</code>, <code>getDtcCount</code>, <code>getMilStatus</code>, <code>getFreezeFrame</code></td><td>various</td><td>See <a href="#diagnostics">Diagnostics</a>.</td></tr>
-            <tr><td><code>setParameterDemand</code></td><td>(QString consumer, QStringList ids)</td><td>Register a consumer's visible parameters; an empty list removes its demand. Applied after 250 ms. Over the service, a consumer is released when the connection that registered it closes.</td></tr>
-            <tr><td><code>setBackgroundDemand</code></td><td>(QString consumer, QStringList ids)</td><td>Low-priority demand: polled one PID per pass of the foreground list (the <a href="#black-box">black box</a> sweep). Same consumer / empty-list rules.</td></tr>
-            <tr><td><code>readVin</code></td><td>()</td><td>Request vehicle identity again.</td></tr>
-            <tr><td><code>connectDirect</code></td><td>(QString mac, int channel = 1)</td><td>Connect by RFCOMM URL on Linux.</td></tr>
-            <tr><td><code>refreshValues</code></td><td>()</td><td>Re-emit current values by queueing one extra poll tick (desktop, while connected).</td></tr>
-            <tr><td><code>coolantTemp</code>, <code>rpm</code>, <code>speedMPH</code>, ... (18)</td><td>() -&gt; float</td><td>Getters for the original 18 values.</td></tr>
-            <tr><td><code>connectObd</code>, <code>openBluetoothSettings</code></td><td>()</td><td><code>connectObd</code> is an alias of <code>startConnection()</code>; <code>openBluetoothSettings</code> is a desktop no-op. Not called from QML.</td></tr>
+            <tr><td>Know whether a car is connected</td><td><code>obdManager.connected</code>, <code>connectionStatus</code> (the text), <code>connectionState</code> (<code>Disconnected</code> / <code>Connecting</code> / <code>Connected</code> / <code>NoVehicle</code> / <code>Failed</code>)</td></tr>
+            <tr><td>Connect</td><td><code>connectToAdapter(identifier)</code>; <code>resetConnection()</code> to try the saved adapter again</td></tr>
+            <tr><td>Ask for readings</td><td><code>setParameterDemand(consumer, ids)</code></td></tr>
+            <tr><td>Get a reading</td><td><code>paramStore[id]</code>, or <code>OBDParameterModel.liveValue(id)</code> in QML</td></tr>
+            <tr><td>Know what the car supports</td><td><code>vehicleSupportedParameters</code>, <code>vehicleScanComplete</code></td></tr>
+            <tr><td>Read trouble codes</td><td><code>enterDiagnosticMode()</code>, <code>readDtc()</code>, <code>readCurrentDtc()</code>, <code>readFreezeFrame()</code>, <code>clearDtc()</code>, <code>exitDiagnosticMode()</code></td></tr>
           </tbody>
         </table>
+        <p>
+          <strong>Tests</strong> (<span class="file-path">tests/cpp/</span>, run with <code>ctest</code>):
+          <code>tst_elm327protocol</code> (requests, decoders, parsers), <code>tst_obdmanager</code> (poll-list rules,
+          status), <code>tst_obdsim</code> (the real manager against the simulated car), <code>tst_parametercatalog</code>,
+          <code>tst_custompids</code>, <code>tst_triprecorder</code>, <code>tst_shiftlightmanager</code>. None needs a
+          car.
+        </p>
 
         <!-- Design decisions -->
-        <h2 id="design-decisions">Design Decisions</h2>
+        <h2 id="design-decisions">Why It Is Built This Way</h2>
         <ul>
-          <li><strong>Two transports, one class.</strong> OCTAVE keeps the Android BLE path inside <code>OBDManager</code> behind <code>#ifdef Q_OS_ANDROID</code> rather than a subclass, so <code>main.cpp</code>, the signal dispatch table and the QML surface are identical on every platform (<code>2d05676</code>).</li>
-          <li><strong>Bypass Qt Bluetooth on Android.</strong> Qt 6.7's <code>QBluetoothPermission</code> aggregator reports Denied on Android 16 even with every runtime grant present, and <code>QLowEnergyController</code> reads that cache before initialising the adapter. <code>BluetoothAdapter.getRemoteDevice</code> + <code>connectGatt</code> do not consult it, so a 400-line Java helper polled over JNI was cheaper and more reliable than fighting the framework (<code>f1901d9</code>). Polling at 50 ms instead of registering native JNI callbacks keeps the Java side free of Qt headers.</li>
-          <li><strong>Three BLE profiles, priority ordered.</strong> ELM327 BLE clones ship ISSC, FFF0 or FFE0 firmware; trying all three at service-discovery time made one APK work with NEXAS, Vgate, Veepeak, Konnwei and HM-10 boards without a per-adapter setting.</li>
-          <li><strong>The worker owns the port.</strong> <code>QSerialPort</code> must live on the thread that reads it, and blocking <code>waitForReadyRead</code> inside the worker is simpler than an async state machine; the price is that every request from the main thread is a queued <code>invokeMethod</code>. The 2026-09-09 spin fixes (<a href="#port-lifecycle">above</a>) are all consequences of that choice: a port left open is a live notifier in that thread's event loop.</li>
-          <li><strong>Release the port on every failure.</strong> Rather than trying to detect a dead rfcomm remote, the rule is "nothing may hold the port open while we are not actively talking to a live adapter" (<code>0404f7b</code>). It is a policy, not a heuristic, so it holds for USB and Bluetooth alike.</li>
-          <li><strong>Live poll-list swaps.</strong> The worker copies the poll list before the thread starts and <code>updatePidsToWatch()</code> swaps it live when demand changes, so a page switch changes polling without a reconnect.</li>
-          <li><strong>One PID table, standard numbering.</strong> The decoders used to sit beside three hand-copied name maps that drifted from each other and from the standard PID numbers (mis-numbered PIDs, a <code>0x59</code> mix-up, 23 names that could never be polled). Giving <code>PidEntry</code> a <code>commandName</code> column and iterating the table everywhere (<code>buildPidsToWatch()</code>, the scans, the Android list, the dev simulator) made the one table the single reference, and <code>tst_elm327protocol</code> checks it without a vehicle.</li>
-          <li><strong>Diagnostics pause polling.</strong> ELM327 adapters are half-duplex request/response devices; interleaving Mode 03/04 traffic with a running PID loop corrupts both. OCTAVE therefore stops live data during DTC work and does a full reconnect afterwards to restore a clean adapter state.</li>
-          <li><strong>Auto-reconnect defaults to off.</strong> The scanner-driven passive mode reconnects when a port appears, which is what happens when a Pi boots before the adapter pairs; unbounded retries against an adapter with no vehicle just spin the port (see the spin bug). Users who want scheduled retries set 1-10 attempts. Direct RFCOMM connections also retry through the 10 s scanner.</li>
-          <li><strong>Unified adapter API.</strong> The settings page used to branch on <code>isAndroid</code>; moving MAC/COM/tty classification and the rfcomm bind into the managers made the page render identically everywhere and gave the manager a single connect entry point to test.</li>
-          <li><strong>Observability over logcat.</strong> The in-app connection log (<code>542b446</code>), the ELM327 transcript category (<code>86c8c3c</code>) and the BLE log forwarding (<code>3858c5c</code>) all exist because the head unit is in a vehicle where neither a terminal nor <code>adb logcat</code> is reachable -- failures must land in the files the Diagnostics card exports.</li>
-          <li><strong>Coalesced model writes.</strong> <code>OBDParameterModel</code> buffers into a plain object and flushes at 30 Hz because the alternative -- one dictionary copy per signal -- was measured at 100 % of a core on the Orange Pi with the adapter unplugged (<code>486a809</code>). Needle animations only need ~30 updates a second anyway.</li>
+          <li><strong>A worker thread that blocks.</strong> The worker sends a command and waits for the answer. That is far simpler than a state machine, and the adapter can only do one thing at a time anyway. Being on its own thread, the waiting never touches the screen.</li>
+          <li><strong>Poll what is on screen.</strong> The adapter's speed is the limit. Polling by demand is what makes a gauge smooth; the background list is what lets the black box still record everything.</li>
+          <li><strong>One table of PIDs.</strong> The requests, the decoders, the vehicle scan and the simulated car all read the same table, so they cannot disagree.</li>
+          <li><strong>Trouble codes pause live data and reconnect afterwards.</strong> Mixing the two on one adapter corrupts both. A fresh connection afterwards costs a second and always leaves the adapter in a known state.</li>
+          <li><strong>Auto Reconnect is off by default.</strong> The 10-second scan already reconnects when the adapter appears, which is the usual case: the head unit boots before the car is started.</li>
+          <li><strong>One adapter list for every platform.</strong> The differences between a COM port, a device file and a Bluetooth address stay inside the manager, so the screens are the same everywhere.</li>
+          <li><strong>Failures must reach the log files.</strong> The head unit is in a car, with no terminal. The Connection Log and the log files exist so a failure on the road can be understood afterwards.</li>
+          <li><strong>The simulated car sits below the real manager.</strong> Simulating the adapter, not the values, means the simulator exercises the code that runs in the car.</li>
         </ul>
 
         <!-- Related Pages -->
         <div class="related-pages" id="related">
           <h3>Related Pages</h3>
           <a href="gauges-dashboards.html" class="related-link">Gauges &amp; Dashboards</a>
+          <a href="pages.html" class="related-link">Pages &amp; Views</a>
+          <a href="hardware-setup.html" class="related-link">Hardware Setup</a>
           <a href="hardware-managers.html" class="related-link">Hardware Managers (BerryIMU)</a>
-          <a href="settings-manager.html" class="related-link">Settings Manager</a>
           <a href="settings-reference.html" class="related-link">Settings Reference</a>
-          <a href="signals-slots-reference.html" class="related-link">Signals &amp; Slots API</a>
+          <a href="api-reference.html" class="related-link">Service API Reference</a>
           <a href="troubleshooting.html" class="related-link">Troubleshooting</a>
           <a href="architecture.html" class="related-link">Architecture Overview</a>
         </div>

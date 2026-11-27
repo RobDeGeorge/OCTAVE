@@ -227,6 +227,7 @@ private:
     // setEmitRate() call before start or across a retry is not lost.
     double m_emitInterval;
     bool m_running;
+    QString m_status = QStringLiteral("Disconnected");   // the last connectionStatusChanged
     bool m_enabled;
     bool m_shuttingDown;
     int m_retryCount;

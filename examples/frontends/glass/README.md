@@ -45,7 +45,7 @@ cd examples/frontends/glass
 npm install && npm run build                    # -> dist/, with octave-frontend.json in it
 ```
 
-Then on the head unit: Settings > Device > Frontends > **Install from folder** (`examples/frontends/glass/dist`), and **Use**. From the next start OCTAVE serves it at `GET /` in place of the reference client and turns the service on; a browser on the head unit holds exactly the manifest's scopes, one elsewhere pairs as usual (Pairing, below). A web frontend has no process for OCTAVE to supervise, so **Try** is for exec frontends only; `frontendManager.setActive("")` goes back to the reference client at `/`.
+Then on the head unit: Settings > Device > Developer > Frontends > **Install from folder** (`examples/frontends/glass/dist`), and **Use**. From the next start OCTAVE serves it at `GET /` in place of the reference client and turns the service on; a browser on the head unit holds exactly the manifest's scopes, one elsewhere pairs as usual (Pairing, below). A web frontend has no process for OCTAVE to supervise, so **Try** is for exec frontends only; `frontendManager.setActive("")` goes back to the reference client at `/`.
 
 A web frontend doesn't replace the head unit's own screen (the built-in UI keeps running), so the exec frontends' way back, mute pressed five times, isn't needed here and isn't wired to it. The rules are in `wiki/writing-a-frontend.html#install`.
 

@@ -29,7 +29,7 @@ Then start the frontend (see its README); they all default to `127.0.0.1:9876`. 
 
 ## Installing one as the screen
 
-Each carries an `octave-frontend.json`, so after its build step it installs on the head unit (Settings > Device > Frontends > Install from folder, then Try or Use; `frontendManager.installFromFolder(path)` over the service). The exec ones then run in place of the QML UI with a token of exactly their scopes, read from `OCTAVE_HOST` / `OCTAVE_PORT` / `OCTAVE_TOKEN`; mute pressed five times within four seconds always brings the built-in screen back. Each README's "Install it as the screen" has the details.
+Each carries an `octave-frontend.json`, so after its build step it installs on the head unit (Settings > Device > Developer > Frontends > Install from folder, then Try or Use; `frontendManager.installFromFolder(path)` over the service). The exec ones then run in place of the QML UI with a token of exactly their scopes, read from `OCTAVE_HOST` / `OCTAVE_PORT` / `OCTAVE_TOKEN`; mute pressed five times within four seconds always brings the built-in screen back. Each README's "Install it as the screen" has the details.
 
 | Frontend | Build | Install the folder | Kind | Scopes (beyond read) |
 |---|---|---|---|---|
@@ -39,7 +39,7 @@ Each carries an `octave-frontend.json`, so after its build step it installs on t
 | arcade | `cmake -S . -B build && cmake --build build` | `arcade` | exec | media, vehicle |
 | retro-cluster | `cargo install --path . --root dist && cp octave-frontend.json preview.png dist/` | `retro-cluster/dist` | exec | media, vehicle, files |
 
-sunlight, the arcade and retro-cluster also build for the browser (`./build_web.sh` in each, into `dist-web/`: Go's js/wasm port, Emscripten with SDL2, Rust's wasm32 target with wasm-bindgen): that folder installs as a web frontend (ids ending `.web`), and the browser demo offers all three in Settings > Device > Frontends. Each manifest names a `preview.png`, the picture in that chooser.
+sunlight, the arcade and retro-cluster also build for the browser (`./build_web.sh` in each, into `dist-web/`: Go's js/wasm port, Emscripten with SDL2, Rust's wasm32 target with wasm-bindgen): that folder installs as a web frontend (ids ending `.web`), and the browser demo offers all three in Settings > Device > Developer > Frontends. Each manifest names a `preview.png`, the picture shown there.
 
 glass and retro-cluster install from `dist/` because the installer copies the whole folder, refuses links (`node_modules/` has some) and stops at 256 MB (`target/` is past it). Screenshots of each against the simulated car: `wiki/images/frontends/`.
 

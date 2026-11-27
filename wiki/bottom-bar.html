@@ -13,454 +13,407 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Bottom Bar</div>
           <h1 class="page-title">Bottom Bar</h1>
-          <p class="page-subtitle">The persistent navigation and media control bar: layout, dual orientation, fitting any window size, volume routing through VolumeController, navigation button behaviour, the clock, and the update-available indicator</p>
+          <p class="page-subtitle">The bar that is on every screen: the section buttons, the music keys, the volume and the clock, swiping between sections, and how the bar fits any window</p>
         </div>
 
         <nav class="toc">
           <h3>On This Page</h3>
           <ul class="toc-list">
-            <li><a href="#overview">Overview</a></li>
-            <li><a href="#layout">Layout and Structure</a></li>
-            <li><a href="#orientation">Dual Orientation</a></li>
-            <li><a href="#fitting">Fitting Any Size</a></li>
-            <li><a href="#media-controls">Media Transport Controls</a></li>
-            <li><a href="#volume">Volume Slider and Mute</a></li>
-            <li><a href="#mute-states">Mute Icon States</a></li>
-            <li><a href="#navigation">Navigation Buttons</a></li>
-            <li><a href="#update-notification">Update Notification</a></li>
-            <li><a href="#clock">Clock Section</a></li>
-            <li><a href="#shuffle">Shuffle State</a></li>
-            <li><a href="#external-volume">External Volume Sources</a></li>
-            <li><a href="#managers">Manager Communication</a></li>
-            <li><a href="#visibility-popup">Toggle View Popup</a></li>
-            <li><a href="#sizing">Sizing Tokens</a></li>
-            <li><a href="#animation-pattern">Button Animation Pattern</a></li>
-            <li><a href="#svg-pattern">SVG Icon Pattern</a></li>
-            <li><a href="#design-decisions">Design Decisions</a></li>
+            <li><a href="#overview">What It Is</a></li>
+            <li><a href="#navigation">The Section Buttons</a></li>
+            <li><a href="#media-controls">Music Keys</a></li>
+            <li><a href="#volume">Volume</a></li>
+            <li><a href="#clock">Clock</a></li>
+            <li><a href="#swipe">Swiping Between Sections</a></li>
+            <li><a href="#settings">Settings</a></li>
+            <li><a href="#how-it-works">How It Is Built</a></li>
+            <li><a href="#sizing">The Bar's Size and Place</a></li>
+            <li><a href="#fitting">Fitting the Controls</a></li>
+            <li><a href="#active-highlight">Which Section Is Current</a></li>
+            <li><a href="#animation-pattern">Taps and the Swipe Slide</a></li>
+            <li><a href="#wiki-reader">Home and Settings with the Wiki Reader Open</a></li>
+            <li><a href="#adding-button">Adding a Button</a></li>
+            <li><a href="#no-page-swipe">Keeping a Swipe for Your Own Item</a></li>
+            <li><a href="#files">Files and Tests</a></li>
+            <li><a href="#design-decisions">Why It Is Built This Way</a></li>
           </ul>
         </nav>
 
         <!-- Overview -->
-        <h2 id="overview">Overview</h2>
-
-        <p><span class="file-path">frontend/BottomBar.qml</span> is the persistent control surface that is visible on every page. It is a <code>Rectangle</code> with a themed gradient background, docked along the bottom of the window or, as a side bar, along the left. It carries three groups: media transport controls, navigation buttons, and the clock. One set of controls serves both orientations: where each one goes is computed by <span class="file-path">frontend/BottomBarLayout.js</span> from the bar's own size (see <a href="#fitting">Fitting Any Size</a>), so nothing is written out twice and nothing is sized from fixed percentages of the window.</p>
-
-        <p>It is instantiated once in <span class="file-path">frontend/Main.qml</span> with <code>z: 0</code>; the page <code>StackView</code> sits above it (<code>z: 1</code>) and anchors to <code>bottomBar.top</code> (horizontal) or <code>bottomBar.right</code> (vertical). A 12&nbsp;px gradient <code>Rectangle</code> (<code>bottomBarShadow</code> / <code>sideBarShadow</code>) in Main.qml draws a soft shadow along the bar's inner edge.</p>
-
+        <h2 id="overview">What It Is</h2>
+        <p>
+          The bottom bar is the strip of buttons that stays on screen whatever page you are on. It is how you move
+          between the sections of OCTAVE: Home, OBD, Media, Sensors and Settings. It also shows the clock, and it can
+          carry the music keys and the volume.
+        </p>
+        <p>
+          The bar sits along the bottom of the screen, or down the left side if you prefer. The pages fill the rest.
+          It fits itself to any window: on a small one it drops the least important controls first and always keeps
+          the section buttons.
+        </p>
+        <p>This page starts with how to use it and gets more technical as it goes.</p>
         <pre class="diagram">
- Horizontal layout (bottomBarOrientation = "bottom"):
- +--------------------------------------------------------------------------------+
- | [&lt;&lt;] [&gt;||] [&gt;&gt;] [Shuf] [Mute] 50%   [Home] [OBD] [Media] [Sensor] [Gear] [AA] [PM]   12:34 |
- +--------------------------------------------------------------------------------+
-   media, packed from the left      nav, centred on the bar          clock, at the right
+ Along the bottom:
+ +--------------------------------------------------------------------------+
+ | [&lt;&lt;] [&gt;||] [&gt;&gt;] [Shuf] [Mute] 50%    [Home] [OBD] [Media] [Sens] [Set]    12:34 |
+ +--------------------------------------------------------------------------+
+   music keys and volume (optional)      section buttons, centred           clock
 
- Vertical layout (bottomBarOrientation = "side"):
- +----------+
- | [&lt;&lt;][&gt;||][&gt;&gt;]   media rows, at the top
- | [Shuf][Mute]
- |   50%    |
- |          |
- |  [Home]  |   nav, centred on the bar
- |  [OBD]   |
- |   ...    |
- |  [PM]    |
- |          |
- |  12:34   |   clock, at the bottom
- +----------+
+ Down the left side: the same groups from top to bottom, with the music keys
+ in rows (previous / play / next, then shuffle / mute, then the volume).
         </pre>
 
-        <!-- Layout -->
-        <h2 id="layout">Layout and Structure</h2>
-
-        <p>The root is a <code>Rectangle</code> whose gradient direction follows the orientation. Note the unusual stop positions &mdash; the "start" colour is placed at <span class="num">1.5</span>, beyond the end of the gradient, so the visible bar is dominated by <code>bottomBarGradientEnd</code> (the theme's <code>baseAlt</code>) fading toward <code>base</code>.</p>
-
-        <p>Every control is a <code>BarSlot</code> (an inline component): the item itself covers the control's touch area (<code>geo.hits.&lt;name&gt;</code>) and a <code>faceItem</code> inside it covers the drawn part (<code>geo.items.&lt;name&gt;</code>). <code>MediaButton</code> builds on it for previous, play, next, shuffle and mute; the volume % and the clock are plain <code>BarSlot</code>s; the nav buttons are a <code>Repeater</code> over <code>navSections</code> (<code>home</code>, <code>obd</code>, <code>media</code>, <code>sensor</code>, <code>settings</code>, plus <code>androidAuto</code> / <code>phoneMirror</code> when enabled). Each nav button's icon and action come from the <code>navButtons</code> table and its colour from <code>navColor()</code>.</p>
-
-        <pre><code><span class="kw">readonly property var</span> geo: BarLayout.<span class="fn">compute</span>({
-    vertical: isVertical, width: width, height: height,
-    navCount: navSections.length,
-    showMedia: settingsManager.showBottomBarMediaControls,
-    showClock: settingsManager.showClock,
-    clockAuto: clockSizeAuto, clockPx: manualClockSize,
-    clockWidthPerPx: clockMetrics.advanceWidth / <span class="num">100</span>, ...   <span class="cmt">// text measured at 100 px</span>
-    minUnit: Math.<span class="fn">max</span>(<span class="num">24</span>, <span class="num">0.045</span> * Math.<span class="fn">min</span>(_parentW, _parentH)),
-    scale: App.Spacing.globalScale
-})</code></pre>
-
-        <p><code>geo</code> is one binding, so it is recomputed only when one of its inputs changes (a resize, an orientation switch, a setting, the clock format).</p>
-
-        <p>Like every other QML file in the project, the bar defines local <code>dp()</code> / <code>dpMin()</code> wrappers (<code>Math.round(size * (App.Spacing.effectiveScale || 1.0))</code>) instead of calling <code>App.Spacing.dp()</code>. The comment at the top of the file explains why: calling functions on a QML singleton is unreliable on Android, so every file re-implements the two-line helper locally.</p>
-
-        <!-- Orientation -->
-        <h2 id="orientation">Dual Orientation</h2>
-
-        <p>The <code>isVertical</code> property is bound to the persisted setting (Display &rarr; Layout &rarr; "Nav Bar Position", a <code>SettingsSegmentedControl</code> with the options <code>"bottom"</code> and <code>"side"</code>):</p>
-
-        <pre><code><span class="prop">property bool</span> isVertical: settingsManager &amp;&amp;
-    settingsManager.bottomBarOrientation === <span class="str">"side"</span></code></pre>
-
-        <p>The bar places and sizes itself with bindings, with no anchors and nothing assigned from a handler, so a resize or an orientation switch can't leave a stale size behind. Its thickness follows the window, within limits:</p>
-
-        <pre><code>x: <span class="num">0</span>
-y: isVertical ? <span class="num">0</span> : _parentH - height
-width: isVertical ? thickness : _parentW
-height: isVertical ? _parentH : thickness
-
-thickness: isVertical
-    ? max(min(<span class="num">10</span>% of width, <span class="num">16</span>% of height), min(<span class="num">20</span>% of width, dpMin(<span class="num">72</span>, <span class="num">56</span>)))
-    : max(min(<span class="num">12.5</span>% of height, <span class="num">9</span>% of width), min(<span class="num">20</span>% of height, dpMin(<span class="num">56</span>, <span class="num">44</span>)))</code></pre>
-
-        <p>The first term keeps the bar in proportion and stops it becoming a thick slab on a portrait or ultrawide window; the second keeps it touchable on a small one. On the Jeep's 1280&times;800 screen this is 100&nbsp;px along the bottom or 128&nbsp;px at the side.</p>
-
-        <p>Main.qml reacts to the same signal: it flips <code>isVerticalLayout</code>, re-asserts the z-order (<code>stackView.z = 1</code>, <code>bottomBar.z = 0</code>) and, if the Settings page is open, restarts <code>navReloadTimer</code> (150&nbsp;ms) which replaces the current <code>SettingsMenu</code> with a fresh instance on the same section and open tile (<code>initialTile</code>) so the settings layout re-measures against the new content area.</p>
-
-        <!-- Fitting -->
-        <h2 id="fitting">Fitting Any Size</h2>
-
-        <p><span class="file-path">frontend/BottomBarLayout.js</span> is one pure function, <code>compute(params)</code>, that returns a rect for every control's face and touch area in bar coordinates. Everything is a multiple of one <em>unit</em>, the nav button's size, so the bar grows and shrinks as a whole and keeps its proportions:</p>
-
+        <!-- Navigation -->
+        <h2 id="navigation">The Section Buttons</h2>
+        <p>
+          There are five section buttons, plus Android Auto when you turn it on. The button of the section you are in
+          has a faint tinted fill. A tap changes the page at once, with no animation.
+        </p>
         <table>
-          <thead><tr><th>Control</th><th>Size (units)</th></tr></thead>
+          <thead><tr><th>Button</th><th>What a tap does</th></tr></thead>
           <tbody>
-            <tr><td>Nav button</td><td>1 &times; 1 (side bar: up to 1.4 wide, never wider than the bar)</td></tr>
-            <tr><td>Previous, Play, Next, Shuffle, Mute</td><td>1 &times; 1, as a nav button (side bar: square, three to a row)</td></tr>
-            <tr><td>Icon in a nav or media button</td><td>0.7 of the button</td></tr>
-            <tr><td>Volume %</td><td>0.36 font size</td></tr>
-            <tr><td>Clock (Auto)</td><td>digits 0.7 tall (as the icons), may give way to 0.45; its face is 1 tall</td></tr>
-            <tr><td>Gaps: margin / between groups / between buttons</td><td>0.3 / 0.6 / 0.3, each with a smaller minimum; media buttons use the nav gap</td></tr>
+            <tr><td>Home</td><td>Goes back to Home. If you are already on Home and a phone is being mirrored, it presses the phone's own Home key.</td></tr>
+            <tr><td>OBD</td><td>From another section: reopens the OBD page you last used, or OBD Home if there is none. With no car connected it always opens OBD Home, which then shows the connect prompt. On an OBD page: goes back to OBD Home. On OBD Home: nothing.</td></tr>
+            <tr><td>Media</td><td>From another section: opens the Media Room, or the library if "Open Music to the Library" is on. On either of the two: switches to the other.</td></tr>
+            <tr><td>Sensors</td><td>From another section: reopens the sensor page you last used, or Sensor Home. On a sensor page or the 3D vehicle view: goes back to Sensor Home. On Sensor Home: nothing. If the remembered page can no longer be opened (the 3D view needs a module that may be missing), OCTAVE forgets it and opens Sensor Home.</td></tr>
+            <tr><td>Settings</td><td>Opens Settings where you left it. A tap while in Settings goes back to the settings grid and closes the open card. <a href="#visibility-popup">Press and hold</a> to choose which settings sections are shown.</td></tr>
+            <tr><td>Android Auto</td><td>Opens the Android Auto screen. Shown only when Settings &gt; Phone &gt; Android Auto &gt; <strong>Show in Nav Bar</strong> is on.</td></tr>
           </tbody>
         </table>
+        <p>
+          There is no Phone Mirror button. A mirrored phone is shown on Home and in the Media Room; see
+          <a href="phone-mirror-android-auto.html">Phone Mirror &amp; Android Auto</a>.
+        </p>
+        <p id="update-notification">
+          An orange dot on the Settings button means an update is available. It pulses five times, then stays lit.
+          Settings &gt; About has the update itself; see <a href="network-manager.html">Network Manager</a>.
+        </p>
 
-        <p>The ideal unit comes from the bar's thickness (75&nbsp;% of a horizontal bar's height, 68&nbsp;% until the buttons grew on 2026-11-19 to fill the bar more, the bar itself no thicker; the side bar's width / 1.4, times 1.1) times the UI scale. The side bar sets prev / play / next on one row, so their unit is also capped by the bar's width. Along the bar's length the controls are fitted in steps:</p>
+        <h3 id="visibility-popup">Press and hold Settings: Toggle View</h3>
+        <p>
+          Holding the Settings button opens a panel called <strong>Toggle View</strong>, with a switch for each
+          settings section: Device, Media, Display, OBD, Phone, Accessories and About (on Android, where Settings has no Phone or Accessories section, those two are left out). Turn one off and that section
+          is hidden from Settings. Tap <strong>Close</strong> or outside the panel when done. The choice is saved; how
+          Settings uses it is on the <a href="settings-ui.html">Settings UI</a> page.
+        </p>
 
-        <ol>
-          <li>At the ideal unit with comfortable gaps. The nav group sits at the bar's centre whenever the media and clock groups leave room for that, otherwise between them.</li>
-          <li>Gaps tighten: margins and gaps between groups first, then gaps inside a group. Then the Auto clock gives up some size.</li>
-          <li>Everything scales down together.</li>
-          <li>If that would take the nav buttons below <code>minUnit</code> (4.5&nbsp;% of the window's shorter side, at least 24&nbsp;px), controls are dropped in order: shuffle, volume %, mute, prev / play / next, clock. A control that would be too small on its own is dropped by itself (the clock under <code>max(12, 0.35 &times; minUnit)</code> px, prev / play / next across a narrow side bar). Nav buttons are never dropped.</li>
-        </ol>
-
-        <p>A manual clock size (Auto off) is a ceiling: the clock is never taller than 80&nbsp;% of the bar, never wider than a side bar, and shrinks with everything else when room runs out.</p>
-
-        <h3>Touch Areas</h3>
-        <p>Each control's touch area is its face grown by half a unit along the bar and by the full thickness across it, clipped to the bar. Any two that would overlap are cut at the midpoint between their faces, so neighbouring controls never share a touch point and every press lands on exactly one control. Within those limits the areas are as large as they can be, which matters on a car touchscreen.</p>
-
-        <h3>Tested Promises</h3>
-        <p><span class="file-path">tests/cpp/tst_bottombarlayout.cpp</span> runs <code>compute()</code> in a <code>QJSEngine</code> over a grid of sizes (horizontal 320&ndash;3840 &times; 32&ndash;220 px, side 40&ndash;320 &times; 240&ndash;2160 px), 5 and 7 nav buttons, and every combination of media / clock / Auto clock. At each one it checks that every face and touch area lies inside the bar, that no two faces and no two touch areas overlap, and that each face lies inside its own touch area. It also checks a UI scale of 0.5&ndash;2, a 500&nbsp;px manual clock, a zero-size bar, that 1280&times;800 keeps every control at full size, that shuffle is the first thing dropped, that the nav buttons are one size and evenly spaced, and that along the bottom the media buttons match the nav buttons in size and step and the Auto clock in height. Change the proportions in <code>BottomBarLayout.js</code> and run <code>ctest -R tst_bottombarlayout</code>.</p>
-
-        <!-- Media Transport Controls -->
-        <h2 id="media-controls">Media Transport Controls</h2>
-
-        <p>The media group is off by default: a fresh install (and the browser demo) shows only the nav buttons and the clock, and Settings &gt; Display &gt; Layout &gt; Nav Bar Media Controls (<code>showBottomBarMediaControls</code>) turns it on. A settings file that already saved the old default keeps it. The media group contains, in order: Previous, Play/Pause, Next, Shuffle, Mute and the volume percentage. Each transport button is a <code>MediaButton</code>, drawn as a nav button is: the same size, gap and accent outline, with a tinted SVG (<code>TintedIcon</code>, see <a href="#svg-pattern">SVG Icon Pattern</a>) at 0.7 of the face, inside a face that squishes while pressed (see <a href="#animation-pattern">Button Animation Pattern</a>), and a <code>MouseArea</code> over the whole touch area:</p>
-
-        <pre><code><span class="cls">MediaButton</span> {
-    <span class="prop">face</span>: bottomBar.geo.items.prev; <span class="prop">hit</span>: bottomBar.geo.hits.prev
-    <span class="prop">source</span>: <span class="str">"./assets/previous_button.svg"</span>
-    <span class="prop">color</span>: App.Style.bottomBarPreviousButton
-    <span class="prop">onTapped</span>: bottomBar.<span class="fn">mediaPrevious</span>()
-}</code></pre>
-
-        <h3>Play/Pause Button</h3>
-        <p>The play/pause button binds <code>source: bottomBar.playIcon</code>, a property over <a href="signals-slots-reference.html#nowPlaying"><code>nowPlaying.playing</code></a>, which follows whichever source owns the music (the phone while mirroring, Android Auto, else local media). No <code>Connections</code> are needed:</p>
-
-        <pre><code><span class="kw">readonly property string</span> playIcon: (_np &amp;&amp; _np.playing) ? <span class="str">"./assets/pause_button.svg"</span> : <span class="str">"./assets/play_button.svg"</span></code></pre>
+        <!-- Media -->
+        <h2 id="media-controls">Music Keys</h2>
+        <p>
+          The music keys are off on a fresh install. Turn them on in Settings &gt; Display &gt; Layout &gt;
+          <strong>Nav Bar Media Controls</strong>. You then get Previous, Play / Pause, Next, Shuffle, Mute and the
+          volume in percent.
+        </p>
+        <p>
+          The keys control whatever is playing: OCTAVE's own player, or the phone, Android Auto or Spotify while one
+          of those has the music. <span id="shuffle">Shuffle</span> is lit while it is on. It works for OCTAVE's own
+          player and for Spotify; for any other app on the phone it does nothing, because that shuffle belongs to
+          the app. The Shuffle key is drawn dim only then, when it does nothing.
+        </p>
 
         <!-- Volume -->
-        <h2 id="volume">Volume Slider and Mute</h2>
-
-        <h3>Volume Label and Popup</h3>
-        <p>The bar itself only shows the percentage as bold text (<code>bottomBar.volumePercent + "%"</code>, <code>primaryTextColor</code>, sized by the layout: <code>geo.volumePx</code>). Tapping it opens <code>popupSlider</code>, a modal <code>Popup</code> as wide as the window and <code>dp(140)</code> tall (at most half the window), centred in <code>Overlay.overlay</code>, closed by Escape or by pressing outside. Its background is <code>backgroundColor</code> with a 1&nbsp;px <code>accent</code> border. Inside: a <code>dp(32)</code> accent-coloured percentage label and a <code>Slider</code>:</p>
-
-        <pre><code><span class="cls">Slider</span> {
-    <span class="prop">id</span>: volumeSlider
-    <span class="prop">width</span>: parent.width * <span class="num">0.95</span>
-    <span class="prop">height</span>: <span class="fn">dp</span>(<span class="num">50</span>)
-    <span class="prop">from</span>: <span class="num">0</span>; <span class="prop">to</span>: <span class="num">100</span>; <span class="prop">stepSize</span>: <span class="num">1</span>
-    <span class="prop">value</span>: bottomBar.volumePercent
-
-    <span class="prop">background</span>: <span class="cls">Rectangle</span> {      <span class="cmt">// dp(16) tall track, hoverColor, volumeSliderColor fill</span>
-        ...
-    }
-    <span class="prop">handle</span>: <span class="cls">Rectangle</span> {          <span class="cmt">// dp(40) circle in accent</span>
-        ...
-    }
-
-    <span class="cmt">// Single dispatch to settings + every audio output; raising it</span>
-    <span class="cmt">// while muted unmutes (VolumeController)</span>
-    <span class="prop">onValueChanged</span>: volumeController.<span class="fn">applyVolume</span>(Math.<span class="fn">round</span>(value))
-}</code></pre>
-
-        <h3>Volume Routing: VolumeController</h3>
-        <p>The bar never computes the volume curve and never calls <code>mediaManager.setVolume()</code> directly. Every change goes through <code>volumeController.applyVolume(percent)</code>, a QML context property registered in <span class="file-path">src/appcore.cpp</span>. The curve is quadratic: <code>linear = (percent / 100)&sup2;</code>.</p>
-
-        <p><code>VolumeController</code> (<span class="file-path">src/managers/volumecontroller.{h,cpp}</span>) clamps the percent to 0&ndash;100, calls <code>SettingsManager::setCurrentVolume(percent)</code>, then emits <code>volumeApplied(percent, linear)</code>. <code>AppCore::wireVolume</code> (<span class="file-path">src/appcore.cpp</span>) connects that signal to <code>mediaManager.setVolume(linear)</code>, <code>phoneMirrorManager.setVolume(linear)</code>, Android Auto and AirPlay, <code>spotifyManager.setVolume(percent)</code> while Spotify is the source (the Spotify device's own volume) and (desktop builds) <code>esp32VolumeManager.send_volume_update(percent)</code>, so the ESP32 LED ring gets the raw percent and the audio outputs get the curved value.</p>
-
-        <p><span class="file-path">src/appcore.cpp</span> applies the startup volume to every output before QML loads. The bar reads the level back from <code>volumeController.percent</code> (<code>bottomBar.volumePercent</code> is a read-only binding to it), and a <code>Connections</code> on <code>volumeController.percentChanged</code> moves the slider to a level set anywhere else (knob, gesture, media room), but only while the slider is not being dragged (<code>!volumeSlider.pressed</code>). No curve math happens in QML.</p>
-
-        <div class="info-box info">
-          <div class="info-box-title">One Curve, One Entry Point</div>
-          The header comment in <span class="file-path">src/managers/volumecontroller.h</span> records why this exists: every audio output must use the same curve or they drift out of sync when the user moves the slider, so the curve lives in one place (<code>VolumeController::toLinear()</code>) and every source &mdash; QML sliders, the gesture sensor, the ESP32 knob &mdash; funnels through <code>applyVolume()</code>. See the <a href="frontend-overview.html">Frontend Overview</a> and <a href="media-manager.html">Media Manager</a> pages for the consumers.
-        </div>
-
-        <h3>Touch-Friendly Slider</h3>
-        <p>Nine <code>dp(80)</code> square <code>MouseArea</code>s are laid along the track at <code>index * (volumeSlider.width / 8)</code>, each mapping its press position back to a slider value. <code>preventStealing: false</code> lets the slider itself still receive the events. This turns a thin 16&nbsp;px track into a band of large targets:</p>
-
-        <pre><code><span class="cls">Repeater</span> {
-    <span class="prop">model</span>: <span class="num">9</span>
-    <span class="cls">MouseArea</span> {
-        <span class="prop">x</span>: (index * (volumeSlider.width / <span class="num">8</span>)) - width/<span class="num">2</span> + volumeSlider.x
-        <span class="prop">y</span>: volumeSlider.y + volumeSlider.height/<span class="num">2</span> - height/<span class="num">2</span>
-        <span class="prop">width</span>: <span class="fn">dp</span>(<span class="num">80</span>); <span class="prop">height</span>: <span class="fn">dp</span>(<span class="num">80</span>)
-        <span class="prop">onMouseXChanged</span>: {
-            <span class="kw">if</span> (pressed) {
-                <span class="kw">var</span> globalX = <span class="fn">mapToItem</span>(volumeSlider, mouseX, mouseY).x
-                <span class="kw">var</span> newPosition = Math.<span class="fn">max</span>(<span class="num">0</span>, Math.<span class="fn">min</span>(<span class="num">1</span>,
-                    (globalX - volumeSlider.leftPadding) / volumeSlider.availableWidth))
-                volumeSlider.value = newPosition * <span class="num">100</span>
-            }
-        }
-        <span class="prop">preventStealing</span>: <span class="kw">false</span>
-    }
-}</code></pre>
-
-        <h3>Mute Button</h3>
-        <p>Tapping Mute calls <code>volumeController.toggleMute()</code>; the rules live there (<a href="signals-slots-reference.html#volumeController">VolumeController</a>). At 0&nbsp;% the tap restores the startup volume (<code>toPercent(startUpVolume)</code>, e.g. 32&nbsp;% for the default 0.1) and unmutes instead of toggling; presses within 150&nbsp;ms of the last are ignored. Mute is in memory only, never saved.</p>
-
-        <pre><code><span class="cmt">// At 0 % this restores the startup volume instead</span>
-<span class="prop">onClicked</span>: volumeController.<span class="fn">toggleMute</span>()</code></pre>
-
-        <!-- Mute Icon States -->
-        <h2 id="mute-states">Mute Icon States</h2>
-
-        <p><code>bottomBar.muteIcon</code>, a binding, picks the SVG from <span class="file-path">frontend/assets/</span>. Muted wins over any level; the level thresholds are strict <code>&lt;</code> comparisons:</p>
-
-        <table>
-          <thead><tr><th>Condition</th><th>Icon file</th></tr></thead>
-          <tbody>
-            <tr><td><code>volumeController.effectivelyMuted</code> (muted, or volume 0)</td><td><code>mute_on.svg</code></td></tr>
-            <tr><td>volume &lt; 33</td><td><code>mute_off_low.svg</code></td></tr>
-            <tr><td>volume &lt; 66</td><td><code>mute_off_med.svg</code></td></tr>
-            <tr><td>66 and above</td><td><code>mute_off_high.svg</code></td></tr>
-          </tbody>
-        </table>
-
-        <p>The icon is tinted with <code>bottomBarVolumeButton</code>. It follows <code>volumeController.percent</code> and <code>effectivelyMuted</code> through the binding.</p>
-
-        <!-- Navigation Buttons -->
-        <h2 id="navigation">Navigation Buttons</h2>
-
-        <p>The nav group holds up to seven buttons, each a transparent rectangle (corner radius 14&nbsp;% of its shorter side) bordered in <code>accent</code> with a tinted SVG at 70&nbsp;% of its shorter side. They are square on the bottom bar and up to 1.4&times; as wide as tall on the side bar.</p>
-
-        <table>
-          <thead><tr><th>Button</th><th>Icon / colour token</th><th>Behaviour on tap</th></tr></thead>
-          <tbody>
-            <tr>
-              <td>Home</td><td><code>home_button.svg</code> / <code>bottomBarHomeButton</code></td>
-              <td>Normally pops to the root. Pressed while already on Home with phone mirroring running, it takes the phone to its own home screen instead (<code>phoneMirrorManager.pressHome()</code>; on a desktop display that starts the launcher there). When Settings owns an open wiki reader, <code>openHomeSection()</code> keeps that page on the stack and opens or reuses a MainMenu above it so the reader can resume later.</td>
-            </tr>
-            <tr>
-              <td>OBD</td><td><code>obd_button.svg</code> / <code>bottomBarOBDButton</code></td>
-              <td><code>openOBDSection()</code>: reads <code>stackView.currentItem.objectName</code>. On <code>"obdHome"</code>: nothing. On any page whose name starts with <code>"obd"</code>: pops until <code>obdHome</code> is on top (opens <code>OBDHome.qml</code> if it was not on the stack). From anywhere else: opens the remembered subpage stored in the generic setting <code>lastOBDPage</code> (written by <span class="file-path">OBDHome.qml</span>), falling back to <code>OBDHome.qml</code> if none is stored or it fails to load. While no adapter is connected (<code>obdManager.connected</code> false) it skips the remembered subpage and opens <code>OBDHome.qml</code>, which is then only the connect prompt.</td>
-            </tr>
-            <tr>
-              <td>Media</td><td><code>media_button.svg</code> / <code>bottomBarMediaButton</code></td>
-              <td><code>openMediaSection()</code>: on <code>mediaRoom</code> opens <code>MediaPlayer.qml</code>; on <code>mediaPlayer</code> opens <code>MediaRoom.qml</code>; otherwise opens the page named by <code>settingsManager.musicButtonDefaultPage</code> (<code>"mediaRoom"</code> or <code>"mediaPlayer"</code>, the "Open Music to the Library" toggle in Media settings).</td>
-            </tr>
-            <tr>
-              <td>Sensor</td><td><code>sensor_button.svg</code> / <code>bottomBarSensorButton</code></td>
-              <td><code>openSensorSection()</code>: on <code>sensorHome</code> nothing; on a page named <code>sensor*</code> or <code>carMenu</code> pops back to Sensor Home; from elsewhere opens the generic setting <code>lastSensorPage</code> (written by <span class="file-path">SensorHome.qml</span>). If that page fails to load (for example <code>CarMenu.qml</code> when QtQuick3D is missing) the stale preference is cleared and <code>SensorHome.qml</code> is opened instead. Every failure is logged with <code>console.warn</code> by <code>openPage()</code>.</td>
-            </tr>
-            <tr>
-              <td>Settings</td><td><code>settings_button.svg</code> / <code>bottomBarSettingsButton</code></td>
-              <td>If the current item is <code>settingsMenu</code>, calls <code>handleSettingsButton()</code>: an open wiki reader closes back to About; otherwise it calls <code>navigateToHub()</code> (returns the Hub / Dashboard layouts to their card grid, closes the open card in the default grid layout, a no-op for Carousel). If an open wiki reader is preserved below the current page, it pops back to that Settings instance and restores the reader. Otherwise it pops to root and opens the cached <code>SettingsMenu.qml</code> (built the first time with <code>initialSection: lastSettingsSection</code>, a Main.qml property bound to <code>settingsManager.lastSettingsSection</code>; on later visits the page simply keeps the section it was on). Press-and-hold (<code>onPressAndHold</code>) opens the <a href="#visibility-popup">Toggle View popup</a> instead.</td>
-            </tr>
-            <tr>
-              <td>Android Auto</td><td><code>android_auto_button.svg</code> / <code>bottomBarAndroidAutoButton</code></td>
-              <td>Pushes <code>AndroidAutoView.qml</code>. Visible only when <code>settingsManager.androidAutoEnabled</code> and not on Android (<code>typeof isAndroid === "undefined" || !isAndroid</code>).</td>
-            </tr>
-            <tr>
-              <td>Phone Mirror</td><td><code>phone_mirror_button.svg</code> / <code>bottomBarPhoneMirrorButton</code></td>
-              <td><strong>Not shown since 2026-11-25</strong>: the phone is seen on Home only (<code>PhoneMirrorWidget</code>) while that flow is worked out; <code>navSections</code> no longer pushes <code>phoneMirror</code>. When shown: <code>openPhoneMirrorSection()</code> &rarr; <code>stackView.openPage("PhoneMirrorView.qml")</code>: pops back to the cached view if it is on the stack (so the running mirror session is reused) or pushes it. Pressed while the mirror view is already showing and <code>mirrorRunning</code>, it calls <code>phoneMirrorManager.pressHome()</code> instead, so the button doubles as the phone's Home button. Same visibility rule as Android Auto, keyed on <code>phoneMirrorEnabled</code>.</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <p>Navigation helpers use <code>stackView.openPage()</code> or pop to an existing page (see <a href="frontend-overview.html#page-cache">the page cache</a>): the page is built once with <code>stackView</code> and <code>mainWindow</code> supplied by <code>cachedPage()</code>, and every later press re-pushes or pops back to that same instance. Each nav button's <code>MouseArea</code> only calls its <code>open*Section()</code> function on <code>bottomBar</code>, looked up in <code>navButtons</code>. They fire on <code>onPressed</code>, not <code>onClicked</code>, so a page changes on touch-down instead of waiting ~100 ms for the finger to lift. The switch is delayed by about two frames so the press animation is on screen first; see <a href="#animation-pattern">Button Animation Pattern</a>. Settings keeps <code>onPressAndHold</code>, so holding it opens Settings and then the Toggle View popup on top.</p>
-
-        <h3 id="active-highlight">Active Page Highlight</h3>
-        <p>The button for the page you are on gets a faint accent-tinted fill (18% opacity) inside its outline. <code>bottomBar.activeSection</code> maps <code>stackView.currentItem.objectName</code> to a section: <code>mainMenu</code> &rarr; home, <code>obd*</code> &rarr; obd, <code>mediaRoom</code> / <code>mediaPlayer</code> &rarr; media, <code>sensor*</code> / <code>carMenu</code> &rarr; sensor, <code>settingsMenu</code> &rarr; settings, <code>androidAutoView</code> &rarr; androidAuto, <code>phoneMirrorView</code> / <code>airPlayView</code> &rarr; phoneMirror. Any other page leaves every button unlit. Each nav button has its own plate, drawn behind its face but outside it, so the press bounce leaves the plate still. On a page change the new button's plate grows out from its centre while the old one shrinks away (160 ms scale, <code>OutCubic</code>, plus a 140 ms fade). A new page only lights a button if its <code>objectName</code> matches one of these rules.</p>
-
-        <p><strong>Swiping between sections</strong> (since 2026-11-26). A quick sideways swipe on a page opens the next or previous section in <code>navSections</code>: finger to the left gives the button to the right, as a tap on it would (<code>navButtons[...].open()</code>). It doesn't wrap at the ends, and does nothing on a page no button owns (<code>activeSection</code> is <code>""</code>). It lives in <code>Main.qml</code> (<code>pageSwipe</code>, over the <code>StackView</code>) as a passive <code>PointHandler</code>, like the press probe <code>inputActivity</code>: the page still gets every touch. A swipe counts when it is under 700&nbsp;ms, at least <code>max(dp(90), 18&nbsp;%</code> of the page width) sideways and at least twice as far sideways as up or down. It is ignored when it starts on something that drags sideways itself, found by walking <code>childAt()</code> from the page down to the touched item: a horizontal <code>Slider</code> or <code>RangeSlider</code>, an interactive <code>Flickable</code> / <code>ListView</code> / <code>PathView</code> that scrolls sideways, a <code>MultiPointTouchArea</code> (the phone mirror, AirPlay, Android Auto), a <code>MouseArea</code> with <code>preventStealing</code> (the Now Playing seek bar, the music device scene and carousel), or any item with <code>octaveNoPageSwipe: true</code> (the whole <code>PhoneMirrorWidget</code>, live or not, so a swipe anywhere on the phone on Home or in the Media Room's art corner is never a page change; the full-screen <code>PhoneMirrorView</code>; the 3D vehicle's orbit area; the zoomed Trip History chart; the embedded Android Auto item). <code>octaveNoPageSwipe</code> counts even on a disabled item. Pointer handlers can't be seen from outside, so an item that drags sideways with a <code>DragHandler</code> needs that property. Each swipe is logged (<code>[NAV] Swipe left to obd</code>).</p>
-
-        <p>The swipe animates; a tap on a nav button stays an instant cut (the <code>StackView</code>'s transitions are <code>null</code> unless <code>stackView.slideActive</code>). <code>stackView.slideTo(sign, open)</code> turns the slide on for that one push or pop: the new page comes in from the side the finger came from (an <code>XAnimator</code>, 320&nbsp;ms, <code>OutCubic</code>) on top (<code>z</code> 2) of the old one, which drifts 20&nbsp;% the other way, shrinks to 92&nbsp;% and dims to 35&nbsp;% over a black backdrop, then is put back as it was once hidden. The shrink and dim are <code>NumberAnimation</code>s: as <code>ScaleAnimator</code> / <code>OpacityAnimator</code> in the exit transition they blanked the old page from the first frame.</p>
-
-        <!-- Update notification -->
-        <h2 id="update-notification">Update Notification</h2>
-
-        <p>The Settings button carries an orange dot (14&nbsp;% of the button's shorter side, at least 6&nbsp;px) (<code>#FF9800</code>) anchored to its top-right corner, visible while <code>networkManager.updateStatus === "update-available"</code>. The pulse animation is bound to the same condition through <code>running</code>, so it costs nothing while hidden:</p>
-
-        <pre><code><span class="cls">Rectangle</span> {
-    <span class="prop">width</span>: Math.<span class="fn">max</span>(<span class="num">6</span>, Math.<span class="fn">min</span>(parent.width, parent.height) * <span class="num">0.14</span>); <span class="prop">height</span>: width; <span class="prop">radius</span>: width / <span class="num">2</span>
-    <span class="prop">color</span>: <span class="str">"#FF9800"</span>
-    <span class="prop">visible</span>: navSlot.modelData === <span class="str">"settings"</span> &amp;&amp; networkManager &amp;&amp; networkManager.updateStatus === <span class="str">"update-available"</span>
-
-    <span class="cls">SequentialAnimation on</span> opacity {
-        <span class="prop">running</span>: networkManager &amp;&amp; networkManager.updateStatus === <span class="str">"update-available"</span>
-        <span class="prop">loops</span>: Animation.Infinite
-        <span class="cls">NumberAnimation</span> { <span class="prop">from</span>: <span class="num">1.0</span>; <span class="prop">to</span>: <span class="num">0.3</span>; <span class="prop">duration</span>: <span class="num">1200</span> }
-        <span class="cls">NumberAnimation</span> { <span class="prop">from</span>: <span class="num">0.3</span>; <span class="prop">to</span>: <span class="num">1.0</span>; <span class="prop">duration</span>: <span class="num">1200</span> }
-    }
-}</code></pre>
-
-        <p>The same dot, with the same colour and 1200&nbsp;ms cadence, is repeated inside the settings UI on the "About" entry of every layout (carousel tab, hub card, dashboard card; the default grid's About tile shows a static dot) and on the About page's "Check for Updates" button, so the user can follow it all the way to the update controls. <code>updateStatus</code> is produced by <code>NetworkManager</code> (see <a href="network-manager.html">Network Manager</a>); the other values it can take are <code>"checking"</code>, <code>"up-to-date"</code>, <code>"ahead"</code>, <code>"diverged"</code> and <code>"error"</code>, none of which show the dot.</p>
+        <h2 id="volume">Volume</h2>
+        <p>
+          The volume is part of the music keys group, so it shows only when that group is on.
+        </p>
+        <ul>
+          <li><strong>The percentage.</strong> Tap it and a wide slider opens across the screen. Drag anywhere along it; you do not have to hit the handle. Tap outside to close it.</li>
+          <li><strong id="mute-states">Mute.</strong> Tap to mute, tap again to unmute. The icon shows a crossed-out speaker while muted or at 0&nbsp;%, and otherwise a speaker with one, two or three waves: below 33&nbsp;%, below 66&nbsp;%, and from 66&nbsp;% up.</li>
+          <li>Turning the volume up while muted unmutes, from the slider, a knob or a gesture alike.</li>
+          <li>Tapping Mute at 0&nbsp;% brings the volume back to the startup volume, since there is nothing to unmute to.</li>
+          <li>Mute is not saved: OCTAVE always starts unmuted.</li>
+        </ul>
+        <p id="external-volume">
+          The bar is one of several places that set the volume; the volume knob, the gesture sensor and the Media Room
+          are others. They all go through one object, <code>volumeController</code>, so the number on the bar follows
+          whichever one you used. The bar reads <code>volumeController.percent</code> and
+          <code>effectivelyMuted</code> and calls <code>applyVolume(percent)</code> and <code>toggleMute()</code>. It
+          does no volume math of its own. See <a href="api-reference.html#volumeController">volumeController</a> in
+          the API reference.
+        </p>
 
         <!-- Clock -->
-        <h2 id="clock">Clock Section</h2>
+        <h2 id="clock">Clock</h2>
+        <p>
+          The clock is at the right end of the bar, or at the bottom of a side bar. Tap it to open the Clock page. Its
+          format, seconds and size are set in Settings &gt; Display &gt; Clock (<a href="#settings">below</a>). With
+          <strong>Clock Size</strong> on Auto, the digits stand as tall as the icons in the buttons. With Auto off,
+          the size you set is an upper limit: the clock still never grows past the bar and shrinks when room is short.
+        </p>
 
-        <p>The clock is a <code>Text</code> fed by the <code>clock</code> context property (<code>Clock</code> emits <code>timeChanged(QString)</code>; the format and seconds options live in Display &rarr; Clock). It uses <code>clockTextColor</code> (the theme accent), the global font, and automatic sizing by default (<code>clockSizeAuto</code>): its digits stand as tall as the nav icons (0.7 of the unit, measured from the font's own digit height via <code>TextMetrics.tightBoundingRect</code>, so a custom font with a tall or short line height still lines up), giving way when room is short (see <a href="#fitting">Fitting Any Size</a>). With Auto off, <code>settingsManager.clockSize</code> (default 18, slider 10&ndash;85 px) is used as a ceiling: the clock never grows past the bar. Tapping the clock opens <code>ClockMenu.qml</code> (<code>openClockSection()</code>). A press highlight uses <code>hoverColor</code>.</p>
+        <!-- Swipe -->
+        <h2 id="swipe">Swiping Between Sections</h2>
+        <p>
+          You can also move between sections by swiping sideways on a page. Swipe with your finger moving left and you
+          get the section whose button is to the right of the current one; swipe right for the one to the left. It
+          does what a tap on that button would do, and the new page slides in over the old one.
+        </p>
+        <p>What counts as a swipe:</p>
+        <ul>
+          <li>It is quick: under 0.7 seconds from touch to lift.</li>
+          <li>It is long: at least 18&nbsp;% of the page's width (and never less than a fixed minimum on a small window).</li>
+          <li>It is clearly sideways: at least twice as far sideways as up or down.</li>
+        </ul>
+        <p>What a swipe does not do:</p>
+        <ul>
+          <li>It does not wrap. Swiping past Home or past the last button does nothing.</li>
+          <li>It does nothing on a page that belongs to no button, such as the Clock page.</li>
+          <li><strong>It leaves alone anything that drags sideways itself.</strong> A swipe that starts on a slider, a list that scrolls sideways, the seek bar, the mirrored phone's screen, the 3D vehicle (which you turn by dragging), a zoomed Trip History chart or the Android Auto screen belongs to that control and never changes the page. Start the swipe somewhere else on the page.</li>
+        </ul>
+        <p>There is no setting to turn swiping off.</p>
 
-        <p>The text binds <code>bottomBar.clockTimeText</code>, which binds <code>clock.time</code>, so it shows the current time from the first frame. The layout measures the text with every digit replaced by "8" (and <code>"88:88 PM"</code> before the first tick), so the bar does not shift as the minutes change.</p>
-
-        <!-- Shuffle -->
-        <h2 id="shuffle">Shuffle State</h2>
-
-        <p><code>isShuffleEnabled</code> on the bar root is the single source of truth for the shuffle button. It is initialised from <code>mediaManager.isShuffled()</code> and kept current by <code>mediaManager.shuffleStateChanged(enabled)</code>. While the phone has the controls the shuffle button does nothing (the phone's shuffle belongs to its app).</p>
-
-        <p>When active, the button background becomes <code>bottomBarToggleShade</code> (corner radius 12&nbsp;% of its width) and the icon is tinted <code>bottomBarActiveToggleButton</code> (the accent). When inactive the icon uses <code>bottomBarShuffleButton</code>, the per-theme <code>bottombar.shuffle</code> colour.</p>
-
-        <!-- External Volume -->
-        <h2 id="external-volume">External Volume Sources</h2>
-
-        <p>Volume can change without the slider being touched. All of these end in <code>volumeController.applyVolume()</code> on the C++ side, so the bar simply reacts to <code>volumeController.percentChanged</code>; turning the volume up from any of them while muted unmutes:</p>
-
+        <!-- Settings -->
+        <h2 id="settings">Settings</h2>
+        <p>The key is the name in the settings file.</p>
         <table>
-          <thead><tr><th>Source</th><th>Path</th></tr></thead>
+          <thead><tr><th>Setting</th><th>Where</th><th>Key</th><th>Default</th><th>What it does</th></tr></thead>
           <tbody>
-            <tr><td>ESP32 rotary encoder</td><td><code>esp32VolumeManager.volumeChangeRequested(delta)</code> &rarr; <code>applyVolume(currentVolume + change)</code> (wired in <span class="file-path">src/appcore.cpp</span>). The knob's mute button calls <code>volumeController.toggleMute()</code> and the bar's icon follows <code>effectivelyMutedChanged</code>.</td></tr>
-            <tr><td>PAJ7620U2 gesture sensor</td><td>Up/down gestures call <code>applyVolume(currentVolume &plusmn; step)</code> with <code>gestureVolumeStep</code>.</td></tr>
-            <tr><td>Startup</td><td><code>currentVolume</code> (from <code>startUpVolume</code>) is applied once by <span class="file-path">src/appcore.cpp</span>.</td></tr>
+            <tr><td id="orientation">Nav Bar Position</td><td>Display &gt; Layout</td><td><code>bottomBarOrientation</code></td><td><code>bottom</code></td><td><code>bottom</code>: along the bottom. <code>side</code>: down the left side.</td></tr>
+            <tr><td>Nav Bar Media Controls</td><td>Display &gt; Layout</td><td><code>showBottomBarMediaControls</code></td><td>off</td><td>Shows the music keys and the volume.</td></tr>
+            <tr><td>UI Scale</td><td>Display &gt; Layout</td><td><code>uiScale</code></td><td>100&nbsp;%</td><td>50 to 200&nbsp;%. Scales the whole app. On the bar it makes the buttons larger or smaller inside the bar; the bar itself does not get thicker.</td></tr>
+            <tr><td>Show Clock</td><td>Display &gt; Clock</td><td><code>showClock</code></td><td>on</td><td>Shows the clock on the bar.</td></tr>
+            <tr><td>Show Seconds</td><td>Display &gt; Clock</td><td><code>clockShowSeconds</code></td><td>off</td><td>Adds seconds to the clock.</td></tr>
+            <tr><td>Time Format</td><td>Display &gt; Clock</td><td><code>clockFormat24Hour</code></td><td>24-hour</td><td>24-hour or 12-hour.</td></tr>
+            <tr><td>Clock Size: Auto</td><td>Display &gt; Clock</td><td><code>clockSizeAuto</code></td><td>on</td><td>Sizes the clock to match the buttons.</td></tr>
+            <tr><td>Clock Size (slider)</td><td>Display &gt; Clock</td><td><code>clockSize</code></td><td>18&nbsp;px</td><td>10 to 85&nbsp;px, used when Auto is off.</td></tr>
+            <tr><td>Show in Nav Bar</td><td>Phone &gt; Android Auto</td><td><code>androidAutoEnabled</code></td><td>off</td><td>Adds the Android Auto button.</td></tr>
+            <tr><td>Open Music to the Library</td><td>Media</td><td><code>musicButtonDefaultPage</code></td><td><code>mediaRoom</code></td><td>Which page the Media button opens: the Media Room, or the library (<code>mediaPlayer</code>).</td></tr>
           </tbody>
         </table>
+        <p>
+          The bar's thickness has no setting: it follows the window (<a href="#sizing">below</a>). OCTAVE also keeps
+          <code>lastOBDPage</code>, <code>lastSensorPage</code> and <code>lastSettingsSection</code> for itself, so the
+          buttons can reopen where you were. The complete list of settings is the
+          <a href="settings-reference.html">Settings Reference</a>.
+        </p>
 
-        <!-- Manager Communication -->
-        <h2 id="managers">Manager Communication</h2>
+        <!-- How it works -->
+        <h2 id="how-it-works">How It Is Built</h2>
+        <p>From here on the page is for people changing the code.</p>
+        <p>
+          A bar like this has one hard problem: it must look right and stay usable at every window size, in two
+          orientations, with groups of controls that can be switched off. OCTAVE solves it by separating two jobs.
+          <span class="file-path">frontend/BottomBar.qml</span> holds one copy of each control and what it does.
+          <span class="file-path">frontend/BottomBarLayout.js</span> is a single function, <code>compute()</code>, that
+          takes the bar's size and what is switched on and returns a rectangle for every control. The QML only puts
+          each control at its rectangle. Because the layout is a plain function with no screen behind it, a test can
+          run it over hundreds of sizes.
+        </p>
+        <p id="managers">
+          The bar is created once, in <span class="file-path">frontend/Main.qml</span>, next to the
+          <code>StackView</code> that holds the pages. It talks to the rest of the app through a few
+          <a href="frontend-overview.html">context properties</a>: <code>nowPlaying</code> for the music keys,
+          <code>volumeController</code> for volume and mute, <code>clock</code> for the time,
+          <code>settingsManager</code> for its settings, <code>networkManager</code> for the update dot and
+          <code>phoneMirrorManager</code> for the phone's Home key.
+        </p>
 
-        <p>Every media action goes through <a href="signals-slots-reference.html#nowPlaying"><code>nowPlaying</code></a>, which routes it to the phone or Android Auto while one of them owns the music and to the local player otherwise; <code>useRemote</code> (<code>nowPlaying.source !== "local"</code>) only dims the shuffle button, and <code>isShuffleEnabled</code> binds <code>nowPlaying.shuffled</code>:</p>
+        <h2 id="sizing">The Bar's Size and Place</h2>
+        <p>
+          The bar's thickness is a share of the window, held between two limits so it is never too thin to touch and
+          never a thick slab on a tall or very wide window.
+        </p>
+        <table>
+          <thead><tr><th>Position</th><th>Thickness</th><th>But at least</th><th>On a 1280 &times; 800 screen</th></tr></thead>
+          <tbody>
+            <tr><td>Bottom</td><td>12.5&nbsp;% of the window's height, at most 9&nbsp;% of its width</td><td>56 scaled pixels (never under 44), at most 20&nbsp;% of the height</td><td>100&nbsp;px</td></tr>
+            <tr><td>Side</td><td>10&nbsp;% of the window's width, at most 16&nbsp;% of its height</td><td>72 scaled pixels (never under 56), at most 20&nbsp;% of the width</td><td>128&nbsp;px</td></tr>
+          </tbody>
+        </table>
+        <p>
+          The bar's position and size are bindings on the window's size and the orientation setting. Nothing assigns
+          them from a handler, so a resize or a switch of position cannot leave a stale size behind. The pages'
+          <code>StackView</code> is anchored to the bar's inner edge and takes the rest of the window.
+        </p>
+        <p id="shadow">
+          <strong>The shadow strips.</strong> <span class="file-path">Main.qml</span> draws a 12&nbsp;px shadow along
+          the bar's inner edge: above a bottom bar, to the right of a side bar. The strip lies over the edge of the
+          page area and is drawn above the pages, so the last 12&nbsp;px of every page on that side are under it. The
+          order from back to front is the bar, the pages, the shadow.
+        </p>
+        <p>
+          <strong>Switching position while Settings is open.</strong> The Settings page was laid out for the old page
+          area, so <span class="file-path">Main.qml</span> builds a fresh one a moment later, on the same section and
+          the same open card.
+        </p>
+        <p>
+          <code>Spacing.bottomBarHeight</code> is not the bar's real thickness. It is a spacing token the settings
+          pages use for padding at their bottom. See <a href="theme-system.html">Theme System</a> for the tokens.
+        </p>
 
+        <h2 id="fitting">Fitting the Controls</h2>
+        <p>
+          Everything on the bar is sized as a multiple of one <strong>unit</strong>: the side of a section button. So
+          the bar grows and shrinks as a whole and keeps its proportions.
+        </p>
+        <table>
+          <thead><tr><th>Control</th><th>Size in units</th></tr></thead>
+          <tbody>
+            <tr><td>Section button</td><td>1 &times; 1. On a side bar it is up to 1.4 wide, never wider than the bar.</td></tr>
+            <tr><td>Music key</td><td>1 &times; 1, the same as a section button. On a side bar: square, three to a row.</td></tr>
+            <tr><td>Icon in a button</td><td>0.7 of the button</td></tr>
+            <tr><td>Volume text</td><td>0.36</td></tr>
+            <tr><td>Clock on Auto</td><td>Digits 0.7 tall, the same as the icons; may shrink to 0.45</td></tr>
+            <tr><td>Gaps</td><td>0.3 at the ends, 0.6 between groups, 0.3 between buttons, each with a smaller minimum</td></tr>
+          </tbody>
+        </table>
+        <p>
+          The unit starts at 75&nbsp;% of a bottom bar's thickness, times the UI scale, and is never more than 85&nbsp;%
+          of the thickness. On a side bar it comes from the bar's width. Then the controls are fitted along the bar's
+          length in this order:
+        </p>
+        <ol class="steps">
+          <li><strong>Full size, comfortable gaps.</strong> The music keys go at the start, the clock at the end, and the section buttons at the centre of the bar. If the other groups leave no room at the centre, the section buttons sit between them.</li>
+          <li><strong>Tighten the gaps.</strong> First the gaps at the ends and between groups, then the gaps between buttons. Then the clock gives up some size.</li>
+          <li><strong>Shrink everything together.</strong></li>
+          <li><strong>Drop controls.</strong> If shrinking would take the section buttons below the smallest allowed size, controls are removed in this order and the fit starts again: shuffle, the volume text, mute, previous / play / next, the clock. Section buttons are never dropped.</li>
+        </ol>
+        <p>
+          The smallest allowed button is 4.5&nbsp;% of the window's shorter side, and at least 24&nbsp;px. A control that
+          would be too small on its own is dropped by itself: the clock when its text would be under about 12&nbsp;px,
+          and previous / play / next when they cannot fit across a narrow side bar.
+        </p>
+        <p>
+          <strong>Touch areas.</strong> Each control's touch area is larger than what is drawn: half a unit more along
+          the bar, and the bar's full thickness across it. Where two would overlap, the line between them is put
+          halfway between the two controls. Every press lands on exactly one control, and the areas are as large as
+          that allows.
+        </p>
+        <p>
+          <strong>The clock does not jiggle.</strong> The layout measures the clock's text with every digit replaced
+          by 8, so the bar does not shift as the minutes change.
+        </p>
+        <p>The layout promises, and the test checks at every size, that:</p>
         <ul>
-          <li><code>mediaPrevious()</code> &rarr; <code>nowPlaying.previous()</code></li>
-          <li><code>mediaTogglePlay()</code> &rarr; <code>nowPlaying.togglePlay()</code></li>
-          <li><code>mediaNext()</code> &rarr; <code>nowPlaying.next()</code></li>
-          <li><code>mediaToggleShuffle()</code> &rarr; <code>nowPlaying.toggleShuffle()</code> (does nothing while the phone or Android Auto has the music)</li>
+          <li>every control and every touch area lies inside the bar;</li>
+          <li>no two controls overlap and no two touch areas overlap;</li>
+          <li>each control lies inside its own touch area.</li>
         </ul>
 
-        <p>Mute and volume feedback always come from <code>mediaManager</code> (the local player is the audio device that is actually muted). The context properties the bar depends on &mdash; <code>settingsManager</code>, <code>mediaManager</code>, <code>nowPlaying</code> (media), <code>phoneMirrorManager</code> (optional, checked with <code>typeof</code>; the home button while mirroring), <code>volumeController</code>, <code>networkManager</code>, <code>clock</code>, and the optional <code>isAndroid</code> flag &mdash; are registered by <span class="file-path">src/main.cpp</span>.</p>
-
-        <!-- Visibility popup -->
-        <h2 id="visibility-popup">Toggle View Popup</h2>
-
-        <p>At the bottom of the file a modal <code>Popup</code> named <code>settingsVisibilityPopup</code> ("Toggle View") lists six settings sections (Device, Media, Display, OBD, Accessories, About) with animated switches bound to <code>settingsManager.is_settings_section_visible(section)</code> and writing <code>save_settings_section_visibility(section, state)</code>. The Settings nav button's <code>MouseArea</code> calls <code>settingsVisibilityPopup.open()</code> from <code>onPressAndHold</code>, while a plain tap keeps the navigate / <code>navigateToHub()</code> behaviour described above. The visibility map is honoured by <code>SettingsMenu.buildHubModel()</code> (see <a href="settings-ui.html#visibility">Settings UI &rarr; Section Visibility</a>).</p>
-
-        <!-- Sizing -->
-        <h2 id="sizing">Sizing Tokens</h2>
-
-        <p>The bar's thickness reads <code>App.Spacing.bottomBarHeightPercent</code> (0.125 of the window height, see <a href="#orientation">Dual Orientation</a>); everything inside it is sized by <span class="file-path">frontend/BottomBarLayout.js</span> (see <a href="#fitting">Fitting Any Size</a>), not by <span class="file-path">Spacing.qml</span>. The user's UI scale (<code>App.Spacing.globalScale</code>) scales the unit, within what the bar can hold. The settings pages use <code>App.Spacing.bottomBarHeight</code> as bottom padding.</p>
-
-        <!-- Button Animation Pattern -->
-        <h2 id="animation-pattern">Button Animation Pattern</h2>
-
-        <p>Transport buttons (previous, play, next, shuffle, mute) track the press: scale to 0.8 with an <code>Easing.OutBack</code> overshoot of 1.1 over 200&nbsp;ms, and opacity to 0.7 over 150&nbsp;ms, while the finger is down:</p>
-
-        <pre><code><span class="prop">scale</span>: mouseArea.pressed ? <span class="num">0.8</span> : <span class="num">1.0</span>
-<span class="cls">Behavior on</span> scale {
-    <span class="cls">NumberAnimation</span> { <span class="prop">duration</span>: <span class="num">200</span>; <span class="prop">easing.type</span>: Easing.OutBack; <span class="prop">easing.overshoot</span>: <span class="num">1.1</span> }
-}
-<span class="prop">opacity</span>: mouseArea.pressed ? <span class="num">0.7</span> : <span class="num">1.0</span>
-<span class="cls">Behavior on</span> opacity { <span class="cls">NumberAnimation</span> { <span class="prop">duration</span>: <span class="num">150</span> } }</code></pre>
-
-        <p>Navigation buttons use <code>PressBounce</code> instead, an inline component in BottomBar.qml. Each button's <code>onPressed</code> calls <code>restart()</code> on it, and it scales the button's face 1.0 &rarr; 0.8 (90&nbsp;ms, <code>OutQuad</code>) &rarr; 1.0 (220&nbsp;ms, <code>OutBack</code> 1.1), with opacity 1.0 &rarr; 0.7 &rarr; 1.0. It is built only from <code>ScaleAnimator</code> / <code>OpacityAnimator</code>, so under the threaded render loop the whole bounce runs on the render thread and keeps moving while the GUI thread is busy switching pages. The <code>pressed</code>-bound <code>Behavior</code> version froze for as long as a page build took (up to ~350&nbsp;ms for CarMenu before pre-building finished), and a press and release handled in the same stall never showed the squish at all. The trade-off is that the bounce plays in full on every tap and does not hold while the finger stays down.</p>
-
-        <p>The page switch itself runs through <code>bottomBar.navAfterFrame(fn)</code>, which waits for two <code>frameSwapped</code> signals, or an 80&nbsp;ms fallback, before calling the <code>open*Section()</code> function. Two frames, because the first swap after a press can belong to a frame synced before it. By then the bounce has been handed to the render thread. The cost is about two frames of latency.</p>
-
-        <!-- SVG and ColorOverlay Pattern -->
-        <h2 id="svg-pattern">SVG Icon Pattern</h2>
-
-        <p>All icons are flat single-fill SVGs from <span class="file-path">frontend/assets/</span>. The <code>Image</code> is hidden and used only as the source of a <code>ColorOverlay</code> (Qt5Compat.GraphicalEffects), which recolours every opaque pixel with a theme token:</p>
-
-        <pre><code><span class="cls">Image</span> {
-    <span class="prop">id</span>: iconImage
-    <span class="prop">source</span>: <span class="str">"./assets/home_button.svg"</span>
-    <span class="prop">sourceSize</span>: Qt.<span class="fn">size</span>(width * <span class="num">2</span>, height * <span class="num">2</span>)   <span class="cmt">// 2x supersample</span>
-    <span class="prop">fillMode</span>: Image.PreserveAspectFit
-    <span class="prop">smooth</span>: <span class="kw">true</span>; <span class="prop">antialiasing</span>: <span class="kw">true</span>; <span class="prop">mipmap</span>: <span class="kw">true</span>
-    <span class="prop">visible</span>: <span class="kw">false</span>
-}
-<span class="cls">ColorOverlay</span> {
-    <span class="prop">anchors.fill</span>: iconImage
-    <span class="prop">source</span>: iconImage
-    <span class="prop">color</span>: App.Style.bottomBarHomeButton
-}</code></pre>
-
-        <p>Because every token in <span class="file-path">Style.qml</span> has a <code>Behavior on</code> colour animation, the icons cross-fade when the theme changes (see <a href="theme-system.html#transitions">Theme System &rarr; Colour Transitions</a>). In the bar the pair lives in one inline component, <code>TintedIcon</code>, with the <code>sourceSize</code> kept at least 1&nbsp;px so a control at zero size does not load the SVG at its natural size.</p>
-
-        <!-- Design decisions -->
-        <h2 id="design-decisions">Design Decisions</h2>
-
+        <h2 id="active-highlight">Which Section Is Current</h2>
+        <p>
+          Every page has an <code>objectName</code>. The bar looks at the page on top of the stack and maps its name
+          to a section. That one value, <code>bottomBar.activeSection</code>, lights the button and tells the swipe
+          where it is.
+        </p>
         <table>
-          <thead><tr><th>Decision</th><th>Rationale (from code comments and commit history)</th></tr></thead>
+          <thead><tr><th>Page's <code>objectName</code></th><th>Section</th></tr></thead>
           <tbody>
-            <tr>
-              <td>One set of controls placed by a pure function, for both orientations</td>
-              <td>The bar used to be two complete layouts (horizontal and vertical) with fixed section percentages (40&nbsp;% / fill / 20&nbsp;%), button sizes taken from the window's shorter side rather than the bar, and touch areas up to 3&times; the button that overlapped their neighbours. At some sizes controls ran into each other: on the 1280&times;800 side bar the prev / play / next row was 163&nbsp;px wide in a 128&nbsp;px bar. Placing every control from one function of the bar's size makes "nothing overlaps, nothing leaves the bar" a property that a test can check over hundreds of sizes, and leaves one copy of every control (2,620 lines down to about 960).</td>
-            </tr>
-            <tr>
-              <td>Size and place the bar with bindings, not anchors set from handlers</td>
-              <td>The old <code>updateLayout()</code> (and a twin in Main.qml) assigned anchors, width and height from <code>onIsVerticalChanged</code> and resize handlers, which broke the bindings; after an orientation switch the side bar could be left 0&nbsp;px wide.</td>
-            </tr>
-            <tr>
-              <td><code>minUnit</code> in proportion to the window, not <code>dp()</code></td>
-              <td><code>dp()</code> follows the screen (<code>screenAutoScale</code>), so a small window on a large monitor would drop controls it had room for.</td>
-            </tr>
-            <tr>
-              <td>Local <code>dp()</code>/<code>dpMin()</code> wrappers</td>
-              <td>"Work around Qt Android singleton-function bug" &mdash; singleton <em>functions</em> are unreliable on Android, so only singleton <em>properties</em> (<code>App.Spacing.effectiveScale</code>) are read across the boundary.</td>
-            </tr>
-            <tr>
-              <td>All volume changes go through <code>volumeController.applyVolume()</code></td>
-              <td>Commit <code>d2b047b</code> ("volume curve de-duplication") replaced the per-site <code>Math.pow(value/100, 2)</code> and the four manual <code>setVolume</code> calls with one dispatcher. Changing the curve is now a one-line edit in <code>toLinear()</code> and every output stays in sync.</td>
-            </tr>
-            <tr>
-              <td>Nine circular touch areas on the popup slider</td>
-              <td>A 16&nbsp;px track is impractical to grab while driving; the overlapping <code>dp(80)</code> areas turn the whole band into a target while leaving the <code>Slider</code> functional.</td>
-            </tr>
-            <tr>
-              <td>Mute at 0&nbsp;% restores the startup volume</td>
-              <td>Comment: "If volume is 0, restore to startup volume instead of toggling mute". Toggling mute on a silent output would do nothing visible.</td>
-            </tr>
-            <tr>
-              <td>Sensor button remembers and validates the last subpage</td>
-              <td>Comments and commit <code>0c29e64</code> ("Fix sensor menu dead-end"): a stored <code>lastSensorPage</code> that no longer loads (CarMenu needs the optional QtQuick3D module) used to make the button appear dead. The failure is now logged, the preference cleared, and Sensor Home shown.</td>
-            </tr>
-            <tr>
-              <td>Second tap on Settings returns to the hub</td>
-              <td>The Hub and Dashboard layouts have a card-grid landing state; <code>navigateToHub()</code> gives the nav button a purpose while already in Settings. The section-visibility popup moved to press-and-hold on the same button (see above), so a tap never opens a modal by surprise.</td>
-            </tr>
-            <tr>
-              <td>Phone Mirror pops back to an existing view</td>
-              <td>Comment: "Check if PhoneMirrorView is already on the stack - if so, pop back to it". Pushing a second view would start a second mirroring session over the live one.</td>
-            </tr>
-            <tr>
-              <td>Percent from <code>volumeController</code>, not <code>mediaManager.volumeChanged</code></td>
-              <td>The player reports linear volume; the bar used to invert the curve itself (<code>sqrt</code>) in six places across QML. <code>VolumeController.percent</code> is the number the user set, and <code>toPercent()</code> is the one inverse.</td>
-            </tr>
-            <tr>
-              <td>StackView transitions disabled in Main.qml</td>
-              <td>Comment: "Disable transitions for better performance" &mdash; every push from the bar is instant, which matters on the Raspberry Pi / Orange Pi head units. Together with the page cache this also makes <code>StackView.onActivated</code> fire synchronously inside <code>push()</code>.</td>
-            </tr>
+            <tr><td><code>mainMenu</code></td><td><code>home</code></td></tr>
+            <tr><td>anything starting with <code>obd</code></td><td><code>obd</code></td></tr>
+            <tr><td><code>mediaRoom</code>, <code>mediaPlayer</code></td><td><code>media</code></td></tr>
+            <tr><td>anything starting with <code>sensor</code>, and <code>carMenu</code></td><td><code>sensor</code></td></tr>
+            <tr><td><code>settingsMenu</code></td><td><code>settings</code></td></tr>
+            <tr><td><code>androidAutoView</code></td><td><code>androidAuto</code></td></tr>
+            <tr><td>anything else</td><td>none: no button is lit and a swipe does nothing</td></tr>
           </tbody>
         </table>
+        <p>
+          The buttons on the bar, in order, are <code>bottomBar.navSections</code>. A swipe moves one step along that
+          list from <code>activeSection</code> and calls the same function a tap on that button calls.
+        </p>
 
-        <p><strong>Method names:</strong> this page uses the camelCase names of the manager methods (<code>nextTrack</code>). The older snake_case name of each (<code>next_track</code>) still works through protocol&nbsp;4 and goes in protocol&nbsp;5; the <a href="api-reference.html">API reference</a> lists them.</p>
+        <h2 id="animation-pattern">Taps and the Swipe Slide</h2>
+        <ul>
+          <li><strong>Section buttons act on touch-down</strong>, not on release, so the page changes without waiting for the finger to lift. The clock does the same.</li>
+          <li><strong>Settings acts on release</strong>, because it also has press-and-hold. A hold opens Toggle View and does not open Settings.</li>
+          <li><strong>The page change waits about two frames.</strong> The button's squish must be on screen before the page work starts, or a fast tap would show no feedback at all. If no frame comes, it goes ahead after 80&nbsp;ms.</li>
+          <li><strong>The squish runs on the render thread</strong>, so it keeps moving while the main thread is busy opening a page. The price: it plays in full on every tap and does not hold while the finger stays down. The music keys do no page work, so they simply squish while pressed and act on release.</li>
+          <li><strong>A tap is an instant cut; a swipe slides.</strong> The page stack has no transitions except during a swipe. Then the new page comes in from the side over 320&nbsp;ms, on top of the old one, which drifts back, shrinks a little and dims over black.</li>
+          <li>Pages opened from the bar are built once and reused; see <a href="frontend-overview.html#page-cache">the page cache</a>.</li>
+        </ul>
+
+        <h2 id="wiki-reader">Home and Settings with the Wiki Reader Open</h2>
+        <p>
+          Settings &gt; About can open this wiki in a reader. If you leave Settings while the reader is open, OCTAVE
+          keeps your place:
+        </p>
+        <ul>
+          <li><strong>Home</strong> does not clear the page stack as it normally does. It leaves that Settings page where it is and shows Home above it, reusing a Home page that is already there.</li>
+          <li><strong>Settings</strong>, from another section, goes back down to that same Settings page with the reader still open, and does not open a new one.</li>
+          <li><strong>Settings</strong>, tapped while the reader is showing, closes the reader and lands on About.</li>
+        </ul>
+
+        <h2 id="adding-button">Adding a Button</h2>
+        <p>All of it is in <span class="file-path">frontend/BottomBar.qml</span>:</p>
+        <ol class="steps">
+          <li>Put a single-colour SVG icon in <span class="file-path">frontend/assets/</span>. The bar tints it.</li>
+          <li>Write the function a tap runs, such as <code>openMySection()</code>. Open the page with <code>stackView.openPage("MyPage.qml")</code> so it is cached.</li>
+          <li>Add a row to <code>navButtons</code>: <code>mySection: { icon: "./assets/my_button.svg", open: openMySection }</code>.</li>
+          <li>Add the name to <code>navSections</code>, at the place it should have on the bar. That is also its place in the swipe order. Add it under a condition if a setting should show or hide it.</li>
+          <li>Add a case to <code>navColor()</code> for the icon's colour. Without one the icon is drawn in the theme's accent colour.</li>
+          <li>Add a rule to <code>activeSection</code> that maps your page's <code>objectName</code> to the section. Without it the button never lights and you cannot swipe away from the page.</li>
+        </ol>
+        <p>
+          The layout needs no change: it takes the number of buttons and makes room. Run
+          <code>ctest -R tst_bottombarlayout</code> if you touch the proportions. The Phone Mirror button's row,
+          colour and function are still in the file, unused; adding <code>"phoneMirror"</code> to
+          <code>navSections</code> would bring it back.
+        </p>
+
+        <h2 id="no-page-swipe">Keeping a Swipe for Your Own Item</h2>
+        <p>
+          When a touch starts, <span class="file-path">Main.qml</span> (<code>pageSwipe</code>) walks from the page
+          down to the item under the finger. If any item on the way drags sideways itself, the touch is not a page
+          swipe. These are recognised without any work from you:
+        </p>
+        <ul>
+          <li>a horizontal <code>Slider</code> or <code>RangeSlider</code>;</li>
+          <li>a <code>Flickable</code>, <code>ListView</code> or <code>PathView</code> that is interactive and scrolls sideways (a list that only scrolls up and down does not count);</li>
+          <li>a <code>MultiPointTouchArea</code>;</li>
+          <li>a <code>MouseArea</code> with <code>preventStealing: true</code>.</li>
+        </ul>
+        <p>Anything else needs one line on the item:</p>
+        <pre><code><span class="kw">readonly property bool</span> octaveNoPageSwipe: <span class="kw">true</span></code></pre>
+        <p>
+          You need it for an item that drags with a pointer handler such as <code>DragHandler</code>, which cannot be
+          seen from outside, and for an area that should never change the page even when its own control is switched
+          off. The property counts on a disabled item too; the automatic cases above count only while the item is
+          enabled. It can be a binding: the Trip History chart sets it only while zoomed. The
+          phone mirror widget, the full-screen phone page, the 3D vehicle and the Android Auto screen all set it.
+        </p>
+        <p>
+          The swipe watcher only observes. It never takes a touch away from the page, so adding it changed nothing
+          about how pages receive presses. Each swipe is logged, for example <code>[NAV] Swipe left to obd</code>.
+        </p>
+
+        <h2 id="files">Files and Tests</h2>
+        <table>
+          <thead><tr><th>File</th><th>What is in it</th></tr></thead>
+          <tbody>
+            <tr><td><span class="file-path">frontend/BottomBar.qml</span></td><td>The controls, what each button does, <code>navSections</code>, <code>activeSection</code>, the volume slider, the Toggle View panel.</td></tr>
+            <tr><td><span class="file-path">frontend/BottomBarLayout.js</span></td><td><code>compute()</code>: where every control and touch area goes. The proportions are constants at the top.</td></tr>
+            <tr><td><span class="file-path">frontend/Main.qml</span></td><td>Creates the bar; the shadow strips; <code>pageSwipe</code>; the slide (<code>stackView.slideTo()</code>).</td></tr>
+            <tr><td><span class="file-path">frontend/settings/DisplaySettingsPage.qml</span></td><td>Nav Bar Position, Nav Bar Media Controls, UI Scale, the clock settings.</td></tr>
+            <tr><td><span class="file-path">tests/cpp/tst_bottombarlayout.cpp</span></td><td>The layout test.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          <code>tst_bottombarlayout</code> runs <code>compute()</code> with no screen, over a grid of bar sizes
+          (bottom: 320 to 3840 wide and 32 to 220 thick; side: 40 to 320 wide and 240 to 2160 long), with 5 and 7
+          section buttons and every combination of music keys, clock and Auto clock. At each size it checks the three
+          promises above. It also checks UI scales from 0.5 to 2, a 500&nbsp;px manual clock, a bar of zero size, that
+          a 1280 &times; 800 screen keeps every control, that shuffle is the first control dropped, that the section
+          buttons are one size and evenly spaced, and that along the bottom the music keys match the section buttons.
+          The swipe has no automated test.
+        </p>
+
+        <!-- Design decisions -->
+        <h2 id="design-decisions">Why It Is Built This Way</h2>
+        <ul>
+          <li><strong>One set of controls, placed by one function.</strong> Two hand-written layouts with fixed percentages will run controls into each other at some window size. With one function of the bar's size, "nothing overlaps and nothing leaves the bar" is something a test can prove over hundreds of sizes.</li>
+          <li><strong>Everything is a multiple of one unit.</strong> The bar scales as a whole, so it looks the same on a phone and on a wide desktop window.</li>
+          <li><strong>Drop controls before shrinking the section buttons too far.</strong> Navigation is the bar's job. A shuffle key is not worth a section button too small to hit in a moving car.</li>
+          <li><strong>The smallest button follows the window, not the screen.</strong> The app's scaled pixels follow the screen, so a small window on a large monitor would drop controls it has room for.</li>
+          <li><strong>Size and place by bindings.</strong> Assigning sizes from handlers breaks bindings, and a switch of position could then leave the bar with no width.</li>
+          <li><strong>Touch areas as large as they can be without overlapping.</strong> A car touchscreen is used at arm's length on a rough road.</li>
+          <li><strong>Buttons act on touch-down.</strong> Waiting for release adds about a tenth of a second to every page change.</li>
+          <li><strong>A tap on Settings never opens a panel by surprise.</strong> Toggle View is on press-and-hold; a tap inside Settings goes back to the grid.</li>
+          <li><strong>The remembered sensor page is checked.</strong> A remembered page that cannot load would make the button look dead, so it is forgotten and Sensor Home opens.</li>
+          <li><strong>The swipe only watches.</strong> It never takes a touch from a page, and it gives way to anything that drags sideways, so no control was changed to make room for it.</li>
+          <li><strong>The update dot stops pulsing.</strong> An animation that runs for as long as an update is available keeps the screen repainting for days.</li>
+          <li><strong>The bar's file keeps its own two-line scaling helpers.</strong> Calling functions on a shared QML singleton has been unreliable on Android; reading its properties is fine.</li>
+        </ul>
 
         <div class="related-pages">
           <h3>Related Pages</h3>
@@ -468,7 +421,9 @@ thickness: isVertical
           <a href="pages.html" class="related-link">Pages</a>
           <a href="theme-system.html" class="related-link">Theme System</a>
           <a href="settings-ui.html" class="related-link">Settings UI</a>
+          <a href="settings-reference.html" class="related-link">Settings Reference</a>
           <a href="media-manager.html" class="related-link">Media Manager</a>
+          <a href="phone-mirror-android-auto.html" class="related-link">Phone Mirror &amp; Android Auto</a>
           <a href="network-manager.html" class="related-link">Network Manager</a>
         </div>
 

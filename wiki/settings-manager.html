@@ -13,758 +13,295 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Settings Manager</div>
           <h1 class="page-title">Settings Manager</h1>
-          <p class="page-subtitle">Central settings store: one JSON file, an in-memory cache served to QML through Qt properties, a coalesced atomic disk write, and a metadata registry that drives the Quick Panel</p>
+          <p class="page-subtitle">Where OCTAVE keeps your settings, how to back them up or reset them, and how code reads, writes and adds a setting</p>
         </div>
 
         <nav class="toc">
           <h3>Table of Contents</h3>
           <ul class="toc-list">
-            <li><a href="#overview">Overview</a></li>
-            <li><a href="#file-location">File Location and Storage Paths</a></li>
-            <li><a href="#property-signal-system">Property / Signal / Slot System</a></li>
-            <li><a href="#lifecycle">Startup, In-Memory Cache and Coalesced Writes</a></li>
-            <li><a href="#json-persistence">JSON Persistence and Validation</a></li>
-            <li><a href="#settings-registry">Settings Registry Metadata System</a></li>
-            <li><a href="#default-settings">Default Settings</a></li>
-            <li><a href="#key-methods">Key Methods and Slots</a></li>
-            <li><a href="#section-visibility">Section Visibility System</a></li>
-            <li><a href="#pinned-settings">Pinned Quick Settings</a></li>
-            <li><a href="#generic-access">Generic Setting Access</a></li>
-            <li><a href="#album-art-colors">Album Art Colors</a></li>
-            <li><a href="#qml-connection">Connection to QML and Other Managers</a></li>
-            <li><a href="#design-decisions">Design Decisions</a></li>
+            <li><a href="#overview">What It Is</a></li>
+            <li><a href="#file-location">Where the Settings File Lives</a></li>
+            <li><a href="#config-folder">What Else Is in the Config Folder</a></li>
+            <li><a href="#backup-reset">Back Up, Reset, Edit by Hand</a></li>
+            <li><a href="#property-signal-system">How Code Reads and Writes a Setting</a></li>
+            <li><a href="#key-methods">To Do This, Use That</a></li>
+            <li><a href="#qml-connection">How a Change Reaches the Screen</a></li>
             <li><a href="#adding-new-setting">How to Add a New Setting</a></li>
-            <li><a href="#signal-reference">Signal Reference</a></li>
-            <li><a href="#behaviour-notes">Behaviour Notes</a></li>
+            <li><a href="#json-persistence">How Saving Works</a></li>
+            <li><a href="#special-cases">Details and Special Cases</a></li>
+            <li><a href="#troubleshooting">When Something Goes Wrong</a></li>
+            <li><a href="#files">Files, API and Tests</a></li>
+            <li><a href="#design-decisions">Why It Is Built This Way</a></li>
             <li><a href="#related">Related Pages</a></li>
           </ul>
         </nav>
 
         <!-- Overview -->
-        <h2 id="overview">Overview</h2>
+        <h2 id="overview">What It Is</h2>
         <p>
-          The <code>SettingsManager</code> class (<span class="file-path">src/managers/settingsmanager.{h,cpp}</span>) is the
-          central configuration store for all of OCTAVE. It inherits from <code>QObject</code> and exposes typed settings to
-          QML through <code>Q_PROPERTY</code> getters, change signals, and <code>save_*</code> slots. It defines 96 default
-          keys, 79 properties, 83 signals, 91 public slots and 51 <code>Q_INVOKABLE</code> methods, and reads and writes one
-          file: <code>settingsConfigure.json</code> in the OS-specific app data directory.
+          Everything you change in Settings (the theme, the clock, the music folder, which OBD adapter to use) is
+          kept in one text file, <code>settingsConfigure.json</code>. The settings manager is the part of OCTAVE that
+          owns that file: it reads it once when the app starts, hands every setting to the screens and to the other
+          parts of the app, and writes the file again when something changes.
         </p>
         <p>
-          Beyond the typed properties, the manager provides a <strong>settings registry</strong> (25 entries) that maps a
-          setting ID to its label, category, control type and save slot. The Quick Panel and the pin system render
-          settings from this metadata, so a slider or toggle can be pinned without any per-setting QML.
+          The file is plain JSON, the same on every platform, so you can copy it to another machine, read it and edit
+          it in a text editor. The folder it lives in is what the rest of this wiki calls the
+          <strong>config folder</strong>: logs, trip history, your dashboards and vehicles are kept beside it.
         </p>
         <p>
-          Since the 2026-09 performance sweep the manager is <strong>memory-served</strong>: the file is read once in the
-          constructor, every getter answers from the in-memory copy, and every setter updates that copy and arms a
-          500&nbsp;ms single-shot timer that performs one atomic write for the whole burst. Details in
-          <a href="#lifecycle">Startup, In-Memory Cache and Coalesced Writes</a>.
+          This page starts with how to use it and gets more technical as it goes. The list of every setting, with its
+          default and range, is the <a href="settings-reference.html">Settings Reference</a>; the settings screens are
+          described in <a href="settings-ui.html">Settings UI</a>.
         </p>
 
         <span class="platform-badge all">All Platforms</span>
 
         <!-- File Location -->
-        <h2 id="file-location">File Location and Storage Paths</h2>
-        <p>
-          The settings file lives in the directory returned by the static <code>SettingsManager::getAppDataDir()</code>, which
-          creates the directory if it is missing and picks the path by platform:
-        </p>
+        <h2 id="file-location">Where the Settings File Lives</h2>
         <table>
           <thead>
-            <tr><th>Platform</th><th>Path</th><th>Rule in code</th></tr>
+            <tr><th>Platform</th><th>Config folder</th></tr>
           </thead>
           <tbody>
-            <tr><td>Windows</td><td><code>%APPDATA%\OCTAVE\settingsConfigure.json</code></td><td><code>APPDATA</code> env var; falls back to the home directory if unset</td></tr>
-            <tr><td>macOS</td><td><code>~/Library/Application Support/OCTAVE/settingsConfigure.json</code></td><td>hard-coded under the home directory</td></tr>
-            <tr><td>Linux / Raspberry Pi / Orange Pi</td><td><code>~/.config/OCTAVE/settingsConfigure.json</code></td><td><code>$XDG_CONFIG_HOME/OCTAVE</code> when the variable is set</td></tr>
-            <tr><td>Android / iOS</td><td><code>&lt;QDir::homePath()&gt;/.config/OCTAVE/settingsConfigure.json</code></td><td>same <code>#else</code> branch as Linux (<code>XDG_CONFIG_HOME</code> honoured if set)</td></tr>
-          </tbody>
-        </table>
-
-        <pre><code>QString SettingsManager::<span class="fn">getAppDataDir</span>()
-{
-    <span class="kw">const</span> QString appName = QStringLiteral(<span class="str">"OCTAVE"</span>);
-    QString dataDir;
-<span class="kw">#ifdef</span> Q_OS_WIN
-    QString base = qEnvironmentVariable(<span class="str">"APPDATA"</span>);
-    <span class="kw">if</span> (base.isEmpty())
-        base = QDir::homePath();
-    dataDir = base + QDir::separator() + appName;
-<span class="kw">#elif defined</span>(Q_OS_MACOS)
-    dataDir = QDir::homePath() + QStringLiteral(<span class="str">"/Library/Application Support/"</span>) + appName;
-<span class="kw">#else</span>
-    QString base = qEnvironmentVariable(<span class="str">"XDG_CONFIG_HOME"</span>);
-    <span class="kw">if</span> (base.isEmpty())
-        base = QDir::homePath() + QStringLiteral(<span class="str">"/.config"</span>);
-    dataDir = base + QDir::separator() + appName;
-<span class="kw">#endif</span>
-    QDir().mkpath(dataDir);
-    <span class="kw">return</span> dataDir;
-}</code></pre>
-
-        <p>
-          The same directory is the root for everything else OCTAVE persists, so the helper is imported by other managers
-          rather than duplicated:
-        </p>
-        <table>
-          <thead>
-            <tr><th>Path under the app data dir</th><th>Owner</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>settingsConfigure.json</code></td><td>SettingsManager (this page)</td></tr>
-            <tr><td><code>theme_art/theme_&lt;safe name&gt;.&lt;ext&gt;</code></td><td>SettingsManager, album art copied or downloaded for a custom theme (<a href="#key-methods">save_custom_theme</a>)</td></tr>
-            <tr><td><code>logs/</code></td><td><span class="file-path">src/util/logger.cpp</span>, <span class="file-path">src/managers/diagnosticsmanager.cpp</span> (see <a href="development.html">Development</a>)</td></tr>
-            <tr><td><code>dashboards/</code></td><td>DashboardManager user dashboards (<a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>)</td></tr>
-            <tr><td><code>metadata_cache.json</code>, <code>display_names.json</code></td><td><a href="media-manager.html">MediaManager</a></td></tr>
-          </tbody>
-        </table>
-
-        <div class="info-box info">
-          <div class="info-box-title">Retired keys are deleted at startup</div>
-          Files from older builds may carry <code>spotifyClientId</code>, <code>spotifyClientSecret</code>,
-          <code>mediaSource</code> (the removed Spotify integration), <code>scrcpyAudioEnabled</code> (the removed phone
-          audio toggle) and <code>downloadSubfolder</code>, <code>downloadFormat</code>, <code>downloadBitrate</code> (the
-          music downloader, removed in 2026-10). The constructor deletes them, saves, logs "Removed settings of retired features", and then
-          deletes the old Spotify login token, <code>.spotify_token_cache</code> in the app data dir.
-        </div>
-
-        <!-- Property / Signal / Slot System -->
-        <h2 id="property-signal-system">Property / Signal / Slot System</h2>
-        <p>
-          A <strong>plain setting</strong> is one bool, number or string under one key of the file. Each is a row of the
-          settings table at the top of <span class="file-path">src/managers/settingsmanager.cpp</span>
-          (<code>OCTAVE_SETTINGS</code>): its key, type, default, the values it takes, the signal that says it changed
-          and its save slot. Everything is driven from the table: the defaults, loading, every way of setting the value,
-          <code>get_setting()</code>, <code>reset_to_defaults()</code> and the pinned-settings values.
-        </p>
-        <pre><code><span class="cmt">// key, type, default, rule, notify, save slot, shape</span>
-X(themeSetting,  QMetaType::QString, QStringLiteral(<span class="str">"CosmicVoyager"</span>), any(), N_STR(themeSettingChanged), <span class="str">"save_theme_setting"</span>, Plain)
-X(sideCardAngle, QMetaType::Int,     <span class="num">30</span>, clampTo(<span class="num">5</span>, <span class="num">60</span>),  N_INT(sideCardAngleChanged), <span class="str">"save_side_card_angle"</span>, Plain)
-X(uiScale,       QMetaType::Double,  <span class="num">1.0</span>, within(<span class="num">0.5</span>, <span class="num">2.0</span>), N_FLOAT(uiScaleChanged), <span class="str">"save_ui_scale"</span>, Plain)
-X(windowState,   QMetaType::QString, QStringLiteral(<span class="str">"windowed"</span>), oneOf({...}), N_STR(windowStateChanged), <span class="str">"save_window_state"</span>, Plain)</code></pre>
-        <p>The header still declares what moc and QML need, one line each:</p>
-        <pre><code>Q_PROPERTY(QString themeSetting READ themeSetting WRITE save_theme_setting NOTIFY themeSettingChanged)
-    QString themeSetting() <span class="kw">const</span>;
-<span class="kw">signals</span>:
-    <span class="kw">void</span> <span class="fn">themeSettingChanged</span>(<span class="kw">const</span> QString &amp;value);
-<span class="kw">public slots</span>:
-    <span class="kw">void</span> <span class="fn">save_theme_setting</span>(<span class="kw">const</span> QString &amp;theme);
-
-<span class="cmt">// source: both bodies are one line</span>
-QString SettingsManager::<span class="fn">themeSetting</span>() <span class="kw">const</span> { <span class="kw">return</span> row(R_themeSetting).toString(); }
-<span class="kw">void</span> SettingsManager::<span class="fn">save_theme_setting</span>(<span class="kw">const</span> QString &amp;theme) { setRow(R_themeSetting, theme); }</code></pre>
-
-        <p>
-          <code>setRow()</code> is the one place a plain setting changes. The save slot, a write to the property (the
-          service's <code>set</code> op, a QML assignment), <code>save_setting(key, value)</code> and
-          <code>apply_settings()</code> all end there, so they cannot leave two answers for one key:
-        </p>
-        <ol class="steps">
-          <li>the value is made the row's type (from outside it must already be one: <code>"true"</code> is not a bool; a number for an int row is rounded)</li>
-          <li>the row's rule is applied: <code>clampTo()</code> brings a number into range, <code>within()</code> and <code>oneOf()</code> refuse a value outside theirs, <code>custom()</code> is a function that may change or refuse it. A refusal is logged and nothing changes</li>
-          <li>an unchanged value stops here: no write, no signal</li>
-          <li>the value goes into <code>m_values</code> (the row's value in its own type) and into <code>m_settings</code> (what the file holds), the 500 ms save timer is armed, and the row's signal is emitted</li>
-        </ol>
-        <p>
-          The rules are those the slots always had (the clamps and allowed values listed in the
-          <a href="settings-reference.html">Settings Reference</a>), plus five ranges the slots did not check and the
-          sliders imply: <code>uiScale</code> 0.5&ndash;2.0, <code>clockSize</code> 10&ndash;85,
-          <code>colorTransitionMs</code> 0&ndash;2000, <code>backgroundBlurRadius</code> 0&ndash;100 and
-          <code>startUpVolume</code> 0&ndash;1. Loading is more lenient than saving: a clamped row is clamped, a
-          <code>oneOf()</code> or <code>custom()</code> value that fails becomes the default, and a value outside a
-          <code>within()</code> range is kept as the file has it.
-        </p>
-        <p>
-          Every plain setting's property is <strong>writable</strong>, with the <code>settings</code> permission. The
-          <code>save_*</code> slots and the <code>get_*</code> methods that only repeat a property are deprecated
-          (<code>"use the &lt;property&gt; property; goes in protocol 5"</code>): they work as before, and the QML still
-          calls them. The camelCase exceptions among the slots are <code>setCurrentVolume()</code>, which only
-          <code>VolumeController</code> calls, and the shutdown flush <code>flushPendingSave()</code>.
-        </p>
-        <p>
-          Settings that are a list or a map (<code>homeOBDParameters</code>, <code>obdParameters</code>,
-          <code>gestureMapping</code>, <code>settingsMenuVisibility</code>, <code>pinnedSettings</code>,
-          <code>directoryHistory</code>, <code>customThemes</code>) and the media folder are not rows: each keeps a member
-          and its own savers, which call <code>loadSettings()</code> / <code>saveSettings()</code>.
-          <code>save_setting()</code> on one of those keys re-reads the member and emits its signal. Two rows are stored
-          as a string and shown to QML as a list or a map by a read-only property of the same name
-          (<code>obdSavedAdapters</code>, <code>albumArtColors</code>), and the six <code>sensorShow*</code> rows are
-          behind the one <code>sensorCards</code> map.
-        </p>
-
-        <div class="info-box info">
-          <div class="info-box-title">Property types used</div>
-          Properties are <code>QString</code>, <code>bool</code>, <code>int</code>, <code>float</code>
-          (<code>uiScale</code>, <code>startUpVolume</code>, <code>fuelTankCapacity</code>), <code>double</code>
-          (<code>sideCardOpacity</code>, <code>scrcpyAudioGain</code>, <code>scrcpyAudioDuckLevel</code>,
-          <code>esp32VolumeStepSize</code>) and <code>QVariantList</code> for <code>homeOBDParameters</code>, <code>directoryHistory</code>,
-          <code>customThemes</code> (a list of theme <em>names</em>), <code>pinnedSettings</code> and <code>obdSavedAdapters</code>
-          (the remembered adapters as <code>{name, mac}</code> maps, though the file stores a JSON string). One property is
-          a JSON <em>string</em> QML parses with <code>JSON.parse</code>: <code>settingsMenuVisibility</code>.
-          <code>albumArtColors</code> is a <code>QVariantMap</code> (the palette object; the file keeps a string) and
-          <code>customThemeData</code> holds every custom theme as name &rarr; object. Object-valued settings
-          (<code>obdParameters</code>, <code>gestureMapping</code>, <code>expandedCards</code>,
-          <code>customThemes</code> contents) have no property at all; QML reads them through dedicated getters or
-          <code>get_setting_with_default()</code>.
-        </div>
-
-        <!-- Lifecycle -->
-        <h2 id="lifecycle">Startup, In-Memory Cache and Coalesced Writes</h2>
-        <p>The constructor performs the only unconditional disk read of the manager's lifetime:</p>
-        <ol class="steps">
-          <li>Build <code>m_defaultSettings</code> with <code>buildDefaultSettings()</code> (96 keys) and the registry.</li>
-          <li><code>loadSettings()</code>: the file is read, parsed and passed through <code>validateSettings()</code>. A missing file is created from the defaults immediately; a corrupt file (JSON parse error) is moved aside to <code>.corrupt</code> and restored from <code>.bak</code> (see <a href="#json-persistence">Backup and Corruption Recovery</a>).</li>
-          <li><strong>Migrations</strong>. The first two and the retired-key removal rewrite the file; the rest change the settings in memory and reach disk with the next save:
-            <ul>
-              <li><code>uiScale == 0.6</code> (an old default) becomes <code>1.0</code> and is saved straight away.</li>
-              <li><code>fontSetting == "Google Sans"</code> (the pre-0.9 default, which <code>Style.setFont()</code> rejects because <code>Main.qml</code> derives the display name <code>"GoogleSans Regular"</code> from the bundled <code>GoogleSans-Regular.ttf</code>, silently leaving the app in the system font) becomes <code>"GoogleSans Regular"</code> and is saved straight away.</li>
-              <li><code>obdBluetoothPort == "/dev/rfcomm0"</code> (the former desktop placeholder, meaningless on Android where the field holds a MAC address) is cleared to <code>""</code>.</li>
-              <li><code>lastSettingsSection == "clockSettings"</code> (a removed page) becomes <code>"displaySettings"</code>.</li>
-              <li><code>obdParameters</code>: every PID present in the defaults but missing from the file is added, so new PIDs appear after an upgrade without discarding the user's toggles.</li>
-              <li><code>settingsMenuVisibility</code>: sections missing from the stored object are filled in as <code>true</code> (visible), matching <code>is_settings_section_visible()</code>.</li>
-              <li>Retired keys (<code>spotifyClientId</code>, <code>spotifyClientSecret</code>, <code>mediaSource</code>, <code>scrcpyAudioEnabled</code>, <code>downloadSubfolder</code>, <code>downloadFormat</code>, <code>downloadBitrate</code>) are removed and saved straight away, and the old Spotify login token is deleted (see the "Retired keys" note above).</li>
-            </ul>
-          </li>
-          <li><code>populateMembers()</code> (which <code>reset_to_defaults()</code> reuses) gives every table row its value in its own type, brought within the row's rule and written back into the in-memory object so the two agree, then fills the members of the list and map settings, with the default as fallback.</li>
-          <li><code>mediaFolder</code> defaults to <code>""</code> on disk and is resolved at load to <code>QStandardPaths::MusicLocation</code> (falling back to <code>~/Music</code>); the directory is created on desktop only, never on Android.</li>
-          <li><code>currentVolume</code> (never persisted) is derived from <code>startUpVolume</code> by inverting the volume curve: <code>VolumeController::toPercentStatic(startUpVolume)</code> (<code>round(sqrt(x) * 100)</code>), e.g. the default 0.1 gives 32&nbsp;%. See <a href="architecture.html">Architecture</a> for the quadratic curve.</li>
-          <li>Two single-shot timers are created: the 500&nbsp;ms settings write timer and the 800&nbsp;ms OBD-parameter debounce timer.</li>
-        </ol>
-
-        <p>After that, <code>m_settingsLoaded</code> is true and the manager works entirely from memory:</p>
-        <pre class="diagram">save_xxx(), a property write, save_setting(), apply_settings()
-                    ▼
-              setRow(row, value)  type, then the row's rule (clamp / refuse); unchanged: stop here
-                    │              m_values[row] = value ; m_settings[key] = value
-                    ▼
-              saveSettings()    ──► validateSettings()  (types checked against defaults)
-                    │              m_settings = validated
-                    │              m_savePending = true ; m_saveTimer.start()   (500 ms, restarted on every call)
-                    ▼
-              emit xxxChanged(value) ──► QML bindings update immediately
-                    ⋮
-        500 ms of quiet  ──► flushPendingSave() ──► writeSettingsToDisk()   (QSaveFile: temp + rename)
-        aboutToQuit      ──► flushPendingSave()      (AppCore::shutdown(), after MediaManager saves playback state)</pre>
-
-        <p>
-          Consequences worth knowing: a slider drag that fires twenty <code>save_*</code> calls costs one write;
-          album-art colours pushed on every track change cost one write per track at most; and if the process is killed
-          (not quit) within 500&nbsp;ms of a change, that change is lost. The OBD parameter toggles add their own layer:
-          <code>save_obd_parameter_enabled()</code> only updates the in-memory map and restarts the 800&nbsp;ms timer;
-          when it fires, <code>flushObdParameters()</code> copies the map into the settings object (which arms the
-          500&nbsp;ms timer) and emits <code>obdParametersChanged</code> once for the whole batch. The shutdown flush only handles the general save timer; a legacy OBD change still waiting for its 800&nbsp;ms timer is not explicitly flushed.
-        </p>
-
-        <!-- JSON Persistence -->
-        <h2 id="json-persistence">JSON Persistence and Validation</h2>
-
-        <h3>Atomic Write</h3>
-        <p><code>writeSettingsToDisk()</code> receives an already validated object and never re-validates. It hands the bytes to <code>atomicWrite()</code>:</p>
-        <ol class="steps">
-          <li>Open a <code>QSaveFile</code> on the target, which writes to a temporary file in the same directory so the final rename is on one filesystem</li>
-          <li>Write the JSON with 4-space indentation (<code>QJsonDocument::Indented</code>)</li>
-          <li><code>QSaveFile::commit()</code> flushes and fsyncs the temp file, then renames it over <code>settingsConfigure.json</code> in one step; actual durability also depends on the filesystem and storage hardware</li>
-          <li>Set permissions on the destination to owner read/write only (<code>chmod 600</code>; skipped on Windows)</li>
-          <li>If any step fails, the temp file is removed and the existing file is left untouched; the next save tries again. There is no direct (truncating) fallback write</li>
-        </ol>
-
-        <h3>Backup and Corruption Recovery</h3>
-        <p>The first time a session reads a settings file that parses cleanly, it copies it to <code>settingsConfigure.json.bak</code> (same atomic write). If a later boot finds the file unparseable (typically an ignition cut mid-write on an SD card), the bad file is moved to <code>settingsConfigure.json.corrupt</code> for inspection, the <code>.bak</code> copy is loaded and written back as the live file, and only if the backup is also unusable are the defaults used.</p>
-
-        <h3>Validation</h3>
-        <p>
-          <code>validateSettings()</code> runs at exactly two points: once on the
-          initial read and once inside every <code>saveSettings()</code> (i.e. on the in-memory copy, before the timer
-          is armed). It starts from a copy of the defaults and accepts a stored value only if its type matches the
-          default's type; anything else keeps the default. Keys that have no default are copied through untouched so
-          newer builds and QML-only keys survive older builds.
-        </p>
-        <table>
-          <thead>
-            <tr><th>Default type</th><th>Rule</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>bool</td><td><code>QJsonValue::isBool()</code></td></tr>
-            <tr><td>int / float</td><td>any JSON number (<code>isDouble()</code>); ints and floats are not distinguished, so a float stored under an int default is kept and truncated by the member's <code>toInt()</code></td></tr>
-            <tr><td>string</td><td><code>isString()</code></td></tr>
-            <tr><td>object / array</td><td><code>isObject()</code> / <code>isArray()</code>; contents are not inspected</td></tr>
-            <tr><td>not an object at top level</td><td>non-object JSON is treated as a corrupt file and triggers backup recovery; an empty object receives defaults</td></tr>
-          </tbody>
-        </table>
-
-        <div class="info-box info">
-          <div class="info-box-title">Float settings need float defaults</div>
-          Validation does not distinguish ints from floats, so the member's type decides what survives: a setting read
-          with <code>toInt()</code> truncates a stored 0.5. Give float settings a <code>double</code> member, a
-          <code>toDouble()</code> read and a float-literal default (<code>1.0</code>, not <code>1</code>), as
-          <code>esp32VolumeStepSize</code> does so that 0.25 / 0.5 / 0.75 knob steps round-trip.
-        </div>
-
-        <h3>No File Locking</h3>
-        <p>
-          The file is read once, at start-up, and replaced whole by <code>QSaveFile</code> (a temporary file renamed over
-          it), so a reader sees the old file or the new one and never a partial document. There was a non-blocking
-          advisory lock around the read (<code>flock</code> / <code>LockFileEx</code>) whose result was ignored and
-          which no writer ever took: it protected nothing and was removed in 2026-11.
-        </p>
-
-        <!-- Settings Registry -->
-        <h2 id="settings-registry">Settings Registry Metadata System</h2>
-        <p>
-          <code>buildSettingsRegistry()</code> fills the static <code>s_settingsRegistry</code> once; it maps 25 setting IDs to metadata. QML fetches it once with
-          <code>get_settings_registry()</code> (JSON string) and renders a control per entry; the same metadata plus a
-          <code>currentValue</code> comes back from <code>get_pinned_settings_metadata()</code> for the Quick Panel.
-        </p>
-
-        <h3>Registry Entry Structure</h3>
-        <table>
-          <thead>
-            <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>key</code></td><td>string</td><td>The camelCase key in <code>settingsConfigure.json</code>, which is also the QML property name</td></tr>
-            <tr><td><code>label</code></td><td>string</td><td>Human-readable label displayed in the UI</td></tr>
-            <tr><td><code>category</code></td><td>string</td><td>Settings section ID: <code>mediaSettings</code>, <code>displaySettings</code>, <code>obdSettings</code>, <code>gestureSensorSettings</code> or <code>imuSettings</code></td></tr>
-            <tr><td><code>controlType</code></td><td>string</td><td><code>"toggle"</code>, <code>"slider"</code> or <code>"chips"</code></td></tr>
-            <tr><td><code>saveSlot</code></td><td>string</td><td>Name of the slot QML calls with the new value (e.g. <code>save_ui_scale</code>)</td></tr>
-            <tr><td><code>params</code></td><td>object</td><td>Optional. Sliders: <code>from</code>, <code>to</code>, <code>stepSize</code>, optional <code>logarithmic</code>. Chips: <code>options</code> (fixed list) or <code>optionsSource</code> (a QML-side list name)</td></tr>
-            <tr><td><code>id</code></td><td>string</td><td>Added only by <code>get_pinned_settings_metadata()</code>: the registry key itself</td></tr>
-            <tr><td><code>currentValue</code></td><td>any</td><td>Added only by <code>get_pinned_settings_metadata()</code>: the live value</td></tr>
-          </tbody>
-        </table>
-
-        <h3>Registered Settings</h3>
-        <table>
-          <thead>
-            <tr><th>ID</th><th>Key</th><th>Control</th><th>Params</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>startup_volume</code></td><td>startUpVolume</td><td>slider</td><td>0 – 1, step 0.01, logarithmic</td></tr>
-            <tr><td><code>auto_play_on_startup</code></td><td>autoPlayOnStartup</td><td>toggle</td><td></td></tr>
-            <tr><td><code>persist_shuffle_state</code></td><td>persistShuffleState</td><td>toggle</td><td></td></tr>
-            <tr><td><code>show_waveform_visualizer</code></td><td>showWaveformVisualizer</td><td>toggle</td><td></td></tr>
-            <tr><td><code>show_3d_button_tilt</code></td><td>show3DButtonTilt</td><td>toggle</td><td></td></tr>
-            <tr><td><code>show_3d_album_preview</code></td><td>show3DAlbumPreview</td><td>toggle</td><td></td></tr>
-            <tr><td><code>rounded_album_art</code></td><td>roundedAlbumArt</td><td>toggle</td><td></td></tr>
-            <tr><td><code>album_art_corner_radius</code></td><td>albumArtCornerRadius</td><td>slider</td><td>2 – 32, step 1</td></tr>
-            <tr><td><code>show_album_art_shadow</code></td><td>showAlbumArtShadow</td><td>toggle</td><td></td></tr>
-            <tr><td><code>vinyl_record_mode</code></td><td>vinylRecordMode</td><td>toggle</td><td></td></tr>
-            <tr><td><code>album_art_transition</code></td><td>albumArtTransition</td><td>chips</td><td>Crossfade, Slide, Vinyl Lift, Dissolve, Flip, Coverflow, Conveyor, Stack, Depth, Swing</td></tr>
-            <tr><td><code>background_overlay_opacity</code></td><td>backgroundOverlayOpacity</td><td>slider</td><td>0 – 100, step 1</td></tr>
-            <tr><td><code>side_card_opacity</code></td><td>sideCardOpacity</td><td>slider</td><td>0.1 – 1.0, step 0.05</td></tr>
-            <tr><td><code>side_card_angle</code></td><td>sideCardAngle</td><td>slider</td><td>5 – 60, step 1</td></tr>
-            <tr><td><code>button_tilt_duration</code></td><td>buttonTiltDuration</td><td>slider</td><td>50 – 500, step 10</td></tr>
-            <tr><td><code>text_scroll_speed</code></td><td>textScrollSpeed</td><td>slider</td><td>1000 – 10000, step 500</td></tr>
-            <tr><td><code>background_blur_radius</code></td><td>backgroundBlurRadius</td><td>slider</td><td>0 – 100, step 1 (category <code>mediaSettings</code>)</td></tr>
-            <tr><td><code>ui_scale</code></td><td>uiScale</td><td>slider</td><td>0.5 – 2.0, step 0.05</td></tr>
-            <tr><td><code>theme_setting</code></td><td>themeSetting</td><td>chips</td><td><code>optionsSource: "themeList"</code></td></tr>
-            <tr><td><code>show_clock</code></td><td>showClock</td><td>toggle</td><td></td></tr>
-            <tr><td><code>bottom_bar_media_controls</code></td><td>showBottomBarMediaControls</td><td>toggle</td><td></td></tr>
-            <tr><td><code>color_transition_ms</code></td><td>colorTransitionMs</td><td>slider</td><td>0 – 2000, step 50 (same as the Display page's own slider)</td></tr>
-            <tr><td><code>obd_fast_mode</code></td><td>obdFastMode</td><td>toggle</td><td></td></tr>
-            <tr><td><code>black_box_enabled</code></td><td>blackBoxEnabled</td><td>toggle</td><td></td></tr>
-            <tr><td><code>black_box_sweep_all</code></td><td>blackBoxSweepAll</td><td>toggle</td><td></td></tr>
-            <tr><td><code>home_vehicle_card</code></td><td>homeVehicleCard</td><td>toggle</td><td></td></tr>
-            <tr><td><code>black_box_max_mb</code></td><td>blackBoxMaxMB</td><td>slider</td><td>50&ndash;5000, step 50</td></tr>
-            <tr><td><code>gesture_sensor_enabled</code></td><td>gestureSensorEnabled</td><td>toggle</td><td></td></tr>
-            <tr><td><code>imu_enabled</code></td><td>imuEnabled</td><td>toggle</td><td></td></tr>
-          </tbody>
-        </table>
-
-        <h3>Example Registry Entries</h3>
-        <pre><code>reg[QStringLiteral(<span class="str">"startup_volume"</span>)] = entry(<span class="str">"startUpVolume"</span>, <span class="str">"Startup Volume"</span>, <span class="str">"mediaSettings"</span>,
-    <span class="str">"slider"</span>, <span class="str">"save_start_volume"</span>, sliderParams(<span class="num">0</span>, <span class="num">1</span>, <span class="num">0.01</span>, <span class="kw">true</span>));
-reg[QStringLiteral(<span class="str">"album_art_transition"</span>)] = entry(<span class="str">"albumArtTransition"</span>, <span class="str">"Track Transition"</span>, <span class="str">"mediaSettings"</span>,
-    <span class="str">"chips"</span>, <span class="str">"save_album_art_transition"</span>,
-    chipParams({<span class="str">"Crossfade"</span>, <span class="str">"Slide"</span>, <span class="str">"Vinyl Lift"</span>, <span class="str">"Dissolve"</span>, <span class="str">"Flip"</span>,
-                <span class="str">"Coverflow"</span>, <span class="str">"Conveyor"</span>, <span class="str">"Stack"</span>, <span class="str">"Depth"</span>, <span class="str">"Swing"</span>}));
-reg[QStringLiteral(<span class="str">"theme_setting"</span>)] = entry(<span class="str">"themeSetting"</span>, <span class="str">"Theme"</span>, <span class="str">"displaySettings"</span>,
-    <span class="str">"chips"</span>, <span class="str">"save_theme_setting"</span>, chipSource(<span class="str">"themeList"</span>));</code></pre>
-<p><code>entry()</code>, <code>sliderParams()</code>, <code>chipParams()</code> and <code>chipSource()</code> are local lambdas that build the JSON objects described above (shown here with the <code>QStringLiteral</code> wrappers on the option names dropped).</p>
-
-        <h3>Control Types</h3>
-        <table>
-          <thead>
-            <tr><th>controlType</th><th>params</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>toggle</code></td><td>none</td><td>Boolean on/off switch</td></tr>
-            <tr><td><code>slider</code></td><td><code>from</code>, <code>to</code>, <code>stepSize</code>, optional <code>logarithmic</code></td><td>Numeric range slider; <code>logarithmic</code> is only set on <code>startup_volume</code>, whose 0 – 1 value is the linear gain (the quadratic curve makes the slider feel logarithmic)</td></tr>
-            <tr><td><code>chips</code></td><td><code>options</code> (array of strings) or <code>optionsSource</code> (name of a QML-side list)</td><td>Selectable chip/pill buttons; <code>optionsSource: "themeList"</code> lets the theme chips include custom themes that the static registry cannot list</td></tr>
-          </tbody>
-        </table>
-
-        <p>The registry is exposed to QML via:</p>
-        <pre><code>QString SettingsManager::<span class="fn">get_settings_registry</span>()
-{
-    <span class="kw">return</span> QString::fromUtf8(QJsonDocument(s_settingsRegistry).toJson(QJsonDocument::Compact));
-}</code></pre>
-
-        <!-- Default Settings -->
-        <h2 id="default-settings">Default Settings</h2>
-        <p>
-          All defaults live in <code>buildDefaultSettings()</code>. The object it returns is the schema: any key absent from
-          the loaded JSON gets its default, and top-level values with an incompatible type are replaced by defaults. It
-          defines <strong>109 top-level keys</strong>.
-          The nested <code>obdParameters</code> object holds <strong>123 parameter IDs, 20 enabled by default</strong>. The exhaustive
-          per-key table, including ranges and the UI page that owns each key, is the
-          <a href="settings-reference.html">Settings Reference</a>; the summary:
-        </p>
-        <table>
-          <thead>
-            <tr><th>Category</th><th>Keys</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>Device / window</td><td><code>deviceName</code>, <code>fontSetting</code>, <code>windowState</code>, <code>screenWidth</code>, <code>screenHeight</code></td></tr>
-            <tr><td>Display</td><td><code>themeSetting</code>, <code>uiScale</code>, <code>colorTransitionMs</code>, <code>songLengthTransition</code>, <code>showClock</code>, <code>clockFormat24Hour</code>, <code>clockShowSeconds</code>, <code>clockSize</code>, <code>clockSizeAuto</code>, <code>bottomBarOrientation</code>, <code>showBottomBarMediaControls</code>, <code>settingsLayoutStyle</code>, <code>customThemes</code>, <code>albumArtColors</code></td></tr>
-            <tr><td>Media &amp; Now Playing</td><td><code>startUpVolume</code>, <code>audioOutputDevice</code>, <code>mediaFolder</code>, <code>autoPlayOnStartup</code>, <code>persistShuffleState</code>, <code>musicButtonDefaultPage</code>, <code>returnToLibraryAfterSelection</code>, <code>showWaveformVisualizer</code>, <code>show3DButtonTilt</code>, <code>show3DAlbumPreview</code>, <code>roundedAlbumArt</code>, <code>albumArtCornerRadius</code>, <code>showAlbumArtShadow</code>, <code>musicDeviceModel</code>, <code>vinylRecordMode</code>, <code>albumArtTransition</code>, <code>backgroundOverlayOpacity</code>, <code>backgroundBlurRadius</code>, <code>backgroundGrid</code>, <code>sideCardOpacity</code>, <code>sideCardAngle</code>, <code>buttonTiltDuration</code>, <code>textScrollSpeed</code>, <code>directoryHistory</code></td></tr>
-            <tr><td>Playback resume</td><td><code>lastShuffleState</code>, <code>lastPlayedSong</code>, <code>lastPlayedPosition</code>, <code>lastPlayedPlaylist</code>, <code>mediaLastSource</code>, <code>mediaLastPlaying</code></td></tr>
-            <tr><td>OBD</td><td><code>obdBluetoothPort</code>, <code>obdSavedAdapters</code>, <code>obdFastMode</code>, <code>obdAutoReconnectAttempts</code>, <code>fuelTankCapacity</code>, <code>blackBoxEnabled</code>, <code>blackBoxSweepAll</code>, <code>homeVehicleCard</code>, <code>blackBoxMaxMB</code>, <code>serviceEnabled</code>, <code>obdParameters</code>, <code>homeOBDParameters</code>, <code>supportedOBDParameters</code></td></tr>
-            <tr><td>Android Auto / Phone Mirror</td><td><code>androidAutoEnabled</code>, <code>phoneMirrorUsed</code>, <code>androidAutoBackend</code>, <code>androidAutoCertPath</code>, <code>androidAutoResolution</code>, <code>androidAutoFps</code>, <code>androidAutoDpi</code>, <code>airPlayEnabled</code>, <code>airPlayName</code>, <code>airPlayRequirePin</code>, <code>airPlayResolution</code>, <code>airPlayTouchEnabled</code>, <code>airPlayTouchScale</code>, <code>phoneMirrorEnabled</code>, <code>scrcpyDisplaySize</code>, <code>scrcpyAudioGain</code>, <code>scrcpyAudioDuckEnabled</code>, <code>scrcpyAudioDuckLevel</code>, <code>scrcpyPhoneScreenOff</code>, <code>scrcpyDisplayDpi</code>, <code>scrcpyBitRateUsb</code>, <code>scrcpyBitRateWifi</code>, <code>scrcpyAutoWifi</code>, <code>scrcpyBitRateAuto</code>, <code>scrcpyWirelessAddress</code></td></tr>
-            <tr><td>ESP32 knob</td><td><code>esp32VolumeEnabled</code>, <code>esp32VolumePort</code>, <code>esp32VolumeStepSize</code>, <code>esp32AutoReconnect</code>, <code>esp32LedSleepEnabled</code>, <code>esp32LedColorMode</code>, <code>esp32LedStaticColor</code></td></tr>
-            <tr><td>IMU</td><td><code>imuEnabled</code>, <code>sensorEmitRate</code>, <code>sensorDecimalPlaces</code>, <code>sensorTempUnit</code>, <code>sensorAltitudeUnit</code>, <code>sensorShowPitch</code>, <code>sensorShowRoll</code>, <code>sensorShowHeading</code>, <code>sensorShowGForce</code>, <code>sensorShowAltitude</code>, <code>sensorShowTemperature</code></td></tr>
-            <tr><td>Gesture</td><td><code>gestureSensorEnabled</code>, <code>gestureMapping</code>, <code>gestureVolumeStep</code>, <code>gestureCooldown</code></td></tr>
-            <tr><td>Settings UI state</td><td><code>lastSettingsSection</code>, <code>settingsMenuVisibility</code>, <code>pinnedSettings</code>, <code>expandedCards</code></td></tr>
-          </tbody>
-        </table>
-
-        <!-- Key Methods -->
-        <h2 id="key-methods">Key Methods and Slots</h2>
-        <p>The header exposes 142 callable methods (91 public slots and 51 <code>Q_INVOKABLE</code> methods). The groups below cover everything that is not a plain <code>save_&lt;key&gt;</code> setter.</p>
-
-        <h3>Core Persistence</h3>
-        <table>
-          <thead>
-            <tr><th>Method</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>loadSettings()</code> (private)</td><td>Returns a copy of the in-memory object once loaded. Before that (constructor only), it attempts a shared lock and reads the file. A missing file is initialized with defaults; a corrupt file triggers backup recovery, falling back to defaults if recovery fails.</td></tr>
-            <tr><td><code>saveSettings(settings)</code> (private)</td><td>Validates into the in-memory copy and arms the 500&nbsp;ms timer. On the constructor path (migration, first run) it writes immediately.</td></tr>
-            <tr><td><code>flushPendingSave()</code></td><td>Invokable. Writes now if a save is pending and stops the timer. Called from <code>AppCore::shutdown()</code> (<span class="file-path">src/appcore.cpp</span>, run on <code>aboutToQuit</code>), after <code>MediaManager</code> has saved playback state so that write is included.</td></tr>
-            <tr><td><code>writeSettingsToDisk(settings)</code> (private)</td><td>The atomic temp+rename write; takes an already validated object.</td></tr>
-            <tr><td><code>setRow(row, value)</code> (private)</td><td>The one place a plain setting changes: type, rule, unchanged check, both stores, the save timer, the row's signal. Returns refused / unchanged / changed.</td></tr>
-            <tr><td><code>updateSetting(key, value)</code> (private)</td><td>For keys that are not rows (the file-only keys): copy, set key, <code>saveSettings</code>.</td></tr>
-            <tr><td><code>get_setting(key)</code>, <code>get_setting_with_default(key, default)</code></td><td>Read any key from memory; a plain setting comes back as its row's value, in its own type. <code>get_setting</code> returns an invalid <code>QVariant</code> (<code>undefined</code> in QML) for unknown keys.</td></tr>
-            <tr><td><code>save_media_folder(path)</code></td><td>Returns false and saves nothing unless <code>path</code> (or a <code>file://</code> URL) is absolute and not the filesystem root, the rule <code>save_media_folder_url</code> applies; it may be absent (a card not yet inserted).</td></tr>
-            <tr><td><code>get_setting</code> / <code>get_setting_with_default</code></td><td>Never return a file-only key (<code>serviceEnabled</code>, <code>serviceWebRoot</code>, <code>serviceLoopbackOpen</code>, <code>serviceTokens</code>); their owners read them with the C++-only <code>fileOnlySetting</code>.</td></tr>
-            <tr><td><code>save_setting(key, value)</code></td><td>Write any key and emit <code>genericSettingChanged(key)</code>. A plain setting goes through <code>setRow()</code> (type and range checked, its property and signal follow; refused or unchanged: nothing emitted). No type validation for keys without a default. Refuses <code>serviceEnabled</code> and <code>serviceWebRoot</code> (a warning, nothing written): what turns the service on and what it serves are set in the file, never by one of its own clients (<code>fileOnlyKeys()</code>, the one list <code>save_setting</code>, <code>apply_settings</code> and <code>reset_to_defaults</code> share; a reset keeps their file values).</td></tr>
-            <tr><td><code>apply_settings(values)</code></td><td>Many settings at once, each through its own <code>save_*</code> slot (the table row's slot, else the registry's <code>saveSlot</code>, else <code>save_</code> + the key in snake case: <code>backgroundGrid</code> &rarr; <code>save_background_grid</code>, <code>show3DButtonTilt</code> &rarr; <code>save_show_3d_button_tilt</code>), so each slot's validation and notify signal apply. A value must already be the slot's type (an <code>int</code> slot rounds a number); keys with no setter and the file-only keys are refused. Returns <code>{applied: [keys], refused: {key: reason}}</code>.</td></tr>
-            <tr><td><code>nowPlayingPresets</code> / <code>applyNowPlayingPreset(label)</code></td><td>The Now Playing look presets (Minimal, Vinyl, Showcase 3D, Cinema) as <code>[{label, settings}]</code>, and applying one through <code>apply_settings</code> (false for an unknown label). The QML UI has not shown them since 2026-11-23 (the look editor's presets strip left); they stay for other frontends, such as the console example.</td></tr>
-            <tr><td><code>reset_to_defaults()</code></td><td>Slot. Saves the default object, reloads everything through the constructor's <code>populateMembers()</code> and emits the signal of each setting that changed (nothing for one that was already the default). Not wired to any UI or C++ caller at present.</td></tr>
-          </tbody>
-        </table>
-
-        <h3>OBD Parameters and Adapters</h3>
-        <table>
-          <thead>
-            <tr><th>Method</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>save_obd_parameter_enabled(parameter, enabled)</code></td><td>Slot. Updates the in-memory map immediately and restarts the 800&nbsp;ms debounce timer. Retained for compatibility and <code>enableAllSupported()</code>; the current UI does not use it to select polled parameters.</td></tr>
-            <tr><td><code>flushObdParameters()</code> (private)</td><td>Timer target. Copies the map into the settings object (one write) and emits <code>obdParametersChanged</code> once. It no longer drives polling: the managers refresh their poll lists from <code>setParameterDemand()</code> and the current vehicle scan.</td></tr>
-            <tr><td><code>get_obd_parameter_enabled(parameter, defaultVal = true)</code></td><td>Invokable. Returns the state from memory; an unknown PID is cached with <code>default</code> as a side effect (so the next flush persists it).</td></tr>
-            <tr><td><code>save_supported_obd_parameters(list)</code> / <code>get_supported_obd_parameters()</code></td><td>Persist and read the last vehicle-scan result; <code>OBDManager</code> writes it as a historical scan result; live polling uses the new connection’s scan rather than trusting this persisted list. Emits <code>supportedOBDParametersChanged</code>.</td></tr>
-            <tr><td><code>save_home_obd_parameters(list)</code> / <code>get_home_obd_parameters()</code>, <code>add_home_obd_parameter(id, index = -1)</code>, <code>remove_home_obd_parameter(id)</code>, <code>move_home_obd_parameter(from, to)</code>, <code>maxHomeObdParameters</code></td><td>The PIDs shown on the home screen cards, in order. The manager enforces the rules: no duplicates or empty ids, at most <code>kMaxHomeObdParameters</code> (8); <code>add</code> returns false when the id is already there or the grid is full, <code>move</code> shifts the cards in between (a drop past the end goes last). The OBD settings page's drag editor calls the three slots and reads the cap from <code>maxHomeObdParameters</code>; until open-backend #13 it edited a copy itself, with the cap in three places and a drop within the grid swapping two cards. Emits <code>homeOBDParametersChanged</code>.</td></tr>
-            <tr><td><code>add_obd_saved_adapter(name, mac)</code>, <code>remove_obd_saved_adapter(mac)</code></td><td>Maintain <code>obdSavedAdapters</code>: a list of <code>{name, mac}</code> maps for QML, stored as a compact JSON-array <em>string</em> (the private <code>save_obd_saved_adapters(json)</code> writes it). <code>add</code> upper-cases and trims the MAC, removes any duplicate, prepends the entry (most recent first) and caps the list at 8. <code>OBDManager::connect_to_adapter()</code> calls <code>add</code> whenever the identifier it is asked to connect to is a MAC address ("persist the choice so reconnects + restarts use it"); the OBD settings page calls <code>remove</code>.</td></tr>
-          </tbody>
-        </table>
-
-        <h3>Playback State</h3>
-        <table>
-          <thead>
-            <tr><th>Method</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>save_playback_state(song, position_ms, playlist)</code></td><td>Slot. Sets the three resume fields in one save and emits nothing (the values are read back at startup, not bound live). <code>MediaManager</code> calls it from its own 1&nbsp;s debounce and at shutdown.</td></tr>
-            <tr><td><code>save_last_played_song / _position / _playlist</code></td><td>Individual setters with signals; available but <code>MediaManager</code> uses the batched call.</td></tr>
-            <tr><td><code>save_last_shuffle_state(bool)</code></td><td>Called by <code>MediaManager</code> whenever shuffle toggles; honoured at startup only when <code>persistShuffleState</code> is on.</td></tr>
-            <tr><td><code>setCurrentVolume(int)</code></td><td>Slot. Updates the in-memory 0–100 unified volume and emits <code>currentVolumeChanged</code>; never persisted. Only <code>VolumeController</code> calls it (see <a href="architecture.html">Architecture</a>).</td></tr>
-          </tbody>
-        </table>
-
-        <h3>Custom Themes</h3>
-        <table>
-          <thead>
-            <tr><th>Method</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>save_custom_theme(name, theme, albumArtSource = QString())</code></td><td>Slot. Takes the theme object (a <code>QVariantMap</code>; such as <code>App.Style.albumArtTheme</code>), stores it under <code>customThemes[name]</code> and emits <code>customThemesChanged</code> immediately. The source is not trusted (the caller may be a paired device holding only the <code>settings</code> scope): only a picture is taken, at most 16&nbsp;MB, judged by its content and not its name. A local <code>albumArtSource</code> (path or <code>file://</code> URL) is copied synchronously to <code>theme_art/theme_&lt;safe name&gt;.&lt;ext&gt;</code> and recorded as <code>theme["albumArt"]</code>; an <code>http(s)://</code> source is downloaded on a background thread and patched in afterwards. The safe name replaces every character outside <code>[\w-]</code> with <code>_</code>.</td></tr>
-            <tr><td><code>downloadThemeArtAsync()</code> (private)</td><td>On a <code>QThread</code>: looks the host up and refuses it unless every address it has is a public one (not loopback, private, link-local or carrier NAT), then runs the external <code>curl</code> through <code>QProcess</code> held to the address that was checked (<code>--resolve</code>), http(s) only, no redirects, 30&nbsp;s and 16&nbsp;MB at most, saving to <code>theme_art/theme_&lt;safe name&gt;.jpg</code>. A reply that is not a picture is deleted. The result comes back to the GUI thread as a queued call, which saves and emits <code>customThemesChanged</code> again.</td></tr>
-            <tr><td><code>delete_custom_theme(name)</code></td><td>Slot. Removes the entry and deletes its art file if the stored URL resolves to a local file.</td></tr>
-            <tr><td><code>customThemeData</code></td><td>Property: every saved theme, name &rarr; object, as on disk (notify <code>customThemesChanged</code>). The <code>customThemes</code> property only lists names. Replaced the <code>get_custom_theme(name)</code> JSON-string getter.</td></tr>
-          </tbody>
-        </table>
-
-        <h3>Directory History</h3>
-        <table>
-          <thead>
-            <tr><th>Method</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>save_to_directory_history(path)</code></td><td>Slot. Prepends a folder (no duplicates) and trims the list to 10, then emits <code>directoryHistoryChanged</code>.</td></tr>
-            <tr><td><code>remove_from_directory_history(path)</code>, <code>get_directory_history()</code></td><td>Remove one entry / read the list (also exposed as the <code>directoryHistory</code> property). No current QML or C++ caller writes to the history; the API is retained for the media-folder picker.</td></tr>
-          </tbody>
-        </table>
-
-        <h3>Gesture Mapping</h3>
-        <table>
-          <thead>
-            <tr><th>Method</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>save_gesture_action(gesture, action)</code></td><td>Slot. Rebinds one gesture and emits <code>gestureMappingChanged</code>.</td></tr>
-            <tr><td><code>save_gesture_mapping(map)</code>, <code>reset_gesture_mapping()</code></td><td>Replace the whole map / restore the default nine bindings. <code>GestureManager</code> calls <code>save_gesture_mapping</code> when it edits bindings itself; the Accessories page calls <code>reset_gesture_mapping</code>.</td></tr>
-            <tr><td><code>get_gesture_mapping()</code>, <code>get_gesture_mapping_dict()</code></td><td>JSON string for QML / <code>QVariantMap</code> for the managers.</td></tr>
-          </tbody>
-        </table>
-
-        <h3>Git Info (About page)</h3>
-        <table>
-          <thead>
-            <tr><th>Method</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>get_git_commit_hash()</code></td><td>Runs <code>git rev-parse --short HEAD</code> in the repo root with a 5&nbsp;s timeout; <code>"unknown"</code> if no runtime or build-time value is available. Packaged builds (APK, installers, AppImage) have no <code>.git</code> and no <code>git</code> binary, so when the process fails the method returns the hash CMake baked in at configure time (<code>OCTAVE_GIT_COMMIT</code>, likewise <code>OCTAVE_GIT_DATE</code> for <code>get_git_commit_date()</code>).</td></tr>
-            <tr><td><code>get_git_commit_date()</code></td><td><code>git log -1 --format=%ci</code>, reformatted to <code>YYYY-MM-DD at HH:MM</code>.</td></tr>
-            <tr><td><code>get_git_commit_message()</code></td><td><code>git log -1 --format=%s</code>; empty string on failure.</td></tr>
+            <tr><td>Linux, Raspberry Pi, Orange Pi</td><td><code>~/.config/OCTAVE/</code>, or <code>$XDG_CONFIG_HOME/OCTAVE/</code> when that variable is set</td></tr>
+            <tr><td>Windows</td><td><code>%APPDATA%\OCTAVE\</code></td></tr>
+            <tr><td>macOS</td><td><code>~/Library/Application Support/OCTAVE/</code></td></tr>
+            <tr><td>Android</td><td><code>.config/OCTAVE/</code> inside the app's own private storage (not reachable from a file manager)</td></tr>
           </tbody>
         </table>
         <p>
-          The repo root is derived as the parent of <code>QCoreApplication::applicationDirPath()</code>
-          (<code>getGitRepoDir()</code>), i.e. the parent of the <code>build/</code> directory for a source build. The hash and date fall back to the commit hash and date baked in by CMake when runtime git lookup fails; the commit message has no build-time fallback. Checking whether an update is available, and the ahead/behind/diverged ancestry logic that
-          guards self-update, live in <a href="network-manager.html">NetworkManager</a>, not here.
+          The settings file is <code>settingsConfigure.json</code> in that folder. OCTAVE creates the folder and the
+          file the first time it runs.
         </p>
-
-        <!-- Section Visibility -->
-        <h2 id="section-visibility">Section Visibility System</h2>
-        <p>
-          Settings-menu sections can be hidden. Visibility state is the nested <code>settingsMenuVisibility</code> object,
-          exposed to QML as a JSON string (property and <code>get_settings_menu_visibility()</code>) plus a per-section
-          boolean query:
-        </p>
-        <pre><code><span class="str">"settingsMenuVisibility"</span>: {
-    <span class="str">"displaySettings"</span>: <span class="kw">true</span>,
-    <span class="str">"mediaSettings"</span>: <span class="kw">true</span>,
-    <span class="str">"obdSettings"</span>: <span class="kw">true</span>,
-    <span class="str">"accessoriesSettings"</span>: <span class="kw">true</span>,
-    <span class="str">"deviceSettings"</span>: <span class="kw">true</span>,
-    <span class="str">"about"</span>: <span class="kw">true</span>      <span class="cmt">// every section visible by default</span>
-}</code></pre>
-
         <ul>
-          <li><code>is_settings_section_visible(section)</code> returns the stored flag, or <code>true</code> for a section that is not in the object</li>
-          <li><code>save_settings_section_visibility(section, visible)</code> stores the flag and emits <code>settingsMenuVisibilityChanged</code> (no arguments)</li>
-          <li><code>get_settings_menu_visibility()</code> returns the whole object as JSON</li>
-        </ul>
-        <p>
-          The toggles live in the <code>settingsVisibilityPopup</code> defined in
-          <span class="file-path">frontend/BottomBar.qml</span>, opened by a press-and-hold on the settings navigation
-          button (a tap navigates as before), and <span class="file-path">frontend/SettingsMenu.qml</span> filters its page model through
-          <code>is_settings_section_visible()</code>. The default visibility keys are the menu's seven sections:
-          <code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>,
-          <code>phoneSettings</code> (Phone Mirror, Android Auto, iPhone; desktop only),
-          <code>accessoriesSettings</code> (Volume Knob, IMU and Gesture sub-sections; desktop only),
-          <code>deviceSettings</code> and <code>about</code>, all <code>true</code>. A file written by an older build
-          may still carry the retired per-feature keys (<code>androidAutoSettings</code>, <code>phoneMirrorSettings</code>,
-          <code>volumeKnobSettings</code>, <code>gestureSensorSettings</code>); they are kept but nothing reads them, and any
-          current section missing from the file reads as visible. See <a href="settings-ui.html">Settings UI</a> for the layouts.
-        </p>
-
-        <!-- Pinned Settings -->
-        <h2 id="pinned-settings">Pinned Quick Settings</h2>
-        <p>
-          Users can pin registry entries to the Quick Panel. Pinned IDs are stored in the <code>pinnedSettings</code>
-          list (property, <code>is_setting_pinned(id)</code>, <code>toggle_pin_setting(id)</code>). Only IDs present in
-          the registry can be pinned:
-        </p>
-        <pre><code><span class="kw">void</span> SettingsManager::<span class="fn">toggle_pin_setting</span>(<span class="kw">const</span> QString &amp;settingId)
-{
-    <span class="kw">int</span> idx = m_pinnedSettings.indexOf(settingId);
-    <span class="kw">if</span> (idx &gt;= <span class="num">0</span>) {
-        m_pinnedSettings.removeAt(idx);
-    } <span class="kw">else</span> {
-        <span class="kw">if</span> (s_settingsRegistry.contains(settingId))
-            m_pinnedSettings.append(settingId);
-    }
-    QJsonObject settings = loadSettings();
-    QJsonArray arr;
-    <span class="kw">for</span> (<span class="kw">const auto</span> &amp;v : m_pinnedSettings)
-        arr.append(v.toString());
-    settings[QStringLiteral(<span class="str">"pinnedSettings"</span>)] = arr;
-    saveSettings(settings);
-    <span class="kw">emit</span> pinnedSettingsChanged();
-}</code></pre>
-
-        <p>
-          <code>get_pinned_settings_metadata()</code> returns a JSON array of the pinned registry entries, each extended
-          with <code>id</code> and <code>currentValue</code>. The value is the table row's for a plain setting,
-          and the in-memory settings object's for any other key.
-        </p>
-
-        <!-- Generic Access -->
-        <h2 id="generic-access">Generic Setting Access</h2>
-        <p>
-          For values that do not warrant a dedicated property, QML uses the generic accessors:
-          <code>get_setting(key)</code>, <code>get_setting_with_default(key, default)</code> and
-          <code>save_setting(key, value)</code>, which emits <code>genericSettingChanged(key)</code>.
-        </p>
-        <p>
-          A key that is a plain setting takes the same path as its save slot: <code>save_setting("uiScale", 1.5)</code>
-          checks the type and the range, moves <code>settingsManager.uiScale</code>, emits <code>uiScaleChanged</code>
-          and then <code>genericSettingChanged("uiScale")</code>; a wrong type or a value outside the row's rule is
-          refused, and an unchanged value does nothing. (Until 2026-11 it wrote the file only: the property kept the old
-          value until the next start.) <code>get_setting()</code> returns the row's value in its own type. A key that is
-          a list or a map kept in a member is written and the member re-read. Any other key is written as given; it is
-          type-checked only if it has a default in <code>buildDefaultSettings()</code>. The four service keys are
-          refused both ways.
-        </p>
-
-        <p>Two families of keys use this path today:</p>
-        <ul>
-          <li><strong>Keys with a default but no property</strong>: <code>expandedCards</code>, <code>musicDeviceModel</code>, <code>mediaArtPhoneMirror</code> and the built-in Android Auto keys <code>androidAutoBackend</code> (<code>"dhu"</code>), <code>androidAutoCertPath</code> (<code>""</code>), <code>androidAutoResolution</code> (<code>"1280x720"</code>), <code>androidAutoFps</code> (30) and <code>androidAutoDpi</code> (160), and the six <code>airPlay*</code> keys (<code>AirPlayManager</code> follows <code>genericSettingChanged</code> for every key starting with <code>airPlay</code>; see <a href="settings-reference.html#phone">Settings Reference</a>). These are type-validated like any other default. <code>AndroidAutoManager</code> reads the Android Auto keys with <code>get_setting_with_default()</code> at every connection attempt and follows <code>genericSettingChanged("androidAutoBackend")</code> to emit its <code>backendChanged</code>; the Android Auto card writes the backend and video size with <code>save_setting()</code>, and the other three have no control yet (<a href="settings-reference.html#phone">Settings Reference</a>).</li>
-          <li><strong>QML-only keys with no C++ default</strong>: the RPM shift-light configuration (<code>rpm_*</code>, defaults in <code>ShiftLightManager::reload()</code>), <code>lastOBDPage</code>, and <code>lastSensorPage</code>. Their defaults live in the QML call sites and they survive validation through the forward-compatibility copy. The full list with defaults is in the <a href="settings-reference.html#generic">Settings Reference</a>.</li>
+          <li><strong>Another folder:</strong> start OCTAVE with <code>--config DIR</code> and it keeps settings, trips, dashboards and logs in <code>DIR</code> instead. This is how to try something without touching your real settings.</li>
+          <li><strong>The simulator:</strong> <code>--sim</code> (and <code>--dev</code>, which implies it) runs on a throwaway config folder that is deleted at exit, unless you also give <code>--config DIR</code>.</li>
+          <li><strong>The browser demo:</strong> the file lives in the page's memory. Settings last until the tab is reloaded.</li>
         </ul>
 
+        <!-- Config folder -->
+        <h2 id="config-folder">What Else Is in the Config Folder</h2>
+        <p>Other pages say "the config folder" or <code>&lt;config&gt;</code>. This is what you will find there:</p>
+        <table>
+          <thead>
+            <tr><th>File or folder</th><th>What it holds</th><th>More</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>settingsConfigure.json</code></td><td>Every setting. Beside it, <code>.bak</code> (the last good copy) and sometimes <code>.corrupt</code> (a damaged file kept for inspection)</td><td>this page</td></tr>
+            <tr><td><code>logs/</code></td><td>The log files</td><td><a href="architecture.html#logging">Architecture</a></td></tr>
+            <tr><td><code>dashboards/</code></td><td>Your own dashboards, one JSON file each</td><td><a href="gauges-dashboards.html">Gauges &amp; Dashboards</a></td></tr>
+            <tr><td><code>history/</code></td><td>The black box: <code>blackbox.sqlite</code>, the per-trip files in <code>trips/</code>, bus monitor recordings in <code>bus/</code></td><td><a href="obd-manager.html">OBD Manager</a></td></tr>
+            <tr><td><code>custom-pids.json</code></td><td>Manufacturer-specific readings you have added (you create this file)</td><td><a href="obd-manager.html">OBD Manager</a></td></tr>
+            <tr><td><code>vehicles/</code></td><td>3D models of your own for the vehicle view</td><td><a href="pages.html">Pages &amp; Views</a></td></tr>
+            <tr><td><code>frontends/</code></td><td>Installed frontends</td><td><a href="writing-a-frontend.html">Writing a Frontend</a></td></tr>
+            <tr><td><code>theme_art/</code></td><td>The picture saved with each custom theme</td><td><a href="theme-system.html">Theme System</a></td></tr>
+            <tr><td><code>metadata_cache.json</code>, <code>display_names.json</code></td><td>The music library's cache of song tags and names</td><td><a href="media-manager.html">Media Manager</a></td></tr>
+            <tr><td><code>spotify.json</code></td><td>The Spotify sign-in</td><td><a href="media-manager.html">Media Manager</a></td></tr>
+            <tr><td><code>android-auto/</code>, <code>airplay/</code></td><td>What Android Auto and AirPlay keep between sessions (the head-unit certificate, AirPlay's state)</td><td><a href="phone-mirror-android-auto.html">Phone Mirror &amp; Android Auto</a></td></tr>
+            <tr><td><code>temp/</code></td><td>Album art received from a phone. Safe to delete</td><td></td></tr>
+          </tbody>
+        </table>
+
+        <!-- Backup / reset / edit -->
+        <h2 id="backup-reset">Back Up, Reset, Edit by Hand</h2>
+        <p>
+          <strong>Quit OCTAVE first</strong> for all three. The app reads the file once, at start, and from then on
+          writes the whole file from what it holds in memory: a change you make to the file while the app runs is
+          overwritten at the next save.
+        </p>
+        <table>
+          <thead>
+            <tr><th>To</th><th>Do this</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Back up your settings</td><td>Copy <code>settingsConfigure.json</code> somewhere safe. To keep trips, dashboards and vehicles too, copy the whole config folder</td></tr>
+            <tr><td>Move settings to another machine</td><td>Copy the file into that machine's config folder. Paths in it (the music folder, serial ports) belong to the old machine: set them again in Settings</td></tr>
+            <tr><td>Reset everything</td><td>Delete or rename <code>settingsConfigure.json</code>. The next start writes a new one with the defaults. There is no reset button in the app</td></tr>
+            <tr><td>Reset one setting</td><td>Delete its line from the file. A missing key gets its default</td></tr>
+            <tr><td>Change a setting by hand</td><td>Edit its value and save. Key names and allowed values are in the <a href="settings-reference.html">Settings Reference</a></td></tr>
+          </tbody>
+        </table>
+        <p>What happens to a hand edit that is not quite right:</p>
+        <ul>
+          <li><strong>A value of the wrong type</strong> (text where a number belongs): that setting gets its default.</li>
+          <li><strong>A number outside its range:</strong> for most settings it is brought to the nearest limit. A few slider settings (interface scale, clock size, colour transition time, background blur, startup volume) are kept as written.</li>
+          <li><strong>A word that is not one of the choices</strong> (a window state that does not exist): that setting gets its default.</li>
+          <li><strong>A key OCTAVE does not know:</strong> it is kept, untouched.</li>
+          <li><strong>Broken JSON</strong> (a missing comma or brace): the whole file is set aside as <code>settingsConfigure.json.corrupt</code> and the settings from <code>settingsConfigure.json.bak</code> come back. Your edit is in the <code>.corrupt</code> file; fix it there and copy it back.</li>
+        </ul>
         <div class="info-box info">
-          <div class="info-box-title">QML-only keys are unvalidated</div>
-          A QML-only key needs no C++ code, but it also gets no validation: a corrupted value is passed to QML as-is.
-          Add a default in <code>buildDefaultSettings()</code> when a key needs a type check. Add a dedicated validating setter when it also needs range or allowed-value checks.
+          <div class="info-box-title">The file is private</div>
+          On Linux, macOS and Android the file is readable by your user only. It names the devices paired with the
+          service API, so do not post it whole when asking for help.
         </div>
 
-        <!-- Album Art Colors -->
-        <h2 id="album-art-colors">Album Art Colors</h2>
+        <!-- How code uses a setting -->
+        <h2 id="property-signal-system">How Code Reads and Writes a Setting</h2>
         <p>
-          When the <code>"Album Art Capture"</code> theme is active, the palette extracted from the current cover is
-          pushed to SettingsManager as a JSON string. This is the single distribution point: <code>MediaManager</code>
-          calls <code>set_album_art_colors()</code>, QML reads
-          <code>settingsManager.albumArtColors</code> as a theme object (see <a href="theme-system.html">Theme System</a>), and
-          <span class="file-path">src/appcore.cpp</span> sends its <code>accent</code> to the ESP32 knob's LEDs when
-          <code>esp32LedColorMode</code> is <code>"theme"</code>.
+          From here on the page is technical: it is for people writing QML, another frontend, or C++ in
+          <span class="file-path">src/</span>.
         </p>
-        <pre><code>Q_PROPERTY(QVariantMap albumArtColors READ albumArtColors NOTIFY albumArtColorsChanged)   <span class="cmt">// parsed from the stored string</span>
-
-<span class="kw">public slots</span>:
-    <span class="kw">void</span> <span class="fn">set_album_art_colors</span>(<span class="kw">const</span> QString &amp;colorsJson);</code></pre>
         <p>
-          The JSON is persisted under the <code>albumArtColors</code> key so the last palette is reapplied at the next
-          startup before a fresh extraction finishes, which avoids flashing the placeholder theme. Because extraction runs
-          on every track change, this is the setter that benefits most from the coalesced write.
+          The class is <code>SettingsManager</code>. QML and the service API see it as the object
+          <code>settingsManager</code> (a <em>context property</em>: a C++ object QML can use by name anywhere). C++
+          managers get a pointer to it when they are built. Every setting is read from memory, so reading one costs
+          nothing.
         </p>
+        <p>There are three kinds of setting, and each is used a little differently:</p>
+        <table>
+          <thead>
+            <tr><th>Kind</th><th>Examples</th><th>How to use it</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Plain setting</strong>: one on/off, number or text. Most settings</td><td><code>showClock</code>, <code>uiScale</code>, <code>themeSetting</code></td><td>A property of the same name. Read it, bind to it, assign to it</td></tr>
+            <tr><td><strong>List or map</strong></td><td><code>customThemes</code>, <code>gestureMapping</code>, <code>obdSavedAdapters</code></td><td>A read-only property plus methods that change it (<code>save_custom_theme()</code>, <code>save_gesture_action()</code>, <code>add_obd_saved_adapter()</code>)</td></tr>
+            <tr><td><strong>Key with no property</strong></td><td><code>homeScreen</code>, <code>lastOBDPage</code>, the <code>airPlay*</code> and <code>rpm_*</code> keys</td><td>By name: <code>get_setting_with_default()</code> and <code>save_setting()</code></td></tr>
+          </tbody>
+        </table>
 
-        <!-- QML Connection -->
-        <h2 id="qml-connection">Connection to QML and Other Managers</h2>
+        <h3>A plain setting</h3>
+        <p>In QML, a plain setting is an ordinary property. Bind to it and the binding follows every change:</p>
+        <pre><code><span class="cmt">// Read: this text follows the setting</span>
+Text { text: settingsManager.deviceName }
+
+<span class="cmt">// Write: assign to it</span>
+Switch {
+    checked: settingsManager.showClock
+    onToggled: settingsManager.showClock = checked
+}</code></pre>
+        <p>In C++, call the getter and the save slot, and connect to the signal named <code>&lt;key&gt;Changed</code>:</p>
+        <pre><code><span class="kw">if</span> (m_settings-&gt;obdFastMode()) { <span class="cmt">/* ... */</span> }
+
+m_settings-&gt;save_obd_fast_mode(<span class="kw">false</span>);
+
+connect(m_settings, &amp;SettingsManager::obdFastModeChanged, <span class="kw">this</span>, [<span class="kw">this</span>](<span class="kw">bool</span> on) { <span class="cmt">/* ... */</span> });</code></pre>
         <p>
-          SettingsManager is constructed first and registered as the QML context property <code>settingsManager</code>
-          in <span class="file-path">src/main.cpp</span>:
+          Each plain setting also has a <code>save_&lt;key&gt;</code> slot (<code>save_show_clock(true)</code>) and
+          some have a <code>get_&lt;key&gt;()</code> method. They do exactly what the property does. For QML and for
+          service clients they are <strong>deprecated aliases</strong> that go away in protocol&nbsp;5; most of the
+          app's own QML still calls them. New QML should use the property.
         </p>
-        <pre><code>SettingsManager settingsManager;
-ctx-&gt;setContextProperty(<span class="str">"settingsManager"</span>, &amp;settingsManager);</code></pre>
+        <p>
+          Two signal names do not follow the key: <code>clockFormat24Hour</code> announces with
+          <code>clockFormatChanged</code>, and <code>startUpVolumeChanged</code> carries the number as text, so read the
+          <code>startUpVolume</code> property rather than the signal's argument.
+        </p>
 
-        <p>It is then handed to nearly every other manager, either through the constructor (<code>Clock</code>, <code>VolumeController</code>, <code>OBDManager</code>) or a <code>setSettingsManager()</code> (<code>MediaManager</code>) or <code>connect_settings_manager()</code> call (<code>ESP32VolumeManager</code>, <code>BerryIMUManager</code>, <code>GestureManager</code>); <code>OBDAdapterFinder</code> takes it in its constructor too. <code>PhoneMirrorManager</code> is primed from the <code>get_scrcpy_*</code> getters and its <code>scrcpyAudioGainChanged</code>, <code>scrcpyAudioDuckEnabledChanged</code>, <code>scrcpyAudioDuckLevelChanged</code>, <code>scrcpyPhoneScreenOffChanged</code>, <code>scrcpyDisplayDpiChanged</code>, <code>scrcpyBitRateUsbChanged</code>, <code>scrcpyBitRateWifiChanged</code>, <code>scrcpyBitRateAutoChanged</code> and <code>scrcpyAutoWifiChanged</code> signals are wired straight into the manager's setters, so those Accessories-page sliders apply live. <code>scrcpyWirelessAddress</code> runs the other way: the manager owns the remembered Wi-Fi phone and its <code>wirelessAddressChanged</code> signal is wired to <code>save_scrcpy_wireless_address</code>.</p>
+        <h3>What a write goes through</h3>
+        <p>
+          However a plain setting is written (assignment, save slot, <code>save_setting()</code>,
+          <code>apply_settings()</code>, the service's <code>set</code>), it takes one path:
+        </p>
+        <ol class="steps">
+          <li><strong>Type.</strong> The value becomes the setting's type. From <code>save_setting()</code>, <code>apply_settings()</code> and the service it must already be that type: the text <code>"true"</code> is not a bool. A fractional number for a whole-number setting is rounded.</li>
+          <li><strong>Rule.</strong> Each setting has a rule. A number is either brought into its range or refused when outside it; a choice is refused unless it is one of the allowed words. The rule for each key is in the <a href="settings-reference.html">Settings Reference</a>.</li>
+          <li><strong>Unchanged?</strong> The same value again stops here: nothing is written and no signal is sent.</li>
+          <li><strong>Store, save, announce.</strong> The value is stored in memory, a save to disk is scheduled, and the setting's signal is emitted.</li>
+        </ol>
+        <p>
+          A refused value changes nothing and writes a warning to the log (<code>Setting uiScale refused: ...</code>).
+          The call itself does not fail, so after writing a value from outside, read the property back if you need to
+          know.
+        </p>
 
-        <p>QML accesses settings directly:</p>
-        <pre><code><span class="cmt">// Read a property (binding updates on the notify signal)</span>
-text: settingsManager.deviceName
+        <h3 id="generic-access">A key with no property</h3>
+        <p>
+          Some keys are only ever read by one screen or one manager and have no property. Use them by name, and give
+          the default at the place you read it:
+        </p>
+        <pre><code>property string homeScreen: settingsManager.get_setting_with_default(<span class="str">"homeScreen"</span>, <span class="str">""</span>)
 
-<span class="cmt">// Write via slot</span>
-settingsManager.save_device_name(newName)
+settingsManager.save_setting(<span class="str">"homeScreen"</span>, <span class="str">"cockpit"</span>)
 
-<span class="cmt">// React to changes</span>
 Connections {
     target: settingsManager
-    <span class="kw">function</span> <span class="fn">onThemeSettingChanged</span>(theme) { <span class="cmt">/* ... */</span> }
-    <span class="kw">function</span> <span class="fn">onGenericSettingChanged</span>(key) { <span class="kw">if</span> (key === <span class="str">"lastOBDPage"</span>) { <span class="cmt">/* ... */</span> } }
-}
-
-<span class="cmt">// Generic key with a QML-side default</span>
-property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span class="str">"rpm_shift_light_enabled"</span>, <span class="kw">true</span>)</code></pre>
-
-        <p>On <code>aboutToQuit</code>, <code>AppCore::shutdown()</code> (<span class="file-path">src/appcore.cpp</span>) calls <code>mediaManager._save_playback_state()</code> before <code>settingsManager.flushPendingSave()</code>, so the final settings write includes playback state.</p>
-
-        <!-- Design Decisions -->
-        <h2 id="design-decisions">Design Decisions</h2>
-
-        <h3>One JSON file, not QSettings or a database</h3>
+    <span class="kw">function</span> <span class="fn">onGenericSettingChanged</span>(key) {
+        <span class="kw">if</span> (key === <span class="str">"homeScreen"</span>)
+            homeScreen = settingsManager.get_setting_with_default(<span class="str">"homeScreen"</span>, <span class="str">""</span>)
+    }
+}</code></pre>
         <p>
-          A single human-readable JSON document is identical on every platform, so a settings file can be copied between
-          the head unit, a laptop and a phone. <code>QSettings</code> would have put the data in the Windows registry,
-          macOS plists and INI files with Qt-specific escaping. JSON also carries nested objects (<code>obdParameters</code>
-          with 123 parameter IDs, <code>gestureMapping</code>, <code>customThemes</code> with embedded theme objects)
-          without flattening keys, and it can be edited in a text editor on the Pi.
+          A call is not a binding: the value does not follow later changes by itself, which is why the example listens
+          for <code>genericSettingChanged(key)</code>. A key used this way needs no C++ at all, and gets no checking
+          either, unless it has a default in the code: then a value of another type is dropped for the default.
+        </p>
+        <p>
+          <code>save_setting()</code> and <code>get_setting()</code> also work on a plain setting, by the same path
+          as its property: <code>save_setting("uiScale", 1.5)</code> moves <code>settingsManager.uiScale</code> and
+          emits <code>uiScaleChanged</code> as well as <code>genericSettingChanged("uiScale")</code>.
+          <code>get_setting()</code> returns <code>undefined</code> for a key that does not exist.
         </p>
 
-        <h3>Defaults object as the schema, validation by type</h3>
+        <!-- Quick table -->
+        <h2 id="key-methods">To Do This, Use That</h2>
+        <table>
+          <thead>
+            <tr><th>To</th><th>Use</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Read or change a plain setting</td><td>the property <code>settingsManager.&lt;key&gt;</code></td></tr>
+            <tr><td>Read or change a key with no property</td><td><code>get_setting_with_default(key, default)</code>, <code>save_setting(key, value)</code>, signal <code>genericSettingChanged(key)</code></td></tr>
+            <tr><td>Change several settings at once (a preset)</td><td><code>apply_settings({key: value, ...})</code>. Each value goes through that setting's own setter and rule. Returns <code>{applied: [keys], refused: {key: reason}}</code></td></tr>
+            <tr><td>Set the music folder</td><td><code>save_media_folder(path)</code>, or <code>save_media_folder_url(url)</code> for what a folder picker returns. Both return false for something that is not an absolute folder path, or is the filesystem root</td></tr>
+            <tr><td>Save or delete a custom theme</td><td><code>save_custom_theme(name, theme, artSource)</code>, <code>delete_custom_theme(name)</code>; read them from <code>customThemes</code> (names) and <code>customThemeData</code></td></tr>
+            <tr><td>Change what a gesture does</td><td><code>save_gesture_action(gesture, action)</code>, <code>reset_gesture_mapping()</code></td></tr>
+            <tr><td>Show or hide a section of the Settings menu</td><td><code>save_settings_section_visibility(section, visible)</code>, <code>is_settings_section_visible(section)</code></td></tr>
+            <tr><td>Put every setting back to its default</td><td><code>reset_to_defaults()</code>. It announces only what changed. No screen in the app calls it</td></tr>
+            <tr><td>Write the file now, without waiting</td><td><code>flushPendingSave()</code></td></tr>
+            <tr><td>Find the config folder from C++</td><td><code>SettingsManager::getAppDataDir()</code> (static)</td></tr>
+          </tbody>
+        </table>
         <p>
-          Rather than a separate schema file, the defaults object <em>is</em> the schema: a key's presence declares it,
-          its default value declares its type, and adding a setting is one line. Validation compares stored values
-          against that type and falls back to the default rather than refusing to load, because a head unit that boots
-          into defaults after a bad write is usable and one that shows an error dialog at 60&nbsp;mph is not. Unknown
-          keys are kept ("forward compatibility", per the comment in <code>validateSettings()</code>) so an older build never
-          destroys a newer build's settings, or the QML-only keys, when both touch the same file.
+          Every property, method and signal, with its types and the permission it needs, is in the generated
+          <a href="api-reference.html#settingsManager">API reference</a>. A device paired over the service API needs
+          the <code>settings</code> permission to change a setting and only <code>read</code> to read one.
         </p>
 
-        <h3>Memory-served reads, one coalesced write</h3>
+        <!-- How a change reaches the screen -->
+        <h2 id="qml-connection">How a Change Reaches the Screen</h2>
         <p>
-          Before the 2026-09 sweep every getter re-read and re-validated the file and every setter wrote it. On the
-          Orange Pi that meant a parse+validate+write on every slider release and on every track change (album colours),
-          all on the GUI thread, and a steady stream of small writes to an SD card. The commit that changed this
-          (<code>ee5a23e</code>) states the rationale in the code comments: after the constructor the in-memory object is
-          authoritative because every setter goes through <code>saveSettings()</code>, so re-reading "always returned
-          what we had just written". The 500&nbsp;ms single-shot timer is restarted on every call, which turns a burst of
-          any length into one atomic write and also spares the SD card. The trade-off, accepted deliberately, is that a
-          hard kill within the window loses the last change; a normal quit flushes.
+          There is no "apply" step. A setting changes in memory at once and announces itself with a signal; the disk
+          write follows later (see <a href="#json-persistence">How Saving Works</a>).
         </p>
-
-        <h3>Validation at save time, not write time</h3>
+        <ol class="steps">
+          <li>Something writes the setting: a control on a Settings page, another manager, or a client of the service API.</li>
+          <li>The manager checks the value, stores it and emits <code>&lt;key&gt;Changed</code>.</li>
+          <li>Every QML binding that reads <code>settingsManager.&lt;key&gt;</code> re-evaluates. The clock disappears, the theme changes, the slider on another page moves.</li>
+          <li>C++ managers that connected to the signal act on it: the phone mirror takes the new audio level, the gauges take the new units, the volume knob's LEDs take the new colour.</li>
+        </ol>
+        <p>Three things follow from this:</p>
+        <ul>
+          <li>A screen never needs to be told that a setting changed. If it shows a stale value, it copied the value into a property of its own instead of binding to it.</li>
+          <li>Writing the same value twice is free: the second write is dropped before any signal.</li>
+          <li>A key with no property has no binding to re-evaluate. Whoever shows it must listen for <code>genericSettingChanged(key)</code>, as in the example above.</li>
+        </ul>
         <p>
-          <code>saveSettings()</code> validates into the cache and the disk writer takes the object as given
-          (<code>037f753</code>). Validating once at the boundary where
-          data enters the cache checks the top-level types of keys with defaults. Unknown keys and nested values remain unvalidated, and <code>save_setting()</code> does not update the backing member or notify signal of a typed property, so use its dedicated setter. The deferred write does not pay
-          for a second pass over 96 keys plus 123 parameter IDs. Per-setter domain checks (enumerated strings, clamped sliders)
-          sit even earlier, in the slot, because the type check cannot express "one of four layout names" or
-          "2 to 32 pixels".
-        </p>
-
-        <h3>Debounced OBD toggles with an in-memory fast path</h3>
-        <p>
-          The legacy <code>obdParameters</code> map retains 123 parameter flags for settings-file compatibility. The current UI and polling system use consumer demand instead.
-          <code>save_obd_parameter_enabled()</code> writes only to the in-memory map so the toggle animates instantly,
-          and <code>get_obd_parameter_enabled()</code> reads that same map, so the page never waits for persistence. The
-          800&nbsp;ms debounce predates the general 500&nbsp;ms coalescing and is kept because it also batches the
-          <code>obdParametersChanged</code> signal. This legacy signal no longer controls polling;
-          <code>setParameterDemand()</code> determines which parameters the current consumers need.
-        </p>
-
-        <h3>Registry metadata instead of per-setting QML</h3>
-        <p>
-          The Quick Panel, the pin system and the dashboard widgets all need "render this setting as a control". Putting
-          label, control type and slot name in one registry means a new pinnable setting is a registry entry plus
-          the normal property/slot triple, and QML renders it generically from <code>get_settings_registry()</code>. The
-          registry lives in C++ rather than QML so the manager stays the source of truth for what is pinnable and
-          <code>toggle_pin_setting()</code> can refuse unknown IDs.
-        </p>
-
-        <h3>Snake_case slots, camelCase properties, string-typed JSON properties</h3>
-        <p>
-          Properties use the JSON key name so QML bindings read like the file, and slots are snake_case
-          <code>save_*</code> verbs, which keeps the two easy to tell apart at a QML call site. One piece of structured state (<code>settingsMenuVisibility</code>) still crosses to QML as a JSON string, which QML
-          parses with <code>JSON.parse</code>; <code>obdSavedAdapters</code>, <code>albumArtColors</code> and
-          <code>customThemeData</code> cross as lists and maps (open-backend #9). On disk,
-          <code>settingsMenuVisibility</code> is an object, while the palette and adapter list remain string values.
+          Managers receive the settings manager when the app is put together in
+          <span class="file-path">src/appcore.cpp</span>, which is also where settings that one manager owns and
+          another needs are wired across (the phone mirror's audio levels, the gauge units).
         </p>
 
         <!-- How to Add a New Setting -->
         <h2 id="adding-new-setting">How to Add a New Setting</h2>
-        <p>Then add the key to <a href="settings-reference.html">Settings Reference</a> and, if it is user-facing, to
-          <a href="signals-slots-reference.html">Signals &amp; Slots Reference</a>.</p>
-
+        <p>
+          If only one screen reads the value and it needs no checking, you do not need any of this: use
+          <code>save_setting()</code> and <code>get_setting_with_default()</code> with a new key name, as in
+          <a href="#generic-access">A key with no property</a>. For a real setting with a property, a default and a
+          rule:
+        </p>
         <ol class="steps">
           <li>
-            <strong>Add a row to the table</strong> (<code>OCTAVE_SETTINGS</code> in <span class="file-path">settingsmanager.cpp</span>): key, type, default, rule, notifier, save slot. That is its default, its loading, its limits and its reset:
+            <strong>Add a row to the settings table</strong>, <code>OCTAVE_SETTINGS</code> near the top of
+            <span class="file-path">src/managers/settingsmanager.cpp</span>: key, type, default, rule, signal, save slot.
+            The row is the setting's default, its loading, its limits and its reset.
             <pre><code>X(myNewFeature, QMetaType::Bool, <span class="kw">false</span>, any(), N_BOOL(myNewFeatureChanged), <span class="str">"save_my_new_feature"</span>, Plain) \</code></pre>
+            The rules: <code>any()</code> takes every value of the type, <code>clampTo(lo, hi)</code> brings a number
+            into range, <code>within(lo, hi)</code> refuses a number outside it, <code>oneOf({...})</code> refuses
+            any other word, <code>custom(fn)</code> is a function that may change or refuse the value.
           </li>
           <li>
-            <strong>Declare the property, getter, signal and slot</strong> in <span class="file-path">settingsmanager.h</span> (moc needs to see them):
+            <strong>Declare it in <span class="file-path">settingsmanager.h</span>:</strong> the property, the getter, the signal and the slot.
             <pre><code>Q_PROPERTY(<span class="kw">bool</span> myNewFeature READ myNewFeature WRITE save_my_new_feature NOTIFY myNewFeatureChanged)
     <span class="kw">bool</span> myNewFeature() <span class="kw">const</span>;
 <span class="kw">signals</span>:
@@ -773,88 +310,210 @@ property bool shiftLightEnabled: settingsManager.get_setting_with_default(<span 
     <span class="kw">void</span> save_my_new_feature(<span class="kw">bool</span> enabled);</code></pre>
           </li>
           <li>
-            <strong>Write the two one-line bodies</strong>:
+            <strong>Write the two one-line bodies</strong> in the <code>.cpp</code>:
             <pre><code><span class="kw">bool</span> SettingsManager::<span class="fn">myNewFeature</span>() <span class="kw">const</span> { <span class="kw">return</span> row(R_myNewFeature).toBool(); }
 <span class="kw">void</span> SettingsManager::<span class="fn">save_my_new_feature</span>(<span class="kw">bool</span> enabled) { setRow(R_myNewFeature, enabled); }</code></pre>
           </li>
           <li>
-            <strong>Mark the slot deprecated</strong> beside the others in the header (<code>Q_CLASSINFO("octave.deprecated.save_my_new_feature", "use the myNewFeature property; goes in protocol 5")</code>), or add it to the list of methods that stay in <code>tst_apidocs</code> if it does more than set one value. Regenerate <span class="file-path">docs/api</span>.
+            <strong>Mark the slot as a deprecated alias</strong> of the property, beside the others at the top of the header:
+            <pre><code>Q_CLASSINFO(<span class="str">"octave.deprecated.save_my_new_feature"</span>, <span class="str">"use the myNewFeature property; goes in protocol 5"</span>)</code></pre>
           </li>
           <li>
-            <strong>(Optional) Add to <code>buildSettingsRegistry()</code></strong> if the setting should be pinnable / appear in the Quick Panel:
-            <pre><code>reg[QStringLiteral(<span class="str">"my_new_feature"</span>)] = entry(<span class="str">"myNewFeature"</span>, <span class="str">"My New Feature"</span>, <span class="str">"mediaSettings"</span>,
-    <span class="str">"toggle"</span>, <span class="str">"save_my_new_feature"</span>);</code></pre>
+            <strong>Put a control on a Settings page</strong> under <span class="file-path">frontend/settings/</span>,
+            bound to <code>settingsManager.myNewFeature</code>.
           </li>
           <li>
-            <strong>Wire the UI</strong> on the owning page under <span class="file-path">frontend/settings/</span> and, if it is a Now Playing visual, in <span class="file-path">frontend/NowPlayingStudio.qml</span> (which carries a commented template for exactly this).
+            <strong>Build and run the tests.</strong> <code>tst_settingsmanager</code> fails if a row has no
+            matching property, signal or slot, or a writable property has no row.
+          </li>
+          <li>
+            <strong>Regenerate the published API</strong> in the same commit (<code>tst_apidocs</code> fails otherwise):
+            <pre><code>./build/octave --dump-api docs/api &amp;&amp; venv/bin/python wiki/build_api_reference.py \
+  &amp;&amp; npm --prefix sdk/typescript run generate &amp;&amp; (cd sdk/go &amp;&amp; go generate ./...)</code></pre>
+          </li>
+          <li>
+            <strong>Add the key to the <a href="settings-reference.html">Settings Reference</a></strong>, and to
+            <a href="settings-ui.html">Settings UI</a> if it has a control.
           </li>
         </ol>
         <p>
-          <code>tst_settingsmanager</code> checks every row against the meta-object (a writable property of the row's
-          type with a notify signal, a slot that exists, a default of the declared type) and every writable property
-          against the table, then sets every row through the generic path and reads it through the typed one, and back.
-          A row without its property, or a property without its row, fails there.
+          You do not write anything for loading, saving, validation or reset: the row does all of it. A setting that
+          is a list or a map is not a row; follow an existing one (<code>gestureMapping</code>) instead.
         </p>
 
-        <div class="info-box tip">
-          <div class="info-box-title">Tip</div>
-          If the setting is only read by one QML component and has no meaningful validation, the generic
-          <code>save_setting(key, value)</code> / <code>get_setting_with_default(key, default)</code> pair needs no C++
-          change at all; <code>genericSettingChanged(key)</code> notifies listeners. Still add a default to
-          <code>buildDefaultSettings()</code> when the value has a type worth protecting.
-        </div>
+        <!-- How saving works -->
+        <h2 id="json-persistence">How Saving Works</h2>
+        <p>
+          The manager keeps every setting in memory and treats the file as a copy of that. Reads never touch the disk.
+          Writes are collected and done in one piece, so the file is always whole.
+        </p>
 
-        <!-- Signal Reference -->
-        <h2 id="signal-reference">Signal Reference</h2>
-        <p>The header declares 83 signals. Every property-backed setting has a <code>&lt;key&gt;Changed</code> signal carrying the new value; the ones below differ from that pattern or matter beyond QML bindings:</p>
+        <h3 id="lifecycle">At start</h3>
+        <ol class="steps">
+          <li><strong>No file:</strong> one is written with the defaults. This is a fresh install.</li>
+          <li><strong>A file that parses:</strong> it is copied to <code>settingsConfigure.json.bak</code>, once per run. That copy is the last file known to be good.</li>
+          <li><strong>A file that does not parse</strong> (typically power cut mid-write): it is renamed to <code>settingsConfigure.json.corrupt</code>, the <code>.bak</code> copy is loaded and written back as the live file. With no usable backup, the defaults are used.</li>
+          <li><strong>Each value is checked</strong> against its default's type and its rule, as described under <a href="#backup-reset">editing by hand</a>. A bad value costs that one setting, never the whole file.</li>
+          <li><strong>Old files are brought up to date</strong> (below).</li>
+        </ol>
+
+        <h3>Saving a change</h3>
+        <p>
+          A change does not write the file straight away. It starts a 500&nbsp;ms timer, and every further change
+          restarts it; when the settings have been quiet for half a second, the file is written once. Dragging a
+          slider, or a new album-art colour palette on every track, costs one write rather than dozens, which also
+          spares an SD card.
+        </p>
+        <p>
+          On a normal quit the pending write is done before the app exits, after the music player has stored where
+          playback stopped. If the app is killed or the power goes within that half second, the last change is lost;
+          everything before it is safe.
+        </p>
+
+        <h3>The write itself</h3>
+        <p>
+          The file is never written in place. The new contents go to a temporary file in the same folder, are flushed
+          to disk, and the temporary file is then renamed over <code>settingsConfigure.json</code> in one step. A power
+          cut leaves the old file or the new one, never half of one. If the write fails, the existing file is left
+          alone and the next save tries again. The file is JSON indented by four spaces, readable by its owner only
+          (except on Windows).
+        </p>
+
+        <h3 id="migration">Files from older versions</h3>
+        <p>An older file is fixed up when it is loaded. Nothing needs doing by hand.</p>
+        <ul>
+          <li>A setting added since the file was written gets its default; the rest of the file is kept.</li>
+          <li>Settings of removed features (the old Spotify keys, the music downloader, the phone audio toggle) are deleted from the file.</li>
+          <li>A few old values are replaced: an interface scale of 0.6 (an old default) becomes 1.0, the font name <code>Google Sans</code> becomes <code>GoogleSans Regular</code>, the OBD port <code>/dev/rfcomm0</code> (an old placeholder) is cleared.</li>
+          <li>A key the app does not know is kept as it is, so a newer build's settings survive a run of an older one.</li>
+        </ul>
+
+        <!-- Details -->
+        <h2 id="special-cases">Details and Special Cases</h2>
+
+        <h3 id="file-only-keys">Keys only the file can set</h3>
+        <p>
+          Four keys control the service API: <code>serviceEnabled</code>, <code>serviceWebRoot</code>,
+          <code>serviceLoopbackOpen</code> and <code>serviceTokens</code> (the paired devices).
+          <code>save_setting()</code> and <code>apply_settings()</code> refuse them, <code>get_setting()</code> will
+          not return them, and <code>reset_to_defaults()</code> leaves them as they are. A client of the service must
+          not be able to switch the service on for the next start, change what it serves, or read the pairing list.
+          Change them by editing the file. See <a href="architecture.html#service">Architecture</a> for the service.
+        </p>
+
+        <h3 id="default-settings">The music folder</h3>
+        <p>
+          <code>mediaFolder</code> is empty in a new file. Empty means the system's music folder
+          (<code>~/Music</code> on most desktops), which OCTAVE creates if it is missing, except on Android.
+        </p>
+
+        <h3 id="section-visibility">Hidden Settings sections</h3>
+        <p>
+          Press and hold the Settings button on the bottom bar to choose which sections of the Settings menu show.
+          The choice is the <code>settingsMenuVisibility</code> map; a section missing from it is visible.
+        </p>
+
+        <h3 id="album-art-colors">Values the app stores for itself</h3>
+        <p>
+          Not everything in the file is a preference. The app also keeps state there so it can pick up where it left
+          off: the last song and position, the last Settings section, the window size, the remembered OBD adapters,
+          and the colours taken from the last album cover (<code>albumArtColors</code>, so the Album Art Capture theme
+          does not flash a placeholder at start). These are set by the managers that own them:
+          <a href="media-manager.html">Media Manager</a>, <a href="obd-manager.html">OBD Manager</a>,
+          <a href="theme-system.html">Theme System</a>.
+        </p>
+        <p>
+          <code>settingsManager.currentVolume</code> is the live volume, 0 to 100. It starts from the startup volume
+          and is never saved. Do not set it yourself: all volume changes go through the volume controller
+          (<a href="architecture.html">Architecture</a>).
+        </p>
+
+        <h3 id="settings-registry">Pinnable settings</h3>
+        <p>
+          The manager holds a short list of settings that a frontend can draw as a control without knowing them in
+          advance (30 of them: toggles, sliders and choice chips for media, display, OBD and sensor settings).
+          <code>get_settings_registry()</code> returns the list as JSON. Each entry gives the setting's
+          <code>key</code>, a <code>label</code>, a <code>category</code>, a <code>controlType</code>
+          (<code>toggle</code>, <code>slider</code> or <code>chips</code>), the slider's range or the chips' options
+          in <code>params</code>, and its <code>saveSlot</code>.
+        </p>
+        <p id="pinned-settings">
+          A user's picks from that list are the <code>pinnedSettings</code> setting.
+          <code>toggle_pin_setting(id)</code> pins or unpins one (an id not in the list is ignored), and
+          <code>get_pinned_settings_metadata()</code> returns the pinned entries with their current values. No screen
+          of the built-in QML frontend shows pinned settings at present; the console example frontend
+          (<span class="file-path">examples/frontends/console/</span>) uses the list.
+        </p>
+
+        <h3>Left over</h3>
+        <ul>
+          <li><code>fuelTankCapacity</code> and the folder history (<code>directoryHistory</code>) are stored and have an API, but nothing in the app reads or writes them.</li>
+          <li><code>obdParameters</code>, a map of readings switched on and off, is kept for old files. What gets polled is decided by which screens are showing (<a href="obd-manager.html">OBD Manager</a>).</li>
+          <li><code>homeOBDParameters</code> and <code>homeVehicleCard</code> belong to the classic Home screen and are deprecated: Home is a dashboard (<a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>).</li>
+          <li>The three <code>scrcpyBitRate*</code> settings are stored and announced, but nothing acts on them: the phone mirror picks its video bit rate itself.</li>
+        </ul>
+
+        <!-- When something goes wrong -->
+        <h2 id="troubleshooting">When Something Goes Wrong</h2>
+        <ol class="steps">
+          <li><strong>A setting does not stick.</strong> Look in <code>logs/octave-cpp-error.log</code> in the config folder for <code>Setting &lt;key&gt; refused</code>: the value was the wrong type or outside what the setting takes.</li>
+          <li><strong>A hand edit disappeared.</strong> The app was running when you edited, and it wrote its own copy over yours. Quit first.</li>
+          <li><strong>All settings went back to an earlier state.</strong> The file was damaged and the backup was restored. The log says <code>Settings file corrupted</code> and <code>Restored settings from backup</code>, and the damaged file is beside the live one as <code>.corrupt</code>.</li>
+          <li><strong>All settings went back to defaults.</strong> Either the file was missing (a different config folder: check <code>--config</code>, <code>XDG_CONFIG_HOME</code> and whether <code>--sim</code> or <code>--dev</code> was used), or it was damaged with no usable backup (<code>No usable settings backup</code> in the log).</li>
+          <li><strong>The last change before a power cut is gone.</strong> Expected: it was inside the half-second before the write. In a car, cut power to the head unit after OCTAVE has quit, or accept losing the last tap.</li>
+          <li><strong>A screen shows an old value.</strong> It read the setting once instead of binding to it. See <a href="#qml-connection">How a Change Reaches the Screen</a>.</li>
+        </ol>
+
+        <!-- Files, API and tests -->
+        <h2 id="files">Files, API and Tests</h2>
         <table>
           <thead>
-            <tr><th>Signal</th><th>Payload</th><th>Emitted when</th></tr>
+            <tr><th>File</th><th>What is in it</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>clockFormatChanged</code></td><td>bool</td><td><code>clockFormat24Hour</code> changes (the signal name does not follow the key)</td></tr>
-            <tr><td><code>startUpVolumeChanged</code></td><td>QString</td><td>Declared with a <code>const QString &amp;</code> argument and emitted with <code>QString::number(volume)</code>, although the property is a <code>float</code>. Read the <code>startUpVolume</code> property rather than the payload</td></tr>
-            <tr><td><code>currentVolumeChanged</code></td><td>int</td><td>Unified 0–100 volume changed by any source; not persisted</td></tr>
-            <tr><td><code>obdParametersChanged</code></td><td>none</td><td>After the 800&nbsp;ms OBD debounce flush, or on reset</td></tr>
-            <tr><td><code>homeOBDParametersChanged</code>, <code>supportedOBDParametersChanged</code></td><td>none</td><td>Home-card list / scan result saved</td></tr>
-            <tr><td><code>obdSavedAdaptersChanged</code></td><td>&mdash;</td><td>Adapter list changed</td></tr>
-            <tr><td><code>directoryHistoryChanged</code>, <code>customThemesChanged</code>, <code>gestureMappingChanged</code>, <code>pinnedSettingsChanged</code>, <code>settingsMenuVisibilityChanged</code></td><td>none</td><td>Their object/list changed; QML re-queries the getter</td></tr>
-            <tr><td><code>genericSettingChanged</code></td><td>QString (key)</td><td><code>save_setting()</code> called</td></tr>
-            <tr><td><code>albumArtColorsChanged</code></td><td>&mdash;</td><td>New palette pushed by MediaManager; also drives the ESP32 LEDs in theme mode</td></tr>
-            <tr><td><code>scrcpyAudioGainChanged</code>, <code>scrcpyAudioDuckEnabledChanged</code>, <code>scrcpyAudioDuckLevelChanged</code>, <code>scrcpyPhoneScreenOffChanged</code>, <code>scrcpyDisplayDpiChanged</code>, <code>scrcpyBitRateUsbChanged</code>, <code>scrcpyBitRateWifiChanged</code>, <code>scrcpyAutoWifiChanged</code>, <code>scrcpyBitRateAutoChanged</code></td><td>double / bool / double / bool / int / int / int / bool / bool</td><td>Connected directly to <code>PhoneMirrorManager</code> setters at startup</td></tr>
-            <tr><td><code>esp32LedColorModeChanged</code>, <code>esp32LedStaticColorChanged</code></td><td>QString</td><td><span class="file-path">src/appcore.cpp</span> connects these to the ESP32 LED sync lambdas</td></tr>
+            <tr><td><span class="file-path">src/managers/settingsmanager.h</span></td><td>The properties, signals and slots QML and the service see</td></tr>
+            <tr><td><span class="file-path">src/managers/settingsmanager.cpp</span></td><td>The settings table (<code>OCTAVE_SETTINGS</code>), the defaults of the other keys (<code>buildDefaultSettings()</code>), loading, saving, the pinnable list (<code>buildSettingsRegistry()</code>)</td></tr>
+            <tr><td><span class="file-path">src/appcore.cpp</span></td><td>Where the manager is built first, handed to the others and flushed at shutdown</td></tr>
+            <tr><td><span class="file-path">frontend/settings/</span></td><td>The Settings pages that show and change the values</td></tr>
+            <tr><td><span class="file-path">tests/cpp/tst_settingsmanager.cpp</span></td><td>The tests</td></tr>
           </tbody>
         </table>
+        <p>
+          The full API is generated from the code: <a href="api-reference.html#settingsManager">API reference,
+          settingsManager</a>.
+        </p>
+        <p>
+          <code>tst_settingsmanager</code> covers, among others: the table against the declared properties
+          (<code>tableMatchesTheMetaObject</code>), that the by-name and the property path agree for every setting
+          (<code>genericAndTypedPathsAgreeForEveryRow</code>), that every setting survives a restart, that refused
+          and unchanged values write nothing, recovery from a damaged file
+          (<code>corruptSettingsRestoredFromBackup</code>), a failed write leaving the file intact, and that the
+          service keys stay file-only. Run it with <code>ctest --test-dir build -R tst_settingsmanager</code>. A test
+          that builds a <code>SettingsManager</code> must point <code>XDG_CONFIG_HOME</code> at a temporary folder
+          first, or it writes into your real settings (<a href="development.html#testing">Development</a>).
+        </p>
 
-        <!-- Behaviour notes -->
-        <h2 id="behaviour-notes">Behaviour Notes</h2>
-        <p>Quirks a maintainer should know:</p>
-        <table>
-          <thead>
-            <tr><th>Topic</th><th>Behaviour</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>Numeric validation</td><td>any JSON number is accepted for an int or float default; an int row rounds it, and the row's rule then applies (see the table)</td></tr>
-            <tr><td><code>save_obd_saved_adapters</code> (private)</td><td>stores the string as given; only an empty string becomes <code>"[]"</code></td></tr>
-            <tr><td><code>add_obd_saved_adapter</code></td><td>keeps an <code>rfcomm://</code> scheme lower-case while upper-casing the MAC; a missing name defaults to the MAC</td></tr>
-            <tr><td><code>reset_to_defaults()</code></td><td>Writes the full default object (the four service keys keep what the file says), reloads everything (<code>populateMembers()</code>) and emits the signal of each setting whose value changed, and <code>genericSettingChanged(key)</code> for each changed key that has no property. Nothing is emitted for a value that was already the default. No caller exists today</td></tr>
-            <tr><td><code>set_last_settings_section()</code></td><td>Whitelists the seven current section IDs (<code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>, <code>phoneSettings</code>, <code>accessoriesSettings</code>, <code>deviceSettings</code>, <code>about</code>) plus the four legacy per-feature IDs an older file may carry; saves and emits only when the section changes</td></tr>
-            <tr><td><code>fuelTankCapacity</code></td><td>Property and slot exist but nothing reads or writes them (no QML, no OBD manager use)</td></tr>
-          </tbody>
-        </table>
-
-        <p><strong>Method names:</strong> this page uses the camelCase names of the manager methods (<code>nextTrack</code>). The older snake_case name of each (<code>next_track</code>) still works through protocol&nbsp;4 and goes in protocol&nbsp;5; the <a href="api-reference.html">API reference</a> lists them.</p>
+        <!-- Design Decisions -->
+        <h2 id="design-decisions">Why It Is Built This Way</h2>
+        <ul>
+          <li><strong>One JSON file, not the platform's settings store.</strong> Qt's <code>QSettings</code> would put the values in the registry on Windows and a plist on macOS. One JSON file is the same everywhere, holds nested values (themes, gesture bindings) as they are, and can be read, copied and edited by hand on the head unit.</li>
+          <li><strong>One table, one way in.</strong> Every plain setting is a row, and every way of writing it ends in the same function. A property write, a save slot and a write by name cannot disagree about a setting's type, range or current value.</li>
+          <li><strong>A bad value costs one setting, not the file.</strong> A head unit that starts with one default is usable; one that refuses to start is not. The same reasoning restores the backup rather than stopping on a damaged file.</li>
+          <li><strong>Memory first, one delayed write.</strong> Reading the file on every read and writing it on every change put a parse and a write on the interface thread for each slider step. Since every change goes through the manager, memory is always right, and the file only has to catch up. The price is the half second a hard power cut can lose.</li>
+          <li><strong>Unknown keys are kept.</strong> Screens can keep small state by name without any C++, and an older build never destroys a newer build's settings.</li>
+          <li><strong>The service's own switches are out of its clients' reach.</strong> A paired device with the <code>settings</code> permission can change preferences, but cannot enable the service for the next start or point it at another folder to serve.</li>
+        </ul>
 
         <!-- Related Pages -->
         <div class="related-pages" id="related">
           <h3>Related Pages</h3>
           <a href="settings-reference.html" class="related-link">Settings Reference</a>
           <a href="settings-ui.html" class="related-link">Settings UI</a>
-          <a href="signals-slots-reference.html" class="related-link">Signals &amp; Slots Reference</a>
+          <a href="api-reference.html" class="related-link">Service API Reference</a>
+          <a href="theme-system.html" class="related-link">Theme System</a>
           <a href="media-manager.html" class="related-link">Media Manager</a>
           <a href="obd-manager.html" class="related-link">OBD Manager</a>
-          <a href="network-manager.html" class="related-link">Network Manager</a>
-          <a href="theme-system.html" class="related-link">Theme System</a>
+          <a href="troubleshooting.html" class="related-link">Troubleshooting</a>
           <a href="architecture.html" class="related-link">Architecture Overview</a>
         </div>
 

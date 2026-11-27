@@ -13,728 +13,559 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Gauges &amp; Dashboards</div>
           <h1 class="page-title">Gauges &amp; Dashboards</h1>
-          <p class="page-subtitle">Reusable gauge primitives, the OBDParameterModel binding layer, schema-1 JSON dashboards rendered by DashboardRenderer, DashboardManager, and the in-app drag-and-tap dashboard editor</p>
+          <p class="page-subtitle">What your Home screen shows: choosing it, writing a dashboard of your own, the gauges and widgets you can put on it, and how it all works underneath</p>
         </div>
 
         <nav class="toc">
-          <h3>On This Page</h3>
+          <h3>Table of Contents</h3>
           <ul class="toc-list">
-            <li><a href="#overview">Overview</a></li>
-            <li><a href="#files">Files at a Glance</a></li>
-            <li><a href="#parameter-model">Data Flow: OBDParameterModel</a></li>
-            <li><a href="#vehicle-gate">Vehicle Gate and Polling Demand</a></li>
-            <li><a href="#binding-api">Shared Binding API</a></li>
-            <li><a href="#primitives">Gauge Primitives</a></li>
-            <li><a href="#self-binding">Self-Binding Widgets</a></li>
-            <li><a href="#angle-math">Angle and Needle Math</a></li>
-            <li><a href="#schema">Dashboard JSON Schema (schema 1 and 2)</a></li>
-            <li><a href="#presets">Built-in Presets</a></li>
-            <li><a href="#dashboard-manager">DashboardManager</a></li>
-            <li><a href="#sharing">Sharing: Export and Import</a></li>
-            <li><a href="#phase4">Alerts, Spec Extras and the Browser Editor</a></li>
-            <li><a href="#renderer">DashboardRenderer: Spec to QML</a></li>
-            <li><a href="#widget-catalog">WidgetCatalog</a></li>
-            <li><a href="#obdmenu">Where Dashboards Show</a></li>
-            <li><a href="#validation">Validation and Hot Reload</a></li>
-            <li><a href="#testing">Testing</a></li>
-            <li><a href="#authoring">Authoring New Gauges and Dashboards</a></li>
-            <li><a href="#design-decisions">Design Decisions</a></li>
+            <li><a href="#overview">What It Is</a></li>
+            <li><a href="#choosing-home">Choosing What Home Shows</a></li>
+            <li><a href="#making">Making a Dashboard</a></li>
+            <li><a href="#schema">The Dashboard File</a></li>
+            <li><a href="#primitives">The Widgets</a></li>
+            <li><a href="#binding-api">Options Every Gauge Has</a></li>
+            <li><a href="#alerts">Warnings and the Red Banner</a></li>
+            <li><a href="#editor">The Browser Editor</a></li>
+            <li><a href="#settings">Settings</a></li>
+            <li><a href="#how-it-works">How It Works</a></li>
+            <li><a href="#parameter-model">Where a Gauge Gets Its Value</a></li>
+            <li><a href="#vehicle-gate">Readings the Car Does Not Have, and Polling</a></li>
+            <li><a href="#validation">What OCTAVE Does to a File</a></li>
+            <li><a href="#home-screens">Hand-Built Home Screens</a></li>
+            <li><a href="#troubleshooting">When Something Goes Wrong</a></li>
+            <li><a href="#files">Files, API and Tests</a></li>
+            <li><a href="#authoring">Adding a Widget</a></li>
+            <li><a href="#design-decisions">Why It Is Built This Way</a></li>
             <li><a href="#related">Related Pages</a></li>
           </ul>
         </nav>
 
-        <h2 id="overview">Overview</h2>
+        <!-- Overview -->
+        <h2 id="overview">What It Is</h2>
         <p>
-          A <strong>dashboard</strong> is a JSON spec that places gauge primitives on a grid, drawn by
-          <span class="file-path">frontend/dashboards/DashboardRenderer.qml</span>. Home shows one: the built-in <code>home</code>
-          (<span class="file-path">frontend/dashboards/presets/</span>) or a file of the user's own from the dashboards directory,
-          picked in Settings &gt; Display &gt; Home Screen. Dashboards are not made in the app; they are written as files (or in the
-          browser editor the service serves). <code>DashboardManager</code> (<span class="file-path">src/managers/dashboardmanager.{h,cpp}</span>)
-          enumerates both sources, watches the user directory, and exposes save / delete / duplicate plus export / import.
-          The OBD page (<span class="file-path">frontend/OBDMenu.qml</span>) is the <strong>Parameter Cards</strong> grid: every PID the
-          connected vehicle supports. A <a href="#vehicle-gate">vehicle gate</a> keeps dashboards from showing PIDs that vehicle doesn't report.
+          A <strong>dashboard</strong> is a screen of gauges and other widgets laid out on a grid: a tachometer here,
+          the speed in big figures there, the song that is playing along the bottom. OCTAVE's Home screen is one. You
+          can keep the one that ships, pick one of the hand-drawn Home screens, or write a dashboard of your own.
         </p>
         <p>
-          Every gauge binds to the <code>OBDParameterModel</code> singleton by <code>paramId</code> (<code>"RPM"</code>,
-          <code>"SPEED"</code>, <code>"LATERAL_G"</code>...) -- title, unit, min and max are auto-populated from the model
-          and the live value updates reactively. No gauge touches <code>obdManager</code> directly, so the same widgets work unchanged with the live
-          <a href="obd-manager.html">OBD manager</a>, the dev-mode simulated car, a test fake, or the model's demo data.
+          A dashboard is not built on the car's screen. It is a small text file in JSON format that says which widget
+          goes where and which reading it shows. You write it at a desk, or draw it in the editor OCTAVE serves to a
+          web browser, and drop it in a folder. OCTAVE shows it at once.
         </p>
         <p>
-          The step-by-step authoring spec is <span class="file-path">docs/GAUGE_AUTHORING.md</span>; this page documents
-          how the pieces are built and why. Where the two disagree, the code wins and both should be updated.
+          This page starts with how to use it and gets more technical as it goes. Stop reading whenever you have what
+          you came for.
         </p>
 
-        <h2 id="files">Files at a Glance</h2>
-        <pre class="diagram">
-frontend/
-  OBDParameterModel.qml          singleton: allParameters (from parameterCatalog), liveValue(id) (from paramStore), demo mode, vehicle gate
-  OBDMenu.qml                    Parameter Cards (vehicle PIDs); previews a dashboard edited in a browser
-  qmldir                         registers OBDParameterModel and WidgetCatalog as singletons
-  gauges/
-    CircularGauge.qml            arc + ticks + optional needle + centre readout
-    ArcGauge.qml                 top half-dial with readout below the chord
-    BarGauge.qml                 horizontal / vertical filled bar with warn threshold
-    SegmentedGauge.qml           discrete level strip, optional high warning, missing-data state
-    LinearGauge.qml              scale with bidirectional fill from zero
-    DigitalReadout.qml           big number + title + unit
-    SparklineGauge.qml           timer-sampled rolling history line (Canvas)
-    WarningLight.qml             threshold tell-tale
-    GForceGauge.qml              self-binding LATERAL_G / LONGITUDINAL_G dot + trail
-    CompassGauge.qml             self-binding HEADING compass card
-  dashboards/
-    DashboardRenderer.qml        spec -> absolutely positioned Loaders
-    widget-catalog.json          the catalog data: palette meta, spans, supportedKinds, label/range/color flags,
-                                 editableProps, colorSwatches (dashboardManager.widgetCatalog)
-    WidgetCatalog.qml            singleton: that data + type -> url
-    presets/                     home.json, the one built-in dashboard
-    widgets/
-      NowPlayingWidget.qml       self-binding media card
-      MediaControlsWidget.qml    self-binding transport buttons
-      ClockWidget.qml            time + optional date, follows 12/24-hour preference
-src/managers/dashboardmanager.{h,cpp}   DashboardManager
-src/util/dashboardgrid.{h,cpp}          grid placement (canPlace, fitAt, nearestFree, arrange: swap / push), density (rescale), sizes (minSpan, sizeOptions)
-docs/GAUGE_AUTHORING.md                 authoring spec (source of truth for the API)
-tests/cpp/tst_dashboardmanager.cpp      spec rules, import, export/import round trip, grid placement (QtTest)
-tests/cpp/tst_vehiclegate.cpp           headless QML gate test with a fake obdManager (QtTest)
-        </pre>
-
-        <h2 id="parameter-model">Data Flow: OBDParameterModel</h2>
-        <pre class="diagram">
-obdManager.parameterSampled ─┐
-berryIMU (8 signals) ─────────┴─> paramStore (C++, 33 ms fold) ─ paramStore[id] ─> OBDParameterModel.liveValue(id) ─> gauge bindings
-  (main.cpp)                       one notifying key per id                          (or the demo sweep)                 _normalized
-                                                                                                                         _animNorm (Behavior)
-        </pre>
+        <!-- Choosing -->
+        <h2 id="choosing-home">Choosing What Home Shows</h2>
         <p>
-          <span class="file-path">frontend/OBDParameterModel.qml</span> (registered as a singleton in
-          <span class="file-path">frontend/qmldir</span>) declares the members below. The parameter metadata comes from the C++ <a href="signals-slots-reference.html#parameterCatalog"><code>parameterCatalog</code></a> (<span class="file-path">src/managers/parametercatalog.cpp</span>); the singleton has no table of its own.
+          Open Settings &gt; Display &gt; Layout and find <strong>Home Screen</strong>. It shows a card with a picture
+          for every choice. Tap one and it is Home.
         </p>
         <table>
-          <thead><tr><th>Member</th><th>Description</th></tr></thead>
+          <thead><tr><th>Card</th><th>What it is</th></tr></thead>
           <tbody>
-            <tr><td><code>allParameters</code></td><td><code>parameterCatalog.parameters</code>: array of <code>{ id, title, shortTitle, unit, min, max, kind, decimals, source, aliasOf }</code>, <strong>129</strong> entries: 121 OBD entries (including the <code>IGNITION_TIMING</code> alias, <code>aliasOf: "TIMING_ADVANCE"</code>, and adapter voltage) and 8 BerryIMU readings. Of the OBD entries, 37 newer values arrive through <code>obdParameterChanged(paramId, value)</code>.</td></tr>
-            <tr><td><code>kind</code></td><td>One of <code>percentage</code> (0-100 %), <code>temperature</code> (°C), <code>voltage</code>, <code>pressure</code> (kPa/Pa), <code>bidirectional</code> (signed, straddles zero: trims, timing, EGR error, WR currents, pitch/roll/G), <code>numeric</code> (everything else). Widgets declare which kinds they accept; the PID picker filters on it.</td></tr>
-            <tr><td><code>originalParameters</code>, <code>isOriginalParameter(id)</code></td><td>The historical group of 18 ids, also used as the settings list fallback before a supported-PID list is available.</td></tr>
-            <tr><td><code>parameterInfo</code>, <code>getParamInfo(id)</code>, <code>decimalsFor(id)</code></td><td>Compact metadata (catalog <code>shortTitle</code>: <code>SPD</code>, <code>CLT</code>, <code>AFR</code>...) keyed by id for the home cards; <code>decimalsFor</code> is the catalog <code>decimals</code> (1 for an unknown id); <code>getParamInfo</code> returns a permissive fallback for unknown ids.</td></tr>
-            <tr><td><code>hasParameter(id)</code></td><td>Strict membership test, added for renderer/editor validation precisely because <code>getParamInfo</code> never fails.</td></tr>
-            <tr><td><code>liveValue(id)</code>, <code>getParamValue(id)</code></td><td>The live value: <code>paramStore[id]</code>, or the demo sweep while <code>simulationActive</code>; <code>undefined</code> before the first reading and at shutdown (<code>getParamValue</code> gives 0). A binding re-evaluates only when its own id changes. (Until #8 this was <code>paramValues</code>, a whole map replaced on every fold that re-evaluated every reader.) The values live in the C++ <a href="signals-slots-reference.html#paramStore"><code>paramStore</code></a>, which coalesces writes to one fold per 33 ms (introduced in QML in <code>486a809</code> after the IMU's ~440 signals/s pegged the QML thread at 100 % on an idle Orange Pi; now in C++).</td></tr>
-            <tr><td><code>simulationActive</code></td><td>Demo mode: a 100 ms timer sweeps every parameter along a sine between min and max (period 4-16 s and phase vary per index so the screen does not pulse in lockstep; big ranges are rounded to integers). While on, <code>liveValue()</code> serves the sweep (<code>_simValues</code>) instead of the store; switching off reads the store again (the real readings, no fake ones).</td></tr>
-            <tr><td><code>sensorParameters</code>, <code>isSensorParameter(id)</code></td><td>The eight BerryIMU ids (catalog <code>source: "imu"</code>). They are not OBD PIDs, so the vehicle gate never applies to them.</td></tr>
-            <tr><td><code>vehicleKnown</code>, <code>vehicleSupportedParameters</code></td><td>Mirrors of <code>obdManager.vehicleScanComplete</code> / <code>vehicleSupportedParameters</code>: this session's supported-PID scan, cleared on disconnect, never loaded from the saved list. Guarded with <code>typeof obdManager</code>.</td></tr>
-            <tr><td><code>isSupported(id)</code></td><td>True for sensor ids, and for OBD ids the scanned vehicle reported. False otherwise, including when no vehicle is known (callers wanting "anything goes offline", like the PID picker, check <code>vehicleKnown</code> first).</td></tr>
-            <tr><td><code>vehicleParameters</code></td><td>The supported OBD entries of <code>allParameters</code>, in <code>allParameters</code> order, without aliases (no second Timing Advance card); empty until a vehicle has been scanned. Feeds Parameter Cards.</td></tr>
-            <tr><td>(feeding)</td><td>None in QML: the store is fed in <span class="file-path">main.cpp</span> (the 84 per-signal handlers and the <code>berryIMU</code> block are gone).</td></tr>
+            <tr><td><strong>Home</strong></td><td>The dashboard that ships: the phone's screen in the middle, the music under it, speed and RPM on the left, coolant temperature and system voltage on the right.</td></tr>
+            <tr><td><strong>Cockpit</strong>, <strong>Glass</strong>, <strong>Trail</strong>, <strong>Retro</strong>, <strong>Rings</strong>, <strong>Telemetry</strong></td><td>Six Home screens drawn by hand, each with its own look. They are not grid dashboards and have no file to edit. See <a href="#home-screens">Hand-Built Home Screens</a>.</td></tr>
+            <tr><td><strong>Classic</strong></td><td>The older three-panel Home.</td></tr>
+            <tr><td>Your own dashboards</td><td>One card for every file in the dashboards folder. A dashboard has no photo, so its card shows a plan of where its widgets stand.</td></tr>
           </tbody>
         </table>
-        <p>The eight sensor parameters (fed by <code>berryIMU</code>, not <code>obdManager</code>):</p>
-        <table>
-          <thead><tr><th>id</th><th>Title</th><th>Unit</th><th>Min</th><th>Max</th><th>Kind</th></tr></thead>
-          <tbody>
-            <tr><td><code>PITCH</code></td><td>Pitch</td><td>°</td><td>-90</td><td>90</td><td>bidirectional</td></tr>
-            <tr><td><code>ROLL</code></td><td>Roll</td><td>°</td><td>-180</td><td>180</td><td>bidirectional</td></tr>
-            <tr><td><code>HEADING</code></td><td>Heading</td><td>°</td><td>0</td><td>360</td><td>numeric</td></tr>
-            <tr><td><code>ALTITUDE</code></td><td>Altitude</td><td>m</td><td>0</td><td>3000</td><td>numeric</td></tr>
-            <tr><td><code>ACCEL_MAG</code></td><td>G Magnitude</td><td>g</td><td>0</td><td>3</td><td>numeric</td></tr>
-            <tr><td><code>LATERAL_G</code></td><td>Lateral G</td><td>g</td><td>-2</td><td>2</td><td>bidirectional</td></tr>
-            <tr><td><code>LONGITUDINAL_G</code></td><td>Longitudinal G</td><td>g</td><td>-2</td><td>2</td><td>bidirectional</td></tr>
-            <tr><td><code>BARO_TEMP</code></td><td>Cabin Baro Temp</td><td>°C</td><td>-20</td><td>60</td><td>temperature</td></tr>
-          </tbody>
-        </table>
-        <p>The full OBD metadata list is in <span class="file-path">docs/GAUGE_AUTHORING.md</span> &sect;6 and <span class="file-path">src/managers/parametercatalog.cpp</span>. A model entry describes a displayable value; availability depends on the vehicle, adapter and decoding path. See <a href="obd-manager.html">OBD Manager</a> for backend polling and supported-PID behavior.</p>
-
-        <h2 id="vehicle-gate">Vehicle Gate and Polling Demand</h2>
+        <p>What Home does on top of the dashboard it shows:</p>
+        <ul>
+          <li>With no car connected it puts "No vehicle connected" and a <strong>Connect</strong> button over the car's readings, which would only show <code>--</code>.</li>
+          <li>With no music it puts the music prompt over the Now Playing widget, and "No sensor" on a widget that reads the motion sensor when there is none.</li>
+          <li>A tap on the music widget opens the music page. A tap on any other widget opens nothing yet.</li>
+        </ul>
         <p>
-          Every connect runs a supported-PID scan; <code>OBDManager</code> publishes the result as
-          <code>obdManager.vehicleSupportedParameters</code> + <code>vehicleScanComplete</code>, which
-          <code>OBDParameterModel</code> mirrors (see the table above). The gate only ever describes the vehicle that is
-          answering right now:
-        </p>
-        <table>
-          <thead><tr><th>Where</th><th>No vehicle scanned</th><th>Vehicle scanned</th></tr></thead>
-          <tbody>
-            <tr><td>Any dashboard / Parameter Cards (<code>OBDMenu</code>)</td><td>No dashboard renders while the adapter is disconnected: the page shows "No vehicle connected" and a connect button in place of the active dashboard (<code>obdConnected</code> gate). Once connected, Parameter Cards shows "Reading your vehicle's PIDs…" until the scan answers.</td><td>One card per <code>vehicleParameters</code> entry; "No supported PIDs reported" when the scan came back empty.</td></tr>
-            <tr><td><code>DashboardRenderer</code></td><td>Every cell renders</td><td>A cell bound to an unsupported PID shows a "Not supported by this vehicle" placeholder (<code>objectName: dashUnsupported_&lt;i&gt;</code>) instead of a gauge stuck at 0.</td></tr>
-            <tr><td>Editor <code>PIDPicker</code></td><td>Every PID, with the note "No vehicle connected. Showing every PID."</td><td>The vehicle's PIDs sort first in each kind group; the rest are greyed and labelled "Not supported by this vehicle" but stay assignable (a dashboard may be meant for another car, or shared).</td></tr>
-            <tr><td>Editor <code>PropertiesPanel</code></td><td>-</td><td>Red note under the PID button when the bound PID isn't supported.</td></tr>
-          </tbody>
-        </table>
-        <p>
-          <strong>Polling is demand-driven.</strong> The backend polls only PIDs that some on-screen consumer asked for through
-          <code>obdManager.setParameterDemand(consumer, ids)</code> (an empty list withdraws the consumer). QML consumers:
-        </p>
-        <table>
-          <thead><tr><th>Consumer</th><th>Registered by</th><th>Ids</th></tr></thead>
-          <tbody>
-            <tr><td><code>"dashboard"</code></td><td><code>OBDMenu</code> while it is the active StackView page and a dashboard is showing</td><td><code>DashboardRenderer.paramIds</code> (distinct ids in the spec)</td></tr>
-            <tr><td><code>"cards"</code></td><td><code>OBDMenu</code> while Parameter Cards is showing</td><td>every id in <code>vehicleParameters</code></td></tr>
-            <tr><td><code>"editor"</code></td><td><code>DashboardEditor</code> for its lifetime</td><td>the canvas cells' ids (live preview while editing)</td></tr>
-            <tr><td><code>"carMenu"</code></td><td>CarMenu while visible</td><td><code>RPM</code> and <code>SPEED</code> for the rig animation</td></tr>
-            <tr><td><code>"home"</code></td><td><code>HomeOBDView</code> while visible</td><td>the Home tiles' ids</td></tr>
-            <tr><td><code>"settings"</code></td><td><code>OBDSettingsPage</code> while its list is visible</td><td>its visible parameters</td></tr>
-          </tbody>
-        </table>
-        <p>
-          How the union is filtered, the heartbeat PID, the debounce and live re-apply are backend matters: see
-          <a href="obd-manager.html">OBD Manager</a>. A new dashboard needs no wiring -- the renderer's <code>paramIds</code>
-          is registered automatically. The gate is covered headlessly by <span class="file-path">tests/cpp/tst_vehiclegate.cpp</span>.
+          If the dashboard you picked is deleted, Home goes back to the one that ships.
         </p>
 
-        <h2 id="binding-api">Shared Binding API</h2>
-        <p>
-          The seven value gauges (Circular, Arc, Bar, Segmented, Linear, DigitalReadout, Sparkline) are each a
-          <span class="file-path">frontend/gauges/ValueGaugeBase.qml</span> that only draws: the base holds the
-          <code>paramId</code> string, the <code>_pInfo</code> row (one map lookup,
-          <code>App.OBDParameterModel.displayInfo(paramId)</code>, not a scan), the properties defaulted from it, the
-          reading and the alert rule below. <code>WarningLight</code> binds the same way without the alert properties. The
-          self-binding widgets (<a href="#self-binding">below</a>) skip <code>paramId</code> and read their ids directly.
-        </p>
-        <pre><code>ValueGaugeBase {
-    id: root
-    <span class="cmt">// from the base, all overridable per widget:</span>
-    <span class="cmt">//   paramId, title, unit, min, max, value (NaN = no reading), hasValue, decimals,</span>
-    <span class="cmt">//   warnAbove / warnBelow / critAbove / critBelow, alertFlash, alertHysteresis,</span>
-    <span class="cmt">//   warnColor, critColor, alertLevel (read-only)</span>
-}</code></pre>
-        <table>
-          <thead><tr><th>Property</th><th>Type</th><th>Default</th><th>Notes</th></tr></thead>
-          <tbody>
-            <tr><td><code>paramId</code></td><td>string</td><td><code>""</code></td><td>Any id from <code>allParameters</code>. Drives title/unit/min/max/value.</td></tr>
-            <tr><td><code>title</code>, <code>unit</code></td><td>string</td><td>from paramId</td><td>Override the label / suffix (a preset can set <code>"title"</code> in <code>props</code>).</td></tr>
-            <tr><td><code>min</code>, <code>max</code></td><td>real</td><td>from paramId (0 / 100 when unbound)</td><td>Range used for normalisation. Presets override them freely (the TJ preset rescales RPM to 0-6000, coolant to 60-115). <code>DigitalReadout</code> draws no scale and uses them only for the alert hold.</td></tr>
-            <tr><td><code>value</code></td><td>real</td><td>live</td><td>Override for previews and demos.</td></tr>
-            <tr><td><code>decimals</code></td><td>int</td><td>0</td><td>Digits after the point in numeric readouts; WarningLight has no decimals property.</td></tr>
-            <tr><td><code>labelColor</code>, <code>valueColor</code></td><td>color</td><td><code>App.Style.obdLabelColor</code>, <code>App.Style.obdValueColor</code></td><td>Numeric readout colors; WarningLight has its own label colors. Other default colors come from <code>App.Style</code> (<code>obdBarColor</code>, <code>obdBoxBackground</code>, <code>statusDanger</code>, <code>accent</code>).</td></tr>
-            <tr><td><code>octaveSupportedKinds</code></td><td>var (readonly)</td><td>per widget</td><td>Kinds the widget accepts, <code>["*"]</code> = any, <code>[]</code> = self-binding. Must mirror <code>WidgetCatalog.supportedKinds</code>.</td></tr>
-          </tbody>
-        </table>
-        <p>
-          Normalisation and animation are also shared: <code>_normalized = clamp((value - min) / (max - min), 0, 1)</code>
-          and a <code>_animNorm</code> property with a <code>Behavior { NumberAnimation { duration: 120-140; easing: OutCubic } }</code>.
-          The raw <code>value</code> is never animated (readouts show the true number; only the geometry eases).
-        </p>
-        <p>
-          <strong>No reading is not zero.</strong> Every PID-bound primitive binds
-          <code>value: App.OBDParameterModel.sample(paramId)</code>, which is <code>NaN</code> until there is a finite
-          reading, and exposes <code>hasValue</code>. Without one the readout shows <code>--</code>, no fill, needle or
-          marker is drawn, <code>_normalized</code> is 0 and no threshold (redline, <code>warnAbove</code>,
-          <code>triggerAbove</code> / <code>triggerBelow</code>) is evaluated, so a missing fuel level never lights a
-          low-fuel warning. A real 0 is a value. <code>SparklineGauge</code> records a missing sample as a gap in the trace;
-          <code>GForceGauge</code> and <code>CompassGauge</code> hide the dot / keep the card still and show
-          <code>-- g</code> / <code>--°</code>.
-        </p>
-        <p>
-          <strong>Alerts.</strong> The value gauges (Circular, Arc, Bar, Segmented, Linear, DigitalReadout, Sparkline)
-          share one rule, <span class="file-path">frontend/gauges/AlertLevel.js</span>: <code>warnAbove</code> /
-          <code>warnBelow</code> (level 1, <code>warnColor</code> = the theme's <code>statusWarning</code>, amber) and
-          <code>critAbove</code> / <code>critBelow</code> (level 2, <code>critColor</code> = <code>statusDanger</code>,
-          red), inclusive, critical winning; <code>alertLevel</code> is 0 without a reading. At a level the value text and
-          the fill take its colour, and <code>alertFlash</code> blinks the value while critical. A level is entered at its
-          limit and left only once the value is back inside it by a hold (<code>alertHysteresis</code>, display unit on the gauge and the PID's own unit in a spec, where it is converted as a difference;
-          default 1&nbsp;% of the range, whatever the range is; <code>Alerts.levelHeld()</code>; the dashboard's banner computes the same hold), so a
-          reading sitting on a limit does not flicker the colour, restart the flash or pop the dashboard's alert banner in
-          and out. <code>WarningLight</code> holds its lamp the same way. Circular and Arc draw each
-          band as a thin arc on the inner edge of the scale (<code>Alerts.bands()</code>; a warning band stops where a
-          critical one starts); <code>redlineStart</code> stays a separate red zone. All four limits are stored in the
-          PID's own unit (<code>paramUnit</code>). Until 2026-10-30 Bar and Segmented had only <code>warnAbove</code>,
-          drawn red; the presets moved those limits to <code>critAbove</code>.
-        </p>
-        <p>
-          <strong>Text stays inside the cell.</strong> Header rows give the value its width and elide the title in what is
-          left; <code>ArcGauge</code> and <code>DigitalReadout</code> scale their readout block by its measured height
-          against the space they have; values use <code>fontSizeMode: Text.HorizontalFit</code>. <code>BarGauge</code> and
-          <code>LinearGauge</code> lay out with explicit geometry per orientation, so switching <code>orientation</code>
-          after creation lays out as creating it so, and a bar's fill is the track's own shape revealed by a clip (exactly
-          proportional, never outside the track). <code>tst_dashboardwidgets</code> checks every widget's text bounds with a
-          long title and a wide value at 160&times;50, 80&times;32, 320&times;100, 164&times;103 and 100&times;240.
-          The renderer additionally clips every cell.
-        </p>
-
-        <h2 id="primitives">Gauge Primitives</h2>
-        <p>Defaults below are read from the QML property declarations, not from the manifests.</p>
-
-        <h3>CircularGauge</h3>
-        <p>
-          Arc-sweep dial built from three <code>Shape { ShapePath { PathAngleArc } }</code> layers (track, static redline
-          zone, animated fill), a <code>Repeater</code> of tick rectangles, an optional needle + hub, and a centre readout.
-          <code>octaveSupportedKinds: ["*"]</code>. Fills its own bounding box; the arc radius is
-          <code>min(width, height) / 2 - 4 dp</code>, arc width <code>max(6 dp, 12 % of radius)</code>.
-        </p>
-        <table>
-          <thead><tr><th>Property</th><th>Type</th><th>Default</th><th>Notes</th></tr></thead>
-          <tbody>
-            <tr><td><code>startAngle</code></td><td>real</td><td>135</td><td><code>PathAngleArc</code> degrees, 0 = 3 o'clock, clockwise.</td></tr>
-            <tr><td><code>sweepAngle</code></td><td>real</td><td>270</td><td>Three-quarter dial; 180 gives a half-dial.</td></tr>
-            <tr><td><code>showNeedle</code></td><td>bool</td><td>false</td><td>Needle (3 dp wide, 92 % of radius, <code>transformOrigin: Item.Bottom</code>) + hub; the readout shifts up by 45 % of the radius to clear it.</td></tr>
-            <tr><td><code>showTicks</code></td><td>bool</td><td>true</td><td></td></tr>
-            <tr><td><code>majorTickCount</code></td><td>int</td><td>9</td><td>Inclusive of both endpoints. Total ticks = <code>(major - 1) * minorTicksPerMajor + 1</code>.</td></tr>
-            <tr><td><code>minorTicksPerMajor</code></td><td>int</td><td>5</td><td></td></tr>
-            <tr><td><code>redlineStart</code></td><td>real</td><td>NaN</td><td>When set and strictly inside (min, max): a red arc from that value to max, and the fill turns red once <code>value &gt;= redlineStart</code>.</td></tr>
-            <tr><td><code>showCenterReadout</code></td><td>bool</td><td>true</td><td>Title, value, unit stacked; font sizes capped at 22 % / 30-42 % / 18 % of the arc radius.</td></tr>
-            <tr><td><code>trackColor</code>, <code>fillColor</code>, <code>redlineColor</code>, <code>needleColor</code></td><td>color</td><td>darker box bg, <code>obdBarColor</code>, <code>statusDanger</code>, <code>obdBarColor</code></td><td></td></tr>
-          </tbody>
-        </table>
-
-        <h3>ArcGauge</h3>
-        <p>
-          Same engine as <code>CircularGauge</code> but geometry for a wide "n" shape: the arc centre sits
-          <code>radius + 8 dp</code> from the top, radius = <code>max(10 dp, min(width / 2, height * 0.6) - 4 dp)</code>, and
-          the readout is a column just below the centre line rather than in the middle. <code>["*"]</code>.
-        </p>
-        <table>
-          <thead><tr><th>Property</th><th>Type</th><th>Default</th><th>Notes</th></tr></thead>
-          <tbody>
-            <tr><td><code>startAngle</code> / <code>sweepAngle</code></td><td>real</td><td>180 / 180</td><td>9 o'clock -&gt; 12 -&gt; 3 o'clock.</td></tr>
-            <tr><td><code>showNeedle</code>, <code>showTicks</code></td><td>bool</td><td>false, true</td><td></td></tr>
-            <tr><td><code>majorTickCount</code> / <code>minorTicksPerMajor</code></td><td>int</td><td>5 / 4</td><td></td></tr>
-            <tr><td><code>redlineStart</code></td><td>real</td><td>NaN</td><td>As CircularGauge.</td></tr>
-            <tr><td><code>showReadout</code></td><td>bool</td><td>true</td><td>Title / value / unit under the chord (unit row hidden when empty).</td></tr>
-            <tr><td><code>trackColor</code>, <code>fillColor</code>, <code>redlineColor</code>, <code>needleColor</code></td><td>color</td><td>theme</td><td></td></tr>
-          </tbody>
-        </table>
-
-        <h3>BarGauge</h3>
-        <p>
-          Filled pill. <code>octaveSupportedKinds: ["percentage", "temperature", "numeric", "pressure", "voltage"]</code>
-          -- deliberately not <code>bidirectional</code>, because the bar grows from one end and does not represent signed
-          ranges well (use <code>LinearGauge</code>). Horizontal layout: compact "Title  Value Unit" header row, bar below.
-          Vertical: title top, bar (40 % of width or <code>maxThickness</code>) centred, value bottom. The fill is hidden
-          below 1 % so the rounded-cap floor does not render as a blob at zero.
-        </p>
-        <table>
-          <thead><tr><th>Property</th><th>Type</th><th>Default</th><th>Notes</th></tr></thead>
-          <tbody>
-            <tr><td><code>orientation</code></td><td>string</td><td><code>"horizontal"</code></td><td>or <code>"vertical"</code>.</td></tr>
-            <tr><td><code>warnAbove</code>, <code>critAbove</code>, ...</td><td>real</td><td>NaN</td><td>The shared alerts (above): the fill (200 ms colour animation) and the value turn amber / red.</td></tr>
-            <tr><td><code>showLabel</code>, <code>showValue</code></td><td>bool</td><td>true, true</td><td></td></tr>
-            <tr><td><code>maxThickness</code></td><td>real (dp)</td><td>0 = fill</td><td>Caps the pill thickness so a bar in a tall cell stays a bar (the Sport preset uses 40).</td></tr>
-            <tr><td><code>trackColor</code>, <code>fillColor</code>, <code>warnColor</code>, <code>critColor</code></td><td>color</td><td>theme</td><td></td></tr>
-          </tbody>
-        </table>
-
-        <h3>LinearGauge</h3>
-        <p>
-          Horizontal scale with an indicator dot above the track and ticks below. <code>["bidirectional"]</code>. When
-          <code>centerOriginAtZero</code> (auto when <code>min &lt; 0 &lt; max</code>) the fill starts at the zero mark
-          (<code>_zeroT = -min / (max - min)</code>) and grows left or right; a 2 dp origin marker is drawn there.
-        </p>
-        <table>
-          <thead><tr><th>Property</th><th>Type</th><th>Default</th><th>Notes</th></tr></thead>
-          <tbody>
-            <tr><td><code>majorTickCount</code> / <code>minorTicksPerMajor</code></td><td>int</td><td>5 / 4</td><td></td></tr>
-            <tr><td><code>showTicks</code></td><td>bool</td><td>true</td><td></td></tr>
-            <tr><td><code>centerOriginAtZero</code></td><td>bool</td><td><code>min &lt; 0 &amp;&amp; max &gt; 0</code></td><td>Overridable.</td></tr>
-            <tr><td><code>trackColor</code>, <code>fillColor</code></td><td>color</td><td>theme</td><td></td></tr>
-          </tbody>
-        </table>
-
-        <h3>DigitalReadout</h3>
-        <p>
-          Big number, no chrome. <code>["*"]</code>. No <code>min</code>/<code>max</code>. The value text uses
-          <code>fontSizeMode: Text.HorizontalFit</code> so wide numbers shrink instead of clipping, and the whole stack scales
-          by <code>_vfit = min(1, height / naturalHeight)</code>.
-        </p>
-        <table>
-          <thead><tr><th>Property</th><th>Type</th><th>Default</th><th>Notes</th></tr></thead>
-          <tbody>
-            <tr><td><code>padDigits</code></td><td>int</td><td>0</td><td>Zero-pads the integer part (sign preserved).</td></tr>
-            <tr><td><code>valueScale</code></td><td>real</td><td>3.5</td><td>Multiplier on <code>App.Spacing.overallText</code> (Sport uses 7.0).</td></tr>
-            <tr><td><code>showTitle</code>, <code>showUnit</code></td><td>bool</td><td>true, true</td><td></td></tr>
-            <tr><td><code>alignment</code></td><td>int</td><td><code>Qt.AlignHCenter</code></td><td>or <code>AlignLeft</code> / <code>AlignRight</code>.</td></tr>
-            <tr><td><code>unitColor</code></td><td>color</td><td><code>obdLabelColor</code></td><td></td></tr>
-          </tbody>
-        </table>
-
-        <h3>SegmentedGauge</h3>
-        <p>A horizontal discrete level strip for any numeric PID. <code>segmentCount</code> defaults to 20 (2–40);
-          the shared alert limits default off. Each lit segment past <code>warnAbove</code> / <code>critAbove</code>
-          takes that level's colour, like a shift-light strip, the readout takes the value's level, and unlit segments
-          past a limit keep a dim outline. <code>showLabel</code> and <code>showValue</code>
-          default on. Decimals default to 0 and can be set to 0–4. Range and threshold overrides are stored
-          in native units and follow display-unit preferences. Missing/non-finite samples show <code>--</code>, with no
-          lit segments or warning; a real zero remains zero. Invalid ranges fill no segments. Values outside a valid
-          range clamp the strip, while the numeric readout stays truthful. Default span: 6 × 2.</p>
-
-        <h3>SparklineGauge</h3>
-        <p>
-          Rolling history drawn on a <code>Canvas</code>. <code>["*"]</code>. A <code>Timer</code> (running only while
-          <code>visible</code>, <code>triggeredOnStart</code>) pushes <code>value</code> into <code>_samples</code> every
-          <code>sampleIntervalMs</code> and drops the oldest past <code>maxSamples</code>; the x step is
-          <code>width / (maxSamples - 1)</code> and samples are right-aligned so the newest sits at the right edge. It samples
-          on its own clock rather than on value changes so the x-axis means time regardless of the OBD poll rate (and is
-          unaffected by the model's 33 ms coalescing).
-        </p>
-        <table>
-          <thead><tr><th>Property</th><th>Type</th><th>Default</th><th>Notes</th></tr></thead>
-          <tbody>
-            <tr><td><code>maxSamples</code></td><td>int</td><td>60</td><td></td></tr>
-            <tr><td><code>sampleIntervalMs</code></td><td>int</td><td>500</td><td>60 × 500 ms = 30 s window by default.</td></tr>
-            <tr><td><code>fillBelow</code></td><td>bool</td><td>true</td><td>Area fill at 22 % alpha of <code>obdBarColor</code>.</td></tr>
-            <tr><td><code>showHeader</code></td><td>bool</td><td>true</td><td>"Title  Value Unit" strip.</td></tr>
-            <tr><td><code>autoScale</code></td><td>bool</td><td>false</td><td>Y-range from the visible window's min/max instead of the PID range -- for fuel trim, timing and other small-swing values.</td></tr>
-            <tr><td><code>lineColor</code>, <code>fillColor</code>, <code>backgroundColor</code></td><td>color</td><td>theme</td><td><code>fillColor</code> defaults to <code>lineColor</code> at 22 % alpha, so the editor's single Color pick (which writes <code>lineColor</code>) recolors line and area together.</td></tr>
-          </tbody>
-        </table>
-
-        <h3>WarningLight</h3>
-        <p>
-          Round tell-tale. <code>["*"]</code>. Lit when <code>value &gt;= triggerAbove</code> or <code>value &lt;= triggerBelow</code>
-          (either or both may be set; NaN disables). Colour and border animate over 160 ms; the optional pulse is an opacity loop (1.0 -&gt; 0.45 -&gt; 1.0) that only runs while lit, pulsing is enabled and the widget is visible.
-        </p>
-        <table>
-          <thead><tr><th>Property</th><th>Type</th><th>Default</th><th>Notes</th></tr></thead>
-          <tbody>
-            <tr><td><code>triggerAbove</code>, <code>triggerBelow</code></td><td>real</td><td>NaN, NaN</td><td></td></tr>
-            <tr><td><code>label</code></td><td>string</td><td><code>""</code></td><td>Short text inside the disc (38 % of the diameter).</td></tr>
-            <tr><td><code>activeColor</code></td><td>color</td><td><code>App.Style.statusDanger</code></td><td>Presets pass hex strings (e.g. <code>"#F1C40F"</code> for the fuel light).</td></tr>
-            <tr><td><code>inactiveColor</code></td><td>color</td><td>darker <code>obdBoxBackground</code></td><td></td></tr>
-            <tr><td><code>activeLabelColor</code></td><td>color</td><td><code>"white"</code></td><td></td></tr>
-            <tr><td><code>pulse</code></td><td>bool</td><td>false</td><td>Reserve for critical alerts (overtemp, overrev).</td></tr>
-            <tr><td><code>maxSize</code></td><td>real (dp)</td><td>0 = fill</td><td>Caps the diameter so a light in a big cell stays an idiot-light (Performance uses 90).</td></tr>
-          </tbody>
-        </table>
-
-        <h2 id="self-binding">Self-Binding Widgets</h2>
-        <p>
-          Five widgets have <code>octaveSupportedKinds: []</code> and no <code>paramId</code>. The renderer skips the PID
-          bind for them (it checks <code>item.paramId !== undefined</code>), the editor never opens the PID picker for them,
-          and the properties panel hides its PID section.
-        </p>
-        <table>
-          <thead><tr><th>Widget</th><th>Source</th><th>Props (default)</th><th>Notes</th></tr></thead>
-          <tbody>
-            <tr><td><code>GForceGauge</code></td><td><code>liveValue("LATERAL_G")</code>, <code>liveValue("LONGITUDINAL_G")</code></td><td><code>maxG</code> (1.5), <code>showTrail</code> (true), <code>showValue</code> (true)</td><td>Rings at 100 % and 50 %, crosshair, "1.5g" scale label, dot animated over 100 ms, a 20-point trail sampled every 100 ms with opacity fading by age, and a total-G readout <code>sqrt(lat² + lon²)</code>. Compact sibling of the full-screen <code>GForceDisplay.qml</code>.</td></tr>
-            <tr><td><code>CompassGauge</code></td><td><code>liveValue("HEADING")</code></td><td><code>showDegrees</code> (true)</td><td>The card (12 ticks, N/E/S/W letters, N in <code>statusDanger</code>) rotates by <code>-heading</code> under a fixed accent-coloured lubber triangle (a <code>Canvas</code> repainted on <code>accentChanged</code>); letters counter-rotate to stay upright. <code>RotationAnimation { direction: Shortest }</code> handles the 359° -&gt; 0° wrap. Centre readout shows degrees and the 8-point cardinal.</td></tr>
-            <tr><td><code>NowPlayingWidget</code></td><td><a href="signals-slots-reference.html#nowPlaying"><code>nowPlaying</code></a></td><td><code>showArt</code>, <code>showArtist</code>, <code>showProgress</code> (all true)</td><td>Binds <code>nowPlaying</code> (the phone while it has the media controls, else local media), so it follows source and track changes with no refresh; art falls back to <code>assets/missing_art.png</code>. Display-only.</td></tr>
-            <tr><td><code>MediaControlsWidget</code></td><td><code>nowPlaying</code></td><td>none</td><td>Prev / play-pause / next calling <code>nowPlaying.previous()</code> / <code>togglePlay()</code> / <code>next()</code>, which route to the live source; the icon binds <code>nowPlaying.playing</code>. Interactive in rendered dashboards; in the editor the drag/select <code>MouseArea</code> sits on top so taps select the cell.</td></tr>
-            <tr><td><code>ClockWidget</code></td><td>Local clock, app 12/24-hour preference</td><td><code>showDate</code> (true), <code>showSeconds</code> (false)</td><td>Time and optional abbreviated date, fitted to the cell. Updates once per second while visible, refreshes immediately when shown, and works with the bottom-bar clock hidden. No PID or OBD polling.</td></tr>
-          </tbody>
-        </table>
-
-        <h2 id="angle-math">Angle and Needle Math</h2>
-        <p>
-          <code>PathAngleArc</code> measures degrees from 3 o'clock, clockwise. A QML <code>Item</code> with
-          <code>rotation: 0</code> points straight up, so an item rotated to sit on arc angle <em>a</em> needs
-          <code>rotation: a + 90</code>. Both dials use:
-        </p>
-        <pre><code><span class="cmt">// tick i of N (N = (majorTickCount - 1) * minorTicksPerMajor + 1)</span>
-_t        = i / (N - 1)
-_angleDeg = startAngle + sweepAngle * _t
-x         = cx + tickR * cos(_angleRad) - width / 2
-y         = cy + tickR * sin(_angleRad) - height / 2
-rotation  = _angleDeg + 90              <span class="cmt">// long axis radial</span>
-
-<span class="cmt">// needle (transformOrigin: Item.Bottom, drawn pointing up from the centre)</span>
-rotation  = (startAngle + sweepAngle * _animNorm) + 90
-
-<span class="cmt">// redline arc</span>
-_t         = (redlineStart - min) / (max - min)
-startAngle = startAngle + sweepAngle * _t
-sweepAngle = sweepAngle * (1 - _t)</code></pre>
-        <p>
-          With the CircularGauge defaults (135° start, 270° sweep) the minimum sits at item rotation 225° (down-left) and
-          the maximum at 135° (down-right); a redline equal to <code>max</code> has zero width and looks like a missing end,
-          so keep <code>redlineStart &lt; max</code>.
-        </p>
-
-        <h2 id="schema">Dashboard JSON Schema (schema 1 and 2)</h2>
+        <!-- Making -->
+        <h2 id="making">Making a Dashboard</h2>
+        <ol class="steps">
+          <li>Write a file like the one below and save it as <code>my-drive.json</code>.</li>
+          <li>Put it in the <code>dashboards</code> folder inside OCTAVE's config folder (table below). OCTAVE notices the new file within a second. There is no need to restart.</li>
+          <li>Open Settings &gt; Display &gt; Layout &gt; Home Screen and tap the <strong>My Drive</strong> card.</li>
+          <li>Go Home. Edit the file and save it again whenever you like: Home redraws with the change.</li>
+        </ol>
         <pre><code>{
-  <span class="prop">"id"</span>:          <span class="str">"my-board"</span>,        <span class="cmt">// required, unique across presets + user files, file-safe slug</span>
-  <span class="prop">"label"</span>:       <span class="str">"My Board"</span>,        <span class="cmt">// required, shown in the chooser and the OBD header</span>
-  <span class="prop">"schema"</span>:      <span class="num">1</span>,                 <span class="cmt">// 1, or 2 with "layouts" (every built-in)</span>
-  <span class="prop">"gridColumns"</span>: <span class="num">12</span>,                <span class="cmt">// optional, default 12</span>
-  <span class="prop">"gridRows"</span>:    <span class="num">8</span>,                 <span class="cmt">// optional, default 6 (presets use 8; tj-wrangler 12)</span>
-  <span class="prop">"margins"</span>:     <span class="num">20</span>,                <span class="cmt">// optional dp, outer padding, default 20</span>
-  <span class="prop">"spacing"</span>:     <span class="num">16</span>,                <span class="cmt">// optional dp, gap between cells, default 16</span>
+  <span class="prop">"id"</span>: <span class="str">"my-drive"</span>,
+  <span class="prop">"label"</span>: <span class="str">"My Drive"</span>,
+  <span class="prop">"schema"</span>: <span class="num">1</span>,
+  <span class="prop">"gridColumns"</span>: <span class="num">12</span>,
+  <span class="prop">"gridRows"</span>: <span class="num">8</span>,
   <span class="prop">"cells"</span>: [
-    {
-      <span class="prop">"type"</span>:    <span class="str">"CircularGauge"</span>,   <span class="cmt">// a WidgetCatalog type (== the .qml file name)</span>
-      <span class="prop">"paramId"</span>: <span class="str">"RPM"</span>,             <span class="cmt">// an OBDParameterModel id; omit or "" for self-binding widgets</span>
-      <span class="prop">"col"</span>: <span class="num">6</span>, <span class="prop">"row"</span>: <span class="num">0</span>,             <span class="cmt">// 0-based grid position, default 0/0</span>
-      <span class="prop">"colSpan"</span>: <span class="num">6</span>, <span class="prop">"rowSpan"</span>: <span class="num">7</span>,     <span class="cmt">// default 1/1</span>
-      <span class="prop">"props"</span>: { <span class="prop">"showNeedle"</span>: <span class="kw">true</span>, <span class="prop">"redlineStart"</span>: <span class="num">5500</span>,   <span class="cmt">// any QML property of the widget</span>
-                 <span class="prop">"title"</span>: <span class="str">"Revs"</span>, <span class="prop">"max"</span>: <span class="num">6000</span>,          <span class="cmt">// per-widget overrides (Label &amp; Range)</span>
-                 <span class="prop">"fillColor"</span>: <span class="str">"#2ECC71"</span>, <span class="prop">"needleColor"</span>: <span class="str">"#2ECC71"</span> }  <span class="cmt">// Color row</span>
-    }
-  ],
-  <span class="prop">"layouts"</span>: {                       <span class="cmt">// schema 2, optional</span>
-    <span class="prop">"portrait"</span>: {                    <span class="cmt">// a portrait screen: one placement per cell, same order</span>
-      <span class="prop">"gridColumns"</span>: <span class="num">8</span>, <span class="prop">"gridRows"</span>: <span class="num">12</span>,  <span class="cmt">// default: the grid turned</span>
-      <span class="prop">"cells"</span>: [ { <span class="prop">"col"</span>: <span class="num">0</span>, <span class="prop">"row"</span>: <span class="num">0</span>, <span class="prop">"colSpan"</span>: <span class="num">8</span>, <span class="prop">"rowSpan"</span>: <span class="num">6</span> } ]
-    }
+    { <span class="prop">"type"</span>: <span class="str">"CircularGauge"</span>, <span class="prop">"paramId"</span>: <span class="str">"RPM"</span>,
+      <span class="prop">"col"</span>: <span class="num">0</span>, <span class="prop">"row"</span>: <span class="num">0</span>, <span class="prop">"colSpan"</span>: <span class="num">6</span>, <span class="prop">"rowSpan"</span>: <span class="num">6</span>,
+      <span class="prop">"props"</span>: { <span class="prop">"showNeedle"</span>: <span class="kw">true</span>, <span class="prop">"max"</span>: <span class="num">7000</span>, <span class="prop">"redlineStart"</span>: <span class="num">5500</span> } },
+
+    { <span class="prop">"type"</span>: <span class="str">"DigitalReadout"</span>, <span class="prop">"paramId"</span>: <span class="str">"SPEED"</span>,
+      <span class="prop">"col"</span>: <span class="num">6</span>, <span class="prop">"row"</span>: <span class="num">0</span>, <span class="prop">"colSpan"</span>: <span class="num">6</span>, <span class="prop">"rowSpan"</span>: <span class="num">3</span>,
+      <span class="prop">"props"</span>: { <span class="prop">"frame"</span>: <span class="kw">true</span> } },
+
+    { <span class="prop">"type"</span>: <span class="str">"ArcGauge"</span>, <span class="prop">"paramId"</span>: <span class="str">"COOLANT_TEMP"</span>,
+      <span class="prop">"col"</span>: <span class="num">6</span>, <span class="prop">"row"</span>: <span class="num">3</span>, <span class="prop">"colSpan"</span>: <span class="num">3</span>, <span class="prop">"rowSpan"</span>: <span class="num">3</span>,
+      <span class="prop">"props"</span>: { <span class="prop">"warnAbove"</span>: <span class="num">100</span>, <span class="prop">"critAbove"</span>: <span class="num">108</span> } },
+
+    { <span class="prop">"type"</span>: <span class="str">"BarGauge"</span>, <span class="prop">"paramId"</span>: <span class="str">"FUEL_LEVEL"</span>,
+      <span class="prop">"col"</span>: <span class="num">9</span>, <span class="prop">"row"</span>: <span class="num">3</span>, <span class="prop">"colSpan"</span>: <span class="num">3</span>, <span class="prop">"rowSpan"</span>: <span class="num">3</span>,
+      <span class="prop">"props"</span>: { <span class="prop">"title"</span>: <span class="str">"Fuel"</span>, <span class="prop">"critBelow"</span>: <span class="num">10</span> } },
+
+    { <span class="prop">"type"</span>: <span class="str">"NowPlayingWidget"</span>,
+      <span class="prop">"col"</span>: <span class="num">0</span>, <span class="prop">"row"</span>: <span class="num">6</span>, <span class="prop">"colSpan"</span>: <span class="num">8</span>, <span class="prop">"rowSpan"</span>: <span class="num">2</span> },
+
+    { <span class="prop">"type"</span>: <span class="str">"ClockWidget"</span>,
+      <span class="prop">"col"</span>: <span class="num">8</span>, <span class="prop">"row"</span>: <span class="num">6</span>, <span class="prop">"colSpan"</span>: <span class="num">4</span>, <span class="prop">"rowSpan"</span>: <span class="num">2</span>,
+      <span class="prop">"props"</span>: { <span class="prop">"showDate"</span>: <span class="kw">false</span> } }
+  ]
+}</code></pre>
+        <p>
+          Read it as a sheet of squared paper 12 squares wide and 8 tall. Each entry in <code>cells</code> is one
+          widget: its <code>type</code>, the reading it shows (<code>paramId</code>), the square its top-left corner
+          sits on (<code>col</code>, <code>row</code>, counted from 0) and how many squares it covers
+          (<code>colSpan</code>, <code>rowSpan</code>). <code>props</code> holds that widget's options.
+        </p>
+        <table>
+          <thead><tr><th>System</th><th>Dashboards folder</th></tr></thead>
+          <tbody>
+            <tr><td>Linux, Raspberry Pi, Orange Pi</td><td><code>~/.config/OCTAVE/dashboards/</code></td></tr>
+            <tr><td>macOS</td><td><code>~/Library/Application Support/OCTAVE/dashboards/</code></td></tr>
+            <tr><td>Windows</td><td><code>%APPDATA%/OCTAVE/dashboards/</code></td></tr>
+          </tbody>
+        </table>
+        <p>
+          You do not need a car to try a dashboard: connect the simulated car (see
+          <a href="obd-manager.html">OBD Manager</a>) and every gauge moves. If you would sooner drag widgets around
+          than type, use <a href="#editor">the browser editor</a>. It writes the same files.
+        </p>
+
+        <!-- Schema -->
+        <h2 id="schema">The Dashboard File</h2>
+        <table>
+          <thead><tr><th>Key</th><th>Needed</th><th>What it is</th></tr></thead>
+          <tbody>
+            <tr><td><code>id</code></td><td>yes</td><td>The dashboard's name inside OCTAVE. Letters, digits, <code>-</code> and <code>_</code>, at most 64 characters. Use the file name without <code>.json</code>. <code>home</code> and <code>grid</code> are taken.</td></tr>
+            <tr><td><code>label</code></td><td>yes</td><td>The name on its card, up to 80 characters.</td></tr>
+            <tr><td><code>schema</code></td><td>yes</td><td><code>1</code>, or <code>2</code> when the file has a portrait layout (below).</td></tr>
+            <tr><td><code>gridColumns</code>, <code>gridRows</code></td><td>no</td><td>The size of the grid. 12 by 6 when left out, at most 48 each.</td></tr>
+            <tr><td><code>margins</code>, <code>spacing</code></td><td>no</td><td>The space around the grid and between widgets, 0 to 200. 20 and 16 when left out.</td></tr>
+            <tr><td><code>cells</code></td><td>yes</td><td>The widgets, at most 256.</td></tr>
+            <tr><td><code>alertBanner</code></td><td>no</td><td><code>false</code> turns off <a href="#alerts">the red banner</a>.</td></tr>
+          </tbody>
+        </table>
+        <p>And in each cell:</p>
+        <table>
+          <thead><tr><th>Key</th><th>What it is</th></tr></thead>
+          <tbody>
+            <tr><td><code>type</code></td><td>One of <a href="#primitives">the widgets</a>.</td></tr>
+            <tr><td><code>paramId</code></td><td>The id of the reading, such as <code>RPM</code> or <code>COOLANT_TEMP</code>. Leave it out for a widget that has its own data (the clock, the music). The ids are listed in the <a href="api-reference.html#parameters">API reference</a>; a <a href="obd-manager.html#custom-pids">custom PID</a> of yours works too.</td></tr>
+            <tr><td><code>col</code>, <code>row</code></td><td>The top-left square, counted from 0.</td></tr>
+            <tr><td><code>colSpan</code>, <code>rowSpan</code></td><td>The width and height in squares. 1 when left out.</td></tr>
+            <tr><td><code>props</code></td><td>The widget's options: plain values only (true / false, numbers, text).</td></tr>
+          </tbody>
+        </table>
+        <h3 id="portrait">A screen that stands upright</h3>
+        <p>
+          When the screen is taller than wide, OCTAVE lays the same widgets out again for that shape by fixed rules,
+          so a dashboard works either way up without any extra work. If you want to place them yourself, set
+          <code>"schema": 2</code> and add a position for every cell, in the same order as <code>cells</code>:
+        </p>
+        <pre><code><span class="prop">"layouts"</span>: {
+  <span class="prop">"portrait"</span>: {
+    <span class="prop">"gridColumns"</span>: <span class="num">8</span>, <span class="prop">"gridRows"</span>: <span class="num">12</span>,
+    <span class="prop">"cells"</span>: [ { <span class="prop">"col"</span>: <span class="num">0</span>, <span class="prop">"row"</span>: <span class="num">0</span>, <span class="prop">"colSpan"</span>: <span class="num">8</span>, <span class="prop">"rowSpan"</span>: <span class="num">5</span> } ]
   }
 }</code></pre>
+        <p>
+          The complete format, with every optional key, is in <span class="file-path">docs/GAUGE_AUTHORING.md</span>
+          &sect;5 and, for programs, in <span class="file-path">docs/api/dashboard-spec.schema.json</span>.
+        </p>
+
+        <!-- Widgets -->
+        <h2 id="primitives">The Widgets</h2>
+        <p>
+          Eight widgets show a reading you choose with <code>paramId</code>. Each one's options and their defaults are
+          in <span class="file-path">docs/GAUGE_AUTHORING.md</span> &sect;3.
+        </p>
         <table>
-          <thead><tr><th>Field</th><th>Required</th><th>Read by</th><th>Rules</th></tr></thead>
+          <thead><tr><th><code>type</code></th><th>What you see</th><th>Good for</th></tr></thead>
           <tbody>
-            <tr><td><code>id</code></td><td>yes</td><td>DashboardManager, OBDMenu</td><td>Missing id: file skipped (logged). Duplicate of a built-in: user file skipped. <code>"grid"</code> is reserved for the Parameter Cards entry (<code>DashboardManager::kParameterCardsId</code>): <code>uniqueIdForLabel</code> never returns it, <code>saveDashboard</code> refuses it, and a user file carrying it is skipped on scan (logged). <code>saveDashboard</code> writes <code>&lt;id&gt;.json</code> and refuses an id that isn't file-safe (<code>[A-Za-z0-9_-]</code>, &le; 64 chars).</td></tr>
-            <tr><td><code>label</code></td><td>yes (for save)</td><td>DashboardManager, OBDMenu</td><td>Whitespace collapsed, capped at 80 chars. <code>saveDashboard</code> rejects an empty label; a file with none loads named after its id.</td></tr>
-            <tr><td><code>schema</code></td><td>by convention</td><td>DashboardManager</td><td>Written by the editor and every preset. Save and the <a href="#sharing">import sanitizer</a> refuse a spec newer than <code>kSupportedSchema</code> (2) with "This dashboard needs a newer version of OCTAVE"; a newer file dropped into the folder by hand is listed, and <code>DashboardRenderer</code> shows that message instead of its cells (and demands no PIDs). It reads the limit from <code>dashboardManager.supportedSchema</code>, or 1 with no manager; <code>loadDashboard</code> passes such a file through untouched and the editor won't open it. A missing <code>schema</code> is 1.</td></tr>
-            <tr><td><code>gridColumns</code>, <code>gridRows</code></td><td>no</td><td>Renderer, Editor</td><td>Not a positive JSON number (0, missing, a string) = 12 / 6; capped at 48.</td></tr>
-            <tr><td><code>margins</code>, <code>spacing</code></td><td>no</td><td>Renderer and editor</td><td>Applied through <code>App.Spacing.dp()</code>; 0..200, <code>null</code> = absent. The editor keeps a loaded spec's values (<code>specMargins</code> / <code>specSpacing</code>), renders its canvas with them and writes them back into saves and drafts (<code>_withGridGeometry()</code>), but only when the spec had them &mdash; a dashboard without the keys keeps relying on the 20 / 16 defaults and its JSON stays minimal.</td></tr>
-            <tr><td><code>cells[].type</code></td><td>yes</td><td>Renderer, Editor, WidgetCatalog</td><td>Kept in the file whatever it is (a newer build's widget survives a save). Unknown type: renderer logs and skips the cell (its area stays empty); editor shows it inert as "needs a newer OCTAVE", and Delete works.</td></tr>
-            <tr><td><code>cells[].paramId</code></td><td>no</td><td>Renderer, Editor</td><td>Kept in the file. Unknown id: renderer logs and leaves the widget unbound; the editor canvas doesn't bind it either. Ignored for widgets without a <code>paramId</code> property.</td></tr>
-            <tr><td><code>cells[].col/row/colSpan/rowSpan</code></td><td>no</td><td>Renderer, Editor</td><td>Normalised on save and load (<code>DashboardManager::normalizeSpec</code>): a cell off the grid keeps its size and moves back in, shrinking only if wider than the grid; cells never overlap (the earlier cell in file order wins, a later one shrinks toward 1&times;1 and is dropped only if its corner is taken). The editor's tap / drag / resize use the same placement code (<code>canPlace</code>, <code>fitAt</code>, <span class="file-path">src/util/dashboardgrid.{h,cpp}</span>).</td></tr>
-            <tr><td><code>cells[].props</code></td><td>no</td><td>Renderer, Editor</td><td>Scalars only (bool, number, string &le; 200 chars); nested objects and arrays are dropped on save and load. Applied after <code>paramId</code> so overrides win over model defaults. This is also where the editor's per-widget overrides live: <code>title</code>, <code>unit</code>, <code>min</code>, <code>max</code> and the color keys from the catalog's <code>colorProps</code>; omit a key to follow the PID metadata / live theme. Keys the widget does not declare are silently skipped. The string <code>"NaN"</code> is coerced to <code>NaN</code> (JSON cannot encode it; used to un-set thresholds).</td></tr>
-            <tr><td><code>layouts.portrait</code></td><td>no (schema 2)</td><td>Renderer, Editor</td><td>Where each cell goes on a portrait screen, <code>{gridColumns, gridRows, cells: [{col, row, colSpan, rowSpan}]}</code>, one placement per cell in <code>cells</code> order (a cell the rules drop takes its placement with it). Normalised like the cells; a missing or colliding placement goes to the nearest free spot of its size, then 1&times;1, and if even that fails the layout is dropped. A spec with one is saved as schema 2, one without as 1. <code>DashboardRenderer</code> uses it when taller than wide (<code>orientedSpec(spec, true)</code>); without one it derives a layout by fixed rules (<code>derivePortrait</code>: the grid turned, every widget its on-screen shape on a 16:9 screen, reading order, made smaller in steps until all fit), the same on every run. Every built-in has one (TJ Wrangler's and Sport's hand-tuned). JSON Schema: <span class="file-path">docs/api/dashboard-spec.schema.json</span>.</td></tr>
+            <tr><td><code>CircularGauge</code></td><td>A round dial with a filled ring or a needle, tick marks and a red zone if you set one.</td><td>RPM, speed, boost</td></tr>
+            <tr><td><code>ArcGauge</code></td><td>A half dial with the value under it.</td><td>Temperatures, pressures</td></tr>
+            <tr><td><code>BarGauge</code></td><td>A bar that fills, lying down or standing up.</td><td>Fuel, load, throttle. Not for readings that go below zero.</td></tr>
+            <tr><td><code>SegmentedGauge</code></td><td>A row of segments that light up, like a shift-light strip.</td><td>RPM, load</td></tr>
+            <tr><td><code>LinearGauge</code></td><td>A scale with zero in the middle; the fill grows left or right.</td><td>Readings that go both ways: fuel trims, timing, pitch and roll</td></tr>
+            <tr><td><code>DigitalReadout</code></td><td>The number, big and plain.</td><td>Speed, voltage, anything</td></tr>
+            <tr><td><code>SparklineGauge</code></td><td>The reading over the last half minute as a line.</td><td>Seeing a trend</td></tr>
+            <tr><td><code>WarningLight</code></td><td>A lamp that lights when the reading passes a limit (<code>triggerAbove</code>, <code>triggerBelow</code>).</td><td>Overheating, low fuel</td></tr>
+          </tbody>
+        </table>
+        <p id="self-binding">The rest bring their own data and take no <code>paramId</code>:</p>
+        <table>
+          <thead><tr><th><code>type</code></th><th>What you see</th></tr></thead>
+          <tbody>
+            <tr><td><code>GForceGauge</code></td><td>A dot that moves with cornering and braking forces, from the <a href="hardware-managers.html">motion sensor</a>.</td></tr>
+            <tr><td><code>CompassGauge</code></td><td>A compass card that turns with the heading, from the motion sensor.</td></tr>
+            <tr><td><code>NowPlayingWidget</code></td><td>The song playing: cover, title, artist and progress. Wider than tall it is a strip; taller than wide, a column. With <code>"seekable": true</code> the progress bar takes a touch.</td></tr>
+            <tr><td><code>MediaControlsWidget</code></td><td>Previous, play / pause and next.</td></tr>
+            <tr><td><code>PhoneMirrorWidget</code></td><td>Your phone's screen, live and touchable while <a href="phone-mirror-android-auto.html">phone mirroring</a> runs, with a Connect Phone button when it does not.</td></tr>
+            <tr><td><code>VehicleWidget</code></td><td>A picture of your vehicle.</td></tr>
+            <tr><td><code>ShiftLightWidget</code></td><td>The <a href="obd-manager.html#shift-light">shift light</a> as a lamp.</td></tr>
+            <tr><td><code>ClockWidget</code></td><td>The time, and the date if you like.</td></tr>
           </tbody>
         </table>
 
-        <h2 id="presets">Built-in Presets</h2>
-        <p>One built-in ships since 2026-11-24: <code>home</code> (<span class="file-path">frontend/dashboards/presets/home.json</span>, 12 &times; 12, portrait 12 &times; 20), the dashboard Home shows until another is chosen. It is read-only; editing it from Home makes a copy. Sport, Minimal, Full Grid, Performance and TJ Wrangler 4.0 were removed (two of them live on as test fixtures in <span class="file-path">tests/cpp/fixtures/presets/</span>); the widgets they used are all still in the catalog.</p>
-
-        <h2 id="dashboard-manager">DashboardManager</h2>
+        <!-- Common options -->
+        <h2 id="binding-api">Options Every Gauge Has</h2>
         <p>
-          Context property <code>dashboardManager</code>, registered before the QML engine loads. <code>main.cpp</code>
-          calls <code>setPresetsDir(&lt;frontend&gt;/dashboards/presets)</code> then
-          <code>setUserDir(&lt;app data dir&gt;/dashboards)</code>; the second call performs the initial scan and starts the
-          directory watch. The user dir is <code>~/.config/OCTAVE/dashboards/</code> on Linux,
-          <code>~/Library/Application Support/OCTAVE/dashboards/</code> on macOS, <code>%APPDATA%/OCTAVE/dashboards/</code> on
-          Windows (via <code>SettingsManager::getAppDataDir()</code>), and is created on
-          demand.
+          A gauge needs only its <code>paramId</code>. Its title, unit and range come from the reading, and its
+          colours from the theme. Put any of these in <code>props</code> to change them:
         </p>
         <table>
-          <thead><tr><th>Member</th><th>Kind</th><th>Behavior</th></tr></thead>
+          <thead><tr><th>Option</th><th>What it does</th></tr></thead>
           <tbody>
-            <tr><td><code>dashboards</code></td><td>Property (list), notify <code>dashboardsChanged</code></td><td>Headers <code>{ id, label, builtIn, path }</code> (plus <code>showWhen</code> when the dashboard has one): presets first in file-name order, then user files in file-name order.</td></tr>
-            <tr><td><code>loadDashboard(id)</code></td><td>Invokable -&gt; map</td><td>The spec normalised by the <a href="#schema">spec rules</a> (a newer-schema file untouched), or an empty map for an unknown id / unreadable file (logged).</td></tr>
-            <tr><td><code>isBuiltIn(id)</code></td><td>Invokable -&gt; bool</td><td></td></tr>
-            <tr><td><code>saveDashboard(spec)</code></td><td>Slot -&gt; id or <code>""</code></td><td>A spec with no <code>id</code> gets <code>uniqueIdForLabel(label)</code> first (a new dashboard in one call). Normalises the spec (<a href="#schema">spec rules</a>; refuses a newer schema, an empty label or an id that isn't file-safe) and needs a configured user dir; refuses an id that belongs to a built-in (hidden ones included) or is <code>"grid"</code>; otherwise writes <code>&lt;userDir&gt;/&lt;id&gt;.json</code> (overwriting an existing user file with that id) and rescans.</td></tr>
-            <tr><td><code>deleteDashboard(id)</code></td><td>Slot -&gt; bool</td><td>Removes the user file. A built-in is hidden instead: its id is added to <code>&lt;userDir&gt;/.hidden-builtins</code> (a JSON array) and it drops out of <code>dashboards</code>, but its id stays reserved. False for unknown ids.</td></tr>
-            <tr><td><code>hiddenBuiltInCount</code></td><td>Property (int), notify <code>dashboardsChanged</code></td><td>Number of built-ins the user has deleted (hidden).</td></tr>
-            <tr><td><code>supportedSchema</code></td><td>Property (int), constant</td><td><code>kSupportedSchema</code> (2): the highest dashboard <code>schema</code> this build reads; DashboardRenderer shows "needs a newer OCTAVE" above it.</td></tr>
-            <tr><td><code>restoreBuiltInDashboards()</code></td><td>Slot -&gt; bool</td><td>Clears <code>.hidden-builtins</code> and rescans; false if nothing was hidden.</td></tr>
-            <tr><td><code>uniqueIdForLabel(label)</code></td><td>Invokable -&gt; id</td><td>The id a new dashboard named <code>label</code> should save under: slug of the label, then <code>-2</code>, <code>-3</code>, ... until it is not a visible or hidden built-in, a user dashboard, or <code>"grid"</code>. The editor, Duplicate and Import all use it.</td></tr>
-            <tr><td><code>duplicateDashboard(sourceId, newLabel)</code></td><td>Slot -&gt; id or <code>""</code></td><td>Reads the source spec (built-in or user), sets <code>label</code> to <code>newLabel</code> or <code>"&lt;source label&gt; (Copy)"</code>, generates a unique id, and calls <code>saveDashboard</code>.</td></tr>
-            <tr><td><code>refresh()</code></td><td>Slot</td><td>Full rescan of both directories.</td></tr>
-            <tr><td><code>exportDashboard(id)</code></td><td>Slot -&gt; path or <code>""</code></td><td>Writes the spec to <code>&lt;Downloads&gt;/OCTAVE-dashboards/&lt;id&gt;.json</code> (Documents if there is no Downloads location), atomically.</td></tr>
-            <tr><td><code>copyDashboardToClipboard(id)</code></td><td>Slot -&gt; bool</td><td>Puts the spec on the clipboard as compact JSON.</td></tr>
-            <tr><td><code>importDashboard(pathOrUrl)</code></td><td>Slot -&gt; new id or <code>""</code></td><td>Accepts a plain path, a <code>file://</code> URL, or an Android <code>content://</code> URL (handed to <code>QFile</code> as is). Reads at most 512 KB, then as <code>importDashboardFromText</code>.</td></tr>
-            <tr><td><code>importDashboardFromClipboard()</code></td><td>Slot -&gt; new id or <code>""</code></td><td>Clipboard text through <code>importDashboardFromText</code>; "The clipboard is empty" otherwise.</td></tr>
-            <tr><td><code>importDashboardFromText(json)</code></td><td>Slot -&gt; new id or <code>""</code></td><td>Parse, <a href="#sharing">sanitize</a>, assign a fresh id from the label, <code>saveDashboard</code>.</td></tr>
-            <tr><td><code>lastShareError</code></td><td>Property (string), notify <code>lastShareErrorChanged</code></td><td>Human-readable reason the last export/import failed; <code>""</code> after a success. The chooser's status banner shows it.</td></tr>
-            <tr><td><code>lastImportReport</code></td><td>Property (map), notify <code>lastImportReportChanged</code> (experimental)</td><td>What the last successful import kept and left out: <code>{id, label, cells, droppedCells (types), droppedProps, movedCells, portraitDropped, unknownTypes, paramIds}</code>; <code>{}</code> after a refused one. The chooser's report popup checks <code>paramIds</code> against the connected car.</td></tr>
-            <tr><td><code>thumbnailFromImage(image)</code></td><td>Invokable -&gt; string (experimental)</td><td>A <code>QImage</code> (QML <code>grabToImage</code>'s <code>result.image</code>) scaled into 320 &times; 180 as a <code>data:image/jpeg;base64,...</code> URL (PNG where there is no JPEG writer), at most 96 KB; <code>""</code> for anything else (so over the service).</td></tr>
-            <tr><td><code>preview</code> / <code>previewDashboard(spec)</code> / <code>endPreview()</code></td><td>Property (map), notify <code>previewChanged</code>; slots (experimental)</td><td>A dashboard being edited on another device: <code>{id, spec}</code> (spec held to the load rules, no thumbnail; <code>id</code> <code>""</code> for one not saved yet) or <code>{}</code>. <code>previewDashboard</code> returns false and ends the preview for an unusable spec; each call restarts a 60 s expiry. OBDMenu shows it in place of the active dashboard, with or without a car.</td></tr>
-            <tr><td><code>widgetPresets</code></td><td>Property (list), notify <code>widgetPresetsChanged</code> (experimental)</td><td>"My widgets": <code>[{id, label, baseType, paramId, props}]</code> from <code>&lt;config&gt;/widgets/*.json</code>, by label; props held to the spec rules for the base type.</td></tr>
-            <tr><td><code>saveWidgetPreset(preset)</code> / <code>deleteWidgetPreset(id)</code></td><td>Slots (experimental)</td><td>Save <code>{label, baseType, paramId, props}</code> (an existing <code>id</code> overwrites, else a slug of the label) -&gt; id or <code>""</code> with <code>lastError</code>; delete by id.</td></tr>
-            <tr><td><code>widgetPresetText(id)</code>, <code>copyWidgetPresetToClipboard(id)</code>, <code>importWidgetPresetFromText(json)</code>, <code>importWidgetPresetFromClipboard()</code></td><td>Invokable / slots (experimental)</td><td>A preset as shared text (<code>{"schema": 1, "kind": "widgetPreset", ...}</code>), and back as a new one (never overwrites). The dashboard importer refuses a preset, and the preset importer a dashboard, each pointing at the other.</td></tr>
+            <tr><td><code>title</code>, <code>unit</code></td><td>The words shown, in place of the reading's own.</td></tr>
+            <tr><td><code>min</code>, <code>max</code></td><td>The ends of the scale. A reading's own range is wide (RPM runs to 8000); set these to fit your car.</td></tr>
+            <tr><td><code>decimals</code></td><td>Digits after the point.</td></tr>
+            <tr><td><code>warnAbove</code>, <code>warnBelow</code>, <code>critAbove</code>, <code>critBelow</code></td><td><a href="#alerts">Warning and critical limits</a>.</td></tr>
+            <tr><td><code>frame</code></td><td><code>true</code> draws a card behind the widget. Every widget has this one (the phone and the vehicle call it <code>showFrame</code>).</td></tr>
+            <tr><td>A colour</td><td>Each widget has its own colour options, such as <code>fillColor</code>. Write a colour as <code>"#2ECC71"</code>. Left out, the widget follows the <a href="theme-system.html">theme</a>.</td></tr>
           </tbody>
         </table>
+        <p>Three things to know:</p>
         <ul>
-          <li><strong>Scanning</strong>: every <code>*.json</code> is fully parsed (there is no lightweight header read; <code>readHeader</code> calls <code>readFullSpec</code>). Non-object roots, parse errors, missing ids, duplicate preset ids and user ids colliding with a built-in are logged (<code>octave.dashboards</code> category) and skipped.</li>
-          <li><strong>Atomic writes</strong>: pretty-printed JSON is written through <code>QSaveFile</code> (a temporary file committed over the target). This prevents readers from seeing a partially written JSON file; it is not a guarantee against every power-loss failure.</li>
-          <li><strong>Id generation</strong>: <code>slugify</code> lowercases, replaces runs of <code>[^a-z0-9]</code> with <code>-</code>, trims dashes, and falls back to <code>"dashboard"</code>; <code>uniqueIdForLabel</code> appends <code>-2</code>, <code>-3</code>, ... up to 999 (then a millisecond timestamp), skipping hidden built-ins and <code>"grid"</code>. The editor calls it before saving a new dashboard, so there is one rule (<span class="file-path">tests/cpp/tst_dashboardmanager.cpp</span>).</li>
-          <li><strong>Hot reload</strong> (<code>c754f3d</code>): a <code>QFileSystemWatcher</code> on the user dir, a 300 ms single-shot debounce, and a signature <code>name:mtime:size|...</code> of the JSON files. A directory event only triggers a rescan when the signature differs from the one recorded at the last scan -- the manager's own saves already rescanned, so they do not double-fire. If the directory was recreated the watch is re-armed.</li>
-        </ul>
-        <div class="info-box info">
-          <div class="info-box-title">Synchronous rescans</div>
-          Specs are parsed with <code>QJsonDocument</code> and the hot-reload signature uses
-          <code>QFileInfo::lastModified().toSecsSinceEpoch()</code>. Headers carry the user file's absolute path, and
-          <code>dashboardsChanged</code> is emitted synchronously at the end of every rescan -- which is why the chooser's delete
-          button must not run code after <code>deleteDashboard()</code> in its own delegate (see below).
-        </div>
-
-        <h2 id="sharing">Sharing: Export and Import</h2>
-        <p>
-          <code>DashboardManager</code> exports and imports dashboards as text or files (<code>exportDashboard</code>,
-          <code>copyDashboardToClipboard</code>, <code>importDashboard</code>, <code>importDashboardFromText</code>). The buttons
-          for them were in the OBD page's chooser, removed on 2026-11-24; the calls remain for the browser editor and the service API,
-          and a file copied into <span class="file-path">&lt;config&gt;/dashboards/</span> needs no import at all.
-        </p>
-        <p>
-          <strong>Imports never overwrite.</strong> The incoming <code>id</code> is discarded and a new one is generated from the
-          label with the same <code>uniqueIdForLabel</code> rule as Duplicate, so importing the same file twice gives
-          <code>name</code> and <code>name-2</code>. The spec rules every save and load apply
-          (<code>DashboardManager::normalizeSpec</code>, see the field table above) run first, plus the import-only refusals:
-        </p>
-        <ul>
-          <li>Root must be a JSON object with a <code>cells</code> array; <code>schema</code> (default 1) must be 1 or 2 -- newer is refused with "This dashboard needs a newer version of OCTAVE".</li>
-          <li>Only <code>schema</code>, <code>label</code>, <code>gridColumns</code>, <code>gridRows</code>, <code>margins</code>, <code>spacing</code>, <code>cells</code> survive; per cell only <code>type</code>, <code>paramId</code>, <code>col</code>, <code>row</code>, <code>colSpan</code>, <code>rowSpan</code>, <code>props</code>. Anything else -- an <code>id</code>, a <code>source</code> field, unknown keys -- is dropped.</li>
-          <li><code>props</code> keeps scalar values only (bool, number, string &le; 200 chars); nested objects and arrays are dropped.</li>
-          <li>Numbers must be JSON numbers (no bools, no numeric strings); geometry is moved into the grid and overlaps resolved as for any save, grid size 1..48, margins/spacing 0..200. Label is whitespace-collapsed, capped at 80 chars, default "Imported dashboard".</li>
-          <li>Caps: 512 KB of text, 256 cells. Cells with an empty or over-long <code>type</code> are skipped; unknown types are kept (the renderer skips them, so a newer catalog's widgets survive a round trip).</li>
-        </ul>
-        <p>
-          Shared dashboards are pure data -- no QML or script is ever loaded from an import. Covered by
-          <span class="file-path">tests/cpp/tst_dashboardmanager.cpp</span> (spec rules on save, load and import, the presets already satisfying them, rejections, export/import round trip, grid placement).
-        </p>
-
-        <h2 id="phase4">Alerts, Spec Extras and the Browser Editor</h2>
-        <p>
-          The optional spec keys stay schema 1
-          (an older build drops them):
-        </p>
-        <table>
-          <thead><tr><th>Key</th><th>What it does</th></tr></thead>
-          <tbody>
-            <tr><td><code>alertBanner</code></td><td><code>DashboardRenderer.activeAlerts</code> names every cell at its critical limit (<code>critAbove</code> / <code>critBelow</code>, in the PID's own unit) with its value in a red strip along the top (<code>dashAlertBanner</code>). <code>false</code> turns it off; absent = on.</td></tr>
-            <tr><td><code>showWhen</code></td><td><code>{paramId, above, below}</code>: kept in the spec and by the browser editor, but nothing acts on it since 2026-11-24 (it brought a dashboard up by itself on the OBD page, which shows no dashboards now).</td></tr>
-            <tr><td><code>thumbnail</code></td><td>A JPEG / PNG data URL &le; 96 KB. Export carries it; the browser editor's list shows it.</td></tr>
-          </tbody>
-        </table>
-        <ul>
-          <li><strong>Import report</strong>: <code>lastImportReport</code> says what an import left out (values the car does not report, unknown widget types and options); the browser editor shows it. The app's own popup for it went with the chooser.</li>
-          <li><strong>My widgets</strong> (<code>widgetPresets</code>, <span class="file-path">&lt;config&gt;/widgets/</span>) are still served by <code>DashboardManager</code>; nothing in the app lists them since the editor's gallery was removed.</li>
-          <li><strong>Browser editor</strong>: <code>GET /dashboards</code> on the service port serves <span class="file-path">sdk/web/dashboards.html</span> (embedded at <code>:/web-client/dashboards.html</code>, <code>CommandServer::addPage</code>, a CSP that also allows <code>data:</code> images; not served when a <code>--web-root</code> frontend owns the port). It pairs like the reference client, lists the dashboards (thumbnail or a schematic, Edit / Customize / Copy / Download / Delete, New from a template filled from the car, Import by paste or file with the report), and edits one: drag to move, drag the corner to resize (placed by <code>arrange</code>), add by widget or by value (<code>sizeOptions</code> / <code>minSpan</code> / <code>nearestFree</code>), the catalog's options by section, colour swatches, Coarse / Normal / Fine (<code>rescale</code>; a portrait layout is derived again), the portrait layout (kept a placement per cell), undo / redo, and the dashboard's alert banner and auto-show rule. <em>Show on the car</em> sends each change (250 ms debounce, a keep-alive every 30 s) to <code>previewDashboard</code>; Save, leaving or closing the page ends it.</li>
-          <li>The address of the browser editor is the service's own (<code>http://&lt;address&gt;:9876/dashboards</code>; off the device it needs <code>--service-bind</code> and a pairing code from <code>octave --pair-code</code>). The <strong>In a browser</strong> sheet that showed it with a QR code went with the chooser.</li>
+          <li><strong>Numbers are in the reading's own unit.</strong> Write <code>min</code>, <code>max</code> and every limit in the unit the reading has in the list: &deg;C, MPH, metres. If the driver has chosen &deg;F or km/h, OCTAVE converts the limit along with the value, so <code>"critAbove": 108</code> on coolant still means 108 &deg;C on a gauge that reads in &deg;F.</li>
+          <li><strong>No reading is not zero.</strong> Until a value arrives, a gauge shows <code>--</code>, draws no fill or needle and raises no warning. A missing fuel level never lights a low-fuel lamp.</li>
+          <li><strong>Only listed options work.</strong> A widget accepts the options the widget catalog lists for it and ignores anything else, so a dashboard file cannot hide a widget, resize it or pin it to a made-up value.</li>
         </ul>
 
-        <h2 id="renderer">DashboardRenderer: Spec to QML</h2>
+        <!-- Alerts -->
+        <h2 id="alerts">Warnings and the Red Banner</h2>
         <p>
-          <span class="file-path">frontend/dashboards/DashboardRenderer.qml</span> is an <code>Item</code> with one input,
-          <code>spec</code>. It positions cells absolutely instead of using <code>GridLayout</code>: <code>GridLayout</code>'s
-          <code>fillHeight</code> + <code>rowSpan</code> interaction does not give proportional sizes (a <code>rowSpan: 4</code>
-          cell came out the same height as a <code>rowSpan: 1</code> peer), and deterministic cells are exactly the snap
-          model the editor needs.
+          Give a gauge a limit and it changes colour when the reading reaches it: amber for a warning
+          (<code>warnAbove</code>, <code>warnBelow</code>), red for critical (<code>critAbove</code>,
+          <code>critBelow</code>). Critical wins when both apply. <code>"alertFlash": true</code> also blinks the
+          value while it is critical. The round dials draw the warning and critical bands on their scale, so you can
+          see them coming.
         </p>
-        <pre><code>_cols    = spec.gridColumns || 12
-_rows    = spec.gridRows    || 6
-_margin  = dp(spec.margins  !== undefined ? spec.margins : 20)
-_spacing = dp(spec.spacing  !== undefined ? spec.spacing : 16)
-_cellW   = max(1, (width  - 2 * _margin - _spacing * (_cols - 1)) / _cols)
-_cellH   = max(1, (height - 2 * _margin - _spacing * (_rows - 1)) / _rows)
+        <p>
+          A small gauge in a corner can go red without being noticed. So while any gauge on a dashboard is critical, a
+          red strip along the top names it with its value. Put <code>"alertBanner": false</code> in the file to turn
+          the strip off; the built-in Home does.
+        </p>
+        <p>
+          A level does not flicker when a reading sits right on its limit. It starts at the limit and ends only when
+          the reading has come back inside by a small margin, 1 % of the gauge's range unless you set
+          <code>alertHysteresis</code>.
+        </p>
 
-cell.x      = _margin + col * (_cellW + _spacing)
-cell.y      = _margin + row * (_cellH + _spacing)
-cell.width  = colSpan * _cellW + (colSpan - 1) * _spacing
-cell.height = rowSpan * _cellH + (rowSpan - 1) * _spacing</code></pre>
-        <p>A <code>Repeater</code> over <code>spec.cells</code> creates, per cell, a clipped <code>Item</code> containing an asynchronous <code>Loader</code>:</p>
+        <!-- Browser editor -->
+        <h2 id="editor">The Browser Editor</h2>
+        <p id="phase4">
+          OCTAVE can serve a dashboard editor to a web browser on a laptop or a phone. It is a web page, not a part
+          of the app's own screen. You drag widgets around a picture of the grid and the car shows the result while
+          you work.
+        </p>
         <ol class="steps">
-          <li><code>_knownType = WidgetCatalog.isKnownType(type)</code> and <code>_knownParam = !paramId || OBDParameterModel.hasParameter(paramId)</code>; <code>Component.onCompleted</code> emits one <code>console.warn</code> per failure, naming the dashboard id.</li>
-          <li>The Loader is <code>active</code> only for known types; its <code>source</code> is <code>WidgetCatalog.urlFor(type)</code>.</li>
-          <li><code>onLoaded</code> binds <code>item.width/height</code> to the Loader (Loader auto-sizing is unreliable when the loaded root has no implicit size), sets <code>item.paramId</code> first (only if the widget has that property and the id is known), then walks <code>props</code> applying every key the item already declares, through <code>_coerce()</code> for the <code>"NaN"</code> sentinel. Range props (<code>WidgetCatalog.paramUnitProps(type)</code>: <code>min</code> / <code>max</code> where <code>rangeProps</code>, and editable props flagged <code>"paramUnit": true</code> such as <code>warnAbove</code>, <code>redlineStart</code>, <code>triggerAbove</code> / <code>triggerBelow</code>) are written in the PID's own unit and bound through <code>OBDParameterModel.toDisplay(paramId, v)</code>, so they follow the gauge unit settings (<code>gaugeTempUnit</code>, <code>gaugeSpeedUnit</code>, <code>sensorAltitudeUnit</code>); the editor canvas does the same and the properties panel shows and stores them converted.</li>
-          <li><code>Loader.Error</code> is logged with the source URL; it never throws into the page.</li>
-          <li><strong>Vehicle gate</strong>: <code>_unsupported</code> is true when the cell has a known <code>paramId</code>, <code>OBDParameterModel.vehicleKnown</code> and <code>!isSupported(paramId)</code>; the Loader is hidden and a placeholder (<code>dashUnsupported_&lt;index&gt;</code>) shows the title (or the <code>title</code> override) and "Not supported by this vehicle".</li>
+          <li>Turn on <strong>Service</strong> in Settings &gt; Device &gt; Developer and restart OCTAVE. The switch applies at the next start.</li>
+          <li>In a browser on the same device, open <code>http://127.0.0.1:9876/dashboards</code>.</li>
+          <li>From another device, OCTAVE must be started with <code>--service-bind</code> so it listens on the network. Open <code>http://&lt;the car's address&gt;:9876/dashboards</code> and pair the browser with the 6-digit code OCTAVE gives (<code>octave --pair-code</code> prints one).</li>
         </ol>
-        <p>The renderer also exposes <code>paramIds</code> (distinct <code>paramId</code>s in the spec), which <code>OBDMenu</code> registers as the <code>"dashboard"</code> polling demand.</p>
+        <p>What it does:</p>
+        <ul>
+          <li>Lists your dashboards, and edits, copies, downloads and deletes them.</li>
+          <li>Starts a new one from a template (one big dial with four readouts, four half-dials, a track layout and so on), filled in with readings your car has.</li>
+          <li>Imports a dashboard someone gave you, pasted as text or as a file, and tells you what did not come across, such as readings your car does not report.</li>
+          <li>In the editor: drag to move, drag a corner to resize, pick each widget's reading and options, choose a coarse, normal or fine grid, arrange the portrait layout, undo and redo.</li>
+          <li><strong>Show on the car</strong>: while this is ticked, the car's OBD page shows the dashboard as you change it, in place of its usual cards. It stops when you save or close the page, or a minute after the browser goes quiet.</li>
+        </ul>
         <p>
-          Cells without a <code>paramId</code> are still placed -- a <code>WarningLight</code> with an explicit <code>value</code>
-          can be decorative. The renderer is instantiated in two places: full-size in <code>OBDMenu</code> for the active
-          dashboard, and once per chooser card as a live miniature (same spec, scaled).
+          An imported dashboard is always saved as a new one under a new id. It never replaces one you have.
         </p>
 
-        <h2 id="widget-catalog">WidgetCatalog</h2>
-        <p>
-          The catalog's data lives in <span class="file-path">frontend/dashboards/widget-catalog.json</span>
-          (<code>{schema, widgets, colorSwatches}</code>), read by <code>DashboardManager</code> and served as
-          <code>dashboardManager.widgetCatalog</code>, so every frontend gets the same widget list, and published as
-          <span class="file-path">docs/api/widget-catalog.json</span>. <code>normalizeSpec</code> uses it to hold a known
-          widget's <code>editableProps</code> to their kind (a wrong type is dropped; numbers clamped to <code>min</code> /
-          <code>max</code>, ints rounded). <span class="file-path">frontend/dashboards/WidgetCatalog.qml</span> is a singleton
-          that adds each type's QML url (its <code>urls</code> map: <code>Qt.resolvedUrl("../gauges/X.qml")</code> or
-          <code>"widgets/X.qml"</code>) and offers the ordered <code>widgets</code> array (a type needs both an entry and a
-          url), <code>colorSwatches</code>, <code>metaFor(type)</code>, <code>urlFor(type)</code> and
-          <code>isKnownType(type)</code>. It is the single whitelist the renderer, the palette, the PID picker and the
-          properties panel all consult, so "what can render" and "what can be placed" cannot drift.
-        </p>
-        <p>Each entry declares, besides <code>type</code> / <code>url</code> / <code>displayName</code> / <code>glyph</code> / default span (for a 12 &times; 6 grid; the editor scales it) / <code>supportedKinds</code>:</p>
+        <!-- Settings -->
+        <h2 id="settings">Settings</h2>
         <table>
-          <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+          <thead><tr><th>Setting</th><th>Key</th><th>Default</th><th>What it does</th></tr></thead>
           <tbody>
-            <tr><td><code>category</code>, <code>description</code>, <code>demo</code></td><td>The widget gallery's tab (one of the top-level <code>categories</code>), its one-line description, and <code>{paramId, props}</code> its live miniature runs on (<code>{}</code> for self-binding widgets).</td></tr>
-            <tr><td><code>minSize</code>, <code>aspect</code></td><td>The smallest size (dp, <code>{w, h}</code>) the widget reads at, and its natural width / height. <code>dashboardManager.minSpan(type, ...)</code> turns <code>minSize</code> into the smallest span on a given grid and <code>sizeOptions(type, ...)</code> offers S / M / L spans (about 1/12, 1/6 and 1/3 of the grid, nearest the aspect, never below the minimum) for the editor's size presets.</td></tr>
-            <tr><td><code>labelProps</code></td><td><code>true</code> if the widget has <code>title</code> + <code>unit</code> string props that default to the PID metadata: the panel offers Title / Unit overrides.</td></tr>
-            <tr><td><code>rangeProps</code></td><td><code>true</code> if it has <code>min</code> + <code>max</code> real props: the panel offers Min / Max overrides and warns when min &ge; max.</td></tr>
-            <tr><td><code>colorProps</code></td><td>Props the single Color swatch row writes, all to the same value (e.g. <code>["fillColor", "needleColor"]</code>). Unset = the live theme color.</td></tr>
-            <tr><td><code>editableProps</code></td><td><code>{ key, label, kind, def[, min, max][, options] }</code>; <code>kind</code> is <code>bool</code> (Switch), <code>int</code> / <code>real</code> (number field clamped to <code>min</code>/<code>max</code>), <code>string</code> (text field) or <code>enum</code> (segmented buttons over <code>options</code>). <code>def</code> is the gauge's real default (<code>null</code> = NaN-when-unset threshold, shown empty with placeholder "off").</td></tr>
+            <tr><td>Display &gt; Layout &gt; Home Screen</td><td><code>homeScreen</code></td><td>empty</td><td>The hand-built Home screen to show (<code>cockpit</code>, <code>glass</code>, <code>trail</code>, <code>retro</code>, <code>rings</code>, <code>telemetry</code>, <code>classic</code>). Empty means a dashboard. Which dashboard is not a setting: it is kept in the dashboards folder, in a file named <code>.home</code>.</td></tr>
+            <tr><td>Display &gt; Units &gt; Temperature</td><td><code>gaugeTempUnit</code></td><td>&deg;C</td><td>Temperatures on every gauge in &deg;C or &deg;F.</td></tr>
+            <tr><td>Display &gt; Units &gt; Speed</td><td><code>gaugeSpeedUnit</code></td><td>mph</td><td>Speed in mph or km/h.</td></tr>
+            <tr><td>Display &gt; Units &gt; Altitude</td><td><code>sensorAltitudeUnit</code></td><td>m</td><td>Altitude in metres or feet.</td></tr>
           </tbody>
         </table>
-        <p>The catalog also carries <code>colorSwatches</code> (the eight colors after the panel's "T" (theme) swatch), <code>categories</code> (the gallery's tabs, in order) and <code>suggestions</code> (<code>byId</code> then <code>byKind</code>: the widget data-first add proposes for a parameter; <code>WidgetCatalog.suggestFor()</code>). Every <code>editableProps</code> entry has a <code>section</code> (<code>look</code> / <code>range</code> / <code>advanced</code>) that places it in the settings sheet, and the value gauges list the shared alert props (<code>warnAbove</code>, <code>warnBelow</code>, <code>critAbove</code>, <code>critBelow</code>, <code>alertFlash</code>) besides those in the table.</p>
+        <p>The complete list is the <a href="settings-reference.html">Settings Reference</a>.</p>
+
+        <!-- How it works -->
+        <h2 id="how-it-works">How It Works</h2>
+        <p>
+          From here on the page is for people who want to know what happens underneath, or who are changing the code.
+        </p>
+        <p>
+          The idea is that a dashboard is <strong>data, not code</strong>. A file names widgets from a fixed list and
+          gives them plain values. Nothing in it is run. That is what makes a dashboard safe to take from a stranger,
+          and what lets the app, the browser editor and any other frontend show the same file the same way.
+        </p>
         <table>
-          <thead><tr><th>type</th><th>Palette name / glyph</th><th>Default span</th><th>supportedKinds</th><th>label / range</th><th>colorProps</th><th>editableProps</th></tr></thead>
+          <thead><tr><th>Piece</th><th>Job</th></tr></thead>
           <tbody>
-            <tr><td><code>CircularGauge</code></td><td>Circular ◯</td><td>4 × 4</td><td><code>*</code></td><td>yes / yes</td><td>fillColor, needleColor</td><td>showNeedle, showTicks, showCenterReadout, redlineStart, decimals (0-4), majorTickCount (2-20), minorTicksPerMajor (0-10), startAngle, sweepAngle</td></tr>
-            <tr><td><code>ArcGauge</code></td><td>Arc ◠</td><td>6 × 3</td><td><code>*</code></td><td>yes / yes</td><td>fillColor, needleColor</td><td>showNeedle, showTicks, showReadout, redlineStart, decimals, majorTickCount, minorTicksPerMajor</td></tr>
-            <tr><td><code>BarGauge</code></td><td>Bar ▮</td><td>3 × 2</td><td>percentage, temperature, numeric, pressure, voltage</td><td>yes / yes</td><td>fillColor</td><td>orientation (enum horizontal/vertical), showLabel, showValue, decimals, maxThickness, the alerts</td></tr>
-            <tr><td><code>SegmentedGauge</code></td><td>Segmented ▮</td><td>6 × 2</td><td><code>*</code></td><td>yes / yes</td><td>fillColor</td><td>segmentCount (2–40), showLabel, showValue, decimals (0–4), the alerts</td></tr>
-            <tr><td><code>LinearGauge</code></td><td>Linear ↔</td><td>4 × 2</td><td>bidirectional</td><td>yes / yes</td><td>fillColor</td><td>showTicks, decimals, majorTickCount, minorTicksPerMajor</td></tr>
-            <tr><td><code>DigitalReadout</code></td><td>Digital 88</td><td>4 × 2</td><td><code>*</code></td><td>yes / no</td><td>valueColor</td><td>showTitle, showUnit, decimals, padDigits (0-8), valueScale ("Digit size", 0.5-12)</td></tr>
-            <tr><td><code>SparklineGauge</code></td><td>Sparkline ∿</td><td>6 × 2</td><td><code>*</code></td><td>yes / yes</td><td>lineColor</td><td>autoScale, fillBelow, showHeader, decimals, maxSamples (10-300), sampleIntervalMs (100-5000)</td></tr>
-            <tr><td><code>WarningLight</code></td><td>Warning ⚠</td><td>2 × 2</td><td><code>*</code></td><td>no / no</td><td>activeColor</td><td>label (string), triggerAbove, triggerBelow, pulse</td></tr>
-            <tr><td><code>GForceGauge</code></td><td>G-Force ◎</td><td>4 × 4</td><td>(none: self-binding)</td><td>no / no</td><td>dotColor</td><td>maxG (0.2-5), showTrail, showValue</td></tr>
-            <tr><td><code>CompassGauge</code></td><td>Compass N</td><td>4 × 4</td><td>(none)</td><td>no / no</td><td>northColor</td><td>showDegrees</td></tr>
-            <tr><td><code>NowPlayingWidget</code></td><td>Now Playing ♪</td><td>6 × 2</td><td>(none)</td><td>no / no</td><td>progressColor</td><td>showArt, showArtist, showProgress</td></tr>
-            <tr><td><code>MediaControlsWidget</code></td><td>Media Keys ▶</td><td>4 × 2</td><td>(none)</td><td>no / no</td><td>accentColor</td><td>(none)</td></tr>
-            <tr><td><code>ClockWidget</code></td><td>Clock 12</td><td>4 × 2</td><td>(none)</td><td>no / no</td><td>valueColor</td><td>showDate, showSeconds</td></tr>
+            <tr><td><code>DashboardManager</code></td><td>C++. Finds the dashboard files, checks and tidies each one, saves, deletes, copies, imports and exports, remembers which is Home, and watches the folder for changes. It is <code>dashboardManager</code> in QML and in the <a href="writing-a-frontend.html">service API</a>.</td></tr>
+            <tr id="widget-catalog"><td>The widget catalog</td><td>One JSON file listing every widget type: its name, its usual size, the options a dashboard may set on it and their limits. The manager serves it as <code>dashboardManager.widgetCatalog</code>, so every frontend sees the same list.</td></tr>
+            <tr id="renderer"><td><code>DashboardRenderer</code></td><td>QML. Takes one dashboard and draws it: works out each cell's rectangle and loads the widget into it.</td></tr>
+            <tr><td>The widgets</td><td>QML. Each draws one thing. A gauge is told only its <code>paramId</code>.</td></tr>
+            <tr><td><code>OBDParameterModel</code></td><td>QML. Where a widget asks for a reading's value, title, unit and range.</td></tr>
+          </tbody>
+        </table>
+        <pre class="diagram">
+  my-drive.json                      widget-catalog.json
+        |                                    |
+        v                                    v
+  +------------------+  the file, tidied  +-------------------+
+  | DashboardManager | -----------------&gt; | DashboardRenderer |  one rectangle per cell
+  +------------------+                    +---------+---------+
+                                                    |  loads, sets paramId and options
+                                                    v
+                                              +-----------+
+                                              |  widget   |
+                                              +-----+-----+
+                                                    |  liveValue("RPM")
+                                                    v
+                                          +-------------------+
+                                          | OBDParameterModel |
+                                          +---------+---------+
+                                                    |
+                                               paramStore  &lt;---  car (OBD) and motion sensor
+        </pre>
+        <p>What happens when Home appears:</p>
+        <ol class="steps">
+          <li>Home asks the manager which dashboard is Home (<code>homeDashboardId</code>) and loads it (<code>loadDashboard(id)</code>). The manager returns the file <a href="#validation">tidied</a>.</li>
+          <li>The renderer divides its area into the grid. A cell's rectangle follows from its column, row and spans, so a cell three rows tall is exactly three times the height of a one-row cell. On an upright screen it uses the portrait positions.</li>
+          <li>For each cell it looks the type up in the catalog and loads that widget. A type it does not know leaves the cell empty.</li>
+          <li>It sets the widget's <code>paramId</code>, then the options from <code>props</code>, each one only if the catalog lists it for that type. Limits and ranges are tied to the unit settings, so they follow a change of unit.</li>
+          <li>Home tells the OBD manager which readings the dashboard shows, so <a href="#vehicle-gate">only those are polled</a>.</li>
+          <li>When a dashboard file changes, the manager announces it and Home loads again. If the content is the same as before, the widgets are left alone.</li>
+        </ol>
+
+        <!-- Parameter model -->
+        <h2 id="parameter-model">Where a Gauge Gets Its Value</h2>
+        <p>
+          No widget talks to the OBD manager. The latest value of every reading sits in <code>paramStore</code>
+          (described on the <a href="obd-manager.html">OBD Manager</a> page), and
+          <span class="file-path">frontend/OBDParameterModel.qml</span> is the one place QML reads it from. The model
+          adds two things: what each reading is called and how it is measured, taken from the C++
+          <code>parameterCatalog</code>, and the driver's choice of units. A binding to one reading is re-evaluated
+          only when that reading changes.
+        </p>
+        <table>
+          <thead><tr><th>To do this</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td>Bind a number to a reading</td><td><code>OBDParameterModel.sample(id)</code>: the value in the driver's units, or <code>NaN</code> when there is none</td></tr>
+            <tr><td>Get the value as it is</td><td><code>liveValue(id)</code>: the same, but <code>undefined</code> when there is none</td></tr>
+            <tr><td>Get the value in the reading's own unit</td><td><code>rawValue(id)</code></td></tr>
+            <tr><td>Get title, unit, min, max, kind and decimals</td><td><code>displayInfo(id)</code> in the driver's units; <code>nativeInfo(id)</code> in the reading's own</td></tr>
+            <tr><td>Convert one value</td><td><code>toDisplay(id, v)</code>, <code>fromDisplay(id, v)</code>; <code>toDisplayDelta(id, d)</code> for a difference</td></tr>
+            <tr><td>Check that an id exists</td><td><code>hasParameter(id)</code></td></tr>
           </tbody>
         </table>
         <p>
-          The catalog is what the panel reads, so the gauge never has to be instantiated to build the inspector.
-          New widgets only need the catalog entry and URL mapping. A cell's <code>props</code> reach the widget through
-          <span class="file-path">frontend/dashboards/CellProps.js</span> (renderer and editor canvas alike), and only
-          the keys the catalog names for its type: <code>editableProps</code>, <code>colorProps</code>,
-          <code>specProps</code> (the other documented props, set in the JSON by hand: <code>trackColor</code>,
-          <code>labelColor</code>, <code>warnColor</code> ...), <code>title</code> / <code>unit</code> with
-          <code>labelProps</code> and <code>min</code> / <code>max</code> with <code>rangeProps</code>. Any other key is
-          ignored, so a dashboard file cannot set <code>visible</code>, <code>width</code> or <code>value</code> on a
-          widget; a value of the wrong type is logged and that option keeps its default.
+          Every reading has a <code>kind</code>: <code>percentage</code>, <code>temperature</code>,
+          <code>voltage</code>, <code>pressure</code>, <code>bidirectional</code> (goes both sides of zero) or
+          <code>numeric</code> (everything else). The catalog says which kinds each widget suits, and the browser
+          editor offers only readings that suit the widget. A file written by hand is not checked for this.
+        </p>
+        <p>
+          The seven value gauges (Circular, Arc, Bar, Segmented, Linear, Digital, Sparkline) share one base,
+          <span class="file-path">frontend/gauges/ValueGaugeBase.qml</span>. The base holds the binding, the defaults
+          taken from the reading and the alert rule; each gauge only draws.
         </p>
 
-        <h2 id="obdmenu">Where Dashboards Show</h2>
+        <!-- Vehicle gate -->
+        <h2 id="vehicle-gate">Readings the Car Does Not Have, and Polling</h2>
+        <p>
+          A dashboard may name any reading, so it can be written for another car or passed around. After connecting,
+          OCTAVE asks the car which readings it supports. From then on, a cell whose reading this car does not report
+          shows the reading's title and <strong>"Not supported by this vehicle"</strong>, not a gauge stuck at
+          nothing. The answer describes the car connected now: it is forgotten on disconnect, and until a car has
+          answered, every cell is drawn. Readings from the motion sensor are never held back this way.
+        </p>
+        <p>
+          In QML: <code>OBDParameterModel.vehicleKnown</code>, <code>isSupported(id)</code> and
+          <code>vehicleParameters</code> (the supported readings, which the OBD page's Live Data cards list).
+        </p>
+        <p>
+          <strong>Only what is on screen is polled.</strong> An adapter answers one question at a time, so OCTAVE
+          asks only for readings somebody shows. A dashboard needs no wiring for this: the renderer lists its
+          readings in <code>paramIds</code>, and the page that hosts it passes them to
+          <code>obdManager.setParameterDemand(consumer, ids)</code> while it is on screen and takes them back when it
+          leaves. How the lists are joined is on the OBD Manager page under
+          <a href="obd-manager.html#watcher-system">Which Readings Get Polled</a>.
+        </p>
+
+        <!-- Validation -->
+        <h2 id="validation">What OCTAVE Does to a File</h2>
+        <p>
+          A file written by hand will have mistakes, and it must never take the Home screen down in a moving car. So
+          one set of rules is applied every time a dashboard is loaded, saved or imported, and a bad part is dropped
+          or mended, never fatal:
+        </p>
         <ul>
-          <li><strong>Home</strong> (<span class="file-path">frontend/HomeDashboard.qml</span>) shows one dashboard, <code>dashboardManager.homeDashboardId</code>: the built-in <code>home</code> until another is picked in Settings &gt; Display &gt; Home Screen, a card for each choice with a picture of it (<code>homeScreenCards</code>, <code>homeCard_&lt;kind&gt;_&lt;id&gt;</code>; a dashboard with no picture shows where its widgets stand), <code>setHomeDashboard(id)</code>. See <a href="pages.html#mainmenu">Pages</a>.</li>
-          <li><strong>Making one</strong>: a dashboard is a JSON file (<a href="#schema">schema</a>) in <span class="file-path">&lt;config&gt;/dashboards/</span>, read as it changes (<a href="#validation">hot reload</a>). There is no editor in the app since 2026-11-24; the browser editor at <code>GET /dashboards</code> (<a href="#phase4">below</a>) writes the same files.</li>
-          <li><strong>The OBD page</strong> (<span class="file-path">frontend/OBDMenu.qml</span>) shows the <strong>Parameter Cards</strong> only: one card per <code>OBDParameterModel.vehicleParameters</code> entry, the connected vehicle's full supported-PID list from this session's scan. Square or circular per <code>obdCardStyleCircular</code>; 2 / 3 / 4 columns for up to 4 / 9 / 16 cards, 5 beyond that on wide screens. The grid sits in a vertical <code>Flickable</code> (<code>parameterCardsScroll</code>) and rows keep a 120 dp minimum height, so a long list scrolls instead of shrinking. Empty states (<code>parameterCardsEmpty</code>): "No vehicle connected" (with <code>obdConnectButton</code>, "Connect", which opens the <code>OBDAdapterSheet</code>), "Reading your vehicle's PIDs…", "No supported PIDs reported". While visible it registers every card's id as the <code>"cards"</code> polling demand. It has no chooser, swipe or page dots; a dashboard being edited in the browser editor previews there (<code>dashboardManager.preview</code>, <code>activeDashboardRenderer</code>).</li>
+          <li>A file that is not valid JSON, has no <code>id</code>, or uses an id already taken is left out of the list. The reason goes to the log.</li>
+          <li>Keys OCTAVE does not know are dropped. Options keep plain values only; text is cut at 200 characters.</li>
+          <li>A cell that hangs off the grid is moved back in. It shrinks only if it is wider than the grid.</li>
+          <li>Two cells never overlap. The one earlier in the file stays; the later one shrinks, and is dropped only if its corner is taken.</li>
+          <li>An option of the wrong sort (text where a number belongs) is dropped and the widget uses its default. A number outside the catalog's limits is brought inside them.</li>
+          <li>A widget type or a reading OCTAVE does not know is kept in the file, so a dashboard made with a newer OCTAVE survives being saved by an older one. The unknown widget's cell stays empty; a gauge with an unknown reading shows <code>--</code>.</li>
+          <li>A file whose <code>schema</code> is newer than this build reads shows one line, "This dashboard needs a newer version of OCTAVE", and nothing else.</li>
+          <li id="sharing">Import is stricter: it refuses text over 512 KB, more than 256 cells, a newer schema, or anything with no list of cells, and always gives the result a new id.</li>
         </ul>
+        <p>
+          The folder is watched. A file added, changed or removed, by hand or by a sync client, is picked up within a
+          second.
+        </p>
+        <p id="presets">
+          The dashboard that ships, <code>home</code>, lives with the app
+          (<span class="file-path">frontend/dashboards/presets/home.json</span>) and cannot be changed or deleted.
+          To change it, copy it into your folder under another <code>id</code> and edit the copy.
+        </p>
 
-
-        <h2 id="validation">Validation and Hot Reload</h2>
+        <!-- Hand-built Home screens -->
+        <h2 id="home-screens">Hand-Built Home Screens</h2>
+        <p>
+          Home does not have to be a grid. The six screens in <span class="file-path">frontend/home/</span> are
+          drawn freely in QML, each for one idea:
+        </p>
         <table>
-          <thead><tr><th>Where</th><th>Check</th><th>Outcome</th></tr></thead>
+          <thead><tr><th>Screen</th><th>The idea</th></tr></thead>
           <tbody>
-            <tr><td>DashboardManager</td><td>JSON parses to an object; <code>id</code> present; unique vs presets</td><td>File skipped with a warning; the rest of the list still loads.</td></tr>
-            <tr><td>DashboardRenderer</td><td><code>WidgetCatalog.isKnownType(type)</code>; <code>OBDParameterModel.hasParameter(paramId)</code></td><td>Unknown type: cell skipped, <code>console.warn</code> with dashboard id. Unknown PID: widget rendered unbound (shows 0 / placeholder), warned.</td></tr>
-            <tr><td>DashboardManager save / load / import (<code>normalizeSpec</code>)</td><td>Schema version, allowed keys, scalar props, number types, geometry, overlaps, size caps, file-safe id on save</td><td>Reduced to the known keys, moved into the grid, overlaps shrunk or dropped (see the <a href="#schema">field table</a>); a save that fails returns <code>""</code>; an import is refused with a <code>lastShareError</code> reason (see <a href="#sharing">Sharing</a>). A newer-schema file loads untouched for the renderer's placeholder.</td></tr>
-            <tr><td>OBDMenu</td><td>Active id still exists after <code>dashboardsChanged</code></td><td>Falls back to Parameter Cards.</td></tr>
-            <tr><td>Hot reload</td><td>Watcher + 300 ms debounce + signature</td><td>A spec dropped into or removed from the user dir from a terminal or sync client shows up in the chooser within about a second, no restart.</td></tr>
+            <tr><td>Cockpit</td><td>An instrument cluster: the tachometer in the middle with the speed inside it, a shift strip across the top.</td></tr>
+            <tr><td>Glass</td><td>Built around the music: blurred album art fills the screen, with the drive in panes of glass.</td></tr>
+            <tr><td>Trail</td><td>For off-road: a heading tape, an artificial horizon that tilts with pitch and roll, the G-force bubble.</td></tr>
+            <tr><td>Retro</td><td>A 1980s digital dash: seven-segment speed, a bar-graph tachometer, one colour on black.</td></tr>
+            <tr><td>Rings</td><td>Four readings as concentric rings that fill with their level.</td></tr>
+            <tr><td>Telemetry</td><td>A data logger: the last half minute of four readings as live traces, and the black box's state.</td></tr>
           </tbody>
         </table>
-        <p>Not validated: a <code>props</code> value's type against the widget (a scalar of the wrong type is assigned as-is and the QML property coerces or ignores it). Unknown types and PIDs are only checked in QML, since the widget catalog is QML.</p>
-
-        <h2 id="testing">Testing</h2>
-        <p><strong>Headless (QtTest under <span class="file-path">tests/cpp/</span>, run by <code>ctest</code> in CI):</strong></p>
-        <ul>
-          <li><span class="file-path">tests/cpp/tst_dashboardmanager.cpp</span> -- the import sanitizer keeps only known keys and clamps geometry, rejects newer/bad schema, missing cells, too many cells and non-object JSON (a data-driven test); export writes <code>OCTAVE-dashboards/&lt;id&gt;.json</code> (<code>HOME</code> and <code>XDG_DOWNLOAD_DIR</code> pointed at a temp dir), importing it twice gives two new ids, and failures set <code>lastShareError</code>.</li>
-          <li><span class="file-path">tests/cpp/tst_vehiclegate.cpp</span> -- loads the real <code>OBDParameterModel</code> and <code>DashboardRenderer</code> against a fake <code>obdManager</code> and checks the gate before a scan, after a scan (only the unreported PID shows the placeholder; sensor ids exempt; <code>vehicleParameters</code> order) and after disconnect.</li>
-          <li><span class="file-path">tests/cpp/tst_obdmanager.cpp</span> -- the backend side of demand-driven polling (see <a href="obd-manager.html">OBD Manager</a>).</li>
-        </ul>
-        <p>The gitignored <span class="file-path">dev/tests/drive_dashboard_editor.py</span> and <span class="file-path">drive_dashboard_features.py</span> drove the in-app editor and the OBD page's chooser, both removed on 2026-11-24; they no longer apply.</p>
-
-        <h2 id="authoring">Authoring New Gauges and Dashboards</h2>
         <p>
-          <span class="file-path">docs/GAUGE_AUTHORING.md</span> is the source of truth for the API and carries the
-          step-by-step recipes; update it in the same commit as any gauge or schema change. In short:
+          Each is built on <span class="file-path">frontend/home/HomeScreen.qml</span>, which gives a screen what it
+          needs so that it only has to draw: <code>text(id)</code> (the reading as text, <code>--</code> for none),
+          <code>value(id)</code>, <code>norm(id)</code> (where the reading stands in its range, 0 to 1),
+          <code>unitOf(id)</code>, what is playing, <code>portrait</code>, and <code>u</code>, which is 1 % of the
+          screen's short side. Sizing everything from <code>u</code> is what makes a screen work at any size and
+          either way up. A screen lists the readings it shows in <code>paramIds</code>, and they are polled while it
+          is on screen.
         </p>
+        <p>
+          To add one: write the file in <span class="file-path">frontend/home/</span>, add a row to
+          <span class="file-path">frontend/home/HomeScreens.js</span> with a preview picture (a 640 by 310 JPEG in
+          <span class="file-path">frontend/assets/home/</span>), and add it to the <code>homeScreens</code> test in
+          <code>tst_dashboardwidgets</code>. It then has a card in Settings. The recipe is in
+          <span class="file-path">docs/GAUGE_AUTHORING.md</span> &sect;5.5b.
+        </p>
+
+        <!-- Troubleshooting -->
+        <h2 id="troubleshooting">When Something Goes Wrong</h2>
+        <ol class="steps">
+          <li><strong>The dashboard has no card in Settings.</strong> The file was left out. Check that it is valid JSON, has an <code>id</code> of its own, ends in <code>.json</code> and is in the right folder. The log says why a file was skipped (<code>octave-cpp.log</code>, category <code>octave.dashboards</code>; see <a href="architecture.html#logging">Architecture</a> for where the logs are).</li>
+          <li><strong>A cell is empty.</strong> The <code>type</code> is misspelt. Types are case-sensitive.</li>
+          <li><strong>A gauge shows <code>--</code>.</strong> No value has arrived: no car is connected, or the <code>paramId</code> is misspelt.</li>
+          <li><strong>A cell says "Not supported by this vehicle".</strong> The car does not report that reading. Pick another.</li>
+          <li><strong>A widget is smaller than you wrote, or missing.</strong> It overlapped one earlier in the file.</li>
+          <li><strong>An option does nothing.</strong> It is not one of that widget's options, or its value is of the wrong sort. Check the widget in <span class="file-path">docs/GAUGE_AUTHORING.md</span> &sect;3.</li>
+        </ol>
+
+        <!-- Files -->
+        <h2 id="files">Files, API and Tests</h2>
+        <table>
+          <thead><tr><th>File</th><th>What is in it</th></tr></thead>
+          <tbody>
+            <tr id="dashboard-manager"><td><span class="file-path">src/managers/dashboardmanager.{h,cpp}</span></td><td><code>DashboardManager</code>.</td></tr>
+            <tr><td><span class="file-path">src/util/dashboardgrid.{h,cpp}</span></td><td>The grid rules: where a cell fits, moving cells aside, changing the grid's density, working out a portrait layout.</td></tr>
+            <tr><td><span class="file-path">frontend/dashboards/widget-catalog.json</span></td><td>The widget catalog. Published as <span class="file-path">docs/api/widget-catalog.json</span>.</td></tr>
+            <tr><td><span class="file-path">frontend/dashboards/WidgetCatalog.qml</span></td><td>Adds each type's QML file to the catalog. A widget needs both an entry and a file here.</td></tr>
+            <tr><td><span class="file-path">frontend/dashboards/DashboardRenderer.qml</span>, <span class="file-path">CellProps.js</span>, <span class="file-path">CellFrame.qml</span></td><td>The renderer, how options reach a widget, the card behind a framed widget.</td></tr>
+            <tr><td><span class="file-path">frontend/dashboards/presets/home.json</span></td><td>The dashboard that ships.</td></tr>
+            <tr><td><span class="file-path">frontend/dashboards/templates/</span></td><td>The starting points the browser editor offers.</td></tr>
+            <tr><td><span class="file-path">frontend/gauges/</span></td><td>The gauges, their shared base (<code>ValueGaugeBase.qml</code>) and the alert rule (<code>AlertLevel.js</code>).</td></tr>
+            <tr><td><span class="file-path">frontend/dashboards/widgets/</span></td><td>The music, phone, vehicle, shift-light and clock widgets.</td></tr>
+            <tr><td><span class="file-path">frontend/HomeDashboard.qml</span></td><td>Home as a dashboard: the prompts, the taps.</td></tr>
+            <tr><td><span class="file-path">frontend/home/</span></td><td>The hand-built Home screens.</td></tr>
+            <tr><td><span class="file-path">frontend/OBDParameterModel.qml</span></td><td>Values and metadata for QML.</td></tr>
+            <tr><td><span class="file-path">sdk/web/dashboards.html</span></td><td>The browser editor, compiled into the app.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          <strong>API.</strong> Every property, method and signal of <code>dashboardManager</code> is in the
+          <a href="api-reference.html#dashboardManager">API reference</a>, which is generated from the code. The ones
+          most code needs:
+        </p>
+        <table>
+          <thead><tr><th>To do this</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td>List the dashboards</td><td><code>dashboards</code>: <code>{id, label, builtIn, path}</code> for each; <code>dashboardsChanged</code> when the list or a file changes</td></tr>
+            <tr><td>Read one</td><td><code>loadDashboard(id)</code></td></tr>
+            <tr><td>Save one</td><td><code>saveDashboard(spec)</code>. With no <code>id</code> it makes one from the label. Returns the id, or <code>""</code> with the reason in <code>lastError</code></td></tr>
+            <tr><td>Copy or delete one</td><td><code>duplicateDashboard(id, newLabel)</code>, <code>deleteDashboard(id)</code></td></tr>
+            <tr><td>Know or set Home's dashboard</td><td><code>homeDashboardId</code>, <code>setHomeDashboard(id)</code></td></tr>
+            <tr><td>Share one</td><td><code>exportDashboard(id)</code> writes it to <code>Downloads/OCTAVE-dashboards/</code>; <code>importDashboardFromText(json)</code> and <code>importDashboard(file)</code> bring one in, with the reason for a refusal in <code>lastShareError</code> and what was left out in <code>lastImportReport</code></td></tr>
+            <tr><td>Show one on the car while editing</td><td><code>previewDashboard(spec)</code>, <code>endPreview()</code></td></tr>
+            <tr><td>Know which widgets exist</td><td><code>widgetCatalog</code></td></tr>
+            <tr><td>Start from a template</td><td><code>templates</code>, <code>fromTemplate(id, supportedIds)</code></td></tr>
+          </tbody>
+        </table>
+        <p id="testing">
+          <strong>Tests</strong> (<span class="file-path">tests/cpp/</span>, run with <code>ctest</code>):
+          <code>tst_dashboardmanager</code> (the file rules, import and export, the grid rules, the templates),
+          <code>tst_dashboardwidgets</code> (every widget: no reading is not zero, alert levels, text staying inside
+          a small cell, the portrait layout, taps, the red banner, the Home screens) and <code>tst_vehiclegate</code>
+          (unsupported readings, before and after the car answers). None needs a car.
+        </p>
+
+        <!-- Authoring -->
+        <h2 id="authoring">Adding a Widget</h2>
+        <p>
+          <span class="file-path">docs/GAUGE_AUTHORING.md</span> is the complete guide for anyone adding a gauge:
+          every widget's options with their defaults, the theme colours to use, the angle arithmetic for needles, and
+          the recipe step by step (&sect;7). Keep it up to date in the same change. In short, a new widget needs:
+        </p>
+        <ol class="steps">
+          <li>A QML file in <span class="file-path">frontend/gauges/</span>, built on <code>ValueGaugeBase</code> if it shows one reading.</li>
+          <li>An entry in <span class="file-path">widget-catalog.json</span>: its name, usual size, the kinds of reading it suits, and each option a dashboard may set with its real default.</li>
+          <li>Its file in the <code>urls</code> list of <span class="file-path">WidgetCatalog.qml</span>. Without both the entry and the file it cannot be drawn.</li>
+          <li>A row in the table on this page and a section in the guide.</li>
+        </ol>
+        <p>
+          A new reading from the car is added on the OBD side; see <a href="obd-manager.html">OBD Manager</a>. Gauges
+          can show it with no further work.
+        </p>
+
+        <!-- Design decisions -->
+        <h2 id="design-decisions">Why It Is Built This Way</h2>
         <ul>
-          <li><strong>New dashboard</strong>: write a schema-1 JSON by hand and drop it into <span class="file-path">frontend/dashboards/presets/</span> (ships as a read-only built-in, picked up at the next start) or the user dashboards directory (picked up live).</li>
-          <li><strong>New primitive</strong>: create <span class="file-path">frontend/gauges/MyGauge.qml</span>, paste the shared binding preamble verbatim, animate <code>_animNorm</code> (not <code>value</code>), use <code>Shape</code>/<code>PathAngleArc</code> for curves and rotated <code>Rectangle</code>s for marks, declare <code>octaveSupportedKinds</code>, scale typography with the cell, and register it in <code>WidgetCatalog</code> with a url, display name, glyph, default span, matching <code>supportedKinds</code> and curated <code>editableProps</code> with honest defaults. Without the catalog entry it will neither render nor be placeable. Then document it in §3 of the authoring guide and on this page.</li>
-          <li><strong>New backend parameter</strong>: add the decoder to <span class="file-path">elm327protocol.cpp</span> (and the signal to <code>OBDManager</code>), and the row with a <code>kind</code> to <span class="file-path">parametercatalog.cpp</span> (<code>tst_parametercatalog</code> fails without it); its values reach <code>paramStore</code> through <code>parameterSampled</code>, so gauges pick it up with no further work.</li>
+          <li><strong>A dashboard is data.</strong> A file can only name widgets from the catalog and set options the catalog lists. That makes sharing safe, and gives the app, the browser editor and other frontends one format to agree on.</li>
+          <li><strong>No editor on the car's screen.</strong> Designing a dashboard on a touchscreen in a car took more interface than the result was worth. A dashboard is written at a desk or in a browser, and the app only shows it.</li>
+          <li><strong>A grid, not free placement.</strong> Dashboards people write are grid-shaped, a grid can be turned for an upright screen by rule, and overlaps can be mended by rule.</li>
+          <li><strong>The renderer places cells itself.</strong> Qt's own grid layout does not give a cell that spans three rows three times the height of one that spans one. Working each rectangle out from the grid does.</li>
+          <li><strong>One catalog for everyone.</strong> What can be drawn and what can be set are the same list in every frontend, because all of them read the same file.</li>
+          <li><strong>Gauges never touch the OBD manager.</strong> They read a value by id from one place. The same gauge then works with a real car, the simulated car, the motion sensor or a test.</li>
+          <li><strong>Mend and carry on.</strong> A mistake in one cell costs that cell. It is logged, and the rest of the screen is drawn.</li>
+          <li><strong>Limits in the reading's own unit.</strong> A dashboard written by someone who drives in &deg;C warns at the same temperature for someone who reads &deg;F.</li>
+          <li><strong>Home can also be drawn by hand.</strong> A grid of widgets cannot express every idea for a Home screen, so a screen may be written freely in QML and chosen from the same list.</li>
         </ul>
 
-        <h2 id="design-decisions">Design Decisions</h2>
-        <ul>
-          <li><strong>A singleton aggregator between the backend and the gauges.</strong> <code>OBDParameterModel</code> was introduced (<code>42bbf5f</code>, "centralized OBD parameter definitions into a singleton") so that parameter metadata lives in one QML table and gauges bind by string id. That is what lets the same gauge run against the live manager, the dev-mode simulated car, a test fake or pure-QML demo data, and what let the IMU parameters join later with zero gauge changes.</li>
-          <li><strong>Coalesced model writes, then a per-key store.</strong> Replacing a whole <code>paramValues</code> map per signal was correct but cost a full core on the Pi with nothing connected (<code>486a809</code>); a 33 ms flush kept bindings reactive without allocating per write. Open-backend #8 moved the values into the C++ <code>paramStore</code> (same 33 ms fold, one notifying key per id), so a value now re-evaluates only its own readers. The sparkline samples on its own timer, so the change did not alter any time axis.</li>
-          <li><strong>Grid over free placement.</strong> Every dashboard anyone had written was grid-shaped, grids are far easier to edit on a touchscreen, and a 12-column grid maps cleanly onto the spans people actually want (<span class="file-path">TODO/dashboards-roadmap.md</span>, "Key design decisions already made").</li>
-          <li><strong>JSON before editor.</strong> Phase 2 (data-driven dashboards) was declared the hinge: an editor that emitted QML source would have been a mess, while an editor that emits a JSON object is a GUI over a data format. Hand-written dashboard QML files were retired once all built-ins were JSON.</li>
-          <li><strong>Absolute positioning in the renderer.</strong> <code>GridLayout</code> could not give proportional row spans; explicit cell math also gives the editor a deterministic snap grid and makes the miniature previews pixel-consistent with the full view.</li>
-          <li><strong>Built-ins read-only, "Copy" to derive.</strong> Presets are authoritative and their ids are reserved (even while hidden by Delete); a user file that reuses one is rejected at load rather than shadowing it, so an update to a preset can never be masked by a stale copy.</li>
-          <li><strong>One catalog for every consumer.</strong> The type -&gt; url map used to live inline in the renderer; with the data in <span class="file-path">widget-catalog.json</span> and the map in <code>WidgetCatalog</code>, the app, the browser editor and any other frontend agree on which widgets exist and which props a spec may set.</li>
-          <li><strong>No editor in the app (2026-11-24).</strong> A touch editor was built twice (a toolbar-and-sheet one, then a tiled one in the manner of a tiling window manager) and both were taken out: designing a dashboard at the head unit took more interface than the result was worth. A dashboard is a JSON file, written at a desk or in the browser editor, and the app only shows it. The editor's last form is in the history before that date.</li>
-          <li><strong>Validation logs and degrades, never throws.</strong> A typo in one cell of a hand-written spec must not take down the OBD page in a moving vehicle.</li>
-          <li><strong>Hot reload with a signature, not just an event.</strong> Directory events fire for the manager's own atomic saves; comparing a name/mtime/size signature makes the external-edit path and the in-app path share one rescan without double work.</li>
-        </ul>
-
+        <!-- Related Pages -->
         <div class="related-pages" id="related">
           <h3>Related Pages</h3>
           <a href="obd-manager.html" class="related-link">OBD Manager</a>
+          <a href="pages.html" class="related-link">Pages &amp; Views</a>
           <a href="hardware-managers.html" class="related-link">Hardware Managers (BerryIMU)</a>
-          <a href="components.html" class="related-link">Components</a>
-          <a href="signals-slots-reference.html" class="related-link">Signals &amp; Slots API</a>
+          <a href="phone-mirror-android-auto.html" class="related-link">Phone Mirror</a>
+          <a href="writing-a-frontend.html" class="related-link">Writing a Frontend</a>
           <a href="settings-reference.html" class="related-link">Settings Reference</a>
+          <a href="api-reference.html" class="related-link">Service API Reference</a>
           <a href="theme-system.html" class="related-link">Theme System</a>
-          <a href="development.html" class="related-link">Development Guide</a>
         </div>
 
       </div>

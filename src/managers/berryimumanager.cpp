@@ -795,6 +795,8 @@ BerryIMUManager::BerryIMUManager(QObject *parent)
     , m_maxRetries(5)
     , m_retryDelayMs(5000)
 {
+    // First connection, so the status is stored before anything bound to it reads it
+    connect(this, &BerryIMUManager::connectionStatusChanged, this, [this](const QString &status) { m_status = status; });
     // Start connection attempt after a short delay
     QTimer::singleShot(1000, this, &BerryIMUManager::startSensor);
 }
@@ -928,9 +930,12 @@ void BerryIMUManager::startSensor()
 
 // ==================== Public Slots ====================
 
+// The last status announced: "Connected", "Disconnected", "Error" or
+// "Disabled". It used to be worked out from m_running alone, so a reader of
+// the property saw "Disconnected" for a sensor that had failed or was off.
 QString BerryIMUManager::getConnectionStatus()
 {
-    return m_running ? QStringLiteral("Connected") : QStringLiteral("Disconnected");
+    return m_status;
 }
 
 void BerryIMUManager::setEnabled(bool enabled)

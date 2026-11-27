@@ -557,6 +557,8 @@ GestureManager::GestureManager(QObject *parent)
     , m_cooldown(GESTURE_COOLDOWN)
     , m_gestureMapping(defaultGestureMapping())
 {
+    // First connection, so the status is stored before anything bound to it reads it
+    connect(this, &GestureManager::connectionStatusChanged, this, [this](const QString &status) { m_status = status; });
     QTimer::singleShot(1000, this, &GestureManager::startSensor);
 }
 
@@ -692,9 +694,12 @@ void GestureManager::startSensor()
 
 // ==================== Public Slots ====================
 
+// The last status announced: "Connected", "Disconnected", "Error" or
+// "Disabled". It used to be worked out from m_running alone, so a reader of
+// the property saw "Disconnected" for a sensor that had failed or was off.
 QString GestureManager::getConnectionStatus()
 {
-    return m_running ? QStringLiteral("Connected") : QStringLiteral("Disconnected");
+    return m_status;
 }
 
 void GestureManager::setGestureAction(const QString &gesture, const QString &action)

@@ -8,7 +8,7 @@ The smallest OCTAVE frontend that does something: two live readings, the track w
 octave --headless --sim --web-root templates/hello-car-js     # the release download (or ./build/octave): a simulated car, no window; or --service --web-root with the UI
 ```
 
-Open <http://127.0.0.1:9876/>. On the head unit itself nothing else is needed. From a phone or another machine, start OCTAVE with `--service-bind 0.0.0.0`, open `http://<the head unit's address>:9876/` (by address, not by name: the browser rule in `docs/api/README.md`), and the page asks for the 6-digit code from Settings > Service > Pair a device. It asks only for the **media** permission (play / pause); readings are always allowed. The token stays in the browser.
+Open <http://127.0.0.1:9876/>. On the head unit itself nothing else is needed. From a phone or another machine, start OCTAVE with `--service-bind 0.0.0.0`, open `http://<the head unit's address>:9876/` (by address, not by name: the browser rule in `docs/api/README.md`), and the page asks for the 6-digit code from Settings > Device > Developer > Service > Pair a device. It asks only for the **media** permission (play / pause); readings are always allowed. The token stays in the browser.
 
 A release build has the simulated car too: `octave --headless --sim` works everywhere, and `sim.setThrottle(40)` or `sim.scenario("highway")` over the service makes the numbers move (`docs/api/README.md`, "Simulator").
 

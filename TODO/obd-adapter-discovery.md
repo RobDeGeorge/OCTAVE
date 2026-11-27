@@ -58,6 +58,6 @@ Done in code: `src/platform/wasm/webbluetooth.{h,cpp}` + `obdadapterfinder_wasm.
 
 ## Order
 
-1 → 2 (Android Classic is the biggest gap for real users) → 3 → 4; 5 whenever a BLE dongle is at hand. Update `wiki/obd-manager.html#adapter-finder` and `wiki/signals-slots-reference.html` with each phase.
+1 → 2 (Android Classic is the biggest gap for real users) → 3 → 4; 5 whenever a BLE dongle is at hand. Update `wiki/obd-manager.html#adapter-finder` with each phase.
 
 Delete this file when all five sections are done.

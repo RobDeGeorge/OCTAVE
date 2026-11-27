@@ -87,6 +87,6 @@ Both should feed the same QML view and decode path. Build whichever ships first 
 5. **Windows/macOS.** **Effort:** S–M. **Device:** Windows and macOS machines + phone. OpenSSL in the release builds (vcpkg / Homebrew `openssl@3`, CMake `OPENSSL_ROOT_DIR`), then a smoke run; the adb transport needs no USB setup.
 6. **AOA transport.** **Effort:** L. **Device:** desktop Linux + phone, then the Android tablet. `aoatransport` (libusb, udev rule, WinUSB docs) feeding the same `AapSession`, then `UsbManager` on the Android build (`TODO/android-cpp-port.md`). This is what makes it work for users without developer mode. Wireless AA only if it's still feasible by then.
 
-Update `wiki/phone-mirror-android-auto.html`, `wiki/signals-slots-reference.html`, `wiki/hardware-setup.html` and `README.md` as each phase lands.
+Update `wiki/phone-mirror-android-auto.html`, `wiki/hardware-setup.html` and `README.md` as each phase lands.
 
 **Delete this file when** the native receiver is the default on desktop and the Orange Pi, DHU is either removed or explicitly kept as a documented fallback, and any leftover work (AOA transport, wireless, Android build) has its own smaller TODO.

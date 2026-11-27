@@ -27,7 +27,7 @@
         </nav>
 
         <h2 id="overview">Overview</h2>
-        <p>This page is generated from <span class="file-path">docs/api/</span> (<code>./build/octave --dump-api docs/api</code>, then <code>python wiki/build_api_reference.py</code>); <code>tst_apidocs</code> fails when that copy is out of date. The protocol itself (<code>hello</code>, <code>describe</code>, <code>get</code>, <code>set</code>, <code>call</code>, <code>subscribe</code>, <code>rows</code>, <code>stream</code>, <code>pair</code>) is specified in <span class="file-path">docs/api/protocol.json</span> (JSON Schema, checked against the server) and described in <a href="utilities.html#service-protocol">Utilities: Service protocol</a>; versioning and the dashboard file schema in <span class="file-path">docs/api/README.md</span> and <span class="file-path">docs/api/dashboard-spec.schema.json</span>. What each member means is in the hand-written <a href="signals-slots-reference.html">Signals &amp; Slots API</a>.</p>
+        <p>This page is generated from <span class="file-path">docs/api/</span> (<code>./build/octave --dump-api docs/api</code>, then <code>python wiki/build_api_reference.py</code>); <code>tst_apidocs</code> fails when that copy is out of date. The protocol itself (<code>hello</code>, <code>describe</code>, <code>get</code>, <code>set</code>, <code>call</code>, <code>subscribe</code>, <code>rows</code>, <code>stream</code>, <code>pair</code>) is specified in <span class="file-path">docs/api/protocol.json</span> (JSON Schema, checked against the server) and described in <a href="utilities.html#service-protocol">Utilities: Service protocol</a>; versioning and the dashboard file schema in <span class="file-path">docs/api/README.md</span> and <span class="file-path">docs/api/dashboard-spec.schema.json</span>. This page lists members and their types. What an object is for, and the calls most code needs, are on the page each section links to.</p>
         <p>The same objects are QML context properties under the same names. Types are Qt's names (<code>QString</code>, <code>QVariantMap</code>, ...); on the wire they are JSON. 30 objects:</p>
         <ul>
             <li><a href="#airPlayManager">airPlayManager</a></li>
@@ -64,7 +64,7 @@
 
         <h2 id="objects">Objects</h2>
         <h3 id="airPlayManager"><code>airPlayManager</code> <span class="cmt">&mdash; AirPlayManager</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#airPlayManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/airPlayManager.json</span>.</p>
+        <p>Explained in: <a href="phone-mirror-android-auto.html#airplay">Phone Mirror &amp; Android Auto: AirPlay</a>. Raw: <span class="file-path">docs/api/airPlayManager.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -111,7 +111,7 @@
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>enabledChanged()</code> <span class="cmt">(experimental)</span>, <code>stateChanged()</code> <span class="cmt">(experimental)</span>, <code>mediaChanged()</code> <span class="cmt">(experimental)</span>, <code>frameSizeChanged()</code> <span class="cmt">(experimental)</span>, <code>videoSinkChanged()</code> <span class="cmt">(experimental)</span>, <code>touchChanged()</code> <span class="cmt">(experimental)</span>, <code>mirroringStarted()</code>, <code>audioStreamingChanged(bool streaming)</code>.</p>
 
         <h3 id="androidAutoManager"><code>androidAutoManager</code> <span class="cmt">&mdash; AndroidAutoManager</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#androidAutoManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/androidAutoManager.json</span>.</p>
+        <p>Explained in: <a href="phone-mirror-android-auto.html#android-auto">Phone Mirror &amp; Android Auto: Android Auto</a>. Raw: <span class="file-path">docs/api/androidAutoManager.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -147,7 +147,7 @@
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>connectionProgress(QString message)</code>, <code>error(QString message)</code>, <code>dhuWindowReady(int windowHandle)</code>, <code>dhuEmbeddedChanged(bool embedded)</code>, <code>backendChanged()</code> <span class="cmt">(experimental)</span>, <code>nativeStateChanged()</code> <span class="cmt">(experimental)</span>, <code>videoStreamingChanged()</code> <span class="cmt">(experimental)</span>, <code>videoSinkChanged()</code> <span class="cmt">(experimental)</span>.</p>
 
         <h3 id="audioAnalyzer"><code>audioAnalyzer</code> <span class="cmt">&mdash; AudioAnalyzer</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#audioAnalyzer">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/audioAnalyzer.json</span>.</p>
+        <p>Explained in: <a href="audio-analyzer.html">Audio Analyzer</a>. Raw: <span class="file-path">docs/api/audioAnalyzer.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -187,7 +187,7 @@
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>fftDataChanged(QVariantList levels)</code>, <code>analysisComplete()</code>, <code>analysisStarted()</code>.</p>
 
         <h3 id="berryIMU"><code>berryIMU</code> <span class="cmt">&mdash; BerryIMUManager</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#berryIMU">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/berryIMU.json</span>.</p>
+        <p>Explained in: <a href="hardware-managers.html#imu-overview">Hardware Managers: the motion sensor</a>. Raw: <span class="file-path">docs/api/berryIMU.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -214,7 +214,7 @@
 
         <h3 id="busMonitor"><code>busMonitor</code> <span class="cmt">&mdash; BusMonitor</span></h3>
         <p><strong>Experimental:</strong> this object may change or go in any release.</p>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#busMonitor">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/busMonitor.json</span>.</p>
+        <p>Explained in: <a href="obd-manager.html#bus-monitor">OBD Manager: Bus Monitor</a>. Raw: <span class="file-path">docs/api/busMonitor.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -245,7 +245,7 @@
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>availableChanged()</code>, <code>activeChanged()</code>, <code>noteChanged()</code>, <code>idsChanged()</code>, <code>recordingChanged()</code>.</p>
 
         <h3 id="clock"><code>clock</code> <span class="cmt">&mdash; Clock</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#clock">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/clock.json</span>.</p>
+        <p>Explained in: <a href="utilities.html#clock">Utilities: Clock</a>. Raw: <span class="file-path">docs/api/clock.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -263,7 +263,7 @@
 
         <h3 id="customPids"><code>customPids</code> <span class="cmt">&mdash; CustomPids</span></h3>
         <p><strong>Experimental:</strong> this object may change or go in any release.</p>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#customPids">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/customPids.json</span>.</p>
+        <p>Explained in: <a href="obd-manager.html#custom-pids">OBD Manager: Custom PIDs</a>. Raw: <span class="file-path">docs/api/customPids.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -282,7 +282,7 @@
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>fileExistsChanged()</code>.</p>
 
         <h3 id="dashboardManager"><code>dashboardManager</code> <span class="cmt">&mdash; DashboardManager</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#dashboardManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/dashboardManager.json</span>.</p>
+        <p>Explained in: <a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>. Raw: <span class="file-path">docs/api/dashboardManager.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -342,7 +342,7 @@
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>dashboardsChanged()</code>, <code>lastShareErrorChanged()</code>, <code>lastErrorChanged()</code>, <code>lastExportPathChanged()</code>, <code>lastImportReportChanged()</code>, <code>previewChanged()</code>, <code>widgetPresetsChanged()</code>, <code>homeDashboardChanged()</code>.</p>
 
         <h3 id="diagnosticsManager"><code>diagnosticsManager</code> <span class="cmt">&mdash; DiagnosticsManager</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#diagnosticsManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/diagnosticsManager.json</span>.</p>
+        <p>Explained in: <a href="utilities.html#diagnostics-manager">Utilities: Diagnostics</a>. Raw: <span class="file-path">docs/api/diagnosticsManager.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -369,7 +369,7 @@
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>lastExportPathChanged()</code>.</p>
 
         <h3 id="esp32VolumeManager"><code>esp32VolumeManager</code> <span class="cmt">&mdash; ESP32VolumeManager</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#esp32VolumeManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/esp32VolumeManager.json</span>.</p>
+        <p>Explained in: <a href="hardware-managers.html#esp32-overview">Hardware Managers: the volume knob</a>. Raw: <span class="file-path">docs/api/esp32VolumeManager.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -404,7 +404,7 @@
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>connectionStatusChanged(QString status)</code>, <code>connectionDetailChanged(QString detail)</code>, <code>availablePortsChanged(QVariantList ports)</code>, <code>volumeChangeRequested(float delta)</code>, <code>muteToggleRequested()</code>.</p>
 
         <h3 id="fontCatalog"><code>fontCatalog</code> <span class="cmt">&mdash; FontCatalog</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#fontCatalog">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/fontCatalog.json</span>.</p>
+        <p>Explained in: <a href="theme-system.html#font-system">Theme System: Fonts</a>. Raw: <span class="file-path">docs/api/fontCatalog.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -414,7 +414,7 @@
         </table>
 
         <h3 id="frontendManager"><code>frontendManager</code> <span class="cmt">&mdash; FrontendManager</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#frontendManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/frontendManager.json</span>.</p>
+        <p>Explained in: <a href="writing-a-frontend.html#install">Writing a Frontend: Installing</a>. Raw: <span class="file-path">docs/api/frontendManager.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -444,7 +444,7 @@
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>frontendsChanged()</code>, <code>activeChanged()</code>, <code>lastErrorChanged()</code>, <code>installed(QString id)</code>, <code>trialChanged()</code>, <code>trialExpired()</code>, <code>restartRequested()</code>.</p>
 
         <h3 id="gestureSensor"><code>gestureSensor</code> <span class="cmt">&mdash; GestureManager</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#gestureSensor">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/gestureSensor.json</span>.</p>
+        <p>Explained in: <a href="hardware-managers.html#gesture-overview">Hardware Managers: the gesture sensor</a>. Raw: <span class="file-path">docs/api/gestureSensor.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -470,7 +470,7 @@
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>gestureDetected(QString gesture)</code>, <code>actionTriggered(QString action)</code>, <code>connectionStatusChanged(QString status)</code>.</p>
 
         <h3 id="mediaManager"><code>mediaManager</code> <span class="cmt">&mdash; MediaManager</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#mediaManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/mediaManager.json</span>.</p>
+        <p>Explained in: <a href="media-manager.html">Media Manager</a>. Raw: <span class="file-path">docs/api/mediaManager.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -604,7 +604,7 @@
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>playbackStateChanged(int state)</code>, <code>playStateChanged(bool playing)</code>, <code>currentMediaChanged(QString filename)</code>, <code>mediaListChanged(QStringList files)</code>, <code>durationChanged(qlonglong durationMs)</code>, <code>positionChanged(qlonglong positionMs)</code>, <code>metadataChanged(QString title, QString artist, QString album)</code>, <code>durationFormatChanged(QString formatted)</code>, <code>volumeChanged(float volume)</code>, <code>shuffleStateChanged(bool shuffled)</code>, <code>totalDurationChanged(QString formatted)</code>, <code>albumCountChanged(int count)</code>, <code>artistCountChanged(int count)</code>, <code>playlistsChanged()</code>, <code>currentPlaylistChanged(QString name)</code>, <code>scanProgress(QString message)</code>, <code>albumColorsExtracted(QString jsonColors)</code>, <code>songDeleted(QString filename)</code>, <code>audioOutputsChanged()</code>.</p>
 
         <h3 id="networkManager"><code>networkManager</code> <span class="cmt">&mdash; NetworkManager</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#networkManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/networkManager.json</span>.</p>
+        <p>Explained in: <a href="network-manager.html">Network Manager</a>. Raw: <span class="file-path">docs/api/networkManager.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -636,7 +636,7 @@
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>networkNameChanged(QString name)</code>, <code>isConnectedChanged(bool connected)</code>, <code>updateStatusChanged(QString status)</code>, <code>updateMessageChanged(QString message)</code>, <code>remoteCommitChanged(QString commit)</code>, <code>remoteCommitMsgChanged(QString msg)</code>, <code>releaseUrlChanged(QString url)</code>, <code>workingTreeDirtyChanged(bool dirty)</code>, <code>selfUpdateStatusChanged(QString status)</code>, <code>selfUpdateMessageChanged(QString message)</code>, <code>canSelfUpdateChanged(bool canUpdate)</code>.</p>
 
         <h3 id="nowPlaying"><code>nowPlaying</code> <span class="cmt">&mdash; NowPlaying</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#nowPlaying">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/nowPlaying.json</span>.</p>
+        <p>Explained in: <a href="media-manager.html#now-playing">Media Manager: Now Playing</a>. Raw: <span class="file-path">docs/api/nowPlaying.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -671,7 +671,7 @@
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>sourceChanged()</code>, <code>playingChanged()</code>, <code>trackInfoChanged()</code>, <code>artUrlChanged()</code>, <code>durationChanged()</code>, <code>positionChanged()</code>, <code>capabilitiesChanged()</code>, <code>shuffledChanged()</code>, <code>trackChanged()</code>.</p>
 
         <h3 id="obdAdapterFinder"><code>obdAdapterFinder</code> <span class="cmt">&mdash; OBDAdapterFinder</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#obdAdapterFinder">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/obdAdapterFinder.json</span>.</p>
+        <p>Explained in: <a href="obd-manager.html#adapter-finder">OBD Manager: finding an adapter</a>. Raw: <span class="file-path">docs/api/obdAdapterFinder.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -700,7 +700,7 @@
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>bluetoothOnChanged()</code>, <code>scanningChanged()</code>, <code>devicesChanged()</code>, <code>busyChanged()</code>, <code>statusChanged()</code>.</p>
 
         <h3 id="obdManager"><code>obdManager</code> <span class="cmt">&mdash; OBDManager</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#obdManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/obdManager.json</span>.</p>
+        <p>Explained in: <a href="obd-manager.html">OBD Manager</a>. Raw: <span class="file-path">docs/api/obdManager.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -825,7 +825,7 @@
         <p><strong>Enum</strong> <code>ConnectionState</code>: <code>Disconnected</code>, <code>Connecting</code>, <code>Connected</code>, <code>NoVehicle</code>, <code>Failed</code> (by name or number).</p>
 
         <h3 id="paramStore"><code>paramStore</code> <span class="cmt">&mdash; ParameterStore</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#paramStore">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/paramStore.json</span>.</p>
+        <p>Explained in: <a href="obd-manager.html#supported-parameters">OBD Manager: readings</a>. Raw: <span class="file-path">docs/api/paramStore.json</span>.</p>
         <table>
           <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
@@ -837,7 +837,7 @@
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>changed(QStringList ids)</code>.</p>
 
         <h3 id="parameterCatalog"><code>parameterCatalog</code> <span class="cmt">&mdash; ParameterCatalog</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#parameterCatalog">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/parameterCatalog.json</span>.</p>
+        <p>Explained in: <a href="obd-manager.html#supported-parameters">OBD Manager: readings</a>. Raw: <span class="file-path">docs/api/parameterCatalog.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -857,7 +857,7 @@
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>displayParametersChanged()</code>.</p>
 
         <h3 id="phoneMirrorManager"><code>phoneMirrorManager</code> <span class="cmt">&mdash; PhoneMirrorManager</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#phoneMirrorManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/phoneMirrorManager.json</span>.</p>
+        <p>Explained in: <a href="phone-mirror-android-auto.html#phone-mirror">Phone Mirror &amp; Android Auto: Phone Mirror</a>. Raw: <span class="file-path">docs/api/phoneMirrorManager.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -955,7 +955,7 @@
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>scrcpyStarted(int handle)</code>, <code>scrcpyStopped()</code>, <code>scrcpyError(QString message)</code>, <code>lastErrorKindChanged()</code>, <code>sessionStateChanged()</code>, <code>isRunningChanged()</code>, <code>displaySizeChanged()</code>, <code>frameSizeChanged(int width, int height)</code>, <code>frameReady()</code>, <code>videoSinkChanged()</code>, <code>audioActiveChanged(bool active)</code>, <code>audioPlayingChanged(bool playing)</code>, <code>audioPlayed(QByteArray pcm, int bufferedMs)</code>, <code>phoneAsleepChanged(bool asleep)</code>, <code>phoneInUseChanged(bool inUse)</code>, <code>duckingChanged(float factor)</code>, <code>wirelessAddressChanged(QString address)</code>, <code>connectionTypeChanged()</code>, <code>wirelessBusyChanged()</code>, <code>wirelessResult(bool ok, QString message)</code>, <code>qrPairingChanged()</code>, <code>currentBitRateChanged()</code>, <code>mediaChanged()</code>, <code>mediaTrackChanged()</code>, <code>mediaArtChanged()</code>, <code>mediaQueueChanged()</code>, <code>mediaActiveChanged(bool active)</code>, <code>deviceStateChanged()</code>, <code>mirrorNoticeChanged()</code>.</p>
 
         <h3 id="settingsManager"><code>settingsManager</code> <span class="cmt">&mdash; SettingsManager</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#settingsManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/settingsManager.json</span>.</p>
+        <p>Explained in: <a href="settings-manager.html">Settings Manager</a>. Raw: <span class="file-path">docs/api/settingsManager.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -1230,7 +1230,7 @@
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>deviceNameChanged(QString value)</code>, <code>fontSettingChanged(QString value)</code>, <code>themeSettingChanged(QString value)</code>, <code>uiScaleChanged(float value)</code>, <code>colorTransitionMsChanged(int value)</code>, <code>songLengthTransitionChanged(bool value)</code>, <code>showClockChanged(bool value)</code>, <code>clockFormatChanged(bool value)</code>, <code>clockShowSecondsChanged(bool value)</code>, <code>clockSizeChanged(int value)</code>, <code>clockSizeAutoChanged(bool value)</code>, <code>backgroundGridChanged(QString value)</code>, <code>screenWidthChanged(int value)</code>, <code>screenHeightChanged(int value)</code>, <code>backgroundBlurRadiusChanged(int value)</code>, <code>bottomBarOrientationChanged(QString value)</code>, <code>showBottomBarMediaControlsChanged(bool value)</code>, <code>settingsLayoutStyleChanged(QString value)</code>, <code>albumArtColorsChanged()</code>, <code>settingsMenuVisibilityChanged()</code>, <code>startUpVolumeChanged(QString value)</code>, <code>currentVolumeChanged(int value)</code>, <code>mediaFolderChanged(QString value)</code>, <code>autoPlayOnStartupChanged(bool value)</code>, <code>persistShuffleStateChanged(bool value)</code>, <code>lastShuffleStateChanged(bool value)</code>, <code>lastPlayedSongChanged(QString value)</code>, <code>lastPlayedPositionChanged(int value)</code>, <code>lastPlayedPlaylistChanged(QString value)</code>, <code>musicButtonDefaultPageChanged(QString value)</code>, <code>returnToLibraryAfterSelectionChanged(bool value)</code>, <code>showWaveformVisualizerChanged(bool value)</code>, <code>show3DButtonTiltChanged(bool value)</code>, <code>show3DAlbumPreviewChanged(bool value)</code>, <code>roundedAlbumArtChanged(bool value)</code>, <code>albumArtCornerRadiusChanged(int value)</code>, <code>showAlbumArtShadowChanged(bool value)</code>, <code>vinylRecordModeChanged(bool value)</code>, <code>albumArtTransitionChanged(QString value)</code>, <code>audioOutputDeviceChanged(QString value)</code>, <code>backgroundOverlayOpacityChanged(int value)</code>, <code>sideCardOpacityChanged(double value)</code>, <code>sideCardAngleChanged(int value)</code>, <code>buttonTiltDurationChanged(int value)</code>, <code>textScrollSpeedChanged(int value)</code>, <code>obdBluetoothPortChanged(QString value)</code>, <code>obdSavedAdaptersChanged()</code>, <code>obdFastModeChanged(bool value)</code>, <code>obdCardStyleCircularChanged(bool value)</code>, <code>gaugeTempUnitChanged()</code>, <code>gaugeSpeedUnitChanged()</code>, <code>obdAutoReconnectAttemptsChanged(int value)</code>, <code>fuelTankCapacityChanged(float value)</code>, <code>blackBoxEnabledChanged(bool value)</code>, <code>blackBoxSweepAllChanged(bool value)</code>, <code>blackBoxMaxMBChanged(int value)</code>, <code>obdParametersChanged()</code>, <code>homeOBDParametersChanged()</code> <span class="cmt">(deprecated: Home is a dashboard: dashboardManager.homeDashboardChanged; goes with the classic Home)</span>, <code>homeVehicleCardChanged(bool value)</code> <span class="cmt">(deprecated: Home is a dashboard: place a VehicleWidget; goes with the classic Home)</span>, <code>supportedOBDParametersChanged()</code>, <code>directoryHistoryChanged()</code>, <code>customThemesChanged()</code>, <code>windowStateChanged(QString value)</code>, <code>lastSettingsSectionChanged(QString value)</code>, <code>androidAutoEnabledChanged(bool value)</code>, <code>phoneMirrorEnabledChanged(bool value)</code>, <code>scrcpyDisplaySizeChanged(QString value)</code>, <code>scrcpyAudioGainChanged(double value)</code>, <code>scrcpyAudioDuckEnabledChanged(bool value)</code>, <code>scrcpyAudioDuckLevelChanged(double value)</code>, <code>scrcpyPhoneScreenOffChanged(bool value)</code>, <code>scrcpyDisplayDpiChanged(int value)</code>, <code>scrcpyBitRateUsbChanged(int value)</code>, <code>scrcpyBitRateWifiChanged(int value)</code>, <code>scrcpyAutoWifiChanged(bool value)</code>, <code>scrcpyBitRateAutoChanged(bool value)</code>, <code>scrcpyWirelessAddressChanged(QString value)</code>, <code>esp32VolumeEnabledChanged(bool value)</code>, <code>esp32VolumePortChanged(QString value)</code>, <code>esp32VolumeStepSizeChanged(double value)</code>, <code>esp32AutoReconnectChanged(bool value)</code>, <code>esp32LedSleepEnabledChanged(bool value)</code>, <code>esp32LedColorModeChanged(QString value)</code>, <code>esp32LedStaticColorChanged(QString value)</code>, <code>imuEnabledChanged(bool value)</code>, <code>sensorEmitRateChanged(int value)</code>, <code>sensorDecimalPlacesChanged(int value)</code>, <code>sensorTempUnitChanged(QString value)</code>, <code>sensorAltitudeUnitChanged(QString value)</code>, <code>sensorCardsChanged()</code>, <code>gestureSensorEnabledChanged(bool value)</code>, <code>gestureMappingChanged()</code>, <code>gestureVolumeStepChanged(int value)</code>, <code>gestureCooldownChanged(int value)</code>, <code>pinnedSettingsChanged()</code>, <code>genericSettingChanged(QString key)</code>.</p>
 
         <h3 id="shiftLightManager"><code>shiftLightManager</code> <span class="cmt">&mdash; ShiftLightManager</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#shiftLightManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/shiftLightManager.json</span>.</p>
+        <p>Explained in: <a href="obd-manager.html#shift-light">OBD Manager: Shift Light</a>. Raw: <span class="file-path">docs/api/shiftLightManager.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -1263,7 +1263,7 @@
 
         <h3 id="sim"><code>sim</code> <span class="cmt">&mdash; Simulator</span></h3>
         <p><strong>Experimental:</strong> this object may change or go in any release.</p>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#sim">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/sim.json</span>.</p>
+        <p>Explained in: <a href="development.html#mock-obd">Development: the simulated car</a>. Raw: <span class="file-path">docs/api/sim.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -1299,7 +1299,7 @@
 
         <h3 id="spotifyManager"><code>spotifyManager</code> <span class="cmt">&mdash; SpotifyManager</span></h3>
         <p><strong>Experimental:</strong> this object may change or go in any release.</p>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#spotifyManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/spotifyManager.json</span>.</p>
+        <p>Explained in: <a href="media-manager.html#spotify">Media Manager: Spotify</a>. Raw: <span class="file-path">docs/api/spotifyManager.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -1362,7 +1362,7 @@
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>stateChanged()</code>, <code>clientIdChanged()</code>, <code>userChanged()</code>, <code>statusChanged()</code>, <code>libraryChanged()</code>, <code>libraryLoadingChanged()</code>, <code>collectionChanged()</code>, <code>collectionTracksChanged()</code>, <code>devicesChanged()</code>, <code>playingChanged()</code>, <code>trackChanged()</code>, <code>artChanged()</code>, <code>positionReported()</code>, <code>modesChanged()</code>, <code>deviceChanged()</code>, <code>playbackRequested()</code>, <code>commandFailed(QString message)</code>, <code>startedElsewhere()</code>.</p>
 
         <h3 id="themeCatalog"><code>themeCatalog</code> <span class="cmt">&mdash; ThemeCatalog</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#themeCatalog">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/themeCatalog.json</span>.</p>
+        <p>Explained in: <a href="theme-system.html">Theme System</a>. Raw: <span class="file-path">docs/api/themeCatalog.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -1377,7 +1377,7 @@
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>activeThemeChanged()</code>.</p>
 
         <h3 id="tripRecorder"><code>tripRecorder</code> <span class="cmt">&mdash; TripRecorder</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#tripRecorder">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/tripRecorder.json</span>.</p>
+        <p>Explained in: <a href="obd-manager.html#black-box">OBD Manager: the black box</a>. Raw: <span class="file-path">docs/api/tripRecorder.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -1426,7 +1426,7 @@
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>enabledChanged(bool enabled)</code>, <code>storeReadyChanged()</code>, <code>recordingChanged()</code>, <code>currentSampleCountChanged()</code>, <code>currentTripElapsedSChanged()</code>, <code>liveTripChanged(qlonglong id)</code>, <code>tripsChanged()</code>, <code>historyDirChanged()</code>, <code>storageBytesChanged()</code>, <code>lastExportPathChanged()</code>, <code>lastErrorChanged()</code>, <code>tripStarted(qlonglong id)</code>, <code>tripEnded(qlonglong id, QVariantMap summary)</code>, <code>detailReady(qlonglong id, QVariantMap detail)</code>, <code>seriesReady(qlonglong id, QString paramId, QVariantList points)</code>, <code>exportFinished(qlonglong id, QString path)</code>, <code>healthTrendsReady(int days, QVariantMap result)</code>, <code>paramTrendReady(QString paramId, int days, QVariantList rows)</code>.</p>
 
         <h3 id="units"><code>units</code> <span class="cmt">&mdash; Units</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#units">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/units.json</span>.</p>
+        <p>Explained in: <a href="utilities.html#platform">Utilities: small helpers</a>. Raw: <span class="file-path">docs/api/units.json</span>.</p>
         <table>
           <thead><tr><th>Method (<code>call</code>)</th><th>Returns</th><th>Kind</th><th>Needs</th></tr></thead>
           <tbody>
@@ -1443,7 +1443,7 @@
 
         <h3 id="vehicleManager"><code>vehicleManager</code> <span class="cmt">&mdash; VehicleManager</span></h3>
         <p><strong>Experimental:</strong> this object may change or go in any release.</p>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#vehicleManager">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/vehicleManager.json</span>.</p>
+        <p>Explained in: <a href="pages.html#carmenu">Pages: 3D View</a>. Raw: <span class="file-path">docs/api/vehicleManager.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -1470,7 +1470,7 @@
         <p><strong>Signals</strong> (<code>subscribe</code>): <code>vehiclesChanged()</code>, <code>activeChanged()</code>, <code>lastErrorChanged()</code>.</p>
 
         <h3 id="volumeController"><code>volumeController</code> <span class="cmt">&mdash; VolumeController</span></h3>
-        <p>Hand-written notes: <a href="signals-slots-reference.html#volumeController">Signals &amp; Slots API</a>. Raw: <span class="file-path">docs/api/volumeController.json</span>.</p>
+        <p>Explained in: <a href="utilities.html#volume-controller">Utilities: Volume</a>. Raw: <span class="file-path">docs/api/volumeController.json</span>.</p>
         <table>
           <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>
           <tbody>
@@ -1631,7 +1631,7 @@
         <div class="related-pages">
           <h3>Related Pages</h3>
           <a href="utilities.html#service-protocol" class="related-link">Service protocol</a>
-          <a href="signals-slots-reference.html" class="related-link">Signals &amp; Slots API</a>
+          <a href="writing-a-frontend.html" class="related-link">Writing a Frontend</a>
           <a href="architecture.html" class="related-link">Architecture Overview</a>
         </div>
       </div>

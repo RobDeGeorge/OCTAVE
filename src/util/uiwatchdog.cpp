@@ -140,7 +140,10 @@ void UiWatchdog::loop()
         if (!stalled)
             continue;
 
-#ifdef Q_OS_LINUX
+        // Desktop Linux only. Q_OS_LINUX is defined on Android too, where
+        // there is no gdb, nothing restarts an aborted app, and the system
+        // itself stops the GUI thread of an app that is not in front
+#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
         if (!dumped && silent > m_dumpMs) {
             dumped = true;
             const QString path = dumpStacks();
@@ -178,7 +181,7 @@ void UiWatchdog::loop()
 
 QString UiWatchdog::dumpStacks()
 {
-#ifdef Q_OS_LINUX
+#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
     const QString gdb = QStandardPaths::findExecutable(QStringLiteral("gdb"));
     if (gdb.isEmpty()) {
         qCWarning(lcWatchdog) << "gdb not installed; no stack dump for this hang";

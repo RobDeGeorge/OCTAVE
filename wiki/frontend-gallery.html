@@ -13,13 +13,14 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Frontend Gallery</div>
           <h1 class="page-title">Frontend Gallery</h1>
-          <p class="page-subtitle">OCTAVE's screen is replaceable. These frontends drive the same backend as the built-in QML UI, over the service API, each in a different language and style. Try the web ones in your browser, copy any of them (MIT), or add your own.</p>
+          <p class="page-subtitle">The other screens that exist for OCTAVE: five complete examples and three starter templates, with where each one runs and how to try it.</p>
         </div>
 
         <nav class="toc">
           <h3>Table of Contents</h3>
           <ul class="toc-list">
-            <li><a href="#try">Try One Now</a></li>
+            <li><a href="#what">What a Frontend Is</a></li>
+            <li><a href="#try">Try One</a></li>
             <li><a href="#examples">Example Frontends</a></li>
             <li><a href="#templates">Starter Templates</a></li>
             <li><a href="#community">Community Frontends</a></li>
@@ -27,141 +28,144 @@
           </ul>
         </nav>
 
-        <h2 id="try">Try One Now</h2>
-        <p>The <a href="../playground.html">frontend playground</a> runs a web frontend against the real OCTAVE core (compiled to WebAssembly) and a simulated car, in your browser, with nothing to install. The car's own screen runs next to it, so you can watch both follow the same engine. Any web frontend loads with <code>playground.html?frontend=&lt;url&gt;</code>, so a link is enough to show yours.</p>
-        <p>On <a href="../">the browser demo</a> they are in Settings &gt; Device &gt; Developer &gt; Frontends too: tap one's picture and it replaces the built-in screen, on the same car (glass, sunlight, the arcade and the retro cluster run there; the console is a terminal program and shows greyed out); its <em>OCTAVE</em> button brings the built-in screen back.</p>
-        <p>The native ones run against any OCTAVE release with <code>octave --headless --sim</code> (a simulated car, no window). Install one as the car's screen from Settings &gt; Device &gt; Developer &gt; Frontends, and press <em>Try</em>: the built-in screen comes back after two minutes, or at any time when you press mute five times within four seconds (<a href="writing-a-frontend.html#install">details</a>).</p>
+        <h2 id="what">What a Frontend Is</h2>
+        <p>A frontend is a screen for OCTAVE: a separate program or web page that shows the car and the music and sends your taps back, over the same service API the built-in screen's data comes from. It can be written in any language, and it can take the built-in screen's place on the device. <a href="writing-a-frontend.html">Writing a Frontend</a> explains how to make one; this page shows the ones that exist.</p>
+
+        <h2 id="try">Try One</h2>
+        <h3>In a browser, with nothing to install</h3>
+        <ul>
+          <li><strong>The <a href="../playground.html">frontend playground</a></strong> runs a web frontend beside the real OCTAVE core and a simulated car. Pick one from its list, or type the address of a frontend hosted anywhere. <code>playground.html?frontend=&lt;name or URL&gt;</code> opens one directly; a frontend from another site runs only after you say yes.</li>
+          <li><strong><a href="../">The browser demo</a></strong> lists them in Settings &gt; Device &gt; Developer &gt; Frontends. Tap a picture and that frontend covers the built-in screen at once, on the same car. Its <em>&larr; OCTAVE</em> button, or mute pressed five times within four seconds, brings the built-in screen back. The Console is shown greyed out there: it is a terminal program.</li>
+        </ul>
+        <h3>On a device or a desktop</h3>
+        <ol>
+          <li>Get the frontend's folder and build it if it needs building. Each one's README has the command and names the folder to install.</li>
+          <li>In OCTAVE, open Settings &gt; Device &gt; Developer &gt; Frontends and press <em>Install from folder</em> (or <em>Install from zip</em>).</li>
+          <li>For a program, press <em>Try</em> on its tile: OCTAVE restarts on it now and returns to the built-in screen after two minutes. Tap the tile itself to use a frontend from the next start.</li>
+          <li>To get the built-in screen back at any time, press mute five times within four seconds.</li>
+        </ol>
+        <p>No car is needed: <code>octave --headless --sim</code> runs OCTAVE with a simulated car and no window, and every frontend here connects to it. Add <code>--web-root &lt;folder&gt;</code> for a web one and open <code>http://127.0.0.1:9876/</code>. <a href="writing-a-frontend.html#install">Installing Your Frontend</a> has the rest.</p>
 
         <h2 id="examples">Example Frontends</h2>
-        <p>Five complete frontends, written to prove that everything the built-in UI does is reachable over the API (<a href="https://github.com/RobDeGeorge/OCTAVE/blob/main/examples/frontends/PARITY.md">feature by feature</a>). They live in <span class="file-path">examples/frontends/</span>, MIT licensed, and <span class="file-path">examples/frontends/check_all.sh</span> runs each one's tests against a simulated car.</p>
+        <p>Five complete frontends, each in a different language and style, written to show that a whole screen can be built on the API. None of them ships with OCTAVE. They are in <span class="file-path">examples/frontends/</span> under the MIT license; <a href="https://github.com/RobDeGeorge/OCTAVE/blob/main/examples/frontends/PARITY.md">PARITY.md</a> there lists, feature by feature, what each one reaches, and <span class="file-path">check_all.sh</span> runs each one's own checks against a simulated car.</p>
 
         <div class="gallery">
           <article class="gallery-card">
             <img src="images/frontends/glass.png" alt="Glass: frosted glass cards with the clock, now playing and four gauges" loading="lazy">
             <div class="gallery-body">
               <h3>Glass</h3>
-              <div class="gallery-stack">TypeScript + Svelte 5 &middot; web</div>
-              <p>A frosted-glass tablet UI, light and dark. Aims at everything the QML app does: media and the library, OBD and trouble codes, dashboards drawn from their JSON specs, trips, settings, phone mirroring over WebCodecs.</p>
+              <div class="gallery-stack">TypeScript + Svelte 5 &middot; runs in a browser</div>
+              <p>A frosted-glass tablet screen, light and dark, for the head unit in landscape or a phone upright. It aims at everything the built-in screen does: music and the library, live readings and trouble codes, dashboards, trips, settings, phone mirroring.</p>
               <div class="gallery-links">
                 <a href="../playground.html?frontend=glass">Try it live</a>
-                <a href="https://github.com/RobDeGeorge/OCTAVE/tree/main/examples/frontends/glass">Source</a>
+                <a href="https://github.com/RobDeGeorge/OCTAVE/tree/main/examples/frontends/glass">Source: examples/frontends/glass</a>
               </div>
             </div>
           </article>
-
           <article class="gallery-card">
             <img src="images/frontends/sunlight.png" alt="Sunlight: large black-on-white readouts" loading="lazy">
             <div class="gallery-body">
               <h3>Sunlight</h3>
-              <div class="gallery-stack">Go + Gio &middot; native, and in a browser</div>
-              <p>Brutalist black on white, readable in direct sun, with an inverted night mode. Drive readouts, every saved dashboard drawn from its spec, trouble codes, trips, media with the cover.</p>
+              <div class="gallery-stack">Go + Gio &middot; a program for Linux and macOS, also built for the browser</div>
+              <p>Black on white with huge numerals, made to be read in direct sun, with an inverted night mode. Drive readouts, your saved dashboards drawn from their JSON, trouble codes, trips, and music with the cover.</p>
               <div class="gallery-links">
                 <a href="../?frontend=sunlight">Try it live</a>
-                <a href="https://github.com/RobDeGeorge/OCTAVE/tree/main/examples/frontends/sunlight">Source</a>
+                <a href="https://github.com/RobDeGeorge/OCTAVE/tree/main/examples/frontends/sunlight">Source: examples/frontends/sunlight</a>
               </div>
             </div>
           </article>
-
           <article class="gallery-card">
             <img src="images/frontends/retro-cluster.png" alt="Retro cluster: glowing vacuum-fluorescent gauges" loading="lazy">
             <div class="gallery-body">
               <h3>Retro Cluster</h3>
-              <div class="gallery-stack">Rust + egui &middot; native</div>
-              <p>A 1980s vacuum-fluorescent instrument cluster. Driving gauges, every PID, trouble codes, trips, a spectrum analyzer and media with a dot-matrix cover. Its <span class="file-path">link.rs</span> and <span class="file-path">link_tcp.rs</span> are the smallest complete client. Also builds for the browser.</p>
+              <div class="gallery-stack">Rust + egui &middot; a program for Linux and macOS, also built for the browser</div>
+              <p>A 1980s vacuum-fluorescent instrument cluster, drawn from shapes with no font or image files. Driving gauges, every reading the car gives, trouble codes, trips, a spectrum analyzer, and music with a dot-matrix cover.</p>
               <div class="gallery-links">
                 <a href="../?frontend=retro-cluster">Try it live</a>
-                <a href="https://github.com/RobDeGeorge/OCTAVE/tree/main/examples/frontends/retro-cluster">Source</a>
+                <a href="https://github.com/RobDeGeorge/OCTAVE/tree/main/examples/frontends/retro-cluster">Source: examples/frontends/retro-cluster</a>
               </div>
             </div>
           </article>
-
           <article class="gallery-card">
             <img src="images/frontends/arcade.png" alt="Arcade: a 320 by 200 pixel dashboard in 16 colours" loading="lazy">
             <div class="gallery-body">
               <h3>Arcade</h3>
-              <div class="gallery-stack">C11 + SDL2 &middot; native, and in a browser</div>
-              <p>An 8-bit arcade dashboard: 320&times;200 pixels scaled up, its own pixel font, 16 colours. Drive readouts, media with a palette-crushed cover, trouble codes. Proof that plain C and a JSON library are enough.</p>
+              <div class="gallery-stack">C11 + SDL2 &middot; a program for Linux and macOS, also built for the browser</div>
+              <p>An 8-bit arcade dashboard: 320&times;200 pixels scaled up, its own pixel font, 16 colours. Drive readouts, music with the cover crushed to big pixels, trouble codes. It shows that plain C and a JSON library are enough.</p>
               <div class="gallery-links">
                 <a href="../?frontend=arcade">Try it live</a>
-                <a href="https://github.com/RobDeGeorge/OCTAVE/tree/main/examples/frontends/arcade">Source</a>
+                <a href="https://github.com/RobDeGeorge/OCTAVE/tree/main/examples/frontends/arcade">Source: examples/frontends/arcade</a>
               </div>
             </div>
           </article>
-
           <article class="gallery-card">
             <img src="images/frontends/console.png" alt="Console: a dense terminal UI with tabs and a live table of values" loading="lazy">
             <div class="gallery-body">
               <h3>Console</h3>
-              <div class="gallery-stack">Python + Textual &middot; terminal</div>
-              <p>A dense, keyboard-first operator console for a terminal or an SSH session: live data, OBD and trouble codes, trips, the library, dashboards as JSON, every setting, and an API explorer.</p>
+              <div class="gallery-stack">Python + Textual &middot; runs in a terminal (Linux, macOS)</div>
+              <p>A dense, keyboard-first operator console for a terminal or an SSH session: live readings, trouble codes, trips, the library, dashboards as JSON, every setting, and an explorer for the API itself. It has no browser build.</p>
               <div class="gallery-links">
-                <a href="https://github.com/RobDeGeorge/OCTAVE/tree/main/examples/frontends/console">Source</a>
+                <a href="https://github.com/RobDeGeorge/OCTAVE/tree/main/examples/frontends/console">Source: examples/frontends/console</a>
               </div>
             </div>
           </article>
         </div>
 
         <h2 id="templates">Starter Templates</h2>
-        <p>The smallest working frontends, under 200 lines each, to copy and grow: they connect, pair when off the head unit, show RPM and speed live, play and pause, and show the cover. Each is checked against the simulated car in CI, so they keep working. In <span class="file-path">templates/</span>, MIT.</p>
+        <p>The smallest working frontends, to copy and grow. Each connects, pairs when it is not on the head unit, shows RPM and speed live, plays and pauses, and shows the cover. Each has a test that runs it against the simulated car (<code>template_js</code>, <code>template_python</code>, <code>template_go</code>). They are in <span class="file-path">templates/</span> under the MIT license and have no pictures.</p>
         <div class="gallery">
           <article class="gallery-card">
             <div class="gallery-body">
               <h3>Hello, car (JavaScript)</h3>
-              <div class="gallery-stack">plain JavaScript &middot; web, no bundler</div>
-              <p>One HTML page and a 60-line client. Served by OCTAVE itself with <code>--web-root</code>, or installed as the screen.</p>
+              <div class="gallery-stack">plain JavaScript, no bundler &middot; runs in a browser</div>
+              <p>One HTML page and a small client file. OCTAVE serves it itself with <code>--web-root</code>, and the folder installs as the screen as it is.</p>
               <div class="gallery-links">
                 <a href="../playground.html?frontend=hello-car-js">Try it live</a>
-                <a href="https://github.com/RobDeGeorge/OCTAVE/tree/main/templates/hello-car-js">Source</a>
+                <a href="https://github.com/RobDeGeorge/OCTAVE/tree/main/templates/hello-car-js">Source: templates/hello-car-js</a>
               </div>
             </div>
           </article>
           <article class="gallery-card">
             <div class="gallery-body">
               <h3>Hello, car (Python)</h3>
-              <div class="gallery-stack">Python 3.8+ &middot; terminal, standard library only</div>
-              <p>The same in a terminal, with the stdlib-only SDK copied in. Installs as the screen as it is.</p>
+              <div class="gallery-stack">Python 3.8+, standard library only &middot; runs in a terminal</div>
+              <p>The same in a terminal, with the Python client copied into the folder. The folder installs as the screen as it is (Linux, macOS, Windows).</p>
               <div class="gallery-links">
-                <a href="https://github.com/RobDeGeorge/OCTAVE/tree/main/templates/hello-car-python">Source</a>
+                <a href="https://github.com/RobDeGeorge/OCTAVE/tree/main/templates/hello-car-python">Source: templates/hello-car-python</a>
               </div>
             </div>
           </article>
           <article class="gallery-card">
             <div class="gallery-body">
               <h3>Hello, car (Go)</h3>
-              <div class="gallery-stack">Go 1.22+ &middot; terminal</div>
-              <p>The same in Go, with the generated, typed Go SDK.</p>
+              <div class="gallery-stack">Go 1.22+ &middot; runs in a terminal</div>
+              <p>The same in Go, on the typed Go client in <span class="file-path">sdk/go</span>. It cannot be installed as the screen yet: it has no <code>octave-frontend.json</code>.</p>
               <div class="gallery-links">
-                <a href="https://github.com/RobDeGeorge/OCTAVE/tree/main/templates/hello-car-go">Source</a>
+                <a href="https://github.com/RobDeGeorge/OCTAVE/tree/main/templates/hello-car-go">Source: templates/hello-car-go</a>
               </div>
             </div>
           </article>
         </div>
 
         <h2 id="community">Community Frontends</h2>
-        <p>Frontends other people have made. Find more on GitHub under the topic <a href="https://github.com/topics/octave-frontend"><code>octave-frontend</code></a>.</p>
-        <table>
-          <thead><tr><th>Frontend</th><th>By</th><th>Language / toolkit</th><th>Kind</th><th>Links</th></tr></thead>
-          <tbody>
-            <tr><td colspan="5"><em>None yet: yours could be the first. See below.</em></td></tr>
-          </tbody>
-        </table>
+        <p>Frontends other people have made go here. None yet: yours could be the first. The GitHub topic for them is <a href="https://github.com/topics/octave-frontend"><code>octave-frontend</code></a>.</p>
 
         <h2 id="add">Add Yours</h2>
         <ol>
-          <li><strong>Build it.</strong> Start from a <a href="#templates">template</a> and <a href="writing-a-frontend.html">Writing a Frontend</a>. Any language, any toolkit, any license: the SDKs and templates are MIT, and a frontend that talks over the service protocol is your own program (<a href="writing-a-frontend.html#license">Your Frontend, Your License</a>).</li>
-          <li><strong>Make it installable.</strong> Add an <code>octave-frontend.json</code> asking only for the permissions it uses (<a href="writing-a-frontend.html#install">Installing Your Frontend</a>). For a frontend on a car's screen, follow <a href="#good-citizen">the checklist</a> below.</li>
-          <li><strong>Publish it</strong> in a public repository with the GitHub topic <code>octave-frontend</code> and a screenshot in its README. A web frontend on GitHub Pages runs in the playground straight away: link <code>https://robdegeorge.com/OCTAVE/playground.html?frontend=https://you.github.io/your-frontend/</code> (whoever opens the link is asked before a frontend from another site runs).</li>
-          <li><strong>Tell us.</strong> Open a <a href="https://github.com/RobDeGeorge/OCTAVE/issues/new?template=show-your-frontend.yml">Show your frontend</a> issue, or a pull request adding a row to the table above. If the API is missing something you need, open an <a href="https://github.com/RobDeGeorge/OCTAVE/issues/new?template=api-request.yml">API request</a>: new members land as <em>experimental</em> first, so they can come quickly.</li>
+          <li><strong>Build it.</strong> Start from a <a href="#templates">template</a> and <a href="writing-a-frontend.html">Writing a Frontend</a>. Any language and any toolkit will do. The templates and clients are MIT, and a frontend that talks to OCTAVE over the service API is your own program, under whatever license you choose.</li>
+          <li><strong>Make it installable.</strong> Add an <code>octave-frontend.json</code> that asks only for the permissions it uses (<a href="writing-a-frontend.html#install">Installing Your Frontend</a>). If it is meant for a car's screen, go through <a href="#good-citizen">the checklist</a> below.</li>
+          <li><strong>Publish it</strong> in a public repository with the GitHub topic <code>octave-frontend</code> and a screenshot in its README. A web frontend hosted on GitHub Pages runs in the playground as it is: link <code>https://robdegeorge.com/OCTAVE/playground.html?frontend=https://you.github.io/your-frontend/</code>.</li>
+          <li><strong>Tell us.</strong> Open a <a href="https://github.com/RobDeGeorge/OCTAVE/issues/new?template=show-your-frontend.yml">Show your frontend</a> issue, or a pull request that adds it under <a href="#community">Community Frontends</a>. If the API lacks something you need, open an <a href="https://github.com/RobDeGeorge/OCTAVE/issues/new?template=api-request.yml">API request</a>.</li>
         </ol>
 
         <h3 id="good-citizen">A Frontend for a Car's Screen</h3>
         <ul>
-          <li>Readable at a glance: large values, high contrast, nothing that needs reading twice. Touch targets of at least 48&nbsp;px (about 9&nbsp;mm); no hover-only controls.</li>
-          <li>Volume and mute always one tap away (<code>volumeController.applyVolume</code>, <code>toggleMute</code>), and the user's theme where you can (<code>themeCatalog.activeTheme</code>).</li>
-          <li>Show critical values whatever page is open (coolant, oil pressure, voltage: <code>parameterCatalog</code> and the alert limits).</li>
-          <li>Ask only for the PIDs on screen (<code>obdManager.setParameterDemand</code>), and release them when the page goes; the car's bus is shared.</li>
-          <li>Don't use five quick mute presses for anything: that is the way back to the built-in screen. During a trial, show <code>frontendManager.trialSecondsLeft</code> and offer <em>Keep this screen</em> (<code>keepTrial()</code>).</li>
-          <li>Survive the service going away and coming back (reconnect with back-off) and an unknown later protocol version (say so; don't crash).</li>
+          <li>Make it readable at a glance: large values, high contrast, touch targets of at least 48&nbsp;px, nothing that works only on hover.</li>
+          <li>Keep volume and mute one tap away (<code>volumeController.applyVolume</code>, <code>toggleMute</code>), and use the driver's colours where you can (<code>themeCatalog.activeTheme</code>).</li>
+          <li>Show the readings that matter (coolant, oil pressure, voltage) whatever page is open.</li>
+          <li>Ask only for the readings on screen (<code>obdManager.setParameterDemand</code>) and release them when the page goes: the car's bus is shared.</li>
+          <li>Leave five quick mute presses alone: that is the driver's way back to the built-in screen. During a trial, show <code>frontendManager.trialSecondsLeft</code> and offer <em>Keep this screen</em> (<code>keepTrial()</code>).</li>
+          <li>Reconnect, waiting a little longer each time, when OCTAVE goes away and comes back. If it reports a protocol version you do not know, say so instead of crashing.</li>
         </ul>
 
         <div class="related-pages">

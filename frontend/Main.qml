@@ -1103,6 +1103,14 @@ ApplicationWindow {
         function onMirroringStarted() {
             stackView.openPage("AirPlayView.qml")
         }
+        // A new iPhone is pairing: the PIN it asks for is on that page. It
+        // was shown only in Settings and on the page itself, which nothing
+        // had opened yet, so the driver had no PIN to type
+        function onStateChanged() {
+            if (airPlayManager.state === "pin"
+                    && !(stackView.currentItem && stackView.currentItem.objectName === "airPlayView"))
+                stackView.openPage("AirPlayView.qml")
+        }
     }
 
     // Last child of the content item: draws over every page (popups still

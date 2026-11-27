@@ -70,7 +70,7 @@ No image provider: push decoded `QVideoFrame`s to the `QVideoSink` of a QML `Vid
 4. **H.264 decode + audio routing** — **Effort:** M (the shared decoder exists). **Hardware:** dongle + phone. Feed the NAL units to the shared decoder → `QVideoSink`; route audio through the existing `VolumeController` so the global volume curve applies (per `CLAUDE.md`, never call manager `setVolume` directly).
 5. **QML surface** — **Effort:** M. **Hardware:** dongle + phone; Orange Pi 5 Plus touch screen. `frontend/CarPlay.qml` showing the video, top-bar status (phone mode + connection), and a touch overlay that calls `carlinkitManager.sendTouch(...)` with normalized coordinates. New `frontend/settings/CarPlaySettingsPage.qml` for resolution / FPS / mic type config + udev rule install button.
 6. **Replace AA path** — **Effort:** M. **Hardware:** dongle + Android phone, then the Jeep. Once CarPlay is solid, plumb the same dongle into the Android Auto code path. Keep `androidautomanager` reachable behind a settings toggle (`mediaSettings.useDHUForAndroidAuto`) for ~1 release as a rollback.
-7. **Wiki updates** — **Effort:** S. New `wiki/carplay-manager.html`, update `wiki/hardware-managers.html`, `wiki/hardware-setup.html`, `wiki/signals-slots-reference.html`, rebuild search index per `CLAUDE.md`.
+7. **Wiki updates** — **Effort:** S. New `wiki/carplay-manager.html`, update `wiki/hardware-managers.html`, `wiki/hardware-setup.html`, rebuild search index per `CLAUDE.md`.
 
 ## Things to watch out for
 

@@ -13,393 +13,477 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Settings UI</div>
           <h1 class="page-title">Settings UI</h1>
-          <p class="page-subtitle">The SettingsMenu orchestrator, the six settings pages and their tile grids, the four layout engines (Grid default), the reusable component library, widgets, persistence helpers, and how to add a page</p>
+          <p class="page-subtitle">The Settings screen: what is in each section, how to find and hide things, the controls to build a setting from, and how the screen is put together</p>
         </div>
 
         <nav class="toc">
           <h3>On This Page</h3>
           <ul class="toc-list">
-            <li><a href="#orchestrator">SettingsMenu Orchestrator</a></li>
-            <li><a href="#page-model">Page Model</a></li>
-            <li><a href="#pages">The Settings Pages</a></li>
-            <li><a href="#tile-system">Tile Grids and the Card Popup</a></li>
-            <li><a href="#layouts">The Layout</a></li>
-            <li><a href="#sidebar">Grid Layout</a></li>
-            <li><a href="#components">Reusable Components</a></li>
-            <li><a href="#visibility">Section Visibility</a></li>
-            <li><a href="#persistence">Card State and Scroll Memory</a></li>
-            <li><a href="#adding-page">Adding a New Settings Page</a></li>
-            <li><a href="#design-decisions">Design Decisions</a></li>
+            <li><a href="#overview">What It Is</a></li>
+            <li><a href="#pages">What Is in Each Section</a></li>
+            <li><a href="#finding">Finding a Setting</a></li>
+            <li><a href="#visibility">Hiding Sections</a></li>
+            <li><a href="#components">The Controls</a></li>
+            <li><a href="#card-rules">Rules Every Card Follows</a></li>
+            <li><a href="#adding-setting">Adding a Setting, a Tile or a Section</a></li>
+            <li><a href="#how-it-works">How It Is Built</a></li>
+            <li><a href="#tile-system">Tiles and the Card Popup</a></li>
+            <li><a href="#details">Details and Special Cases</a></li>
+            <li><a href="#files">Files and API</a></li>
+            <li><a href="#design-decisions">Why It Is Built This Way</a></li>
+            <li><a href="#related">Related Pages</a></li>
           </ul>
         </nav>
 
-        <!-- Orchestrator -->
-        <h2 id="orchestrator">SettingsMenu Orchestrator</h2>
+        <!-- Overview -->
+        <h2 id="overview">What It Is</h2>
+        <p>
+          Settings is the screen behind the gear button on the navigation bar. It is one grid of
+          <strong>tiles</strong>, like the quick-settings panel of a phone: a column for each section (Display, Media,
+          OBD and so on), and in it a tile for each group of settings. A tile shows its name and, under it, how things
+          stand right now: "Connected", "12 albums &middot; Autoplay", "&deg;F &middot; mph". Tap a tile and it grows
+          into a <strong>card</strong> with the settings themselves.
+        </p>
+        <p>
+          Every change is saved as you make it. There is no Save button and nothing to confirm, except for the few
+          actions that cannot be taken back (Shut Down, Forget, Clear history), which ask for a second tap.
+        </p>
+        <p>
+          This page starts with how to use the screen and gets more technical as it goes: first what is where, then
+          how to add a setting of your own, then how the screen is built.
+        </p>
 
-        <p><span class="file-path">frontend/SettingsMenu.qml</span> is pushed onto the <code>StackView</code> by the bottom bar's Settings button with <code>initialSection</code> set to the last visited section. It renders no settings itself; it owns the page model, the visible-page model, the navigation API, and a <code>Loader</code> for the layout, <span class="file-path">SettingsSidebarLayout.qml</span> (the grid; see <a href="#layouts">The Layout</a>):</p>
-
-        <pre><code><span class="cls">Item</span> {
-    <span class="prop">id</span>: settingsMenu
-    <span class="prop">objectName</span>: <span class="str">"settingsMenu"</span>
-    <span class="kw">required property var</span> stackView
-    <span class="kw">required property var</span> mainWindow
-    <span class="kw">required property string</span> initialSection
-
-    <span class="prop">property string</span> currentSection: <span class="str">""</span>
-    <span class="prop">property bool</span> updateAvailable: networkManager &amp;&amp; networkManager.updateStatus === <span class="str">"update-available"</span>
-}
-</code></pre>
-
-        <p>In <code>Component.onCompleted</code> it pre-loads the card-state cache (<code>ExpandedCards.load(settingsManager)</code>), builds <code>hubModel</code>, and adopts <code>initialSection</code> if it is a visible section. The layout <code>Loader</code>'s <code>onLoaded</code> hands the layout a reference to the orchestrator and a live binding to <code>hubModel</code>.</p>
-
-        <h3>Navigation API</h3>
-        <ul>
-          <li><code>navigateToCategory(section)</code> &mdash; sets <code>currentSection</code>, persists it with <code>settingsManager.set_last_settings_section()</code>, then calls the layout's <code>navigateToCategory()</code> (the grid opens the About card for <code>"about"</code>; other sections have no page of their own).</li>
-          <li><code>navigateToSubSection(section, sub)</code> &mdash; delegates to the layout if it implements it, otherwise falls back to the category.</li>
-          <li><code>openTile(cardId)</code> &mdash; opens one card of the grid (e.g. <code>mainWindow.navigateToSettings("obdSettings", "obd_connection")</code>).</li>
-          <li><code>navigateToHub()</code> &mdash; called by the bottom bar when Settings is tapped while already open; the grid closes its open card (see <a href="#sidebar">Grid Layout</a>).</li>
-        </ul>
-
-        <!-- Page Model -->
-        <h2 id="page-model">Page Model</h2>
-
-        <p><code>pageModel</code> is the single source of truth for the seven pages:</p>
-
-        <pre><code><span class="kw">readonly property var</span> pageModel: [
-    { <span class="prop">name</span>: <span class="str">"Display"</span>,     <span class="prop">section</span>: <span class="str">"displaySettings"</span>,     <span class="prop">source</span>: <span class="str">"settings/DisplaySettingsPage.qml"</span>,
-      <span class="prop">icon</span>: <span class="str">"☼"</span>, <span class="prop">iconSource</span>: Style.assetBase + <span class="str">"cat_display.svg"</span>,
-      <span class="prop">group</span>: <span class="str">"Appearance"</span>,   <span class="prop">subSections</span>: [<span class="str">"Layout"</span>, <span class="str">"Appearance"</span>, <span class="str">"Units"</span>, <span class="str">"Clock"</span>] },
-    { <span class="prop">name</span>: <span class="str">"Media"</span>,       <span class="prop">section</span>: <span class="str">"mediaSettings"</span>,       ... <span class="prop">iconSource</span>: Style.assetBase + <span class="str">"cat_media.svg"</span>,
-      <span class="prop">group</span>: <span class="str">"Appearance"</span>,   <span class="prop">subSections</span>: [<span class="str">"Library &amp; Playback"</span>, <span class="str">"Spotify"</span>] },
-    { <span class="prop">name</span>: <span class="str">"OBD"</span>,         <span class="prop">section</span>: <span class="str">"obdSettings"</span>,         ... <span class="prop">iconSource</span>: Style.assetBase + <span class="str">"cat_obd.svg"</span>,
-      <span class="prop">group</span>: <span class="str">"Connectivity"</span>, <span class="prop">subSections</span>: [<span class="str">"Connection"</span>, <span class="str">"Black Box"</span>, <span class="str">"Advanced"</span>] },
-    { <span class="prop">name</span>: <span class="str">"Phone"</span>,       <span class="prop">section</span>: <span class="str">"phoneSettings"</span>,       <span class="prop">source</span>: <span class="str">"settings/PhoneSettingsPage.qml"</span>, ...
-      <span class="prop">group</span>: <span class="str">"Connectivity"</span>, <span class="prop">desktopOnly</span>: <span class="kw">true</span>,
-      <span class="prop">subSections</span>: [<span class="str">"Phone Mirror"</span>, <span class="str">"Android Auto"</span>, <span class="str">"iPhone"</span>] },
-    { <span class="prop">name</span>: <span class="str">"Accessories"</span>, <span class="prop">section</span>: <span class="str">"accessoriesSettings"</span>, ... <span class="prop">iconSource</span>: Style.assetBase + <span class="str">"cat_accessories.svg"</span>,
-      <span class="prop">group</span>: <span class="str">"Connectivity"</span>, <span class="prop">desktopOnly</span>: <span class="kw">true</span>,
-      <span class="prop">subSections</span>: [<span class="str">"Volume Knob"</span>, <span class="str">"IMU Sensor"</span>, <span class="str">"Gesture Sensor"</span>] },
-    { <span class="prop">name</span>: <span class="str">"Device"</span>,      <span class="prop">section</span>: <span class="str">"deviceSettings"</span>,      ... <span class="prop">iconSource</span>: Style.assetBase + <span class="str">"cat_device.svg"</span>,
-      <span class="prop">group</span>: <span class="str">"System"</span>,       <span class="prop">subSections</span>: [<span class="str">"Device"</span>, <span class="str">"Vehicle"</span>, <span class="str">"Developer"</span>] },
-    { <span class="prop">name</span>: <span class="str">"About"</span>,       <span class="prop">section</span>: <span class="str">"about"</span>,               ... <span class="prop">iconSource</span>: Style.assetBase + <span class="str">"cat_about.svg"</span>,
-      <span class="prop">group</span>: <span class="str">"System"</span>,       <span class="prop">subSections</span>: [] }
-]</code></pre>
-
+        <!-- Sections -->
+        <h2 id="pages">What Is in Each Section</h2>
+        <p>
+          There are seven sections. Each row below is one tile; the last column lists what its card holds, by the
+          names on the screen.
+        </p>
         <table>
-          <thead><tr><th>Key</th><th>Purpose</th></tr></thead>
+          <thead><tr><th>Section</th><th>Tile</th><th>What is in the card</th></tr></thead>
           <tbody>
-            <tr><td><code>name</code></td><td>Label in tabs, sidebar rows and cards</td></tr>
-            <tr><td><code>section</code></td><td>Identifier used for navigation, persistence (<code>lastSettingsSection</code>) and the visibility map</td></tr>
-            <tr><td><code>source</code></td><td>Page QML, relative to <span class="file-path">frontend/</span> (loaded by the layout in that directory)</td></tr>
-            <tr><td><code>icon</code></td><td>Legacy Unicode glyph, kept only as a fallback</td></tr>
-            <tr><td><code>iconSource</code></td><td>Theme-tinted SVG built from <code>Style.assetBase</code>; this is what renders</td></tr>
-            <tr><td><code>group</code></td><td>Appearance / Connectivity / System (carried in <code>hubModel</code>, currently informational)</td></tr>
-            <tr><td><code>desktopOnly</code></td><td><code>buildHubModel()</code> drops the page when the <code>isAndroid</code> context property is true (Accessories)</td></tr>
-            <tr><td><code>subSections</code></td><td>Anchor names for sub-navigation. <strong>Must equal the page's <code>tileModel</code> titles</strong>: lookup is by <code>objectName</code>, which pages set from <code>modelData.title</code>.</td></tr>
+            <tr><td rowspan="4"><strong>Display</strong></td><td>Layout</td><td>UI Scale (50 to 200 %), Screen Dimensions (Width, Height, Fullscreen, Maximize), Nav Bar Position (bottom or side), Home Screen (a picture for each Home you can pick), Nav Bar Media Controls.</td></tr>
+            <tr><td>Appearance</td><td>Theme (Light and Dark colour swatches, your saved Album Art Themes, and Album Art Capture with Fade Time and Fade Over the Whole Song), Font. See <a href="theme-system.html">Theme System</a>.</td></tr>
+            <tr><td>Units</td><td>Temperature (&deg;C / &deg;F), Speed (mph / km/h), Altitude (m / ft), for the whole app. Trip History keeps the units each drive was recorded in.</td></tr>
+            <tr><td>Clock</td><td>Show Clock, Show Seconds, Time Format (24-hour / 12-hour), Clock Size (Auto, or 10 to 85 px). With Show Clock off the other three are hidden.</td></tr>
+
+            <tr><td rowspan="2"><strong>Media</strong></td><td>Library &amp; Playback</td><td>Library Folder (Browse, Scan, Clean Titles), Startup Volume, Audio Output, Autoplay on Startup, Remember Shuffle, Open Music to the Library, Return to Library After Picking a Song, and the Scan Log once a scan has written to it. See <a href="media-manager.html">Media Manager</a>.</td></tr>
+            <tr><td>Spotify</td><td>The steps to set Spotify up (the Client ID field), Connect Spotify, and Sign Out once signed in. See <a href="media-manager.html#spotify">Media Manager: Spotify</a>.</td></tr>
+
+            <tr><td rowspan="3"><strong>OBD</strong></td><td>Connection</td><td>The connection status, Reconnect, the Vehicle line (VIN), the Adapter section (Find Bluetooth Adapters, saved adapters, Enter Address Manually), Fast Polling, Auto Reconnect (1 to 10 tries), Show Log. See <a href="obd-manager.html">OBD Manager</a>.</td></tr>
+            <tr><td>Black Box</td><td>Record every drive, Record everything the car reports, Storage cap (50 to 5000 MB), what is recorded so far, Trip history, Open folder, Clear history. See <a href="obd-manager.html#black-box">Black Box</a>.</td></tr>
+            <tr><td>Advanced</td><td>Two tools few people need, one under the other: <a href="obd-manager.html#custom-pids">Custom PIDs</a> (what was loaded, what was skipped, Create starter file) and the <a href="obd-manager.html#bus-monitor">Bus Monitor</a> (Listen / Stop, a message-id filter, Record to file).</td></tr>
+
+            <tr><td rowspan="3"><strong>Phone</strong></td><td>Phone Mirror</td><td>Wireless (Pair a Phone, Forget), Display Mode (Mirror Phone / Desktop (DeX), with Text Size for the desktop), Stay Wireless After USB, Phone Screen Off While Mirroring, Phone Audio Level, Duck Local Music.</td></tr>
+            <tr><td>Android Auto</td><td>Show in Nav Bar, Head Unit (Built-in / Google DHU), Video Size.</td></tr>
+            <tr><td>iPhone</td><td>AirPlay Receiver, Ask New iPhones for a PIN, Touch Through Bluetooth (Pair Touch), Name, Video Size, Forget Paired iPhones. The tile is only there in a build that has AirPlay. All three: <a href="phone-mirror-android-auto.html">Phone Mirror / Android Auto</a>.</td></tr>
+
+            <tr><td rowspan="3"><strong>Accessories</strong></td><td>Volume Knob</td><td>Connection (the USB Serial Port to use), Volume Step (Change per Click), LED (Keep LEDs on, Color Mode: Theme Colors or Static Color).</td></tr>
+            <tr><td>IMU Sensor</td><td>Connection (the IMU Sensor switch and its status), Sensors Page (Decimal Places, Update Rate, Visible Cards).</td></tr>
+            <tr><td>Gesture Sensor</td><td>Connection (the Gesture Sensor switch and its status), Volume and Timing (Volume per Swipe, Pause Between Gestures), Mapping (what each gesture does, Reset to Defaults). All three: <a href="hardware-managers.html">Hardware Managers</a>.</td></tr>
+
+            <tr id="device-cards"><td rowspan="3"><strong>Device</strong></td><td>Device</td><td>Name (also the window title), Network (the network's name and Refresh), Power (Shut Down).</td></tr>
+            <tr><td>Vehicle</td><td>The vehicle the 3D view and Home show: a picture for each one, "No vehicle", and one to add a model of your own. Show on Home. For a model of your own: Turn 90&deg;, Stand it up, Remove.</td></tr>
+            <tr><td>Developer</td><td>Three cards, one under the other. <strong>Frontends</strong>: other screens for OCTAVE (Built-in and each installed one; Install from folder, Install from zip, Try, Remove); see <a href="writing-a-frontend.html#install">Installing Your Frontend</a>. <strong>Service</strong>: the Service switch (applies at the next start), Pair a device (Show a code), Paired devices (Read only / Allow all, Revoke). <strong>Diagnostics</strong>: the end of the log with Refresh, Copy, Export logs and Open folder.</td></tr>
+
+            <tr><td><strong>About</strong></td><td>About</td><td>One tile, in the bottom-right corner, showing the version. This Build (commit and date), Software Updates (Check for Updates, Update Now), Documentation (Open Wiki), Open-Source Licenses (what this build includes, with a button for each license text).</td></tr>
           </tbody>
         </table>
+        <p>
+          <strong>On Android</strong> there are no Phone and Accessories sections.
+          <strong>On a screen taller than it is wide</strong> the grid
+          becomes one scrolling list, each section under its name with its tiles two across.
+        </p>
+        <p>
+          This page lists what is on the screen. What each setting does, its key in the settings file and its default
+          are in the <a href="settings-reference.html">Settings Reference</a>.
+        </p>
 
-        <!-- Pages -->
-        <h2 id="pages">The Settings Pages</h2>
-
-        <p><strong>Chips</strong>: the text chips of a <code>SettingsChips</code> sit on a grid. Every chip of one control is the same width and the columns share the card's width (<code>gridColumns</code> is what the widest label allows, evened out over the rows it takes; <code>gridCellWidth</code>), so rows line up; a label wider than its cell is elided. Swatch, font and picture chips keep their fixed sizes. The knob's serial ports and step presets and the gesture mapping use <code>SettingsChips</code> too, in place of chip rows of their own.</p>
-
-        <p><strong>Rules every card follows</strong> (settings sweep, 2026-11-18): the state of a connection comes first in its card; one setting per <code>SettingCategory</code>, a toggle on the right of the card (<code>inlineContent</code>), centred vertically on the title and description, with no "On" / "Off" label; a description only where the title does not say it, one line, with the how-to left to this wiki; anything that cannot be taken back is a <code>ConfirmButton</code>. A tool few people need is a titled <code>SettingsCard</code> inside an Advanced / Developer tile rather than a tile of its own; those cards are always open (no <code>cardId</code>), since a card that had to be tapped open read as a dropdown. The inline switch (<code>SettingsToggle</code> with <code>compact</code>) is <code>dp(68)</code> by <code>dp(36)</code>, and a tap anywhere on its card flips it (<code>SettingCategory.inlineToggle</code>; on a card with controls under the title, the title and description only). A card that moved keeps answering to its old id: <code>movedCards</code> in <span class="file-path">SettingsSidebarLayout.qml</span> maps it to the tile it now lives in (<code>obd_adapters</code>, <code>obd_custom_pids</code>, <code>obd_bus_monitor</code>, <code>device_frontends</code>, <code>device_service</code>, <code>device_diagnostics</code>, <code>accessories_phone_dock</code>).</p>
-
-        <p>Six of the seven pages are <code>Flickable</code>s that declare a <code>tileModel</code> &mdash; an array of <code>{ cardId, title, summary, component }</code> &mdash; and put each card's body in its own <code>Component</code>. The same components serve two renderings: the page's own stacked <code>SettingsCard</code> list, and the tile grid + popup that the grid layout builds from each <code>tileModel</code> (see <a href="#tile-system">Tile Grids</a>). Each tile page also has <code>property bool renderCards: true</code>, and its card <code>Repeater</code> only builds when it is true. The Sidebar layout loads pages with <code>contentLoader.setSource(url, { renderCards: false })</code> instead of a <code>source</code> binding, so the flag is set before the page is built. Sidebar hides the page behind its tile grid, and building the hidden stacked cards anyway cost 50+&nbsp;ms per section switch. About accepts the property too, so the Sidebar can pass it uniformly. About has no tiles and renders as a plain scrolling page in every layout. Every page also declares the local <code>dp()</code>/<code>dpMin()</code> wrappers.</p>
-
-        <h3>Display &mdash; <span class="file-path">settings/DisplaySettingsPage.qml</span></h3>
-        <table>
-          <thead><tr><th>Tile</th><th>Controls (all persisted through <code>settingsManager.save_*</code>)</th></tr></thead>
-          <tbody>
-            <tr><td>Layout (<code>display_layout</code>)</td><td><strong>UI Scale</strong> slider 0.5&ndash;2.0 step 0.05, committed on release (see <a href="theme-system.html#gui-scale">Theme System</a>). <strong>Screen Dimensions</strong>: width (400&ndash;3840) and height (300&ndash;2160) text fields that resize <code>mainWindow</code> and call <code>App.Spacing.updateDimensions()</code>; a Fullscreen / Exit Fullscreen button and a Maximize button that also call <code>save_window_state("fullscreen" | "windowed" | "maximized")</code> so Main.qml can restore the window state at launch (this was the separate Window tile). <strong>Nav Bar Position</strong> segmented control <code>bottom</code> / <code>side</code>. <strong>Nav Bar Media Controls</strong> toggle. A toggle sits in its card's title row (<code>SettingCategory.inlineContent</code>) with no "On" / "Off" label, and a card has a description only where the title does not say it.</td></tr>
-            <tr><td>Appearance (<code>display_appearance</code>)</td><td><strong>Theme</strong>: Light and Dark swatch-chip rows, an "Album Art Theme" row of saved image chips, and the Album Art Capture sub-card with Fade Time and Fade Over the Whole Song. <strong>Font</strong> chips that render in their own typeface. Details: <a href="theme-system.html#theme-picker">Theme Picker</a>.</td></tr>
-            <tr><td>Units (<code>display_units</code>)</td><td>The units of the whole app, as segmented controls: <strong>Temperature</strong> &deg;C / &deg;F (one choice that writes both <code>gaugeTempUnit</code> and <code>sensorTempUnit</code>; it shows the gauges' value), <strong>Speed</strong> mph / km/h (<code>gaugeSpeedUnit</code>) and <strong>Altitude</strong> m / ft (<code>sensorAltitudeUnit</code>). These were toggles on OBD &rarr; Parameters and on the IMU card. Trip History keeps the units each drive was recorded in.</td></tr>
-            <tr><td>Clock (<code>display_clock</code>)</td><td><strong>Show Clock</strong>, <strong>Show Seconds</strong> toggles; <strong>Time Format</strong> segmented control ("24-hour" / "12-hour" &rarr; <code>save_clock_format(bool)</code>); <strong>Clock Size</strong>: <strong>Auto</strong> toggle (<code>save_clock_size_auto(bool)</code>, fits the clock to its nav bar slot) plus a 10&ndash;85 px slider, disabled while Auto is on. With Show Clock off, the other three cards are hidden.</td></tr>
-          </tbody>
-        </table>
-
-        <h3>Media &mdash; <span class="file-path">settings/MediaSettingsPage.qml</span></h3>
-        <table>
-          <thead><tr><th>Tile</th><th>Controls</th></tr></thead>
-          <tbody>
-            <tr><td>Library &amp; Playback (<code>media_library</code>)</td><td>Library folder text field; <strong>Browse</strong> opens a <code>FolderDialog</code> whose result goes to <code>settingsManager.save_media_folder_url()</code>, which maps it to a path (<span class="file-path">src/util/pathurl.h</span>: a <code>file://</code> URL incl. a Windows drive letter; an Android Storage Access Framework tree to <code>/storage/emulated/0/...</code> or, for an SD card, <code>/storage/&lt;volume&gt;/...</code>; the library is read with <code>QDir</code> under the <code>READ_MEDIA_AUDIO</code> permission) and refuses anything else, which the page explains under the field instead of leaving an empty library; <strong>Scan</strong> (<code>mediaManager.scanLibrary()</code>) and <strong>Clean Titles</strong> (<code>stripFilenames()</code>, which tidies the song names shown and leaves the files alone) buttons. Then the former Playback tile: <strong>Startup Volume</strong> slider 0&ndash;1 (displayed as <code>sqrt(value)&times;100&nbsp;%</code> to match the quadratic curve, 100&nbsp;ms debounce); <strong>Audio Output</strong> chips (&ldquo;System default&rdquo; plus each <code>mediaManager.audioOutputs</code> entry, saved with <code>settingsManager.save_audio_output_device(id)</code>; the description names <code>mediaManager.currentAudioOutput</code> and says when the picked output is unplugged); <strong>Autoplay on Startup</strong>; <strong>Remember Shuffle</strong>; <strong>Open Music to the Library</strong> (<code>musicButtonDefaultPage</code> = <code>mediaPlayer</code> / <code>mediaRoom</code>); <strong>Return to Library After Picking a Song</strong>. Last, because it is tall, a <code>TerminalFeedback</code> panel ("Scan Log") fed by <code>mediaManager.scanProgress</code>, hidden until Scan or Clean Titles has written a line.</td></tr>
-
-            <tr><td>Spotify (<code>media_spotify</code>)</td><td>One card, a step at a time. Setup: how to create the Spotify developer app, the redirect URI to register and the Client ID field (<code>setClientId</code>; empty goes back to the build's <code>OCTAVE_SPOTIFY_CLIENT_ID</code>), hidden in a build with its own ID unless <strong>Use My Own Client ID</strong> is pressed. <strong>Connect Spotify</strong> (<code>spotifyManager.signIn()</code>) shows once there is an ID of 32 letters and digits. Signed in: who, and <strong>Sign Out</strong>. <code>spotifyManager.status</code> in red when something went wrong. Tile state: "Signed in as &lt;name&gt;" / "Needs setup" / "Not connected". See <a href="media-manager.html#spotify">Media Manager &rarr; Spotify</a>.</td></tr>
-          </tbody>
-        </table>
-
-        <h3>OBD &mdash; <span class="file-path">settings/OBDSettingsPage.qml</span></h3>
-        <p>Three tiles. <strong>Connection</strong> (<code>obd_connection</code>): the status bar, a <strong>Reconnect</strong> button (<code>obdManager.resetConnection()</code>), the vehicle, then the adapter section (the former Adapters tile: <code>adaptersContent</code> in a <code>Loader</code>, with Find Bluetooth Adapters, the adapters found, the saved ones, and the address field with Go / Direct behind <strong>Enter Address Manually</strong>, open from the start where <code>obdAdapterFinder.canScan</code> is false), <strong>Fast Polling</strong>, <strong>Auto Reconnect</strong> (a switch over <code>obdAutoReconnectAttempts</code>: on writes 3, off writes 0, and a 1&ndash;10 slider shows while it is on) and the connection log behind <strong>Show Log</strong>. The <strong>Home Gauges</strong> tile (<code>obd_parameters</code>: the classic Home's card list) was removed on 2026-11-24; <code>homeOBDParameters</code> keeps its saved value and the classic Home still reads it, but nothing in the app edits it. <code>obdCardStyleCircular</code> is likewise a setting the OBD page follows with no control on screen. <strong>Advanced</strong> (<code>obd_advanced</code>): Custom PIDs and Bus Monitor as two <code>SettingsCard</code>s, one under the other, described below.</p>
-
-        <p>In detail: <strong>Connection</strong> (status with colour map, vehicle, fast polling, auto reconnect, live log), <strong>Black Box</strong> (<code>obd_black_box</code>: the <a href="obd-manager.html#black-box">trip recorder</a> on/off, the all-PIDs sweep, the storage cap, recording status and storage used, buttons to the Trip History page, the trips folder and a two-tap "Clear history"). Commit <code>93d0fc9</code> split the former monolithic "Connection" card into four; the small Tuning tile was later folded back into Connection and Parameters. See <a href="obd-manager.html">OBD Manager</a> for what the controls drive. <strong>Custom PIDs</strong> (<code>obd_custom_pids</code>): what <code>customPids</code> loaded from <code>custom-pids.json</code> at startup (each reading with its mode, id, ECU header and formula), the entries skipped and why, the file's path, and Create starter file (<code>customPids.createExample()</code>) while there is none; editing is done in the file and takes a restart (<a href="obd-manager.html#custom-pids">Custom PIDs</a>). <strong>Bus Monitor</strong> (<code>obd_bus_monitor</code>): Listen / Stop with an optional message-id filter, the table of <code>busMonitor.ids</code> (id, period, bytes, the ones that just changed in the accent colour; the list's model is the row count, so delegates survive each refresh), the message and overrun counts, and Record to file (<a href="obd-manager.html#bus-monitor">Bus Monitor</a>).</p>
-
-        <p>The Connection tile's status bar shows <code>obdManager.connectionStatus</code> as its label and takes its colour, its "Connecting" pulse and progress from <code>obdManager.connectionState</code> (<code>import OCTAVE.OBD 1.0</code> for <code>OBDManager.Connecting</code> etc.), which <code>OBDManager::stateFor()</code> classifies from the status text: <code>Connected</code> (accent); <code>Connecting</code> (<code>statusWarning</code>): <code>Connecting</code>, <code>Reconnecting</code>, <code>Stale Connection</code> and the Android BLE steps <code>Connecting BLE...</code>, <code>Discovering services...</code>, <code>Initializing ELM327...</code>, <code>Querying PIDs...</code>; <code>NoVehicle</code> (<code>statusInfo</code>): <code>No Vehicle</code>; <code>Disconnected</code> (<code>statusDisconnected</code>); <code>Failed</code> (<code>statusError</code>): <code>Device Not Found</code>, <code>Connection Failed</code>, <code>Error</code>, <code>No MAC Address</code>, <code>BLE connect failed</code>, <code>BLE error</code> and any text the table doesn't know. Until open-backend #10 the page kept a string-keyed colour table, OBDHome and the connect button matched only the exact "Connecting" (so the BLE steps showed red with no spinner on Android), and the tile and widget classified by substring.</p>
-
-        <h3>Accessories &mdash; <span class="file-path">settings/AccessoriesSettingsPage.qml</span></h3>
-        <p><strong>Volume Knob</strong> (the step is picked from preset chips), <strong>IMU Sensor</strong>, <strong>Gesture Sensor</strong>. The phone cards moved to the Phone page below. Marked <code>desktopOnly</code> in the page model, so it is absent from the Android build's menu. See <a href="hardware-managers.html">Hardware Managers</a> and <a href="phone-mirror-android-auto.html">Phone Mirror / Android Auto</a>.</p>
-
-        <h3>Phone &mdash; <span class="file-path">settings/PhoneSettingsPage.qml</span></h3>
-        <p>What was Accessories &rarr; Phone Dock, a tile per way a phone reaches the screen (<code>desktopOnly</code>, section <code>phoneSettings</code>). Each card opens with a status line. <strong>Phone Mirror</strong> (<code>phone_mirror</code>, no on / off switch since 2026-11-25): Wireless (Pair a Phone / Forget, the QR modal), Display Mode (Mirror Phone / Desktop (DeX), the desktop always the size of the window, with Text Size), Stay Wireless After USB (<code>scrcpyAutoWifi</code>, with its warning), Phone Screen Off While Mirroring, Phone Audio Level, Duck Local Music. <strong>Android Auto</strong> (<code>phone_android_auto</code>): Show in Nav Bar, Head Unit (Built-in / Google DHU), Video Size; what the built-in head unit needs is one line shown until it is running, and the certificate folder shows only when a certificate is missing or there is an error. <strong>iPhone</strong> (<code>phone_airplay</code>, only where <code>airPlayManager.available</code>): AirPlay Receiver, Ask New iPhones for a PIN, Touch Through Bluetooth (its state and Pair Touch), Name, Video Size, Forget Paired iPhones. See <a href="phone-mirror-android-auto.html">Phone Mirror / Android Auto</a>.</p>
-
-        <h3>Device &mdash; <span class="file-path">settings/DeviceSettingsPage.qml</span></h3>
-        <p>Three tiles: Device, <strong>Vehicle</strong> (<code>device_vehicle</code>, which also has <strong>Show on Home</strong>, <code>homeVehicleCard</code>) and <strong>Developer</strong> (<code>device_developer</code>): Frontends, Service and Diagnostics as three <code>SettingsCard</code>s, one under the other, each described below as it was when it had a tile. <strong>Device</strong> (<code>device_name</code>; its tile shows the device name, with a status dot for the network) holds three sections: <strong>Name</strong> (text field &rarr; <code>mainWindow.updateDeviceName()</code>, which is also the window title), <strong>Network</strong> (connection dot, network name / "Not Connected", Refresh &rarr; <code>networkManager.refreshNetwork()</code>) and <strong>Power</strong> (a <code>ConfirmButton</code>, "Shut Down" &rarr; "Confirm Shutdown", that calls <code>networkManager.shutdownDevice()</code>). <strong>Diagnostics</strong> (the tile is always there; its controls show when the <code>diagnosticsManager</code> context property exists &mdash; <span class="file-path">src/main.cpp</span> registers it on every platform): a 2&times;2 <code>GridLayout</code> of <code>SettingsButton</code>s &mdash; Refresh (<code>recentLogLines(200)</code>), Copy (<code>copyLogsToClipboard(400)</code>), Export logs (<code>exportLogs()</code> &rarr; Downloads folder) and Open folder (visible only when <code>canOpenFolder</code>) &mdash; followed by a line with <code>appVersion</code>, <code>backendName</code>, <code>deviceInfo</code> and <code>logDir</code>, a status line, and a <code>dp(180)</code> monospace log tail scrolled to the bottom. Commit <code>7fd8405</code> moved the buttons into the grid because four labels side by side overflowed the card at 1276&nbsp;px on the Pi and a Layout cannot shrink a button below its label. Diagnostics lived on the About page until it moved here.</p>
-
-        <h3>About &mdash; <span class="file-path">settings/AboutPage.qml</span></h3>
+        <!-- Finding -->
+        <h2 id="finding">Finding a Setting</h2>
         <ul>
-          <li>A pulsing "OCTAVE" title (a dimmed copy behind the accent-coloured text, opacity 0.3&harr;0.7 every 600&nbsp;ms).</li>
-          <li><strong>Latest Build</strong>: commit hash, date and message from <code>settingsManager.get_git_commit_hash() / _date() / _message()</code>.</li>
-          <li><strong>Documentation</strong>: Open Wiki opens a reader inside OCTAVE’s page area, keeping the bottom or side navigation visible and usable. A build with no web view opens the published wiki in the browser instead: the browser demo opens the wiki published beside its page (<code>wiki/</code> next to the page's address) in a new tab, and a desktop build without Qt WebEngine opens <code>robdegeorge.com/OCTAVE/wiki/</code>. On desktop the reader is Qt WebEngine (<span class="file-path">settings/WikiWebView.qml</span>); on Android, where WebEngine does not exist, <span class="file-path">WikiPopup.qml</span> loads <span class="file-path">settings/WikiNativeView.qml</span> instead &mdash; the same toolbar on Qt WebView (the phone's own WebView), reading the wiki that the APK carries under <code>assets/wiki</code> (<code>file:///android_asset/wiki/index.html</code>; <code>main.cpp</code> calls <code>QtWebView::initialize()</code> before the application object and exposes that URL as <code>wikiHomeUrl</code>). The native view has no user scripts, so the reader bootstrap is injected with <code>runJavaScript()</code> after every successful load. While another page is shown the popup is not just transparent and disabled but zero-sized and its reader loader hidden: an open Popup swallows every press inside its geometry regardless of <code>enabled</code>, which had left the media room untouchable after the wiki was opened, and on Android the native WebView ignores QML opacity. A compact toolbar provides Back, Forward, Home, and Close (or Escape), with Topics and Search controls. Pressing the app’s Settings navigation button while viewing the wiki closes the reader and returns to About. Choosing another app page suspends the reader in the background; returning with Settings restores the same page and scroll position. The in-app reader sizes its text automatically &mdash; no zoom buttons: the smallest size follows the screen scale and the UI Scaling setting, and on wider readers the text grows (up to 1.4&times;) to keep lines near 70 characters &mdash; and has a collapsible topic panel with large tap targets, and horizontally scrollable tables. Touchscreens use native swipe scrolling; mouse-emulating touchscreens can drag the article or topic list. The standard browser wiki retains its original layout. Desktop builds use Qt WebEngine; the reader is created on open and released only when explicitly closed. Source launches read the live <code>wiki/</code> folder, while packaged native builds fall back to an embedded offline copy. Builds without WebEngine display an availability message.</li>
-          <li><strong>Software Updates</strong>: Check for Updates (with the same orange pulsing dot as the bottom bar), a status dot coloured per <code>updateStatus</code> (checking = accent, up-to-date = green, update-available / diverged = orange, ahead = accent, error = red) and <code>updateMessage</code>; when an update is available it shows the remote commit and, if <code>canSelfUpdate</code>, either a "working tree dirty" warning or a two-step "Update Now" / "Confirm Update" button (5&nbsp;s timeout) driving <code>applySelfUpdate()</code>, with fetching / error-retry / "Restart Now" states from <code>selfUpdateStatus</code>. Non-git installs see "Pull the latest changes from GitHub to update."</li>
-          <li><strong>Open-Source Licenses</strong> (<code>objectName: "licensesCard"</code>): OCTAVE's GPL-3.0-or-later notice with the source link, then what this build bundles, each with its license and use. Every build lists Qt, the QR Code generator, the scrcpy server fork and the three bundled OFL-1.1 fonts (Google Sans, JetBrains Mono, OCTAVE Symbols); desktop adds TagLib, FFmpeg (the H.264-decoder-only build that decodes the phone mirror, LGPL-2.1+, and the copy inside Qt Multimedia that plays music, LGPL-2.1+ except GPL-2.0+ in the aarch64 AppImage) and adb; Android adds OpenSSL. Every build also lists SQLite (public domain); the browser build lists TagLib and coi-serviceworker in place of the desktop extras. Below the list is one button per license text, as many in a row as fit with the rows evened out: "GPL-3.0" (<code>LICENSE</code>), then the licenses the components of this build are under (each component has a <code>texts</code> list; of LGPL-3.0, LGPL-2.1, GPL-2.0, MPL-1.1, Apache-2.0, MIT and OFL-1.1 only those appear), then "Notices" (<code>NOTICE</code>). Each opens the full text in a scrollable popup through <code>diagnosticsManager.licenseText()</code>; the texts are the files of <span class="file-path">licenses/</span>, compiled in.</li>
-          <li>Description text, the GitHub link, and the copyright line.</li>
+          <li><strong>Read the tiles.</strong> The whole of Settings is on one screen, so there is nothing to search or page through. The line under a tile's name is its state, and a tile is tinted in the accent colour when its thing is on or connected. A coloured dot before the state means a connection: connected, waiting, or not there.</li>
+          <li><strong>Go back</strong> from a card by tapping its title bar (the arrow and the name at the top), or by tapping the Settings button on the navigation bar again.</li>
+          <li><strong>Some screens take you straight to the right card.</strong> The Connect button on the OBD page opens OBD &gt; Connection. The phone widget on Home opens Phone &gt; Phone Mirror. The vehicle card on Home opens Device &gt; Vehicle. The music screens' Spotify button opens Media &gt; Spotify until you are signed in.</li>
+          <li><strong>An orange dot</strong> on the About tile means an update is available.</li>
+          <li><strong>Open Wiki</strong> (About &gt; Documentation) opens this wiki inside OCTAVE, with the navigation bar still usable. Go to another page and come back with the Settings button, and the wiki is where you left it; tap Settings while reading and it closes. A build with no web view opens the wiki in your browser instead and says so under the button.</li>
         </ul>
 
-        <!-- Tile system -->
-        <h2 id="tile-system">Tile Grids and the Card Popup</h2>
-
-        <p>Commit <code>93d0fc9</code> gave every page a tile grid. Three components implement it:</p>
-
-        <ul>
-          <li><strong><span class="file-path">settings/SettingsTilePage.qml</span></strong> &mdash; a <code>GridLayout</code> of <code>SettingsTile</code>s driven by <code>tileModel</code>. A <code>columns</code> property (default 0 = automatic) overrides the column count, and a non-zero <code>rows</code> switches the flow to top-to-bottom with that many rows per column (the settings grid uses this so a column holds one section). The grid's height is split evenly between its rows and every tile is sized to its share, so the grid always fits the space it is given (a fixed minimum tile height used to push the bottom row under the nav bar); a model entry's optional <code>rowSpan</code> makes a tile cover several rows; automatically, four tiles form a 2&times;2 grid and any other count uses <code>max(2, ceil(sqrt(n)))</code> columns. It emits <code>tileSelected(cardId, originRect)</code> with the tile's rectangle mapped into the grid's parent. The tapped tile stays drawn while its popup is open; the popup covers it once its background fills in.</li>
-          <li><strong><span class="file-path">settings/SettingsTile.qml</span></strong> &mdash; a rounded rectangle (<code>primaryTextColor</code> at 5&nbsp;%, 10&nbsp;% on hover, accent at 18&nbsp;% when pressed, scale 0.97 while pressed) with a static bevel (1&nbsp;px white 10&nbsp;% top line, 1&nbsp;px black 20&nbsp;% bottom line), no icon: it shows the setting's name with its current state under it, the label / second-line pattern of Android Quick Settings and Apple Home tiles. The title (<code>primaryTextColor</code>, medium weight) is the largest text; the <code>stateText</code> line below it is <code>secondaryTextColor</code>, with an optional status dot before it (<code>statusColor</code>, <code>statusVisible</code>). Both are grouped and vertically centred, and sized from the tile width rather than the text, so every tile in a grid matches; a long title wraps to a second line ("Library &amp; Playback") and anything longer elides rather than shrinks. When <code>active</code> is true (something on or connected) the tile is tinted with the accent at 16&nbsp;% and the state line turns primary. A tile with no state shows its title alone (Adapters). Emits <code>tileClicked(cardId)</code>.</li>
-          <li><strong><span class="file-path">settings/SettingsCardPopup.qml</span></strong> &mdash; a <code>contentColor</code> panel with a header row (a "&rarr;" glyph and the title, both turning accent on hover; tapping anywhere on the header emits <code>backRequested()</code>), a solid 1&nbsp;px accent rule, and a <code>Flickable</code> body (inset <code>overallMargin</code> from the rule and from the bottom bar, the same gap the music library leaves) whose <code>Loader</code> instantiates the tile's <code>component</code>. The popup owns its hero morph (below); hosts only set <code>open</code>, <code>originRect</code>, <code>title</code> and <code>contentComponent</code>.</li>
-        </ul>
-
-        <p>Each <code>tileModel</code> entry's <code>summary</code> is a function returning <code>{ state, active, status }</code> (all optional). <code>SettingsTilePage</code> calls it inside the delegate's <code>info</code> binding, so the binding tracks whatever <code>settingsManager</code> or manager properties the function reads and the tile updates live (the clock tile ticks from a 1&nbsp;s timer in <code>DisplaySettingsPage</code>) without the page rebuilding its <code>tileModel</code>. Summaries read only existing <code>NOTIFY</code> properties (<code>obdManager.connectionStatus</code>, <code>networkManager.networkName</code>, <code>esp32VolumeManager.connected</code>, &hellip;) or page properties fed by <code>Connections</code> (album count), so no manager needs a summary-specific API. Keep the state to about 14 characters (the settings grid elides past that), set <code>active</code> only for things that are on or connected, and leave the state out rather than fill it with an instruction.</p>
-
-        <p>The host (the grid layout) detects a tile page in <code>Loader.onLoaded</code> by <code>typeof item.tileModel !== "undefined"</code>, sets <code>item.visible = false</code> to hide the page's own stacked rendering, and shows the grid instead. Opening a tile records <code>detailTile</code>, <code>detailCardId</code> and <code>originRect</code>, and binds the popup's <code>open</code> to <code>detailCardId !== ""</code>; the popup then morphs from the tile:</p>
-
-        <pre><code><span class="cls">SettingsCardPopup</span> {   <span class="cmt">// inside the popup itself</span>
-    <span class="prop">property real</span> openProgress: open ? <span class="num">1.0</span> : <span class="num">0.0</span>
-    <span class="prop">x</span>: originRect.x * (<span class="num">1.0</span> - openProgress)
-    <span class="prop">y</span>: originRect.y * (<span class="num">1.0</span> - openProgress)
-    <span class="prop">width</span>:  originRect.width  + (parent.width  - originRect.width)  * openProgress
-    <span class="prop">height</span>: originRect.height + (parent.height - originRect.height) * openProgress
-    <span class="prop">contentOpacity</span>: Math.<span class="fn">max</span>(<span class="num">0.0</span>, (openProgress - <span class="num">0.45</span>) / <span class="num">0.55</span>)   <span class="cmt">// content resolves in the second half</span>
-    <span class="cls">Behavior on</span> openProgress { <span class="prop">enabled</span>: _animEnabled; <span class="cls">NumberAnimation</span> { <span class="prop">duration</span>: open ? <span class="num">320</span> : <span class="num">260</span>; <span class="prop">easing.type</span>: Easing.OutCubic } }
-}</code></pre>
-
-        <p>Details that keep the morph smooth:</p>
-        <ul>
-          <li><strong>No reflow while it grows.</strong> The body <code>Flickable</code> is sized to the fully-open popup (the parent's size) for the whole morph and clipped by the popup, so the card's text and controls are laid out once instead of re-wrapping every frame.</li>
-          <li><strong>Cross-fade with the tile.</strong> The tile stays drawn underneath. The popup's background alpha is <code>min(1, openProgress / 0.3)</code>, tinted like the tile (<code>primaryTextColor</code> at 5&nbsp;% over <code>contentColor</code>, fading to plain <code>contentColor</code>) with the tile's corner radius shrinking to 0, so the tile dissolves into the card on open and reappears through it on close. Hiding the tile instead left a blank block over it for the slow tail of the close.</li>
-          <li><strong>Content held through the close.</strong> The popup latches <code>title</code> and <code>contentComponent</code> and only drops them once <code>openProgress</code> reaches 0, so they fade with the shrink rather than vanishing on its first frame. The body's <code>Loader</code> unloads then, so <code>Component.onDestruction</code> still runs and page-scoped resources such as the Now Playing live preview stop. <code>closeTile()</code> clears <code>detailCardId</code> and nulls <code>detailTile</code> as before.</li>
-          <li><strong>Section switch.</strong> When the section's page changes the host calls <code>snapShut()</code> first, which disables the animation for one frame so an open card closes at once instead of shrinking into the new section's grid.</li>
-          <li><code>_animEnabled</code> is set with <code>Qt.callLater</code> after creation so the popup never animates at startup.</li>
-        </ul>
-
-        <!-- Now Playing Studio -->
-        <h2 id="now-playing-studio">Now Playing Studio</h2>
-
-        <p>The Now Playing look editor left Settings on 2026-11-23: there is no "Now Playing" tile on the Media page any more. It opens from the customize button at the top right of the Media Room, around the page it edits; see <a href="pages.html#nowplayingstudio">Pages &rarr; NowPlayingStudio</a>. It still uses this page's components (<code>SettingCategory</code>, <code>SettingsSlider</code>, <code>NowPlayingButtonGrid</code>, ...).</p>
-
-        <!-- Layouts -->
-        <h2 id="layouts">The Layout</h2>
-
-        <p>There is one layout, the grid. The experimental Carousel, Hub and Dashboard layouts (and the per-page widgets the Dashboard showed) were removed on 2026-11-15; the <code>settingsLayoutStyle</code> setting still exists in <code>SettingsManager</code> but the UI no longer reads it. The layout receives <code>settingsMenu</code> and <code>hubModel</code> from the orchestrator and shows the update dot on the About entry. When a page is loaded it binds <code>item.mainWindow</code>, <code>item.stackView</code> and <code>item.currentSection</code> if the page declares those properties.</p>
-
-        <!-- Sidebar -->
-        <h2 id="sidebar">Grid Layout</h2>
-
-        <p><span class="file-path">frontend/SettingsSidebarLayout.qml</span> is the layout (the file keeps the name of the sidebar it replaced). It fills the whole content area with one <code>SettingsTilePage</code> holding every card of every visible section (<code>allTiles</code>), like an app drawer. There is no section list and no per-section view.</p>
-
-        <p>The grid fills top to bottom, one section per column under a small uppercase caption (the section name, from a <code>Row</code> laid out with the grid's own margin and spacing), with at most <code>gridRows</code> (4) tiles per column. <code>sectionColumns</code> builds the columns in <code>pageModel</code> order, and About's single tile finishes the last column if it has room, landing in the bottom-right corner. A column with fewer tiles stretches them to fill it, so short sections leave no gaps: the grid has <code>gridSlots</code> (12) rows and each tile's <code>rowSpan</code> is 12 divided by its column's tile count (12 divides evenly by 1&ndash;4). Desktop reads Display (3), Media (2), OBD (3), Accessories (4), Device (2) + About; Android has no Accessories. If the last column is full (for example Device hidden in the Toggle View popup), About gets a column of its own with no caption.</p>
-
-        <p>A hidden <code>Repeater</code> of <code>Loader</code>s builds one instance of each tile page with <code>renderCards: false</code>, because each tile's <code>component</code> lives inside its page. Tapping a tile opens its card in the <code>SettingsCardPopup</code> described above; the popup's back arrow, or tapping the bottom bar's Settings button (<code>navigateToHub()</code>), closes it. <code>media_now_playing</code> still opens the Now Playing studio. About has no tiles of its own, so it gets one tile (<code>section:about</code>) whose card loads the whole <code>AboutPage.qml</code>; its summary (<code>_aboutSummary()</code>) shows the app version and backend, plus an orange status dot when an update is available. <code>navigateToCategory("about")</code> (used when the wiki popup is closed from the Settings button) opens that card. After a rebuild (nav bar orientation change) the card in <code>settingsMenu.initialTile</code> is reopened once the pages have loaded.</p>
+        <!-- Visibility -->
+        <h2 id="visibility">Hiding Sections</h2>
+        <p>
+          If you never use a section (no sensors, no phone), you can take it off the Settings screen.
+        </p>
+        <ol class="steps">
+          <li><strong>Press and hold</strong> the Settings button on the navigation bar. A panel called <strong>Toggle View</strong> opens.</li>
+          <li>Tap a section to hide it or show it again. The grid behind changes at once.</li>
+          <li>Tap <strong>Close</strong>.</li>
+        </ol>
+        <p>
+          Hiding a section only removes its column from the screen. Its settings keep their values and keep working.
+          Every section is shown until you hide it.
+        </p>
+        <p>
+          The choice is stored under the <code>settingsMenuVisibility</code> key as one true / false per section id.
+          The seven ids are <code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>,
+          <code>phoneSettings</code>, <code>accessoriesSettings</code>, <code>deviceSettings</code> and
+          <code>about</code>. From code, read one with <code>settingsManager.is_settings_section_visible(id)</code>
+          (an id it has never heard of counts as visible) and change one with
+          <code>settingsManager.save_settings_section_visibility(id, visible)</code>. The panel itself belongs to the
+          <a href="bottom-bar.html">Bottom Bar</a>.
+        </p>
 
         <!-- Components -->
-        <h2 id="components">Reusable Components</h2>
+        <h2 id="components">The Controls</h2>
+        <p>
+          From here on the page is for people adding to the Settings screen or changing it.
+        </p>
+        <p>
+          A card is built from a small set of ready-made parts in <span class="file-path">frontend/settings/</span>.
+          Use them and a new setting looks and behaves like every other one. They are QML files in the same folder
+          as the pages, so a page uses them by name with no import; the snippets below assume the page's usual
+          <code>import ".." as App</code> for <code>App.Style</code> and <code>App.Spacing</code>.
+        </p>
+        <p>
+          The pattern is the same for every control: <strong>bind what it shows to the setting, and write the setting
+          when the user acts</strong>. The control then follows the setting wherever it changes from, including a
+          paired device or a knob. Reading and writing a setting is explained in
+          <a href="settings-manager.html">Settings Manager</a>.
+        </p>
 
-        <p>All of these live in <span class="file-path">frontend/settings/</span> and import the parent directory as <code>App</code>. Radii and feature flags come from <code>App.EnvironmentTheme.active</code> (single fixed preset, see <a href="theme-system.html#environment-theme">Theme System</a>); the dormant "spacecraft" / "deep sea" branches noted below are compiled in but never active.</p>
-
-        <h3>Containers</h3>
+        <h3>Boxes that hold a setting</h3>
         <table>
-          <thead><tr><th>Component</th><th>Details</th></tr></thead>
+          <thead><tr><th>Part</th><th>What it is for</th></tr></thead>
           <tbody>
-            <tr><td><strong>SettingsCard</strong></td><td>Collapsible card. Props <code>cardId</code>, <code>title</code>, <code>description</code>, <code>expanded</code>; <code>default property alias cardContent</code>. <code>collapsible</code> is true when <code>cardId</code> is set; the initial <code>expanded</code> value comes from <code>ExpandedCards.isExpanded(cardId)</code>, which returns <strong>false</strong> for a card that has never been toggled, so cards start collapsed in the stacked renderings. Background <code>primaryTextColor</code> at 7&nbsp;%, radius <code>cardRadius</code>, 250&nbsp;ms height animation gated by <code>_initialized</code>; the header arrow (&#9660; / &#9654;) blinks through an opacity animation targeted by id &mdash; commit <code>cda1182</code> ("Settings page opaque menu fix") changed that target from <code>parent</code> to the explicit ids <code>collapseArrow</code> / <code>sectionArrow</code>. Dormant: accent border, top highlight, glass gradient, <code>CornerBrackets</code>.</td></tr>
-            <tr><td><strong>SettingCategory</strong></td><td>Light card (5&nbsp;% background, no border) for one setting or a tight group. <code>title</code>, <code>description</code>, default slot <code>categoryContent</code> (stacked) and <code>inlineContent</code> (right side of the title row). A flex spacer pushes inline controls to the right edge; when there are none it becomes the HUD line only if <code>sectionHeaderLines</code> is on.</td></tr>
-            <tr><td><strong>SettingSubcategory</strong></td><td>Card-within-a-card (4&nbsp;% background, 7&nbsp;% border, radius <code>cardRadius &times; 0.7</code>). With <code>togglable: true</code> the header carries a compact <code>SettingsToggle</code> and the body (height + opacity animated, <code>enabled</code> follows visibility) only shows while <code>checked</code>. Reveal animation suppressed on first mount.</td></tr>
-            <tr><td><strong>SettingsDivider</strong></td><td>1&nbsp;px translucent line. A <code>Loader</code> picks the standard, "spacecraft" (gradient + pulse + rotating diamond) or "deep sea" (gradient + sonar ping) variant by flags; only the standard one is reachable.</td></tr>
+            <tr><td><code>SettingCategory</code></td><td>The box for <strong>one setting</strong>: a <code>title</code>, an optional one-line <code>description</code>, and the control. Put a switch in <code>inlineContent</code> and it sits on the right of the title; anything else goes inside and stacks under the title.</td></tr>
+            <tr><td><code>SettingSubcategory</code></td><td>A box inside a box, for controls that belong to one choice. With <code>togglable: true</code> it has its own switch and shows its contents only while <code>checked</code>; it emits <code>toggled(bool)</code>.</td></tr>
+            <tr><td><code>SettingsCard</code></td><td>A larger box with a slightly stronger background, for a whole tool inside a tile (Custom PIDs, Diagnostics). Give it no <code>cardId</code> and it is always open with no header: put a <code>SettingLabel</code> first as its title.</td></tr>
+            <tr><td><code>SettingsDivider</code></td><td>A thin line between groups in a card that is not split into boxes.</td></tr>
+            <tr><td><code>SettingLabel</code>, <code>SettingDescription</code></td><td>Text in the settings' own sizes and colours: a label, and smaller grey text that wraps.</td></tr>
           </tbody>
         </table>
 
-        <h3>Controls</h3>
-        <table>
-          <thead><tr><th>Component</th><th>Details</th></tr></thead>
-          <tbody>
-            <tr><td><strong>SettingsToggle</strong></td><td><code>checked</code>, <code>compact</code>, <code>text</code>, <code>activeColor</code>, <code>inactiveColor</code>; signal <code>toggled(bool)</code>. A tap emits <code>toggled(!checked)</code> and does <em>not</em> assign <code>checked</code>, so the caller's <code>checked: settingsManager.x</code> binding stays alive and the switch follows the setting from wherever it changes; pages no longer need a <code>Connections</code> block to copy the setting back. Only when <code>checked</code> did not follow the tap (no binding, or one on a value that does not notify, such as <code>get_setting_with_default()</code>) does the toggle set it itself. Compact mode: a <code>dp(48)&times;dp(26)</code> switch (accent when on, <code>secondaryTextColor</code> when off, white <code>dp(20)</code> knob, radii <code>switchRadius</code>/<code>switchKnobRadius</code>) with a bold label to its right, and a touch target at least <code>dp(44)</code> tall that reaches past the drawn switch; it hugs its content so it right-aligns inside <code>SettingCategory</code>. Full mode: <code>dp(46)</code> row with the label at 55&nbsp;% width and a <code>dp(72)&times;dp(36)</code> track with a white handle carrying an inner accent dot, spring animation (<code>OutBack</code>, overshoot 0.6) and a press pulse; the handle's <code>DropShadow</code> is enabled because <code>toggleRectShadow</code> is false.</td></tr>
-            <tr><td><strong>SettingsSlider</strong></td><td>A <code>Slider</code> with <code>activeColor</code> (default <code>settingsSliderColor</code>), <code>visualValue</code>, <code>valueDisplay</code>. Track: <code>secondaryTextColor</code> with an <code>activeColor</code> fill, half the <code>overallSliderHeight</code>; handle <code>overallSliderWidth &times; overallSliderHeight</code>, darkened 10&nbsp;% while pressed. A <code>z: 10</code> <code>MouseArea</code> absorbs presses on the track and passes through only presses on the handle, so the value can be changed by dragging only, never by tapping the track. Dormant: handle glow, 11 tick marks.</td></tr>
-            <tr><td><strong>SettingsButton</strong></td><td><code>text</code>, <code>tooltipText</code>, <code>buttonColor</code> (default accent), <code>bold</code>; signal <code>clicked()</code>. Solid fill darkened 20&nbsp;% on hover and 40&nbsp;% on press, 1&nbsp;px darker border, radius <code>buttonRadius</code>, white label, <code>ToolTip</code> after 300&nbsp;ms. Preferred width follows the label plus <code>overallSpacing &times; 1.5</code>, minimum <code>dp(70)</code>. It has no height of its own: every use sets <code>height</code> or <code>Layout.preferredHeight</code> (<code>dp(44)</code> for anything destructive).</td></tr>
-            <tr><td><strong>ConfirmButton</strong></td><td>A <code>SettingsButton</code> for an action that cannot be taken back. <code>label</code>, <code>confirmLabel</code> (default "Confirm"), <code>idleColor</code> (default accent), <code>armMs</code> (4000), <code>armed</code>; signal <code>confirmed()</code>. The first tap arms it: it reads <code>confirmLabel</code> in <code>Style.statusDanger</code>; a second tap within <code>armMs</code> emits <code>confirmed()</code>; left alone, hidden or disabled it disarms. No dialog, so there is nothing new to aim at in a moving car. Used for Forget (wireless phone, paired iPhones), Revoke (paired device), Remove (frontend) and Spotify Sign Out. The same two taps, written in place where the control is not a button: the saved OBD adapter chip's &#10005; ("Remove?"), "Reset to Defaults" for the gesture mapping, a saved widget's &times; in the dashboard gallery ("Delete?"), and the text-chip &times; of <code>SettingsChips</code>, which opens that component's delete popup. Shut Down, Update Now, Clear history, dashboard delete, Clear DTCs, and song / playlist delete already asked.</td></tr>
-            <tr><td><strong>SettingsTextField</strong></td><td><code>TextField</code> at <code>formElementHeight</code>, preferred width <code>dp(500)</code>, max <code>dp(800)</code>, <code>hoverColor</code> background, accent border while focused, hover tint. Dormant: eight corner-mark rectangles.</td></tr>
-            <tr><td><strong>SettingsSegmentedControl</strong></td><td><code>RowLayout</code> of equal segments (<code>minimumWidth dp(80)</code>, <code>formElementHeight</code>), selected = accent with white text, others <code>hoverColor</code>. <code>options</code>, <code>currentValue</code>, and <code>onSelected</code> as a <code>var</code> callback property (assigned with <code>onSelected: function(value) {...}</code>), not a signal.</td></tr>
-            <tr><td><strong>SettingsChips</strong></td><td>A <code>Flow</code> of selectable chips. Props <code>options</code>, <code>currentValue</code>, <code>chipColors</code> (per-chip text colour), <code>chipImages</code> (album-art chips), <code>chipPalettes</code> (three-band swatch chips), <code>chipFonts</code> (font sample chips), <code>deletableItems</code>; callbacks <code>onSelected</code>, <code>onItemDeleted</code>. Text chips are pills sized to their label; image/palette chips are squares and font chips wide rectangles of <code>formElementHeight &times; 2.4</code>, drawn on <code>#222222</code> with a <code>dpMin(4, 2)</code> accent border when selected. Text chips are laid out first, then a full-width 1&nbsp;px break, then image chips on their own row. Deleting: an inline &times; on text chips, press-and-hold on image/palette chips; both go through a shared confirmation <code>Popup</code>. A <code>DropShadow</code> layer is enabled on the selected text chip (<code>chipAccentBorder</code> is false).</td></tr>
-            <tr><td><strong>SettingLabel</strong> / <strong>SettingDescription</strong></td><td><code>Label</code> in <code>primaryTextColor</code> at <code>overallText</code>; word-wrapped <code>Text</code> in <code>secondaryTextColor</code> at 80&nbsp;%.</td></tr>
-            <tr><td><strong>ValueDisplay</strong></td><td>Read-out next to sliders; <code>text</code> alias, <code>secondaryTextColor</code>, dormant bracket / accent modes.</td></tr>
-          </tbody>
-        </table>
+        <h3>A switch</h3>
+        <pre><code><span class="cls">SettingCategory</span> {
+    <span class="prop">title</span>: <span class="str">"Show on Home"</span>
+    <span class="prop">description</span>: <span class="str">"Beside the readings."</span>
 
-        <h3>Tiles, Cards and Studio Helpers</h3>
-        <table>
-          <thead><tr><th>Component</th><th>Details</th></tr></thead>
-          <tbody>
-            <tr><td><strong>SettingsTile</strong>, <strong>SettingsTilePage</strong>, <strong>SettingsCardPopup</strong></td><td>See <a href="#tile-system">Tile Grids and the Card Popup</a>.</td></tr>
-            <tr><td><strong>ThemedIcon</strong> (<span class="file-path">frontend/ThemedIcon.qml</span>)</td><td>Tinted SVG with an offset shadow overlay; see <a href="theme-system.html#themed-icon">Theme System</a>.</td></tr>
-            <tr><td><strong>CornerBrackets</strong> (<span class="file-path">frontend/CornerBrackets.qml</span>)</td><td>Pulsing accent corner marks; instantiated by cards and tiles with <code>visible: cornerBrackets</code>, which is always false. The pulse animation runs only while visible.</td></tr>
-
-            <tr><td><strong>NowPlayingButtonGrid</strong></td><td>Two-column <code>GridLayout</code> of equal-width option buttons (selected = accent); signal <code>selected(value)</code>.</td></tr>
-          </tbody>
-        </table>
-
-        <!-- Visibility System -->
-        <h2 id="visibility">Section Visibility</h2>
-
-        <p><code>buildHubModel()</code> filters <code>pageModel</code> through <code>settingsManager.is_settings_section_visible(section)</code> (and drops <code>desktopOnly</code> pages on Android):</p>
-
-        <pre><code><span class="kw">function</span> <span class="fn">buildHubModel</span>() {
-    <span class="kw">var</span> model = []
-    <span class="kw">var</span> android = (<span class="kw">typeof</span> isAndroid !== <span class="str">"undefined"</span> &amp;&amp; isAndroid)
-    <span class="kw">for</span> (<span class="kw">var</span> i = <span class="num">0</span>; i &lt; pageModel.length; i++) {
-        <span class="kw">var</span> page = pageModel[i]
-        <span class="kw">if</span> (page.desktopOnly &amp;&amp; android) <span class="kw">continue</span>
-        <span class="kw">if</span> (!<span class="fn">isVisible</span>(page.section)) <span class="kw">continue</span>
-        model.<span class="fn">push</span>({ <span class="prop">name</span>: page.name, <span class="prop">section</span>: page.section, <span class="prop">source</span>: page.source, <span class="prop">icon</span>: page.icon,
-                     <span class="prop">iconSource</span>: page.iconSource || <span class="str">""</span>, <span class="prop">group</span>: page.group || <span class="str">""</span>, <span class="prop">widget</span>: page.widget || <span class="str">""</span> })
+    <span class="prop">inlineContent</span>: <span class="cls">SettingsToggle</span> {
+        <span class="prop">compact</span>: <span class="kw">true</span>
+        <span class="prop">checked</span>: settingsManager.homeVehicleCard
+        <span class="prop">onToggled</span>: <span class="kw">function</span>(checked) { settingsManager.homeVehicleCard = checked }
     }
-    hubModel = model
 }</code></pre>
+        <p>
+          <code>SettingsToggle</code> has <code>checked</code>, <code>compact</code> (the small switch, which is what
+          the settings cards use), an optional <code>text</code> label and the signal <code>toggled(bool)</code>. A
+          tap does not change <code>checked</code> by itself: it emits <code>toggled</code> with the state asked for
+          and waits for your binding to follow. So keep <code>checked</code> bound to the setting and never assign
+          it. In a <code>SettingCategory</code>'s <code>inlineContent</code>, a tap anywhere on the box flips the
+          switch; if the box also has controls under the title, only the title and description do.
+        </p>
 
-        <p><code>SettingsManager</code> persists the map as <code>settingsMenuVisibility</code> and exposes <code>is_settings_section_visible(section)</code> (unknown sections are treated as visible) and <code>save_settings_section_visibility(section, visible)</code>, which emits <code>settingsMenuVisibilityChanged</code>; the orchestrator rebuilds <code>hubModel</code> on that signal. The shipped defaults are exactly the six <code>pageModel</code> sections &mdash; <code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>, <code>accessoriesSettings</code>, <code>deviceSettings</code>, <code>about</code> &mdash; all <code>true</code>, and a section missing from a stored <span class="file-path">settingsConfigure.json</span> is filled in as visible when the file loads, so every page shows until the user hides it. The UI that writes the map is the "Toggle View" popup, opened by press-and-hold on the bottom bar's Settings button (see <a href="bottom-bar.html#visibility-popup">Bottom Bar</a>).</p>
+        <h3>A slider</h3>
+        <pre><code><span class="cls">SettingCategory</span> {
+    <span class="prop">title</span>: <span class="str">"Storage cap"</span>
 
-        <!-- Persistence -->
-        <h2 id="persistence">Card State and Scroll Memory</h2>
+    <span class="cls">RowLayout</span> {
+        <span class="prop">Layout.fillWidth</span>: <span class="kw">true</span>
+        <span class="cls">SettingsSlider</span> {
+            <span class="prop">id</span>: capSlider
+            <span class="prop">from</span>: <span class="num">50</span>; <span class="prop">to</span>: <span class="num">5000</span>; <span class="prop">stepSize</span>: <span class="num">50</span>
+            <span class="prop">value</span>: settingsManager.blackBoxMaxMB
+            <span class="prop">onMoved</span>: settingsManager.blackBoxMaxMB = Math.<span class="fn">round</span>(value)
+        }
+        <span class="cls">ValueDisplay</span> { <span class="prop">text</span>: Math.<span class="fn">round</span>(capSlider.value) + <span class="str">" MB"</span>; <span class="prop">Layout.fillWidth</span>: <span class="kw">false</span> }
+    }
+}</code></pre>
+        <p>
+          <code>SettingsSlider</code> is a Qt Quick <code>Slider</code> with the app's look and one rule: <strong>it
+          moves only when you drag the handle</strong>. A tap on the track does nothing, so a stray touch in a moving
+          car cannot jump a setting. Write the setting in <code>onMoved</code> (the user's drags only), not in
+          <code>onValueChanged</code>. <code>ValueDisplay</code> is the read-out beside it. A slider whose value
+          changes the layout while you drag, as UI Scale does, should write on release instead.
+        </p>
 
-        <h3>ExpandedCards.js</h3>
-        <p>A <code>.pragma library</code> module &mdash; one JavaScript instance shared by every importer &mdash; caching the expanded/collapsed state of <code>SettingsCard</code>s:</p>
+        <h3>A choice of a few: segments</h3>
+        <pre><code><span class="cls">SettingCategory</span> {
+    <span class="prop">title</span>: <span class="str">"Nav Bar Position"</span>
 
-        <pre><code><span class="cmt">// SettingsMenu.onCompleted, once per settings visit (guarded by _loaded)</span>
-ExpandedCards.<span class="fn">load</span>(settingsManager)     <span class="cmt">// reads generic setting "expandedCards"</span>
+    <span class="cls">SettingsSegmentedControl</span> {
+        <span class="prop">options</span>: [<span class="str">"bottom"</span>, <span class="str">"side"</span>]
+        <span class="prop">currentValue</span>: settingsManager.bottomBarOrientation
+        <span class="prop">onSelected</span>: <span class="kw">function</span>(value) { settingsManager.bottomBarOrientation = value }
+    }
+}</code></pre>
+        <p>
+          For two to four choices that fit on one row. <code>onSelected</code> here is a property you give a function
+          to, not a signal: write it exactly as above. What an option says on screen is the string in
+          <code>options</code>, so map it to the stored value in <code>onSelected</code> if the two differ.
+        </p>
 
-<span class="cmt">// SettingsCard</span>
-<span class="prop">property bool</span> expanded: ExpandedCards.<span class="fn">isExpanded</span>(cardId)   <span class="cmt">// false when unknown</span>
-<span class="prop">onExpandedChanged</span>: { ExpandedCards.<span class="fn">setExpanded</span>(cardId, expanded); _saveTimer.<span class="fn">restart</span>() }   <span class="cmt">// 500 ms debounce</span>
-<span class="cmt">// _saveTimer → ExpandedCards.save(settingsManager) → settingsManager.save_setting("expandedCards", copy)</span></code></pre>
+        <h3>A choice of many: chips</h3>
+        <pre><code><span class="cls">SettingCategory</span> {
+    <span class="prop">title</span>: <span class="str">"Font"</span>
 
-        <p>The cache exists so that creating a card never touches the disk and so the card does not hold a <code>settingsManager</code> binding (the comment cites binding re-evaluation cascades). <code>SettingsManager</code> provides the generic <code>get_setting_with_default(key, default)</code> / <code>save_setting(key, value)</code> pair the module uses.</p>
+    <span class="cls">SettingsChips</span> {
+        <span class="prop">options</span>: App.Style.availableFonts
+        <span class="prop">currentValue</span>: settingsManager.fontSetting
+        <span class="prop">onSelected</span>: <span class="kw">function</span>(value) { settingsManager.fontSetting = value }
+    }
+}</code></pre>
+        <p>
+          <code>SettingsChips</code> wraps onto as many rows as it needs. All the text chips of one control are the
+          same width and line up in columns; a label too long for its chip is cut with an ellipsis. As with segments,
+          <code>onSelected</code> is a function property. The optional extras:
+        </p>
+        <table>
+          <thead><tr><th>Property</th><th>What it adds</th></tr></thead>
+          <tbody>
+            <tr><td><code>chipPalettes</code></td><td>A colour swatch for an option: <code>{ "Name": ["#base", "#alt", "#accent"] }</code>. The theme picker uses it.</td></tr>
+            <tr><td><code>chipImages</code></td><td>A picture for an option: <code>{ "Name": "file:///..." }</code>. Picture chips get a row of their own.</td></tr>
+            <tr><td><code>chipFonts</code></td><td>The option drawn in a font: <code>{ "Name": "Family" }</code>.</td></tr>
+            <tr><td><code>chipColors</code></td><td>A text colour per option.</td></tr>
+            <tr><td><code>deletableItems</code>, <code>onItemDeleted</code></td><td>Options the user may delete, and the function called when one is. The control asks before it calls.</td></tr>
+          </tbody>
+        </table>
 
-        <!-- Adding a Page -->
-        <h2 id="adding-page">Adding a New Settings Page</h2>
+        <h3>Text, buttons, and actions that cannot be undone</h3>
+        <pre><code><span class="cls">SettingsTextField</span> {
+    <span class="prop">Layout.fillWidth</span>: <span class="kw">true</span>
+    <span class="prop">text</span>: settingsManager.deviceName
+    <span class="prop">onEditingFinished</span>: <span class="kw">if</span> (text.<span class="fn">trim</span>() !== <span class="str">""</span>) mainWindow.<span class="fn">updateDeviceName</span>(text)
+}
 
+<span class="cls">SettingsButton</span> {
+    <span class="prop">text</span>: <span class="str">"Refresh"</span>
+    <span class="prop">Layout.preferredHeight</span>: <span class="fn">dp</span>(<span class="num">44</span>)          <span class="cmt">// a button has no height of its own</span>
+    <span class="prop">onClicked</span>: networkManager.<span class="fn">refreshNetwork</span>()
+}
+
+<span class="cls">ConfirmButton</span> {
+    <span class="prop">label</span>: <span class="str">"Forget"</span>; <span class="prop">confirmLabel</span>: <span class="str">"Confirm forget"</span>
+    <span class="prop">Layout.preferredHeight</span>: <span class="fn">dp</span>(<span class="num">44</span>)
+    <span class="prop">onConfirmed</span>: phoneMirrorManager.<span class="fn">forgetWireless</span>()
+}</code></pre>
+        <ul>
+          <li><code>SettingsTextField</code> is a Qt Quick <code>TextField</code> in the app's look. Save in <code>onEditingFinished</code>, not on every key.</li>
+          <li><code>SettingsButton</code> has <code>text</code>, <code>buttonColor</code> (the accent colour unless you set it), <code>tooltipText</code> and <code>clicked()</code>. <strong>Always give it a height</strong> (<code>height</code>, or <code>Layout.preferredHeight</code> in a layout): it has none of its own and would not show.</li>
+          <li><code>ConfirmButton</code> is for anything that cannot be taken back. The first tap turns it to the theme's danger colour and shows <code>confirmLabel</code>; a second tap within four seconds (<code>armMs</code>) emits <code>confirmed()</code>. Left alone, it goes back. There is no dialog, so there is nothing new to aim at in a moving car.</li>
+        </ul>
+        <p>
+          <code>NowPlayingButtonGrid</code> also lives in this folder: a two-column grid of equal buttons for picking
+          one of several options, with a <code>selected(value)</code> signal. The Now Playing look editor uses it,
+          and that editor opens from the Media Room, not from Settings; see <a href="pages.html">Pages &amp; Views</a>.
+        </p>
+
+        <!-- Rules -->
+        <h2 id="card-rules">Rules Every Card Follows</h2>
+        <ul>
+          <li><strong>One setting, one box.</strong> Each setting gets its own <code>SettingCategory</code>.</li>
+          <li><strong>The state of a connection comes first</strong> in its card, before the settings.</li>
+          <li><strong>A switch sits on the right of the title</strong>, with no "On" / "Off" text beside it.</li>
+          <li><strong>A description only where the title does not say it</strong>, in one line. The how-to belongs in this wiki, not on the card.</li>
+          <li><strong>Anything that cannot be taken back is a <code>ConfirmButton</code>.</strong></li>
+          <li><strong>A tool few people need does not get a tile.</strong> It goes in an Advanced or Developer tile as an always-open <code>SettingsCard</code>.</li>
+          <li><strong>Sizes go through <code>dp()</code>.</strong> Every page and control declares its own small <code>dp()</code> / <code>dpMin()</code> functions at the top; copy them into a new file. They follow the UI Scale setting.</li>
+        </ul>
+
+        <!-- Adding -->
+        <h2 id="adding-setting">Adding a Setting, a Tile or a Section</h2>
+
+        <h3>A setting in an existing card</h3>
         <ol class="steps">
-          <li><strong>Create the page</strong> in <span class="file-path">frontend/settings/MySettingsPage.qml</span> as a <code>Flickable</code> with the local <code>dp()</code> wrappers, a <code>tileModel</code>, one <code>Component</code> per card body, and the stacked fallback:
-            <pre><code><span class="prop">property bool</span> renderCards: <span class="kw">true</span>
-<span class="prop">property var</span> tileModel: [
-    { <span class="prop">cardId</span>: <span class="str">"my_first"</span>, <span class="prop">title</span>: <span class="str">"First"</span>, <span class="prop">component</span>: firstContent },
-    <span class="cmt">// ... at most 4 tiles: one column of the settings grid</span>
+          <li><strong>Add the setting itself</strong> to <code>SettingsManager</code>, if it is new. The steps are in <a href="settings-manager.html">Settings Manager</a>.</li>
+          <li><strong>Find the card.</strong> Each page in <span class="file-path">frontend/settings/</span> has one <code>Component</code> per tile (<code>layoutContent</code>, <code>clockContent</code>, <code>connectionContent</code>&hellip;). Its top-level <code>ColumnLayout</code> is the card.</li>
+          <li><strong>Add a <code>SettingCategory</code></strong> with the control from the section above, where it belongs in the order of the card.</li>
+          <li><strong>Update the docs:</strong> the table on this page and the <a href="settings-reference.html">Settings Reference</a>.</li>
+        </ol>
+
+        <h3>A new tile</h3>
+        <p>
+          A page's tiles are its <code>tileModel</code> list. Add an entry and a <code>Component</code> for the card.
+          The example is made up; there is no Night Mode setting:
+        </p>
+        <pre><code><span class="prop">property var</span> tileModel: [
+    <span class="cmt">// ...</span>
+    { <span class="prop">cardId</span>: <span class="str">"display_night"</span>, <span class="prop">title</span>: <span class="str">"Night Mode"</span>, <span class="prop">component</span>: nightContent,
+      <span class="prop">summary</span>: <span class="kw">function</span>() {
+          <span class="kw">return</span> { <span class="prop">state</span>: settingsManager.nightMode ? <span class="str">"On"</span> : <span class="str">"Off"</span>,
+                   <span class="prop">active</span>: settingsManager.nightMode }
+      } }
 ]
 
 <span class="cls">Component</span> {
-    <span class="prop">id</span>: firstContent
+    <span class="prop">id</span>: nightContent
     <span class="cls">ColumnLayout</span> {
         <span class="prop">width</span>: parent ? parent.width : <span class="num">0</span>
-        <span class="cls">SettingCategory</span> { <span class="prop">title</span>: <span class="str">"..."</span>; <span class="cmt">/* controls */</span> }
+        <span class="prop">spacing</span>: App.Spacing.sectionSpacing
+        <span class="cls">SettingCategory</span> { <span class="prop">title</span>: <span class="str">"..."</span> <span class="cmt">/* the control */</span> }
     }
-}
-
-<span class="cmt">// Default rendering for Hub / Dashboard / About-style hosts; the tile hosts hide this.</span>
-<span class="cls">ColumnLayout</span> {
-    <span class="prop">width</span>: parent.width
-    <span class="cls">Repeater</span> {
-        <span class="prop">model</span>: pageRoot.renderCards ? pageRoot.tileModel : []
-        <span class="cls">SettingsCard</span> {
-            <span class="prop">Layout.fillWidth</span>: <span class="kw">true</span>
-            <span class="prop">objectName</span>: modelData.title      <span class="cmt">// sub-section lookup key</span>
-            <span class="prop">cardId</span>: modelData.cardId
-            <span class="prop">title</span>: modelData.title
-            <span class="cls">Loader</span> { <span class="prop">Layout.fillWidth</span>: <span class="kw">true</span>; <span class="prop">sourceComponent</span>: modelData.component }
-        }
-    }
-    <span class="cls">Item</span> { <span class="prop">Layout.fillHeight</span>: <span class="kw">true</span>; <span class="prop">Layout.minimumHeight</span>: App.Spacing.bottomBarHeight }
 }</code></pre>
-            Declare <code>property var mainWindow</code>, <code>stackView</code> or <code>currentSection</code> only if you need them; the layouts bind them when present.
-          </li>
-          <li><strong>Add a summary</strong> function returning <code>{ state, active, status }</code> when useful. Tiles show labels and current state; category cards and tabs can still use a single-fill SVG through <code>ThemedIcon</code>.</li>
-          <li><strong>Register in <code>pageModel</code></strong> with <code>subSections</code> equal to the tile titles, and add <code>desktopOnly: true</code> if the page depends on desktop-only managers.</li>
-          <li><strong>Backend</strong>: add every new <code>save_*</code> slot and property to <code>SettingsManager</code> (<span class="file-path">src/managers/settingsmanager.{h,cpp}</span>) and to <a href="settings-reference.html">Settings Reference</a>; add the section to the <code>settingsMenuVisibility</code> defaults there if it should be hideable.</li>
-        </ol>
-
-        <!-- Design decisions -->
-        <h2 id="design-decisions">Design Decisions</h2>
-
         <table>
-          <thead><tr><th>Decision</th><th>Rationale (from code comments and commit history)</th></tr></thead>
+          <thead><tr><th>Field</th><th>What it is</th></tr></thead>
           <tbody>
-            <tr>
-              <td>Card bodies as <code>Component</code>s shared by two renderings</td>
-              <td>Page comment: "shared between the Flickable rendering (below) and the SettingsCardPopup in the Sidebar layout". One definition of each setting serves the stacked list and the tile popup.</td>
-            </tr>
-            <tr>
-              <td>Tile grids with a hero-morph popup instead of long scrolling pages</td>
-              <td>Commit <code>93d0fc9</code>: "tile grids for every page". Four large touch targets per page suit a dash-mounted screen; the popup "grows from the clicked tile's rect" so the user keeps spatial context, and content fades in only once "there's enough room for them".</td>
-            </tr>
-            <tr>
-              <td><code>closeTile()</code> nulls the tile component</td>
-              <td>Comment: without it "page-scoped resources would persist after the user backs out of the tile"; destroying the content is invisible because the body has already faded.</td>
-            </tr>
-            <tr>
-              <td>Pages hide themselves in tile hosts</td>
-              <td>The host sets <code>item.visible = false</code> rather than the page knowing about layouts; a page only declares <code>tileModel</code> and works in all four engines.</td>
-            </tr>
-            <tr>
-              <td><code>subSections</code> must equal tile titles</td>
-              <td>Sub-navigation looks cards up by <code>objectName</code>, which pages set from <code>modelData.title</code>; a mismatch silently fails to scroll.</td>
-            </tr>
-            <tr>
-              <td>Card state in a <code>.pragma library</code> cache with a debounced write</td>
-              <td>"Avoids disk I/O during card creation"; the card holds no <code>settingsManager</code> binding "to avoid binding re-evaluation cascades"; the 500&nbsp;ms timer "coalesces rapid expand/collapse into a single disk write".</td>
-            </tr>
-            <tr>
-              <td>Sliders drag-only, no track clicks</td>
-              <td><code>SettingsSlider</code> comment: "Block track clicks &mdash; only allow dragging the handle." A stray touch on a long track would otherwise jump a setting.</td>
-            </tr>
-            <tr>
-              <td>Scale slider commits on release</td>
-              <td>Mid-drag updates re-lay out the slider itself (commit <code>fe567f3</code>); see <a href="theme-system.html#gui-scale">Theme System</a>.</td>
-            </tr>
-            <tr>
-              <td>Diagnostics buttons in a 2&times;2 grid</td>
-              <td>Commit <code>7fd8405</code>: four labels side by side overflowed at 1276&nbsp;px on the Pi and "a Layout cannot shrink a SettingsButton below its label".</td>
-            </tr>
-            <tr>
-              <td>Two-step confirmations with a 5&nbsp;s reset</td>
-              <td>Shutdown and self-update both require a second tap within five seconds, with a pulsing warning text, instead of a modal dialog &mdash; cheaper to hit on a touchscreen and impossible to trigger with one accidental tap.</td>
-            </tr>
-            <tr>
-              <td>Themed SVG icons via <code>Style.assetBase</code></td>
-              <td>Commit <code>93d0fc9</code> and the Style.qml comment: settings pages and layouts sit at different directory depths, so a URL resolved in <span class="file-path">frontend/</span> avoids guessing <code>../</code> segments; a property rather than a function because of the Android singleton-function bug.</td>
-            </tr>
-            <tr>
-              <td>Accessories page is <code>desktopOnly</code></td>
-              <td>The serial knob, I&sup2;C sensors and adb-based phone dock are desktop hardware paths; Android is C++-only and omits those managers, so the page is dropped from the model rather than guarded control by control.</td>
-            </tr>
-            <tr>
-              <td>Update dot repeated on every layout's About entry</td>
-              <td>The bottom bar's dot leads the user into Settings; each layout re-draws it on the About entry so the trail continues to the update controls.</td>
-            </tr>
+            <tr><td><code>cardId</code></td><td>The tile's id, unique across all pages (<code>display_clock</code>, <code>obd_connection</code>). Other code opens the card by it.</td></tr>
+            <tr><td><code>title</code></td><td>The name on the tile and on the card. About fourteen characters fit on a line; a longer title wraps to a second line.</td></tr>
+            <tr><td><code>component</code></td><td>The card's contents.</td></tr>
+            <tr><td><code>summary</code></td><td>Optional. A function returning any of <code>state</code> (the line under the name; keep it to about fourteen characters), <code>active</code> (true tints the tile: only for something that is on or connected) and <code>status</code> (a colour for the dot, such as <code>App.Style.statusConnected</code>). The tile updates by itself whenever a property the function reads changes. Leave <code>state</code> out rather than fill it with an instruction.</td></tr>
           </tbody>
         </table>
+        <p>
+          <strong>A section holds at most four tiles</strong>: one column of the grid, whose heights only divide
+          evenly for one to four. Make room by folding a little-used tile into another as a
+          <code>SettingsCard</code>, the way Advanced and Developer do.
+        </p>
 
-        <p><strong>Method names:</strong> this page uses the camelCase names of the manager methods (<code>nextTrack</code>). The older snake_case name of each (<code>next_track</code>) still works through protocol&nbsp;4 and goes in protocol&nbsp;5; the <a href="api-reference.html">API reference</a> lists them.</p>
+        <h3 id="adding-page">A new section</h3>
+        <ol class="steps">
+          <li><strong>Create the page</strong>, <span class="file-path">frontend/settings/MySettingsPage.qml</span>, by copying the smallest existing one (<span class="file-path">MediaSettingsPage.qml</span>). Keep its <code>tileModel</code>, its <code>renderCards</code> property and the <code>dp()</code> functions. Declare <code>property var mainWindow</code> or <code>stackView</code> only if the page needs them; they are filled in when present.</li>
+          <li><strong>List it in <code>pageModel</code></strong> in <span class="file-path">frontend/SettingsMenu.qml</span>: its <code>name</code> (the caption over the column), its <code>section</code> id and its <code>source</code>. Columns appear in the order of this list. Add <code>desktopOnly: true</code> if it has no place on Android.</li>
+          <li><strong>Teach the settings store the id:</strong> add it to <code>kSettingsSections</code> and to the <code>settingsMenuVisibility</code> defaults in <span class="file-path">src/managers/settingsmanager.cpp</span>.</li>
+          <li><strong>Add it to the Toggle View panel:</strong> the list of sections in <span class="file-path">frontend/BottomBar.qml</span> is separate from <code>pageModel</code>.</li>
+          <li><strong>Update this page.</strong> Nothing needs adding to <span class="file-path">CMakeLists.txt</span>: the files in <span class="file-path">frontend/</span> are loaded at run time.</li>
+        </ol>
 
-        <div class="related-pages">
+        <!-- How it works -->
+        <h2 id="how-it-works">How It Is Built</h2>
+        <p>
+          The problem to solve: a lot of settings, on a touchscreen in a car, where long scrolling lists and nested
+          menus are slow to use. The answer is two levels and no more. Level one is the grid, which shows
+          everything at once with its state. Level two is one card. Nothing is deeper than one tap from the grid.
+        </p>
+        <p>Four pieces do it:</p>
+        <table>
+          <thead><tr><th>Piece</th><th>Job</th></tr></thead>
+          <tbody>
+            <tr id="orchestrator"><td><span class="file-path">frontend/SettingsMenu.qml</span></td><td>The Settings screen as the rest of the app sees it. It holds the list of sections (<code>pageModel</code>), works out which are visible, and offers the calls other screens use to open a card. It draws nothing itself.</td></tr>
+            <tr id="sidebar"><td><span class="file-path">frontend/SettingsSidebarLayout.qml</span></td><td>The grid and the card popup. This is the only layout; the file is named after a sidebar it replaced.</td></tr>
+            <tr><td>The section pages, <span class="file-path">frontend/settings/*SettingsPage.qml</span> and <span class="file-path">AboutPage.qml</span></td><td>What is <em>in</em> each section: the <code>tileModel</code> and a <code>Component</code> per card.</td></tr>
+            <tr><td>The controls, <span class="file-path">frontend/settings/</span></td><td>The parts described <a href="#components">above</a>, plus the tile, the tile grid and the popup.</td></tr>
+          </tbody>
+        </table>
+        <pre class="diagram">
+  SettingsMenu            pageModel: 7 sections --buildHubModel()--&gt; hubModel: the visible ones
+       |
+  SettingsSidebarLayout   loads each visible section's page, hidden, and reads its tileModel
+       |
+       +-- SettingsTilePage     the grid: one SettingsTile per tileModel entry, a column per section
+       |
+       +-- SettingsCardPopup    grows out of the tapped tile and shows that entry's component
+        </pre>
+
+        <h3 id="page-model">From the list of sections to the grid</h3>
+        <ol class="steps">
+          <li><strong><code>pageModel</code></strong> lists the seven sections in order, each with its <code>name</code>, <code>section</code> id and page <code>source</code>.</li>
+          <li><strong><code>buildHubModel()</code></strong> goes through that list and leaves out a section the user has hidden (<code>is_settings_section_visible</code>) and, on Android, one marked <code>desktopOnly</code> (Phone, Accessories). The result is <code>hubModel</code>. It is rebuilt whenever <code>settingsManager</code> emits <code>settingsMenuVisibilityChanged</code>, which is why the grid changes while the Toggle View panel is still open.</li>
+          <li><strong>The layout loads every page in <code>hubModel</code></strong>, invisibly. It never shows a page: it only needs each page's <code>tileModel</code> and the card components that live inside the page.</li>
+          <li><strong>It lays the tiles out a column per section</strong>, top to bottom, at most four to a column. A column with fewer tiles stretches them to fill its height, so a short section leaves no gap. About has no tiles of its own, so it gets one tile whose card is the whole About page. That tile finishes the last column when there is room (the bottom-right corner), and otherwise gets a column of its own.</li>
+          <li><strong>A tap on a tile</strong> opens the popup with that tile's <code>component</code>.</li>
+        </ol>
+
+        <h3 id="layouts">Opening Settings from other code</h3>
+        <table>
+          <thead><tr><th>To do this</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td>Open Settings on a card, from anywhere</td><td><code>mainWindow.navigateToSettings(section, cardId)</code>, for example <code>navigateToSettings("obdSettings", "obd_connection")</code>. It works whether or not Settings is already open.</td></tr>
+            <tr><td>Open a card when Settings is the current page</td><td><code>openTile(cardId)</code> on the Settings page. If the tiles are still loading, the card opens when they are ready.</td></tr>
+            <tr><td>Know which card is open</td><td><code>openTileId()</code>: the <code>cardId</code>, or an empty string.</td></tr>
+            <tr><td>Close the open card</td><td><code>navigateToHub()</code>. The navigation bar's Settings button calls <code>handleSettingsButton()</code>, which closes the wiki reader if it is open and otherwise does this.</td></tr>
+            <tr><td>Open About</td><td><code>navigateToCategory("about")</code>, or <code>openTile("section:about")</code>.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          Cards have been merged over time, and old ids still work. The layout keeps a small table,
+          <code>movedCards</code>, from a retired id to the tile that now holds it: <code>obd_adapters</code> opens
+          <code>obd_connection</code>; <code>obd_custom_pids</code> and <code>obd_bus_monitor</code> open
+          <code>obd_advanced</code>; <code>device_frontends</code>, <code>device_service</code> and
+          <code>device_diagnostics</code> open <code>device_developer</code>; <code>accessories_phone_dock</code>
+          opens <code>phone_mirror</code>. When you fold a tile into another, add its id there.
+        </p>
+
+        <!-- Tile system -->
+        <h2 id="tile-system">Tiles and the Card Popup</h2>
+        <p>
+          <strong>A tile</strong> (<code>SettingsTile</code>) has no icon. It shows the setting's name and its
+          current state under it, the way Android's quick settings and Apple's Home tiles do, because the state is
+          what you came to see.
+          The tile calls its <code>summary</code> function inside a binding, so it stays live without the page doing
+          anything: the Clock tile ticks, the Connection tile turns to "Connected" when the car answers.
+        </p>
+        <p>
+          <strong>The grid</strong> (<code>SettingsTilePage</code>) places the tiles. The Settings screen uses two of
+          its three modes: columns of sections in landscape (<code>rows</code>), and a scrolling list of sections,
+          two tiles across, in portrait (<code>sections</code>). In both it reports a tap as
+          <code>tileSelected(cardId, rect)</code>, with the tile's rectangle, so the popup knows where to grow from.
+        </p>
+        <p>
+          <strong>The popup</strong> (<code>SettingsCardPopup</code>) is the card. It grows out of the tapped tile
+          until it fills the Settings area, and shrinks back into the tile when closed, so you keep track of where
+          you are. Its title bar (an arrow and the tile's name) is the back button, and the body scrolls when the
+          card is taller than the screen. The host only sets four things: <code>open</code>, <code>originRect</code>,
+          <code>title</code> and <code>contentComponent</code>; and listens for <code>backRequested()</code>.
+        </p>
+        <p>Three things keep the animation smooth; keep them if you change it:</p>
+        <ul>
+          <li><strong>The card is laid out once,</strong> at its full size, and clipped while the popup grows, so text does not re-wrap on every frame.</li>
+          <li><strong>The tile stays drawn underneath</strong> and the popup's background fades in over it. Hiding the tile instead leaves a blank block where it was.</li>
+          <li><strong>The contents are kept until the popup has fully closed.</strong> Only then is the card's component destroyed, so anything it started (a live preview, a timer) stops in its <code>Component.onDestruction</code>.</li>
+        </ul>
+
+        <!-- Details -->
+        <h2 id="details">Details and Special Cases</h2>
+        <ul>
+          <li id="orientation-rebuild"><strong>Changing Nav Bar Position rebuilds Settings.</strong> The grid was laid out for the old shape of the screen, so when <code>bottomBarOrientation</code> changes while Settings is open, <span class="file-path">Main.qml</span> notes the open card (<code>openTileId()</code>), builds a fresh Settings page a moment later, swaps it in and destroys the old one. The new page is given the card as <code>initialTile</code> and reopens it once the tiles have loaded, so you stay in Display &gt; Layout, where the switch is. If Settings is not on screen, its cached copy is simply thrown away.</li>
+          <li><strong>A card's contents exist only while it is open.</strong> The pages are loaded for the life of the Settings screen, but with <code>renderCards: false</code>, so none of their cards are built until a tile is tapped. A page's own stacked list of cards (the <code>Repeater</code> at the bottom of each page file) is for a host that shows the page by itself; nothing does today.</li>
+          <li id="persistence"><strong>A <code>SettingsCard</code> with a <code>cardId</code> is collapsible</strong> and remembers whether it was open, in the <code>expandedCards</code> setting (through <span class="file-path">ExpandedCards.js</span>). The Settings screen does not use this now: its cards are either popups or always open.</li>
+          <li><strong>The wiki reader stays alive behind other pages.</strong> While another page is shown it is made zero-sized as well as hidden, because an open Qt popup swallows touches inside its area even when invisible.</li>
+          <li><strong>Unused fields.</strong> <code>pageModel</code> entries also carry <code>icon</code>, <code>iconSource</code>, <code>group</code> and <code>subSections</code>. The grid uses none of them. The <code>settingsLayoutStyle</code> setting is likewise not read by the screen.</li>
+          <li id="now-playing-studio"><strong>The Now Playing look editor is not in Settings.</strong> It opens from the Media Room; see <a href="pages.html#nowplayingstudio">Pages &amp; Views</a>.</li>
+        </ul>
+
+        <!-- Files -->
+        <h2 id="files">Files and API</h2>
+        <table>
+          <thead><tr><th>File (under <code>frontend/</code>)</th><th>What is in it</th></tr></thead>
+          <tbody>
+            <tr><td><span class="file-path">SettingsMenu.qml</span></td><td>The list of sections, which are visible, the calls to open a card.</td></tr>
+            <tr><td><span class="file-path">SettingsSidebarLayout.qml</span></td><td>The grid of all tiles, the column captions, the popup, <code>movedCards</code>.</td></tr>
+            <tr><td><span class="file-path">settings/DisplaySettingsPage.qml</span>, <span class="file-path">MediaSettingsPage.qml</span>, <span class="file-path">OBDSettingsPage.qml</span>, <span class="file-path">PhoneSettingsPage.qml</span>, <span class="file-path">AccessoriesSettingsPage.qml</span>, <span class="file-path">DeviceSettingsPage.qml</span></td><td>One page per section: its tiles and cards.</td></tr>
+            <tr><td><span class="file-path">settings/AboutPage.qml</span></td><td>The About card.</td></tr>
+            <tr><td><span class="file-path">settings/WikiPopup.qml</span>, <span class="file-path">WikiWebView.qml</span>, <span class="file-path">WikiNativeView.qml</span></td><td>The in-app wiki reader: the popup, the desktop view (Qt WebEngine) and the Android view (the phone's own web view).</td></tr>
+            <tr><td><span class="file-path">settings/SettingsTile.qml</span>, <span class="file-path">SettingsTilePage.qml</span>, <span class="file-path">SettingsCardPopup.qml</span></td><td>The tile, the grid, the card popup.</td></tr>
+            <tr><td>The other files in <span class="file-path">settings/</span></td><td>The boxes and controls, one file each, named as in <a href="#components">The Controls</a>.</td></tr>
+            <tr><td><span class="file-path">BottomBar.qml</span></td><td>The Settings button and the Toggle View panel.</td></tr>
+            <tr><td><span class="file-path">Main.qml</span></td><td><code>navigateToSettings()</code> and the rebuild when the bar moves.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          The Settings screen is QML only: it has no manager of its own. What it reads and writes belongs to the
+          managers, above all <code>settingsManager</code>, whose every property and method is in the
+          <a href="api-reference.html#settingsManager">API reference</a>.
+        </p>
+
+        <!-- Design decisions -->
+        <h2 id="design-decisions">Why It Is Built This Way</h2>
+        <ul>
+          <li><strong>One grid, not a menu of pages.</strong> Large tiles are easy to hit on a dash-mounted screen, and seeing every section at once means nothing has to be searched for.</li>
+          <li><strong>Tiles show state, not icons.</strong> "Connected" or "Off" answers most visits to Settings without opening anything.</li>
+          <li><strong>The card grows out of its tile.</strong> You see where the card came from and where Back will put you.</li>
+          <li><strong>The page owns its cards; the layout only places them.</strong> A page declares <code>tileModel</code> and knows nothing about the grid, so the layout can change without touching a single setting.</li>
+          <li><strong>A switch asks, the setting answers.</strong> The switch never sets its own state, so it cannot disagree with a setting that was changed from somewhere else.</li>
+          <li><strong>Phone and Accessories are dropped whole on Android</strong> (<code>desktopOnly</code>) rather than guarded control by control.</li>
+        </ul>
+
+        <div class="related-pages" id="related">
           <h3>Related Pages</h3>
-          <a href="theme-system.html" class="related-link">Theme System</a>
+          <a href="settings-reference.html" class="related-link">Settings Reference</a>
+          <a href="settings-manager.html" class="related-link">Settings Manager</a>
           <a href="bottom-bar.html" class="related-link">Bottom Bar</a>
+          <a href="theme-system.html" class="related-link">Theme System</a>
           <a href="components.html" class="related-link">Components</a>
           <a href="frontend-overview.html" class="related-link">Frontend Overview</a>
-          <a href="settings-manager.html" class="related-link">Settings Manager</a>
-          <a href="settings-reference.html" class="related-link">Settings Reference</a>
+          <a href="pages.html" class="related-link">Pages &amp; Views</a>
         </div>
 
       </div>

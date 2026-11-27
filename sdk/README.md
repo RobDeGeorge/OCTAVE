@@ -11,7 +11,7 @@ Turn the service on first. It is off by default, and listens on 127.0.0.1:9876:
 ./build/octave --headless         # no UI: the managers and the service only
 ```
 
-(Or turn on Settings > Device > Service. To reach it from another machine add `--service-bind 0.0.0.0`: clients there must pair first, with the code that card shows; programs on the head unit itself need nothing. Traffic is not encrypted, so only on a network you control.)
+(Or turn on Settings > Device > Developer > Service. To reach it from another machine add `--service-bind 0.0.0.0`: clients there must pair first, with the code that card shows; programs on the head unit itself need nothing. Traffic is not encrypted, so only on a network you control.)
 
 ## Browser: `web/`
 

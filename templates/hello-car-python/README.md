@@ -9,7 +9,7 @@ octave --headless --sim                    # the release download (or ./build/oc
 python templates/hello-car-python/hello_car.py
 ```
 
-Enter toggles play / pause, Ctrl-C quits. From another machine, start OCTAVE with `--service-bind 0.0.0.0` and run `hello_car.py <the head unit's address>`: it asks for the 6-digit code from Settings > Service > Pair a device, asks only for the **media** permission (play / pause; readings are always allowed), and keeps the token in `.token` beside the script for next time.
+Enter toggles play / pause, Ctrl-C quits. From another machine, start OCTAVE with `--service-bind 0.0.0.0` and run `hello_car.py <the head unit's address>`: it asks for the 6-digit code from Settings > Device > Developer > Service > Pair a device, asks only for the **media** permission (play / pause; readings are always allowed), and keeps the token in `.token` beside the script for next time.
 
 Make the numbers move with the simulator: `octave_client.Client().call("sim", "setThrottle", 40)`, or a scenario (`docs/api/README.md`, "Simulator").
 

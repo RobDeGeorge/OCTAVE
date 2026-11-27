@@ -6,7 +6,7 @@
 // answered within stallMs a WARNING is logged (once per stall, with the
 // duration when it recovers), so a frozen head unit leaves a trace.
 //
-// On Linux it also acts on a long stall: after dumpMs it attaches gdb and
+// On desktop Linux (not Android) it also acts on a long stall: after dumpMs it attaches gdb and
 // writes every thread's stack to <log dir>/hang-<time>.txt, and after abortMs
 // it aborts so the launcher (octave-start.sh) restarts the app instead of
 // leaving a frozen screen that only a power pull clears. The abort is held

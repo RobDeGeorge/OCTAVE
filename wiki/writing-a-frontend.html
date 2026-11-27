@@ -13,275 +13,520 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Writing a Frontend</div>
           <h1 class="page-title">Writing a Frontend</h1>
-          <p class="page-subtitle">Build your own OCTAVE screen, remote or script in any language: start the service, connect, discover, read, subscribe, control. The QML UI is one client of this API; yours can be another.</p>
+          <p class="page-subtitle">Make your own screen, remote or script for OCTAVE, in any language: run the core with a simulated car, connect, read, subscribe, control, then install what you built</p>
         </div>
 
         <nav class="toc">
           <h3>Table of Contents</h3>
           <ul class="toc-list">
-            <li><a href="#what-you-get">What You Get</a></li>
-            <li><a href="#license">Your Frontend, Your License</a></li>
-            <li><a href="#start">1. Get OCTAVE and a Simulated Car</a></li>
-            <li><a href="#connect">2. Connect</a></li>
-            <li><a href="#discover">3. Discover</a></li>
-            <li><a href="#read">4. Read and Subscribe</a></li>
-            <li><a href="#control">5. Control</a></li>
-            <li><a href="#template">Start from a Template</a></li>
-            <li><a href="#first">Your First Frontend in 60 Lines</a></li>
-            <li><a href="#recipes">Recipes</a></li>
-            <li><a href="#headless">Being the Only UI</a></li>
+            <li><a href="#what-you-get">What a Frontend Is</a></li>
+            <li><a href="#start">The Five-Minute Start</a></li>
+            <li><a href="#ideas">The Ideas</a></li>
+            <li><a href="#recipes">What to Use for What</a></li>
+            <li><a href="#pairing">Pairing and Permissions</a></li>
+            <li><a href="#template">Starter Projects and SDKs</a></li>
             <li><a href="#install">Installing Your Frontend</a></li>
-            <li><a href="#rules">Versioning and Security</a></li>
-            <li><a href="#limits">What Is Not Available Yet</a></li>
+            <li><a href="#browser-demo">Frontends in the Browser Demo</a></li>
+            <li><a href="#rules">Rules of the Road</a></li>
+            <li><a href="#license">Your Frontend, Your License</a></li>
+            <li><a href="#related">Related Pages</a></li>
           </ul>
         </nav>
 
-        <h2 id="what-you-get">What You Get</h2>
-        <p>Every manager the bundled UI uses: settings, media and now playing, volume, OBD and the live value of every PID and IMU reading, the black box, the shift light, phone mirroring control, dashboards. Each one's properties, methods and signals are listed with their types in the generated <a href="api-reference.html">Service API Reference</a> (<span class="file-path">docs/api/</span>); what they mean is in <a href="signals-slots-reference.html">Signals &amp; Slots API</a>. <code>tst_conformance</code> guarantees the bundled UI uses nothing outside that list, so whatever it can do, your frontend can too.</p>
-        <p>Four working clients come with the repo: <span class="file-path">sdk/web/index.html</span> (plain JavaScript, about 250 lines), <span class="file-path">sdk/python/octave_client</span> (stdlib only), <span class="file-path">sdk/go</span> (standard library only, generated from <span class="file-path">docs/api/protocol.json</span> and the object files: one Go type per service object, with a method per API method) and <span class="file-path">sdk/typescript</span> (an npm package for browsers and Node; its envelope is generated from <span class="file-path">docs/api/protocol.json</span> and its object types from the object files, so a wrong call fails to compile and a deprecated member shows as such in the editor). Read one of them next to this page.</p>
-        <p>Five whole frontends written to prove the API (TypeScript + Svelte, Python + Textual, Go + Gio, Rust + egui, C + SDL2, together reaching every feature of the bundled UI) are in <span class="file-path">examples/frontends/</span> as worked examples, MIT, each installable as the screen; see them in the <a href="frontend-gallery.html">Frontend Gallery</a>.</p>
+        <h2 id="what-you-get">What a Frontend Is</h2>
+        <p>
+          OCTAVE has two halves. The <strong>core</strong> holds everything that matters: the connection to the car,
+          the music, the phone, the settings. A <strong>frontend</strong> is the screen on top. The screen OCTAVE
+          ships with is one frontend; any other program can be one too, by talking to the core over a socket. That
+          socket is called the <strong>service</strong>.
+        </p>
+        <pre class="diagram">
+  your frontend        the built-in screen       a script, a phone page
+  (any language)             (QML)
+        |                      |                          |
+        |   JSON over TCP or WebSocket, port 9876         |
+        +----------------------+--------------------------+
+                               |
+                   +-----------+-----------+
+                   |      OCTAVE core      |
+                   |  car - music - phone  |
+                   +-----------------------+</pre>
+        <p>
+          The built-in screen uses nothing your frontend cannot reach, and a test (<code>tst_conformance</code>) keeps
+          it that way. So a frontend can be a whole replacement screen, a remote on a phone, a second display, or a
+          ten-line script that skips a track.
+        </p>
+        <p>
+          This page is a walkthrough: follow it top to bottom and you end with a working frontend installed in
+          OCTAVE. The list of every object and member is the <a href="api-reference.html">Service API Reference</a>;
+          five complete frontends to read are in the <a href="frontend-gallery.html">Frontend Gallery</a>.
+        </p>
 
-        <h2 id="license">Your Frontend, Your License</h2>
-        <p>OCTAVE itself (the app, its managers, the bundled QML UI) is GPL-3.0-or-later. Everything you would copy into a frontend is MIT: the clients in <span class="file-path">sdk/</span> (Python, Go, TypeScript, the web page), the starter projects in <span class="file-path">templates/</span> and the example frontends in <span class="file-path">examples/frontends/</span>, each folder with its own <span class="file-path">LICENSE</span>. Copy them, keep the MIT notice, and license the rest of your frontend however you like, open or closed.</p>
-        <p>A frontend that talks to OCTAVE over the service protocol (JSON over a socket or a WebSocket, documented in <span class="file-path">docs/api/</span>) is a separate program that communicates with OCTAVE; it does not link OCTAVE's code or copy it. The project's intent, and its reading of the GPL, is that such a frontend is not a derivative work of OCTAVE and need not be GPL, however it is installed or launched. That is a statement of intent, not legal advice. What does fall under the GPL: changes to OCTAVE's own code (<span class="file-path">src/</span>, <span class="file-path">frontend/</span>), and a fork of the bundled QML UI.</p>
+        <h2 id="start">The Five-Minute Start</h2>
+        <p>
+          You need neither a car nor a build of OCTAVE. Download a release from
+          <a href="https://github.com/RobDeGeorge/OCTAVE/releases">GitHub Releases</a> (or build it; see
+          <a href="building.html">Building</a>). Below, <code>octave</code> stands for that program.
+        </p>
 
-        <h2 id="start">1. Get OCTAVE and a Simulated Car</h2>
-        <p><strong>Or skip the download:</strong> a web frontend runs in <a href="https://robdegeorge.com/OCTAVE/playground.html">the frontend playground</a> against the real OCTAVE core (WebAssembly) and its simulated car, in your browser. <code>playground.html?frontend=&lt;url&gt;</code> loads yours from any host that allows CORS (GitHub Pages does), so a link is all it takes to show someone your frontend running: the page names your host and asks them before it runs, since a frontend controls the car on that page. It runs sandboxed: no <code>localStorage</code>, no <code>/art</code> covers, no video, and no Spotify session (the playground keeps the visitor's own out).</p>
-        <p>You don't need to build OCTAVE, or own the car. Download a release for your machine from <a href="https://github.com/RobDeGeorge/OCTAVE/releases">GitHub Releases</a> (one where <code>octave --help</code> lists <code>--sim</code>) and start it with no window and a simulated car:</p>
-        <pre><code>./OCTAVE-*-linux-x86_64.AppImage --headless --sim                 <span class="cmt"># Linux (chmod +x it first)</span>
-/Applications/OCTAVE.app/Contents/MacOS/octave --headless --sim   <span class="cmt"># macOS, from the .dmg</span>
-"C:\Program Files\OCTAVE\OCTAVE.exe" --headless --sim           <span class="cmt"># Windows, after the installer</span></code></pre>
-        <p>That serves every object on <code>127.0.0.1:9876</code> with the real OBD stack connected to a simulated ELM327 adapter (every PID supported, a VIN, trouble codes), IMU readings that move with it, and three short test tracks to play. It runs on a throwaway config that is deleted when it exits, so it never touches an OCTAVE you use; <code>--config DIR</code> keeps one in <code>DIR</code> instead. Drive the car from your frontend or a script with the <code>sim</code> object, for example <code>{"op":"call","object":"sim","method":"setThrottle","args":[60]}</code>; its methods (pedals, gears, scenarios, link faults, the IMU, a test video, pairing codes) are listed in <span class="file-path">docs/api/README.md</span>, "Simulator". <code>sim</code> is experimental and exists for development: <code>sim.active</code> is false on a real head unit, where every control does nothing. Leave out <code>--headless</code> to see the same car in the bundled UI next to yours.</p>
-        <p>On a real head unit the service is off by default. Any of these turns it on, listening on <code>127.0.0.1:9876</code>:</p>
-        <pre><code>octave --service              <span class="cmt"># the normal UI, plus the service</span>
-octave --service 9900         <span class="cmt"># another port</span>
-octave --headless             <span class="cmt"># no UI at all: your frontend is the screen</span></code></pre>
-        <p>Or set <code>"serviceEnabled": true</code> in <code>settingsConfigure.json</code> (<a href="settings-reference.html">Settings Reference</a>) to have it at every start. For a phone or a second screen on the car's network add <code>--service-bind 0.0.0.0</code>; read <a href="#rules">Versioning and Security</a> first.</p>
+        <h3 id="headless">1. Run the core with a simulated car</h3>
+        <pre><code>octave --headless --sim</code></pre>
+        <p>
+          <code>--headless</code> starts the core and the service with no window: your frontend is the screen.
+          <code>--sim</code> adds a simulated car (a real OBD connection to a simulated adapter, with every reading,
+          a VIN and trouble codes), motion-sensor readings that move with it, and three short test tracks. It runs on
+          a throwaway config folder that is deleted on exit, so it never touches an OCTAVE you use.
+          <code>--config DIR</code> keeps the config in <code>DIR</code> instead. Leave out <code>--headless</code> to
+          see the same car in the built-in screen next to yours.
+        </p>
+        <p>The service now listens on <code>127.0.0.1:9876</code>.</p>
 
-        <h2 id="connect">2. Connect</h2>
-        <p>Two transports on the same port carry the same JSON messages:</p>
+        <h3 id="connect">2. Talk to it by hand</h3>
+        <p>
+          The protocol is one JSON object per line over TCP. Open a connection with <code>nc 127.0.0.1 9876</code>
+          and type the lines below (send the first within 10 seconds, or the connection is closed). Lines marked
+          <code>&larr;</code> are what comes back.
+        </p>
+        <pre><code>{"op":"hello","id":1}
+<span class="cmt">&larr; {"id":1,"ok":true,"result":{"protocolVersion":3,"auth":"trusted","loopbackOpen":true,"scopes":["full"],
+     "app":{"version":"...","build":"release","headless":true},"objects":["airPlayManager", ...]}}</span>
+
+{"op":"get","object":"volumeController","property":"percent","id":2}
+<span class="cmt">&larr; {"id":2,"ok":true,"result":32}</span>
+
+{"op":"call","object":"obdManager","method":"setParameterDemand","args":["my-frontend",["RPM","SPEED"]],"id":3}
+<span class="cmt">&larr; {"id":3,"ok":true,"result":null}</span>
+
+{"op":"subscribe","object":"paramStore","properties":["RPM","SPEED"],"throttleMs":500,"id":4}
+<span class="cmt">&larr; {"id":4,"ok":true,"result":{"sub":1}}
+&larr; {"event":"params","sub":1,"object":"paramStore","values":{"RPM":800,"SPEED":0},"t":51234}
+&larr; ... another whenever a value changes, at most every 500 ms</span>
+
+{"op":"call","object":"sim","method":"setThrottle","args":[60],"id":5}
+<span class="cmt">&larr; {"id":5,"ok":true,"result":true}
+&larr; ... and the RPM and speed in the events climb</span></code></pre>
+        <p>What just happened:</p>
+        <ol class="steps">
+          <li><code>hello</code> says who you are talking to. Check <code>protocolVersion</code>: it is <strong>3</strong>.</li>
+          <li><code>get</code> read one value, the volume in percent.</li>
+          <li><code>call</code> ran a method. OCTAVE only asks the car for readings somebody shows, so you told it which two you want, under a name of your own.</li>
+          <li><code>subscribe</code> asked for those readings as they change. The reply carries a subscription id; every event after it carries the same <code>sub</code>.</li>
+          <li>Another <code>call</code> pressed the simulated accelerator.</li>
+        </ol>
+        <p>
+          Every request has an <code>op</code>. The <code>id</code> is optional and is echoed in the reply, so you
+          can send several requests without waiting. Every reply has <code>ok</code>; a failure is
+          <code>{"ok":false,"error":"..."}</code>, sometimes with a <code>code</code> a program can act on
+          (<a href="#rules">Rules of the Road</a>). A message with an <code>event</code> key is not a reply, and can
+          arrive between a request and its reply.
+        </p>
+
+        <h3 id="first">3. The same in an SDK</h3>
+        <p>
+          The Python client needs nothing but Python 3.8 and a copy of the repository. From the repository root,
+          with the core from step 1 still running:
+        </p>
+        <pre><code>import sys; sys.path.insert(0, "sdk/python")
+from octave_client import Client
+
+with Client() as octave:                 <span class="cmt"># 127.0.0.1:9876; says hello and checks the version</span>
+    print(octave.get("volumeController", "percent"))
+    octave.call("obdManager", "setParameterDemand", "my-frontend", ["RPM", "SPEED"])
+    octave.subscribe("paramStore", properties=["RPM", "SPEED"], throttle_ms=500)
+    octave.call("sim", "setThrottle", 60)
+    for event in octave.events(timeout=5):   <span class="cmt"># runs until you press Ctrl+C</span>
+        print(event.get("values"))</code></pre>
+        <p>
+          That is the whole pattern: read, subscribe, call. For a complete small frontend to copy, go to
+          <a href="#template">Starter Projects and SDKs</a>.
+        </p>
+
+        <h2 id="ideas">The Ideas</h2>
+        <p>
+          <strong>Objects.</strong> The core is a set of named objects, one per feature: <code>nowPlaying</code>,
+          <code>volumeController</code>, <code>obdManager</code>, <code>settingsManager</code> and about thirty in
+          all. <code>hello</code> lists their names.
+        </p>
+        <p>
+          <strong>Properties</strong> are an object's state. Read one with <code>get</code>. A few are writable and
+          take <code>set</code>, which answers with the value read back:
+        </p>
+        <pre><code>{"op":"set","object":"volumeController","property":"muted","value":true}
+{"op":"set","object":"settingsManager","property":"showClock","value":false}</code></pre>
+        <p>
+          <strong>Methods</strong> do things, and are what the touch screen calls too. Most state is read-only and
+          changes through a method. <code>args</code> is a list in the method's order; the reply is the return value,
+          or <code>null</code>. A method runs on the app's main thread, so a slow one holds the built-in screen just
+          as a tap would.
+        </p>
+        <pre><code>{"op":"call","object":"nowPlaying","method":"next"}
+{"op":"call","object":"volumeController","method":"applyVolume","args":[40]}</code></pre>
+        <p>
+          <strong>Signals</strong> are moments: a track changed, an export finished. You cannot ask for one; you
+          subscribe and wait.
+        </p>
+
+        <h3 id="discover">describe: what an object offers</h3>
+        <p>
+          <code>{"op":"describe","object":"nowPlaying"}</code> answers with that object's properties (type,
+          writable or not), methods (parameters, return type) and signals, and the permission each change needs.
+          Without <code>object</code> it describes every object and lists the ops this server understands. The same
+          data is in the repository as <span class="file-path">docs/api/&lt;object&gt;.json</span>, and as a page in
+          the <a href="api-reference.html">API reference</a>, so you can write code against the files and check at
+          run time. <span class="file-path">docs/api/protocol.json</span> describes the protocol itself (every op,
+          reply, event and error) as JSON Schema, for writing a client in a language with no SDK.
+        </p>
+
+        <h3 id="read">Subscriptions</h3>
+        <p>
+          One <code>subscribe</code> follows any number of properties and signals of one object:
+        </p>
+        <pre><code>{"op":"subscribe","object":"nowPlaying","properties":["title","artist","playing"],"signals":["trackChanged"],"throttleMs":250,"id":6}
+<span class="cmt">&larr; {"id":6,"ok":true,"result":{"sub":2}}
+&larr; {"event":"property","sub":2,"object":"nowPlaying","name":"title","value":"Dream On","t":61200}
+&larr; {"event":"signal","sub":2,"object":"nowPlaying","name":"trackChanged","args":[],"t":93410}</span></code></pre>
+        <p>
+          Each property arrives once at the start with its current value, then on every change, so you never need a
+          <code>get</code> first. <code>throttleMs</code> limits each property to one event per interval, carrying the
+          latest value. The reply with your <code>sub</code> id always comes before the first event.
+          <code>{"op":"unsubscribe","sub":2}</code> ends one; closing the connection ends them all.
+        </p>
+
+        <h3 id="live-values">Live readings from the car</h3>
+        <p>
+          Readings from the car and the motion sensor live in one object, <code>paramStore</code>, keyed by ids such
+          as <code>RPM</code>, <code>SPEED</code> and <code>COOLANT_TEMP</code>. Subscribe with the ids as
+          <code>properties</code> and you get <code>params</code> events, each holding the values that changed. Two
+          things to know:
+        </p>
         <ul>
-          <li><strong>TCP, one JSON object per line</strong>, for any language with sockets. Requests carry <code>op</code> and an optional <code>id</code>, which the reply echoes so you can send several at once.</li>
-          <li><strong>WebSocket</strong> (<code>ws://host:9876/</code>), one object per text frame, for browsers. A browser may only connect from the service's own page, i.e. served by the app at <code>http://host:9876/</code> and opened by IP address. To host your own page there, start the app with <code>--web-root DIR</code> (your built frontend: the directory holding its <code>index.html</code>; or the <code>serviceWebRoot</code> setting) and open <code>http://host:9876/</code>; see <a href="utilities.html#service-protocol">the service protocol</a> for what it serves and refuses. Non-browser WebSocket clients send no <code>Origin</code> and are not restricted.</li>
-        </ul>
-        <pre><code><span class="cmt"># a whole session by hand</span>
-$ printf '{"op":"hello","id":1}\n{"op":"get","object":"volumeController","property":"percent","id":2}\n' | nc -q1 127.0.0.1 9876
-{"id":1,"ok":true,"result":{"app":{"build":"release","headless":true,"version":"0.9.6"},"auth":"trusted","loopbackOpen":true,"objects":["settingsManager",...],"protocolVersion":3,"scopes":["full"]}}
-{"id":2,"ok":true,"result":32}</code></pre>
-        <p>Every reply has <code>ok</code>; a failure has <code>"ok": false</code> and an <code>error</code> string. Anything with an <code>event</code> key is not a reply but a subscription event, and can arrive between replies.</p>
-
-        <h2 id="discover">3. Discover</h2>
-        <ul>
-          <li><code>hello</code>: the protocol version (check it), the app version, whether it is headless, and the object names.</li>
-          <li><code>describe {object}</code>: that object's properties (type, writable, notify signal, enum keys), methods (parameter types, return type) and signals. <code>describe</code> with no object returns all of them (about 110&nbsp;KB). It is the same data as <span class="file-path">docs/api/&lt;object&gt;.json</span>, so you can code against the files and check them at run time.</li>
-          <li><span class="file-path">docs/api/parameters.json</span> (or <code>get parameterCatalog parameters</code>): every OBD PID and IMU reading with its title, native unit, range and decimals.</li>
-          <li><span class="file-path">docs/api/protocol.json</span>: the protocol itself as JSON Schema, for a client in a language without an SDK: each op's arguments and reply, the reply envelope and error codes, every event's fields, the binary record, the HTTP routes, the pairing steps. It is checked against the server by a test, so it is current. <code>describe</code> with no object lists the ops the server has as <code>ops</code>, so a client can tell at run time what it may send. To develop a client with no OCTAVE build at all, <code>python tools/api/fake_server.py</code> is a fake service that speaks the spec with canned data, pairing and faults on demand (<span class="file-path">docs/api/README.md</span>, "For SDK authors").</li>
+          <li><strong>Ask for what you show.</strong> OCTAVE polls the car only for readings somebody wants. Call <code>obdManager.setParameterDemand("my-frontend", [ids])</code> for what is on your screen, and again with an empty list when it leaves. Pick a name of your own. If your connection closes, OCTAVE releases your demand for you.</li>
+          <li><strong>Values are in the car's native unit</strong> (°C, MPH, kPa). <span class="file-path">docs/api/parameters.json</span> lists every id with its title, unit and range. To show the units the user picked, read <code>parameterCatalog.displayParameters</code> and convert with <code>parameterCatalog.toDisplay(id, value)</code>.</li>
         </ul>
 
-        <h2 id="read">4. Read and Subscribe</h2>
-        <pre><code>{"op":"get","object":"nowPlaying","property":"title","id":3}
-{"op":"subscribe","object":"nowPlaying","properties":["title","artist","playing","positionMs"],"throttleMs":250,"id":4}
-<span class="cmt">&larr; {"id":4,"ok":true,"result":{"sub":1}}</span>
-<span class="cmt">&larr; {"event":"property","sub":1,"object":"nowPlaying","name":"title","value":"Dream On","t":12345}</span>   <span class="cmt"># the current value at once, then each change</span></code></pre>
-        <ul>
-          <li><strong>Order</strong>: the <code>subscribe</code> reply, with your <code>sub</code> id, always arrives before any event of that subscription, on both TCP and WebSocket, even with requests pipelined. Your client still has to handle the reply before it reads the next message: a JavaScript client that resolves a promise in <code>onmessage</code> and registers the <code>sub</code> in a later <code>.then</code> can see the first event before the registration.</li>
-          <li><strong>Properties</strong>: a <code>property</code> event with the value at once and on every change. <code>throttleMs</code> caps it at one event per property per interval, carrying the latest value.</li>
-          <li><strong>Signals</strong>: <code>"signals": ["trackChanged"]</code> gives <code>signal</code> events with the arguments.</li>
-          <li><strong>Live OBD and IMU values</strong>: subscribe to <code>paramStore</code> with the ids you show as <code>properties</code>. You get <code>params</code> events, <code>{"values": {"RPM": 2210, "SPEED": 41}}</code>, in the native unit. OCTAVE only polls the car for what someone shows: call <code>obdManager.setParameterDemand("my-frontend", ["RPM","SPEED"])</code> for the ids on your screen, and an empty list when they leave it. If your connection closes (or the client is killed), the app releases every consumer that connection registered through <code>setParameterDemand</code>, <code>setBackgroundDemand</code> and <code>berryIMU.setDemand</code>, so pick a consumer name of your own: one the QML UI also uses would be released with yours.</li>
-          <li><strong>Lists</strong> (no object serves one at present, protocol 3; the op stays for list models to come): <code>get</code> gives a summary, <code>rows</code> the rows, and a subscription sends <code>model</code> events (reset, insert, update, remove) to replay in order.</li>
-        </ul>
-        <p>A connection's subscriptions end with it. If you stop reading, the oldest events are dropped and a <code>{"event":"dropped","count":N}</code> says how many.</p>
+        <h3 id="rows">Rows</h3>
+        <p>
+          The protocol can serve long lists as models: <code>get</code> answers a summary, the <code>rows</code> op
+          gives the rows, and a subscription sends <code>model</code> events (reset, insert, update, remove) to
+          replay in order. No object serves a list this way yet; the lists there are (trips, dashboards, the phone's
+          queue) are ordinary properties.
+        </p>
 
-        <h2 id="control">5. Control</h2>
-        <pre><code>{"op":"call","object":"nowPlaying","method":"next","id":5}
-{"op":"call","object":"volumeController","method":"applyVolume","args":[40],"id":6}
-{"op":"set","object":"volumeController","property":"muted","value":true,"id":7}
-{"op":"call","object":"settingsManager","method":"save_show_clock","args":[false],"id":8}</code></pre>
-        <p>Most state is read-only and changes through a method, the same one the touch screen calls: settings through their <code>save_*</code> slots, media through <code>nowPlaying</code>, volume through <code>volumeController</code>. Arguments are converted to the declared types (an enum by name or number), and overloads are told apart by argument count. Methods run on the app's GUI thread, so a slow one holds the bundled UI just as a tap would.</p>
+        <h3 id="streams">Streams: the phone's screen</h3>
+        <p>
+          Video does not fit in JSON, so it comes as binary records on the same connection. Ask with
+          <code>{"op":"stream","object":"phoneMirrorManager","name":"video"}</code> for the mirrored phone (H.264),
+          or <code>androidAutoManager</code> / <code>frames</code> for Android Auto (JPEG pictures). A browser decodes
+          the H.264 with WebCodecs; touches go back through
+          <code>phoneMirrorManager.injectTouch(pointerId, action, relX, relY)</code>. To develop without a phone, run
+          <code>--headless --sim</code> and call <code>sim.setVideo(true)</code>, which plays a test clip into the
+          phone stream. The record layout and the rules for joining and falling behind are in
+          <span class="file-path">docs/api/README.md</span>, "Streams".
+        </p>
 
-        <h2 id="template">Start from a Template</h2>
-        <p>The quickest start is a copy of one of the folders in <span class="file-path">templates/</span>: each is a complete frontend under 200 lines that connects, pairs when it is not on the head unit (asking only for the <code>media</code> permission), shows RPM and speed live, plays and pauses, and shows the cover, with its own README and no path into the rest of the repo.</p>
-        <ul>
-          <li><span class="file-path">templates/hello-car-js/</span>: plain JavaScript in a browser, served by the app itself. <code>octave.js</code> is the whole protocol in 60 lines; <code>app.js</code> the page.</li>
-          <li><span class="file-path">templates/hello-car-python/</span>: a terminal program on the Python client (<span class="file-path">sdk/python/octave_client</span>, copied into the folder).</li>
-          <li><span class="file-path">templates/hello-car-go/</span>: the same in Go on <span class="file-path">sdk/go</span> as a module dependency.</li>
-        </ul>
-        <pre><code>octave --headless --sim --web-root templates/hello-car-js           <span class="cmt"># the download from step 1 (or ./build/octave): the simulated car, no window; open http://127.0.0.1:9876/</span>
-python templates/hello-car-python/hello_car.py                         <span class="cmt"># or, against the same app, the Python one...</span>
-cd templates/hello-car-go &amp;&amp; go run .                                 <span class="cmt"># ...or the Go one</span></code></pre>
-        <p>The simulated car idles until something drives it: <code>{"op":"call","object":"sim","method":"setThrottle","args":[40]}</code> over the service, or a scenario (<span class="file-path">docs/api/README.md</span>, "Simulator"). Each template has a check (<code>test/</code>, or <code>go test</code>) that runs it against <code>--headless --sim</code> on a free port; ctest runs them as <code>template_js</code>, <code>template_python</code> and <code>template_go</code>, so a template that stops working fails the build.</p>
+        <h3 id="art">Pictures and files over HTTP</h3>
+        <p>
+          The service port also answers a few HTTP <code>GET</code> requests. <code>/art</code> is the cover of what
+          is playing (404 when there is none). Subscribe to <code>nowPlaying.artRevision</code>, which goes up with
+          every new cover, and put it in the address so the browser does not show a stale one:
+          <code>&lt;img src="/art?rev=12"&gt;</code>. <code>/art?song=&lt;file name&gt;</code> is the cover of a song
+          in the library and <code>/art?queue=&lt;id&gt;</code> of an item in the phone's queue.
+        </p>
+        <p>
+          Exports work in two steps: ask the core to export, then download the result.
+          <code>tripRecorder.exportTrip(id)</code> then <code>/export/trip</code> (add <code>?format=json</code> for
+          JSON), <code>dashboardManager.exportDashboard(id)</code> then <code>/export/dashboard</code>,
+          <code>diagnosticsManager.exportLogs()</code> then <code>/export/logs</code>. Only the last export of each
+          kind is served.
+        </p>
 
-        <h2 id="first">Your First Frontend in 60 Lines</h2>
-        <p>Everything above, in one page on the TypeScript SDK (<span class="file-path">sdk/typescript</span>): it connects to the app that serves it, pairs when the browser is not on the head unit, shows two live readings, the track with transport, and the cover. The whole thing is <span class="file-path">sdk/typescript/examples/first-frontend/</span>: <span class="file-path">index.html</span> (a status line, a pair form, two gauges, a now-playing row) and this <span class="file-path">app.js</span>, no framework and no bundler.</p>
-        <pre><code>cd sdk/typescript &amp;&amp; npm install &amp;&amp; examples/first-frontend/build.sh      <span class="cmt"># builds the SDK, copies it to lib/</span>
-octave --headless --sim --web-root sdk/typescript/examples/first-frontend   <span class="cmt"># a simulated car; open http://127.0.0.1:9876/</span></code></pre>
-        <pre><code>// A first OCTAVE frontend with the TypeScript SDK, in 60 lines: connect, pair
-// when this browser is not on the head unit, two live gauges, a now-playing
-// line with transport, the cover. Build the SDK, then serve this folder from
-// the app (see README.md).
-import { OctaveClient, obj } from &#x27;./lib/index.js&#x27;
-
-const $ = (id) =&gt; document.getElementById(id)
-const client = new OctaveClient({ token: localStorage.getItem(&#x27;token&#x27;) ?? undefined })   // ws://&lt;this page&#x27;s host&gt;/
-const obd = obj(client, &#x27;obdManager&#x27;)
-const now = obj(client, &#x27;nowPlaying&#x27;)
-
-client.on(&#x27;status&#x27;, (s) =&gt; { $(&#x27;status&#x27;).textContent = s === &#x27;online&#x27; ? `OCTAVE ${client.hello?.app.version}` : s })
-client.on(&#x27;hello&#x27;, (h) =&gt; {
-  // Protocol 2: over the network we must pair once; on the head unit nothing to do.
-  if (h.tokenRejected) localStorage.removeItem(&#x27;token&#x27;)
-  $(&#x27;pair&#x27;).style.display = h.auth === &#x27;untrusted&#x27; ? &#x27;block&#x27; : &#x27;none&#x27;
-  if (h.auth !== &#x27;untrusted&#x27;) start()
-})
-$(&#x27;pair&#x27;).onsubmit = async (e) =&gt; {
-  e.preventDefault()
-  try {
-    localStorage.setItem(&#x27;token&#x27;, await client.pair($(&#x27;code&#x27;).value, &#x27;First frontend&#x27;))
-    client.close(); client.connect()                         // a fresh, trusted connection re-issues everything
-  } catch (err) { $(&#x27;pairError&#x27;).textContent = err.message }
-}
-
-let started = false
-async function start() {
-  if (started) return
-  started = true
-  // Live readings: the app polls the car only for what someone asks for.
-  await obd.call(&#x27;setParameterDemand&#x27;, &#x27;first-frontend&#x27;, [&#x27;SPEED&#x27;, &#x27;RPM&#x27;])
-  client.params([&#x27;SPEED&#x27;, &#x27;RPM&#x27;], (v) =&gt; { for (const id in v) $(id).textContent = v[id] === null ? &#x27;–&#x27; : Math.round(v[id]) }, 100)
-  // Now playing: the properties arrive at once, then on every change.
-  now.subscribe({ properties: [&#x27;hasTrack&#x27;, &#x27;title&#x27;, &#x27;artist&#x27;, &#x27;playing&#x27;, &#x27;artRevision&#x27;], throttleMs: 250 }, (e) =&gt; {
-    if (e.event !== &#x27;property&#x27;) return
-    if (e.name === &#x27;title&#x27; || e.name === &#x27;hasTrack&#x27;) $(&#x27;title&#x27;).textContent = e.name === &#x27;hasTrack&#x27; &amp;&amp; !e.value ? &#x27;Nothing playing&#x27; : e.value || $(&#x27;title&#x27;).textContent
-    if (e.name === &#x27;artist&#x27;) $(&#x27;artist&#x27;).textContent = e.value
-    if (e.name === &#x27;playing&#x27;) $(&#x27;play&#x27;).textContent = e.value ? &#x27;⏸&#x27; : &#x27;▶&#x27;
-    if (e.name === &#x27;artRevision&#x27;) cover(e.value)
-  })
-}
-async function cover(rev) {
-  // Over the network /art needs a short-lived ticket; on the head unit it is harmless.
-  const t = client.hello?.loopbackOpen &amp;&amp; location.hostname === &#x27;127.0.0.1&#x27; ? &#x27;&#x27; : `&amp;ticket=${(await client.mediaTicket()).ticket}`
-  $(&#x27;cover&#x27;).src = rev &gt; 0 ? `/art?rev=${rev}${t}` : &#x27;&#x27;
-}
-$(&#x27;play&#x27;).onclick = () =&gt; now.call(&#x27;togglePlay&#x27;)
-$(&#x27;next&#x27;).onclick = () =&gt; now.call(&#x27;next&#x27;)
-$(&#x27;prev&#x27;).onclick = () =&gt; now.call(&#x27;previous&#x27;)
-client.connect()
-</code></pre>
-        <p>What each part leans on:</p>
-        <ul>
-          <li><strong>Connect.</strong> <code>new OctaveClient()</code> defaults to the page's own host, so the page works wherever the app serves it; <code>connect()</code> reconnects with backoff and re-issues the subscriptions on each new link. A token from an earlier pairing goes with <code>hello</code>.</li>
-          <li><strong>Pair when untrusted.</strong> On the head unit <code>hello</code> says <code>"auth": "trusted"</code> and the form stays hidden. Over the network it says <code>untrusted</code>: the page asks for the 6-digit code (Settings, Service, Pair a device), <code>client.pair(code, name)</code> returns the token to keep, and a fresh connection carries it. A token the app rejects (<code>tokenRejected</code>) is dropped.</li>
-          <li><strong>Live readings.</strong> <code>obdManager.setParameterDemand("first-frontend", ["SPEED", "RPM"])</code> makes the app poll those two PIDs (it polls only what someone shows); <code>client.params([...], cb, 100)</code> delivers them in native units, at most ten times a second.</li>
-          <li><strong>Now playing.</strong> One subscription to <code>nowPlaying</code>'s properties: the current values arrive at once, then every change. The buttons call <code>togglePlay</code>, <code>next</code>, <code>previous</code> through the typed facade (<code>obj(client, 'nowPlaying')</code>): a method that does not exist does not compile.</li>
-          <li><strong>The cover.</strong> <code>GET /art?rev=N</code> with <code>nowPlaying.artRevision</code> as the cache key; over the network the URL also carries a short-lived ticket from <code>mediaTicket</code>, never the token.</li>
-        </ul>
-        <p>Run with <code>--headless --sim --service-bind 0.0.0.0</code> and opened by the machine's LAN address, the page shows the pair form; a code from <code>sim.pairingCode()</code> over loopback pairs it, and then it reads the simulated car and the cover like a page on the head unit.</p>
-
-        <h2 id="recipes">Recipes</h2>
+        <h2 id="recipes">What to Use for What</h2>
         <table>
           <thead><tr><th>To</th><th>Use</th></tr></thead>
           <tbody>
-            <tr><td>Show what is playing, with controls</td><td><code>nowPlaying</code>: <code>title</code> / <code>artist</code> / <code>album</code> / <code>playing</code> / <code>positionMs</code> / <code>durationMs</code> / <code>source</code>; <code>togglePlay</code>, <code>next</code>, <code>previous</code>, <code>seek(ms)</code>. It covers the phone (while mirroring) and the local player alike.</td></tr>
-            <tr><td>Volume and mute</td><td><code>volumeController</code>: <code>percent</code>, <code>muted</code>, <code>applyVolume(0..100)</code>. Never call the media manager's own setters: VolumeController routes to every output and applies the curve.</td></tr>
-            <tr><td>Gauges in the user's units</td><td><code>parameterCatalog.displayParameters</code> (titles, units and ranges after the user's °F / km/h choice) and <code>parameterCatalog.toDisplay(id, value)</code>; <code>settingsManager.gaugeTempUnit</code> / <code>gaugeSpeedUnit</code>.</td></tr>
-            <tr><td>Connect to the car</td><td><code>obdManager</code>: <code>connectionState</code> (enum <code>ConnectionState</code>), <code>connectionLog</code>, the connect methods; Bluetooth adapters through <code>obdAdapterFinder</code>.</td></tr>
-            <tr><td>Past drives</td><td><code>tripRecorder</code> (the black box): <code>trips</code> (the list), <code>requestDetail(id)</code> and <code>requestSeries(...)</code> (four overloads, by argument count; the results arrive as signals), <code>exportTrip</code>; <code>recording</code> / <code>currentTripId</code> for the drive in progress.</td></tr>
-            <tr><td>Dashboards</td><td><code>dashboardManager</code>: <code>dashboards</code> (the list), <code>loadDashboard</code>, <code>saveDashboard</code> (no <code>id</code> = a new one from the label; on failure <code>lastError</code> says why), <code>importDashboard</code> / <code>importDashboardFromText</code>, <code>exportDashboard</code>. Files follow <span class="file-path">docs/api/dashboard-spec.schema.json</span>; the widget types a cell can use, with their defaults and editable props, are <code>dashboardManager.widgetCatalog</code> (<span class="file-path">docs/api/widget-catalog.json</span>).</td></tr>
-            <tr><td>Anything else</td><td>Look it up in the <a href="api-reference.html">API reference</a>, then grep the QML for how the bundled UI uses it.</td></tr>
+            <tr><td>Show what is playing, with controls</td><td><code>nowPlaying</code>: <code>title</code>, <code>artist</code>, <code>album</code>, <code>playing</code>, <code>positionMs</code>, <code>durationMs</code>; <code>togglePlay</code>, <code>next</code>, <code>previous</code>, <code>seek(ms)</code>. It covers local music and the phone alike.</td></tr>
+            <tr><td>Volume and mute</td><td><code>volumeController</code>: <code>percent</code>, <code>muted</code>, <code>applyVolume(0..100)</code>, <code>toggleMute()</code>. Always go through it: it reaches every audio output.</td></tr>
+            <tr><td>Live readings</td><td><code>paramStore</code> with <code>obdManager.setParameterDemand</code> (<a href="#live-values">above</a>).</td></tr>
+            <tr><td>Connect to the car</td><td><code>obdManager</code>: <code>connectionState</code>, <code>connectToAdapter(port)</code>, <code>readDtc()</code> for trouble codes. See <a href="obd-manager.html">OBD Manager</a>.</td></tr>
+            <tr><td>Past drives</td><td><code>tripRecorder</code>: <code>trips</code>, <code>requestDetail(id)</code>; the answer comes as a signal.</td></tr>
+            <tr><td>Dashboards</td><td><code>dashboardManager</code>: <code>dashboards</code>, <code>loadDashboard(id)</code>, <code>saveDashboard(spec)</code>. A dashboard is a JSON file; see <a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>.</td></tr>
+            <tr><td>Settings</td><td><code>settingsManager</code>: set a property, or change several with <code>apply_settings({...})</code>, which answers which keys it applied and which it refused. Keys: <a href="settings-reference.html">Settings Reference</a>.</td></tr>
+            <tr><td>The user's colours</td><td><code>themeCatalog.activeTheme</code>: the palette in force, already resolved. See <a href="theme-system.html">Theme System</a>.</td></tr>
+            <tr><td>Waveform bars</td><td><code>audioAnalyzer.setDemand("my-frontend", true)</code> while they are on screen, then subscribe to <code>audioAnalyzer.levels</code>.</td></tr>
+            <tr><td>Drive the simulated car</td><td><code>sim</code>: <code>setThrottle</code>, <code>setBrake</code>, <code>setGear</code>, <code>scenario("hot")</code> and more (<span class="file-path">docs/api/README.md</span>, "Simulator"). For development only: <code>sim.active</code> is false on a real car, where its controls do nothing.</td></tr>
+            <tr><td>Anything else</td><td>Look it up in the <a href="api-reference.html">API reference</a>.</td></tr>
           </tbody>
         </table>
 
-        <h2 id="headless">Being the Only UI</h2>
-        <p><code>octave --headless</code> runs every manager and the service with no QML engine and no window (the offscreen Qt platform), using about a fifth less memory than the full app. Music, OBD polling, the black box, the knob, gestures and the IMU all keep working; your frontend is the screen. It needs the service, so it exits if the service can't start. <code>hello</code> reports <code>"headless": true</code>.</p>
-        <p><code>octave --headless --sim</code> (<a href="#start">step 1</a>, any build) adds the simulated car behind the real <code>OBDManager</code> and simulated IMU motion, so OBD values, the G-force and the compass move with no adapter and no QML UI. Drive it with the <code>sim</code> object on the same port, for example <code>{"op":"call","object":"sim","method":"setThrottle","args":[80]}</code> or <code>{"op":"call","object":"sim","method":"scenario","args":["hot"]}</code>.</p>
-        <p>The SDK's <code>launch_headless()</code> starts one with a throwaway config, the easiest way to test a frontend or a script: <span class="file-path">sdk/python/tests/test_client.py</span> does exactly that.</p>
+        <h2 id="pairing">Pairing and Permissions</h2>
+        <p>
+          A program on the same device as OCTAVE is trusted and needs none of this. A client anywhere else, such as
+          a phone on the car's Wi-Fi, has to <strong>pair</strong> once, the way a Bluetooth speaker does.
+        </p>
+        <p>First the service has to be on and reachable. It is off unless one of these turns it on:</p>
+        <pre><code>octave --service                      <span class="cmt"># the built-in screen, plus the service</span>
+octave --service 9900                 <span class="cmt"># on another port</span>
+octave --headless                     <span class="cmt"># no screen at all</span>
+octave --service --service-bind 0.0.0.0   <span class="cmt"># reachable from other devices, not only this one</span></code></pre>
+        <p>
+          The <strong>Service</strong> switch in Settings &gt; Device &gt; Developer turns it on at every start (the
+          <code>serviceEnabled</code> setting). Then:
+        </p>
+        <ol class="steps">
+          <li>The user opens Settings &gt; Device &gt; Developer &gt; Service and taps <strong>Show a code</strong> under <strong>Pair a device</strong>. A 6-digit code shows for 2 minutes and works once.</li>
+          <li>Your client sends <code>{"op":"pair","code":"123456","name":"Kitchen tablet","scopes":["media"]}</code> and gets <code>{"token":"...","scopes":["read","media"]}</code>. The connection is trusted from that moment. Store the token.</li>
+          <li>Every later connection starts with <code>{"op":"hello","token":"..."}</code>. If <code>hello</code> answers <code>"auth":"untrusted","tokenRejected":true</code>, the user revoked the device: show your pairing screen again.</li>
+        </ol>
+        <p>
+          Until it pairs, a client gets <code>"code":"unauthorised"</code> for every op but <code>hello</code> and
+          <code>pair</code>. With no screen to read the code from (<code>--headless</code>), run
+          <code>octave --pair-code</code> on the device: it prints a code from the running OCTAVE. Under
+          <code>--sim</code>, <code>sim.pairingCode()</code> over a local connection does the same.
+        </p>
+        <p>
+          <strong>Scopes</strong> are the permissions a paired device holds. Every paired device can read. Changing
+          something needs the scope of that method or property, which <code>describe</code> and the API reference
+          list; without it the answer is <code>"code":"forbidden"</code>. Ask only for what your frontend changes:
+          leaving <code>scopes</code> out of <code>pair</code> asks for <code>full</code>.
+        </p>
+        <table>
+          <thead><tr><th>Scope</th><th>Lets a device change</th></tr></thead>
+          <tbody>
+            <tr><td><code>read</code></td><td>Nothing. Reading, and the demand calls a reading client needs, are always allowed.</td></tr>
+            <tr><td><code>media</code></td><td>Playback, volume, the queue</td></tr>
+            <tr><td><code>vehicle</code></td><td>The OBD connection and trouble codes, adapters, sensors, the shift light</td></tr>
+            <tr><td><code>phone</code></td><td>Phone mirroring and Android Auto. Their video streams need it too.</td></tr>
+            <tr><td><code>settings</code></td><td>Settings</td></tr>
+            <tr><td><code>files</code></td><td>The library and playlists, dashboards, trips, logs, and the <code>/export</code> downloads</td></tr>
+            <tr><td><code>system</code></td><td>Restart, shut down, installing frontends</td></tr>
+            <tr><td><code>full</code></td><td>Everything</td></tr>
+          </tbody>
+        </table>
+        <p>
+          The user sees each paired device under <strong>Paired devices</strong> on the same Settings card and can
+          make it read only or revoke it; a revoked device's connections close at once.
+        </p>
+        <p>
+          <strong>Pictures and downloads.</strong> Off the device, <code>/art</code> and <code>/export/...</code> need
+          trust too. A program sends <code>Authorization: Bearer &lt;token&gt;</code>. A browser page asks
+          <code>{"op":"mediaTicket"}</code> for a ticket that lasts 10 minutes and uses
+          <code>/art?ticket=...</code>. Never put the token itself in an address.
+        </p>
+        <p>
+          <strong>Browsers.</strong> A web page can connect only if OCTAVE itself served it, and only when opened by
+          IP address (<code>http://192.168.1.20:9876/</code>, not a name). This stops a website open on the same
+          machine from driving the car. To have OCTAVE serve your page, start it with
+          <code>--web-root DIR</code>, the folder holding your <code>index.html</code>. Your page then opens a
+          WebSocket to <code>ws://&lt;same host&gt;:9876/</code> and sends the same JSON, one message per text frame.
+          Programs that are not browsers are not restricted this way. More in
+          <a href="utilities.html#service-protocol">the service protocol</a>.
+        </p>
+        <div class="info-box warning">
+          <div class="info-box-title">Traffic is not encrypted</div>
+          Pairing keeps strangers out, but anyone on the network can read what passes. Use
+          <code>--service-bind</code> only on a network you control.
+        </div>
+
+        <h2 id="template">Starter Projects and SDKs</h2>
+        <p>
+          <span id="sdks"></span>Everything here is in the repository and MIT licensed. The starter projects are
+          complete frontends under 200 lines: each connects, pairs when it is not on the device (asking only for
+          <code>media</code>), shows RPM and speed, plays and pauses, and shows the cover.
+        </p>
+        <table>
+          <thead><tr><th>Folder</th><th>What it is</th><th>Use it when</th></tr></thead>
+          <tbody>
+            <tr><td><span class="file-path">templates/hello-car-js/</span></td><td>Starter: plain JavaScript in a browser, no build step. <code>octave.js</code> is the whole protocol in 60 lines.</td><td>You want a web page</td></tr>
+            <tr><td><span class="file-path">templates/hello-car-python/</span></td><td>Starter: a terminal program, Python 3.8+, standard library only</td><td>You want a script or a terminal screen</td></tr>
+            <tr><td><span class="file-path">templates/hello-car-go/</span></td><td>Starter: the same in Go 1.22+</td><td>You want a single native program</td></tr>
+            <tr><td><span class="file-path">sdk/python/</span></td><td>Client library, standard library only. <code>launch_headless()</code> starts a core on a free port for tests.</td><td>Python</td></tr>
+            <tr><td><span class="file-path">sdk/typescript/</span></td><td>npm package <code>octave-client</code> for browsers and Node 22+. Typed from the API, so a wrong call does not compile. Reconnects by itself. <span class="file-path">examples/first-frontend/</span> is a page in 60 lines.</td><td>TypeScript or a bundled web app</td></tr>
+            <tr><td><span class="file-path">sdk/go/</span></td><td>Go module, standard library only: one Go type per object. Not published yet: point a <code>replace</code> line at the folder, as the Go starter does.</td><td>Go</td></tr>
+            <tr><td><span class="file-path">sdk/web/</span></td><td>The reference page OCTAVE serves at <code>http://127.0.0.1:9876/</code> when no other page is set: gauges, now playing, an API explorer. <code>/dashboards</code> is the browser dashboard editor.</td><td>You want to poke at the API in a browser</td></tr>
+            <tr><td><span class="file-path">examples/frontends/</span></td><td>Five complete frontends: TypeScript + Svelte, Python + Textual, Go + Gio, C + SDL2, Rust + egui. See the <a href="frontend-gallery.html">Frontend Gallery</a>.</td><td>You want to see a whole screen built</td></tr>
+            <tr><td><span class="file-path">tools/api/fake_server.py</span></td><td>A stand-in service with canned data, for writing a client in a new language with no OCTAVE at all. TCP only.</td><td>You are writing an SDK</td></tr>
+          </tbody>
+        </table>
+        <p>Run a starter against the simulated car:</p>
+        <pre><code>octave --headless --sim --web-root templates/hello-car-js    <span class="cmt"># then open http://127.0.0.1:9876/</span>
+python templates/hello-car-python/hello_car.py                <span class="cmt"># or, against the same core, the Python one</span>
+cd templates/hello-car-go &amp;&amp; go run .                         <span class="cmt"># or the Go one</span></code></pre>
+        <p>
+          The car idles until something drives it: call <code>sim.setThrottle(40)</code> from another connection.
+          Each starter has its own README and a check that runs it against the simulated car, so they keep working.
+        </p>
 
         <h2 id="install">Installing Your Frontend</h2>
-        <p>A frontend ships as a folder (or a <code>.zip</code> of one) with an <code>octave-frontend.json</code> at its top:</p>
+        <p>
+          Once your frontend works, OCTAVE can show it as its screen. Add a file named
+          <code>octave-frontend.json</code> at the top of its folder:
+        </p>
         <pre><code>{
-  "id": "com.example.dash",          <span class="cmt">// lower case, digits, . _ -: its folder name on the head unit</span>
+  "id": "com.example.dash",          <span class="cmt">// lower case, digits, . _ -</span>
   "name": "Example Dash",
   "version": "1.2.0",
   "description": "Big gauges for the track",
-  "preview": "preview.png",          <span class="cmt">// optional: a picture of it for the chooser (.png, .jpg, .webp)</span>
-  "protocol": [2, 3],                <span class="cmt">// the protocol versions it speaks, min and max</span>
-  "scopes": ["read", "media"],       <span class="cmt">// the permissions it asks for (docs/api/README.md, "Permissions")</span>
-  "web":  {"root": "dist"}           <span class="cmt">// a folder with index.html, served at GET /</span>
+  "preview": "preview.png",          <span class="cmt">// optional: its picture in Settings (.png, .jpg, .webp, up to 4 MB)</span>
+  "protocol": [2, 3],                <span class="cmt">// the protocol versions it speaks, lowest and highest</span>
+  "scopes": ["read", "media"],       <span class="cmt">// the permissions it asks for</span>
+  "web":  {"root": "dist"}           <span class="cmt">// a web frontend: the folder with index.html</span>
   <span class="cmt">// or</span>
   "exec": {"linux":   ["bin/dash", "--fullscreen"],
            "windows": ["dash.exe"],
-           "macos":   ["bin/dash"]}  <span class="cmt">// a program and its arguments per platform</span>
+           "macos":   ["bin/dash"]}  <span class="cmt">// a program frontend: what to run on each platform</span>
 }</code></pre>
-        <p>Exactly one of <code>web</code> and <code>exec</code>. Paths are relative to the folder and can't leave it. An exec program is either inside the folder (<code>bin/dash</code>) or a bare name found on <code>PATH</code> (<code>python3</code>, with your script as an argument); <code>{dir}</code> in an argument becomes the folder. <code>scopes</code> defaults to <code>["read"]</code>. <code>preview</code> is the picture Settings &gt; Device &gt; Developer &gt; Frontends shows in the frontend's box (16:10 fits it, 640&times;400 is plenty, 4&nbsp;MB at most); without one the box shows the first letter of the name, and each row of <code>frontendManager.frontends</code> carries it as a <code>preview</code> URL. Unknown keys are ignored, so a manifest written for a newer OCTAVE still installs on this one if its <code>protocol</code> range fits.</p>
-        <p><code>frontendManager</code> (<a href="signals-slots-reference.html#frontendManager">reference</a>) installs one: <code>installFromFolder(path)</code> or <code>installFromZip(path)</code> copies it to <span class="file-path">&lt;config&gt;/frontends/&lt;id&gt;/</span> after checking the manifest, that this OCTAVE speaks one of its protocol versions, that it has a program for this platform, and that it holds no links, nothing outside its folder (a zip entry like <code>../x</code> refuses the whole zip), at most 10&nbsp;000 files and 256&nbsp;MB. Nothing in it runs at install. Installing the same id again replaces it. <code>setActive(id)</code> makes it the screen from the next start (<code>""</code> goes back to the built-in QML UI), <code>remove(id)</code> deletes it. These need the <code>system</code> permission. On the head unit the same is on Settings &gt; Device &gt; Developer &gt; Frontends: install from a folder or a zip, then a box per screen with its picture, its name and what its scopes let it change. Tapping a box uses that screen (the box is the Use button; the one in use has the accent border); Try and Remove are under it.</p>
-        <h3>When it is the screen</h3>
+        <p>
+          Give exactly one of <code>web</code> and <code>exec</code>. Paths are relative to the folder and cannot
+          leave it. An <code>exec</code> program is either inside the folder or a bare name found on
+          <code>PATH</code> (<code>python3</code>, with your script as an argument); <code>{dir}</code> in an argument
+          becomes the folder's path. Unknown keys are ignored.
+        </p>
+        <ol class="steps">
+          <li>Open Settings &gt; Device &gt; Developer &gt; Frontends.</li>
+          <li>Tap <strong>Install from folder</strong> or <strong>Install from zip</strong>. OCTAVE checks the manifest, copies the frontend into <span class="file-path">&lt;config&gt;/frontends/&lt;id&gt;/</span> and runs nothing. It refuses a folder with links in it, more than 10,000 files or more than 256 MB, so install your built output, not your source tree.</li>
+          <li>Each installed frontend is a box with its picture, name and permissions. Tap the box to make it the screen from the next start; <strong>Restart now</strong> applies it at once. The <strong>Built-in</strong> box goes back.</li>
+          <li>For a program frontend, <strong>Try</strong> restarts OCTAVE on it and comes back to the current screen by itself after two minutes.</li>
+        </ol>
+        <p>
+          The same over the service, with the <code>system</code> scope:
+          <code>frontendManager.installFromFolder(path)</code>, <code>installFromZip(path)</code>,
+          <code>setActive(id)</code> (<code>""</code> is the built-in screen), <code>tryFrontend(id, seconds)</code>,
+          <code>restartNow()</code>, <code>remove(id)</code>. <code>frontendManager.frontends</code> is the list and
+          <code>lastError</code> says why something was refused. The two starters with a manifest
+          (<span class="file-path">templates/hello-car-js</span>, <span class="file-path">templates/hello-car-python</span>)
+          install as they are.
+        </p>
+
+        <h3 id="web-frontend">When a web frontend is the screen</h3>
+        <p>
+          OCTAVE serves it at <code>http://&lt;address&gt;:9876/</code> in place of the reference page, and turns the
+          service on to do so. The built-in screen stays on the display; your page is opened in a browser, on the
+          device or on a phone. In a browser on the device it holds exactly the scopes in its manifest. In a browser
+          elsewhere it pairs as usual.
+        </p>
+
+        <h3 id="exec-frontend">When a program frontend is the screen</h3>
+        <p>
+          OCTAVE starts with no screen of its own and runs your program in its folder. Not on Android, iOS or the
+          browser demo. Your program finds the service in its environment:
+        </p>
+        <table>
+          <thead><tr><th>Variable</th><th>Holds</th></tr></thead>
+          <tbody>
+            <tr><td><code>OCTAVE_HOST</code>, <code>OCTAVE_PORT</code></td><td>Where to connect (<code>127.0.0.1</code> and the service port)</td></tr>
+            <tr><td><code>OCTAVE_TOKEN</code></td><td>A token for this run, holding exactly your manifest's scopes. Send it with <code>hello</code> first.</td></tr>
+            <tr><td><code>OCTAVE_PROTOCOL</code>, <code>OCTAVE_SCOPES</code>, <code>OCTAVE_FRONTEND_DIR</code></td><td>The protocol version, your scopes (comma separated), your folder</td></tr>
+          </tbody>
+        </table>
+        <p>What OCTAVE expects of it:</p>
         <ul>
-          <li><strong>A web frontend</strong> is served at <code>GET /</code> in place of the reference client (only <code>--web-root</code> comes before it), and being active turns the service on. Open it in the head unit's browser or from a phone; in a browser on the head unit itself the page holds exactly its manifest's <code>scopes</code> (OCTAVE tells a browser from a program by the <code>Origin</code> / <code>Sec-Fetch-Site</code> headers browsers send; programs on the head unit keep full trust), and in a browser elsewhere it pairs as usual and holds what the pairing gave it. A token the page presents with <code>hello</code> counts as usual.</li>
-          <li><strong>An exec frontend</strong> is the screen: a plain <code>octave</code> start runs headless (no QML UI) and starts your program in its folder with
-            <code>OCTAVE_HOST</code> (<code>127.0.0.1</code>), <code>OCTAVE_PORT</code>, <code>OCTAVE_TOKEN</code>, <code>OCTAVE_PROTOCOL</code>, <code>OCTAVE_SCOPES</code> and <code>OCTAVE_FRONTEND_DIR</code> in its environment. Connect and send <code>{"op":"hello","token":"$OCTAVE_TOKEN"}</code> first: the token holds exactly the <code>scopes</code> of your manifest, and for that run OCTAVE trusts no local connection without a token, so a frontend can't do more than it asked for by leaving the token out. The token is new each start, kept in memory only, and revoked when your program ends. Your program's output goes to OCTAVE's log, up to 200 lines and 64&nbsp;KB a second with each line cut at 1000 characters (the rest is counted in one "lines dropped" note a second): log what helps, not every frame. The scopes bound what the program can do over the socket, not what it can do as a process: it runs as OCTAVE's user, with the config folder on disk and the token in its environment (inherited by anything it starts), so the user installs only frontends they trust.</li>
-          <li><strong>Exit code 0</strong> means the user quit: OCTAVE quits too, unless it comes within 3&nbsp;s of starting (a frontend that quits at once on every start would leave a blank head unit), which counts as a crash. Any other end (a crash, another code) starts it again after 1&nbsp;s, then 2, 4 ... up to 30&nbsp;s; a run longer than a minute forgives the crashes before it. After 5 crashes in a row, each within a minute of starting, OCTAVE writes <span class="file-path">&lt;config&gt;/frontends/USE_QML</span> with the reason and starts again on the QML UI.</li>
-          <li><strong>When OCTAVE wants your program to quit</strong> (another screen was chosen, a trial is over, five mute presses, OCTAVE itself is quitting) it closes your program's standard input and, at the same moment, sends <code>SIGTERM</code> on Linux and macOS and <code>WM_CLOSE</code> to your windows on Windows. Treat any of them as "quit now". A program with a window, and any program on Linux or macOS, needs no more than its toolkit's usual close or signal handling. A console program on Windows gets neither a signal nor a window message: read standard input (a thread that blocks on it is enough; OCTAVE never writes to it) and quit when it ends, as <span class="file-path">templates/hello-car-python/hello_car.py</span> does. What is still running after 3&nbsp;s is killed, with a warning in OCTAVE's log; until then the switch to the next screen waits. The exit code of a program that was asked to quit doesn't matter.</li>
-          <li><strong>The way back, from the driver's seat</strong>: press mute five times within four seconds (the ESP32 knob, the gesture sensor, a key, or your frontend's own mute button: anything that reaches <code>volumeController.toggleMute()</code>). OCTAVE ends your program, writes <span class="file-path">USE_QML</span> and starts again on the built-in UI. This works whatever your frontend shows, so a frontend that hangs or draws nothing never strands the driver; don't use five quick mute presses for anything else.</li>
-          <li><strong>Trying a screen</strong>: Settings &gt; Device &gt; Developer &gt; Frontends &gt; <em>Try</em> (or <code>frontendManager.tryFrontend(id, seconds)</code>, 15 to 900&nbsp;s, <code>system</code> permission) restarts OCTAVE on your exec frontend and, when the time is up, on the screen it came from. Turning the car off and on during a trial also ends it. <code>frontendManager.trialSecondsLeft</code> counts down (0 when this run isn't a trial); show it, and offer a <em>Keep this screen</em> button that calls <code>frontendManager.keepTrial()</code>, which any frontend may call. A frontend that crashes during its trial goes back too. <em>Use</em> makes a choice for the next start, and <em>Restart now</em> (<code>restartNow()</code>) applies it at once.</li>
-          <li><strong>Getting the QML UI back</strong> from a keyboard: <code>octave --qml</code> for one run; or create the file <span class="file-path">&lt;config&gt;/frontends/USE_QML</span> (any text) on the head unit's disk, which keeps the QML UI until it is deleted (<code>frontendManager.clearForcedQml()</code>, or "Try it again" on Settings &gt; Device &gt; Developer &gt; Frontends) or a screen is chosen again with <code>setActive</code>. An explicit <code>octave --headless</code> never starts an installed frontend: the caller is the frontend then.</li>
-          <li>While an exec frontend is the screen, every other program on the head unit needs a token too: scripts, the SDK examples, a second frontend. The pairing code is shown on the QML UI's Settings &gt; Device &gt; Developer &gt; Service, which isn't up then: run <code>octave --pair-code</code> on the head unit instead (as the same user, with the same <code>--config</code> if the running one has one). It asks the running OCTAVE for a fresh code over a local channel only that user can open, prints <code>{"code": "123456", "secondsLeft": 120}</code> and exits; it exits 1 if no OCTAVE with the service on is running for that config. Devices paired earlier keep working, and <code>octave --qml</code> (or <code>USE_QML</code>) still gives you the Settings page for one start. Exec frontends run on Linux (the Pi), Windows and macOS; not on Android, iOS or in the browser build.</li>
+          <li><strong>Use the token.</strong> During such a run no local program is trusted without one, so a frontend cannot get more than it asked for by leaving the token out. Other programs on the device need to pair too (<code>octave --pair-code</code>).</li>
+          <li><strong>Exit code 0 means the user quit</strong>, and OCTAVE quits too. Any other ending is a crash: OCTAVE starts your program again after 1 second, then 2, 4, up to 30. Quitting within 3 seconds of starting also counts as a crash.</li>
+          <li><strong>Five crashes in a row</strong>, each within a minute of starting, and OCTAVE goes back to the built-in screen and stays there until the user picks a screen again.</li>
+          <li><strong>Quit when asked.</strong> When OCTAVE wants your program to stop, it closes your standard input and sends <code>SIGTERM</code> (Linux, macOS) or <code>WM_CLOSE</code> to your windows (Windows). A console program on Windows gets neither signal nor message, so watch for standard input ending, as <span class="file-path">templates/hello-car-python/hello_car.py</span> does. A program still running after 3 seconds is killed.</li>
+          <li><strong>Log sparingly.</strong> Your output goes to OCTAVE's log, up to 200 lines a second; the rest is dropped.</li>
+          <li><strong>During a trial</strong>, <code>frontendManager.trialSecondsLeft</code> counts down. Show it, with a "Keep this screen" button that calls <code>frontendManager.keepTrial()</code>.</li>
+        </ul>
+        <div class="info-box warning">
+          <div class="info-box-title">The driver's way back</div>
+          Pressing mute five times within four seconds always returns to the built-in screen, from the volume knob,
+          the gesture sensor or your own mute button. It works even if your frontend hangs. Do not use five quick
+          mute presses for anything else. From a keyboard, <code>octave --qml</code> starts the built-in screen for
+          one run.
+        </div>
+        <p>
+          The scopes limit what a program frontend does over the socket, not what it does as a process: it runs as
+          OCTAVE's own user and can read the config folder. Install only frontends you trust.
+        </p>
+
+        <h2 id="browser-demo">Frontends in the Browser Demo</h2>
+        <p>
+          The <a href="https://robdegeorge.com/OCTAVE/">browser demo</a> is the real core compiled to WebAssembly,
+          so a web frontend runs against it with nothing installed.
+        </p>
+        <p>
+          <strong id="playground">The frontend playground</strong>
+          (<a href="https://robdegeorge.com/OCTAVE/playground.html">robdegeorge.com/OCTAVE/playground.html</a>) runs
+          one web frontend beside the core and its simulated car. It offers the bundled ones (the JavaScript starter,
+          glass, sunlight, arcade, retro-cluster), and <code>playground.html?frontend=&lt;url&gt;</code> loads yours
+          from any host that allows cross-origin requests (GitHub Pages does). That makes a link enough to show
+          someone your frontend running. The page asks the visitor before it runs a frontend that came in a link.
+          Your frontend needs no changes: it opens its WebSocket as usual. What is missing there:
+          <code>localStorage</code> (it throws), <code>/art</code> and <code>/export</code>, video streams, and
+          pairing.
+        </p>
+        <p>
+          <strong id="web-frontends">The web frontends list.</strong> In the demo itself, Settings &gt; Device &gt;
+          Developer &gt; Frontends lists the site's web frontends the way a head unit lists installed ones. Tapping
+          one shows it over the built-in screen at once. Its <strong>OCTAVE</strong> button, or five mute presses,
+          brings the built-in screen back. Program frontends are listed greyed out: they cannot run in a browser.
+          Nothing can be installed or removed there.
+        </p>
+
+        <h2 id="rules">Rules of the Road</h2>
+        <p>
+          <strong>Versions.</strong> The protocol version is <strong>3</strong>. It goes up only when something
+          breaks: a member removed, renamed or retyped. Additions do not change it, so ignore fields, objects and
+          events you do not know. Accept the versions you were written for and refuse a later one you have never
+          seen. What each version changed is in <span class="file-path">docs/api/CHANGELOG.md</span>.
+        </p>
+        <ul>
+          <li>A member marked <code>deprecated</code> in <code>describe</code> still works and says what to use instead. The older snake_case method names (<code>next_track</code>) are deprecated in favour of camelCase (<code>nextTrack</code>).</li>
+          <li>A member or object marked <code>"stability":"experimental"</code>, such as <code>sim</code>, may change in any release.</li>
+          <li>Requests that use an <code>action</code> key instead of <code>op</code> are developer tooling. They exist only in developer builds and are not part of the API. Do not build on them.</li>
+        </ul>
+        <p id="limits">
+          <strong>Limits.</strong> One client can never slow the car's screen, so each connection has limits. A
+          well-behaved frontend never meets them.
+        </p>
+        <table>
+          <thead><tr><th>Limit</th><th>What happens past it</th></tr></thead>
+          <tbody>
+            <tr><td>200 requests a second, 400 in a burst</td><td>The request does not run and answers <code>"code":"rateLimited"</code> with <code>retryAfterMs</code>. Wait that long and send it again.</td></tr>
+            <tr><td>Events you have not read</td><td>The oldest are dropped, and <code>{"event":"dropped","count":N}</code> says how many. A client that stays behind for 15 seconds is disconnected.</td></tr>
+            <tr><td>64 connections in all, 8 from one network address</td><td>Further ones are closed at once.</td></tr>
+            <tr><td>Silence: 10 seconds before the first byte, 60 seconds while unpaired</td><td>Closed.</td></tr>
+            <tr><td>One request: 1 MB</td><td>Closed.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          When a connection drops, reconnect with a growing delay (1 second, doubling), then say <code>hello</code>
+          and subscribe again: subscriptions do not survive a connection. The three error codes a program should act
+          on are <code>unauthorised</code> (pair first), <code>forbidden</code> (a missing scope) and
+          <code>rateLimited</code>. Every other failure is a message for a person in <code>error</code>.
+        </p>
+        <p><strong>Not available yet:</strong></p>
+        <ul>
+          <li>Encryption of the connection.</li>
+          <li>A sandbox for installed program frontends.</li>
+          <li>Program frontends on Android, iOS and in the browser demo.</li>
+          <li>The Go SDK as a published module.</li>
         </ul>
 
-        <p><strong>From a template to the screen.</strong> <span class="file-path">templates/hello-car-js</span> and <span class="file-path">templates/hello-car-python</span> each carry an <code>octave-frontend.json</code> asking for the <code>media</code> permission only, so either folder installs as it is: Settings &gt; Device &gt; Developer &gt; Frontends &gt; Install from folder, then Use (or <code>frontendManager.installFromFolder(path)</code> and <code>setActive(id)</code> over the service). From the next start the JavaScript one is served at <code>/</code>, where a browser on the head unit holds read and media only, and the Python one runs as the screen with a token of the same two, reading <code>OCTAVE_HOST</code>, <code>OCTAVE_PORT</code> and <code>OCTAVE_TOKEN</code> from its environment. Change the <code>id</code>, <code>name</code> and <code>version</code> when you make one your own. ctest <code>templates_install</code> runs both this way against the simulated car (<span class="file-path">tests/templates/check_install.py</span>), so the path can't rot.</p>
+        <h2 id="license">Your Frontend, Your License</h2>
+        <p>
+          OCTAVE itself (the core and the built-in screen) is GPL-3.0-or-later. Everything you would copy into a
+          frontend is MIT: the clients in <span class="file-path">sdk/</span>, the starters in
+          <span class="file-path">templates/</span> and the examples in
+          <span class="file-path">examples/frontends/</span>, each with its own <span class="file-path">LICENSE</span>.
+          Copy them, keep the MIT notice, and license the rest of your frontend however you like, open or closed.
+        </p>
+        <p>
+          A frontend that only talks to OCTAVE over the service is a separate program: it neither links OCTAVE's code
+          nor copies it. The project's intent, and its reading of the GPL, is that such a frontend is not a
+          derivative work and need not be GPL, however it is installed or started. That is a statement of intent,
+          not legal advice. What does fall under the GPL: changes to OCTAVE's own code
+          (<span class="file-path">src/</span>, <span class="file-path">frontend/</span>) and a fork of the built-in
+          screen.
+        </p>
 
-        <h2 id="rules">Versioning and Security</h2>
-        <ul>
-          <li><strong>Versioning.</strong> <code>protocolVersion</code> is 3. Accept the versions you know and refuse an unknown later one; it changes only on a breaking change (something removed, renamed or retyped; for 2, pairing; for 3, the <code>downloadManager</code> object removed). Additions don't change it, so ignore fields, objects and events you don't know. The rule, the history and what each version broke are in <span class="file-path">docs/api/README.md</span>.</li>
-          <li><strong>Pairing.</strong> On the head unit itself nothing is needed (unless <code>serviceLoopbackOpen</code> is off). Over the network your client pairs once: the user opens Settings &gt; Service &gt; Pair a device, you send <code>{"op":"pair","code":"123456","name":"My dash"}</code> and keep the token; later connections start with <code>{"op":"hello","token":"..."}</code> (a revoked or unknown token gets <code>"auth": "untrusted", "tokenRejected": true</code>: pair again). Until then every op but <code>hello</code> and <code>pair</code> answers <code>"code": "unauthorised"</code>. For <code>&lt;img&gt;</code> and downloads ask <code>{"op":"mediaTicket"}</code> and use <code>/art?ticket=...</code>; never put the token in a URL. A revoked device's connections are closed. Details: <span class="file-path">docs/api/README.md</span>, "Pairing".</li>
-          <li><strong>Permissions.</strong> Ask only for what your frontend changes: <code>{"op":"pair",...,"scopes":["media"]}</code>. Every paired device can read; changing a member needs its <code>scope</code> (listed on every method and writable property in <code>describe</code> and the <a href="api-reference.html">API reference</a>: <code>media</code>, <code>vehicle</code>, <code>phone</code>, <code>settings</code>, <code>files</code>, <code>system</code>, <code>full</code>), otherwise it answers <code>"code": "forbidden"</code>. Without <code>scopes</code> you get <code>full</code>. The user sees each device's access in Settings and can make it read only. Details: <span class="file-path">docs/api/README.md</span>, "Permissions".</li>
-          <li><strong>The network.</strong> Bind beyond loopback (<code>--service-bind</code>) only on a network you control: pairing keeps strangers out, but traffic is not encrypted.</li>
-          <li><strong>Browsers</strong> are held to the app's own page, opened by IP address (<a href="utilities.html#service-protocol">the Origin rule</a>), so a website open on the same machine can't drive the car.</li>
-          <li><strong>Experimental objects and members</strong> (marked <code>"stability": "experimental"</code>, such as <code>sim</code>) aren't covered by the version and may change in any release.</li>
-          <li><strong>Dev-only actions</strong> (<code>navigate</code>, <code>click</code>, <code>screenshot</code>, <code>sim_*</code>) exist only in developer builds with <code>--dev</code> / <code>--profile</code>, aren't versioned, and drive the bundled UI rather than the managers. Don't build on them.</li>
-        </ul>
-
-        <h3>Changing settings</h3>
-        <p>Each setting has a <code>save_*</code> slot that validates it and notifies (<code>settingsManager.save_theme_setting("NeonMatrix")</code>). To change several at once call <code>settingsManager.apply_settings({"backgroundGrid": "Normal", "backgroundBlurRadius": 40})</code>: every key goes through its own slot, values must already have the right JSON type, and the reply lists <code>applied</code> keys and <code>refused</code> ones with the reason. The Now Playing presets are <code>settingsManager.nowPlayingPresets</code>; apply one with <code>applyNowPlayingPreset("Cinema")</code>. <code>serviceEnabled</code> and <code>serviceWebRoot</code> can't be set over the service at all: they are edited in <span class="file-path">settingsConfigure.json</span>.</p>
-
-        <h3>Choosing the music folder</h3>
-        <p>With no native folder picker, browse with <code>mediaManager.browseMusicFolders(path)</code>: <code>""</code> gives the browse roots (<code>{roots: [{name, path}]}</code>: your Music folder (not the whole home folder), <span class="file-path">/media</span>, <span class="file-path">/mnt</span>, <span class="file-path">/run/media</span>, <span class="file-path">/storage</span>, the current music folder), a path inside them <code>{path, parent, dirs, audioFiles, truncated}</code> (names only, no hidden entries, at most 2000), anything outside them <code>{error}</code>, symlinks resolved first. Then <code>settingsManager.save_media_folder(path)</code>.</p>
-
-        <h3>The user's theme</h3>
-        <p>Subscribe to <code>themeCatalog.activeTheme</code>: the palette the user has chosen, already resolved (an album-art palette, a saved custom theme, or a built-in), as <code>{base, baseAlt, accent, text: {primary, secondary}, states, sliders, bottombar, mediaroom, mainmenu, obd}</code> with <code>#RRGGBB</code> colours; <code>activeThemeName</code> names it. Every built-in palette is in <code>themeCatalog.themes</code> (picker order in <code>lightThemeNames</code> / <code>darkThemeNames</code>), custom ones in <code>settingsManager.customThemeData</code>; choose one with <code>settingsManager.save_theme_setting(name)</code>. Keys: <a href="theme-system.html#theme-object">Theme Object Structure</a>.</p>
-
-        <h3>Waveform bars</h3>
-        <p>Call <code>audioAnalyzer.setDemand("my-frontend", true)</code> while your bars are on screen (and <code>false</code> when they leave; a closed connection releases it), then subscribe to <code>audioAnalyzer.levels</code>: a list of <code>numBars</code> (96) numbers from 0 to 8, for local tracks and phone audio alike, changing at most 10&ndash;20 times a second; pass <code>throttleMs</code> to thin it further. Nothing is analysed while nobody asks.</p>
-
-        <h3>Album art</h3>
-        <p><code>nowPlaying.artUrl</code> is a file on the head unit; fetch the picture itself from <code>GET http://host:9876/art</code> (local and phone art alike, typed by its bytes: JPEG, PNG, GIF, WebP or BMP; 404 when there is none). Subscribe to <code>nowPlaying.artRevision</code>, which goes up by one on every new cover, and use it as your cache key: <code>&lt;img src="/art?rev=12"&gt;</code> from a <code>--web-root</code> page, or refetch when it changes. For a list, <code>/art?song=&lt;file name&gt;</code> (URL-encoded, a song in the library, as the playlist APIs name it) gives that song's cover and <code>/art?queue=&lt;id&gt;</code> a phone queue item's (<code>phoneMirrorManager.mediaQueue</code> ids). The request only names a song or an item; the app looks the file up itself and serves nothing outside its own art folders.</p>
-
-        <h3>Video: the phone mirror and Android Auto</h3>
-        <p>Send <code>{"op":"stream","object":"phoneMirrorManager","name":"video"}</code> (or <code>androidAutoManager</code> / <code>frames</code> for JPEG); both need the <code>phone</code> permission when paired. The reply gives your stream id; then binary records arrive on the same connection: H.264 access units in Annex-B, every keyframe carrying its SPS and PPS, with a <code>streamConfig</code> event (codec string, width, height) whenever those change. A browser decodes them with WebCodecs: <code>decoder.configure({codec})</code>, then one <code>EncodedVideoChunk</code> per record. Touch goes back through <code>phoneMirrorManager.injectTouch(pointerId, action, relX, relY)</code>, with 0 to 1 coordinates over the picture. The record layout, the join and drop rules and a phone-free test source (<code>sim.setVideo(true)</code> under <code>--sim</code>) are in <span class="file-path">docs/api/README.md</span>, "Streams".</p>
-
-        <h3>Exports</h3>
-        <p>An export writes to the head unit's Downloads folder; a remote client then fetches it over HTTP. Call <code>tripRecorder.exportTrip(id)</code> and, after its <code>exportFinished</code>, download <code>GET /export/trip</code> (the CSV; <code>?format=json</code> for the JSON); <code>dashboardManager.exportDashboard(id)</code> then <code>GET /export/dashboard</code>; <code>diagnosticsManager.exportLogs()</code> then <code>GET /export/logs</code> (the list of files) and <code>/export/logs?file=octave-cpp.log</code>. Only the last export of each kind is served, never a path you name.</p>
-
-        <h3>Head-unit only, by design</h3>
-        <p>A few things act on the head unit's own desktop and have no service API: copying a dashboard to the clipboard (<code>copyDashboardToClipboard</code>, <code>importDashboardFromClipboard</code>: use <code>importDashboardFromText</code> and <code>/export/dashboard</code> instead), opening the log folder in a file manager (<code>openLogFolder</code>: use <code>/export/logs</code>), and the window's size and state. A remote client has its own clipboard and window.</p>
-
-        <h2 id="limits">What Is Not Available Yet</h2>
-        <ul>
-          <li>Encryption: the service speaks plain TCP and WebSocket. Pairing keeps strangers out of the car; it does not hide the traffic.</li>
-          <li>A sandbox for installed frontends: an exec frontend is held to its <code>scopes</code> on the service, but it runs as OCTAVE's own user and can read the config folder. Install only frontends you trust.</li>
-          <li>Installed <code>exec</code> frontends on Android, iOS and the browser build.</li>
-          <li>The Go SDK as a published module: until it is tagged, a Go project points a <code>replace</code> line at <span class="file-path">sdk/go</span> (the Go template's README says how).</li>
-          <li>The phone's screen to a client without the <code>phone</code> permission, and Bluetooth adapter pairing anywhere but desktop Linux.</li>
-        </ul>
-
-        <p><strong>Method names:</strong> this page uses the camelCase names of the manager methods (<code>nextTrack</code>). The older snake_case name of each (<code>next_track</code>) still works through protocol&nbsp;4 and goes in protocol&nbsp;5; the <a href="api-reference.html">API reference</a> lists them.</p>
-
-        <div class="related-pages">
+        <div class="related-pages" id="related">
           <h3>Related Pages</h3>
-          <a href="frontend-gallery.html" class="related-link">Frontend Gallery</a>
           <a href="api-reference.html" class="related-link">Service API Reference</a>
+          <a href="frontend-gallery.html" class="related-link">Frontend Gallery</a>
           <a href="utilities.html#service-protocol" class="related-link">Service protocol</a>
-          <a href="signals-slots-reference.html" class="related-link">Signals &amp; Slots API</a>
           <a href="architecture.html#service" class="related-link">Architecture: The Service</a>
+          <a href="gauges-dashboards.html" class="related-link">Gauges &amp; Dashboards</a>
         </div>
       </div>
     </div>

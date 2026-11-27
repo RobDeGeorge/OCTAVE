@@ -54,6 +54,26 @@ private slots:
         QVERIFY(changed.count() >= 1);
     }
 
+    void scanConnectsAReceiverThatAppears()
+    {
+        // A knob plugged in after startup used to wait for a tap in Settings
+        const auto pick = &ESP32VolumeManager::portToConnectAfterScan;
+        const QString acm0 = "/dev/ttyACM0", acm1 = "/dev/ttyACM1", s0 = "/dev/ttyS0";
+        // The saved port appears: connect it. Already there last scan: leave it
+        // (it failed to open, or the user disconnected it)
+        QCOMPARE(pick(acm0, acm0, {s0}, {acm0, s0}), acm0);
+        QCOMPARE(pick(acm0, acm0, {acm0, s0}, {acm0, s0}), QString());
+        QCOMPARE(pick(s0, QString(), {}, {s0}), s0);
+        // No saved port: an ESP32-S3 is taken, any other port never
+        QCOMPARE(pick(QString(), acm0, {acm0}, {acm0}), acm0);
+        QCOMPARE(pick(QString(), QString(), {}, {s0}), QString());
+        // The saved port is gone and the receiver comes back under another name
+        QCOMPARE(pick(acm0, acm1, {s0}, {acm1, s0}), acm1);
+        QCOMPARE(pick(acm0, acm1, {acm1, s0}, {acm1, s0}), QString());
+        // Nothing there
+        QCOMPARE(pick(acm0, QString(), {s0}, {s0}), QString());
+    }
+
     void noPortSavedAutoSelectsOnlyAnEsp32S3()
     {
         SettingsManager settings;

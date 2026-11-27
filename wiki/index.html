@@ -14,32 +14,49 @@
         <div class="page-header">
           <h1 class="page-title">OCTAVE Wiki</h1>
           <p class="page-subtitle">
-            Guides and reference for the Open-source Cross-platform Telematics for Augmented Vehicle Experience.
-            Learn how to use, build, and extend OCTAVE, with details for the C++ backend and the QML frontend.
+            Open-source Cross-platform Telematics for Augmented Vehicle Experience:
+            how to use it, how it works, and how to build on it.
           </p>
         </div>
 
         <h2>What is OCTAVE?</h2>
         <p>
-          OCTAVE is an open-source (GPLv3) car head unit / infotainment system you run on your own hardware. It pairs a
-          <strong>C++ / Qt 6 backend</strong> &mdash; the shipped binary on every platform &mdash; with a
-          <strong>QML frontend</strong>. It plays local music, reads live data
-          from the car over OBD-II, mirrors an Android phone over USB or Wi-Fi, shows a live 3D model of the vehicle from an
-          IMU, and recolours its interface to match the album art. It runs on Windows, macOS, Linux, Raspberry Pi /
-          Orange Pi class boards, and Android (iOS is planned but not built yet).
+          OCTAVE is an open-source (GPLv3) infotainment system for a car, which you run on your own hardware. It plays
+          your music, reads live data from the car through its OBD-II port, shows your phone on the car's screen, draws
+          a live 3D model of the vehicle, and recolours itself to match the album art. It runs on Windows, macOS, Linux,
+          Raspberry Pi and Orange Pi boards, and Android. You can also
+          <a href="https://robdegeorge.com/OCTAVE/">try it in a browser</a> with nothing to install.
         </p>
         <p>
-          Until October 2026 OCTAVE also had a Python / PySide6 backend. It is frozen on the
-          <a href="https://github.com/RobDeGeorge/OCTAVE/tree/python-final"><code>python-final</code></a> branch,
-          which carries its own wiki describing that backend as it stood.
+          The usual installation is a small computer behind the dash, a touchscreen and a power supply. The author
+          drives it daily in a 2003 Jeep TJ, on an Orange Pi 5 Plus with a 10.1-inch touchscreen. A desktop or laptop
+          is all you need to try it or to work on it.
         </p>
         <p>
-          The typical installation is a single-board computer behind the dash, a touchscreen, a power source and a
-          3D-printed mount (the author daily-drives it in a 2003 Jeep TJ on an Orange Pi 5 Plus with a 10.1-inch
-          1280&times;800 touchscreen). Development and testing can happen on any desktop OS.
+          Underneath it is a C++ / Qt 6 core with a QML screen on top. The same core can drive any other screen: a
+          program in any language can read the car and control the music over a socket.
         </p>
 
-        <p>This reference describes the checked-out source and its build workflow. Released packages can differ, and optional hardware or Qt modules affect feature availability. Platform differences are called out in the detailed pages.</p>
+        <h2>Where to Start</h2>
+        <p>
+          Every page starts with what its topic is and how to use it, and gets more technical as it goes. Read as far
+          as you need.
+        </p>
+        <table>
+          <thead><tr><th>You want to</th><th>Read</th></tr></thead>
+          <tbody>
+            <tr><td>Install OCTAVE and look around</td><td><a href="getting-started.html">Installation &amp; First Run</a></td></tr>
+            <tr><td>Put it in a vehicle</td><td><a href="hardware-setup.html">Hardware Setup</a></td></tr>
+            <tr><td>Connect your car</td><td><a href="obd-manager.html">OBD Manager</a></td></tr>
+            <tr><td>Play your music</td><td><a href="media-manager.html">Media Manager</a></td></tr>
+            <tr><td>Show your phone on the screen</td><td><a href="phone-mirror-android-auto.html">Phone Mirror &amp; Android Auto</a></td></tr>
+            <tr><td>Change how Home looks, or make a dashboard</td><td><a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>, <a href="theme-system.html">Theme System</a></td></tr>
+            <tr><td>Fix something that is not working</td><td><a href="troubleshooting.html">Troubleshooting</a></td></tr>
+            <tr><td>Make your own screen for OCTAVE, in any language</td><td><a href="writing-a-frontend.html">Writing a Frontend</a></td></tr>
+            <tr><td>Understand how OCTAVE is built</td><td><a href="architecture.html">Architecture Overview</a></td></tr>
+            <tr><td>Build it from source and change it</td><td><a href="building.html">Building &amp; CI/CD</a>, <a href="development.html">Development</a></td></tr>
+          </tbody>
+        </table>
 
         <h2>Core Features</h2>
         <div class="feature-grid">
@@ -188,7 +205,7 @@
               <td><strong>macOS</strong> (Intel and Apple Silicon)</td>
               <td>Build target</td>
               <td><code>OCTAVE-&lt;v&gt;-macos.dmg</code></td>
-              <td>I²C hardware is unavailable and DHU window discovery is not implemented. CI builds on macOS 14 against Qt 6.7.3; verify the <a href="building.html#macos">bundle frontend layout</a> before distribution.</td>
+              <td>I²C hardware is unavailable and DHU window discovery is not implemented. CI builds on macOS 15 against Qt 6.7.3; verify the <a href="building.html#macos">bundle frontend layout</a> before distribution.</td>
             </tr>
             <tr>
               <td><strong>Android</strong> (arm64-v8a, Android 11+)</td>
@@ -205,48 +222,51 @@
           </tbody>
         </table>
 
-        <h2>Wiki Sections</h2>
+        <h2>All Pages</h2>
 
         <h3>Getting Started</h3>
         <ul>
-          <li><a href="getting-started.html">Installation &amp; First Run</a> &mdash; Pre-built binaries, building from source, requirements, directory layout</li>
-          <li><a href="architecture.html">Architecture Overview</a> &mdash; C++ backend and QML frontend, manager pattern, startup order, threading, volume, video paths, logging, design decisions</li>
+          <li><a href="getting-started.html">Installation &amp; First Run</a> &mdash; Download it, open it, and the first four things to try</li>
+          <li><a href="hardware-setup.html">Hardware Setup</a> &mdash; Putting OCTAVE in a vehicle: the computer, screen, sensors, volume knob, starting at boot</li>
+          <li><a href="troubleshooting.html">Troubleshooting</a> &mdash; Problems by symptom, with the fix</li>
+          <li><a href="architecture.html">Architecture Overview</a> &mdash; The whole picture: the core, the screen, managers, threads, where settings and logs live</li>
         </ul>
 
-        <h3>Backend Deep Dives</h3>
+        <h3>What OCTAVE Does</h3>
         <ul>
-          <li><a href="settings-manager.html">Settings Manager</a> &mdash; Central settings store, property system, coalesced JSON persistence</li>
-          <li><a href="media-manager.html">Media Manager</a> &mdash; Local audio playback, library scanning, album art and colours</li>
-          <li><a href="obd-manager.html">OBD Manager</a> &mdash; ELM327 protocol, supported parameters, threaded worker, Android BLE, black box trip recorder</li>
-          <li><a href="network-manager.html">Network Manager</a> &mdash; WiFi status, update checking, self-update</li>
-          <li><a href="hardware-managers.html">Hardware Managers</a> &mdash; ESP32 knob, BerryIMU, gesture sensor</li>
-          <li><a href="phone-mirror-android-auto.html">Phone Mirror &amp; Android Auto</a> &mdash; Built-in scrcpy-protocol client, the forked phone server, bundled adb, DHU</li>
-          <li><a href="audio-analyzer.html">Audio Analyzer</a> &mdash; FFT waveform visualisation</li>
-          <li><a href="utilities.html">Utilities</a> &mdash; Clock, logging and crash handlers, DiagnosticsManager, UI watchdog, VolumeController, performance monitor, command server</li>
+          <li><a href="media-manager.html">Media Manager</a> &mdash; Your music library, playlists, the Media Room, Spotify</li>
+          <li><a href="obd-manager.html">OBD Manager</a> &mdash; Connecting a car, live readings, trouble codes, the black box</li>
+          <li><a href="phone-mirror-android-auto.html">Phone Mirror &amp; Android Auto</a> &mdash; An Android phone on the screen, Android Auto, an iPhone over AirPlay</li>
+          <li><a href="gauges-dashboards.html">Gauges &amp; Dashboards</a> &mdash; Home screens, dashboards as JSON files, the gauges you can use</li>
+          <li><a href="hardware-managers.html">Hardware Managers</a> &mdash; The volume knob, the motion sensor, the gesture sensor</li>
+          <li><a href="audio-analyzer.html">Audio Analyzer</a> &mdash; The visualizer bars and how they are made</li>
+          <li><a href="network-manager.html">Network Manager</a> &mdash; Network status, updates, restart and shut down</li>
+          <li><a href="settings-manager.html">Settings Manager</a> &mdash; The settings file: where it is, how it is read and saved</li>
+          <li><a href="utilities.html">Utilities</a> &mdash; Clock, logs, diagnostics, the watchdog, volume, the service protocol</li>
         </ul>
 
-        <h3>Frontend Deep Dives</h3>
+        <h3>The Screen</h3>
         <ul>
-          <li><a href="frontend-overview.html">Frontend Overview</a> &mdash; QML architecture, Main.qml, page routing</li>
-          <li><a href="pages.html">Pages &amp; Views</a> &mdash; Every page in the application, including the 3D CarMenu</li>
-          <li><a href="bottom-bar.html">Bottom Bar</a> &mdash; Navigation and volume control</li>
-          <li><a href="theme-system.html">Theme System</a> &mdash; Dynamic theming, design tokens</li>
-          <li><a href="settings-ui.html">Settings UI</a> &mdash; Settings framework, layout engines, components</li>
-          <li><a href="components.html">Components</a> &mdash; Reusable QML components</li>
-          <li><a href="gauges-dashboards.html">Gauges &amp; Dashboards</a> &mdash; Gauge primitives, JSON dashboards, the in-app editor</li>
+          <li><a href="frontend-overview.html">Frontend Overview</a> &mdash; How the QML side is laid out and how a page gets its data</li>
+          <li><a href="pages.html">Pages &amp; Views</a> &mdash; A tour of every screen</li>
+          <li><a href="bottom-bar.html">Bottom Bar</a> &mdash; Navigation, media keys, volume, swiping between sections</li>
+          <li><a href="theme-system.html">Theme System</a> &mdash; Themes, colours from album art, fonts, sizes that fit every screen</li>
+          <li><a href="settings-ui.html">Settings UI</a> &mdash; The Settings screen and the controls it is built from</li>
+          <li><a href="components.html">Components</a> &mdash; Reusable building blocks for a screen</li>
         </ul>
 
-        <h3>Reference &amp; Guides</h3>
+        <h3>Building On and Working On OCTAVE</h3>
         <ul>
-          <li><a href="settings-reference.html">Settings Reference</a> &mdash; Defaults, persisted keys, and platform differences</li>
-          <li><a href="signals-slots-reference.html">Signals &amp; Slots API</a> &mdash; Every manager's QML-accessible API</li>
-          <li><a href="writing-a-frontend.html">Writing a Frontend</a> &mdash; Drive OCTAVE from your own screen, phone, script or web page over the service API</li>
-          <li><a href="frontend-gallery.html">Frontend Gallery</a> &mdash; Example frontends in five languages, the starter templates, the browser playground, and how to add yours</li>
-          <li><a href="api-reference.html">Service API Reference</a> &mdash; Generated from the C++: every object a frontend can drive, its types, and the parameter catalog</li>
-          <li><a href="hardware-setup.html">Hardware Setup</a> &mdash; Wiring, firmware, 3D printed mounts</li>
-          <li><a href="building.html">Building &amp; CI/CD</a> &mdash; CMake targets, AppImage / DMG / EXE / APK packaging, GitHub Actions</li>
-          <li><a href="development.html">Development</a> &mdash; Dev mode, mock data, MCP server, profiling, screenshots</li>
-          <li><a href="troubleshooting.html">Troubleshooting</a> &mdash; Common issues, log locations, debugging</li>
+          <li><a href="writing-a-frontend.html">Writing a Frontend</a> &mdash; Drive OCTAVE from your own screen, phone, script or web page</li>
+          <li><a href="frontend-gallery.html">Frontend Gallery</a> &mdash; Example frontends, starter templates, and how to add yours</li>
+          <li><a href="building.html">Building &amp; CI/CD</a> &mdash; Building for each platform, CMake options, releases</li>
+          <li><a href="development.html">Development</a> &mdash; From clone to a running dev build, the simulated car, tests, tools</li>
+        </ul>
+
+        <h3>Reference</h3>
+        <ul>
+          <li><a href="settings-reference.html">Settings Reference</a> &mdash; Every settings key, its default and what it does</li>
+          <li><a href="api-reference.html">Service API Reference</a> &mdash; Generated from the code: every object, property, method and signal, and every reading</li>
         </ul>
 
         <h2>Tech Stack</h2>

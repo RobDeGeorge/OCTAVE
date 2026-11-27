@@ -83,6 +83,17 @@ private slots:
         custom.insert("accent", "#abcdef");
         QCOMPARE(themes.resolve("NeonMatrix", {{"NeonMatrix", custom}}, {}).value("accent").toString(),
                  QStringLiteral("#abcdef"));
+        // A custom theme that lacks a colour, or holds something that is no
+        // colour, gets the fallback theme's for it; its own extra keys stay
+        const QVariantMap fallback = themes.themes().value("SolarizedLight").toMap();
+        QVariantMap broken{{"accent", "#abcdef"}, {"base", "not a colour"}, {"text", QVariantMap{{"primary", 7}}},
+                           {"albumArt", "file:///art.jpg"}};
+        const QVariantMap fixed = themes.resolve("Broken", {{"Broken", broken}}, {});
+        QCOMPARE(fixed.value("accent").toString(), QStringLiteral("#abcdef"));
+        QCOMPARE(fixed.value("base"), fallback.value("base"));
+        QCOMPARE(fixed.value("text").toMap(), fallback.value("text").toMap());
+        QCOMPARE(fixed.value("bottombar").toMap(), fallback.value("bottombar").toMap());
+        QCOMPARE(fixed.value("albumArt").toString(), QStringLiteral("file:///art.jpg"));
         // ...and a saved one is followed live
         settings.save_custom_theme("Mine", custom);
         settings.save_theme_setting("Mine");

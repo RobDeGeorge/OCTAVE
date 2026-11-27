@@ -19,7 +19,7 @@ This guide covers:
 ```bash
 # Configure + build (Debug, current platform)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build -j
+cmake --build build -j8
 
 # Run
 ./build/octave            # Linux/macOS
@@ -66,6 +66,9 @@ for a sanitizer build and run it from the repository, as the app finds `frontend
 
 ### Linux
 
+TagLib (`libtag1-dev`) is required: CMake stops without it. FFmpeg, OpenSSL
+and libplist are optional (phone mirroring and AirPlay, below).
+
 SQLite (for the OBD black box) is compiled in from `third_party/sqlite/`, so no
 `libsqlite3` / Qt Sql driver package is needed at build or run time.
 
@@ -77,6 +80,7 @@ are all found: `sudo apt install libplist-dev libssl-dev libavcodec-dev`
 
 ```bash
 sudo apt install -y build-essential cmake ninja-build pkg-config \
+                    libtag1-dev libavcodec-dev libavutil-dev libssl-dev libplist-dev \
                     libgl1-mesa-dev libegl1-mesa-dev libpulse-dev libxkbcommon-dev libfontconfig1 libdbus-1-3 \
                     libxcb-cursor0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 \
                     libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
@@ -88,7 +92,7 @@ aqt install-qt linux desktop 6.7.3 linux_gcc_64 -O ~/Qt \
 
 export PATH="$HOME/Qt/6.7.3/gcc_64/bin:$PATH"
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
+cmake --build build -j8
 ```
 
 Outputs: `build/octave`. CI packages this into a portable `OCTAVE-<version>-linux-x86_64.AppImage` via `packaging/linux/build-appimage.sh` (see [CI parity](#ci-parity)) — no local installer needed for development.
@@ -120,7 +124,7 @@ aqt install-qt mac desktop 6.7.3 -O ~/Qt \
 
 export PATH="$HOME/Qt/6.7.3/macos/bin:$PATH"
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
+cmake --build build -j8
 ```
 
 Outputs: `build/octave.app`. CI runs `macdeployqt dist/OCTAVE.app -qmldir=frontend -dmg` to produce `OCTAVE-<version>-macos.dmg`.
@@ -179,7 +183,7 @@ CI uses **vcpkg** to provide `taglib`, `ffmpeg[core,avcodec]` and `openssl` (the
 cmake -S . -B build `
   -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
   -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release -j
+cmake --build build --config Release -j8
 ```
 
 Outputs: `build/Release/octave.exe`. CI runs `windeployqt` then `iscc.exe build_scripts/installer_windows.iss` to produce `OCTAVE-<version>-windows-x86_64.exe`.
@@ -188,14 +192,14 @@ Outputs: `build/Release/octave.exe`. CI runs `windeployqt` then `iscc.exe build_
 
 ## Android build
 
-Produces an installable `.apk` for arm64-v8a (Android 11+). Tested on Samsung Galaxy Tab S6 and S22 Ultra.
+Produces an installable `.apk` for arm64-v8a (Android 11+: minimum SDK 30, target and compile SDK 33, set in `CMakeLists.txt`). Tested on Samsung Galaxy Tab S6 and S22 Ultra.
 
 **Distribution model:** LGPL Qt, dynamically linked, shared `.so`s bundled in APK. No commercial Qt license required at this stage.
 
 ### Toolchain prerequisites
 
 ```bash
-java -version          # OpenJDK 17.x — required by Android Gradle Plugin 8.x. Not 11, not 21.
+java -version          # OpenJDK 17.x, what CI uses with Android Gradle Plugin 7.4.1 (pinned in android/build.gradle). Not 21.
 cmake --version        # 3.21+
 adb version            # sudo pacman -S android-tools  (or apt install android-tools-adb)
 ```
@@ -238,9 +242,9 @@ yay -S android-studio   # or download from https://developer.android.com/studio
 ```
 
 Launch Android Studio once, accept licenses. Then via SDK Manager:
-- **SDK Platforms:** Android 14 (API 34)
+- **SDK Platforms:** Android 13 (API 33), the compile SDK
 - **SDK Tools:** NDK (Side by side) — version `26.1.10909125` (what Qt 6.7.3 expects)
-- **SDK Tools:** Android SDK Command-line Tools (latest), Build-Tools 35.0.0
+- **SDK Tools:** Android SDK Command-line Tools (latest), Build-Tools 33.0.2 (what CI uses)
 
 **Route B: cmdline-tools only (lean).**
 
@@ -255,8 +259,8 @@ yes | ~/Android/Sdk/cmdline-tools/latest/bin/sdkmanager --licenses
 
 ~/Android/Sdk/cmdline-tools/latest/bin/sdkmanager \
     "platform-tools" \
-    "platforms;android-34" \
-    "build-tools;35.0.0" \
+    "platforms;android-33" \
+    "build-tools;33.0.2" \
     "ndk;26.1.10909125"
 ```
 
@@ -297,7 +301,7 @@ qt-cmake -S . -B build-android \
     -DANDROID_PLATFORM=android-30 \
     -DQT_ANDROID_SIGN_APK=OFF
 
-cmake --build build-android --target apk -j
+cmake --build build-android --target apk -j8
 adb install build-android/android-build/build/outputs/apk/debug/android-build-debug.apk
 ```
 
@@ -328,7 +332,7 @@ adb devices
 
 ## WebAssembly build
 
-**Status:** Shipped. The app runs in the browser at **https://robdegeorge.com/OCTAVE/** as a demo: the simulated car, every page, no hardware. `.github/workflows/wiki-pages.yml` builds and publishes it (with the wiki under `/OCTAVE/wiki/`) on every push to `main` that touches `src/`, `frontend/`, `CMakeLists.txt`, `packaging/wasm/` or `wiki/`.
+**Status:** Shipped. The app runs in the browser at **https://robdegeorge.com/OCTAVE/** as a demo: every page, a simulated car to pick, and a real ELM327 adapter over Web Bluetooth or Web Serial where the browser has them. `.github/workflows/wiki-pages.yml` builds and publishes it (with the wiki under `/OCTAVE/wiki/`) on every push to `main` that touches `src/`, `frontend/`, `CMakeLists.txt`, `packaging/wasm/` or `wiki/`.
 
 ### Toolchain
 
@@ -379,7 +383,15 @@ Everything is gated on CMake's `EMSCRIPTEN`, which defines `OCTAVE_WASM` and `Q_
 
 ### What works, what does not
 
-Works in the browser: home, the OBD pages, every dashboard, the 3D Jeep, sensors, settings, trip recording (SQLite in memory). Not there: persistence across reloads (MEMFS), a music library (empty), hardware, the service / command server.
+Works in the browser: home, the OBD pages, dashboards, the 3D vehicle view, sensors, settings, trip recording (SQLite in memory). The page opens with no car; the adapter sheet (OBD Home's Connect button) offers:
+
+- **Simulated car**, which starts `DemoDrive`.
+- **Pick Bluetooth Adapter**: a Bluetooth LE ELM327 over Web Bluetooth (Chrome / Edge; on Linux only behind the browser's experimental web platform features flag).
+- **Pick USB Adapter**: an ELM327 on a USB cable over Web Serial (Chrome / Edge on a computer).
+
+Music comes from a folder the visitor picks (`mediaManager.pick_browser_library()`, the browser's folder picker); songs play from the visitor's own files and are not copied into the page's memory. The service protocol is offered to the page itself (`Module.octaveService`, used by `playground.html` and the web frontends listed in Settings > Device > Developer > Frontends); there is no socket, so nothing outside the page can connect.
+
+Not there: settings and files kept across reloads (MEMFS), the other hardware (the I²C sensors, the serial volume knob, phone mirroring), `GET /art` and `/export`, pairing.
 
 Sizes: `octave.wasm` 48 MB and `octave.data` 29 MB raw; GitHub Pages serves both gzipped, about 25 MB over the wire.
 
@@ -429,7 +441,7 @@ venv/bin/ruff check .
 | macOS | `macos-15` | `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release` then `macdeployqt dist/OCTAVE.app -qmldir=frontend -dmg` | `OCTAVE-<v>-macos.dmg` |
 | Linux x86_64 | `ubuntu-22.04` | `bash packaging/linux/build-appimage.sh` (CMake Release + `linuxdeploy` + `linuxdeploy-plugin-qt`) | `OCTAVE-<v>-linux-x86_64.AppImage` |
 | Linux aarch64 | `ubuntu-22.04-arm` | same script; Qt's GStreamer media plugin is dropped after the build (jammy lacks libgstphotography) | `OCTAVE-<v>-linux-aarch64.AppImage` |
-| Android | `ubuntu-22.04` | `qt-cmake -S . -B build-android …` then `cmake --build build-android --target apk`, signed with a per-run keystore (v1+v2+v3) | `OCTAVE-<v>-android-arm64-v8a.apk` |
+| Android | `ubuntu-22.04` | `qt-cmake -S . -B build-android …` then `cmake --build build-android --target apk`, signed with the project's one permanent release key, held in repository secrets (v1+v2+v3), so a release installs over the one before; a run without the secrets (a fork) signs with a throwaway key | `OCTAVE-<v>-android-arm64-v8a.apk` |
 | WebAssembly | `ubuntu-22.04` (`wiki-pages.yml`, not the release matrix) | `packaging/wasm/build.sh` with Qt 6.12.0 `wasm_multithread` + emsdk 5.0.5, deployed to GitHub Pages | robdegeorge.com/OCTAVE/ |
 
 **Pinned versions** (matched locally for parity):

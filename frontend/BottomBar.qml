@@ -532,7 +532,9 @@ Rectangle {
         source: "./assets/shuffle_button.svg"
         color: bottomBar.isShuffleEnabled ? App.Style.bottomBarActiveToggleButton : App.Style.bottomBarShuffleButton
         toggled: bottomBar.isShuffleEnabled
-        restOpacity: bottomBar.useRemote ? 0.35 : 1.0
+        // Dimmed only when it does nothing: another phone app's shuffle is
+        // that app's. With Spotify it works, remote or not
+        restOpacity: (bottomBar._np && bottomBar._np.canShuffle) ? 1.0 : 0.35
         onTapped: bottomBar.mediaToggleShuffle()
     }
     MediaButton {
@@ -889,15 +891,20 @@ Rectangle {
                     spacing: App.Spacing.overallSpacing * 0.5
 
                     Repeater {
+                        // Phone and Accessories are not in Settings on
+                        // Android (SettingsMenu.qml, desktopOnly): no row
+                        // for a section that is never shown
                         model: [
                             { name: "Device", section: "deviceSettings" },
                             { name: "Media", section: "mediaSettings" },
                             { name: "Display", section: "displaySettings" },
                             { name: "OBD", section: "obdSettings" },
-                            { name: "Phone", section: "phoneSettings" },
-                            { name: "Accessories", section: "accessoriesSettings" },
+                            { name: "Phone", section: "phoneSettings", desktopOnly: true },
+                            { name: "Accessories", section: "accessoriesSettings", desktopOnly: true },
                             { name: "About", section: "about" }
-                        ]
+                        ].filter(function(row) {
+                            return !(row.desktopOnly && typeof isAndroid !== "undefined" && isAndroid)
+                        })
 
                         delegate: Rectangle {
                             id: toggleRow

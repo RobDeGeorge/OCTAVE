@@ -13,425 +13,422 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Settings Reference</div>
           <h1 class="page-title">Settings Reference</h1>
-          <p class="page-subtitle">Every key in settingsConfigure.json: type, default, allowed values, the UI page that owns it, and what it affects.</p>
+          <p class="page-subtitle">Every key in the settings file: its name on screen, its default, what values it takes and what it does</p>
         </div>
 
         <nav class="toc">
           <h3>Table of Contents</h3>
           <ul class="toc-list">
-            <li><a href="#overview">Overview</a></li>
-            <li><a href="#device">Device and Window</a></li>
+            <li><a href="#overview">What This Page Is</a></li>
             <li><a href="#display">Display</a></li>
-            <li><a href="#media">Media and Now Playing</a></li>
-            <li><a href="#playback-resume">Playback Resume</a></li>
+            <li><a href="#media">Media</a></li>
+            <li><a href="#media-room">Media Room</a></li>
             <li><a href="#obd">OBD</a></li>
-            <li><a href="#obd-parameters">OBD Parameter PIDs</a></li>
-            <li><a href="#esp32">ESP32 Volume Knob</a></li>
-            <li><a href="#imu">IMU Sensor</a></li>
-            <li><a href="#gesture">Gesture Sensor</a></li>
-            <li><a href="#phone">Android Auto and Phone Mirror</a></li>
-            <li><a href="#ui-state">Settings UI State</a></li>
-            <li><a href="#generic">QML-Only Keys (no C++ default)</a></li>
-            <li><a href="#in-memory">In-Memory Only</a></li>
-            <li><a href="#persistence">Persistence and File Format</a></li>
+            <li><a href="#phone">Phone</a></li>
+            <li><a href="#accessories">Accessories</a></li>
+            <li><a href="#device">Device</a></li>
+            <li><a href="#generic">Keys With No Control in Settings</a></li>
+            <li><a href="#persistence">What Is Not in the File</a></li>
           </ul>
         </nav>
 
-        <!-- Overview -->
-        <h2 id="overview">Overview</h2>
+        <h2 id="overview">What This Page Is</h2>
         <p>
-          Settings are owned by <code>SettingsManager</code> (<span class="file-path">src/managers/settingsmanager.{h,cpp}</span>)
-          and persisted to <code>settingsConfigure.json</code> in the OS-specific config directory:
+          OCTAVE keeps your settings in one file, <code>settingsConfigure.json</code>, in its configuration folder:
+          <code>~/.config/OCTAVE/</code> on Linux, the Raspberry Pi and the Orange Pi, <code>%APPDATA%/OCTAVE/</code> on
+          Windows and <code>~/Library/Application Support/OCTAVE/</code> on macOS. This page lists every key that file
+          can hold. How the file is loaded, checked and saved is on the <a href="settings-manager.html">Settings
+          Manager</a> page.
         </p>
         <p>
-          Each bool, number or string setting below is a row of the settings table in
-          <span class="file-path">settingsmanager.cpp</span> and a <strong>writable property</strong> of
-          <code>settingsManager</code> (the service's <code>set</code> op, <code>settings</code> permission). Its
-          <code>save_*</code> slot does the same and is deprecated for clients, as is a <code>get_*</code> method that
-          only repeats a property. Whatever the way in (slot, property, <code>save_setting</code>,
-          <code>apply_settings</code>), the limits in the Validation column apply: a clamped value is brought into range,
-          a refused one changes nothing, and saving the value a setting already has neither writes nor emits.
+          Each row is one key. <strong>Key</strong> is its name in the file, and the name a program uses for it.
+          <strong>Name on screen</strong> is the label of its control; it is blank when the key has none.
+          <strong>Type</strong> is <em>bool</em> (<code>true</code> or <code>false</code>), <em>int</em> (a whole
+          number), <em>number</em>, <em>text</em>, <em>list</em> or <em>object</em>. <strong>Default</strong> is what a
+          fresh install has. <strong>Range or allowed values</strong> is what OCTAVE accepts: "clamped" means a value
+          outside the range is brought to the nearest end, "refused" means it is ignored and the old value stays, and
+          "not checked" means any value of the right type is stored.
         </p>
-        <ul>
-          <li><strong>Windows:</strong> <code>%APPDATA%/OCTAVE/settingsConfigure.json</code></li>
-          <li><strong>macOS:</strong> <code>~/Library/Application Support/OCTAVE/settingsConfigure.json</code></li>
-          <li><strong>Linux / Raspberry Pi / Orange Pi:</strong> <code>~/.config/OCTAVE/settingsConfigure.json</code> (or <code>$XDG_CONFIG_HOME/OCTAVE/</code>)</li>
-          <li><strong>Android / iOS:</strong> the Linux rule applied to <code>QDir::homePath()</code></li>
-        </ul>
         <p>
-          <code>buildDefaultSettings()</code> defines <strong>96 top-level default keys</strong>. Settings are read once at startup, validated against
-          the defaults, served from memory, and written back atomically 500&nbsp;ms after the last change. The mechanics
-          are on the <a href="settings-manager.html">Settings Manager</a> page; this page is the key catalogue.
+          You can change almost everything here on screen, in <strong>Settings</strong>, and the tables follow the
+          sections and cards you see there. The file is the fallback: for the few keys with no control
+          (<a href="#generic">listed after the sections</a>), or for repairing a setup that will not start. Close
+          OCTAVE before you edit it, because OCTAVE writes the file again when a setting changes. A value of the wrong
+          type is replaced by its default at the next start, and a key OCTAVE does not know is left alone. Values
+          typed into the file are checked a little differently from values set on screen: a number marked "clamped" is
+          still clamped, a text value that is not one of the allowed ones becomes the default, and a number marked
+          "refused" is kept as you wrote it.
         </p>
 
-        <p>How to read the tables:</p>
-        <ul>
-          <li><strong>Property</strong>: the QML-visible property name (same as the JSON key) or how QML reaches a key that has no property.</li>
-          <li><strong>Type</strong>: the C++ property type, or for keys without a property the JSON type (string, object, list) as stored.</li>
-          <li><strong>Default</strong>: the literal in <code>buildDefaultSettings()</code>.</li>
-          <li><strong>Range / Values</strong>: what the save slot enforces (clamp or whitelist), and in parentheses the range the UI control offers when it is narrower. A dash means the slot stores whatever it is given.</li>
-          <li><strong>UI</strong>: the page under <span class="file-path">frontend/settings/</span> (Display, Media, OBD, Accessories, Device, About) or the other QML file that writes the key. See <a href="settings-ui.html">Settings UI</a>.</li>
-        </ul>
-
-        <div class="info-box tip">
-          <div class="info-box-title">Pinnable settings</div>
-          25 of these keys are also registered in the settings registry (<code>buildSettingsRegistry()</code>) and can be pinned to the Quick Panel. They
-          are marked <em>pinnable</em> in the description; the registry itself is documented on the
-          <a href="settings-manager.html#settings-registry">Settings Manager</a> page.
-        </div>
-
-        <!-- Device -->
-        <h2 id="device">Device and Window</h2>
-        <table>
-          <thead>
-            <tr><th>Property</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>UI</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>deviceName</code></td><td>deviceName</td><td>QString</td><td>"Default Device"</td><td>–</td><td>Device page (via <code>Main.updateDeviceName()</code>, which rejects blank names)</td><td>Display name for this OCTAVE installation</td></tr>
-            <tr><td><code>fontSetting</code></td><td>fontSetting</td><td>QString</td><td>"GoogleSans Regular"</td><td>–</td><td>Display page</td><td>UI font family; <code>Style.setFont()</code> is called on change. The default is the display name <code>Main.qml</code> derives from the bundled <code>GoogleSans-Regular.ttf</code>; a stored legacy <code>"Google Sans"</code> (which <code>Style.setFont()</code> rejected, leaving the system font) is migrated to it at load and written back</td></tr>
-            <tr><td><code>windowState</code></td><td>windowState</td><td>QString</td><td>"windowed"</td><td>"windowed", "fullscreen", "maximized" (others ignored)</td><td>Display page (Layout)</td><td>Window mode applied at startup</td></tr>
-            <tr><td><code>screenWidth</code></td><td>screenWidth</td><td>int</td><td>1280</td><td>320 – 7680 (clamped by the saver)</td><td><code>Main.qml</code> on window resize (desktop only; the Display page's field resizes the window)</td><td>Window width in pixels when windowed</td></tr>
-            <tr><td><code>screenHeight</code></td><td>screenHeight</td><td>int</td><td>720</td><td>300 – 4320 (clamped by the saver)</td><td><code>Main.qml</code> on window resize (desktop only)</td><td>Window height in pixels when windowed</td></tr>
-          </tbody>
-        </table>
-
-        <!-- Display -->
         <h2 id="display">Display</h2>
+        <h3 id="display-layout">Layout</h3>
         <table>
-          <thead>
-            <tr><th>Property</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>UI</th><th>Description</th></tr>
-          </thead>
+          <thead><tr><th>Key</th><th>Name on screen</th><th>Type</th><th>Default</th><th>Range or allowed values</th><th>What it does</th></tr></thead>
           <tbody>
-            <tr><td><code>uiScale</code></td><td>uiScale</td><td>float</td><td>1.0</td><td>0.5 – 2.0, a value outside is refused (the slider's range, step 0.05); a file that holds more keeps it</td><td>Display page</td><td>Global UI scale factor (<code>Spacing.globalScale</code>). A stored 0.6 (an old default) is migrated to 1.0 at load. Pinnable</td></tr>
-            <tr><td><code>themeSetting</code></td><td>themeSetting</td><td>QString</td><td>"CosmicVoyager"</td><td>Any built-in or custom theme name; "Album Art Capture" enables palette extraction</td><td>Display page; <code>Main.qml</code> (<code>onThemeSettingChanged</code> &rarr; <code>Style.setThemeInstant()</code>)</td><td>Active colour theme (<a href="theme-system.html">Theme System</a>). Pinnable (chips from <code>themeList</code>)</td></tr>
-            <tr><td><code>customThemes</code></td><td>customThemes</td><td>object (property <code>customThemes</code> is a QVariantList of names, <code>customThemeData</code> the whole map)</td><td>{}</td><td>name → theme object with colour keys and optional <code>albumArt</code> file URL</td><td>Saved from MediaRoom (<code>save_custom_theme</code>), deleted from the Display page</td><td>User-created themes captured from album art; art files live in <code>theme_art/</code></td></tr>
-            <tr><td><code>colorTransitionMs</code></td><td>colorTransitionMs</td><td>int</td><td>1000</td><td>0 – 2000, a value outside is refused (the slider's and the registry's range, step 50)</td><td>Display page</td><td>Duration of theme colour transitions in ms. Pinnable</td></tr>
-            <tr><td><code>songLengthTransition</code></td><td>songLengthTransition</td><td>bool</td><td>false</td><td>true/false</td><td>Display page</td><td>Animate the theme colour transition over the whole song length instead of <code>colorTransitionMs</code></td></tr>
-            <tr><td><code>showClock</code></td><td>showClock</td><td>bool</td><td>true</td><td>true/false</td><td>Display page (Clock); Display widget</td><td>Show the clock in the bottom bar. Pinnable</td></tr>
-            <tr><td><code>clockFormat24Hour</code></td><td>clockFormat24Hour</td><td>bool</td><td>true</td><td>true/false</td><td>Display page (Clock)</td><td>24-hour clock (false = 12-hour). Signal is <code>clockFormatChanged</code></td></tr>
-            <tr><td><code>clockShowSeconds</code></td><td>clockShowSeconds</td><td>bool</td><td>false</td><td>true/false</td><td>Display page (Clock)</td><td>Show seconds in the bottom-bar clock</td></tr>
-            <tr><td><code>clockSize</code></td><td>clockSize</td><td>int</td><td>18</td><td>10 – 85, a value outside is refused (the slider's range, step 1)</td><td>Display page (Clock)</td><td>Manual clock font size in pixels</td></tr>
-            <tr><td><code>clockSizeAuto</code></td><td>clockSizeAuto</td><td>bool</td><td>true</td><td>–</td><td>Display page (Clock)</td><td>Fit the clock to its slot in the nav bar (either orientation); when on, <code>clockSize</code> is ignored</td></tr>
-            <tr><td><code>bottomBarOrientation</code></td><td>bottomBarOrientation</td><td>QString</td><td>"bottom"</td><td>"bottom", "side" (UI chips; slot does not validate)</td><td>Display page (Layout)</td><td>Navigation bar along the bottom edge or the side</td></tr>
-            <tr><td><code>showBottomBarMediaControls</code></td><td>showBottomBarMediaControls</td><td>bool</td><td>false</td><td>true/false</td><td>Display page (Layout)</td><td>Play/skip controls inside the navigation bar. Pinnable</td></tr>
-            <tr><td><code>settingsLayoutStyle</code></td><td>settingsLayoutStyle</td><td>QString</td><td>"Sidebar"</td><td>"Carousel", "Sidebar", "Hub", "Dashboard" (others ignored)</td><td>none</td><td>No longer read by the UI: the settings menu is always the tile grid (the other three layouts were removed 2026-11-15). The key is still stored and served</td></tr>
-            <tr><td><code>albumArtColors</code></td><td>albumArtColors</td><td>QString (JSON) on disk; <code>QVariantMap</code> property</td><td>""</td><td>Palette JSON produced by the extractor; the property is the parsed theme object (empty map when unset)</td><td>Not user-editable: written by MediaManager via <code>set_album_art_colors()</code></td><td>Last extracted Album Art Capture palette, restored at startup so the placeholder theme does not flash</td></tr>
+            <tr><td><code>uiScale</code></td><td>UI Scale</td><td>number</td><td>1.0</td><td>0.5 to 2.0; refused</td><td>Makes everything on screen larger or smaller.</td></tr>
+            <tr><td><code>screenWidth</code></td><td>Screen Dimensions: Width</td><td>int</td><td>1280</td><td>320 to 7680; clamped</td><td>Width of the window in pixels when it is not full screen. It follows the window when you resize it. Not used on Android.</td></tr>
+            <tr><td><code>screenHeight</code></td><td>Screen Dimensions: Height</td><td>int</td><td>720</td><td>300 to 4320; clamped</td><td>Height of the window in pixels, the same way.</td></tr>
+            <tr><td><code>windowState</code></td><td>Fullscreen, Maximize</td><td>text</td><td>windowed</td><td>windowed, fullscreen, maximized; anything else refused</td><td>How the window opens at the next start.</td></tr>
+            <tr><td><code>bottomBarOrientation</code></td><td>Nav Bar Position</td><td>text</td><td>bottom</td><td>bottom, side; not checked</td><td>Puts the navigation bar along the bottom or down the side.</td></tr>
+            <tr><td><code>homeScreen</code></td><td>Home Screen</td><td>text</td><td>(empty)</td><td>cockpit, glass, trail, retro, rings, telemetry, classic, or empty; not checked</td><td>The hand-built Home to show. Empty, or a name OCTAVE does not know, shows the dashboard picked on the same card.</td></tr>
+            <tr><td><code>showBottomBarMediaControls</code></td><td>Nav Bar Media Controls</td><td>bool</td><td>false</td><td>true, false</td><td>Adds play and skip buttons to the navigation bar.</td></tr>
+          </tbody>
+        </table>
+        <h3 id="display-appearance">Appearance</h3>
+        <table>
+          <thead><tr><th>Key</th><th>Name on screen</th><th>Type</th><th>Default</th><th>Range or allowed values</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>themeSetting</code></td><td>Theme</td><td>text</td><td>CosmicVoyager</td><td>The name of a built-in theme or of one you saved, or <code>Album Art Capture</code>; not checked</td><td>The colour theme. <code>Album Art Capture</code> takes the colours from the art of the song that is playing.</td></tr>
+            <tr><td><code>customThemes</code></td><td>Album Art Theme</td><td>object</td><td>{}</td><td>Theme name to its colours</td><td>The themes you saved from album art in the Media Room. Delete one here.</td></tr>
+            <tr><td><code>colorTransitionMs</code></td><td>Fade Time</td><td>int</td><td>1000</td><td>0 to 2000; refused</td><td>How long a change of colours takes, in milliseconds.</td></tr>
+            <tr><td><code>songLengthTransition</code></td><td>Fade Over the Whole Song</td><td>bool</td><td>false</td><td>true, false</td><td>Spreads the change of colours over the length of the song instead of Fade Time.</td></tr>
+            <tr><td><code>fontSetting</code></td><td>Font</td><td>text</td><td>GoogleSans Regular</td><td>A font from the list; not checked</td><td>The font of the whole interface.</td></tr>
+          </tbody>
+        </table>
+        <h3 id="display-units">Units</h3>
+        <table>
+          <thead><tr><th>Key</th><th>Name on screen</th><th>Type</th><th>Default</th><th>Range or allowed values</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>gaugeTempUnit</code></td><td>Temperature</td><td>text</td><td>C</td><td>C, F; anything else refused</td><td>Unit of every temperature on the gauges, Live Data cards and dashboards.</td></tr>
+            <tr><td><code>sensorTempUnit</code></td><td>Temperature</td><td>text</td><td>C</td><td>C, F; anything else refused</td><td>Unit of the temperature on the Sensors page. The Temperature control sets this key and <code>gaugeTempUnit</code> together.</td></tr>
+            <tr><td><code>gaugeSpeedUnit</code></td><td>Speed</td><td>text</td><td>mph</td><td>mph, km/h; anything else refused</td><td>Unit of speed on the gauges and dashboards.</td></tr>
+            <tr><td><code>sensorAltitudeUnit</code></td><td>Altitude</td><td>text</td><td>m</td><td>m, ft; anything else refused</td><td>Unit of altitude on the Sensors page and the gauges.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          Trip History keeps the units each drive was recorded in.
+        </p>
+        <h3 id="display-clock">Clock</h3>
+        <table>
+          <thead><tr><th>Key</th><th>Name on screen</th><th>Type</th><th>Default</th><th>Range or allowed values</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>showClock</code></td><td>Show Clock</td><td>bool</td><td>true</td><td>true, false</td><td>Shows the clock in the navigation bar.</td></tr>
+            <tr><td><code>clockShowSeconds</code></td><td>Show Seconds</td><td>bool</td><td>false</td><td>true, false</td><td>Adds seconds to the clock.</td></tr>
+            <tr><td><code>clockFormat24Hour</code></td><td>Time Format</td><td>bool</td><td>true</td><td>true (24-hour), false (12-hour)</td><td>Chooses the 24-hour or the 12-hour clock.</td></tr>
+            <tr><td><code>clockSizeAuto</code></td><td>Clock Size: Auto</td><td>bool</td><td>true</td><td>true, false</td><td>Fits the clock to its place in the navigation bar. While on, <code>clockSize</code> is ignored.</td></tr>
+            <tr><td><code>clockSize</code></td><td>Clock Size</td><td>int</td><td>18</td><td>10 to 85; refused</td><td>Size of the clock's digits in pixels when Auto is off.</td></tr>
           </tbody>
         </table>
 
-        <!-- Media -->
-        <h2 id="media">Media and Now Playing</h2>
+        <h2 id="media">Media</h2>
+        <h3 id="media-library">Library &amp; Playback</h3>
+        <table>
+          <thead><tr><th>Key</th><th>Name on screen</th><th>Type</th><th>Default</th><th>Range or allowed values</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>mediaFolder</code></td><td>Library Folder</td><td>text</td><td>(empty: your system's Music folder)</td><td>A full folder path; an empty path or the root of the disk is refused</td><td>Where your music is. Each folder inside it is a playlist.</td></tr>
+            <tr><td><code>startUpVolume</code></td><td>Startup Volume</td><td>number</td><td>0.1 (shown as 32&nbsp;%)</td><td>0 to 1; refused</td><td>The volume OCTAVE starts at. The slider shows a percentage; the file holds the audio level it stands for.</td></tr>
+            <tr><td><code>audioOutputDevice</code></td><td>Audio Output</td><td>text</td><td>(empty: the system default)</td><td>The id of an output, up to 512 characters</td><td>The speakers or output that music and phone audio play to. If it is unplugged, OCTAVE uses the system default until it is back.</td></tr>
+            <tr><td><code>autoPlayOnStartup</code></td><td>Autoplay on Startup</td><td>bool</td><td>false</td><td>true, false</td><td>Starts the last song again when OCTAVE opens.</td></tr>
+            <tr><td><code>persistShuffleState</code></td><td>Remember Shuffle</td><td>bool</td><td>false</td><td>true, false</td><td>Keeps shuffle on or off from one start to the next.</td></tr>
+            <tr><td><code>musicButtonDefaultPage</code></td><td>Open Music to the Library</td><td>text</td><td>mediaRoom</td><td>mediaRoom (off), mediaPlayer (on); anything else refused</td><td>Which page the music button opens: the Media Room or the library.</td></tr>
+            <tr><td><code>returnToLibraryAfterSelection</code></td><td>Return to Library After Picking a Song</td><td>bool</td><td>false</td><td>true, false</td><td>Stays in the library after you pick a song instead of opening the Media Room.</td></tr>
+          </tbody>
+        </table>
         <p>
-          These keys are owned by the <strong>Media</strong> page (Library &amp; Playback) and, for the Now Playing visual keys,
-          by the look editor that opens from the customize button of the Media Room (<span class="file-path">frontend/NowPlayingStudio.qml</span>,
-          "NowPlayingStudio" in the table); the Media page no longer shows them, and the three most common toggles appear on the Media widget.
+          The <strong>Spotify</strong> card keeps nothing in this file: the Client ID and the sign-in are in
+          <code>spotify.json</code> in the same folder. See <a href="media-manager.html#spotify">Media Manager</a>.
+        </p>
+
+        <h2 id="media-room">Media Room</h2>
+        <p>
+          These are set in the Media Room itself, not in Settings: the first four in its look editor, the last three by
+          the picker that opens from the album art.
         </p>
         <table>
-          <thead>
-            <tr><th>Property</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>UI</th><th>Description</th></tr>
-          </thead>
+          <thead><tr><th>Key</th><th>Name on screen</th><th>Type</th><th>Default</th><th>Range or allowed values</th><th>What it does</th></tr></thead>
           <tbody>
-            <tr><td><code>startUpVolume</code></td><td>startUpVolume</td><td>float</td><td>0.1</td><td>0 – 1, a value outside is refused (registry step 0.01, logarithmic)</td><td>Media page (its slider runs 0&ndash;100&nbsp;% and saves <code>volumeController.toLinear()</code>); <code>Main.updateStartupVolume()</code></td><td>Linear gain applied at launch; <code>currentVolume</code> starts at <code>round(sqrt(v) × 100)</code> = 32&nbsp;% for the default, which is also what the mute button restores at 0&nbsp;%. Pinnable</td></tr>
-            <tr><td><code>mediaFolder</code></td><td>mediaFolder</td><td>QString</td><td>"" (resolved at load to <code>QStandardPaths::MusicLocation</code>, falling back to <code>~/Music</code>)</td><td>Any directory; saving the current value is a no-op</td><td>Media page (Library)</td><td>Root of the local music library; MediaManager connects <code>mediaFolderChanged</code> to <code>setLibraryRoot</code></td></tr>
-            <tr><td><code>autoPlayOnStartup</code></td><td>autoPlayOnStartup</td><td>bool</td><td>false</td><td>true/false</td><td>Media page (Library &amp; Playback); Media widget</td><td>Resume the last song at launch (not when Android Auto owned the music at shutdown: <code>mediaLastSource</code>). Pinnable</td></tr>
-            <tr><td><code>persistShuffleState</code></td><td>persistShuffleState</td><td>bool</td><td>false</td><td>true/false</td><td>Media page (Library &amp; Playback)</td><td>Restore <code>lastShuffleState</code> at launch. Pinnable</td></tr>
-            <tr><td><code>musicButtonDefaultPage</code></td><td>musicButtonDefaultPage</td><td>QString</td><td>"mediaRoom"</td><td>"mediaRoom", "mediaPlayer" (others ignored)</td><td>Media page (Library &amp; Playback)</td><td>Which view the music nav button opens</td></tr>
-            <tr><td><code>returnToLibraryAfterSelection</code></td><td>returnToLibraryAfterSelection</td><td>bool</td><td>false</td><td>true/false</td><td>Media page (Library &amp; Playback)</td><td>Keep the library open after selecting a track when true; false opens the Now Playing view</td></tr>
-            <tr><td><code>showWaveformVisualizer</code></td><td>showWaveformVisualizer</td><td>bool</td><td>true</td><td>true/false</td><td>NowPlayingStudio; Media widget</td><td>FFT waveform in MediaRoom (<a href="audio-analyzer.html">Audio Analyzer</a>). Pinnable</td></tr>
-            <tr><td><code>show3DButtonTilt</code></td><td>show3DButtonTilt</td><td>bool</td><td>false</td><td>true/false</td><td>&ndash;</td><td>3D tilt on prev/play/next press. Pinnable. No toggle since 2026-11-23 (still read)</td></tr>
-            <tr><td><code>show3DAlbumPreview</code></td><td>show3DAlbumPreview</td><td>bool</td><td>false</td><td>true/false</td><td>Media widget</td><td>Coverflow-style side cards around the album art. Pinnable. No toggle in the look editor since 2026-11-23 (still read)</td></tr>
-            <tr><td><code>roundedAlbumArt</code></td><td>roundedAlbumArt</td><td>bool</td><td>true</td><td>true/false</td><td>&ndash;</td><td>Rounded corners on album art. Pinnable. No control and not read since 2026-11-23: the Media Room's art is always rounded</td></tr>
-            <tr><td><code>albumArtCornerRadius</code></td><td>albumArtCornerRadius</td><td>int</td><td>16</td><td>clamped 2 – 32</td><td>&ndash;</td><td>Corner radius in dp. Pinnable. No control and not read since 2026-11-23: the Media Room's art is always rounded by 16&nbsp;dp</td></tr>
-            <tr><td><code>showAlbumArtShadow</code></td><td>showAlbumArtShadow</td><td>bool</td><td>true</td><td>true/false</td><td>&ndash;</td><td>Drop shadow behind album art. Pinnable. No control and not read since 2026-11-23: the Media Room's art always has its shadow</td></tr>
-            <tr><td><code>get_setting_with_default()</code> / <code>save_setting()</code></td><td>musicDeviceModel</td><td>string</td><td>"Album art"</td><td>"Album art", "Record player", "MP3 player", "CD player", "Cassette player", "iPod" (validated by <code>MusicDevicePreference</code>; SettingsManager checks only the string type)</td><td>NowPlayingStudio</td><td>Now Playing artwork or 3D music-device model. The 3D choices require the Quick3D scene to load; unknown stored choices display as "Album art"</td></tr>
-            <tr><td><code>get_setting_with_default()</code> / <code>save_setting()</code></td><td>mediaArtPhoneMirror</td><td>bool</td><td>false</td><td>true/false</td><td>MediaRoom album-art popup</td><td>The Media Room's art corner shows the phone's screen (Home's phone mirror widget, live and touchable) instead of the art or a 3D player, while phone mirroring can run. Set by the popup: Phone mirror turns it on, any other choice off. Since 2026-11-26</td></tr>
-            <tr><td><code>vinylRecordMode</code></td><td>vinylRecordMode</td><td>bool</td><td>false</td><td>true/false</td><td>MediaRoom album-art popup</td><td>Spin the album art like a record while playing. Pinnable. Set by the Media Room's album-art popup: Vinyl turns it on, Album art off</td></tr>
-            <tr><td><code>audioOutputDevice</code></td><td>audioOutputDevice</td><td>QString</td><td>""</td><td>a <code>QAudioDevice</code> id (up to 512 characters), or "" for the system default</td><td>Media page (Library &amp; Playback); the look editor's output strip in the Media Room</td><td>The output music and phone audio play to. A picked output that is unplugged falls back to the system default until it is back</td></tr>
-            <tr><td><code>albumArtTransition</code></td><td>albumArtTransition</td><td>QString</td><td>"Crossfade"</td><td>"Crossfade", "Slide", "Vinyl Lift", "Dissolve", "Flip", "Coverflow", "Conveyor", "Stack", "Depth", "Swing" (others ignored)</td><td>&ndash;</td><td>Was the track-change animation. Pinnable. No control and not read since 2026-11-23: the Media Room has one transition</td></tr>
-            <tr><td><code>backgroundOverlayOpacity</code></td><td>backgroundOverlayOpacity</td><td>int</td><td>80</td><td>clamped 0 – 100</td><td>NowPlayingStudio</td><td>Dark overlay percentage over the blurred background. Pinnable</td></tr>
-            <tr><td><code>backgroundBlurRadius</code></td><td>backgroundBlurRadius</td><td>int</td><td>40</td><td>0 – 100, a value outside is refused (the sliders' and the registry's range, step 1)</td><td>NowPlayingStudio</td><td>Blur radius of the album-art background. Pinnable</td></tr>
-            <tr><td><code>backgroundGrid</code></td><td>backgroundGrid</td><td>QString</td><td>"4x4"</td><td>"Normal", "2x2", "4x4" (UI chips; slot does not validate)</td><td>NowPlayingStudio</td><td>Tiling of the album-art background</td></tr>
-            <tr><td><code>sideCardOpacity</code></td><td>sideCardOpacity</td><td>double</td><td>0.4</td><td>clamped 0.1 – 1.0</td><td>&ndash;</td><td>Opacity of the 3D preview side cards. Pinnable. No control since 2026-11-23 (still read)</td></tr>
-            <tr><td><code>sideCardAngle</code></td><td>sideCardAngle</td><td>int</td><td>30</td><td>clamped 5 – 60</td><td>&ndash;</td><td>Rotation of the side cards in degrees. Pinnable. No control since 2026-11-23 (still read)</td></tr>
-            <tr><td><code>buttonTiltDuration</code></td><td>buttonTiltDuration</td><td>int</td><td>200</td><td>clamped 50 – 500</td><td>&ndash;</td><td>Button tilt animation length in ms. Pinnable. No control since 2026-11-23 (still read)</td></tr>
-            <tr><td><code>textScrollSpeed</code></td><td>textScrollSpeed</td><td>int</td><td>5000</td><td>clamped 1000 – 10000</td><td>&ndash;</td><td>Marquee scroll duration in ms. Pinnable. No control since 2026-11-23 (still read)</td></tr>
-            <tr><td><code>directoryHistory</code></td><td>directoryHistory</td><td>QVariantList (strings)</td><td>[]</td><td>Most recent first, max 10, no duplicates</td><td>No current writer (API kept for the folder picker)</td><td>Recently used media folders</td></tr>
+            <tr><td><code>backgroundGrid</code></td><td>Background: Layout</td><td>text</td><td>4x4</td><td>Normal, 2x2, 4x4; not checked</td><td>How the album art is tiled across the background.</td></tr>
+            <tr><td><code>backgroundBlurRadius</code></td><td>Background: Blur</td><td>int</td><td>40</td><td>0 to 100; refused</td><td>How much the background art is blurred.</td></tr>
+            <tr><td><code>backgroundOverlayOpacity</code></td><td>Background: Dark Overlay</td><td>int</td><td>80</td><td>0 to 100; clamped</td><td>How dark the layer over the background is, in percent.</td></tr>
+            <tr><td><code>showWaveformVisualizer</code></td><td>Waveform</td><td>bool</td><td>true</td><td>true, false</td><td>Shows the moving waveform of the music.</td></tr>
+            <tr><td><code>musicDeviceModel</code></td><td>The picker's choices</td><td>text</td><td>Album art</td><td>Album art, Record player, MP3 player, CD player, Cassette player, iPod; anything else shows the album art</td><td>What sits in the art corner: the album art or a 3D music player.</td></tr>
+            <tr><td><code>vinylRecordMode</code></td><td>Vinyl</td><td>bool</td><td>false</td><td>true, false</td><td>Spins the album art like a record while music plays.</td></tr>
+            <tr><td><code>mediaArtPhoneMirror</code></td><td>Phone mirror</td><td>bool</td><td>false</td><td>true, false</td><td>Shows the phone's screen in the art corner, live and touchable. Any other choice in the picker turns it off.</td></tr>
           </tbody>
         </table>
 
-        <!-- Playback resume -->
-        <h2 id="playback-resume">Playback Resume</h2>
-        <p>Written by <a href="media-manager.html">MediaManager</a>, never by the settings UI. <code>save_playback_state()</code> stores the three <code>lastPlayed*</code> keys in one write from MediaManager's 1&nbsp;s debounce and at shutdown.</p>
-        <table>
-          <thead>
-            <tr><th>Property</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>lastShuffleState</code></td><td>lastShuffleState</td><td>bool</td><td>false</td><td>true/false</td><td>Shuffle state at last change; restored only when <code>persistShuffleState</code> is on</td></tr>
-            <tr><td><code>lastPlayedSong</code></td><td>lastPlayedSong</td><td>QString</td><td>""</td><td>Filename</td><td>Track to resume</td></tr>
-            <tr><td><code>lastPlayedPosition</code></td><td>lastPlayedPosition</td><td>int</td><td>0</td><td>Milliseconds</td><td>Position to resume from</td></tr>
-            <tr><td><code>mediaLastSource</code></td><td>mediaLastSource</td><td>QString</td><td>"local"</td><td>local / phone / androidauto</td><td>Which source owned the music when OCTAVE last ran (written by <code>nowPlaying</code>). <code>androidauto</code> with <code>mediaLastPlaying</code> resumes Android Auto on its next connect and skips local auto-play on startup</td></tr>
-            <tr><td><code>mediaLastPlaying</code></td><td>mediaLastPlaying</td><td>bool</td><td>false</td><td></td><td>Whether that source was playing</td></tr>
-            <tr><td><code>phoneMirrorUsed</code></td><td>phoneMirrorUsed</td><td>bool</td><td>false</td><td></td><td>A phone has been mirrored on this install: set by the core at the first stream (<code>src/appcore.cpp</code>), and at startup on an older install that had <code>phoneMirrorEnabled</code> on or remembers a Wi-Fi phone. Home's <code>PhoneMirrorWidget</code> starts mirroring by itself only when it is true; until then nothing runs adb before Connect Phone is pressed or, on Linux, a phone with USB debugging on is plugged in (<code>PhoneMirrorManager::checkUsbPhone</code>), so a fresh install does not start the adb server (the Windows firewall prompt, 0.9.6-rc4). No switch in Settings</td></tr>
-            <tr><td><code>lastPlayedPlaylist</code></td><td>lastPlayedPlaylist</td><td>QString</td><td>""</td><td>Playlist name</td><td>Playlist active at last save</td></tr>
-          </tbody>
-        </table>
-
-        <!-- OBD -->
         <h2 id="obd">OBD</h2>
+        <h3 id="obd-connection">Connection</h3>
         <table>
-          <thead>
-            <tr><th>Property</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>UI</th><th>Description</th></tr>
-          </thead>
+          <thead><tr><th>Key</th><th>Name on screen</th><th>Type</th><th>Default</th><th>Range or allowed values</th><th>What it does</th></tr></thead>
           <tbody>
-            <tr><td><code>obdBluetoothPort</code></td><td>obdBluetoothPort</td><td>QString</td><td>"" (a stored "/dev/rfcomm0" is cleared at load)</td><td>Serial device path on desktop, or <code>rfcomm://&lt;MAC&gt;[/&lt;channel&gt;]</code> for a direct Bluetooth socket (Linux); BLE MAC address on Android</td><td>OBD page (Connection); also written by OBDManager when connecting</td><td>Adapter to connect to; OBDManager reconnects on change (<a href="obd-manager.html">OBD Manager</a>)</td></tr>
-            <tr><td><code>obdSavedAdapters</code></td><td>obdSavedAdapters</td><td>QString (JSON array) on disk; <code>QVariantList</code> property</td><td>"[]"</td><td>Array of <code>{"name": string, "mac": string}</code>; MAC upper-cased, most recent first, max 8. Stored as a string; the property is the parsed list of maps</td><td>OBD page (Adapters) removes; <code>OBDManager::connect_to_adapter()</code> adds</td><td>Remembered adapters shown as quick-connect chips</td></tr>
-            <tr><td><code>obdFastMode</code></td><td>obdFastMode</td><td>bool</td><td>true</td><td>true/false</td><td>OBD page (Connection); OBD widget</td><td>Fast polling mode, applied on the next connection. Pinnable</td></tr>
-            <tr><td><code>blackBoxEnabled</code></td><td>blackBoxEnabled</td><td>bool</td><td>true</td><td>true/false</td><td>OBD page (Black Box)</td><td>Record every drive into the black box (<a href="obd-manager.html#black-box">TripRecorder</a>); off ends the trip being recorded. Pinnable</td></tr>
-            <tr><td><code>blackBoxSweepAll</code></td><td>blackBoxSweepAll</td><td>bool</td><td>true</td><td>true/false</td><td>OBD page (Black Box)</td><td>Also poll every PID the vehicle scan found, one per pass of the live gauges, so the record covers PIDs not on screen. Pinnable</td></tr>
-            <tr><td><code>blackBoxMaxMB</code></td><td>blackBoxMaxMB</td><td>int</td><td>500</td><td>50&ndash;5000 (step 50)</td><td>OBD page (Black Box)</td><td>Cap for the database plus trip files; the oldest closed drives are deleted first. Pinnable</td></tr>
-            <tr><td><code>serviceEnabled</code></td><td>&ndash;</td><td>bool</td><td>false</td><td>true/false</td><td>Settings &gt; Device &gt; Developer &gt; Service (head unit only), or edit the file</td><td>Start the <a href="utilities.html#service-protocol">service protocol</a> on <code>127.0.0.1:9876</code> at every launch, as <code>--service</code> does; read once at startup. <code>save_setting</code> refuses it</td></tr>
-            <tr><td><code>serviceWebRoot</code></td><td>&ndash;</td><td>string</td><td>""</td><td>a directory holding <code>index.html</code></td><td>None (edit the file)</td><td>Serve that directory at <code>GET /</code> on the service port instead of the reference client, as <code>--web-root</code> does (the flag wins); read once at startup. <code>save_setting</code> refuses it</td></tr>
-            <tr><td><code>serviceLoopbackOpen</code></td><td>&ndash;</td><td>bool</td><td>true</td><td>true/false</td><td>None (edit the file)</td><td>Programs on this device use the service without pairing. Set false behind a local reverse proxy (it would otherwise make every network client look local). File-only</td></tr>
-            <tr><td><code>serviceTokens</code></td><td>&ndash;</td><td>list</td><td>[]</td><td>written by OCTAVE</td><td>Settings &gt; Device &gt; Developer &gt; Service</td><td>Paired devices: <code>{id, name, hash, created, lastUsed, scopes}</code>, the SHA-256 of each token only; a row without <code>scopes</code> (paired before scopes existed) is <code>["full"]</code>. Session devices of an installed frontend are never stored. File-only: no setter, <code>apply_settings</code> or reset writes it</td></tr>
-            <tr><td><code>obdAutoReconnectAttempts</code></td><td>obdAutoReconnectAttempts</td><td>int</td><td>0</td><td>clamped 0 – 10 (0 = disabled)</td><td>OBD page (Connection)</td><td>Automatic reconnect attempts after a drop</td></tr>
-            <tr><td><code>fuelTankCapacity</code></td><td>fuelTankCapacity</td><td>float</td><td>15.0</td><td>–</td><td>None</td><td>Tank size in gallons. Property and slot exist but nothing reads or writes them today</td></tr>
-            <tr><td><code>get_obd_parameter_enabled(pid)</code> / <code>save_obd_parameter_enabled(pid, on)</code></td><td>obdParameters</td><td>object of bool</td><td>123 parameter IDs, 20 enabled (<a href="#obd-parameters">list</a>)</td><td>PID name → enabled</td><td>Legacy; nothing in the UI writes it any more (<code>enableAllSupported()</code> still can)</td><td>Formerly chose which PIDs are polled. Polling is now demand-driven (<a href="obd-manager.html#watcher-system">what is on screen</a>), so this object is kept only for settings-file compatibility. Writes are debounced 800&nbsp;ms; PIDs missing from the file are merged in from the defaults at load</td></tr>
-            <tr><td><code>homeOBDParameters</code></td><td>homeOBDParameters</td><td>QVariantList (strings)</td><td>["SPEED", "RPM", "COOLANT_TEMP", "CONTROL_MODULE_VOLTAGE"]</td><td>PID names</td><td>OBD page</td><td>PIDs shown on the home-screen cards, in order; at most 8, no duplicates (the manager enforces both)</td></tr>
-            <tr><td><code>homeVehicleCard</code></td><td>homeVehicleCard</td><td>bool</td><td>true</td><td>true/false</td><td>Device page (Vehicle, "Show on Home")</td><td>Show the vehicle's picture as a card with the Home readings (under them, or beside them in an upright window); its tap opens Settings &gt; Device &gt; Vehicle. Pinnable</td></tr>
-            <tr><td><code>get_supported_obd_parameters()</code></td><td>supportedOBDParameters</td><td>list of strings</td><td>[]</td><td>PID names</td><td>Written by OBDManager after a vehicle scan</td><td>PIDs the last scanned vehicle answered; lists the OBD settings page's parameters while offline. The live gate uses <code>obdManager.vehicleSupportedParameters</code> (this session only) instead</td></tr>
+            <tr><td><code>obdBluetoothPort</code></td><td>Enter Address Manually</td><td>text</td><td>(empty)</td><td>A serial port, a Bluetooth address, or <code>rfcomm://&lt;address&gt;</code>; not checked</td><td>The adapter OCTAVE connects to. Picking an adapter in the Connect Vehicle sheet sets it.</td></tr>
+            <tr><td><code>obdSavedAdapters</code></td><td>The saved adapter chips</td><td>text holding a JSON list</td><td>[]</td><td>Up to 8 entries of <code>{"name", "mac"}</code>, newest first</td><td>The adapters you have connected to, for one-tap reconnecting. Remove one with its ✕.</td></tr>
+            <tr><td><code>obdFastMode</code></td><td>Fast Polling</td><td>bool</td><td>true</td><td>true, false</td><td>Asks the car for readings as fast as the adapter can answer. Turn it off if readings drop out.</td></tr>
+            <tr><td><code>obdAutoReconnectAttempts</code></td><td>Auto Reconnect</td><td>int</td><td>0</td><td>0 to 10; clamped. The switch sets 3, the slider 1 to 10</td><td>How many times to retry a failed connection straight away. 0 is off.</td></tr>
           </tbody>
         </table>
-
-        <h2 id="obd-parameters">OBD Parameter PIDs</h2>
-        <p>The <code>obdParameters</code> default object holds these 123 keys. The full gauge/PID catalogue with units is in <a href="obd-manager.html">OBD Manager</a> and <span class="file-path">docs/GAUGE_AUTHORING.md</span>.</p>
-        <p><strong>Enabled by default (20):</strong></p>
-        <pre><code>COOLANT_TEMP  CONTROL_MODULE_VOLTAGE  ENGINE_LOAD  THROTTLE_POS  INTAKE_TEMP
-TIMING_ADVANCE  MAF  SPEED  RPM  COMMANDED_EQUIV_RATIO  FUEL_LEVEL  INTAKE_PRESSURE
-SHORT_FUEL_TRIM_1  LONG_FUEL_TRIM_1  O2_B1S1  FUEL_PRESSURE  OIL_TEMP
-FUEL_ECONOMY  DISTANCE_TO_EMPTY  IGNITION_TIMING</code></pre>
-        <p><strong>Disabled by default (103):</strong></p>
-        <pre><code>RUN_TIME  DISTANCE_W_MIL  FUEL_RAIL_PRESSURE_VAC  FUEL_RAIL_PRESSURE_DIRECT
-BAROMETRIC_PRESSURE  AMBIANT_AIR_TEMP  RELATIVE_THROTTLE_POS  THROTTLE_POS_B
-ACCELERATOR_POS_D  CATALYST_TEMP_B1S1  CATALYST_TEMP_B1S2  EVAP_VAPOR_PRESSURE
-SHORT_FUEL_TRIM_2  LONG_FUEL_TRIM_2  O2_B1S2  O2_B2S1  O2_B2S2
-DISTANCE_SINCE_DTC_CLEAR  WARMUPS_SINCE_DTC_CLEAR  ABSOLUTE_LOAD  COMMANDED_EGR
-EGR_ERROR  ETHANOL_PERCENT
-O2_B1S3  O2_B1S4  O2_B2S3  O2_B2S4
-O2_S1_WR_VOLTAGE … O2_S8_WR_VOLTAGE      (8 wide-range O2 voltage sensors)
-O2_S1_WR_CURRENT … O2_S8_WR_CURRENT      (8 wide-range O2 current sensors)
-CATALYST_TEMP_B2S1  CATALYST_TEMP_B2S2
-THROTTLE_POS_C  ACCELERATOR_POS_E  ACCELERATOR_POS_F  THROTTLE_ACTUATOR
-EVAPORATIVE_PURGE  FUEL_RAIL_PRESSURE_ABS  FUEL_INJECT_TIMING  FUEL_RATE
-RUN_TIME_MIL  TIME_SINCE_DTC_CLEARED  MAX_MAF  FUEL_TYPE
-EVAP_VAPOR_PRESSURE_ABS  EVAP_VAPOR_PRESSURE_ALT
-SHORT_O2_TRIM_B1  LONG_O2_TRIM_B1  SHORT_O2_TRIM_B2  LONG_O2_TRIM_B2
-RELATIVE_ACCEL_POS  HYBRID_BATTERY_REMAINING  ELM_VOLTAGE
-<span class="cmt"># multi-value PIDs 0x61+ (obdParameterChanged), all false by default</span>
-DEMAND_ENGINE_TORQUE  ACTUAL_ENGINE_TORQUE  ENGINE_FRICTION_TORQUE
-REFERENCE_TORQUE  BOOST_PRESSURE_A  BOOST_PRESSURE_A_COMMANDED  WASTEGATE_A
-WASTEGATE_A_COMMANDED  MAF_SENSOR_A  MAF_SENSOR_B  INTAKE_TEMP_B1S1
-INTAKE_TEMP_B1S2  INTAKE_TEMP_B2S1  MANIFOLD_SURFACE_TEMP
-COOLANT_TEMP_SENSOR_1  COOLANT_TEMP_SENSOR_2  THROTTLE_POS_G
-THROTTLE_ACTUATOR_A_COMMANDED  RELATIVE_THROTTLE_A  EGR_A_COMMANDED
-EGR_A_ACTUAL  EGR_A_ERROR  FUEL_RAIL_PRESSURE_A
-FUEL_RAIL_PRESSURE_A_COMMANDED  FUEL_RAIL_TEMP_A  ENGINE_FUEL_RATE_GS
-VEHICLE_FUEL_RATE_GS  CYLINDER_FUEL_RATE  EXHAUST_FLOW_RATE
-TRANSMISSION_GEAR_RATIO  RECOMMENDED_GEAR  ODOMETER  ENGINE_RUN_TIME_TOTAL
-ENGINE_IDLE_TIME_TOTAL  HYBRID_BATTERY_VOLTAGE  HYBRID_BATTERY_CURRENT
-EV_BATTERY_HEALTH</code></pre>
-
-        <!-- ESP32 -->
-        <h2 id="esp32">ESP32 Volume Knob</h2>
-        <p>All on the <strong>Accessories</strong> page, Volume Knob sub-section (desktop only). Consumed by <a href="hardware-managers.html">ESP32VolumeManager</a>; the LED keys are also read by <span class="file-path">src/main.cpp</span> to sync the knob's LEDs with the theme.</p>
+        <h3 id="obd-black-box">Black Box</h3>
         <table>
-          <thead>
-            <tr><th>Property</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>Description</th></tr>
-          </thead>
+          <thead><tr><th>Key</th><th>Name on screen</th><th>Type</th><th>Default</th><th>Range or allowed values</th><th>What it does</th></tr></thead>
           <tbody>
-            <tr><td><code>esp32VolumeEnabled</code></td><td>esp32VolumeEnabled</td><td>bool</td><td>true</td><td>true/false</td><td>Enable the wireless rotary encoder</td></tr>
-            <tr><td><code>esp32VolumePort</code></td><td>esp32VolumePort</td><td>QString</td><td>""</td><td>Serial port name, or empty</td><td>USB serial port of the ESP32-S3 receiver dongle; empty means auto-select the ESP32-S3 at startup</td></tr>
-            <tr><td><code>esp32VolumeStepSize</code></td><td>esp32VolumeStepSize</td><td>double</td><td>1.0</td><td>clamped 0.25 – 10, rounded to the nearest 0.25 (UI slider and chips)</td><td>Volume change per encoder tick in percent. Stored as a double (float-literal default) so fractional steps (0.25 / 0.5 / 0.75) round-trip</td></tr>
-            <tr><td><code>esp32AutoReconnect</code></td><td>esp32AutoReconnect</td><td>bool</td><td>true</td><td>true/false</td><td>Reconnect automatically after the dongle disappears</td></tr>
-            <tr><td><code>esp32LedSleepEnabled</code></td><td>esp32LedSleepEnabled</td><td>bool</td><td>true</td><td>true/false</td><td>Let the knob's LEDs turn off (code comment: "LEDs turn off when OCTAVE closes")</td></tr>
-            <tr><td><code>esp32LedColorMode</code></td><td>esp32LedColorMode</td><td>QString</td><td>"theme"</td><td>"theme", "static" (others ignored)</td><td>LEDs follow the album-art / theme palette or a fixed colour</td></tr>
-            <tr><td><code>esp32LedStaticColor</code></td><td>esp32LedStaticColor</td><td>QString</td><td>"#00FFFF"</td><td>Hex colour</td><td>Colour used when the mode is "static"</td></tr>
+            <tr><td><code>blackBoxEnabled</code></td><td>Record every drive</td><td>bool</td><td>true</td><td>true, false</td><td>Records every drive for Trip History.</td></tr>
+            <tr><td><code>blackBoxSweepAll</code></td><td>Record everything the car reports</td><td>bool</td><td>true</td><td>true, false</td><td>Also records the readings that are not on screen.</td></tr>
+            <tr><td><code>blackBoxMaxMB</code></td><td>Storage cap</td><td>int</td><td>500</td><td>50 to 5000; clamped</td><td>Space for recorded drives in megabytes. The oldest drives are deleted first.</td></tr>
           </tbody>
         </table>
-
-        <!-- IMU -->
-        <h2 id="imu">IMU Sensor</h2>
         <p>
-          Only <code>imuEnabled</code> has a property and slot. The other ten keys have defaults in <code>buildDefaultSettings()</code> (so they are
-          type-validated) but are read and written through <code>get_setting_with_default()</code> /
-          <code>save_setting()</code> from the Accessories page (IMU Sensor sub-section) and
-          <span class="file-path">frontend/SensorMenu.qml</span>; the <a href="hardware-managers.html">BerryIMU manager</a> only reads
-          <code>imuEnabled</code>.
+          The <strong>Advanced</strong> card (Custom PIDs, Bus Monitor) keeps nothing in this file. See
+          <a href="obd-manager.html">OBD Manager</a>.
+        </p>
+        <h3 id="shift-light">Shift light</h3>
+        <p>
+          The shift light has its own editor: tap the RPM card in OBD &gt; Live Data. See
+          <a href="obd-manager.html#shift-light">OBD Manager</a>. These keys have no default in the file; the default
+          below is what OCTAVE uses until you change the setting, and none of them is checked.
         </p>
         <table>
-          <thead>
-            <tr><th>Access</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>Description</th></tr>
-          </thead>
+          <thead><tr><th>Key</th><th>Name on screen</th><th>Type</th><th>Default</th><th>Range or allowed values</th><th>What it does</th></tr></thead>
           <tbody>
-            <tr><td><code>imuEnabled</code> property</td><td>imuEnabled</td><td>bool</td><td>true</td><td>true/false</td><td>Enable the BerryIMU v3 I²C sensor. Pinnable; also on the Accessories widget</td></tr>
-            <tr><td><code>sensorEmitRate</code> / <code>save_sensor_emit_rate()</code></td><td>sensorEmitRate</td><td>int</td><td>60</td><td>10 – 120 Hz (clamped on save and load), UI step 5</td><td>IMU emit rate in Hz; <code>BerryIMUManager</code> applies it at startup and on every change</td></tr>
-            <tr><td><code>sensorDecimalPlaces</code> / <code>save_sensor_decimal_places()</code></td><td>sensorDecimalPlaces</td><td>int</td><td>1</td><td>0 – 4 (clamped)</td><td>Decimal places on the Sensors page readouts</td></tr>
-            <tr><td><code>sensorTempUnit</code> / <code>save_sensor_temp_unit()</code></td><td>sensorTempUnit</td><td>string</td><td>"F"</td><td>"F", "C" (other values ignored)</td><td>Barometer temperature unit</td></tr>
-            <tr><td><code>sensorAltitudeUnit</code> / <code>save_sensor_altitude_unit()</code></td><td>sensorAltitudeUnit</td><td>string</td><td>"m"</td><td>"m", "ft" (other values ignored)</td><td>Barometric altitude unit</td></tr>
-            <tr><td><code>sensorCards.Pitch</code> / <code>save_sensor_card_visible("Pitch", v)</code></td><td>sensorShowPitch</td><td>bool</td><td>true</td><td>true/false</td><td>Show the pitch readout on the Sensors page</td></tr>
-            <tr><td><code>sensorCards.Roll</code> / <code>save_sensor_card_visible("Roll", v)</code></td><td>sensorShowRoll</td><td>bool</td><td>true</td><td>true/false</td><td>Show the roll readout</td></tr>
-            <tr><td><code>sensorCards.Heading</code> / <code>save_sensor_card_visible("Heading", v)</code></td><td>sensorShowHeading</td><td>bool</td><td>true</td><td>true/false</td><td>Show the heading / compass readout</td></tr>
-            <tr><td><code>sensorCards.GForce</code> / <code>save_sensor_card_visible("GForce", v)</code></td><td>sensorShowGForce</td><td>bool</td><td>true</td><td>true/false</td><td>Show the G-force readout</td></tr>
-            <tr><td><code>sensorCards.Altitude</code> / <code>save_sensor_card_visible("Altitude", v)</code></td><td>sensorShowAltitude</td><td>bool</td><td>true</td><td>true/false</td><td>Show the altitude readout</td></tr>
-            <tr><td><code>sensorCards.Temperature</code> / <code>save_sensor_card_visible("Temperature", v)</code></td><td>sensorShowTemperature</td><td>bool</td><td>true</td><td>true/false</td><td>Show the temperature readout</td></tr>
+            <tr><td><code>rpm_shift_light_enabled</code></td><td>Enable Shift Light</td><td>bool</td><td>true</td><td>true, false</td><td>Turns the shift light on.</td></tr>
+            <tr><td><code>rpm_show_on_home_card</code></td><td>Show Indicator on Home</td><td>bool</td><td>true</td><td>true, false</td><td>Shows the shift light on the RPM card of the Classic Home.</td></tr>
+            <tr><td><code>rpm_max_rpm</code></td><td>Redline</td><td>int</td><td>8000</td><td>The slider offers 4000 to 12000</td><td>The top of the engine speed scale the flags are placed on.</td></tr>
+            <tr><td><code>rpm_flags</code></td><td>Add Flag</td><td>text holding a JSON list</td><td>[]</td><td>One entry per flag: its engine speed band, colour and flashing</td><td>The engine speeds at which the light changes colour or flashes.</td></tr>
           </tbody>
         </table>
 
-        <!-- Gesture -->
-        <h2 id="gesture">Gesture Sensor</h2>
-        <p>Accessories page, Gesture Sensor sub-section. Consumed by the <a href="hardware-managers.html">GestureManager</a>; the volume actions are executed by <span class="file-path">src/main.cpp</span> through <code>VolumeController</code>.</p>
-        <table>
-          <thead>
-            <tr><th>Property</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>gestureSensorEnabled</code></td><td>gestureSensorEnabled</td><td>bool</td><td>true</td><td>true/false</td><td>Enable the PAJ7620U2 I²C gesture sensor. Pinnable; also on the Accessories widget</td></tr>
-            <tr><td><code>get_gesture_mapping()</code> / <code>save_gesture_action()</code></td><td>gestureMapping</td><td>object</td><td>(below)</td><td>Gesture name → action name</td><td>Nine gestures mapped to app actions; <code>reset_gesture_mapping()</code> restores the defaults</td></tr>
-            <tr><td><code>gestureVolumeStep</code></td><td>gestureVolumeStep</td><td>int</td><td>5</td><td>clamped 1 – 100 (UI slider 1 – 100 or chips 1/2/5/10/15/25/50)</td><td>Percent change per volume gesture</td></tr>
-            <tr><td><code>gestureCooldown</code></td><td>gestureCooldown</td><td>int</td><td>300</td><td>clamped 100 – 2000 ms (UI slider step 50 or chips 100/200/300/500/1000)</td><td>Minimum time between recognised gestures</td></tr>
-          </tbody>
-        </table>
-
-        <p>Default gesture mapping:</p>
-        <pre><code>{
-  <span class="str">"RIGHT"</span>:             <span class="str">"next_track"</span>,
-  <span class="str">"LEFT"</span>:              <span class="str">"previous_track"</span>,
-  <span class="str">"UP"</span>:                <span class="str">"volume_up"</span>,
-  <span class="str">"DOWN"</span>:              <span class="str">"volume_down"</span>,
-  <span class="str">"FORWARD"</span>:           <span class="str">"play_pause"</span>,
-  <span class="str">"BACKWARD"</span>:          <span class="str">"mute_toggle"</span>,
-  <span class="str">"CLOCKWISE"</span>:         <span class="str">"volume_up"</span>,
-  <span class="str">"COUNTER-CLOCKWISE"</span>: <span class="str">"volume_down"</span>,
-  <span class="str">"WAVE"</span>:              <span class="str">"play_pause"</span>
-}</code></pre>
-
-        <!-- Phone -->
-        <h2 id="phone">Android Auto, Phone Mirror and AirPlay</h2>
-        <p>Phone page (Settings &rarr; Phone). The <code>scrcpy*</code> keys are pushed into <a href="phone-mirror-android-auto.html">PhoneMirrorManager</a> at startup and the gain, duck and screen-off signals are connected to its setters, so they apply to a running session.</p>
-        <p>The five <code>androidAuto*</code> keys after <code>androidAutoEnabled</code> belong to <a href="phone-mirror-android-auto.html#aa-native">built-in Android Auto</a>. They have defaults in <code>buildDefaultSettings()</code> (so they are type-validated) but no property or dedicated slot: the Android Auto card writes them with <code>save_setting()</code> and <code>AndroidAutoManager</code> reads them with <code>get_setting_with_default()</code> at every connection attempt, so a change applies to the next connection (<code>androidAutoBackend</code> at once, through <code>genericSettingChanged</code> &rarr; <code>backendChanged</code>).</p>
-        <table>
-          <thead>
-            <tr><th>Property</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>androidAutoEnabled</code></td><td>androidAutoEnabled</td><td>bool</td><td>false</td><td>true/false</td><td>Show the Android Auto button in the navigation bar ("Show in nav bar" on the Android Auto card)</td></tr>
-            <tr><td>generic (<code>get_setting_with_default()</code> / <code>save_setting()</code>)</td><td>androidAutoBackend</td><td>string</td><td>"dhu"</td><td>"dhu", "native"; anything else reads as "dhu", and so does every value in a build without the built-in receiver</td><td>Android Auto backend: "native" makes OCTAVE the head unit (the <em>Head unit</em> choice "Built-in", shown only when <code>androidAutoManager.nativeAvailable</code>), "dhu" runs Google's Desktop Head Unit ("Google DHU")</td></tr>
-            <tr><td>generic (<code>get_setting_with_default()</code>, no UI)</td><td>androidAutoCertPath</td><td>string</td><td>""</td><td>path of a PEM file, or ""</td><td>Head-unit certificate for built-in Android Auto. The key is read from the same file when it holds a <code>PRIVATE KEY</code> block, else from the sibling <code>&lt;base name&gt;.key</code>. Empty: <code>headunit.crt</code> + <code>headunit.key</code> in <code>&lt;config dir&gt;/android-auto/</code>. OCTAVE ships no certificate (<a href="phone-mirror-android-auto.html#aa-native-cert">The head-unit certificate</a>)</td></tr>
-            <tr><td>generic (<code>get_setting_with_default()</code> / <code>save_setting()</code>)</td><td>androidAutoResolution</td><td>string</td><td>"1280x720"</td><td>"800x480", "1280x720", "1920x1080" (the "Video size" control); any other value falls back to 1280x720</td><td>Size the phone draws built-in Android Auto at, and the touch coordinate space. Takes effect on the next connection</td></tr>
-            <tr><td>generic (<code>get_setting_with_default()</code>, no UI)</td><td>androidAutoFps</td><td>int</td><td>30</td><td>30 or 60 (60 or more means 60, anything below means 30)</td><td>Frame rate asked of the phone for built-in Android Auto</td></tr>
-            <tr><td>generic (<code>get_setting_with_default()</code>, no UI)</td><td>androidAutoDpi</td><td>int</td><td>160</td><td>clamped 80 &ndash; 400</td><td>Density announced to the phone for built-in Android Auto</td></tr>
-            <tr><td>generic (<code>airPlayManager.setEnabled()</code>)</td><td>airPlayEnabled</td><td>bool</td><td>false</td><td>true/false</td><td>Advertise OCTAVE as an AirPlay receiver on the local network (<a href="phone-mirror-android-auto.html#airplay">iPhone (AirPlay)</a>); "AirPlay receiver" on the iPhone card</td></tr>
-            <tr><td>generic (<code>save_setting()</code>)</td><td>airPlayName</td><td>string</td><td>"OCTAVE"</td><td>up to 48 characters; empty means "OCTAVE"</td><td>What an iPhone lists under Screen Mirroring; the Bluetooth mouse is this plus " Touch"</td></tr>
-            <tr><td>generic (<code>save_setting()</code>)</td><td>airPlayRequirePin</td><td>bool</td><td>true</td><td>true/false</td><td>A new iPhone types the on-screen PIN once (remembered in <code>&lt;config&gt;/airplay/state.json</code>)</td></tr>
-            <tr><td>generic (<code>save_setting()</code>)</td><td>airPlayResolution</td><td>string</td><td>"1280x720"</td><td>"1280x720", "1920x1080" (the control); any WxH from 640x360 to 3840x2160</td><td>Display size offered to the iPhone; a change restarts the receiver</td></tr>
-            <tr><td>generic (<code>airPlayManager.setTouchEnabled()</code>)</td><td>airPlayTouchEnabled</td><td>bool</td><td>true</td><td>true/false</td><td>OCTAVE is also a Bluetooth LE mouse ("OCTAVE Touch") for the mirrored iPhone (BlueZ builds)</td></tr>
-            <tr><td>generic (calibration, no direct UI)</td><td>airPlayTouchScale</td><td>double</td><td>600.0</td><td>100 &ndash; 20000</td><td>Mouse counts across the iPhone screen's short side; set by <em>Calibrate touch</em></td></tr>
-            <tr><td><code>phoneMirrorEnabled</code></td><td>phoneMirrorEnabled</td><td>bool</td><td>false</td><td>true/false</td><td>Not used by the app since 2026-11-25 (its switch, Show in Nav Bar, is gone): phone mirroring is on wherever it can run and Home's phone window starts it. Kept for the service API</td></tr>
-            <tr><td><code>scrcpyAudioGain</code></td><td>scrcpyAudioGain</td><td>double</td><td>2.0 (+6 dB)</td><td>clamped 0.25 – 8.0 (UI slider −12 … +18 dB through <code>save_scrcpy_audio_gain_db()</code> / the <code>scrcpyAudioGainDb</code> property, stored as 10^(dB/20); the default 2.0 is 6.02 dB, shown as 6, and the slider's 6 dB stores 1.9953)</td><td>Linear gain applied to phone audio before OCTAVE's volume; the phone's own volume is never changed</td></tr>
-            <tr><td><code>scrcpyAudioDuckEnabled</code></td><td>scrcpyAudioDuckEnabled</td><td>bool</td><td>true</td><td>true/false</td><td>Duck local music while the phone is producing sound (navigation prompts, calls). The manager's <code>duckingChanged</code> is routed to <code>MediaManager::setDucking</code></td></tr>
-            <tr><td><code>scrcpyAudioDuckLevel</code></td><td>scrcpyAudioDuckLevel</td><td>double</td><td>0.1 (−20 dB)</td><td>clamped 0.0 – 1.0 (UI slider −40 … −6 dB through <code>save_scrcpy_audio_duck_level_db()</code> / <code>scrcpyAudioDuckLevelDb</code>)</td><td>Linear factor applied to local music while ducked</td></tr>
-            <tr><td><code>scrcpyPhoneScreenOff</code></td><td>scrcpyPhoneScreenOff</td><td>bool</td><td>false</td><td>true/false</td><td>Opt-in: keep the phone's own panel dark while mirroring (off by default because some phones, e.g. Galaxy S22, only dim the panel instead of blanking it); stream and touch keep working and the panel is restored when the session ends. A power-button press wakes the panel for an 8 s grace window (<code>kWakeGraceMs</code>); a second press inside it hands the phone back to the user, and the MirrorKeeper forces a relight after a wake from the lock screen</td></tr>
-            <tr><td><code>scrcpyWirelessAddress</code></td><td>scrcpyWirelessAddress</td><td>QString</td><td>""</td><td>"ip:port" or ""</td><td>Phone last connected over Wi-Fi (QR pairing from Phone Mirror or the Phone settings card). Written by <code>PhoneMirrorManager</code> through <code>wirelessAddressChanged</code>: when the phone is paired, when Wireless debugging comes back on a new port (found over mDNS), and cleared by Forget. While no phone is usable OCTAVE retries it in the background at most every 5 s</td></tr>
-            <tr><td><code>scrcpyDisplaySize</code></td><td>scrcpyDisplaySize</td><td>QString</td><td>"auto"</td><td>"auto" or ""</td><td>The "Display Mode" control: "" (Mirror Phone) or "auto" (Desktop (DeX)). The desktop display is always the size of the window: since 2026-11-25 there is no Fit to Screen switch or size field, and <code>PhoneMirrorManager.setDisplaySize()</code> treats any size (one saved before included) as "auto"</td></tr>
-            <tr><td><code>scrcpyDisplayDpi</code></td><td>scrcpyDisplayDpi</td><td>int</td><td>0</td><td>0 or 80 – 640 (UI slider Auto, 120 … 400 in steps of 20)</td><td>Density of the virtual display ("Text Size"); 0 lets the server scale the phone's own density. Restarts a running session</td></tr>
-            <tr><td><code>scrcpyBitRateUsb</code></td><td>scrcpyBitRateUsb</td><td>int (Mbps)</td><td>16</td><td>clamped 2 – 40</td><td>Not read since 2026-11-25: the bit rate is automatic (no Picture Quality settings)</td></tr>
-            <tr><td><code>scrcpyBitRateWifi</code></td><td>scrcpyBitRateWifi</td><td>int (Mbps)</td><td>8</td><td>clamped 2 – 40</td><td>Not read since 2026-11-25: the bit rate is automatic (no Picture Quality settings)</td></tr>
-            <tr><td><code>scrcpyBitRateAuto</code></td><td>scrcpyBitRateAuto</td><td>bool</td><td>true</td><td>true/false</td><td>Not read since 2026-11-25: the bit rate is always adaptive</td></tr>
-            <tr><td><code>scrcpyAutoWifi</code></td><td>scrcpyAutoWifi</td><td>bool</td><td>false</td><td>true/false</td><td>Before each USB session, switch the phone's adbd to TCP port 5555 (<code>adb tcpip</code>, skipped when already on) and remember its Wi-Fi address in <code>scrcpyWirelessAddress</code>, so it reconnects over Wi-Fi without a cable or the Wireless debugging toggle until the phone reboots. Off by default since 0.9.5: until that reboot the phone's adbd accepts connections on any network it joins. Only the default changed; a saved <code>true</code> is kept</td></tr>
-          </tbody>
-        </table>
-
-        <!-- UI state -->
-        <h2 id="ui-state">Settings UI State</h2>
-        <p>Persisted automatically by the settings UI; not shown as controls.</p>
-        <table>
-          <thead>
-            <tr><th>Access</th><th>JSON Key</th><th>Type</th><th>Default</th><th>Range / Values</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>lastSettingsSection</code> / <code>set_last_settings_section()</code></td><td>lastSettingsSection</td><td>QString</td><td>"deviceSettings"</td><td>the seven current sections "displaySettings", "mediaSettings", "obdSettings", "phoneSettings", "accessoriesSettings", "deviceSettings", "about", plus the legacy IDs "androidAutoSettings", "phoneMirrorSettings", "volumeKnobSettings", "gestureSensorSettings" an older file may carry (others ignored; "clockSettings" migrated to "displaySettings")</td><td>Section reopened when the settings menu is entered</td></tr>
-            <tr><td><code>settingsMenuVisibility</code> (JSON string) / <code>is_settings_section_visible()</code> / <code>save_settings_section_visibility()</code></td><td>settingsMenuVisibility</td><td>object of bool</td><td><code>displaySettings</code>, <code>mediaSettings</code>, <code>obdSettings</code>, <code>phoneSettings</code>, <code>accessoriesSettings</code>, <code>deviceSettings</code>, <code>about</code>: all true</td><td>section ID → visible; a section missing from the file (or unknown) reads as visible</td><td>Which sections the settings menu shows</td></tr>
-            <tr><td><code>pinnedSettings</code> / <code>toggle_pin_setting()</code></td><td>pinnedSettings</td><td>QVariantList (strings)</td><td>[]</td><td>Registry IDs only</td><td>Quick Panel pins, in pin order</td></tr>
-            <tr><td>generic (<span class="file-path">frontend/settings/ExpandedCards.js</span>)</td><td>expandedCards</td><td>object of bool</td><td>{}</td><td>card ID → expanded</td><td>Expanded / collapsed state of collapsible settings cards</td></tr>
-          </tbody>
-        </table>
-
-        <!-- Generic / QML-only -->
-        <h2 id="generic">QML-Only Keys (no C++ default)</h2>
+        <h2 id="phone">Phone</h2>
         <p>
-          These keys exist only because QML writes them with <code>save_setting()</code>; <code>buildDefaultSettings()</code> does not list them,
-          so they pass through validation untouched (and unvalidated) via the forward-compatibility copy.
-          The default shown is the one passed to <code>get_setting_with_default()</code> at the reading call site.
+          The Phone section is not shown on Android. What each feature does is on the
+          <a href="phone-mirror-android-auto.html">Phone Mirror &amp; Android Auto</a> page.
+        </p>
+        <h3 id="phone-mirror">Phone Mirror</h3>
+        <table>
+          <thead><tr><th>Key</th><th>Name on screen</th><th>Type</th><th>Default</th><th>Range or allowed values</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>scrcpyWirelessAddress</code></td><td>Wireless: Pair a Phone, Forget</td><td>text</td><td>(empty)</td><td><code>address:port</code>, or empty</td><td>The phone last connected over Wi-Fi. OCTAVE reconnects to it by itself; Forget clears it.</td></tr>
+            <tr><td><code>scrcpyDisplaySize</code></td><td>Display Mode</td><td>text</td><td>auto</td><td>Empty (Mirror Phone) or <code>auto</code> (Desktop (DeX)); any other text means <code>auto</code></td><td>Shows the phone's own screen, or a separate desktop the size of OCTAVE's window.</td></tr>
+            <tr><td><code>scrcpyDisplayDpi</code></td><td>Text Size</td><td>int</td><td>0 (Auto)</td><td>0, or 80 to 640 clamped. The slider offers Auto and 120 to 400</td><td>How large things are drawn in desktop mode. Auto follows the phone.</td></tr>
+            <tr><td><code>scrcpyAutoWifi</code></td><td>Stay Wireless After USB</td><td>bool</td><td>false</td><td>true, false</td><td>After a USB session, lets the phone connect without a cable until it restarts.</td></tr>
+            <tr><td><code>scrcpyPhoneScreenOff</code></td><td>Phone Screen Off While Mirroring</td><td>bool</td><td>false</td><td>true, false</td><td>Keeps the phone's own screen dark while it is mirrored. Some phones only dim.</td></tr>
+            <tr><td><code>scrcpyAudioGain</code></td><td>Phone Audio Level</td><td>number</td><td>2.0 (+6&nbsp;dB)</td><td>0.25 to 8.0; clamped. The slider offers -12 to +18&nbsp;dB</td><td>Boosts or trims the phone's sound before OCTAVE's volume. The file holds the gain as a factor, not in dB.</td></tr>
+            <tr><td><code>scrcpyAudioDuckEnabled</code></td><td>Duck Local Music</td><td>bool</td><td>true</td><td>true, false</td><td>Turns OCTAVE's music down while the phone makes sound, such as a navigation prompt.</td></tr>
+            <tr><td><code>scrcpyAudioDuckLevel</code></td><td>Duck Local Music (the slider)</td><td>number</td><td>0.1 (-20&nbsp;dB)</td><td>0.0 to 1.0; clamped. The slider offers -40 to -6&nbsp;dB</td><td>How far the music is turned down. The file holds a factor: 0.1 is a tenth of the level.</td></tr>
+          </tbody>
+        </table>
+        <h3 id="android-auto">Android Auto</h3>
+        <table>
+          <thead><tr><th>Key</th><th>Name on screen</th><th>Type</th><th>Default</th><th>Range or allowed values</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>androidAutoEnabled</code></td><td>Show in Nav Bar</td><td>bool</td><td>false</td><td>true, false</td><td>Shows the Android Auto button in the navigation bar.</td></tr>
+            <tr><td><code>androidAutoBackend</code></td><td>Head Unit</td><td>text</td><td>dhu</td><td>dhu (Google DHU), native (Built-in); anything else means dhu</td><td>Which Android Auto runs: OCTAVE's own, or Google's Desktop Head Unit. The control shows only in a build that has the built-in one.</td></tr>
+            <tr><td><code>androidAutoResolution</code></td><td>Video Size</td><td>text</td><td>1280x720</td><td>800x480, 1280x720, 1920x1080; anything else means 1280x720</td><td>The picture size built-in Android Auto asks the phone for. Applies at the next connection.</td></tr>
+          </tbody>
+        </table>
+        <h3 id="airplay">iPhone</h3>
+        <table>
+          <thead><tr><th>Key</th><th>Name on screen</th><th>Type</th><th>Default</th><th>Range or allowed values</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>airPlayEnabled</code></td><td>AirPlay Receiver</td><td>bool</td><td>false</td><td>true, false</td><td>Lets an iPhone on the same Wi-Fi mirror its screen to OCTAVE.</td></tr>
+            <tr><td><code>airPlayRequirePin</code></td><td>Ask New iPhones for a PIN</td><td>bool</td><td>true</td><td>true, false</td><td>A new iPhone must type the PIN shown on screen, once.</td></tr>
+            <tr><td><code>airPlayTouchEnabled</code></td><td>Touch Through Bluetooth</td><td>bool</td><td>true</td><td>true, false</td><td>Makes OCTAVE a Bluetooth mouse for the iPhone, so touching the picture works.</td></tr>
+            <tr><td><code>airPlayName</code></td><td>Name</td><td>text</td><td>OCTAVE</td><td>Up to 48 characters; empty means OCTAVE</td><td>The name the iPhone lists under Screen Mirroring.</td></tr>
+            <tr><td><code>airPlayResolution</code></td><td>Video Size</td><td>text</td><td>1280x720</td><td>The control offers 1280x720 and 1920x1080; any size from 640x360 to 3840x2160 is used</td><td>The picture size offered to the iPhone. Larger is sharper and uses more CPU.</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="accessories">Accessories</h2>
+        <p>
+          The Accessories section is not shown on Android. The hardware is described on the
+          <a href="hardware-managers.html">Hardware Managers</a> page.
+        </p>
+        <h3 id="esp32">Volume Knob</h3>
+        <table>
+          <thead><tr><th>Key</th><th>Name on screen</th><th>Type</th><th>Default</th><th>Range or allowed values</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>esp32VolumePort</code></td><td>USB Serial Port</td><td>text</td><td>(empty: found automatically)</td><td>A serial port name; not checked</td><td>The port of the knob's USB receiver.</td></tr>
+            <tr><td><code>esp32VolumeEnabled</code></td><td></td><td>bool</td><td>true</td><td>true, false</td><td>Turns the volume knob on. It has no switch; picking a port turns it on.</td></tr>
+            <tr><td><code>esp32VolumeStepSize</code></td><td>Change per Click</td><td>number</td><td>1.0</td><td>0.25 to 10, clamped and rounded to the nearest 0.25. The screen offers 0.25, 0.5, 1, 2 and 5</td><td>How many percent the volume moves for each click of the knob.</td></tr>
+            <tr><td><code>esp32LedSleepEnabled</code></td><td>Keep LEDs on (reversed)</td><td>bool</td><td>true</td><td>true, false</td><td>Lets the knob's LEDs go dark after 5 seconds idle. The switch on screen shows the opposite: Keep LEDs on is <code>false</code> here.</td></tr>
+            <tr><td><code>esp32LedColorMode</code></td><td>Color Mode</td><td>text</td><td>theme</td><td>theme (Theme Colors), static (Static Color); anything else refused</td><td>The LEDs follow the theme, or stay one colour.</td></tr>
+            <tr><td><code>esp32LedStaticColor</code></td><td>Static Color</td><td>text</td><td>#00FFFF</td><td>A colour as <code>#RRGGBB</code>; not checked</td><td>The colour of the LEDs in Static Color mode.</td></tr>
+          </tbody>
+        </table>
+        <h3 id="imu">IMU Sensor</h3>
+        <table>
+          <thead><tr><th>Key</th><th>Name on screen</th><th>Type</th><th>Default</th><th>Range or allowed values</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>imuEnabled</code></td><td>IMU Sensor</td><td>bool</td><td>true</td><td>true, false</td><td>Turns the motion sensor (pitch, roll, heading, G-force, altitude) on.</td></tr>
+            <tr><td><code>sensorDecimalPlaces</code></td><td>Decimal Places</td><td>int</td><td>1</td><td>0 to 4; clamped</td><td>How many decimal places the Sensors page shows.</td></tr>
+            <tr><td><code>sensorEmitRate</code></td><td>Update Rate</td><td>int</td><td>60</td><td>10 to 120; clamped. The slider moves in steps of 5</td><td>How many times a second the sensor readings update. Higher is smoother and uses more CPU.</td></tr>
+            <tr><td><code>sensorShowPitch</code></td><td>Visible Cards: Pitch</td><td>bool</td><td>true</td><td>true, false</td><td>Shows the pitch card on the Sensors page.</td></tr>
+            <tr><td><code>sensorShowRoll</code></td><td>Visible Cards: Roll</td><td>bool</td><td>true</td><td>true, false</td><td>Shows the roll card.</td></tr>
+            <tr><td><code>sensorShowHeading</code></td><td>Visible Cards: Heading</td><td>bool</td><td>true</td><td>true, false</td><td>Shows the heading card.</td></tr>
+            <tr><td><code>sensorShowGForce</code></td><td>Visible Cards: G-Force</td><td>bool</td><td>true</td><td>true, false</td><td>Shows the G-force card.</td></tr>
+            <tr><td><code>sensorShowAltitude</code></td><td>Visible Cards: Altitude</td><td>bool</td><td>true</td><td>true, false</td><td>Shows the altitude card.</td></tr>
+            <tr><td><code>sensorShowTemperature</code></td><td>Visible Cards: Temperature</td><td>bool</td><td>true</td><td>true, false</td><td>Shows the temperature card.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          A program reads the six card switches together as <code>settingsManager.sensorCards</code>, a map from
+          <code>Pitch</code>, <code>Roll</code>, <code>Heading</code>, <code>GForce</code>, <code>Altitude</code> and
+          <code>Temperature</code> to on or off. The units of the Sensors page are under <a href="#display">Display</a>
+          &gt; Units.
+        </p>
+        <h3 id="gesture">Gesture Sensor</h3>
+        <table>
+          <thead><tr><th>Key</th><th>Name on screen</th><th>Type</th><th>Default</th><th>Range or allowed values</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>gestureSensorEnabled</code></td><td>Gesture Sensor</td><td>bool</td><td>true</td><td>true, false</td><td>Turns the hand-gesture sensor on.</td></tr>
+            <tr><td><code>gestureVolumeStep</code></td><td>Volume per Swipe</td><td>int</td><td>5</td><td>1 to 100; clamped</td><td>How many percent a volume gesture moves the volume.</td></tr>
+            <tr><td><code>gestureCooldown</code></td><td>Pause Between Gestures</td><td>int</td><td>300</td><td>100 to 2000; clamped</td><td>The shortest time between two gestures, in milliseconds.</td></tr>
+            <tr><td><code>gestureMapping</code></td><td>Mapping</td><td>object</td><td>See below</td><td>Gesture name to action name; not checked</td><td>What each gesture does. Reset to Defaults puts the table below back.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          The actions are <code>next_track</code>, <code>previous_track</code>, <code>volume_up</code>,
+          <code>volume_down</code>, <code>play_pause</code>, <code>mute_toggle</code> and <code>none</code> (Disabled).
+          The default mapping:
         </p>
         <table>
-          <thead>
-            <tr><th>JSON Key</th><th>Type</th><th>QML default</th><th>Written by</th><th>Read by</th><th>Description</th></tr>
-          </thead>
+          <thead><tr><th>Gesture</th><th>Default action</th></tr></thead>
           <tbody>
-            <tr><td>rpm_shift_light_enabled</td><td>bool</td><td>true</td><td>shift-light editor (<code>obd/ShiftLightEditor.qml</code>)</td><td>ShiftLightManager</td><td>Shift light on/off</td></tr>
-            <tr><td>rpm_show_on_home_card</td><td>bool</td><td>true</td><td>shift-light editor (<code>obd/ShiftLightEditor.qml</code>)</td><td>ShiftLightManager, shift-light editor</td><td>Show the shift light on the home RPM card</td></tr>
-            <tr><td>rpm_max_rpm</td><td>int</td><td>8000</td><td>shift-light editor (<code>obd/ShiftLightEditor.qml</code>)</td><td>ShiftLightManager, shift-light editor</td><td>Redline used by the shift-light stages; the high bound given to migrated legacy <code>{rpm}</code> flags</td></tr>
-            <tr><td>rpm_flags</td><td>string (JSON array)</td><td>"[]"</td><td><code>shiftLightManager.setFlags()</code> (shift-light editor)</td><td>ShiftLightManager</td><td>Shift-light stage thresholds and colours</td></tr>
-            <tr><td>rpm_fullscreen_flash_opacity</td><td>real</td><td>0.5</td><td>none (read only)</td><td>ShiftLightManager</td><td>Opacity of the full-screen shift flash (fallback for flags without their own)</td></tr>
-            <tr><td>rpm_shift_light_size</td><td>real</td><td>0.5</td><td>none (read only)</td><td>ShiftLightManager</td><td>Shift-light size factor</td></tr>
-            <tr><td>rpm_glow_size</td><td>real</td><td>0.6</td><td>none (read only)</td><td>ShiftLightManager</td><td>Glow radius factor</td></tr>
-            <tr><td>rpm_glow_intensity</td><td>real</td><td>0.6</td><td>none (read only)</td><td>ShiftLightManager</td><td>Glow intensity</td></tr>
-            <tr><td>rpm_color_transition_speed</td><td>int</td><td>100</td><td>none (read only)</td><td>ShiftLightManager</td><td>Colour transition speed in ms</td></tr>
-            <tr><td>rpm_pulse_enabled</td><td>bool</td><td>false</td><td>none (read only)</td><td>ShiftLightManager</td><td>Pulse the shift light at redline</td></tr>
-            <tr><td>obdCardStyleCircular</td><td>bool</td><td>false</td><td><code>save_obd_card_style_circular()</code> (OBD page; OBD widget)</td><td><code>settingsManager.obdCardStyleCircular</code> property (OBDMenu, OBD widget)</td><td>Circular gauges instead of cards on the OBD grid</td></tr>
-            <tr><td>gaugeTempUnit</td><td>string</td><td>"C"</td><td><code>save_gauge_temp_unit()</code> (OBD page, "Temperatures in °F"; "C" | "F")</td><td><code>appcore.cpp</code> &rarr; <code>parameterCatalog.setDisplayUnits</code></td><td>Unit of every temperature on the OBD cards, home cards and dashboards (incl. the IMU's BARO_TEMP); the Sensors page keeps <code>sensorTempUnit</code>. Trip History keeps the recorded °C</td></tr>
-            <tr><td>gaugeSpeedUnit</td><td>string</td><td>"mph"</td><td><code>save_gauge_speed_unit()</code> (OBD page, "Speed in km/h"; "mph" | "km/h")</td><td><code>appcore.cpp</code> &rarr; <code>parameterCatalog.setDisplayUnits</code></td><td>Unit of SPEED on the gauges and dashboards; ALTITUDE there follows <code>sensorAltitudeUnit</code></td></tr>
-            <tr><td>lastOBDPage</td><td>string</td><td>""</td><td><code>OBDHome.pushSubpage()</code></td><td>BottomBar, OBDHome</td><td>OBD sub-page the nav button reopens</td></tr>
-            <tr><td>lastSensorPage</td><td>string</td><td>""</td><td>SensorHome (after a successful push); BottomBar clears it when the page fails to load</td><td>BottomBar, SensorHome</td><td>Sensor sub-page the nav button reopens</td></tr>
-            <tr><td>activeDashboard</td><td>string</td><td>"grid"</td><td>&mdash;</td><td>&mdash;</td><td>No longer read (the OBD page showed this dashboard until 2026-11-24) (<a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>)</td></tr>
-            <tr><td>homeScreen</td><td>string</td><td>""</td><td>Settings &gt; Display &gt; Home Screen</td><td>MainMenu</td><td>The hand-built Home screen to show (<code>cockpit</code>, <code>glass</code>, <code>trail</code>, <code>retro</code>, <code>rings</code>, <code>telemetry</code>; <span class="file-path">frontend/home/HomeScreens.js</span>); "" shows the dashboard <code>dashboardManager.homeDashboardId</code> names</td></tr>
+            <tr><td><code>RIGHT</code></td><td><code>next_track</code></td></tr>
+            <tr><td><code>LEFT</code></td><td><code>previous_track</code></td></tr>
+            <tr><td><code>UP</code>, <code>CLOCKWISE</code></td><td><code>volume_up</code></td></tr>
+            <tr><td><code>DOWN</code>, <code>COUNTER-CLOCKWISE</code></td><td><code>volume_down</code></td></tr>
+            <tr><td><code>FORWARD</code>, <code>WAVE</code></td><td><code>play_pause</code></td></tr>
+            <tr><td><code>BACKWARD</code></td><td><code>mute_toggle</code></td></tr>
           </tbody>
         </table>
-        <p>The seven "read only" <code>rpm_*</code> keys have no writer in the current QML; they take effect only if added to the JSON by hand.</p>
 
-        <!-- In-memory -->
-        <h2 id="in-memory">In-Memory Only</h2>
+        <h2 id="device">Device</h2>
         <table>
-          <thead>
-            <tr><th>Property</th><th>Type</th><th>Initial value</th><th>Description</th></tr>
-          </thead>
+          <thead><tr><th>Key</th><th>Name on screen</th><th>Type</th><th>Default</th><th>Range or allowed values</th><th>What it does</th></tr></thead>
           <tbody>
-            <tr><td><code>currentVolume</code> / <code>setCurrentVolume()</code></td><td>int</td><td><code>VolumeController::toPercentStatic(startUpVolume)</code> = <code>round(sqrt(startUpVolume) × 100)</code></td><td>Unified 0–100 volume shared by local media, phone mirror and the ESP32 LEDs. <code>VolumeController.applyVolume()</code> updates it during normal volume changes; it is also initialized on load/reset and is never written to the file</td></tr>
+            <tr><td><code>deviceName</code></td><td>Device: Name</td><td>text</td><td>Default Device</td><td>Any text</td><td>The name of this OCTAVE, shown to other devices.</td></tr>
+            <tr><td><code>homeVehicleCard</code></td><td>Vehicle: Show on Home</td><td>bool</td><td>true</td><td>true, false</td><td>Shows the picture of your vehicle beside the readings on the Classic Home.</td></tr>
+            <tr><td><code>serviceEnabled</code></td><td>Developer: Service</td><td>bool</td><td>false</td><td>true, false</td><td>Lets other programs, and devices you pair, read and control OCTAVE. Read at startup.</td></tr>
+            <tr><td><code>serviceTokens</code></td><td>Developer: Paired devices</td><td>list</td><td>[]</td><td>Written by OCTAVE only</td><td>The devices you have paired and what each may do. Revoke removes one.</td></tr>
           </tbody>
         </table>
+        <p>
+          What turns the <a href="utilities.html#service-protocol">service</a> on, and who is paired, change only
+          on this screen or in the file: the settings calls a program uses refuse these keys. Your dashboards and
+          your own vehicle models are kept in folders of their own beside the settings file.
+        </p>
 
-        <!-- Persistence -->
-        <h2 id="persistence">Persistence and File Format</h2>
-        <p>One JSON object, 4-space indented, containing the 96 default keys (nested objects for <code>obdParameters</code>, <code>gestureMapping</code>, <code>customThemes</code>, <code>settingsMenuVisibility</code>, <code>expandedCards</code>) plus any QML-only keys. Writes are:</p>
-        <ol class="steps">
-          <li>Validated once into the in-memory copy (types checked against the defaults; unknown keys kept)</li>
-          <li>Coalesced behind a 500&nbsp;ms single-shot timer, flushed at quit</li>
-          <li>Written through <code>QSaveFile</code> to a temp file in the same directory, fsynced and renamed over the real file in one step by <code>QSaveFile::commit()</code>; on failure the existing file is left untouched</li>
-          <li><code>chmod 600</code> on Unix</li>
-        </ol>
-        <p>On load, a missing file is created from the defaults, a corrupt file is moved to <code>settingsConfigure.json.corrupt</code> and restored from the last known-good <code>settingsConfigure.json.bak</code> (defaults only if that fails too), and wrong-typed values are replaced individually. Keys of removed features (<code>spotifyClientId</code>, <code>spotifyClientSecret</code>, <code>mediaSource</code>, <code>scrcpyAudioEnabled</code>) are deleted from the file at startup, together with the old Spotify login token. Full detail: <a href="settings-manager.html#json-persistence">Settings Manager: JSON Persistence and Validation</a>.</p>
+        <h2 id="generic">Keys With No Control in Settings</h2>
+        <p>
+          Nothing in Settings changes these. Some are for you to set in the file, some OCTAVE keeps for itself, and some
+          are left over from features that have gone.
+        </p>
+        <h3 id="hand-edited">Set by hand</h3>
+        <p>
+          Edit the file with OCTAVE closed. Each of these is read by the app today.
+        </p>
+        <table>
+          <thead><tr><th>Key</th><th>Name on screen</th><th>Type</th><th>Default</th><th>Range or allowed values</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>androidAutoCertPath</code></td><td></td><td>text</td><td>(empty)</td><td>The path of a certificate file (PEM)</td><td>The head-unit certificate for built-in Android Auto. Empty means <code>headunit.crt</code> and <code>headunit.key</code> in the <code>android-auto</code> folder beside the settings file. See <a href="phone-mirror-android-auto.html#aa-native-cert">the head-unit certificate</a>.</td></tr>
+            <tr><td><code>androidAutoFps</code></td><td></td><td>int</td><td>30</td><td>60 or more means 60, anything less means 30</td><td>Frames per second built-in Android Auto asks the phone for.</td></tr>
+            <tr><td><code>androidAutoDpi</code></td><td></td><td>int</td><td>160</td><td>80 to 400; clamped when used</td><td>How large built-in Android Auto draws its interface.</td></tr>
+            <tr><td><code>serviceWebRoot</code></td><td></td><td>text</td><td>(empty)</td><td>A folder</td><td>Serves that folder as the page at the service's address instead of the built-in one. Read at startup; the <code>--web-root</code> option comes first.</td></tr>
+            <tr><td><code>serviceLoopbackOpen</code></td><td></td><td>bool</td><td>true</td><td>true, false</td><td>Programs on this device use the service without pairing. Read at startup.</td></tr>
+            <tr><td><code>esp32AutoReconnect</code></td><td></td><td>bool</td><td>true</td><td>true, false</td><td>Reconnects to the volume knob by itself after it disappears.</td></tr>
+            <tr><td><code>obdCardStyleCircular</code></td><td></td><td>bool</td><td>false</td><td>true, false</td><td>Draws the Live Data cards as round gauges.</td></tr>
+            <tr><td><code>show3DButtonTilt</code></td><td></td><td>bool</td><td>false</td><td>true, false</td><td>Tilts the previous, play and next buttons of the Media Room when pressed.</td></tr>
+            <tr><td><code>buttonTiltDuration</code></td><td></td><td>int</td><td>200</td><td>50 to 500; clamped</td><td>How long that tilt takes, in milliseconds.</td></tr>
+            <tr><td><code>show3DAlbumPreview</code></td><td></td><td>bool</td><td>false</td><td>true, false</td><td>Shows the previous and next album covers beside the art in the Media Room.</td></tr>
+            <tr><td><code>sideCardOpacity</code></td><td></td><td>number</td><td>0.4</td><td>0.1 to 1.0; clamped</td><td>How solid those side covers are.</td></tr>
+            <tr><td><code>sideCardAngle</code></td><td></td><td>int</td><td>30</td><td>5 to 60; clamped</td><td>How far the side covers are turned, in degrees.</td></tr>
+            <tr><td><code>textScrollSpeed</code></td><td></td><td>int</td><td>5000</td><td>1000 to 10000; clamped</td><td>How long a title that does not fit takes to scroll past, in milliseconds.</td></tr>
+            <tr><td><code>homeOBDParameters</code></td><td></td><td>list</td><td>SPEED, RPM, COOLANT_TEMP, CONTROL_MODULE_VOLTAGE</td><td>Up to 8 reading ids, no duplicates</td><td>The readings on the Classic Home, in order.</td></tr>
+            <tr><td><code>rpm_fullscreen_flash_opacity</code></td><td></td><td>number</td><td>0.5</td><td>Not checked</td><td>How strong the full-screen shift flash is for a flag that does not set its own.</td></tr>
+            <tr><td><code>rpm_shift_light_size</code></td><td></td><td>number</td><td>0.5</td><td>Not checked</td><td>Size of the shift light on the Classic Home's RPM card.</td></tr>
+            <tr><td><code>rpm_glow_size</code></td><td></td><td>number</td><td>0.6</td><td>Not checked</td><td>Size of the glow around that light.</td></tr>
+            <tr><td><code>rpm_glow_intensity</code></td><td></td><td>number</td><td>0.6</td><td>Not checked</td><td>Strength of that glow.</td></tr>
+            <tr><td><code>rpm_color_transition_speed</code></td><td></td><td>int</td><td>100</td><td>Not checked</td><td>How fast that light changes colour, in milliseconds.</td></tr>
+            <tr><td><code>rpm_pulse_enabled</code></td><td></td><td>bool</td><td>false</td><td>true, false</td><td>Makes that light pulse.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          The <code>rpm_*</code> keys have no default in the file: add the key to change it.
+        </p>
+        <h3 id="playback-resume">Kept by OCTAVE: music, phone and car</h3>
+        <p>
+          OCTAVE writes these as you use it. There is no reason to edit them.
+        </p>
+        <table>
+          <thead><tr><th>Key</th><th>Name on screen</th><th>Type</th><th>Default</th><th>Range or allowed values</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>lastPlayedSong</code></td><td></td><td>text</td><td>(empty)</td><td>A file name</td><td>The song to pick up again at the next start.</td></tr>
+            <tr><td><code>lastPlayedPosition</code></td><td></td><td>int</td><td>0</td><td>Milliseconds</td><td>Where in that song to pick up.</td></tr>
+            <tr><td><code>lastPlayedPlaylist</code></td><td></td><td>text</td><td>(empty)</td><td>A playlist name</td><td>The playlist that was open.</td></tr>
+            <tr><td><code>lastShuffleState</code></td><td></td><td>bool</td><td>false</td><td>true, false</td><td>Whether shuffle was on. Used only with Remember Shuffle.</td></tr>
+            <tr><td><code>mediaLastSource</code></td><td></td><td>text</td><td>local</td><td>The name of a music source, such as local, phone or androidauto</td><td>What was playing the music when OCTAVE closed. After <code>androidauto</code>, Autoplay on Startup leaves the music to Android Auto.</td></tr>
+            <tr><td><code>mediaLastPlaying</code></td><td></td><td>bool</td><td>false</td><td>true, false</td><td>Whether that source was playing.</td></tr>
+            <tr><td><code>phoneMirrorUsed</code></td><td></td><td>bool</td><td>false</td><td>true, false</td><td>A phone has been mirrored on this install. Until it is true, Home does not start mirroring by itself.</td></tr>
+            <tr><td><code>airPlayTouchScale</code></td><td></td><td>number</td><td>600.0</td><td>Set by touch calibration</td><td>How far the Bluetooth mouse must move to cross the iPhone's screen.</td></tr>
+            <tr><td><code>albumArtColors</code></td><td></td><td>text holding JSON</td><td>(empty)</td><td>Written by the music player only</td><td>The last colours taken from album art, so the Album Art Capture theme is right from the first frame.</td></tr>
+            <tr><td><code>supportedOBDParameters</code></td><td></td><td>list</td><td>[]</td><td>Reading ids</td><td>The readings the last car said it supports. Nothing on screen reads it; it is there for other programs.</td></tr>
+          </tbody>
+        </table>
+        <h3 id="ui-state">Kept by OCTAVE: where you were</h3>
+        <table>
+          <thead><tr><th>Key</th><th>Name on screen</th><th>Type</th><th>Default</th><th>Range or allowed values</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>lastSettingsSection</code></td><td></td><td>text</td><td>deviceSettings</td><td>displaySettings, mediaSettings, obdSettings, phoneSettings, accessoriesSettings, deviceSettings, about; anything else refused</td><td>The Settings section to open next time.</td></tr>
+            <tr><td><code>lastOBDPage</code></td><td></td><td>text</td><td>(empty)</td><td>A page file name; not checked</td><td>The OBD page the OBD button opens again. No default in the file.</td></tr>
+            <tr><td><code>lastSensorPage</code></td><td></td><td>text</td><td>(empty)</td><td>A page file name; not checked</td><td>The Sensors page the Sensors button opens again. No default in the file.</td></tr>
+            <tr><td><code>expandedCards</code></td><td></td><td>object</td><td>{}</td><td>Card id to true or false</td><td>Which collapsible cards in Settings are open.</td></tr>
+            <tr><td><code>settingsMenuVisibility</code></td><td>Toggle View</td><td>object</td><td>All seven sections true</td><td>Section id (as in <code>lastSettingsSection</code>) to true or false; a missing section is shown</td><td>Which sections Settings shows. It does have a control, outside Settings: hold the Settings button in the navigation bar. See <a href="bottom-bar.html">Bottom Bar</a>.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          Four older section names are still accepted in <code>lastSettingsSection</code> from an old file:
+          <code>androidAutoSettings</code>, <code>phoneMirrorSettings</code>, <code>volumeKnobSettings</code> and
+          <code>gestureSensorSettings</code>.
+        </p>
+        <h3 id="unused">Not used any more</h3>
+        <p>
+          These are still stored, and a program can still read and set them, but nothing in the app acts on them.
+          Changing one has no effect.
+        </p>
+        <table>
+          <thead><tr><th>Key</th><th>Name on screen</th><th>Type</th><th>Default</th><th>Range or allowed values</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>homeStyle</code></td><td></td><td>text</td><td>dashboard</td><td>dashboard, classic; not checked</td><td>Deprecated: use <code>homeScreen</code> = <code>classic</code>. An old file with <code>classic</code> here and no <code>homeScreen</code> still gets the Classic Home; picking any Home in Settings sets it back to <code>dashboard</code>. No default in the file.</td></tr>
+            <tr><td><code>phoneMirrorEnabled</code></td><td></td><td>bool</td><td>false</td><td>true, false</td><td>Not used any more: phone mirroring is on wherever it can run. Read once at startup, to set <code>phoneMirrorUsed</code> on an older install.</td></tr>
+            <tr><td><code>scrcpyBitRateUsb</code></td><td></td><td>int</td><td>16</td><td>2 to 40; clamped</td><td>Not used any more: the picture quality of phone mirroring is automatic.</td></tr>
+            <tr><td><code>scrcpyBitRateWifi</code></td><td></td><td>int</td><td>8</td><td>2 to 40; clamped</td><td>Not used any more, for the same reason.</td></tr>
+            <tr><td><code>scrcpyBitRateAuto</code></td><td></td><td>bool</td><td>true</td><td>true, false</td><td>Not used any more, for the same reason.</td></tr>
+            <tr><td><code>albumArtTransition</code></td><td></td><td>text</td><td>Crossfade</td><td>Crossfade, Slide, Vinyl Lift, Dissolve, Flip, Coverflow, Conveyor, Stack, Depth, Swing; anything else refused</td><td>Not used any more: the Media Room has one way of changing the art.</td></tr>
+            <tr><td><code>roundedAlbumArt</code></td><td></td><td>bool</td><td>true</td><td>true, false</td><td>Not used any more: the album art always has rounded corners.</td></tr>
+            <tr><td><code>albumArtCornerRadius</code></td><td></td><td>int</td><td>16</td><td>2 to 32; clamped</td><td>Not used any more, for the same reason.</td></tr>
+            <tr><td><code>showAlbumArtShadow</code></td><td></td><td>bool</td><td>true</td><td>true, false</td><td>Not used any more: the album art always has its shadow.</td></tr>
+            <tr><td><code>settingsLayoutStyle</code></td><td></td><td>text</td><td>Sidebar</td><td>Carousel, Sidebar, Hub, Dashboard; anything else refused</td><td>Not used any more: Settings has one layout.</td></tr>
+            <tr><td><code>fuelTankCapacity</code></td><td></td><td>number</td><td>15.0</td><td>Not checked</td><td>Not used any more: nothing reads the tank size.</td></tr>
+            <tr id="obd-parameters"><td><code>obdParameters</code></td><td></td><td>object</td><td>123 reading ids, 20 of them true</td><td>Reading id to true or false</td><td>Not used any more: OCTAVE asks the car for <a href="obd-manager.html#watcher-system">what is on screen</a>, not for a fixed list.</td></tr>
+            <tr><td><code>directoryHistory</code></td><td></td><td>list</td><td>[]</td><td>Up to 10 folders</td><td>Not used any more: it held recently used music folders.</td></tr>
+            <tr><td><code>pinnedSettings</code></td><td></td><td>list</td><td>[]</td><td>Ids from the settings registry</td><td>Not used any more by the app's own screen: see below.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          <strong>The settings registry.</strong> <code>settingsManager</code> also carries a list of 30 settings with a
+          label, a kind of control and a range each, and <code>pinnedSettings</code> holds the ones a user has pinned
+          from it. OCTAVE's own screen uses neither. They are there for other frontends that want to build a
+          quick-settings panel; the <a href="api-reference.html">API reference</a> has the calls.
+        </p>
 
-        <p><strong>Method names:</strong> this page uses the camelCase names of the manager methods (<code>nextTrack</code>). The older snake_case name of each (<code>next_track</code>) still works through protocol&nbsp;4 and goes in protocol&nbsp;5; the <a href="api-reference.html">API reference</a> lists them.</p>
+        <h2 id="persistence">What Is Not in the File</h2>
+        <p>
+          <span id="in-memory"></span>The volume you are listening at is not saved: OCTAVE starts at Startup Volume
+          every time, and <code>settingsManager.currentVolume</code> exists only while it runs. Keys of features that
+          have been removed are deleted from the file at startup. Everything else about the file (the backup copy,
+          what happens to a damaged file, when changes are written) is on the
+          <a href="settings-manager.html">Settings Manager</a> page.
+        </p>
 
         <div class="related-pages">
           <h3>Related Pages</h3>
           <a href="settings-manager.html" class="related-link">Settings Manager</a>
           <a href="settings-ui.html" class="related-link">Settings UI</a>
-          <a href="signals-slots-reference.html" class="related-link">Signals &amp; Slots Reference</a>
           <a href="obd-manager.html" class="related-link">OBD Manager</a>
-          <a href="hardware-managers.html" class="related-link">Hardware Managers</a>
+          <a href="media-manager.html" class="related-link">Media Manager</a>
           <a href="phone-mirror-android-auto.html" class="related-link">Phone Mirror &amp; Android Auto</a>
-          <a href="architecture.html" class="related-link">Architecture Overview</a>
+          <a href="hardware-managers.html" class="related-link">Hardware Managers</a>
+          <a href="api-reference.html" class="related-link">API Reference</a>
         </div>
       </div>
     </div>

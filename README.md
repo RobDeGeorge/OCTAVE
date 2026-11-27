@@ -216,7 +216,7 @@ Grab the file for your platform from **[Releases](https://github.com/RobDeGeorge
 <summary>Platform notes</summary>
 
 - **Linux:** Ubuntu 22.04+, Debian, Mint, Fedora, openSUSE and Arch. Arch may need `sudo pacman -S fuse2`, or run `./OCTAVE-*.AppImage --appimage-extract-and-run`.
-- **Android:** each release APK is signed with its own key, so uninstall the previous version before updating.
+- **Android:** releases from 0.9.4 on share one signing key and update in place. Coming from 0.9.3 or older, uninstall the old version first.
 
 </details>
 

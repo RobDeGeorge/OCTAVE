@@ -199,7 +199,7 @@ removals were held until hardware validation of phases 1–2 and have since been
 pinned hashes) and to every packaging target in `BUILD.md`. Delete the v4l2 / window-grab
 code, the `scrcpyPath` / `scrcpyVideoDevice` settings, and the dead classes. Flip
 `phoneMirrorNative` to the only path and remove the flag. Update
-`wiki/phone-mirror-android-auto.html`, `settings-reference.html`, `signals-slots-reference.html`, `building.html`.
+`wiki/phone-mirror-android-auto.html`, `settings-reference.html`, `building.html`.
 
 **Phase 4 — hardware validation.** The Pi agent re-runs the full matrix from the v4l2
 work: idle first paint, sustained scroll, touch accuracy at odd sizes, multitouch pinch,

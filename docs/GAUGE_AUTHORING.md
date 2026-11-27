@@ -24,7 +24,7 @@ You do **not** wire signals yourself. `src/appcore.cpp` feeds every decoded valu
 (and the IMU readings) into the C++ `paramStore`, keyed by a short `paramId`
 (e.g. `"RPM"`, `"SPEED"`, `"COOLANT_TEMP"`). Any QML that binds
 `App.OBDParameterModel.liveValue(paramId)` gets live, animated updates for
-free: it reads `paramStore[paramId]` (or the dashboard editor's demo sweep),
+free: it reads `paramStore[paramId]` (or the model's demo sweep while `simulationActive` is set),
 re-evaluates only when that id changes, and is `undefined` until the first
 reading and at shutdown.
 
@@ -223,7 +223,7 @@ Rolling history line showing recent values. Use when motion matters more than ab
 | `fillBelow`          | bool   | `true`                                   | Area fill under the line.                                      |
 | `showHeader`         | bool   | `true`                                   | Title + current value strip above the plot.                    |
 | `autoScale`          | bool   | `false`                                  | If true, y-axis rescales to window's min/max instead of PID min/max. Use for small-swing values (fuel trim, timing) where full PID range dwarfs real motion. |
-| `lineColor`, `fillColor`, `labelColor`, `valueColor`, `backgroundColor` | color | theme | Manual overrides. `fillColor` defaults to `lineColor` at 22 % alpha, so overriding `lineColor` (the editor's Color row) recolors line and area together. |
+| `lineColor`, `fillColor`, `labelColor`, `valueColor`, `backgroundColor` | color | theme | Manual overrides. `fillColor` defaults to `lineColor` at 22 % alpha, so overriding `lineColor` (the browser editor's Color row) recolors line and area together. |
 
 Sampling only runs while the item is `visible`. Samples are right-aligned — the newest value sits flush with the right edge and older values scroll left as new ones come in.
 
@@ -290,9 +290,7 @@ text centred, the progress bar at the bottom with the times): Home's music panel
 ### 3.11 `MediaControlsWidget` *(self-binding, lives in `frontend/dashboards/widgets/`)*
 
 Previous / play-pause / next transport buttons driving the active media source
-(same source rule as `NowPlayingWidget`). Interactive in rendered dashboards;
-inside the editor canvas the selection/drag layer sits on top, so taps select
-the cell instead of skipping tracks. No editable props.
+(same source rule as `NowPlayingWidget`). Interactive in rendered dashboards. No editable props.
 
 ---
 
@@ -312,12 +310,12 @@ plot or the vehicle's shift-light rules.
 | `warnAbove`, `critAbove`, ... | real | `NaN` | The shared alerts (§3). Each lit segment past `warnAbove` / `critAbove` takes that level's colour, like a shift-light strip, and has a dim outline when unlit. |
 | `showLabel`, `showValue` | bool | `true` | Header title / numeric value. |
 | `decimals` | int | `0` | 0–4 decimal places. |
-| `fillColor`, `trackColor`, `warnColor`, `critColor`, `labelColor`, `valueColor` | color | theme | The editor's Color row overrides `fillColor`. |
+| `fillColor`, `trackColor`, `warnColor`, `critColor`, `labelColor`, `valueColor` | color | theme | The browser editor's Color row overrides `fillColor`. |
 | `hasValue` | readonly bool | finite `value` | Missing and non-finite samples show `--`, fill no segments and never activate the warning. A real zero displays `0`. |
 
 The usual `paramId`, `title`, `unit`, `min`, `max`, and manual `value`
 overrides apply. Thresholds and range overrides in JSON use the PID's native
-unit and follow the user's unit preference through the renderer/editor.
+unit and follow the user's unit preference through the renderer.
 An invalid range (`max <= min`, or non-finite bounds) fills no segments.
 
 ### 3.13 `ClockWidget` *(self-binding)*
@@ -330,13 +328,10 @@ preference and keeps showing time when the bottom-bar clock is hidden.
 | --- | --- | --- | --- |
 | `showDate` | bool | `true` | Abbreviated weekday, month and day beneath the time. |
 | `showSeconds` | bool | `false` | Per-widget seconds display. |
-| `valueColor`, `labelColor` | color | theme | Time / date tint. The editor exposes `valueColor`. |
+| `valueColor`, `labelColor` | color | theme | Time / date tint. The browser editor's Color row sets `valueColor`. |
 
 Updates once a second while visible and refreshes immediately on becoming
 visible. Time and date fit their allotted width and height.
-
-The expanded editor palette scrolls within 90% of the window height and
-uses 2–4 columns according to available width.
 
 ### 3.14 `VehicleWidget` *(self-binding)*
 
@@ -347,7 +342,7 @@ vehicle chosen it says so; an added model with no picture yet shows its name.
 | Property | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `showFrame` | bool | `true` | The reading cards' box around the picture. |
-| `frameColor`, `labelColor`, `valueColor` | color | theme | The editor exposes `frameColor`. |
+| `frameColor`, `labelColor`, `valueColor` | color | theme | The browser editor's Color row sets `frameColor`. |
 
 ### 3.15 `PhoneMirrorWidget` *(self-binding)*
 
@@ -382,7 +377,7 @@ two readings on each side.
 | `showFrame` | bool | `true` | The reading cards' box around it. |
 | `cornerRadius` | real | 8 dp | The frame's corners; the live picture is rounded to match. |
 | `drivesDisplaySize` | bool | `true` | Off: a running session is shown as it is (letterboxed) instead of the phone's display being redrawn for this widget's shape; only a first start takes its size. The Media Room's art corner sets it off (since 2026-11-26), so moving between pages never restarts the session. Not in the catalog's `editableProps`. |
-| `frameColor`, `labelColor`, `valueColor` | color | theme | The editor exposes `frameColor`. |
+| `frameColor`, `labelColor`, `valueColor` | color | theme | The browser editor's Color row sets `frameColor`. |
 
 ### 3.16 `ShiftLightWidget` *(self-binding)*
 
@@ -473,7 +468,7 @@ The placements follow the cells' rules (in the grid, no overlaps; a missing
 or colliding one goes to the nearest free spot). Without `layouts`, a
 portrait screen gets a layout derived from the landscape one by fixed rules
 (`dashboardManager.derivePortrait`: the grid turned, every widget its
-on-screen shape, reading order), the same every time. The editor's
+on-screen shape, reading order), the same every time. The browser editor's
 **Portrait** button derives it once and from then on edits and saves it.
 Write `schema: 1` for a spec without `layouts`, so builds before 2 read it;
 every built-in has a portrait layout. JSON Schema:
@@ -494,17 +489,15 @@ every built-in has a portrait layout. JSON Schema:
   so a small gauge can't go red unnoticed (warnings stay amber on the gauge
   itself). `false` turns the strip off; absent = on.
 - `showWhen` — `{paramId, above, below}` in the PID's own unit, at least one
-  limit: on the OBD page with a car connected, the dashboard comes up by
-  itself when the value passes the limit, and the one before comes back once
-  it has stopped holding for 5 s, unless the user picked another meanwhile.
-  It fires once per crossing (`frontend/dashboards/AutoShowRules.qml`); the
-  rule's PID is polled while the page is on screen.
+  limit. The key is kept in the file (`normalizeSpec`; the browser editor can
+  set it), but nothing in the app acts on it.
 - `thumbnail` — a picture of the dashboard for sharing, a JPEG or PNG data
-  URL of at most 96 KB. The editor takes one on Done
-  (`dashboardManager.thumbnailFromImage`); export carries it.
+  URL of at most 96 KB. `dashboardManager.thumbnailFromImage` makes one from
+  a QML image, but nothing in the app calls it. Export carries the key; the
+  browser editor drops it on save, as it would show the old layout.
 
-**Per-widget overrides are just `props` keys.** The editor's Label & Range and
-Color sections write ordinary props — a cell that renames, rescales and
+**Per-widget overrides are just `props` keys.** The browser editor's Title / Unit, range and
+Color options write ordinary props — a cell that renames, rescales and
 recolors its gauge looks like this:
 
 ```json
@@ -524,15 +517,15 @@ or the live theme (colors). Which keys a widget accepts is declared in its
 `WidgetCatalog` entry (`labelProps`, `rangeProps`, `colorProps`,
 `editableProps`, `specProps` — see §7).
 
-**Only those keys reach the widget.** The renderer and the editor canvas
-apply a cell's `props` through `frontend/dashboards/CellProps.js`: a key the
+**Only those keys reach the widget.** The renderer
+applies a cell's `props` through `frontend/dashboards/CellProps.js`: a key the
 catalog does not name for that type is ignored (with a `console.warn` when
 it is some other property of the QML item), so a dashboard file cannot hide
 a gauge (`visible`), resize it (`width`) or pin it to a made-up reading
 (`value`). Each key is applied on its own: a value of the wrong type is
 logged and that option stays at its default, and the rest still apply.
 
-Per cell: `type` matches a widget registered in `WidgetCatalog` — the gauge primitives in `frontend/gauges/` (`CircularGauge`, `ArcGauge`, `BarGauge`, `LinearGauge`, `DigitalReadout`, `SegmentedGauge`, `SparklineGauge`, `WarningLight`, and the self-binding `GForceGauge` and `CompassGauge`, which ignore `paramId`) plus the self-binding widgets in `frontend/dashboards/widgets/` (`NowPlayingWidget`, `MediaControlsWidget`, `ClockWidget`, no `paramId`). `paramId` must be one of §6 — an unknown id is logged by `DashboardRenderer` and the widget is left unbound; an unknown `type` is logged and the cell is skipped. `props` keys must be exposed `Q_PROPERTY` on the widget — unknown keys are silently skipped. `"NaN"` (string) decodes to JS `NaN` since JSON can't encode it natively.
+Per cell: `type` matches a widget registered in `WidgetCatalog` — the gauge primitives in `frontend/gauges/` (`CircularGauge`, `ArcGauge`, `BarGauge`, `LinearGauge`, `DigitalReadout`, `SegmentedGauge`, `SparklineGauge`, `WarningLight`, and the self-binding `GForceGauge` and `CompassGauge`, which ignore `paramId`) plus the self-binding widgets in `frontend/dashboards/widgets/` (`NowPlayingWidget`, `MediaControlsWidget`, `ClockWidget`, `VehicleWidget`, `PhoneMirrorWidget`, `ShiftLightWidget`, no `paramId`). `paramId` must be one of §6 — an unknown id is logged by `DashboardRenderer` and the widget is left unbound; an unknown `type` is logged and the cell is skipped. `props` keys must be exposed `Q_PROPERTY` on the widget — unknown keys are silently skipped. `"NaN"` (string) decodes to JS `NaN` since JSON can't encode it natively.
 
 ### 5.2 Add a built-in preset
 
@@ -542,8 +535,7 @@ Per cell: `type` matches a widget registered in `WidgetCatalog` — the gauge pr
 ### 5.3 Add a user dashboard
 
 **Write the file.** A user dashboard is one JSON file with the schema above.
-There is no editor in the app: the touch editor (`frontend/dashboards/editor/`)
-and the OBD page's chooser were removed on 2026-11-24. The widget set and the
+There is no editor in the app. The widget set and the
 props each type takes come from the widget catalog: the data in
 `frontend/dashboards/widget-catalog.json` (served as
 `dashboardManager.widgetCatalog`, published as
@@ -593,17 +585,17 @@ is needed. `dashboardManager.refresh()` forces an immediate rescan.
 ### 5.4 Registry rules
 
 - Built-in preset ids must be unique. User ids colliding with a built-in are rejected at load time (logged).
-- Built-ins are read-only: `deleteDashboard` on one hides it (ids listed in `<userDir>/.hidden-builtins`, id still reserved) and `restoreBuiltInDashboards()` brings them back; `hiddenBuiltInCount` drives the chooser's "Restore defaults" button. Parameter Cards (`grid`) can't be deleted. "Duplicate" via `dashboardManager.duplicateDashboard(sourceId, newLabel)` creates an editable user copy with an auto-generated unique id. New ids come from `dashboardManager.uniqueIdForLabel(label)` (editor, Duplicate and Import alike); it never returns a built-in id (hidden ones included) or `grid`, and `saveDashboard` refuses both.
+- Built-ins are read-only: `deleteDashboard` on one hides it (ids listed in `<userDir>/.hidden-builtins`, id still reserved) and `restoreBuiltInDashboards()` brings them back; `hiddenBuiltInCount` says how many are hidden (no button in the app uses either now). `home` is never hidden: `deleteDashboard` refuses it. The id `grid` (`kParameterCardsId`) is reserved. "Duplicate" via `dashboardManager.duplicateDashboard(sourceId, newLabel)` creates an editable user copy with an auto-generated unique id. New ids come from `dashboardManager.uniqueIdForLabel(label)` (the browser editor, Duplicate and Import alike); it never returns a built-in id (hidden ones included) or `grid`, and `saveDashboard` refuses both.
 - **Newer schema.** A spec whose `schema` is above `dashboardManager.supportedSchema` (`kSupportedSchema`, 2) renders no cells, demands no PIDs, and shows one centred "This dashboard needs a newer version of OCTAVE" message. Import refuses such files; this covers one dropped into the folder by hand.
-- **One set of spec rules** (`DashboardManager::normalizeSpec`, applied by `saveDashboard`, `loadDashboard` and every import, so the editor, Duplicate, Import and the renderer all see the same thing):
+- **One set of spec rules** (`DashboardManager::normalizeSpec`, applied by `saveDashboard`, `loadDashboard` and every import, so the browser editor, Duplicate, Import and the renderer all see the same thing):
   - Kept keys: `schema`, `id`, `label`, `gridColumns`, `gridRows`, `margins`, `spacing`, `thumbnail`, `alertBanner`, `showWhen`, `layouts.portrait`, `cells` and per cell `type` / `paramId` / `col` / `row` / `colSpan` / `rowSpan` / `props`; anything else is dropped. `props` keeps scalars only (bool, number, string ≤ 200 chars; `"NaN"` survives).
   - Numbers must be JSON numbers (a string or bool gets the default). Grid size: not a positive number = 12 × 6, else capped at 48. `margins` / `spacing`: 0..200, absent or `null` = the renderer's 20 / 16. Caps: 256 cells (refused on save and import; a file on disk shows its first 256), label 80 chars (whitespace collapsed).
   - A cell off the grid keeps its size and moves back in (as a drag does); only a span wider than the grid shrinks.
   - Cells never overlap. In file order the earlier cell wins; a later one shrinks toward 1×1 (wider side first, as a newly placed widget does) and is dropped, logged, only if its corner is taken.
-  - Unknown widget types and PIDs are **kept**, so a newer build's dashboard survives an older build's save: the renderer skips an unknown type (its grid area stays empty) and leaves an unknown PID unbound; the editor shows an unknown type inert ("needs a newer OCTAVE", Delete works) and doesn't bind an unknown PID.
-  - Schema: missing = 1. A newer schema is refused by save and import, and `loadDashboard` passes such a file through untouched so the renderer can show its placeholder; the editor won't open it.
+  - Unknown widget types and PIDs are **kept**, so a newer build's dashboard survives an older build's save: the renderer skips an unknown type (its grid area stays empty) and leaves an unknown PID unbound; the browser editor lists an unknown type by its name with "(unknown)".
+  - Schema: missing = 1. A newer schema is refused by save and import, and `loadDashboard` passes such a file through untouched so the renderer can show its placeholder; the browser editor won't open it ("Needs a newer version of OCTAVE to edit").
   - `saveDashboard` needs a label and a file-safe id (`[A-Za-z0-9_-]`, ≤ 64; new ids are slugs from `uniqueIdForLabel`, which `saveDashboard` calls itself when the spec has no id). A file with no `cells` loads as an empty dashboard.
-  - Grid placement (`src/util/dashboardgrid.{h,cpp}`) is the same code in the editor: `dashboardManager.canPlace(cells, cols, rows, col, row, colSpan, rowSpan, exceptIndex)` for drag / resize, `dashboardManager.fitAt(cells, cols, rows, col, row, colSpan, rowSpan)` for the span a new widget shrinks to. The rescued editor draft goes through `dashboardManager.normalizedSpec(spec)`.
+  - Grid placement (`src/util/dashboardgrid.{h,cpp}`) is served to every client: `dashboardManager.canPlace(cells, cols, rows, col, row, colSpan, rowSpan, exceptIndex)` says whether a cell fits, `dashboardManager.fitAt(cells, cols, rows, col, row, colSpan, rowSpan)` gives the span a new widget shrinks to, and the browser editor moves and resizes with `arrange` / `nearestFree` / `rescale`. `dashboardManager.normalizedSpec(spec)` applies these rules to a spec that doesn't come from a file.
   - A known widget's `editableProps` are held to their catalog `kind`: a `bool` must be a JSON bool, an `int` / `real` a number (clamped to `min` / `max`, an `int` rounded), an `enum` one of its `options`, a `string` a string; anything else is dropped, so the widget shows its default. Other props (title, unit, min, max, colours, keys the catalog doesn't curate) are kept in the file as before; the renderer applies only the ones the catalog names for the type (§5.1).
   - Every shipped preset already satisfies these rules (`presetsAreAlreadyNormal` in `tests/cpp/tst_dashboardmanager.cpp`).
 - **Validation in QML.** `DashboardRenderer` still checks every cell against `WidgetCatalog.isKnownType()` and `OBDParameterModel.hasParameter()`, `console.warn`s failures with the dashboard id and never crashes the view.
@@ -613,7 +605,7 @@ is needed. `dashboardManager.refresh()` forces an immediate rescan.
   always regenerated from the label (`label` defaults to "Imported
   dashboard"), so an import never overwrites an existing dashboard.
   Failures set `dashboardManager.lastShareError`.
-- **Hot reload.** `DashboardManager` watches the user dashboards directory (`QFileSystemWatcher`, 300 ms debounce, rescans only when the file-name/mtime/size signature changed). Drop a JSON in from a terminal or sync client and it appears in the chooser without restarting; delete one and it disappears. If the deleted file was the active dashboard, `OBDMenu` falls back to Parameter Cards.
+- **Hot reload.** `DashboardManager` watches the user dashboards directory (`QFileSystemWatcher`, 300 ms debounce, rescans only when the file-name/mtime/size signature changed). Drop a JSON in from a terminal or sync client and it is listed (Settings > Display > Home Screen, the browser editor) without restarting; delete one and it disappears. If the deleted file was Home's dashboard, Home goes back to the built-in `home`.
 
 ### 5.5 Home is a dashboard
 
@@ -624,16 +616,20 @@ shows the dashboard `dashboardManager.homeDashboardId` names in the same
 goes back to the built-in), and again when that dashboard is deleted. `home`
 cannot be hidden. The choice is one line in `<config>/dashboards/.home`.
 
-- **The default layout** is `DashboardManager::homeSpec(readings,
-  vehicle)`: music on the left, two columns of reading cards over the
-  vehicle in the middle, G-force / compass / pitch / roll on the right;
-  portrait: music on top, the vehicle beside the readings, the sensors along
-  the bottom. `presets/home.json` is that for the default four readings
-  (`tst_dashboardmanager` holds the two together).
+- **The default layout** (`presets/home.json`): the phone's screen
+  (`PhoneMirrorWidget`) in the middle, a Now Playing card under it, two
+  reading cards on each side (speed, RPM, coolant, voltage); portrait: the
+  phone on top, the four readings in a row under it, music along the bottom.
+  `tst_dashboardmanager` (`homePresetIsPhoneMusicAndFourReadings`) holds it
+  to that.
 - **Carried over once**: `migrateClassicHome()` (called from `AppCore`)
   turns the classic Home's settings (`homeOBDParameters`, `homeVehicleCard`)
   into a user dashboard "My Home" when they
-  differ from the defaults. Those settings are deprecated.
+  differ from the defaults. Those settings are deprecated. That dashboard is
+  built by `DashboardManager::homeSpec(readings, vehicle)`, a different
+  layout: music on the left, two columns of reading cards over the vehicle
+  in the middle, the phone on the right; portrait: music on top, the vehicle
+  beside the readings, the phone along the bottom.
 - **Taps.** Only the music card opens a page for now
   (`HomeDashboard.tapActionsThatOpen`, `["media"]` since 2026-11-26; all were
   off from 2026-11-24). Only Home sets `DashboardRenderer.interactive`. A tap on a cell
@@ -644,8 +640,7 @@ cannot be hidden. The choice is one line in `<config>/dashboards/.home`.
   Settings > Device > Vehicle for `vehicle`. A widget keeps a touch to itself
   with `function octaveConsumesTap(x, y)` (Now Playing's seek bar).
 - **Frames.** `"frame": true` in any cell's `props` draws the reading cards'
-  box behind the widget (`dashboards/CellFrame.qml`, in the renderer and the
-  editor canvas alike); the editor offers it as **Frame**.
+  box behind the widget (`dashboards/CellFrame.qml`).
 - **Prompts** are Home's, not the widgets': "No vehicle connected" + Connect
   over the block of OBD-bound cells (a strip along the bottom when other
   widgets stand in that block), the music prompt over a Now Playing cell
@@ -693,9 +688,8 @@ setting holds its id). Add it to
   mark `"paramUnit": true` (`redlineStart`, `warnAbove` / `warnBelow` /
   `critAbove` / `critBelow`, `triggerAbove`, `triggerBelow`) are written in the parameter's catalog unit (°C, MPH, m),
   whatever the user's display units. `WidgetCatalog.paramUnitProps(type)`
-  lists them; `DashboardRenderer` and the editor canvas bind them through
-  `OBDParameterModel.toDisplay`, and the properties panel shows and stores
-  them converted, so `sport.json`'s `critAbove: 105` on coolant means 221 °F
+  lists them; `DashboardRenderer` binds them through
+  `OBDParameterModel.toDisplay`, so a `critAbove: 105` on coolant means 221 °F
   for a °F user. A new threshold prop in parameter units needs the flag.
   `alertHysteresis` is in the PID's own unit too, but it is a difference, so
   `CellProps` converts it with the scale alone
@@ -710,8 +704,9 @@ setting holds its id). Add it to
 - **Polling is demand-driven.** The backend polls only what QML asks for via
   `obdManager.setParameterDemand(consumer, ids)`. A dashboard needs no extra
   wiring: `DashboardRenderer.paramIds` lists its distinct PIDs and
-  `OBDMenu` registers them as the `"dashboard"` consumer while the page is
-  active. Other consumers: `"cards"` (Parameter Cards), `"home"` (`HomeOBDView`), `"carMenu"` (RPM/SPEED
+  `HomeDashboard` registers them as the `"homeDashboard"` consumer while Home
+  is shown (`OBDMenu` as `"dashboard"` for a dashboard previewed from the
+  browser editor). Other consumers: `"cards"` (Parameter Cards), `"homeScreen"` (a hand-built Home, §5.5b), `"home"` (`HomeOBDView`, the classic Home), `"carMenu"` (RPM/SPEED
   for the 3D Jeep while `CarMenu` is visible). Backend side: `wiki/obd-manager.html`.
 
 ### 5.7 Templates
@@ -729,8 +724,7 @@ grid plus `id`, `label`, `description` and `order`, whose cells name a
 `dashboardManager.fromTemplate(id, supported)` fills each slot with the first
 `prefer` id the car reports (`supported`; empty = no car known, so the first
 preferred), else the first reported id of one of its `kinds`, never one
-another slot took; a slot nothing fits stays unbound and shows "Choose
-data" in the editor. IMU ids count as reported. The result has no `id` and
+another slot took; a slot nothing fits stays unbound. IMU ids count as reported. The result has no `id` and
 goes through the spec rules. `tst_dashboardmanager` checks every template
 loads, fits its grid and names only known PIDs and widgets.
 
@@ -764,8 +758,8 @@ default and a catalog entry. Boost pressure is absolute (subtract
 
 **Sensor parameters** are fed into `paramStore` by the
 `berryIMU` manager instead of `obdManager`, but are otherwise identical: any
-gauge can bind them by `paramId`, the PID picker lists them, and the
-editor's demo mode sweeps them. The vehicle gate never applies to them.
+gauge can bind them by `paramId`, the browser editor's data picker lists
+them, and the demo sweep covers them. The vehicle gate never applies to them.
 
 **Alias.** `IGNITION_TIMING` is `TIMING_ADVANCE` under its old name: it is
 polled as PID 0x0E and counts as supported whenever timing advance does.
@@ -942,24 +936,26 @@ polled as PID 0x0E and counts as supported whenever timing advance does.
 4. Use `Shape` + `ShapePath` + `PathAngleArc` for curves (GPU-accelerated).
    Use `Rectangle` + `transformOrigin` + `rotation` for small marks.
 5. Declare `octaveSupportedKinds` (array of PID `kind` strings, or `["*"]`)
-   near the top — the editor's PID picker filters on it.
+   near the top. Nothing reads it at run time: the catalog entry's
+   `supportedKinds` (step 6) is what the browser editor's data picker
+   filters on, so keep the two the same.
 6. Register the widget in the catalog: its data in
-   `frontend/dashboards/widget-catalog.json` (`widgets`, in palette order)
+   `frontend/dashboards/widget-catalog.json` (`widgets`, in the order they are listed)
    and its QML url in the `urls` map of `frontend/dashboards/WidgetCatalog.qml`
-   (a type needs both). The renderer, palette, properties panel,
-   `normalizeSpec` and every service client read the catalog — a widget
+   (a type needs both). The renderer, `normalizeSpec`, the browser editor
+   and every other service client read the catalog — a widget
    missing there won't render or be placeable. Then regenerate
    `docs/api/` (`./build/octave --dump-api docs/api`). Each entry declares:
    - `type`, `displayName`, `glyph`, `defaultColSpan` / `defaultRowSpan`
-     (for a 12 × 6 grid; the editor scales them to the dashboard's)
-   - `category` — one of the catalog's `categories` (the gallery's tabs);
-     `description` — one line for the gallery card; `demo` —
-     `{ paramId, props }` the gallery miniature runs on (`{}` for
-     self-binding widgets)
+     (for a 12 × 6 grid)
+   - `category` — one of the catalog's `categories` (the groups of the
+     browser editor's widget list); `description` — one line about the
+     widget; `demo` — `{ paramId, props }` to show it with in a preview
+     (`{}` for self-binding widgets)
    - `minSize` — `{ "w", "h" }` in dp: the smallest size the widget stays
      readable at (check it with `tst_dashboardwidgets` `smallCellBounds`);
-     `aspect` — its natural width / height. The editor's minimum span and
-     S / M / L size presets come from these (`dashboardManager.minSpan`,
+     `aspect` — its natural width / height. The browser editor's minimum span and
+     size choices come from these (`dashboardManager.minSpan`,
      `sizeOptions`).
    - `supportedKinds` — must mirror step 5 (`[]` = self-binding, no PID picker)
    - `labelProps` — `true` if the widget has `title` + `unit` string props
@@ -969,7 +965,7 @@ polled as PID 0x0E and counts as supported whenever timing advance does.
      set to the same value (e.g. `["fillColor", "needleColor"]`); `[]` hides
      the row. Swatches come from the catalog's `colorSwatches`.
    - `specProps` — the widget's other public props a hand-written spec may
-     set but no editor offers (`trackColor`, `labelColor`, `warnColor`,
+     set but the browser editor does not offer (`trackColor`, `labelColor`, `warnColor`,
      `alertHysteresis` ...). A prop in none of these lists is not applied
      (§5.1), so list every prop you document for the widget.
    - `defaultTapAction` — what a tap on the widget asks an interactive
@@ -982,11 +978,11 @@ polled as PID 0x0E and counts as supported whenever timing advance does.
      `min`/`max`) · `string` (text field) · `enum` (segmented buttons over
      `options`). `def` is the gauge's real default (`null` for NaN-when-unset
      thresholds). `section` ∈ `look` · `range` · `advanced`: where the
-     settings sheet shows it. A value gauge lists the shared alert props
-     (§3). The catalog entry is the only list the editor reads; a gauge
+     browser editor's options panel shows it. A value gauge lists the shared alert props
+     (§3). The catalog entry is the only list the browser editor reads; a gauge
      declares no manifest of its own.
    - If a kind of parameter suits the new widget best, point the catalog's
-     `suggestions.byKind` (or `byId`) at it: data-first add proposes it.
+     `suggestions.byKind` (or `byId`) at it: the browser editor proposes it for such a value.
 7. Add an entry to this document under §3.
 
 ### Needle/angle math cheat sheet
@@ -1054,7 +1050,7 @@ frontend/
 │   ├── DashboardRenderer.qml  JSON spec → grid of widget instances (taps for Home)
 │   ├── CellFrame.qml          the card behind a cell with `frame: true`
 │   ├── CellProps.js           how a cell's props reach its widget (catalog-listed keys only)
-│   ├── widget-catalog.json    the catalog data: gallery metadata (category,
+│   ├── widget-catalog.json    the catalog data: listing metadata (category,
 │   │                          description, demo), spans and sizes,
 │   │                          supportedKinds, label/range/color flags,
 │   │                          editableProps (with section), colorSwatches,

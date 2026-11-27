@@ -478,6 +478,12 @@ jobs:
           # adb inside the bundle so phone mirroring needs no user install
           mkdir -p dist/OCTAVE.app/Contents/Resources/platform-tools
           cp tools/platform-tools/darwin/* dist/OCTAVE.app/Contents/Resources/platform-tools/
+          # The QML frontend, loaded at runtime from Contents/Resources/frontend
+          # (findFrontendDir in main.cpp), as the AppImage's usr/frontend and
+          # the Windows package's frontend folder are. Before the .dmg is made.
+          cp -r frontend dist/OCTAVE.app/Contents/Resources/frontend
+          rm -rf dist/OCTAVE.app/Contents/Resources/frontend/assets/-src dist/OCTAVE.app/Contents/Resources/frontend/assets/readme
+          test -f dist/OCTAVE.app/Contents/Resources/frontend/Main.qml
           # The offscreen platform plugin beside cocoa: --headless and an exec
           # frontend as the screen run on it, and macdeployqt leaves it out.
           mkdir -p dist/OCTAVE.app/Contents/PlugIns/platforms

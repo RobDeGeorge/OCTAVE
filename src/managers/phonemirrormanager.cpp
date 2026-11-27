@@ -137,7 +137,7 @@ QString PhoneMirrorManager::getInstallInstructions()
     if (!missing.isEmpty())
         return QStringLiteral("Phone mirroring needs ") + missing.join(QStringLiteral(" and ")) + QLatin1Char('.');
     return QStringLiteral("Enable USB debugging on the phone (Settings > Developer options), connect it "
-                          "over USB and accept the authorization prompt. To go wireless, open Phone Mirror and "
+                          "over USB and accept the authorization prompt. To go wireless, open Settings > Phone > Phone Mirror and "
                           "scan its QR code from the phone's Wireless debugging screen.");
 }
 
@@ -485,8 +485,8 @@ bool PhoneMirrorManager::hasConnectedDevice()
 }
 
 const QString PhoneMirrorManager::kEncoderGaveUp = QStringLiteral(
-    "The phone's video encoder failed, even in software mode. Try a smaller virtual display size "
-    "(Settings > Accessories > Phone Mirror), or mirror the phone screen.");
+    "The phone's video encoder failed, even in software mode. Set Display Mode to Mirror Phone "
+    "(Settings > Phone > Phone Mirror).");
 
 QString PhoneMirrorManager::errorKindFor(const QString &message)
 {

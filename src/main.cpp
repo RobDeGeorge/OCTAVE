@@ -79,7 +79,9 @@ extern "C" {
 
 namespace {
 
-// frontend/: next to the binary (packages), or one level up (build/)
+// frontend/: next to the binary (packages), or one level up (build/). In a
+// macOS bundle the binary is octave.app/Contents/MacOS/octave: a release has
+// the folder in Contents/Resources, a local build has it beside build/.
 QDir findFrontendDir()
 {
 #ifdef Q_OS_ANDROID
@@ -87,16 +89,22 @@ QDir findFrontendDir()
     // symlink). Qt supports the "assets:" URL scheme for anything under assets/.
     return QDir(QStringLiteral("assets:/frontend"));
 #else
-    const QString appDir = QGuiApplication::applicationDirPath();
-    QDir frontendDir(appDir);
-    if (!frontendDir.cd("frontend")) {
-        frontendDir = QDir(appDir);
-        frontendDir.cdUp();  // build/ -> project root
-        if (!frontendDir.cd("frontend")) {
-            qWarning("Could not locate frontend/ directory");
-        }
+    const QDir appDir(QGuiApplication::applicationDirPath());
+    const QStringList candidates = {
+        QStringLiteral("frontend"),
+        QStringLiteral("../frontend"),
+#ifdef Q_OS_MACOS
+        QStringLiteral("../Resources/frontend"),
+        QStringLiteral("../../../../frontend"),
+#endif
+    };
+    for (const QString &candidate : candidates) {
+        const QDir dir(QDir::cleanPath(appDir.absoluteFilePath(candidate)));
+        if (dir.exists(QStringLiteral("Main.qml")))
+            return dir;
     }
-    return frontendDir;
+    qWarning("Could not locate frontend/ directory");
+    return QDir(appDir.absoluteFilePath(QStringLiteral("frontend")));
 #endif
 }
 

@@ -242,7 +242,7 @@ bool fixDeviceId(QVariant &v)
     X(imuEnabled, QMetaType::Bool, true, any(), N_BOOL(imuEnabledChanged), "save_imu_enabled", Plain) \
     X(sensorEmitRate, QMetaType::Int, 60, clampTo(10, 120), N_INT(sensorEmitRateChanged), "save_sensor_emit_rate", Plain) \
     X(sensorDecimalPlaces, QMetaType::Int, 1, clampTo(0, 4), N_INT(sensorDecimalPlacesChanged), "save_sensor_decimal_places", Plain) \
-    X(sensorTempUnit, QMetaType::QString, QStringLiteral("F"), oneOf({QStringLiteral("F"), QStringLiteral("C")}), N_STR(sensorTempUnitChanged), "save_sensor_temp_unit", Plain) \
+    X(sensorTempUnit, QMetaType::QString, QStringLiteral("C"), oneOf({QStringLiteral("F"), QStringLiteral("C")}), N_STR(sensorTempUnitChanged), "save_sensor_temp_unit", Plain) \
     X(sensorAltitudeUnit, QMetaType::QString, QStringLiteral("m"), oneOf({QStringLiteral("m"), QStringLiteral("ft")}), N_STR(sensorAltitudeUnitChanged), "save_sensor_altitude_unit", Plain) \
     X(sensorShowPitch, QMetaType::Bool, true, any(), N_VOID(sensorCardsChanged), nullptr, Part) \
     X(sensorShowRoll, QMetaType::Bool, true, any(), N_VOID(sensorCardsChanged), nullptr, Part) \
@@ -1068,6 +1068,12 @@ void SettingsManager::saveSettings(const QJsonObject &settings)
 
 void SettingsManager::flushPendingSave()
 {
+    // An OBD parameter toggled inside its own 800 ms debounce is in memory
+    // only: without this, quitting in that moment lost it
+    if (m_obdParamsDirty) {
+        m_obdParamsSaveTimer.stop();
+        flushObdParameters();
+    }
     if (!m_savePending)
         return;
     m_saveTimer.stop();
@@ -2008,7 +2014,10 @@ QVariantMap SettingsManager::apply_settings(const QVariantMap &values)
                 break;
             }
         }
-        if (!slot.isValid() || !slotName.startsWith(QLatin1String("save_"))) {
+        // A row names its own setter, whatever it is called (homeVehicleCard's
+        // is setHomeVehicleCard); a name found any other way must be a save_ slot
+        const bool rowSlot = index >= 0 && rows().at(index).slot;
+        if (!slot.isValid() || (!rowSlot && !slotName.startsWith(QLatin1String("save_")))) {
             refused.insert(key, QStringLiteral("no setter for this key"));
             continue;
         }

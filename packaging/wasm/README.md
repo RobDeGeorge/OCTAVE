@@ -58,13 +58,14 @@ on first load. Stage the site with `OUT_DIR` (above) and serve it with
 python3 packaging/wasm/serve.py /tmp/octave-site 8080
 ```
 
-Then open `http://127.0.0.1:8080/`. The demo runs the simulated car
-(`--dev` style carsim) and talks to no hardware.
+Then open `http://127.0.0.1:8080/`. The page opens with no car: the adapter sheet
+offers the simulated car, a Bluetooth LE adapter (Web Bluetooth) or a USB
+adapter (Web Serial).
 
 ## Frontends on the demo page
 
 `index.html` lists the site's web frontends (`frontends/catalog.json`) in
-Settings > Device > Frontends, as installed frontends are listed on a head
+Settings > Device > Developer > Frontends, as installed frontends are listed on a head
 unit. The page reads the catalog into `globalThis.octaveFrontendCatalog`
 before the core starts, and `src/platform/wasm/webfrontends.{h,cpp}` puts a
 folder with each one's manifest into the frontends root in the page's
@@ -120,9 +121,9 @@ simulated car itself (`obdManager.connect_to_adapter("sim://elm327")`).
   staged by
   `stage_frontends.py` (from `build.sh`) with `frontends/catalog.json`: each
   one's own `octave-frontend.json` plus its `slug`, `path` and `preview`
-  (its picture for the chooser in Settings > Device > Frontends). To offer
+  (its picture in Settings > Device > Developer > Frontends). To offer
   another, add it to `FRONTENDS` there. `frontends/native.json` lists the
-  example with no browser build (the console): the chooser shows it greyed
+  example with no browser build (the console): the list shows it greyed
   out.
 - **Shared code**: the stand-in, the bridge and the loader are
   `frontend-host.js`, used by this page and `index.html`.

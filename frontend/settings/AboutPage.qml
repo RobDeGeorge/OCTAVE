@@ -351,7 +351,7 @@ Flickable {
                         Layout.fillWidth: true
                         spacing: App.Spacing.overallSpacing * 0.3
                         visible: networkManager && (networkManager.updateStatus === "update-available"
-                                                    || networkManager.selfUpdateStatus !== "")
+                                                    || networkManager.selfUpdateStatus !== "idle")
 
                         RowLayout {
                             Layout.fillWidth: true

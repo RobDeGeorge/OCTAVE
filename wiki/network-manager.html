@@ -13,640 +13,319 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Network Manager</div>
           <h1 class="page-title">Network Manager</h1>
-          <p class="page-subtitle">Connectivity polling with offline backoff, ancestry-aware GitHub update checks, and git-based self-update for source checkouts</p>
+          <p class="page-subtitle">Whether OCTAVE is online, whether a newer version exists, updating a source checkout in place, and the Shut Down button</p>
         </div>
 
         <nav class="toc">
           <h3>Table of Contents</h3>
           <ul class="toc-list">
-            <li><a href="#overview">Overview</a></li>
-            <li><a href="#architecture">Architecture</a></li>
-            <li><a href="#connectivity">Connectivity Detection</a></li>
-            <li><a href="#update-checking">Update Checking Mechanism</a></li>
-            <li><a href="#self-update">Self-Update System</a></li>
-            <li><a href="#app-restart">Application Restart</a></li>
-            <li><a href="#device-shutdown">Device Shutdown</a></li>
-            <li><a href="#signals">Signals Reference</a></li>
-            <li><a href="#properties">Properties Reference</a></li>
-            <li><a href="#slots">Slots Reference</a></li>
-            <li><a href="#integration">System Integration</a></li>
-            <li><a href="#design-decisions">Design Decisions</a></li>
+            <li><a href="#overview">What It Does</a></li>
+            <li><a href="#connectivity">Network Status</a></li>
+            <li><a href="#update-checking">Software Updates</a></li>
+            <li><a href="#self-update">Updating a Source Checkout</a></li>
+            <li><a href="#device-shutdown">Shut Down</a></li>
+            <li><a href="#platforms">Differences by Platform</a></li>
+            <li><a href="#how-it-works">How It Works</a></li>
+            <li><a href="#limits">Limits</a></li>
+            <li><a href="#troubleshooting">When Something Goes Wrong</a></li>
+            <li><a href="#files">Files, API and Tests</a></li>
+            <li><a href="#design-decisions">Why It Is Built This Way</a></li>
+            <li><a href="#related">Related Pages</a></li>
           </ul>
         </nav>
 
         <!-- Overview -->
-        <section id="overview">
-          <h2>Overview</h2>
-          <p>
-            The <strong>NetworkManager</strong> has three jobs: report whether the head unit is online (and on which
-            network), tell the user when the <code>main</code> branch on GitHub has moved past the running commit, and --
-            when OCTAVE runs from a git checkout -- pull that update in place, rebuild and restart. It is defined in
-            <span class="file-path">src/managers/networkmanager.{h,cpp}</span> and registered as the QML context
-            property <code>networkManager</code> in <span class="file-path">src/main.cpp</span>.
-          </p>
-
-          <div class="info-box info">
-            <div class="info-box-title">Thread Safety</div>
-            The manager has no worker thread: it uses asynchronous <code>QProcess</code> and
-            <code>QNetworkAccessManager</code>, whose completion slots run on the main thread, so every signal is emitted
-            from the GUI thread. Some work is still synchronous: the startup <code>git --version</code> probe, the
-            click-time dirty-tree check, the 5&nbsp;s <code>waitForStarted()</code> on each process, the short git queries
-            (<code>runGitSync()</code>: <code>status --porcelain</code>, <code>cat-file</code>, <code>merge-base</code>,
-            <code>rev-list</code>) and the rollback <code>reset --hard</code> -- the header comment says they run on the
-            GUI thread "deliberately: they gate a destructive action, so their answer must be current at the moment of the
-            click".
-          </div>
-
-          <p>
-            The manager targets the GitHub repository <code>RobDeGeorge/OCTAVE</code> (<code>GITHUB_REPO</code>)
-            and compares the local git <code>HEAD</code> against the tip of the remote <code>main</code> branch.
-          </p>
-        </section>
-
-        <!-- Architecture -->
-        <section id="architecture">
-          <h2>Architecture</h2>
-          <div class="diagram">
-NetworkManager (src/managers/networkmanager.cpp)
-  |
-  |-- QNetworkAccessManager m_nam     generate_204 probe, GitHub API (async replies)
-  |-- QProcess m_networkNameProcess   nmcli / networksetup / netsh (async)
-  |-- QProcess m_gitProcess           self-update steps: fetch / reset / cmake configure / build / log
-  |-- runGitSync()                    short blocking git queries that gate the reset
-  |
-  |-- QTimer m_pollTimer              kPollOnlineMs 30000 / kPollOfflineMs 120000
-  |-- QTimer m_resultPollTimer        250 ms progress relay (see Self-Update)
-  |-- QTimer::singleShot(2000)        checkCanSelfUpdate() + refreshNetworkStatus()
-  |
-  |-- busy flags: m_networkCheckBusy, m_updateCheckBusy, m_updating
-          </div>
-
-          <h3>Busy Flags</h3>
-          <p>
-            Each activity has its own busy flag (<code>m_networkCheckBusy</code>, <code>m_updateCheckBusy</code>,
-            <code>m_updating</code>), so a connectivity probe and an update check can be in flight at the same time, while
-            a second request for an activity that is already running returns immediately.
-          </p>
-        </section>
+        <h2 id="overview">What It Does</h2>
+        <p>
+          The network manager answers two questions: is this device online, and is there a newer OCTAVE than the one
+          running? It also carries two actions that grew up beside those answers: updating OCTAVE in place when it
+          runs from its own source code, and powering the device off.
+        </p>
+        <p>
+          You meet it in three places: the <strong>Network</strong> and <strong>Power</strong> sections of Settings
+          &gt; Device, the <strong>Software Updates</strong> card of Settings &gt; About, and the orange dot on the
+          Settings button when an update is waiting. It has no settings of its own.
+        </p>
+        <p>
+          This page starts with how to use it and gets more technical as it goes.
+        </p>
 
         <!-- Connectivity -->
-        <section id="connectivity">
-          <h2>Connectivity Detection</h2>
-          <p>
-            Network status is polled every <strong>30 seconds</strong> while online. After <strong>three consecutive failed
-            probes</strong> the interval backs off to <strong>2 minutes</strong> and returns to 30&nbsp;s on the first success
-            (<code>kPollOnlineMs</code> / <code>kPollOfflineMs</code> / <code>kOfflineStreakForBackoff</code>). The
-            first probe runs 2&nbsp;s after startup so the UI can paint first; the <code>git --version</code> probe behind
-            <code>canSelfUpdate</code> runs at that same moment rather than in the constructor. The name lookup and the
-            internet probe are started in parallel.
-          </p>
+        <h2 id="connectivity">Network Status</h2>
+        <p>
+          Settings &gt; Device &gt; Device &gt; <strong>Network</strong> shows a dot and two lines. The Device tile
+          carries the same dot.
+        </p>
+        <table>
+          <thead><tr><th>You see</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td>Green dot, a network name, "Internet connected"</td><td>Online. The name is the Wi-Fi network, or "Ethernet" on a cable.</td></tr>
+            <tr><td>Green dot, "Connected", "Internet connected"</td><td>Online, but OCTAVE could not find the network's name.</td></tr>
+            <tr><td>Red dot, "Not Connected", "No internet access"</td><td>The internet did not answer. This is also what you see just after starting, until the first check has answered.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          OCTAVE checks every 30 seconds. After three misses in a row it checks every 2 minutes, and goes back to 30
+          seconds at the first success. <strong>Refresh</strong> checks at once.
+        </p>
+        <p>
+          OCTAVE only reports the network. It does not join a Wi-Fi network or change one: do that in the operating
+          system.
+        </p>
 
-          <h3>Network Name Detection</h3>
-          <p>
-            <code>startNetworkNameCheck()</code> and
-            <code>onNetworkNameCheckFinished()</code> shell out to the platform's network tool. The WiFi command runs
-            first; if it yields no SSID a second command looks for a wired link and reports the literal string
-            <code>"Ethernet"</code>.
-          </p>
+        <!-- Update checking -->
+        <h2 id="update-checking">Software Updates</h2>
+        <p>
+          OCTAVE looks for a newer version once per run, the first time it finds itself online. After that it looks
+          only when you tap <strong>Check for Updates</strong> in Settings &gt; About. When there is one, an orange dot
+          pulses on the Settings button, on the About entry and on the Check for Updates button.
+        </p>
+        <p>What "newer" means depends on how OCTAVE was installed:</p>
+        <table>
+          <thead><tr><th>Install</th><th>Compared with</th><th>How to update</th></tr></thead>
+          <tbody>
+            <tr id="release-check"><td>A package: AppImage, Windows installer, <code>.dmg</code>, APK</td><td>The latest release on GitHub. Pre-releases do not count.</td><td><strong>Download</strong> opens the release's page in the browser. The address is printed beside the button, for a car screen with no browser. Install the new package over the old one.</td></tr>
+            <tr><td>Built from source and run from its build folder</td><td>The newest commit on the <code>main</code> branch on GitHub.</td><td><strong>Update Now</strong>: see <a href="#self-update">Updating a Source Checkout</a>.</td></tr>
+          </tbody>
+        </table>
+        <p>The card shows one of these lines, with a coloured dot:</p>
+        <table>
+          <thead><tr><th>Message</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td>Checking for updates...</td><td>Waiting for GitHub. At most 10 seconds.</td></tr>
+            <tr><td>You're running the latest version</td><td>Nothing to do.</td></tr>
+            <tr><td>Version 1.2.3 is available</td><td>A package: a newer release exists. Tap <strong>Download</strong>.</td></tr>
+            <tr><td>Update available (latest: abc1234)</td><td>A source checkout: <code>main</code> has moved on. The commit and its first line are shown under "Latest:".</td></tr>
+            <tr><td>Source is at ... but this build is ... &mdash; update to rebuild</td><td>The source is current but the program was built from an older commit. Update Now rebuilds it.</td></tr>
+            <tr><td>... &mdash; uncommitted changes block updating</td><td>Added to either line above when the checkout has edits that are not committed.</td></tr>
+            <tr><td>Dev build &mdash; ahead of origin/main</td><td>The checkout has commits GitHub does not. Normal while developing; nothing is offered.</td></tr>
+            <tr><td>Local branch has diverged from origin/main</td><td>Both sides have commits the other lacks. Nothing is offered: sort it out with git.</td></tr>
+            <tr><td>Could not reach GitHub</td><td>Offline, GitHub refused the request, or no release exists yet.</td></tr>
+            <tr><td>Could not parse GitHub response</td><td>GitHub answered with something unexpected.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          The commit and date under <strong>This Build</strong> on the same page come from the
+          <a href="settings-manager.html">Settings Manager</a>, not from here.
+        </p>
 
-          <table>
-            <thead>
-              <tr><th>Platform</th><th>WiFi SSID</th><th>Wired fallback</th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><span class="platform-badge linux">Linux</span></td>
-                <td><code>nmcli -t -f ACTIVE,SSID dev wifi list --rescan no</code> -- first line starting <code>yes:</code>. Without
-                  <code>--rescan no</code> nmcli rescans when the last scan is over 30&nbsp;s old, taking the radio off channel for
-                  ~4&nbsp;s; on the Pi that stalled phone mirroring over the OCTAVE-Jeep hotspot, which shares the radio, once a minute.</td>
-                <td><code>nmcli -t -f TYPE,STATE dev</code> -- a line containing both <code>ethernet</code> and <code>connected</code></td>
-              </tr>
-              <tr>
-                <td><span class="platform-badge desktop">macOS</span></td>
-                <td><code>networksetup -getairportnetwork en0</code> -- text after <code>Current Wi-Fi Network: </code></td>
-                <td><code>ifconfig en0</code> -- output contains <code>status: active</code></td>
-              </tr>
-              <tr>
-                <td><span class="platform-badge desktop">Windows</span></td>
-                <td><code>netsh wlan show interfaces</code> -- first <code>SSID</code> line that is not <code>BSSID</code></td>
-                <td><code>netsh interface show interface</code> -- a line containing <code>Connected</code> and <code>Ethernet</code></td>
-              </tr>
-              <tr>
-                <td><span class="platform-badge android">Android</span></td>
-                <td colspan="2">No command is run; <code>networkName</code> is set to the fixed string <code>"WiFi"</code>.</td>
-              </tr>
-            </tbody>
-          </table>
+        <!-- Self-update -->
+        <h2 id="self-update">Updating a Source Checkout</h2>
+        <p>
+          A head unit that runs OCTAVE from a git checkout can update itself from the screen: it fetches the new
+          source, rebuilds, and restarts. <strong>Update Now</strong> appears when all of this is true:
+        </p>
+        <ul>
+          <li>The program runs from a CMake build folder directly inside the checkout (<code>build/octave</code>).</li>
+          <li><code>git</code> and <code>cmake</code> are installed.</li>
+          <li>The check found an update.</li>
+          <li>The checkout has no uncommitted changes. If it has, the card says "This copy has uncommitted changes. Commit or stash them to update." and the button is hidden.</li>
+        </ul>
+        <ol class="steps">
+          <li>Tap <strong>Update Now</strong>. It turns into <strong>Confirm Update</strong> with the warning "This will overwrite local changes". Tap again within 5 seconds, or it goes back.</li>
+          <li>Wait. The card shows the step: "Fetching latest changes...", "Applying update...", "Configuring build...", then "Building... [45%]". The build can take minutes on a Raspberry Pi. OCTAVE keeps working meanwhile.</li>
+          <li>When it says "Update applied. Now on: ...", tap <strong id="app-restart">Restart Now</strong>. OCTAVE closes and starts again with the same command-line options.</li>
+        </ol>
+        <p>
+          If a step fails, the card shows the reason in red and a <strong>Retry Update</strong> button. A failed build
+          undoes itself: the source goes back to the commit it was on, the old program stays in place, and the message
+          reads "Build failed &mdash; update rolled back to ..." with the first error line of the build.
+        </p>
+        <div class="info-box warning">
+          <div class="info-box-title">Update Now replaces the checkout with GitHub's <code>main</code></div>
+          The update is <code>git reset --hard origin/main</code>. It refuses to run over uncommitted changes, over
+          commits GitHub does not have, and on any branch other than <code>main</code> ("On branch &hellip; &mdash;
+          switch to main to update"). It is still not meant for a checkout you develop in.
+        </div>
+        <p>
+          A checkout that cannot rebuild itself (no build folder, no cmake) shows "Pull the latest changes from GitHub
+          to update." in place of the button.
+        </p>
 
-          <p>The manager waits up to 5&nbsp;s for each process to <em>start</em>
-            (<code>waitForStarted(5000)</code>) and otherwise lets it run to completion asynchronously; a name check that is
-            still running when the next poll fires is simply skipped. When neither WiFi nor Ethernet is found the name is
-            empty: the wired-fallback lambda on every desktop platform (and the failed-to-start path)
-            calls <code>clearNetworkName()</code>, which clears <code>networkName</code> and emits
-            <code>networkNameChanged("")</code> so a stale SSID is never left on screen.</p>
+        <!-- Shutdown -->
+        <h2 id="device-shutdown">Shut Down</h2>
+        <p>
+          Settings &gt; Device &gt; Device &gt; <strong>Power</strong> has a <strong>Shut Down</strong> button for a
+          head unit with no power switch. Tap it, then tap <strong>Confirm Shutdown</strong>. OCTAVE asks the
+          operating system to power off and closes itself, saving its state on the way out.
+        </p>
+        <p>
+          Whether the device then powers off is up to the operating system: the user OCTAVE runs as must be allowed
+          to do it. OCTAVE does not check.
+        </p>
 
-          <h3>Internet Connectivity Check</h3>
-          <p>
-            Reachability is a single HTTPS GET of Google's <code>generate_204</code> endpoint (a captive-portal probe URL
-            that returns an empty 204) through <code>QNetworkAccessManager</code> with
-            <code>setTransferTimeout(5000)</code>; any <code>QNetworkReply</code> error counts as offline.
-          </p>
-          <pre><code><span class="kw">void</span> NetworkManager::<span class="fn">startConnectivityCheck</span>()
-{
-    QNetworkRequest request{QUrl(QStringLiteral(<span class="str">"https://clients3.google.com/generate_204"</span>))};
-    request.setTransferTimeout(<span class="num">5000</span>);
-    QNetworkReply *reply = m_nam-&gt;get(request);
-    connect(reply, &amp;QNetworkReply::finished, <span class="kw">this</span>, [<span class="kw">this</span>, reply]() {
-        reply-&gt;deleteLater();
-        <span class="kw">bool</span> connected = (reply-&gt;error() == QNetworkReply::NoError);
-        <span class="cmt">// ... update isConnected, offline streak, poll interval, first-connect update check</span>
-    });
-}</code></pre>
+        <!-- Platforms -->
+        <h2 id="platforms">Differences by Platform</h2>
+        <table>
+          <thead><tr><th>Platform</th><th>Network name</th><th>Update Now</th><th>Shut Down runs</th></tr></thead>
+          <tbody>
+            <tr><td>Linux, Raspberry Pi, Orange Pi</td><td>From <code>nmcli</code>, so the system must use NetworkManager. Wi-Fi name, else "Ethernet".</td><td>In a source checkout</td><td><code>systemctl --no-block poweroff</code></td></tr>
+            <tr><td>macOS</td><td>From <code>networksetup</code> and <code>ifconfig</code>, interface <code>en0</code> only.</td><td>In a source checkout</td><td><code>sudo shutdown -h +0</code></td></tr>
+            <tr><td>Windows</td><td>From <code>netsh</code>. Wi-Fi name, else "Ethernet".</td><td>In a source checkout</td><td><code>shutdown /s /t 5</code> (off 5 seconds later)</td></tr>
+            <tr><td>Android</td><td>Always "WiFi", whatever the phone is connected through.</td><td>Never. Updates are a new APK.</td><td>Nothing: the button only closes OCTAVE.</td></tr>
+            <tr><td>Browser demo</td><td>None: it shows "Connected". The page counts as online from the start.</td><td>Never. Check for Updates does nothing.</td><td>Nothing: the button does nothing.</td></tr>
+          </tbody>
+        </table>
 
-          <h3>Auto Update Check on First Connect</h3>
-          <p>
-            The first time a probe succeeds (<code>m_autoUpdateChecked</code>) the
-            manager schedules <code>checkForUpdates()</code> 500&nbsp;ms later. The flag is never reset, so this happens once
-            per process; later checks are user-initiated from the About page.
-          </p>
-        </section>
+        <!-- How it works -->
+        <h2 id="how-it-works">How It Works</h2>
+        <p>
+          From here on the page is for people who want to know what happens underneath, or who are changing the code.
+        </p>
+        <p>
+          <code>NetworkManager</code> is one class with no thread of its own. Everything slow (a web request, a
+          command-line tool, a build) is started and left to report back, so the screen never waits on the network.
+          The rest of the app reaches it as <code>networkManager</code>, in QML and over the
+          <a href="api-reference.html#networkManager">service API</a>.
+        </p>
 
-        <!-- Update Checking -->
-        <section id="update-checking">
-          <h2>Update Checking Mechanism</h2>
-          <p>
-            In a source checkout the update checker is git-based: it compares the local <code>HEAD</code> against the
-            latest commit on the <code>main</code> branch and asks git how the two are related. A packaged build
-            (AppImage, Windows installer, <code>.dmg</code>, APK) has no checkout, so it compares its version with the
-            latest GitHub release instead (see <a href="#release-check">Packaged builds</a> below).
-          </p>
+        <h3>The online check</h3>
+        <p>
+          Two things run side by side, first 2 seconds after startup and then on the timer described above:
+        </p>
+        <ul>
+          <li><strong>Is the internet there?</strong> One HTTPS request to <code>clients3.google.com/generate_204</code>, a page that exists to answer "yes" with no content. It has 5 seconds. Any error means offline. The result is <code>isConnected</code>.</li>
+          <li><strong>What is the network called?</strong> The platform's own tool is asked for the Wi-Fi name. If there is none, a second command looks for a wired link. The result is <code>networkName</code>: a name, "Ethernet", or empty.</li>
+        </ul>
+        <p>
+          On Linux the Wi-Fi question is <code>nmcli -t -f ACTIVE,SSID dev wifi list --rescan no</code>. The
+          <code>--rescan no</code> matters: without it nmcli scans for networks, which takes the radio off its channel
+          for about 4 seconds. On a head unit whose Wi-Fi card also hosts the hotspot the phone mirrors over, that
+          froze the mirrored picture once a minute. Keep it.
+        </p>
 
-          <h3>Step-by-Step Flow</h3>
-          <ol class="steps">
-            <li>
-              <strong>Get local commit hash</strong> -- <code>git rev-parse --short HEAD</code> in the repository root,
-              <code>repoDir()</code> = <code>QCoreApplication::applicationDirPath() + "/.."</code>, which assumes the binary
-              lives one level below the checkout (e.g. <span class="file-path">build/octave</span>). With no
-              <span class="file-path">.git</span> there (<code>hasCheckout()</code>; never on Android or iOS), or when git
-              cannot be run or gives no hash, the check continues as the <a href="#release-check">release check</a>.
-            </li>
-            <li>
-              <strong>Query GitHub API</strong> -- <code>GET https://api.github.com/repos/RobDeGeorge/OCTAVE/commits/main</code>
-              with a <code>User-Agent: OCTAVE-Updater</code> header and a 10&nbsp;s timeout. The response's <code>sha</code> is
-              truncated to 7 characters; the first line of <code>commit.message</code> becomes <code>remoteCommitMsg</code>.
-              There is no separate connectivity gate: a failed request yields <code>"error"</code> / "Could not reach
-              GitHub", and an unparseable body "Could not parse GitHub response".
-            </li>
-            <li>
-              <strong>Classify the relationship</strong> -- <code>localVsRemote()</code>
-              returns one of <code>same</code>, <code>ahead</code>, <code>diverged</code>, <code>behind</code> (see below),
-              and the working tree is checked for uncommitted changes at the same time.
-            </li>
-            <li>
-              <strong>Emit result</strong> -- <code>updateStatus</code> becomes <code>"up-to-date"</code>,
-              <code>"ahead"</code>, <code>"diverged"</code> or <code>"update-available"</code> with a matching
-              <code>updateMessage</code>; <code>remoteCommit</code>, <code>remoteCommitMsg</code> and
-              <code>workingTreeDirty</code> are refreshed. When an update is available but the tree is dirty, the
-              message gains " — uncommitted changes block updating". The manager logs
-              <code>local=… built=… remote=… relation=… dirty=… status=…</code> at info level.
-            </li>
-            <li>
-              <strong>Stale binary</strong> -- the manager also compares <code>HEAD</code> with the commit baked
-              into the running binary (<code>OCTAVE_GIT_COMMIT</code> in the generated <span class="file-path">buildinfo.h</span>).
-              If the checkout matches origin/main but the binary was built from another commit, the status is
-              <code>"update-available"</code> with "Source is at &lt;head&gt; but this build is &lt;built&gt; — update to
-              rebuild", so the Update button finishes the job by rebuilding.
-            </li>
-          </ol>
+        <h3>The update check</h3>
+        <ol class="steps">
+          <li><code>checkForUpdates()</code> sets <code>updateStatus</code> to <code>checking</code>.</li>
+          <li>If there is a <code>.git</code> folder one level above the program's folder, it asks git for the current commit. No checkout, no git, or no answer: it does the release check instead (step 5). Android never looks for a checkout.</li>
+          <li><strong>Checkout:</strong> it asks GitHub for the newest commit on <code>main</code> (<code>api.github.com/repos/RobDeGeorge/OCTAVE/commits/main</code>).</li>
+          <li>It asks git how the two commits are related, not just whether they differ: the same, the checkout <em>behind</em>, the checkout <em>ahead</em> (GitHub's commit is already in its history), or <em>diverged</em>. Only "behind" is an update. It also compares the checkout with the commit the running program was built from, and notes whether the checkout has uncommitted changes (<code>workingTreeDirty</code>).</li>
+          <li><strong>Package:</strong> it asks GitHub for the latest release (<code>.../releases/latest</code>) and compares the release's tag with the version built into the program. A release candidate sorts before its release: <code>0.9.6-rc2</code> is older than <code>0.9.6</code>.</li>
+        </ol>
+        <p>The answer lands in these properties:</p>
+        <table>
+          <thead><tr><th>Property</th><th>Holds</th></tr></thead>
+          <tbody>
+            <tr><td><code>updateStatus</code></td><td>Empty before the first check, then <code>checking</code>, <code>up-to-date</code>, <code>update-available</code>, <code>ahead</code>, <code>diverged</code> or <code>error</code>. Only <code>update-available</code> lights the orange dot.</td></tr>
+            <tr><td><code>updateMessage</code></td><td>The line shown on the card.</td></tr>
+            <tr><td><code>remoteCommit</code>, <code>remoteCommitMsg</code></td><td>Checkout: the commit on <code>main</code> and the first line of its message. Package: the newer release's tag and title.</td></tr>
+            <tr><td><code>releaseUrl</code></td><td>Package with a newer release: the release's page. Otherwise empty. It is always a page of this repository on github.com, because the app opens it in a browser.</td></tr>
+          </tbody>
+        </table>
 
-          <h3>Ancestry-Aware Classification</h3>
-          <p>
-            A bare <code>remote != local</code> test cannot tell "behind" from "ahead". Before commit <code>0c29e64</code> a
-            source checkout with local commits reported an update to a commit <em>older</em> than <code>HEAD</code>, and the
-            self-update path would then have hard-reset onto it. The classifier now asks git:
-          </p>
-          <pre><code>QString NetworkManager::<span class="fn">localVsRemote</span>(<span class="kw">const</span> QString &amp;remoteShort, <span class="kw">const</span> QString &amp;localShort) <span class="kw">const</span>
-{
-    <span class="kw">if</span> (remoteShort.isEmpty())
-        <span class="kw">return</span> QStringLiteral(<span class="str">"behind"</span>);
-    <span class="kw">if</span> (remoteShort == localShort)
-        <span class="kw">return</span> QStringLiteral(<span class="str">"same"</span>);
+        <h3>The update itself</h3>
+        <p>
+          <code>canSelfUpdate</code> is worked out once, 2 seconds after startup: a <code>.git</code> above the
+          program's folder, a <code>CMakeCache.txt</code> beside the program, a cmake (the one named in that cache,
+          else the one on <code>PATH</code>) and a git that runs. <code>applySelfUpdate()</code> then checks again, at
+          the moment of the tap, that the checkout has no uncommitted changes, and refuses if the last check said
+          <code>ahead</code> or <code>diverged</code>. If git cannot be asked, the checkout counts as changed and the
+          update is refused. After that, one command at a time:
+        </p>
+        <ol class="steps">
+          <li>Remember the current commit, to go back to.</li>
+          <li><code>git fetch origin main</code></li>
+          <li><code>git reset --hard origin/main</code></li>
+          <li><code>cmake -S &lt;checkout&gt; -B &lt;build folder&gt;</code>, so the commit built into the program matches the new source.</li>
+          <li>Copy the program to <code>octave.pre-update</code>, then <code>cmake --build</code> with one job per core, under <code>nice</code> so the screen keeps its share of the processor.</li>
+          <li>Read the new commit for the final message.</li>
+        </ol>
+        <p>
+          <code>selfUpdateStatus</code> is <code>idle</code>, <code>fetching</code> (for the whole run),
+          <code>restart-required</code> or <code>error</code>, and <code>selfUpdateMessage</code> is the text beside
+          it. A failure at steps 2 to 5 resets the source to the remembered commit. A failed configure or build also
+          puts the copied program back if the build had touched it. The running program is not disturbed by a
+          successful build either: the linker writes a new file, and the process keeps the old one until it restarts.
+        </p>
+        <p>
+          <code>restartApp()</code> starts the program again with the same arguments and quits. It first checks that
+          the program file is there and executable; if not, it stays running and says "Restart aborted &mdash; the
+          OCTAVE binary is missing".
+        </p>
 
-    <span class="cmt">// Do we even have the remote commit locally? If the object is missing we</span>
-    <span class="cmt">// cannot be a descendant of it, so this is a normal "remote moved ahead".</span>
-    <span class="kw">bool</span> haveRemote = <span class="kw">false</span>;
-    runGitSync({<span class="str">"cat-file"</span>, <span class="str">"-e"</span>, remoteShort + <span class="str">"^{commit}"</span>}, &amp;haveRemote, <span class="num">5000</span>);
-    <span class="kw">if</span> (haveRemote) {
-        <span class="kw">bool</span> isAncestor = <span class="kw">false</span>;
-        runGitSync({<span class="str">"merge-base"</span>, <span class="str">"--is-ancestor"</span>, remoteShort, <span class="str">"HEAD"</span>}, &amp;isAncestor, <span class="num">5000</span>);
-        <span class="kw">if</span> (isAncestor)
-            <span class="kw">return</span> QStringLiteral(<span class="str">"ahead"</span>);  <span class="cmt">// remote commit is already in our history</span>
-    }
+        <!-- Limits -->
+        <h2 id="limits">Limits</h2>
+        <ul>
+          <li>"Online" means Google's check page answered. A network that blocks it reads as offline even when other sites work.</li>
+          <li>The network name on Linux needs NetworkManager's <code>nmcli</code>. On macOS only <code>en0</code> is looked at.</li>
+          <li>The update check runs once by itself per run. A head unit that stays on for days learns of a new version only when someone taps Check for Updates.</li>
+          <li>GitHub is asked without an account, so its limit for anonymous requests applies. Past it, the check says "Could not reach GitHub".</li>
+          <li>The check never fetches. "Diverged" is judged against the <code>origin/main</code> the checkout last fetched.</li>
+          <li>The refusal over local commits uses the result of the last check, not a new one. Commits made after that check and before the tap are not seen.</li>
+          <li>The checkout is assumed to be the folder above the program's folder. A build folder elsewhere is treated as a package.</li>
+          <li>Shut Down does not wait for the operating system or check that it agreed.</li>
+        </ul>
 
-    <span class="cmt">// Remote commit is unknown to us. If we also carry commits the last-fetched</span>
-    <span class="cmt">// origin/main lacks, both sides moved — that is a divergence, not an update.</span>
-    <span class="kw">bool</span> ok = <span class="kw">false</span>;
-    <span class="kw">const</span> QString aheadCount = runGitSync({<span class="str">"rev-list"</span>, <span class="str">"--count"</span>, <span class="str">"origin/main..HEAD"</span>}, &amp;ok, <span class="num">5000</span>);
-    <span class="kw">if</span> (ok &amp;&amp; aheadCount.toInt() &gt; <span class="num">0</span>)
-        <span class="kw">return</span> QStringLiteral(<span class="str">"diverged"</span>);
+        <!-- Troubleshooting -->
+        <h2 id="troubleshooting">When Something Goes Wrong</h2>
+        <ol class="steps">
+          <li><strong>The message on the card.</strong> A failed update says which step failed and why: "Fetch failed: ...", "Apply failed: ...", "Build failed &mdash; update rolled back to ...".</li>
+          <li><strong>The log files.</strong> Every update check writes one line under the <code>octave.network</code> category with both versions and the verdict. A failed build writes the end of the build output there. See <a href="architecture.html#logging">Architecture</a> for where the logs are.</li>
+          <li><strong>"Could not reach GitHub" on Windows.</strong> The log line names the TLS backend in use; it should say <code>schannel</code>. See the last section for why.</li>
+        </ol>
 
-    <span class="kw">return</span> QStringLiteral(<span class="str">"behind"</span>);
-}</code></pre>
-          <p>
-            The three git commands run through the blocking <code>runGitSync()</code> helper. Note
-            that the <code>diverged</code> test compares against the <em>last-fetched</em> <code>origin/main</code>; the
-            check itself never fetches.
-          </p>
-
-          <h3>Update Status Values</h3>
-          <pre><code><span class="cmt">// updateStatus can be one of:</span>
-<span class="str">""</span>                  <span class="cmt">// No check has run yet (About page hides the status row)</span>
-<span class="str">"checking"</span>          <span class="cmt">// Currently checking</span>
-<span class="str">"up-to-date"</span>        <span class="cmt">// Local matches remote and the binary was built from HEAD; packaged: no newer release</span>
-<span class="str">"update-available"</span>  <span class="cmt">// Behind origin/main, or the binary is stale; packaged: a newer release</span>
-<span class="str">"ahead"</span>             <span class="cmt">// Source checkout with local commits (dev build)</span>
-<span class="str">"diverged"</span>          <span class="cmt">// Both sides moved -- not a safe update</span>
-<span class="str">"error"</span>             <span class="cmt">// Check failed (GitHub unreachable, bad response)</span></code></pre>
-
-          <p>
-            Only <code>"update-available"</code> raises the badge on the settings button
-            (<span class="file-path">frontend/BottomBar.qml</span>, <span class="file-path">frontend/SettingsMenu.qml</span>) and
-            offers the self-update button. <code>"ahead"</code> and <code>"diverged"</code> are normal states when running
-            from the source tree and must never trigger an "update" that would move the checkout backwards.
-          </p>
-
-          <h3 id="release-check">Packaged builds: the release check</h3>
-          <p>
-            A normally installed binary has no source checkout beside it, and comparing a release binary with
-            <code>main</code> would be wrong anyway. <code>checkLatestRelease()</code> asks
-            <code>GET https://api.github.com/repos/RobDeGeorge/OCTAVE/releases/latest</code> (same headers and 10&nbsp;s
-            timeout; "latest" is the newest release that is neither a draft nor a pre-release) and compares its
-            <code>tag_name</code> with the version compiled into the binary (<code>OCTAVE_VERSION</code>). Until 0.9.6 these
-            builds showed "Could not determine local version".
-          </p>
-          <ul>
-            <li><strong>Newer release</strong>: <code>updateStatus</code> <code>"update-available"</code>,
-              <code>updateMessage</code> "Version X.Y.Z is available", <code>remoteCommit</code> the tag
-              (<code>v0.9.7</code>), <code>remoteCommitMsg</code> the release's title, and <code>releaseUrl</code> the
-              release's page. The About page shows a <strong>Download</strong> button that opens it in the browser, with
-              the address beside it (a car screen may have no browser). <code>canSelfUpdate</code> stays false: a package
-              is replaced by installing the new one.</li>
-            <li><strong>Same or older</strong>: <code>"up-to-date"</code>, <code>releaseUrl</code> empty. A release candidate
-              is older than its release and newer than the release before it.</li>
-            <li><strong>Failure</strong>: <code>"error"</code> with "Could not reach GitHub" (offline, rate limit, no
-              release) or "Could not parse GitHub response".</li>
-          </ul>
-          <p>
-            <strong>Windows and TLS.</strong> The Windows package carries OpenSSL DLLs for the Android Auto receiver,
-            and with them present Qt would use its OpenSSL backend for HTTPS. That backend trusts only the root
-            certificates already in the Windows store, and a newly installed Windows holds few (it fetches the others
-            the first time Schannel meets them), so the first check there failed with "SSL handshake failed: The issuer
-            certificate of a locally looked up certificate could not be found". <code>NetworkManager</code>'s constructor
-            therefore selects Qt's Schannel backend on Windows before anything uses TLS
-            (<code>QSslSocket::setActiveBackend("schannel")</code>, process-wide: Spotify's requests use it too). The
-            log line of each check names the backend in use ("TLS: schannel").
-          </p>
-          <p>
-            The two pure halves are in <span class="file-path">src/util/releasecheck.{h,cpp}</span>, held by
-            <span class="file-path">tests/cpp/tst_releasecheck.cpp</span>: <code>ReleaseCheck::compareVersions()</code>
-            (numeric per part, a leading <code>v</code> ignored, <code>0.9.6-rc2 &lt; 0.9.6</code>) and
-            <code>parseLatest()</code>, which takes the release's <code>html_url</code> only when it is a page of this
-            repository on github.com (anything else becomes the repository's releases page, as the link is opened in the
-            browser).
-          </p>
-        </section>
-
-        <!-- Self-Update -->
-        <section id="self-update">
-          <h2>Self-Update System</h2>
-
-          <div class="info-box warning">
-            <div class="info-box-title">Availability</div>
-            Self-update is only available when running from a git checkout. <code>canSelfUpdate</code> is probed 2&nbsp;s
-            after startup and requires a <code>.git</code> path in <code>repoDir()</code>, a
-            <span class="file-path">CMakeCache.txt</span> in the binary's directory (the build dir it rebuilds) and a
-            <code>cmake</code> (the cache's <code>CMAKE_COMMAND</code>, else <code>PATH</code>) and a working
-            <code>git --version</code>; it returns <code>false</code> unconditionally on Android. Packaged builds therefore report <code>false</code> and
-            the About page shows its "not available" card instead.
-          </div>
-
-          <div class="info-box warning">
-            <div class="info-box-title">Preconditions (checked at click time)</div>
-            The apply step below is <code>git reset --hard origin/main</code>, which discards every uncommitted change
-            to tracked files. <code>applySelfUpdate()</code> therefore re-verifies state at the moment it is
-            called for uncommitted changes, and refuses to run when:
-            <ul>
-              <li>the working tree is dirty (<code>git status --porcelain</code> is non-empty) --
-                  <code>selfUpdateMessage</code> "Uncommitted changes — commit or stash them first", or</li>
-              <li><code>updateStatus</code> is <code>"ahead"</code> or <code>"diverged"</code>, since resetting
-                  would discard local commits -- "Local commits would be lost — refusing to reset".</li>
-            </ul>
-            If git itself cannot be queried, the tree is assumed dirty. The ahead/diverged check uses the cached
-            <code>updateStatus</code>; ancestry is not rechecked after fetch or immediately before reset. These checks therefore
-            do not guarantee preservation of commits or edits made after the checks. The About page additionally hides the update
-            and "Retry Update" buttons while <code>workingTreeDirty</code> is true and shows a "commit or stash first" warning instead.
-          </div>
-
-          <h3>Pre-Conditions</h3>
-          <pre><code><span class="kw">bool</span> NetworkManager::<span class="fn">checkCanSelfUpdate</span>()
-{
-<span class="kw">#ifdef</span> Q_OS_ANDROID
-    <span class="kw">return false</span>;
-<span class="kw">#endif</span>
-    <span class="cmt">// Packaged AppImage / installer / DMG builds have no .git above the binary</span>
-    <span class="kw">if</span> (!QFileInfo::exists(QDir(repoDir()).filePath(<span class="str">".git"</span>)))
-        <span class="kw">return false</span>;
-    <span class="cmt">// The update rebuilds the binary in place: it needs the build dir and a cmake</span>
-    <span class="kw">if</span> (!QFileInfo::exists(QDir(buildDir()).filePath(<span class="str">"CMakeCache.txt"</span>)))
-        <span class="kw">return false</span>;
-    <span class="kw">if</span> (findCmake().isEmpty())
-        <span class="kw">return false</span>;
-    QProcess gitCheck;
-    gitCheck.start(<span class="str">"git"</span>, {<span class="str">"--version"</span>});
-    <span class="kw">if</span> (!gitCheck.waitForFinished(<span class="num">5000</span>))
-        <span class="kw">return false</span>;
-    <span class="kw">return</span> gitCheck.exitCode() == <span class="num">0</span>;
-}</code></pre>
-
-          <h3>Update Pipeline</h3>
-          <p>
-            The update pulls the new source and then rebuilds the binary in place. The sequence is a
-            <strong>step machine</strong> (<code>runSelfUpdateStep()</code> / <code>onSelfUpdateStepFinished()</code>): each
-            step starts one <code>QProcess</code> and the <code>finished</code> slot starts the next. A double-tap guard
-            (<code>m_updating</code>) prevents concurrent update attempts.
-          </p>
-
-          <ol class="steps">
-            <li>
-              <strong>Save rollback point</strong> -- <code>git rev-parse HEAD</code> captures the full current hash
-              (progress "Saving rollback point..."). A failure here is not fatal; the update proceeds without rollback.
-            </li>
-            <li>
-              <strong>Fetch latest changes</strong> -- <code>git fetch origin main</code> (no timeout).
-              Progress "Fetching latest changes...". Failure ends with "Fetch failed: &lt;stderr&gt;".
-            </li>
-            <li>
-              <strong>Apply update</strong> -- <code>git reset --hard origin/main</code> (no timeout). Progress
-              "Applying update...". Failure ends with "Apply failed: &lt;stderr&gt;".
-            </li>
-            <li>
-              <strong>Configure</strong> -- <code>cmake -S &lt;repo&gt; -B &lt;build dir&gt;</code> against the existing
-              cache, so the baked commit hash matches the new <code>HEAD</code>. Progress "Configuring build...".
-            </li>
-            <li>
-              <strong>Build</strong> -- <code>nice -n 10 cmake --build &lt;build dir&gt; --parallel &lt;cores&gt;</code>
-              (no timeout; an incremental build can take minutes on a Pi). Progress "Building... [45%]" (Makefiles) or
-              "Building... [123/456]" (Ninja), parsed from the build output. The binary is copied to
-              <span class="file-path">octave.pre-update</span> first. On a failed configure or build the source is
-              <strong>rolled back</strong>, the copy replaces the binary if the build touched it, and the update ends
-              with "Build failed — update rolled back to &lt;hash&gt;" plus the first error line. The linker writes the new
-              binary as a new inode, so the running process is unaffected; the commit hash lives in a generated header
-              included only by <code>SettingsManager</code> and <code>NetworkManager</code>, so a new commit does not
-              rebuild every source file.
-            </li>
-            <li>
-              <strong>Confirm</strong> -- <code>git log -1 --format=%h %s</code> produces the final message
-              "Update applied. Now on: &lt;hash&gt; &lt;subject&gt;" (if <code>git log</code> fails to start, "Update applied —
-              restart to run it") and <code>selfUpdateStatus</code> becomes
-              <code>"restart-required"</code>; <code>updateStatus</code> flips to <code>"up-to-date"</code> with
-              "Update applied — restart to complete".
-            </li>
-          </ol>
-
-          <h3>Rollback Mechanism</h3>
-          <p>
-            Rollback is <code>git reset --hard &lt;old_commit&gt;</code> (30&nbsp;s timeout) and is a no-op when step 1 failed to
-            record a hash. <code>rollback()</code> runs on fetch, reset, configure and build failures, and when git or
-            cmake fails to start for steps 1-4; configure and build failures also restore the previous binary
-            (<code>restoreBinary()</code>).
-          </p>
-          <pre><code><span class="kw">void</span> NetworkManager::<span class="fn">rollback</span>()
-{
-    <span class="kw">if</span> (m_oldCommit.isEmpty())
-        <span class="kw">return</span>;
-    QProcess rollbackProc;
-    rollbackProc.setWorkingDirectory(repoDir());
-    rollbackProc.start(<span class="str">"git"</span>, {<span class="str">"reset"</span>, <span class="str">"--hard"</span>, m_oldCommit});
-    <span class="kw">if</span> (rollbackProc.waitForFinished(<span class="num">30000</span>)) {
-        <span class="cmt">// log "Rolled back to &lt;hash&gt;" or "Rollback failed: &lt;stderr&gt;"</span>
-    } <span class="kw">else</span> {
-        <span class="cmt">// log "Rollback timed out"</span>
-    }
-}</code></pre>
-
-          <h3>Progress Reporting</h3>
-          <p>
-            Step progress is relayed through a mutex-protected message slot. Each step calls
-            <code>setProgress(msg)</code>, and the 250&nbsp;ms <code>m_resultPollTimer</code> picks the message up and emits
-            <code>selfUpdateMessageChanged</code> when it differs from the current text. <code>applySelfUpdate()</code>
-            starts the timer before setting the initial "Fetching latest changes..." and <code>finishSelfUpdate()</code>
-            stops it, so every step's message ("Applying update...", "Configuring build...", "Building... [n%]") reaches
-            the About page.
-          </p>
-
-          <h3>Self-Update Status Values</h3>
-          <pre><code><span class="str">"idle"</span>              <span class="cmt">// No update in progress (initial value)</span>
-<span class="str">"fetching"</span>          <span class="cmt">// Pipeline running (About page shows a spinner + selfUpdateMessage)</span>
-<span class="str">"error"</span>             <span class="cmt">// Refused, failed, or rolled back -- message says which</span>
-<span class="str">"restart-required"</span>  <span class="cmt">// Update applied, restart needed</span></code></pre>
-        </section>
-
-        <!-- App Restart -->
-        <section id="app-restart">
-          <h2>Application Restart</h2>
-          <p>
-            After a successful self-update the About page offers <code>restartApp()</code>. It first checks that the
-            binary still exists and is executable, and otherwise aborts with <code>selfUpdateStatus = "error"</code> /
-            "Restart aborted — the OCTAVE binary is missing". The restart itself is platform-dependent:
-          </p>
-          <ul>
-            <li><strong>Windows:</strong> <code>QProcess::startDetached(appPath, args)</code> immediately, then <code>QCoreApplication::quit()</code></li>
-            <li><strong>Linux/macOS:</strong> the same <code>startDetached()</code> deferred to <code>aboutToQuit</code>, then <code>quit()</code>, so the new process starts once manager cleanup has run.</li>
-          </ul>
-
-          <div class="info-box danger">
-            <div class="info-box-title">Restart Safety</div>
-            If the pre-flight check fails, the restart is aborted and the user is notified
-            via <code>selfUpdateMessage</code>. The build step already proved the code compiles; the check only guards
-            against quitting with no binary to restart into.
-          </div>
-        </section>
-
-        <!-- Device Shutdown -->
-        <section id="device-shutdown">
-          <h2>Device Shutdown</h2>
-          <p>
-            The <code>shutdownDevice()</code> slot (the power button on
-            <span class="file-path">frontend/settings/DeviceSettingsPage.qml</span>) gives vehicle-mounted installs a clean
-            power-off request: it launches the OS shutdown command detached and then quits OCTAVE, triggering
-            <code>aboutToQuit</code> cleanup. The manager does not verify that the OS accepted the request or wait for cleanup
-            before requesting shutdown; the command also depends on the host's permissions.
-          </p>
-          <pre><code><span class="cmt">// Platform-specific shutdown commands (QProcess::startDetached):</span>
-Linux:   systemctl --no-block poweroff
-macOS:   sudo shutdown -h +0
-Windows: shutdown /s /t 5</code></pre>
-        </section>
-
-        <!-- Signals -->
-        <section id="signals">
-          <h2>Signals Reference</h2>
-          <table>
-            <thead>
-              <tr><th>Signal</th><th>Parameters</th><th>Description</th></tr>
-            </thead>
-            <tbody>
-              <tr><td><code>networkNameChanged</code></td><td><code>str</code></td><td>WiFi SSID or "Ethernet" changed</td></tr>
-              <tr><td><code>isConnectedChanged</code></td><td><code>bool</code></td><td>Internet reachability changed</td></tr>
-              <tr><td><code>updateStatusChanged</code></td><td><code>str</code></td><td>Update check state changed</td></tr>
-              <tr><td><code>updateMessageChanged</code></td><td><code>str</code></td><td>Human-readable update status</td></tr>
-              <tr><td><code>remoteCommitChanged</code></td><td><code>str</code></td><td>Latest remote commit hash</td></tr>
-              <tr><td><code>remoteCommitMsgChanged</code></td><td><code>str</code></td><td>Latest remote commit message</td></tr>
-              <tr><td><code>releaseUrlChanged</code></td><td><code>str</code></td><td>The newer release's page (packaged builds), or empty</td></tr>
-              <tr><td><code>workingTreeDirtyChanged</code></td><td><code>bool</code></td><td>Checkout gained/lost uncommitted changes</td></tr>
-              <tr><td><code>selfUpdateStatusChanged</code></td><td><code>str</code></td><td>Self-update state machine</td></tr>
-              <tr><td><code>selfUpdateMessageChanged</code></td><td><code>str</code></td><td>Self-update progress text</td></tr>
-              <tr><td><code>canSelfUpdateChanged</code></td><td><code>bool</code></td><td>Whether git-based update is possible</td></tr>
-            </tbody>
-          </table>
-        </section>
-
-        <!-- Properties -->
-        <section id="properties">
-          <h2>Properties Reference</h2>
-          <table>
-            <thead>
-              <tr><th>Property</th><th>Type</th><th>Notify Signal</th><th>Description</th></tr>
-            </thead>
-            <tbody>
-              <tr><td><code>networkName</code></td><td><code>str</code></td><td><code>networkNameChanged</code></td><td>Current WiFi SSID or "Ethernet" ("WiFi" on Android)</td></tr>
-              <tr><td><code>isConnected</code></td><td><code>bool</code></td><td><code>isConnectedChanged</code></td><td>True if internet is reachable</td></tr>
-              <tr><td><code>updateStatus</code></td><td><code>str</code></td><td><code>updateStatusChanged</code></td><td>Current update check status</td></tr>
-              <tr><td><code>updateMessage</code></td><td><code>str</code></td><td><code>updateMessageChanged</code></td><td>Human-readable update message</td></tr>
-              <tr><td><code>remoteCommit</code></td><td><code>str</code></td><td><code>remoteCommitChanged</code></td><td>Latest remote commit short hash; in a packaged build the newer release's tag</td></tr>
-              <tr><td><code>remoteCommitMsg</code></td><td><code>str</code></td><td><code>remoteCommitMsgChanged</code></td><td>Latest remote commit message (first line); in a packaged build the newer release's title</td></tr>
-              <tr><td><code>releaseUrl</code></td><td><code>str</code></td><td><code>releaseUrlChanged</code></td><td>Packaged builds: the page of the newer release on github.com while <code>updateStatus</code> is <code>"update-available"</code>; empty otherwise and in a checkout</td></tr>
-              <tr><td><code>workingTreeDirty</code></td><td><code>bool</code></td><td><code>workingTreeDirtyChanged</code></td><td>Checkout has uncommitted changes; self-update is refused while true</td></tr>
-              <tr><td><code>selfUpdateStatus</code></td><td><code>str</code></td><td><code>selfUpdateStatusChanged</code></td><td>Self-update state</td></tr>
-              <tr><td><code>selfUpdateMessage</code></td><td><code>str</code></td><td><code>selfUpdateMessageChanged</code></td><td>Self-update progress message</td></tr>
-              <tr><td><code>canSelfUpdate</code></td><td><code>bool</code></td><td><code>canSelfUpdateChanged</code></td><td>Git-based self-update available</td></tr>
-            </tbody>
-          </table>
-        </section>
-
-        <!-- Slots -->
-        <section id="slots">
-          <h2>Slots Reference</h2>
-        <p><strong>Names:</strong> the camelCase name is the one to use (<code>next_track</code> is <code>nextTrack</code>, <code>get_album</code> is <code>getAlbum</code>, <code>is_scanning</code> is <code>isScanning</code>): same parameters, same result, same permission. The tables below show the camelCase names. The older snake_case name of each still works through protocol&nbsp;4, is marked <code>deprecated</code> in <code>describe</code> and <span class="file-path">docs/api/</span>, and goes in protocol&nbsp;5. The full list with each note is in the <a href="api-reference.html">API reference</a>.</p>
-          <table>
-            <thead>
-              <tr><th>Slot</th><th>Parameters</th><th>Description</th></tr>
-            </thead>
-            <tbody>
-              <tr><td><code>refreshNetwork()</code></td><td>--</td><td>Manually trigger a network status check (Device settings "refresh")</td></tr>
-              <tr><td><code>checkForUpdates()</code></td><td>--</td><td>Start a GitHub update check (About page button; also auto-run once on first connectivity)</td></tr>
-              <tr><td><code>applySelfUpdate()</code></td><td>--</td><td>Begin the git self-update pipeline after re-checking the preconditions</td></tr>
-              <tr><td><code>restartApp()</code></td><td>--</td><td>Restart the OCTAVE application</td></tr>
-              <tr><td><code>shutdownDevice()</code></td><td>--</td><td>Shut down the host OS and quit OCTAVE</td></tr>
-              <tr><td><code>cleanup()</code></td><td>--</td><td>Stop timers and kill every helper process still running (git, network name, Ethernet) at exit</td></tr>
-            </tbody>
-          </table>
-        </section>
-
-        <!-- Integration -->
-        <section id="integration">
-          <h2>System Integration</h2>
-          <p>Registration:</p>
-          <pre><code><span class="cmt">// src/main.cpp</span>
-NetworkManager networkManager;
-ctx-&gt;setContextProperty(<span class="str">"networkManager"</span>, &amp;networkManager);</code></pre>
-
-          <h3>QML Consumers</h3>
-          <table>
-            <thead>
-              <tr><th>QML file</th><th>Uses</th></tr>
-            </thead>
-            <tbody>
-              <tr><td><span class="file-path">frontend/settings/AboutPage.qml</span></td><td>"Check for Updates" button (disabled while <code>updateStatus === "checking"</code>), colour-coded status row with <code>updateMessage</code>, remote commit hash + message card, the self-update card (hidden while <code>workingTreeDirty</code>, replaced by a "commit or stash" warning), progress / error / restart-required states driven by <code>selfUpdateStatus</code> and <code>selfUpdateMessage</code> (the card stays up while <code>selfUpdateStatus</code> is not empty, so the <strong>Restart Now</strong> button appears in place of the build progress once the build ends, although <code>updateStatus</code> is <code>"up-to-date"</code> by then), a <strong>Download</strong> button with the address when <code>releaseUrl</code> is set (a packaged build with a newer release), and "Pull the latest changes from GitHub to update." for a checkout that cannot rebuild itself (<code>!canSelfUpdate</code>, no <code>releaseUrl</code>)</td></tr>
-              <tr><td><span class="file-path">frontend/BottomBar.qml</span>, <span class="file-path">frontend/SettingsMenu.qml</span></td><td>Pulsing badge on the settings button while <code>updateStatus === "update-available"</code></td></tr>
-              <tr><td><span class="file-path">frontend/settings/DeviceSettingsPage.qml</span></td><td>Green/red dot from <code>isConnected</code>, <code>networkName</code> ("Not Connected" / "No internet access" texts), <code>refreshNetwork()</code>, and the power-off button calling <code>shutdownDevice()</code></td></tr>
-            </tbody>
-          </table>
-          <p>Many bindings guard a null <code>networkManager</code>. <span class="file-path">src/main.cpp</span> registers this context property before loading QML.</p>
-
-          <h3>Cleanup</h3>
-          <p>
-            <code>cleanup()</code> is called from the <code>aboutToQuit</code> handler in <span class="file-path">src/main.cpp</span>
-            (and from the destructor). It stops both timers and kills and waits (3&nbsp;s each) on any still-running
-            self-update git/cmake process, then on every other helper process the manager owns (the network-name
-            query, the Ethernet query it starts, the one-line git queries), each disconnected first so that ending
-            one starts no other. None is left to be destroyed while it runs.
-          </p>
-
-          <h3>Timers Summary</h3>
-          <table>
-            <thead>
-              <tr><th>Timer</th><th>Interval</th><th>Purpose</th></tr>
-            </thead>
-            <tbody>
-              <tr><td><code>m_pollTimer</code></td><td>30,000 ms online; 120,000 ms after three consecutive misses</td><td>Periodic network status check</td></tr>
-              <tr><td><code>m_resultPollTimer</code></td><td>250 ms while a self-update runs</td><td>Relay step progress to <code>selfUpdateMessage</code></td></tr>
-              <tr><td>startup single-shot</td><td>2,000 ms, once</td><td><code>git --version</code> probe for <code>canSelfUpdate</code> + first network check</td></tr>
-              <tr><td>auto-update single-shot</td><td>500 ms, once</td><td><code>checkForUpdates()</code> after the first successful probe</td></tr>
-            </tbody>
-          </table>
-        </section>
+        <!-- Files -->
+        <h2 id="files">Files, API and Tests</h2>
+        <table>
+          <thead><tr><th>File</th><th>What is in it</th></tr></thead>
+          <tbody>
+            <tr><td><span class="file-path">src/managers/networkmanager.{h,cpp}</span></td><td><code>NetworkManager</code>, all of it.</td></tr>
+            <tr><td><span class="file-path">src/platform/wasm/networkmanager_wasm.cpp</span></td><td>The browser build's version: always online, every action empty. It replaces the <code>.cpp</code> above.</td></tr>
+            <tr><td><span class="file-path">src/util/releasecheck.{h,cpp}</span></td><td>Comparing two version strings and reading GitHub's "latest release" answer. No I/O, so it is tested.</td></tr>
+            <tr><td><span class="file-path">src/appcore.cpp</span></td><td>Where the manager is registered as <code>networkManager</code> and cleaned up at exit.</td></tr>
+            <tr><td><span class="file-path">frontend/settings/DeviceSettingsPage.qml</span></td><td>The Network and Power sections.</td></tr>
+            <tr><td><span class="file-path">frontend/settings/AboutPage.qml</span></td><td>The Software Updates card.</td></tr>
+            <tr><td><span class="file-path">frontend/BottomBar.qml</span>, <span class="file-path">frontend/SettingsMenu.qml</span></td><td>The orange dot.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          <strong>API.</strong> Every property, method and signal is in the
+          <a href="api-reference.html#networkManager">API reference</a>, which is generated from the code. The ones
+          most code needs:
+        </p>
+        <table>
+          <thead><tr><th>To do this</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td>Know whether the device is online</td><td><code>networkManager.isConnected</code>, <code>networkName</code>; <code>refreshNetwork()</code> to check now</td></tr>
+            <tr><td>Know whether an update exists</td><td><code>checkForUpdates()</code>, then <code>updateStatus === "update-available"</code> and <code>updateMessage</code></td></tr>
+            <tr><td>Send the user to a new package</td><td><code>releaseUrl</code></td></tr>
+            <tr><td>Update a checkout</td><td><code>canSelfUpdate</code>, <code>workingTreeDirty</code>, <code>applySelfUpdate()</code>, <code>selfUpdateStatus</code>, <code>selfUpdateMessage</code>, <code>restartApp()</code></td></tr>
+            <tr><td>Power the device off</td><td><code>shutdownDevice()</code></td></tr>
+          </tbody>
+        </table>
+        <p>
+          Over the service API the methods need the <code>system</code> permission, except
+          <code>refreshNetwork()</code>, which needs only <code>read</code>.
+        </p>
+        <p>
+          <strong>Tests</strong> (<span class="file-path">tests/cpp/</span>, run with <code>ctest</code>):
+          <code>tst_releasecheck</code> holds the version comparison and the reading of GitHub's answer. The manager
+          itself has no test: it is all network and processes.
+        </p>
 
         <!-- Design decisions -->
-        <section id="design-decisions">
-          <h2>Design Decisions</h2>
-          <h3>No worker thread</h3>
-          <p>Every slow operation -- the connectivity probe, the name lookup, the GitHub request and each self-update
-            step -- goes through Qt's asynchronous <code>QProcess</code> and <code>QNetworkAccessManager</code>, whose
-            completion slots run on the GUI thread. Signals are therefore never emitted from another thread and no
-            locking is needed beyond the small progress slot.</p>
-          <h3>Back off when the car is offline</h3>
-          <p>Commit <code>ee5a23e</code> introduced the 30&nbsp;s → 2&nbsp;min backoff after three misses and moved the
-            <code>git --version</code> probe off the constructor. The source comment states the motivation: "a car with no
-            internet should not pay for an HTTPS timeout twice a minute forever." Recovery is immediate on the first
-            successful probe, so a hotspot that comes back is noticed within one cycle.</p>
-          <h3>Ancestry-aware update classification</h3>
-          <p>Commit <code>0c29e64</code> replaced the hash-inequality test with the <code>same / ahead / diverged / behind</code>
-            classifier after a dev checkout with local commits was offered an "update" to an older commit. The
-            <code>cat-file -e</code> check comes first because an unknown remote object can never be an ancestor of
-            <code>HEAD</code>, which avoids a misleading <code>merge-base</code> failure on the common "remote moved ahead"
-            case.</p>
-          <h3>Re-verify at click time; assume the worst when git is silent</h3>
-          <p>Because the apply step is a hard reset, <code>applySelfUpdate()</code> re-runs <code>git status --porcelain</code> at the
-            moment of the tap instead of trusting a check that may be minutes old ("the tree can be dirtied, or commits
-            made, long after the last check ran"). If git cannot be queried the tree is treated as dirty -- "the safe default
-            when we cannot tell is the one that refuses to destroy anything". <code>workingTreeDirty</code> is exposed as a
-            property purely so the UI can hide the button before it "eats real work" (header comment).</p>
-          <h3>Synchronous checks alongside asynchronous work</h3>
-          <p>The header explains why <code>runGitSync()</code> blocks the GUI thread: the queries are short, and their
-            answer must be current at the instant of the click, not whatever an async check last cached. The network probes, GitHub request and update steps use asynchronous completion; startup and restart checks and process-start waits can still block the GUI thread.</p>
-          <h3>Build before trusting the new code</h3>
-          <p>Code that fails to compile would leave the head unit running a binary that no longer matches its source, or
-            with no binary at all after a failed link. The pipeline therefore copies the binary to
-            <span class="file-path">octave.pre-update</span>, rebuilds, and on a failed configure or build resets the source
-            to the saved commit and puts the old binary back. <code>restartApp()</code> then only has to confirm that a
-            binary exists before quitting.</p>
-          <h3>One automatic check, then user-driven</h3>
-          <p>The update check runs once on first connectivity (500&nbsp;ms later, so the connectivity state has settled) and
-            afterwards only from the About page. There is no periodic polling of GitHub, which keeps the API call count
-            negligible and avoids surprising the driver with a badge mid-journey.</p>
-          <h3>Git as the source update channel</h3>
-          <p>The self-updater is <code>git fetch</code> + <code>git reset --hard</code> + a CMake reconfigure and
-            incremental build, which is the source-checkout update sequence implemented here. It intentionally does not try to replace a packaged
-            binary; <code>canSelfUpdate</code> is false there and the About page says so.</p>
-        </section>
+        <h2 id="design-decisions">Why It Is Built This Way</h2>
+        <ul>
+          <li><strong>Check less often when offline.</strong> A car with no internet should not pay for a request that times out twice a minute, forever. The first success puts the 30 seconds back, so a hotspot that returns is noticed quickly.</li>
+          <li><strong>Ask git how the commits are related.</strong> "Different from GitHub" is not "older than GitHub". A checkout with its own commits would be offered an update to an older commit, and the update would then reset onto it and lose them.</li>
+          <li><strong>Check again at the tap, and refuse when unsure.</strong> The update discards uncommitted work, and the last check may be minutes old. These few git questions are asked on the spot, blocking for a moment, because their answer must be true now. When git gives no answer, the safe guess is the one that destroys nothing.</li>
+          <li><strong>Build before restarting, and keep the old program.</strong> Source that does not compile would leave a head unit with a program that no longer matches its source, or with none after a failed link. So the old program is copied aside, and a failed build puts source and program back.</li>
+          <li><strong>The commit is built in through a generated header.</strong> Only the files that include it are recompiled after an update. As a compiler definition it rebuilt every file, which made each update on a Pi a full build.</li>
+          <li><strong>Packages are compared with releases, not with <code>main</code>.</strong> A release is not the tip of <code>main</code>, and a package cannot rebuild itself. It is replaced by installing the next one, so the app only points at it.</li>
+          <li><strong>One automatic check, then only on request.</strong> GitHub is asked once per run, which keeps the request count far below its limit.</li>
+          <li><strong>Schannel on Windows.</strong> The Windows package ships OpenSSL for Android Auto, and with it present Qt would use OpenSSL for HTTPS. That trusts only the certificates already in the Windows store, and a fresh Windows has few, so the update check failed there. The manager selects Windows' own TLS (Schannel) before anything else in the app uses HTTPS. The choice is for the whole program.</li>
+          <li><strong>Every helper process is ended at exit.</strong> A command still running when the manager is destroyed is an error in Qt ("Destroyed while process is still running"), seen with <code>netsh</code> on Windows.</li>
+        </ul>
 
-        <div class="related-pages">
+        <!-- Related Pages -->
+        <div class="related-pages" id="related">
           <h3>Related Pages</h3>
-          <a class="related-link" href="architecture.html">Architecture Overview</a>
           <a class="related-link" href="settings-ui.html">Settings UI</a>
+          <a class="related-link" href="settings-manager.html">Settings Manager</a>
           <a class="related-link" href="building.html">Building</a>
-          <a class="related-link" href="getting-started.html">Getting Started</a>
+          <a class="related-link" href="api-reference.html">Service API Reference</a>
+          <a class="related-link" href="troubleshooting.html">Troubleshooting</a>
+          <a class="related-link" href="architecture.html">Architecture Overview</a>
         </div>
 
       </div>

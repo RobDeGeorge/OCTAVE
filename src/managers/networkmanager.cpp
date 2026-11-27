@@ -400,6 +400,23 @@ void NetworkManager::applySelfUpdate()
         emit selfUpdateMessageChanged(m_selfUpdateMessage);
         return;
     }
+    // The reset moves whatever branch is checked out to origin/main. On main
+    // (or a detached HEAD, which has no branch to move) that is the update; on
+    // any other branch it would quietly turn that branch into a copy of main.
+    {
+        bool ok = false;
+        const QString branch = runGitSync({QStringLiteral("rev-parse"), QStringLiteral("--abbrev-ref"),
+                                           QStringLiteral("HEAD")}, &ok, 5000).trimmed();
+        if (!ok || (branch != QLatin1String("main") && branch != QLatin1String("HEAD"))) {
+            qCWarning(lcNetwork) << "Self-update refused: checked-out branch is" << (ok ? branch : QStringLiteral("unknown"));
+            m_selfUpdateStatus = QStringLiteral("error");
+            emit selfUpdateStatusChanged(m_selfUpdateStatus);
+            m_selfUpdateMessage = ok ? QStringLiteral("On branch %1 — switch to main to update").arg(branch)
+                                     : QStringLiteral("Could not read the checked-out branch");
+            emit selfUpdateMessageChanged(m_selfUpdateMessage);
+            return;
+        }
+    }
     if (m_updateStatus == QLatin1String("ahead") || m_updateStatus == QLatin1String("diverged")) {
         qCWarning(lcNetwork) << "Self-update refused: local branch is" << m_updateStatus
                              << "relative to origin/main";

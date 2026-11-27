@@ -13,617 +13,777 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Utility Modules</div>
           <h1 class="page-title">Utility Modules</h1>
-          <p class="page-subtitle">Every supporting module that is not a feature manager: Clock, logging and crash handlers, the UI watchdog, DiagnosticsManager, VolumeController, version, the performance monitor, the command server, AssetStore, the <code>src/util</code> / <code>src/platform</code> trees, and the <code>media/</code> / <code>temp/</code> directories.</p>
+          <p class="page-subtitle">The parts of OCTAVE that support every feature: logs and how to get them off the device, crash and freeze handling, volume, the clock, the small helpers, and the service protocol other programs talk to</p>
         </div>
 
         <nav class="toc">
           <h3>Table of Contents</h3>
           <ul class="toc-list">
-            <li><a href="#overview">Overview &amp; file map</a></li>
+            <li><a href="#overview">What Is Here</a></li>
+            <li><a href="#logging">Logs</a></li>
+            <li><a href="#diagnostics-manager">Getting the Logs Off the Device</a></li>
+            <li><a href="#crash-handlers">Crashes and Shutdown</a></li>
+            <li><a href="#ui-watchdog">Freezes: the UI Watchdog</a></li>
+            <li><a href="#volume-controller">Volume</a></li>
             <li><a href="#clock">Clock</a></li>
-            <li><a href="#logging">Logging</a></li>
-            <li><a href="#crash-handlers">Crash handlers &amp; signal shutdown</a></li>
-            <li><a href="#ui-watchdog">UI watchdog</a></li>
-            <li><a href="#diagnostics-manager">DiagnosticsManager</a></li>
-            <li><a href="#volume-controller">VolumeController</a></li>
-            <li><a href="#version">Version &amp; update check</a></li>
-            <li><a href="#perf-monitor">Performance monitor &amp; perf tooling</a></li>
-            <li><a href="#command-server">Command server</a></li>
-            <li><a href="#service-protocol">Service protocol</a></li>
-            <li><a href="#platform"><code>src/util/</code> and <code>src/platform/</code></a></li>
-            <li><a href="#backend-dirs"><code>media/</code> and <code>temp/</code></a></li>
-            <li><a href="#design-decisions">Design decisions</a></li>
+            <li><a href="#version">Version and Update Check</a></li>
+            <li><a href="#platform">Small Helpers</a></li>
+            <li><a href="#backend-dirs">The <code>media/</code> and <code>temp/</code> Folders</a></li>
+            <li><a href="#perf-monitor">Timing Code</a></li>
+            <li><a href="#command-server">Command Server</a></li>
+            <li><a href="#service-protocol">Service Protocol</a></li>
+            <li><a href="#many-clients">Many Clients: Limits</a></li>
+            <li><a href="#files">Files and Tests</a></li>
+            <li><a href="#design-decisions">Why It Is Built This Way</a></li>
+            <li><a href="#related">Related Pages</a></li>
           </ul>
         </nav>
 
         <!-- Overview -->
-        <h2 id="overview">Overview &amp; file map</h2>
-        <p>The feature managers (media, OBD, sensors, phone mirror, dashboards) each have their own wiki page. This page covers everything else that supports them. The table shows where each piece lives, whether it is a QObject that QML can reach, and the context-property name registered in <span class="file-path">src/main.cpp</span>.</p>
-
+        <h2 id="overview">What Is Here</h2>
+        <p>
+          Media, the car, the sensors and the phone each have a page of their own. This page covers what sits
+          underneath all of them: the code that writes the log files, notices a crash or a frozen screen, turns one
+          volume number into sound on every output, tells the time, and lets other programs talk to OCTAVE.
+        </p>
+        <p>
+          Most of it has no screen. The one part a driver meets is the <strong>Diagnostics</strong> card, which gets
+          the logs out of a head unit without a laptop. The rest is for people changing the code or writing a program
+          that talks to OCTAVE.
+        </p>
+        <p>The page starts with the parts you are most likely to need and gets more technical as it goes.</p>
         <table>
-          <thead><tr><th>Module</th><th>Source</th><th>QML context property</th><th>Notes</th></tr></thead>
+          <thead><tr><th>You want to</th><th>Reach for</th><th>Name in QML and the service API</th></tr></thead>
           <tbody>
-            <tr><td>AssetStore</td><td><span class="file-path">src/util/assetstore.{h,cpp}</span></td><td><code>assetStore</code></td><td>Resolve bundled assets to local file URLs; extract from the APK on Android</td></tr>
-            <tr><td>Clock</td><td><span class="file-path">src/managers/clock.{h,cpp}</span></td><td><code>clock</code></td><td></td></tr>
-            <tr><td>Logging</td><td><span class="file-path">src/util/logger.{h,cpp}</span> (<code>OctaveLog</code> namespace)</td><td>&ndash;</td><td>Not a QObject; installed first thing in <code>main()</code></td></tr>
-            <tr><td>Crash handlers</td><td>inside <span class="file-path">src/util/logger.cpp</span></td><td>&ndash;</td><td>Write to the error log</td></tr>
-            <tr><td>UI watchdog</td><td><span class="file-path">src/util/uiwatchdog.{h,cpp}</span></td><td>&ndash; (not registered)</td><td>QObject, but internal only</td></tr>
-            <tr><td>DiagnosticsManager</td><td><span class="file-path">src/managers/diagnosticsmanager.{h,cpp}</span></td><td><code>diagnosticsManager</code></td><td>Settings &rarr; Device &rarr; Developer &rarr; Diagnostics card</td></tr>
-            <tr><td>VolumeController</td><td><span class="file-path">src/managers/volumecontroller.{h,cpp}</span></td><td><code>volumeController</code></td><td>Quadratic curve + dispatch</td></tr>
-            <tr><td>Version</td><td><code>project(OCTAVE VERSION …)</code> in <span class="file-path">CMakeLists.txt</span> &rarr; <code>OCTAVE_VERSION</code> define</td><td>&ndash; (surfaced as <code>diagnosticsManager.appVersion</code>)</td><td></td></tr>
-            <tr><td>Performance monitor</td><td><span class="file-path">src/dev/perfmonitor.{h,cpp}</span>, <span class="file-path">src/util/perfscope.h</span></td><td><code>perfMonitor</code> (only with <code>--profile</code>)</td><td><code>OCTAVE_DEV_TOOLS</code> builds only</td></tr>
-            <tr><td>Command server</td><td><span class="file-path">src/service/commandserver.{h,cpp}</span>, <span class="file-path">coreactions.cpp</span>, <span class="file-path">uidriver.{h,cpp}</span></td><td>&ndash;</td><td><code>OCTAVE_DEV_TOOLS</code> builds only, started by <code>--profile</code></td></tr>
-            <tr><td>Android JNI bridge</td><td><span class="file-path">src/platform/androidmediabridge.h</span></td><td>&ndash;</td><td>Android builds only</td></tr>
+            <tr><td>See what the app did, or log from your code</td><td><a href="#logging">Logs</a></td><td>none: <code>qCInfo()</code> and friends, or <code>console.log()</code> in QML</td></tr>
+            <tr><td>Get the logs off a head unit</td><td><a href="#diagnostics-manager">Diagnostics</a></td><td><code>diagnosticsManager</code></td></tr>
+            <tr><td>Find out why the app died or froze</td><td><a href="#crash-handlers">Crashes</a>, <a href="#ui-watchdog">the UI watchdog</a></td><td>none</td></tr>
+            <tr><td>Change or show the volume, or mute</td><td><a href="#volume-controller">Volume</a></td><td><code>volumeController</code></td></tr>
+            <tr><td>Show the time</td><td><a href="#clock">Clock</a></td><td><code>clock</code></td></tr>
+            <tr><td>Format a duration, convert a unit, load a bundled file</td><td><a href="#platform">Small helpers</a></td><td><code>units</code>, <code>fontCatalog</code>, <code>assetStore</code></td></tr>
+            <tr><td>Measure how long a function takes</td><td><a href="#perf-monitor">Timing code</a></td><td>none: <code>OCTAVE_PERF_SCOPE</code></td></tr>
+            <tr><td>Read or drive OCTAVE from another program</td><td><a href="#service-protocol">Service protocol</a></td><td>every object above, over a socket</td></tr>
           </tbody>
         </table>
 
-        <div class="info-box info">
-          <div class="info-box-title">Dev tooling is compiled in only for Debug builds</div>
-          <p>Everything under <span class="file-path">src/dev/</span> is built only with the <code>OCTAVE_DEV_TOOLS</code> CMake option, which defaults to on for <code>-DCMAKE_BUILD_TYPE=Debug</code> desktop builds and off for everything else (Release, no build type, Android, iOS). Without it, <code>--dev</code> / <code>--profile</code> log <code>--dev / --profile need a build with -DOCTAVE_DEV_TOOLS=ON (the default for Debug); ignoring</code> and the app starts normally, and <code>OCTAVE_PERF_SCOPE</code> compiles to nothing. The client scripts that drive the command server live in <span class="file-path">dev/</span>, which, like <span class="file-path">.mcp.json</span>, is gitignored and exists only on developer machines.</p>
+        <!-- Logging -->
+        <h2 id="logging">Logs</h2>
+        <p>
+          OCTAVE writes everything it reports to log files, so that a problem on the road can be understood later.
+          They are in a <code>logs</code> folder inside the config folder, next to
+          <code>settingsConfigure.json</code>:
+        </p>
+        <table>
+          <thead><tr><th>System</th><th>Log folder</th></tr></thead>
+          <tbody>
+            <tr><td>Linux, Raspberry Pi, Orange Pi</td><td><code>~/.config/OCTAVE/logs/</code></td></tr>
+            <tr><td>Windows</td><td><code>%APPDATA%\OCTAVE\logs\</code></td></tr>
+            <tr><td>macOS</td><td><code>~/Library/Application Support/OCTAVE/logs/</code></td></tr>
+            <tr><td>Started with <code>--config DIR</code></td><td><code>DIR/logs/</code></td></tr>
+          </tbody>
+        </table>
+        <p>
+          A <code>--sim</code> run without <code>--config</code> uses a throwaway config folder that is deleted at
+          exit, and its logs go with it. On Android and iOS each line also goes to the system's own log (logcat on Android).
+        </p>
+        <table>
+          <thead><tr><th>File</th><th>What is in it</th><th>Size before it rotates</th><th>Old copies kept</th></tr></thead>
+          <tbody>
+            <tr><td><code>octave-cpp.log</code></td><td>Everything except debug messages. Read this first.</td><td>5 MB</td><td>3</td></tr>
+            <tr><td><code>octave-cpp-error.log</code></td><td>Warnings and errors only, plus a block for every crash.</td><td>2 MB</td><td>5</td></tr>
+            <tr><td><code>octave-cpp-debug.log</code></td><td>Everything, debug messages included. Only written when OCTAVE is started with <code>--debug</code>.</td><td>10 MB</td><td>2</td></tr>
+            <tr><td><code>hang-&lt;time&gt;.txt</code></td><td>What every thread was doing during a freeze. Written by the <a href="#ui-watchdog">UI watchdog</a> on Linux.</td><td></td><td>the newest 10</td></tr>
+          </tbody>
+        </table>
+        <p>
+          A full file becomes <code>.1</code>, the old <code>.1</code> becomes <code>.2</code>, and so on; the oldest
+          is deleted. The logs never take more than about 32 MB, or 62 MB with <code>--debug</code>.
+        </p>
+        <p>Every line has the same shape: time, level, category, source file and line, message.</p>
+        <pre><code>2026-09-10 12:00:00.123 | INFO    | octave.media | mediamanager.cpp:123 | message</code></pre>
+        <p>
+          The levels are <code>DEBUG</code>, <code>INFO</code>, <code>WARNING</code>, <code>ERROR</code> and
+          <code>FATAL</code>. The <strong>category</strong> says which part of the app wrote the line:
+          <code>octave.media</code>, <code>octave.elm327</code>, <code>octave.phonemirror</code>,
+          <code>octave.service</code> and so on. A line with the category <code>default</code> came from code that
+          names none, which includes <code>console.log()</code> in QML.
+        </p>
+
+        <h3>Logging from your code</h3>
+        <p>
+          Use Qt's own logging; nothing else is needed. Everything written with <code>qInfo()</code>,
+          <code>qWarning()</code>, <code>qCritical()</code> or the category forms, and every QML
+          <code>console.*</code> call, ends up in the files.
+        </p>
+        <pre><code>Q_LOGGING_CATEGORY(lcFoo, "octave.foo")      // once, at the top of foomanager.cpp
+
+qCInfo(lcFoo) &lt;&lt; "Connected to" &lt;&lt; port;       // main log
+qCWarning(lcFoo) &lt;&lt; "No answer from" &lt;&lt; port;  // main log and error log
+qCDebug(lcFoo) &lt;&lt; "raw reply" &lt;&lt; bytes;        // debug log, only with --debug</code></pre>
+        <p>
+          Without <code>--debug</code>, debug messages are switched off before they are built, so a
+          <code>qCDebug</code> in a hot path costs nothing. With it, OCTAVE's own debug messages are on and Qt's
+          internal ones stay off. To find the category a part of the app uses, search the sources for
+          <code>Q_LOGGING_CATEGORY</code>.
+        </p>
+
+        <h3>How it works</h3>
+        <p>
+          <code>OctaveLog::install()</code> (<span class="file-path">src/util/logger.cpp</span>) is the first thing
+          <code>main()</code> calls, before the application object exists. It opens the files and replaces Qt's
+          message handler with one that formats each message as above, prints it to the terminal, and writes it to
+          the files it belongs in. Each line is written to disk at once, so nothing is lost if the app dies on the
+          next line.
+        </p>
+        <p>
+          One lock guards the files. A thread that cannot get it within 2 seconds (another thread is stuck writing
+          to a failing SD card, say) writes its line straight to the error log and carries on, so one stuck thread
+          cannot stop the rest of the app from logging.
+        </p>
+
+        <!-- DiagnosticsManager -->
+        <h2 id="diagnostics-manager">Getting the Logs Off the Device</h2>
+        <p>
+          A head unit has no keyboard and no terminal. The <strong>Diagnostics</strong> card is how the logs leave
+          it. Open <strong>Settings &gt; Device &gt; Developer</strong> and scroll to Diagnostics. It shows the
+          version, the device, the log folder and the end of the log, with four buttons:
+        </p>
+        <table>
+          <thead><tr><th>Button</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Refresh</strong></td><td>Reads the end of the log again: the last 200 lines of the main log, then the last 50 of the error log under <code>---- errors ----</code>.</td></tr>
+            <tr><td><strong>Copy</strong></td><td>Puts a header (version, device, time) and the last 400 lines on the clipboard, ready to paste into a message.</td></tr>
+            <tr><td><strong>Export logs</strong></td><td>Copies every log file, old copies and freeze dumps included, into a new folder <code>OCTAVE-logs-&lt;date&gt;-&lt;time&gt;</code> in Downloads (Documents if there is no Downloads folder), with a <code>device-info.txt</code>. On Android that is the public Download folder, so any mail or files app can attach it.</td></tr>
+            <tr><td><strong>Open folder</strong></td><td>Opens the log folder in the file manager. Not on Android or iOS.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          A program connected over the <a href="#service-protocol">service protocol</a> can fetch the last export
+          from <code>GET /export/logs</code>.
+        </p>
+        <p>In code this is <code>diagnosticsManager</code>:</p>
+        <table>
+          <thead><tr><th>To do this</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td>Show the version and device</td><td><code>appVersion</code>, <code>deviceInfo</code>, <code>logDir</code></td></tr>
+            <tr><td>Show the end of the log</td><td><code>recentLogLines(maxLines)</code>: returns <code>(no log yet)</code> when the log is empty</td></tr>
+            <tr><td>Copy or export</td><td><code>copyLogsToClipboard(maxLines)</code>; <code>exportLogs()</code> returns the new folder and sets <code>lastExportPath</code></td></tr>
+            <tr><td>Open the folder</td><td><code>openLogFolder()</code>, when <code>canOpenFolder</code> is true</td></tr>
+            <tr><td>Show a licence text</td><td><code>licenseText(name)</code>: <code>"LICENSE"</code>, <code>"NOTICE"</code> or a bundled component's licence such as <code>"LGPL-3.0"</code>. The About page uses it.</td></tr>
+          </tbody>
+        </table>
+        <p>The full list is in the <a href="api-reference.html#diagnosticsManager">API reference</a>.</p>
+        <p>
+          To bundle a new licence: add its file to <span class="file-path">licenses/</span>, its name to
+          <span class="file-path">CMakeLists.txt</span> (<code>octave_add_license_texts()</code>) and to
+          <span class="file-path">src/util/licensetexts.cpp</span>, and a button to
+          <span class="file-path">frontend/settings/AboutPage.qml</span>. The test <code>tst_licensetexts</code>
+          fails when the three disagree.
+        </p>
+
+        <!-- Crash handlers -->
+        <h2 id="crash-handlers">Crashes and Shutdown</h2>
+        <p>From here on the page is for people who are changing the code or reading a log after a failure.</p>
+        <p>
+          The rule is that <strong>a crash in the car must leave a trace</strong>. When the app dies, a block like
+          this is added to <code>octave-cpp-error.log</code>:
+        </p>
+        <pre><code>==== FATAL SIGSEGV - backtrace (addresses; symbolise with addr2line against this build) ====
+...up to 64 frames...
+==== end ====</code></pre>
+        <table>
+          <thead><tr><th>System</th><th>What is written</th></tr></thead>
+          <tbody>
+            <tr><td>Linux, macOS</td><td>The signal (SIGSEGV, SIGABRT, SIGFPE, SIGILL or SIGBUS) and a backtrace of addresses. Turn them into function names with <code>addr2line</code> and the same build.</td></tr>
+            <tr><td>Android</td><td>The signal only: <code>(no backtrace support on this platform)</code>. The system's own crash report (tombstone) has the stack.</td></tr>
+            <tr><td>Windows</td><td><code>==== FATAL exception 0x&lt;code&gt; at &lt;address&gt; ====</code> and up to 62 frame addresses.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          After writing the block the handler hands the crash back to the operating system, which still produces
+          its core dump or crash report. A failed assertion (<code>qFatal</code>) is logged as a <code>FATAL</code>
+          line first, so its text sits just above the block.
+        </p>
+        <p>
+          A stack overflow on the main thread (runaway recursion in QML or C++) is caught too: the handler has a
+          stack of its own there. On any other thread a stack overflow still leaves no block.
+        </p>
+        <div class="info-box warning">
+          <div class="info-box-title">Rule for the crash handler</div>
+          <p>It runs inside a signal, so it may only use raw <code>write()</code> calls on a file descriptor opened at startup. No Qt, no memory allocation, no locks. Keep it that way.</p>
         </div>
+
+        <h3>Stopping cleanly</h3>
+        <p>
+          Closing the window, Ctrl-C, a launcher script and systemd all end the same way. On Linux and macOS,
+          SIGTERM and SIGINT are turned into an ordinary quit: the signal handler only writes one byte to a socket,
+          and the event loop reads it, logs <code>Signal received, shutting down</code> and quits. Without this the
+          app would be killed on the spot and leave child processes and the phone's adb forward behind.
+        </p>
+        <p>The quit cleanup then runs in this order:</p>
+        <ol class="steps">
+          <li>The dev tooling stops, where it is built: the perf log is finished and a screen recording is closed.</li>
+          <li>The service stops, so no client reaches a manager while it shuts down.</li>
+          <li>The UI watchdog stops.</li>
+          <li><code>AppCore::shutdown()</code>: Android Auto, the phone mirror, the knob, the sensors, the open trip, the OBD adapter and the network are closed; then the playback position, the music metadata and the settings are written.</li>
+          <li>The logs are flushed, last, so everything the cleanup logged is on disk.</li>
+        </ol>
+        <p>When you add a manager that owns hardware, a child process or unsaved state, give it a place in <code>AppCore::shutdown()</code> (<span class="file-path">src/appcore.cpp</span>).</p>
+
+        <!-- UI watchdog -->
+        <h2 id="ui-watchdog">Freezes: the UI Watchdog</h2>
+        <p>
+          A crash leaves a block in the log. A freeze used to leave nothing: the screen stopped and so did the log.
+          The watchdog is a small thread that asks the main thread "are you there?" every 2 seconds and acts on how
+          long it has gone without an answer:
+        </p>
+        <table>
+          <thead><tr><th>No answer for</th><th>What happens</th><th>Where</th></tr></thead>
+          <tbody>
+            <tr><td>5 seconds</td><td>One warning: <code>UI thread blocked for N s and counting</code>. When the main thread answers again: <code>UI thread responsive again after N s</code>.</td><td>Everywhere</td></tr>
+            <tr><td>15 seconds</td><td>The stack of every thread is written to <code>hang-&lt;time&gt;.txt</code> in the log folder. This needs <code>gdb</code> installed; without it the log says <code>gdb not installed; no stack dump for this hang</code>.</td><td>Desktop Linux (not Android)</td></tr>
+            <tr><td>30 seconds</td><td>OCTAVE logs <code>UI thread blocked for N s; aborting so the launcher restarts OCTAVE</code> and aborts. On the head unit the launcher script (<span class="file-path">deployment/orange-pi-5-plus/home/.local/bin/octave-start.sh</span>) starts it again, so a frozen screen clears by itself and not by pulling the power.</td><td>Desktop Linux (not Android)</td></tr>
+          </tbody>
+        </table>
+        <p>Things to know when reading these lines:</p>
+        <ul>
+          <li>The lines have the category <code>octave.ui_watchdog</code>. The warnings are in the main log and in <code>octave-cpp-error.log</code>; the abort line is in the error log only.</li>
+          <li>A warning says the main thread was busy; it does not say why. Look at the lines just before it, and at the hang file if there is one.</li>
+          <li>During the first 2 minutes after launch the watchdog does not abort: a first scan of a large music library can keep the main thread busy for a while.</li>
+          <li>The abort line has a UTC time ending in <code>Z</code>; every other line is in local time.</li>
+          <li>In the browser demo a hidden tab is not a freeze. The log says <code>page hidden; the browser paused it</code>.</li>
+          <li>Time is measured on a clock that never jumps, so the clock being corrected after boot on a board with no battery clock is not mistaken for a freeze.</li>
+        </ul>
+        <p>
+          The watchdog is the class <code>UiWatchdog</code> (<span class="file-path">src/util/uiwatchdog.{h,cpp}</span>).
+          <code>main()</code> starts it before the managers are built, with or without a screen
+          (<code>--headless</code> has one too). The five times are constructor arguments. It is not available to
+          QML or the service.
+        </p>
+
+        <!-- VolumeController -->
+        <h2 id="volume-controller">Volume</h2>
+        <p>
+          OCTAVE has one volume, a number from 0 to 100, and several places that play sound. <code>volumeController</code>
+          is the only thing allowed to change it. A slider, the gesture sensor, the volume knob and a remote client
+          all call the same method, and it tells every output.
+        </p>
+        <div class="info-box warning">
+          <div class="info-box-title">Rule</div>
+          <p>Never call a manager's own <code>setVolume</code> or <code>setMuted</code> from QML or a hardware handler, and never work out the curve yourself. Everything goes through <code>volumeController</code>.</p>
+        </div>
+        <table>
+          <thead><tr><th>To do this</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td>Set the volume</td><td><code>volumeController.applyVolume(percent)</code>. Values outside 0 to 100 are clamped.</td></tr>
+            <tr><td>Show the volume</td><td>Bind to <code>volumeController.percent</code>.</td></tr>
+            <tr><td>Mute button</td><td><code>volumeController.toggleMute()</code></td></tr>
+            <tr><td>Mute icon</td><td>Bind to <code>effectivelyMuted</code>: true when muted or when the volume is 0.</td></tr>
+            <tr><td>Mute without the button's rules</td><td>Set <code>muted</code>.</td></tr>
+            <tr><td>Convert between percent and gain</td><td><code>toLinear(percent)</code>, <code>toPercent(linear)</code>; in C++ without an instance, <code>VolumeController::toLinearStatic()</code> / <code>toPercentStatic()</code>.</td></tr>
+          </tbody>
+        </table>
+        <p>The full list is in the <a href="api-reference.html#volumeController">API reference</a>.</p>
+        <pre><code>Slider {
+    from: 0; to: 100
+    value: volumeController.percent
+    onMoved: volumeController.applyVolume(Math.round(value))
+}</code></pre>
+
+        <h3>The rules every input shares</h3>
+        <ul>
+          <li><strong>Turning the volume up while muted unmutes.</strong> It does not matter which input did it.</li>
+          <li><strong>The mute button at 0 % restores the start-up volume</strong> and unmutes: there would be nothing to unmute to.</li>
+          <li>Two presses of mute within 150 ms count as one. The knob's button bounces.</li>
+          <li>Neither the volume nor mute is saved. After a restart the volume is the start-up volume from Settings and mute is off.</li>
+          <li>Five presses of mute within 4 seconds is the <strong>escape gesture</strong> (<code>escapeGesture</code>, experimental): while an installed program is the screen, it brings the built-in screen back. See <a href="writing-a-frontend.html">Writing a Frontend</a>.</li>
+        </ul>
+
+        <h3>How it works</h3>
+        <p>
+          Ears do not hear loudness in a straight line, so the percent is not used as the gain. OCTAVE squares it:
+          gain = (percent / 100)&sup2;. Half way on the slider is a gain of 0.25, and the bottom of the slider gives
+          fine control where the ear is most sensitive.
+        </p>
+        <p>
+          <code>applyVolume()</code> stores the percent, works out the gain and emits <code>volumeApplied(percent,
+          gain)</code>. The controller knows no output. <code>AppCore::wireVolume()</code>
+          (<span class="file-path">src/appcore.cpp</span>) connects them:
+        </p>
+        <table>
+          <thead><tr><th>Output</th><th>Gets</th></tr></thead>
+          <tbody>
+            <tr><td>Local music, phone mirror audio, Android Auto, AirPlay</td><td>The gain (0.0 to 1.0). Mute goes to the same four.</td></tr>
+            <tr><td>Spotify</td><td>The percent, while Spotify is what is playing and mute is off. Spotify plays on another device, which applies its own curve.</td></tr>
+            <tr><td>The volume knob's LED ring</td><td>The percent. Not on phones.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          To change the curve, edit <code>toLinearStatic()</code> and its inverse <code>toPercentStatic()</code> in
+          <span class="file-path">src/managers/volumecontroller.{h,cpp}</span>. Nothing else holds a copy.
+        </p>
 
         <!-- Clock -->
         <h2 id="clock">Clock</h2>
-        <p><span class="file-path">src/managers/clock.{h,cpp}</span> &mdash; QML name: <code>clock</code></p>
-
-        <p>A QTimer-based clock that formats the current time once a second and emits it as a string. It reads three settings from <code>SettingsManager</code> on every tick &mdash; <code>showClock</code>, <code>clockFormat24Hour</code> and <code>clockShowSeconds</code> &mdash; so a settings change takes effect within a second without any signal wiring. Since commit <code>7777777</code> it emits <code>timeChanged</code> <em>only when the text actually changed</em>: without seconds the string changes once a minute, so the QML bindings that show the clock re-evaluate 60&times; less often, and hiding a previously visible clock emits the empty string once. If the clock starts hidden, nothing is emitted, because the cached text is already empty.</p>
-
-        <h3>Public API</h3>
+        <p>
+          <code>clock.time</code> is the time as text, in the format the user chose. Bind to it and you are done:
+          the bottom bar and the hand-built Home screens do exactly that.
+        </p>
+        <pre><code>Text { text: clock.time }</code></pre>
         <table>
-          <thead><tr><th>Member</th><th>Kind</th><th>Declaration</th><th>Description</th></tr></thead>
+          <thead><tr><th>Settings</th><th>Without seconds</th><th>With seconds (<code>clockShowSeconds</code>)</th></tr></thead>
           <tbody>
-            <tr><td><code>time</code></td><td>property (read-only)</td><td><code>QString time NOTIFY timeChanged</code></td><td>The current text (what <code>timeChanged</code> last carried), set from construction: a service client subscribing to it gets it at once instead of waiting up to a minute</td></tr>
-            <tr><td><code>timeChanged(str)</code></td><td>signal</td><td><code>void timeChanged(const QString &amp;)</code></td><td>Formatted time, or <code>""</code> when <code>showClock</code> is off</td></tr>
-            <tr><td><code>updateTime()</code></td><td>slot</td><td><code>public slots</code></td><td>Timer callback (1000 ms); computes the text and emits on change</td></tr>
-            <tr><td>constructor</td><td>&ndash;</td><td><code>Clock(SettingsManager *, QObject *parent = nullptr)</code></td><td>Starts the timer and computes the first text at once</td></tr>
+            <tr><td>24-hour (<code>clockFormat24Hour</code> on)</td><td><code>14:30</code></td><td><code>14:30:05</code></td></tr>
+            <tr><td>12-hour</td><td><code>02:30 PM</code></td><td><code>02:30:05 PM</code></td></tr>
+            <tr><td><code>showClock</code> off</td><td colspan="2">empty text</td></tr>
           </tbody>
         </table>
-
-        <h3>Format</h3>
-        <table>
-          <thead><tr><th>Setting</th><th>Without seconds</th><th>With seconds</th></tr></thead>
-          <tbody>
-            <tr><td><code>clockFormat24Hour = true</code></td><td><code>14:30</code></td><td><code>14:30:05</code></td></tr>
-            <tr><td><code>clockFormat24Hour = false</code></td><td><code>02:30 PM</code></td><td><code>02:30:05 PM</code></td></tr>
-            <tr><td><code>showClock = false</code></td><td colspan="2"><code>""</code> (emitted once)</td></tr>
-          </tbody>
-        </table>
-        <p>The 12-hour form is built by hand (<code>hour % 12</code>, 0 &rarr; 12, zero-padded) with a literal <code>AM</code>/<code>PM</code> appended, so it does not depend on the system locale.</p>
-
-        <h3>Emit-on-change</h3>
-        <pre><code><span class="kw">void</span> <span class="cls">Clock</span>::<span class="fn">update_time</span>()
-{
-    QString text;
-    <span class="kw">if</span> (m_settingsManager-&gt;showClock()) {
-        <span class="cmt">// ... build "HH:mm[:ss]" or "hh:mm[:ss] AM/PM" ...</span>
-    }
-    <span class="cmt">// Without seconds the text changes once a minute; re-evaluating every</span>
-    <span class="cmt">// binding that shows the clock 60 times for the same string is waste.</span>
-    <span class="kw">if</span> (text == m_lastText)
-        <span class="kw">return</span>;
-    m_lastText = text;
-    <span class="kw">emit</span> timeChanged(text);
-}</code></pre>
-
-        <h3>QML consumers</h3>
-        <ul>
-          <li><span class="file-path">frontend/BottomBar.qml</span> &mdash; <code>clockTimeText</code> binds <code>clock.time</code>, so the bar shows the current time from its first frame</li>
-          <li><span class="file-path">frontend/ClockMenu.qml</span> &mdash; same signal drives the digital readout, the date line and the analog hands (<code>time.split(":")</code> for hours / minutes / seconds; a missing seconds field, i.e. <code>clockShowSeconds</code> off, counts as 0)</li>
-        </ul>
-        <p>The Clock does not log.</p>
-
-        <!-- Logging -->
-        <h2 id="logging">Logging</h2>
-        <p><span class="file-path">src/util/logger.{h,cpp}</span> (commit <code>053f587</code>)</p>
-
-        <p>OCTAVE writes rotating log files into <code>&lt;app data dir&gt;/logs/</code>, where the app data dir is the same one that holds <code>settingsConfigure.json</code> (Windows <code>%APPDATA%\OCTAVE</code>, macOS <code>~/Library/Application Support/OCTAVE</code>, Linux <code>$XDG_CONFIG_HOME/OCTAVE</code> or <code>~/.config/OCTAVE</code>).</p>
-
-        <table>
-          <thead><tr><th>File</th><th>Level</th><th>Max size</th><th>Backups</th><th>When</th></tr></thead>
-          <tbody>
-            <tr><td><code>octave-cpp.log</code></td><td>INFO and above (everything except <code>QtDebugMsg</code>)</td><td>5 MB</td><td>3</td><td>Always</td></tr>
-            <tr><td><code>octave-cpp-error.log</code></td><td><strong>WARNING</strong>, ERROR (<code>QtCriticalMsg</code>) and FATAL, plus crash blocks</td><td>2 MB</td><td>5</td><td>Always</td></tr>
-            <tr><td><code>octave-cpp-debug.log</code></td><td>DEBUG and above (everything)</td><td>10 MB</td><td>2</td><td>Only with <code>--debug</code></td></tr>
-          </tbody>
-        </table>
-        <p>Worst-case disk use: ~32 MB without <code>--debug</code>, ~62 MB with it &mdash; sized for an SD-card head unit that must keep several sessions of history.</p>
-
-        <h3>The <code>--debug</code> flag</h3>
-        <p><code>main()</code> scans <code>argv</code> for the literal <code>--debug</code> with <code>strcmp</code> <em>before</em> the <code>QGuiApplication</code> exists and calls <code>OctaveLog::install(debugLogging)</code>. With debug the category filter is <code>*.debug=true\nqt.*.debug=false</code> (OCTAVE categories on, Qt&rsquo;s own off) and the debug file is opened; without it the rule is <code>*.debug=false</code>, so <code>qCDebug</code> calls are filtered at the source and cost nothing.</p>
-
-        <h3><code>OctaveLog</code></h3>
-        <pre><code><span class="kw">namespace</span> OctaveLog {
-<span class="kw">void</span> <span class="fn">install</span>(<span class="kw">bool</span> debug);   <span class="cmt">// message handler + crash handlers; call before QGuiApplication</span>
-QString <span class="fn">logDir</span>();          <span class="cmt">// &lt;app data dir&gt;/logs, created on install</span>
-<span class="kw">void</span> <span class="fn">flush</span>();              <span class="cmt">// flush all three files: aboutToQuit (main.cpp) and after a QtFatalMsg</span>
-}</code></pre>
-        <p><code>install()</code> creates the log directory via <code>SettingsManager::getAppDataDir()</code>, opens the files in append mode, sets the category filter rules, installs a <code>qInstallMessageHandler</code> and then the crash handlers. The handler formats every <code>qDebug</code> / <code>qInfo</code> / <code>qWarning</code> / <code>qCritical</code> / <code>qFatal</code> and every <code>qC*</code> category call &mdash; and, because QML <code>console.*</code> goes through the same Qt message system, every QML log line too &mdash; as:</p>
-        <pre><code>2026-09-10 12:00:00.123 | INFO    | octave.media | mediamanager.cpp:123 | message</code></pre>
-        <p>Levels are named <code>DEBUG</code>, <code>INFO</code>, <code>WARNING</code>, <code>ERROR</code> (for <code>QtCriticalMsg</code>) and <code>FATAL</code>; uncategorised messages show the category <code>default</code>; the file column is the basename only, or <code>-</code> when Qt supplies no location. On desktop the line is echoed to stderr first (deliberately <em>not</em> chained to Qt&rsquo;s default handler, which would print it a second time); on Android and iOS, where stderr goes nowhere, the message is handed to the previous (Qt default) handler instead so it still reaches logcat / <code>os_log</code>. It is then written under a <code>QMutex</code> to the debug file (if enabled), to the main file (unless it is a debug message), and to the error file (warning and above). Each write is flushed immediately. <code>flush()</code> has two callers: the <code>aboutToQuit</code> handler in <span class="file-path">src/main.cpp</span> calls it last, after the settings and metadata flushes, so everything the cleanup logged reaches disk; and the message handler calls it after a <code>QtFatalMsg</code>, right before Qt aborts. It is never called from the crash (signal) handlers, which must stay Qt-free. Rotation happens before a write that would push the file past <code>maxBytes</code>, by a rename chain (<code>.3</code> deleted, <code>.2</code>&rarr;<code>.3</code>, <code>.1</code>&rarr;<code>.2</code>, current&rarr;<code>.1</code>).</p>
-
-        <h3>Logging categories</h3>
-        <p>The sources declare these <code>Q_LOGGING_CATEGORY</code> categories (all under <code>octave.*</code>):</p>
-        <table>
-          <thead><tr><th>Category</th><th>Declared in</th></tr></thead>
-          <tbody>
-            <tr><td><code>octave.androidauto</code></td><td><span class="file-path">src/managers/androidautomanager.cpp</span></td></tr>
-            <tr><td><code>octave.androidauto.connection</code></td><td><span class="file-path">src/android_auto/aapconnection.cpp</span></td></tr>
-            <tr><td><code>octave.androidauto.session</code></td><td><span class="file-path">src/android_auto/aapsession.cpp</span></td></tr>
-            <tr><td><code>octave.assetstore</code></td><td><span class="file-path">src/util/assetstore.cpp</span></td></tr>
-            <tr><td><code>octave.audioanalyzer</code></td><td><span class="file-path">src/managers/audioanalyzer.cpp</span></td></tr>
-            <tr><td><code>octave.berryimu</code></td><td><span class="file-path">src/managers/berryimumanager.cpp</span></td></tr>
-            <tr><td><code>octave.dashboards</code></td><td><span class="file-path">src/managers/dashboardmanager.cpp</span></td></tr>
-            <tr><td><code>octave.dev</code></td><td><span class="file-path">src/dev/devruntime.cpp</span> (<code>OCTAVE_DEV_TOOLS</code> builds only)</td></tr>
-            <tr><td><code>octave.diagnostics</code></td><td><span class="file-path">src/managers/diagnosticsmanager.cpp</span></td></tr>
-            <tr><td><code>octave.elm327</code></td><td><span class="file-path">src/managers/elm327protocol.cpp</span> (also carries the Android <code>[BLE]</code> bridge lines, see <a href="#platform">below</a>)</td></tr>
-            <tr><td><code>octave.embeddeddhu</code></td><td><span class="file-path">src/items/embeddeddhuitem.cpp</span></td></tr>
-            <tr><td><code>octave.esp32volume</code></td><td><span class="file-path">src/managers/esp32volumemanager.cpp</span></td></tr>
-            <tr><td><code>octave.fonts</code></td><td><span class="file-path">src/util/fontcatalog.cpp</span></td></tr>
-            <tr><td><code>octave.frontends</code></td><td><span class="file-path">src/managers/frontendmanager.cpp</span> (installable frontends)</td></tr>
-            <tr><td><code>octave.frontends.supervisor</code></td><td><span class="file-path">src/managers/frontendsupervisor.cpp</span> (an exec frontend: start, restart, fall back to QML)</td></tr>
-            <tr><td><code>octave.gesture</code></td><td><span class="file-path">src/managers/gesturemanager.cpp</span></td></tr>
-            <tr><td><code>octave.media</code></td><td><span class="file-path">src/managers/mediamanager.cpp</span></td></tr>
-            <tr><td><code>octave.network</code></td><td><span class="file-path">src/managers/networkmanager.cpp</span></td></tr>
-            <tr><td><code>octave.phonemirror</code>, <code>octave.phonemirror.client</code></td><td><span class="file-path">src/managers/phonemirrormanager.cpp</span>, <span class="file-path">src/phone_mirror/scrcpyclient.cpp</span></td></tr>
-            <tr><td><code>octave.service</code></td><td><span class="file-path">src/service/commandserver.cpp</span> (the service socket; every build)</td></tr>
-            <tr><td><code>octave.service.pairing</code></td><td><span class="file-path">src/service/servicepairing.cpp</span> (codes, tokens, refusals by address; never the code)</td></tr>
-            <tr><td><code>octave.settings</code></td><td><span class="file-path">src/managers/settingsmanager.cpp</span></td></tr>
-            <tr><td><code>octave.shiftlight</code></td><td><span class="file-path">src/managers/shiftlightmanager.cpp</span></td></tr>
-            <tr><td><code>octave.sim</code>, <code>octave.dev.carsim</code></td><td><span class="file-path">src/sim/simulator.cpp</span>, <span class="file-path">src/sim/carsim.cpp</span> (every build; <code>--sim</code>, <code>--dev</code>, the browser demo)</td></tr>
-            <tr><td><code>octave.themes</code></td><td><span class="file-path">src/managers/themecatalog.cpp</span></td></tr>
-            <tr><td><code>octave.triprecorder</code></td><td><span class="file-path">src/managers/triprecorder.cpp</span></td></tr>
-            <tr><td><code>octave.tripstore</code></td><td><span class="file-path">src/managers/tripstore.cpp</span></td></tr>
-            <tr><td><code>octave.ui_watchdog</code></td><td><span class="file-path">src/util/uiwatchdog.cpp</span></td></tr>
-          </tbody>
-        </table>
-        <p>Clock, VolumeController and the two Android platform headers have no category (the latter use plain <code>qWarning</code>, which lands under <code>default</code>).</p>
-
-        <!-- Crash handlers -->
-        <h2 id="crash-handlers">Crash handlers &amp; signal shutdown</h2>
-        <p>Commit <code>053f587</code> (crash handlers) and <code>3810e03</code> (SIGTERM/SIGINT cleanup). The rule from <span class="file-path">src/util/logger.h</span>: <em>a crash in the vehicle must leave a trace in the error log</em>.</p>
-
-        <h3>Signal / exception handlers in <code>logger.cpp</code></h3>
-        <ul>
-          <li><strong>Unix:</strong> <code>installCrashHandlers()</code> opens <code>octave-cpp-error.log</code> a second time with raw <code>open(O_WRONLY|O_APPEND|O_CREAT)</code> and installs <code>crashHandler</code> for SIGSEGV, SIGABRT, SIGFPE, SIGILL and SIGBUS with <code>sigaction</code> and <code>SA_ONSTACK</code>, after giving the GUI thread a 64&nbsp;KiB signal stack of its own (<code>sigaltstack</code>): a stack overflow there (runaway recursion in QML or C++) leaves no room for a handler on the thread&rsquo;s stack and used to die with nothing in the log. Other threads have no alternate stack, so a stack overflow on one of them still leaves no block. The browser build keeps plain <code>signal()</code>. The handler uses low-level writes and backtrace functions (no Qt &mdash; not even <code>OctaveLog::flush()</code>, which takes a <code>QMutex</code>; the log files need no flush there because <code>RotatingFile::write()</code> flushes every line as it lands): it writes <code>==== FATAL SIGSEGV - backtrace (addresses; symbolise with addr2line against this build) ====</code>, up to 64 frames, and <code>==== end ====</code> to the error log and a shorter block to stderr, then restores <code>SIG_DFL</code> and re-raises so the OS still produces a core dump / tombstone. Backtraces exist only where <code>execinfo.h</code> is available (glibc or macOS); elsewhere &mdash; Android&rsquo;s bionic libc &mdash; the block reads <code>(no backtrace support on this platform)</code>. Two rules keep a stuck thread from taking the log with it: the message handler waits at most 2&nbsp;s for the log lock (held across file writes) and then writes its line straight to the error log&rsquo;s raw descriptor, and the UI watchdog&rsquo;s last line before <code>abort()</code> goes through <code>OctaveLog::writeDirect()</code> (raw <code>write()</code>, no lock, no Qt; its timestamp is UTC with a <code>Z</code>). Test: <code>tst_logger</code> (re-runs itself as a child that crashes, then reads the log).</li>
-          <li><strong>Windows:</strong> <code>SetUnhandledExceptionFilter(crashFilter)</code> writes <code>==== FATAL exception 0x&lt;code&gt; at &lt;address&gt; ====</code> plus up to 62 <code>CaptureStackBackTrace</code> frames via <code>_write</code>, then returns <code>EXCEPTION_CONTINUE_SEARCH</code>.</li>
-          <li><code>qFatal</code> is not a signal: it goes through the message handler as <code>FATAL</code>, after which the handler calls <code>OctaveLog::flush()</code>, before Qt aborts (SIGABRT &rarr; <code>crashHandler</code> appends the backtrace), so assertion text is on disk before the SIGABRT block.</li>
-        </ul>
-
-        <h3>SIGTERM / SIGINT run the normal cleanup</h3>
-        <p>Launcher scripts, systemd and Ctrl-C all deliver a signal; the default action would kill the process without running <code>aboutToQuit</code>, leaving child-process and device cleanup incomplete (adb, ffmpeg, the DHU) and leaking the phone-mirror adb forward. <span class="file-path">src/main.cpp</span> (<code>#if !defined(Q_OS_WIN) &amp;&amp; !defined(Q_OS_MOBILE)</code>) therefore turns the signal into <code>QCoreApplication::quit()</code> with the self-pipe trick. A <code>socketpair()</code> is created; the <code>std::signal</code> handler only writes one byte into it, and a <code>QSocketNotifier</code> on the other end reads the byte on the event loop, logs <code>Signal received, shutting down</code> and calls <code>QCoreApplication::quit()</code>. Nothing Qt-side runs in signal context.</p>
-        <p>The <code>aboutToQuit</code> cleanup stops the dev runtime (on <code>OCTAVE_DEV_TOOLS</code> builds: command server, perf monitor and any recording) and the UI watchdog first, cleans up Android Auto, phone mirror, ESP32, IMU, gesture, OBD and network, then saves playback with <code>_save_playback_state()</code>, flushes the metadata store and the settings (<code>flushPendingSave()</code>, which writes immediately), and finishes with <code>OctaveLog::flush()</code>.</p>
-
-        <!-- UI watchdog -->
-        <h2 id="ui-watchdog">UI watchdog</h2>
-        <p><span class="file-path">src/util/uiwatchdog.{h,cpp}</span> &mdash; class <code>UiWatchdog</code>, commit <code>f157b97</code>. Not registered as a QML context property; it is started in <span class="file-path">src/main.cpp</span> just before the managers are built (<code>AppCore</code>) and stopped from the quit cleanup.</p>
-
-        <p>A hung event loop used to vanish without a trace &mdash; the screen froze and the log simply stopped. The watchdog is a worker thread that posts a &ldquo;ping&rdquo; to the GUI thread every <code>pingMs</code> (2000) and records when the GUI thread answers it. If the answer is older than <code>stallMs</code> (5000) it logs <strong>once</strong> <code>UI thread blocked for N s and counting</code> as a WARNING on <code>octave.ui_watchdog</code>, and when the GUI thread catches up (silence back under one ping interval) it logs <code>UI thread responsive again after N s</code>. The warning also lands in <code>octave-cpp-error.log</code> (that file is WARNING+). Time is measured on a monotonic clock (<code>QElapsedTimer</code>), so a wall-clock jump (the Orange Pi has no RTC, and NTP corrects its clock after boot) cannot register as a stall.</p>
-
-        <div class="diagram">
-worker thread ("ui-watchdog")                     GUI thread
-    │                                                 │
-    │─ sleep pingMs (2 s) ─┐                          │
-    │◄─────────────────────┘                          │
-    │── queued invoke: lastPong = now ───────────────►│  (runs when the event loop gets to it)
-    │                                                 │
-    │  silent = now - lastPong                        │
-    │  silent &gt; stallMs (5 s)  → WARNING "blocked for N s and counting" (once)
-    │  silent ≤ pingMs after a stall → WARNING "responsive again after N s"
-</div>
-
-        <table>
-          <thead><tr><th>Member</th><th>Behaviour</th></tr></thead>
-          <tbody>
-            <tr><td>constructor</td><td><code>UiWatchdog(QObject *parent = nullptr, int pingMs = 2000, int stallMs = 5000)</code></td></tr>
-            <tr><td><code>start()</code></td><td>Starts a <code>QThread</code> named <code>ui-watchdog</code>; the loop runs from its <code>started</code> signal</td></tr>
-            <tr><td><code>stop()</code></td><td>Clears the atomic running flag, <code>quit()</code> + <code>wait(2000)</code></td></tr>
-            <tr><td>ping mechanism</td><td><code>QMetaObject::invokeMethod(this, lambda, Qt::QueuedConnection)</code> writing an <code>std::atomic&lt;qint64&gt;</code> (monotonic ms since the watchdog started)</td></tr>
-            <tr><td>teardown safety</td><td>Worker owns nothing Qt-side; it only posts to <code>this</code></td></tr>
-          </tbody>
-        </table>
-        <p>A warning means the GUI failed to answer within the configured threshold; it does not identify the cause. Expected long operations can also trigger it, so use the surrounding logs to diagnose a stall.</p>
-
-        <!-- DiagnosticsManager -->
-        <h2 id="diagnostics-manager">DiagnosticsManager</h2>
-        <p><span class="file-path">src/managers/diagnosticsmanager.{h,cpp}</span> &mdash; QML name: <code>diagnosticsManager</code>. Commits <code>b5d47b8</code>, <code>95dfb49</code>, <code>7fd8405</code>.</p>
-
-        <p>Field diagnostics: get the logs out of the head unit <em>without a laptop</em>. It backs the <strong>Diagnostics</strong> card on Settings &rarr; Device (<span class="file-path">frontend/settings/DeviceSettingsPage.qml</span>), which shows the version / backend / device line and the log path, a scrollable tail of the log, and four buttons in a 2&times;2 grid (so they fit at dash scale on the Pi): Refresh, Copy, Export logs and &mdash; on desktop &mdash; Open folder. The controls and status text guard access to <code>diagnosticsManager</code>.</p>
-
-        <h3>Properties</h3>
-        <table>
-          <thead><tr><th>Property</th><th>Type</th><th>Notify</th><th>Value</th></tr></thead>
-          <tbody>
-            <tr><td><code>logDir</code></td><td>str</td><td>CONSTANT</td><td><code>SettingsManager::getAppDataDir() + "/logs"</code></td></tr>
-            <tr><td><code>appVersion</code></td><td>str</td><td>CONSTANT</td><td><code>OCTAVE_VERSION</code> compile definition (<code>"dev"</code> if undefined)</td></tr>
-            <tr><td><code>backendName</code></td><td>str</td><td>CONSTANT</td><td><code>"C++"</code></td></tr>
-            <tr><td><code>deviceInfo</code></td><td>str</td><td>CONSTANT</td><td><code>&lt;prettyProductName&gt; &lt;cpuArch&gt; (&lt;hostname&gt;, &lt;kernelVersion&gt;)</code> via <code>QSysInfo</code></td></tr>
-            <tr><td><code>lastExportPath</code></td><td>str</td><td><code>lastExportPathChanged</code></td><td>Folder written by the last <code>exportLogs()</code>; <code>""</code> until it has run</td></tr>
-            <tr><td><code>canOpenFolder</code></td><td>bool</td><td>CONSTANT</td><td><code>false</code> on <code>Q_OS_ANDROID</code> / <code>Q_OS_IOS</code>, else <code>true</code></td></tr>
-          </tbody>
-        </table>
-
-        <h3>Invokables / slots</h3>
-        <table>
-          <thead><tr><th>Method</th><th>Signature</th><th>Behaviour</th></tr></thead>
-          <tbody>
-            <tr><td><code>recentLogLines(maxLines)</code></td><td><code>Q_INVOKABLE QString (int maxLines = 200) const</code></td><td>Reads at most the last 256 KB of the main log (<code>octave-cpp.log</code>), keeps the last <code>maxLines</code> non-empty lines, then appends <code>---- errors ----</code> and the last <code>maxLines / 4</code> lines of the error log if any. Returns <code>(no log yet)</code> when the main log is empty.</td></tr>
-            <tr><td><code>copyLogsToClipboard(maxLines)</code></td><td><code>Q_INVOKABLE bool (int maxLines = 400)</code></td><td>Puts <code>OCTAVE &lt;version&gt; (C++ backend) on &lt;device&gt;</code>, an ISO timestamp, and <code>recentLogLines(maxLines)</code> on the <code>QGuiApplication</code> clipboard. Logs <code>Logs copied to clipboard</code>. <code>false</code> if there is no clipboard.</td></tr>
-            <tr><td><code>exportLogs()</code></td><td><code>Q_INVOKABLE QString ()</code></td><td>Copies every <code>octave*.log*</code> file (current and rotated backups) into <code>&lt;Downloads&gt;/OCTAVE-logs-&lt;yyyyMMdd-HHmmss&gt;/</code> (Documents if there is no Downloads location) plus a <code>device-info.txt</code> header, sets <code>lastExportPath</code>, emits <code>lastExportPathChanged</code>, returns the folder or <code>""</code> on failure. On Android that is the public Download folder, attachable from any mail or files app &mdash; chosen over a FileProvider because androidx is deliberately not bundled.</td></tr>
-            <tr><td><code>openLogFolder()</code></td><td><code>Q_INVOKABLE bool ()</code></td><td><code>QDesktopServices::openUrl(QUrl::fromLocalFile(logDir))</code>; returns <code>false</code> where <code>canOpenFolder</code> is false.</td></tr>
-            <tr><td><code>licenseText(name)</code></td><td><code>Q_INVOKABLE QString (const QString &amp;) const</code></td><td>Full text of <code>"LICENSE"</code> (GPL-3.0) or <code>"NOTICE"</code>, or of a bundled component's license (<code>"LGPL-3.0"</code>, <code>"LGPL-2.1"</code>, <code>"GPL-2.0"</code>, <code>"MPL-1.1"</code>, <code>"Apache-2.0"</code>, <code>"MIT"</code>, <code>"OFL-1.1"</code>; the files of <span class="file-path">licenses/</span>, where <code>MIT</code> and <code>OFL-1.1</code> carry each component's copyright notice). All are compiled in as <code>:/licenses/</code> resources (<code>octave_add_license_texts()</code> in <span class="file-path">CMakeLists.txt</span>) and looked up by <span class="file-path">src/util/licensetexts.{h,cpp}</span>, whose list of names is the only thing that is read; <code>""</code> for any other name. Shown by the About page's licenses card. A new bundled license needs the file, the name in both lists and a button in <span class="file-path">AboutPage.qml</span> (<code>tst_licensetexts</code> holds the three together).</td></tr>
-          </tbody>
-        </table>
-        <p>Signal: <code>lastExportPathChanged()</code>. Logging category <code>octave.diagnostics</code>. The QML calls are <code>recentLogLines(200)</code>, <code>copyLogsToClipboard(400)</code>, <code>exportLogs()</code> and <code>openLogFolder()</code>.</p>
-
-        <!-- VolumeController -->
-        <h2 id="volume-controller">VolumeController</h2>
-        <p><span class="file-path">src/managers/volumecontroller.{h,cpp}</span> &mdash; QML name: <code>volumeController</code>. Introduced in commit <code>d2b047b</code> (&ldquo;volume curve de-duplication&rdquo;).</p>
-
-        <p>OCTAVE maps the UI volume percent (0&ndash;100) to a linear audio gain (0.0&ndash;1.0) through a <strong>quadratic curve</strong>, <code>(percent / 100)<sup>2</sup></code>, which gives a more natural perceptual response at low volumes than a straight line. <code>VolumeController</code> owns the math and is the <em>single entry point</em> for routing a percent to every output; changing the curve means editing <code>toLinearStatic()</code> in one place.</p>
-
-        <table>
-          <thead><tr><th>Percent</th><th>Linear gain</th></tr></thead>
-          <tbody>
-            <tr><td>0</td><td>0.0</td></tr>
-            <tr><td>25</td><td>0.0625</td></tr>
-            <tr><td>50</td><td>0.25</td></tr>
-            <tr><td>75</td><td>0.5625</td></tr>
-            <tr><td>100</td><td>1.0</td></tr>
-          </tbody>
-        </table>
-
-        <h3>Public API</h3>
-        <table>
-          <thead><tr><th>Member</th><th>Declaration</th><th>Description</th></tr></thead>
-          <tbody>
-            <tr><td><code>applyVolume(percent)</code></td><td><code>public slot void (int)</code></td><td>Clamps to 0&ndash;100, stores the raw percent in memory via <code>SettingsManager.setCurrentVolume()</code>, computes the linear value and emits <code>volumeApplied</code></td></tr>
-            <tr><td><code>toLinear(percent)</code></td><td><code>public slot float (float)</code></td><td>Pure curve math for QML; no dispatch</td></tr>
-            <tr><td><code>volumeApplied(int percent, float linear)</code></td><td>signal</td><td>Emitted after every <code>applyVolume()</code>; <span class="file-path">appcore.cpp</span> connects the outputs (media, phone mirror, ESP32) to it</td></tr>
-            <tr><td><code>toLinearStatic(float)</code></td><td><code>static float</code></td><td>Curve without an instance (tests, one-off math)</td></tr>
-            <tr><td>constructor</td><td><code>VolumeController(SettingsManager *, QObject *parent = nullptr)</code></td><td>Holds only the settings pointer; outputs are reached through the signal</td></tr>
-          </tbody>
-        </table>
-
-        <h3>Dispatch: who gets what</h3>
-        <p>Settings store the percent, local media and the phone mirror take the linear gain, and the ESP32 LED takes the raw percent. The controller itself only emits; the fan-out is in <span class="file-path">main.cpp</span>:</p>
-        <pre><code><span class="cmt">// src/main.cpp</span>
-QObject::connect(&amp;volumeController, &amp;VolumeController::volumeApplied,
-                 [&amp;mediaManager, &amp;phoneMirrorManager, &amp;esp32VolumeManager](<span class="kw">int</span> percent, <span class="kw">float</span> linear) {
-    mediaManager.setVolume(linear);
-    phoneMirrorManager.setVolume(linear);
-<span class="kw">#ifndef</span> Q_OS_MOBILE
-    esp32VolumeManager.send_volume_update(percent);   <span class="cmt">// the ESP32 manager rate-limits itself (50 ms)</span>
-<span class="kw">#endif</span>
-});
-volumeController.applyVolume(settingsManager.currentVolume());   <span class="cmt">// startup volume</span></code></pre>
-        <p>The ESP32 leg is compiled out on mobile, where the manager is a stub.</p>
-
-        <h3>Callers</h3>
-        <ul>
-          <li><span class="file-path">frontend/BottomBar.qml</span> (four slider / button sites) and <span class="file-path">frontend/MediaRoom.qml</span> call <code>volumeController.applyVolume(Math.round(value))</code></li>
-          <li>Gesture sensor <code>volume_up</code> / <code>volume_down</code>: <code>applyVolume(currentVolume &plusmn; gestureVolumeStep)</code></li>
-          <li>ESP32 knob <code>volumeChangeRequested(delta)</code>: fractional deltas are accumulated and applied once they reach a whole percent</li>
-          <li><code>AppCore::wireVolume()</code> (<span class="file-path">src/appcore.cpp</span>) calls <code>applyVolume(settingsManager.currentVolume())</code> once after the outputs are constructed, so the configured startup volume reaches every output at startup</li>
-        </ul>
-        <div class="info-box warning">
-          <div class="info-box-title">Rule</div>
-          <p>Never call an individual manager&rsquo;s <code>setVolume</code> from QML or a hardware handler, and never re-derive the curve. Everything goes through <code>volumeController.applyVolume(percent)</code>.</p>
-        </div>
+        <p>
+          The three settings are in Settings &gt; Display; see the <a href="settings-reference.html">Settings
+          Reference</a>. A change shows within a second. <code>AM</code> and <code>PM</code> are always written
+          that way, whatever the system language.
+        </p>
+        <p>
+          The text only changes, and <code>timeChanged</code> only fires, when the time shown changes: once a minute
+          without seconds. So do not use it as a one-second tick. The Clock page
+          (<span class="file-path">frontend/ClockMenu.qml</span>) needs a second hand and runs a timer of its own
+          for that reason.
+        </p>
+        <p>API: <a href="api-reference.html#clock">clock</a>. Source: <span class="file-path">src/managers/clock.{h,cpp}</span>.</p>
 
         <!-- Version -->
-        <h2 id="version">Version &amp; update check</h2>
-        <p><span class="file-path">CMakeLists.txt</span> &mdash; surfaced with the Diagnostics card (<code>b5d47b8</code>).</p>
+        <h2 id="version">Version and Update Check</h2>
+        <p>
+          The version is written in one place: <code>project(OCTAVE VERSION x.y.z ...)</code> at the top of
+          <span class="file-path">CMakeLists.txt</span>. From there it reaches:
+        </p>
         <ul>
-          <li><code>project(OCTAVE VERSION 0.9.6 LANGUAGES CXX)</code> is the source of truth. CMake passes <code>OCTAVE_VERSION="${PROJECT_VERSION}"</code> as a compile definition and reuses <code>PROJECT_VERSION</code> for <code>MACOSX_BUNDLE_BUNDLE_VERSION</code> / <code>MACOSX_BUNDLE_SHORT_VERSION_STRING</code>. <span class="file-path">diagnosticsmanager.cpp</span> falls back to <code>"dev"</code> if the define is missing.</li>
-          <li>The APK's <code>versionName</code> / <code>versionCode</code> come from it as well (<code>QT_ANDROID_VERSION_NAME</code> / <code>QT_ANDROID_VERSION_CODE</code>, code = major&times;10000 + minor&times;100 + patch). Only the Windows installer (<code>MyAppVersion</code> in <span class="file-path">build_scripts/installer_windows.iss</span>) carries its own copy; bump it in the same commit (CI patches it from the tag on release builds).</li>
-          <li>The version is surfaced to users only through <code>diagnosticsManager.appVersion</code> (Device diagnostics card and the log export header).</li>
+          <li>the app, as <code>diagnosticsManager.appVersion</code> (the Diagnostics card, the log export, the service's <code>hello</code> reply) and <code>octave --version</code>;</li>
+          <li>the macOS bundle version;</li>
+          <li>the Android package: its version name, and its version code, which is major &times; 10000 + minor &times; 100 + patch. Android only installs an update whose code is higher.</li>
         </ul>
-        <p>The <strong>update check</strong> does <em>not</em> use the version string. <code>NetworkManager.checkForUpdates()</code> compares the local git <code>HEAD</code> against <code>https://api.github.com/repos/&lt;repo&gt;/commits/main</code> and reports <code>up-to-date</code> / <code>update-available</code> / <code>ahead</code> / <code>diverged</code> / <code>error</code> through <code>updateStatus</code>; the About page and the settings layouts show a badge when it is <code>update-available</code>. See <a href="network-manager.html">Network Manager</a>.</p>
-
-        <!-- Performance monitor -->
-        <h2 id="perf-monitor">Performance monitor &amp; perf tooling</h2>
-        <p><span class="file-path">src/dev/perfmonitor.{h,cpp}</span>, <span class="file-path">src/util/perfscope.h</span>; client tools in <span class="file-path">dev/perf/</span>, <span class="file-path">dev/mcp_server.py</span>, <span class="file-path">dev/mcp_benchmark.py</span> and <span class="file-path">.mcp.json</span>. Compiled in only with <code>OCTAVE_DEV_TOOLS</code>.</p>
-
-        <p>Everything here is switched on by one flag: <code>build/octave --profile</code>. <code>OctaveDev::Runtime</code> (<span class="file-path">src/dev/devruntime.cpp</span>) creates a <code>PerfMonitor</code> writing <code>dev/perf/logs/perf_&lt;yyyyMMdd_HHmmss&gt;.csv</code> and <code>.log</code> under the project root, registers it as the QML context property <code>perfMonitor</code> before <code>Main.qml</code> loads (no shipped QML binds to it; it is there for a HUD), and after the load starts it together with the <a href="#command-server">command server</a>. <code>Runtime::shutdown()</code>, first in the <code>aboutToQuit</code> cleanup, stops both; the detailed report is appended to the <code>.log</code>.</p>
-
-        <h3>PerfMonitor internals</h3>
-        <table>
-          <thead><tr><th>Component</th><th>What it measures</th></tr></thead>
-          <tbody>
-            <tr><td><code>RingBuffer</code></td><td>Fixed-size sample window with <code>mean()</code>, <code>max()</code> and linear-interpolated <code>percentile(p)</code>. Capacities: 1000 for loop latency (5 s of 5 ms ticks, cleared every report), 300 for thread jitter, 200 per timing label.</td></tr>
-            <tr><td>Event-loop probe</td><td>A 5 ms <code>PreciseTimer</code>; how late each tick fires beyond its 5 ms interval is one sample. A high value means the loop was blocked &mdash; UI stutter.</td></tr>
-            <tr><td>Jitter probe</td><td>A <code>std::thread</code> that sleeps 10 ms and records how late it woke &mdash; scheduler / CPU contention. Reported under the <code>gil_*</code> keys and the <code>gilJitterMs</code> property so the client tools read one set of names.</td></tr>
-            <tr><td>Process sample</td><td>CPU % (delta of process CPU time over wall time, may exceed 100 on several cores), RSS MB and thread count: <code>/proc/self/stat</code>, <code>statm</code> and <code>status</code> on Linux / Android, <code>getrusage</code> on other Unix, <code>GetProcessTimes</code> / psapi on Windows.</td></tr>
-            <tr><td>Timing labels</td><td>Fed by <code>OCTAVE_PERF_SCOPE("label")</code> at the top of a function, which records how long the rest of the scope took. Currently instrumented: <code>settings.save_settings</code>, <code>audio._analyze_audio (FFT)</code>, <code>media._update_position</code>, <code>media._extract_colors</code>, <code>media._kmeans_colors</code>, <code>media.next_track</code>, <code>media.previous_track</code>, <code>esp32._read_serial</code>, <code>obd._monitor_connection</code>. With dev tools built but no <code>--profile</code>, a scope costs one relaxed atomic load; without <code>OCTAVE_DEV_TOOLS</code> it compiles to nothing.</td></tr>
-          </tbody>
-        </table>
-
-        <h3>Reporting cycle (every 1 s)</h3>
-        <ol class="steps">
-          <li>Loop latency avg / p50 / p95 / p99 / max from the ring buffer; jitter avg / p99; CPU, memory and thread count.</li>
-          <li>Terminal line (<code>[PERF]</code>), colour-coded by average loop latency: green &lt; 5 ms, yellow &lt; 16 ms, red otherwise. Labels whose p95 exceeds 2 ms are listed every fifth report.</li>
-          <li>Plain-text line in the perf <code>.log</code> tagged <code>OK</code> / <code>WARN</code> / <code>STUTTER</code> with the same thresholds, plus <code>SLOW</code> lines.</li>
-          <li>CSV row: <code>timestamp, loop_avg_ms, loop_p50_ms, loop_p95_ms, loop_p99_ms, loop_max_ms, gil_avg_ms, gil_p99_ms, cpu_pct, mem_mb, threads</code>.</li>
-          <li>Loop buffer cleared, <code>metricsUpdated</code> emitted.</li>
-        </ol>
-
-        <h3>QML properties (all notify on <code>metricsUpdated</code>)</h3>
-        <p><code>loopLatencyMs</code>, <code>loopP99Ms</code>, <code>gilJitterMs</code>, <code>cpuPercent</code>, <code>memMb</code> (double), <code>threadCount</code> (int), <code>summaryText</code> (str, a one-line HUD string). Invokable: <code>getDetailedReport()</code> &rarr; str, listing loop / jitter / CPU and every label with p95 &gt; 1 ms sorted by p95.</p>
-
-        <h3>Instrumentation</h3>
-        <pre><code><span class="kw">#include</span> <span class="str">"../util/perfscope.h"</span>
-
-<span class="kw">void</span> <span class="cls">MediaManager</span>::<span class="fn">next_track</span>()
-{
-    OCTAVE_PERF_SCOPE(<span class="str">"media.next_track"</span>);   <span class="cmt">// times the rest of the function</span>
-    ...
-}</code></pre>
-
-        <h3>dev/perf and the MCP servers</h3>
-        <p>These are Python client scripts that drive the running app over the command server. The whole <code>dev/</code> tree is gitignored, so they exist only on developer machines; <span class="file-path">dev/app_launch.py</span> finds the binary (<code>build*/octave</code>, or <code>OCTAVE_BIN</code>) for the tools that launch the app themselves.</p>
-        <table>
-          <thead><tr><th>Tool</th><th>Purpose</th></tr></thead>
-          <tbody>
-            <tr><td><span class="file-path">dev/perf/profile_performance.py</span></td><td>External sampler: finds the running <code>octave</code> process with psutil and records CPU / memory to CSV for a duration. Does not need <code>--profile</code>.</td></tr>
-            <tr><td><span class="file-path">dev/perf/run_perf_loop.py</span></td><td>Drives the command socket (127.0.0.1:9876) through the full gamut of pages and settings in a loop and diffs the metrics between iterations.</td></tr>
-            <tr><td><span class="file-path">dev/perf/brutalize.py</span></td><td>Cranks every visual setting to maximum and hammers actions faster and faster until the loop latency degrades, then reports where it broke.</td></tr>
-            <tr><td><span class="file-path">dev/perf/logs/</span></td><td>Output: <code>perf_*.csv</code> / <code>.log</code> from PerfMonitor, <code>benchmark_*.json</code> and <code>baseline.json</code> from the benchmark server.</td></tr>
-            <tr><td><span class="file-path">dev/mcp_server.py</span> (<code>octave-perf</code>)</td><td>MCP server wrapping the command socket as tools an AI agent can call: <code>ping</code>, <code>list_actions</code>, <code>navigate</code>, <code>go_back</code>, <code>go_home</code>, <code>get_current_page</code>, <code>list_pages</code>, the settings tools (<code>get_all_settings</code>, <code>list_*_settings</code>, <code>toggle_setting</code>, <code>set_bool_setting</code>, <code>set_numeric_setting</code>, <code>set_string_setting</code>), media tools (<code>next_track</code>, <code>previous_track</code>, <code>toggle_play</code>, <code>pause</code>, <code>toggle_mute</code>, <code>toggle_shuffle</code>, <code>set_volume</code>, <code>skip_tracks</code>, <code>get_media_status</code>, <code>get_track_info</code>), <code>obd_status</code>, <code>get_metrics</code>, <code>get_detailed_report</code>.</td></tr>
-            <tr><td><span class="file-path">dev/mcp_benchmark.py</span> (<code>octave-benchmark</code>)</td><td>Systematic benchmarking and regression tracking (serves MCP only with <code>--mcp</code>; otherwise a CLI): <code>benchmark_page</code>, <code>benchmark_setting</code>, <code>benchmark_transition</code>, <code>benchmark_media_ops</code>, <code>get_bottlenecks</code>, <code>run_benchmark_suite</code> (five phases: baseline, settings matrix, stress, combined, bottlenecks), <code>save_baseline</code>, <code>compare_to_baseline</code>.</td></tr>
-            <tr><td><span class="file-path">.mcp.json</span></td><td>Registers both servers for Claude Code, once per developer machine (<code>octave-perf</code> / <code>octave-benchmark</code> plus <code>-rob</code> and <code>-zion</code> variants pointing at that machine&rsquo;s Python interpreter and checkout). Gitignored because the paths are absolute.</td></tr>
-          </tbody>
-        </table>
-
-        <!-- Command server -->
-        <h2 id="command-server">Command server</h2>
-        <p><span class="file-path">src/service/commandserver.{h,cpp}</span> (server), <span class="file-path">src/dev/coreactions.cpp</span> (built-in actions), <span class="file-path">src/dev/uidriver.{h,cpp}</span> (navigation, capture and input), <span class="file-path">src/dev/collagebridge.{h,cpp}</span> (UI collage actions). Started by <code>OctaveDev::Runtime</code> when <code>--profile</code> is passed on an <code>OCTAVE_DEV_TOOLS</code> build. Listens on <code>127.0.0.1:9876</code>; <code>--command-port N</code> (or <code>--command-port=N</code>) moves it. If the port is taken it logs <code>command server could not listen on 127.0.0.1:9876</code> and the app carries on without it.</p>
-
-        <h3>Protocol</h3>
-        <p>One JSON object per line in, one per line out. <code>args</code> is optional.</p>
-        <pre><code>{<span class="str">"action"</span>: <span class="str">"navigate"</span>, <span class="str">"args"</span>: {<span class="str">"page"</span>: <span class="str">"obd"</span>}}
-{<span class="str">"ok"</span>: <span class="kw">true</span>, <span class="str">"result"</span>: {<span class="str">"navigated_to"</span>: <span class="str">"obd"</span>}}
-
-{<span class="str">"action"</span>: <span class="str">"bogus"</span>}
-{<span class="str">"ok"</span>: <span class="kw">false</span>, <span class="str">"error"</span>: <span class="str">"Unknown action: bogus"</span>}</code></pre>
-        <p>Invalid JSON gets <code>{"ok": false, "error": "Invalid JSON: …"}</code>; an exception thrown by a handler (<code>CommandError</code> or any <code>std::exception</code>) is logged on <code>octave.service</code> and returned as <code>error</code>. A client may keep the connection open and send many lines.</p>
-
-        <h3>Architecture</h3>
-        <div class="diagram">
-  CommandServer                       (lifecycle: start / stop / registerAction)
-    │
-    ├── CommandTcpServer              QTcpServer on its own QThread ("cmd-server"),
-    │     │                           bound to QHostAddress::LocalHost
-    │     └── one QThread per client  reads JSON lines → handleLine() → dispatch()
-    │
-    ├── handlers{}                    action → std::function, registration order kept
-    │                                 for list_actions
-    │
-    └── GUI-thread access from a handler
-          CommandServer::postGui(fn)  queued, fire and forget (navigation, sim_*)
-          CommandServer::onGui(fn)    queued + semaphore wait for the result
-                                      (30 s timeout → "GUI thread did not answer")
-</div>
-        <p>Handlers run on the connection thread, so a slow GUI call on one client never blocks <code>get_metrics</code> on another. Anything that touches Qt objects goes through <code>onGui()</code> (screenshots, item lookup, clicks, settings reads) or <code>postGui()</code> (navigation). Calls into QML functions go through <code>invokeByName()</code>, which passes each argument as a <code>QVariant</code> when the parameter is untyped (a QML JS function), and converts it to the parameter type otherwise.</p>
-
-        <h3>Actions</h3>
-        <table>
-          <thead><tr><th>Category</th><th>Actions</th></tr></thead>
-          <tbody>
-            <tr><td>App</td><td><code>ping</code> &rarr; <code>"pong"</code>; <code>list_actions</code> (in registration order)</td></tr>
-            <tr><td>Perf</td><td><code>get_metrics</code> (loop_avg_ms, loop_p99_ms, gil_avg_ms, cpu_percent, mem_mb, thread_count, summary, <code>backend: "cpp"</code>), <code>get_detailed_report</code>, <code>get_slot_timings</code> (avg / p95 / max / count per label)</td></tr>
-            <tr><td>Navigation</td><td><code>navigate</code> (<code>page</code> &isin; home, media_room, media_player, obd, obd_home, obd_diagnostics, trip_history, sensor_home, settings, phone_mirror, android_auto, airplay, sensors, car, clock &mdash; mapped to the QML file by <code>kPages</code>; anything else returns <code>Unknown page: …</code> with the valid list), <code>go_back</code>, <code>go_home</code>, <code>get_current_page</code> (objectName, or class name, of the <code>stackView</code> current item), <code>list_pages</code>, <code>open_settings</code> (<code>section</code> &isin; displaySettings, mediaSettings, obdSettings, phoneSettings, accessoriesSettings, deviceSettings, about; optional <code>tile</code>, a card of that section to open as well, e.g. <code>device_frontends</code> &mdash; calls <code>navigateToSettings(section, tile)</code>), <code>list_settings_sections</code></td></tr>
-            <tr><td>Screenshots / recording</td><td><code>screenshot</code> (<code>path</code>; <code>grabWindow()</code> &rarr; PNG, so it works on Wayland, X11 and offscreen without any external tool), <code>set_window_size</code> (<code>width</code>, <code>height</code>; Main.qml reflows Spacing), <code>set_dev_chrome</code> (<code>visible</code>; toggles the <code>devOverlay</code> item, no-op without <code>--dev</code>), <code>record_start</code> (<code>path</code>, <code>fps</code> 1&ndash;60, default 30: a GUI-thread QTimer pipes raw RGBA <code>grabWindow()</code> frames into <code>ffmpeg -c:v libx264 -preset veryfast -crf 18</code>; needs <code>ffmpeg</code> on PATH), <code>record_stop</code>, <code>record_status</code> (frames, dropped, repeated, seconds, error; frames are paced by wall clock, repeating the last grab when rendering falls behind, and scaled to the logical window size)</td></tr>
-            <tr><td>UI driving</td><td><code>find_item</code> (<code>name</code>: objectName search through the window&rsquo;s visual tree, popups included, preferring the visible match; returns scene geometry, centre, effective visibility and <code>hiddenBy</code>), <code>list_items</code> (<code>prefix</code>), <code>list_interactive</code> (no args: the reachable controls, each <code>kind</code> (button / toggle / slider / dropdown / text_field / scrollable), <code>label</code> (visible text inside it), <code>icon</code> (image file name), <code>x</code> / <code>y</code> / <code>width</code> / <code>height</code> / <code>cx</code> / <code>cy</code> (the visible part), plus <code>name</code>, <code>checked</code>, <code>value</code> or <code>currentText</code> when they apply; passive pointer handlers and plain <code>Text</code> don&rsquo;t count as controls or as covering one), <code>get_prop</code> / <code>set_prop</code> (<code>name</code>, <code>prop</code>[, <code>value</code>]; <code>"root"</code> addresses the ApplicationWindow), <code>call</code> (<code>name</code>, <code>method</code>: no-arg invoke), <code>find_text</code> (<code>text</code>[, <code>prop</code> default <code>text</code>]: first visible item whose label matches, trimmed and case-insensitive), <code>click</code> (<code>x</code>, <code>y</code>: press + release injected with <code>QTest</code>, so pointer handlers keep their grab state as for a real finger), <code>long_press</code> (<code>x</code>, <code>y</code>, <code>ms</code> default 1000: press, hold with the event loop running, release), <code>type_text</code> (<code>text</code>[, <code>field</code>: objectName or placeholderText, else the focused item][, <code>enter</code>]: key events sent to the item directly, since headless windows and dev mode&rsquo;s keyboard handler keep window-level keys from reaching fields), <code>drag</code> (<code>x1</code>, <code>y1</code>, <code>x2</code>, <code>y2</code>, <code>steps</code> default 12: press, interpolated moves, release), <code>wheel</code> (<code>x</code>, <code>y</code>, <code>notches</code> default 1: one 120-unit mouse-wheel event per notch, positive scrolls up; zooms the 3D Jeep and the trip chart)</td></tr>
-            <tr><td>Media</td><td><code>next_track</code>, <code>previous_track</code>, <code>toggle_play</code>, <code>toggle_shuffle</code> (through <code>nowPlaying</code>, so they drive the phone while it has the media controls), <code>pause</code> (local player), <code>toggle_mute</code> (<code>volumeController.toggleMute()</code>), <code>set_volume</code> (<code>volume</code> 0.0&ndash;1.0 linear, default 0.5 &mdash; converted with <code>toPercent</code> and applied through <code>volumeController.applyVolume</code>, so every output, the sliders and the unmute rule see it), <code>get_media_status</code>, <code>get_track_info</code>, <code>skip_tracks</code> (<code>count</code>)</td></tr>
-            <tr><td>OBD</td><td><code>obd_status</code> (connected, status string), <code>obd_reconnect</code></td></tr>
-            <tr><td>Settings</td><td><code>get_settings</code> (legacy: volume, theme), <code>get_all_settings</code>, <code>toggle_setting</code> / <code>set_bool_setting</code> / <code>list_toggle_settings</code>, <code>set_numeric_setting</code> / <code>list_numeric_settings</code>, <code>set_string_setting</code> / <code>list_string_settings</code></td></tr>
-            <tr><td>UI collage</td><td><code>collage_list_popups</code>, <code>collage_open_popup</code>, <code>collage_close_popups</code>, <code>collage_mount</code>, <code>collage_grab</code>, <code>collage_unmount</code> &mdash; mount any <code>.qml</code> file or popup in isolation and grab it, driven by <code>python -m dev.collage</code></td></tr>
-            <tr><td>Simulator (<code>--dev</code> only)</td><td><code>sim_throttle</code>, <code>sim_brake</code>, <code>sim_rev</code>, <code>sim_engine</code>, <code>sim_gear</code>, <code>sim_upshift</code>, <code>sim_downshift</code>, <code>sim_speed</code>, <code>sim_rpm</code>, <code>sim_realistic</code>, <code>sim_scenario</code> (cold, hot, low_fuel, else normal), <code>sim_dropouts</code>, <code>sim_dropout_now</code>, <code>sim_failure_rate</code>, <code>sim_link</code>, <code>sim_imu</code> (simulated IMU motion), <code>sim_video</code>, <code>sim_pairing_code</code>, <code>sim_status</code> &mdash; registered by <code>Runtime::registerSimActions()</code> as aliases for the <code>sim</code> object's methods, which every build serves under <code>--sim</code></td></tr>
-          </tbody>
-        </table>
-
-        <h3>Settings actions in detail</h3>
-        <ul>
-          <li><strong>Boolean toggles (12):</strong> <code>show_clock</code>, <code>clock_24h</code>, <code>show_waveform</code>, <code>show_3d_tilt</code>, <code>show_3d_album</code>, <code>rounded_album_art</code>, <code>album_art_shadow</code>, <code>vinyl_mode</code>, <code>obd_fast_mode</code>, <code>auto_play</code>, <code>show_bottom_bar_controls</code>, <code>song_length_transition</code> &mdash; each mapped to the <code>save_*</code> slot and the property to read back (<code>toggle_setting</code> returns <code>old</code> / <code>new</code>).</li>
-          <li><strong>Numeric (10), clamped to a range:</strong> <code>ui_scale</code> (0.5&ndash;2.0), <code>blur_radius</code> (0&ndash;100), <code>color_transition_ms</code> (the server&rsquo;s own clamp is 0&ndash;5000; the settings UI slider stops at 2000), <code>album_art_corner_radius</code> (2&ndash;32), <code>bg_overlay_opacity</code> (0&ndash;100), <code>side_card_opacity</code> (0.1&ndash;1.0), <code>side_card_angle</code> (5&ndash;60), <code>button_tilt_duration</code> (50&ndash;500), <code>text_scroll_speed</code> (1000&ndash;10000), <code>clock_size</code> (8&ndash;72).</li>
-          <li><strong>String / enum (5):</strong> <code>theme</code>, <code>font</code>, <code>mediaFolder</code> (free), <code>album_art_transition</code> (Crossfade, Slide, Vinyl Lift, Dissolve, Flip), <code>bottom_bar_orientation</code> (bottom, side).</li>
-        </ul>
-
-        <h3>Lifecycle</h3>
-        <pre><code><span class="cmt">// src/dev/devruntime.cpp — Runtime::afterLoad()</span>
-<span class="kw">if</span> (m_profile) {
-    m_perf-&gt;start();
-    m_ui = <span class="kw">new</span> UiDriver(m_app.engine, <span class="kw">this</span>);
-    m_server = <span class="kw">new</span> CommandServer(m_port, <span class="kw">this</span>);
-    registerCoreActions(*m_server, {m_ui, m_perf, m_app.settings, m_app.media, m_app.obd});
-    m_collage = <span class="kw">new</span> CollageBridge(m_app.engine, m_app.projectRoot, <span class="kw">this</span>);
-    m_collage-&gt;registerActions(*m_server);
-    <span class="kw">if</span> (m_dev)
-        registerSimActions();
-    m_server-&gt;start();
-}</code></pre>
-        <p><code>registerAction()</code> works before or after <code>start()</code>; registering a name again replaces its handler. <code>Runtime::shutdown()</code> stops the server, then the perf monitor, then any recording.</p>
-
-        <h3>Who uses it</h3>
-        <ul>
-          <li><span class="file-path">dev/screenshot_tool.py</span> / <code>python -m dev.screenshots</code> (<span class="file-path">dev/screenshots/auto.py</span>): launches <code>build/octave --dev --profile</code> headless (or sweeps an app already started with <code>--profile</code>, <code>--no-launch</code>), then walks every page with <code>navigate</code> / <code>open_settings</code>, fixes the size with <code>set_window_size</code>, hides the overlay with <code>set_dev_chrome</code> and captures with <code>screenshot</code>.</li>
-          <li><span class="file-path">dev/screenshots/stories.py</span> and the README clips use <code>record_start</code> / <code>record_stop</code> plus the <code>sim_*</code> actions and <code>find_text</code> / <code>long_press</code> / <code>type_text</code>.</li>
-          <li><span class="file-path">dev/tests/drive_dashboard_editor.py</span>: an end-to-end scenario written for the in-app dashboard editor (removed on 2026-11-24), a pattern for <code>find_item</code>, <code>get_prop</code>, <code>set_prop</code>, <code>click</code>, <code>drag</code> and <code>call</code>; <span class="file-path">dev/tests/drive_dashboard_features.py</span> drives the other dashboard features the same way.</li>
-          <li><code>python -m dev.collage</code> (the <code>collage_*</code> actions), <span class="file-path">dev/perf/run_perf_loop.py</span>, <span class="file-path">dev/perf/brutalize.py</span>, and both MCP servers (<a href="#perf-monitor">above</a>).</li>
-        </ul>
+        <p>
+          The Windows installer keeps a copy of its own, <code>MyAppVersion</code> in
+          <span class="file-path">build_scripts/installer_windows.iss</span>. Change it in the same commit.
+        </p>
+        <p>
+          The build also records the git commit it was made from (<code>OCTAVE_GIT_COMMIT</code> and
+          <code>OCTAVE_GIT_DATE</code> in the generated <code>buildinfo.h</code>; <code>"unknown"</code> when built
+          without git).
+        </p>
+        <p>
+          <strong>The update check</strong> works in one of two ways. A packaged build (AppImage, Windows installer,
+          <code>.dmg</code>, APK) asks GitHub for the latest release and compares its tag with its own version. A
+          source checkout compares its commit with <code>main</code> on GitHub. Both belong to
+          <code>networkManager</code>: see <a href="network-manager.html">Network Manager</a>.
+        </p>
 
         <!-- Platform -->
-        <!-- Service protocol -->
-        <h2 id="service-protocol">Service protocol</h2>
-        <p>The way any frontend, in any language, reads and drives OCTAVE (<span class="file-path">TODO/open-backend.md</span>, contract steps 1 and 4). It shares the command server's socket and line format, keyed on <code>op</code> instead of <code>action</code>: the arguments sit at the top level, and an optional <code>id</code> is echoed in the reply so a client can pipeline requests. The dev tooling's <code>action</code> form keeps working unchanged next to it.</p>
-        <p><strong>Off unless asked for</strong> (<span class="file-path">src/service/serviceoptions.{h,cpp}</span>; <code>main.cpp</code> owns the server). Everything on this device is trusted by default (anything else pairs first: "Pairing" below), so it starts only with <code>--service [PORT]</code> (or <code>--service=PORT</code>; 9876 by default, 0 for any free port), the <code>serviceEnabled</code> setting, <code>--headless</code> (no UI, so the service is the only way in; <code>hello</code> reports <code>app.headless: true</code>), or <code>--profile</code> in an <code>OCTAVE_DEV_TOOLS</code> build, and it listens on <code>127.0.0.1</code> unless <code>--service-bind ADDRESS</code> says otherwise (<code>0.0.0.0</code> for every interface; the log then warns that it is reachable beyond this machine, and those clients must pair). <code>--command-port N</code> still picks the port. A bad port or address leaves it off with a warning. Plain <code>--service</code> serves the ops plus <code>ping</code> / <code>list_actions</code>; the UI-driving, screenshot, perf and <code>sim_*</code> actions are added only by the dev runtime (<code>--profile</code>, and <code>--dev</code> for <code>sim_*</code>) and are never built into a Release binary. The simulator itself is: <code>--sim</code> in any build, driven through the <code>sim</code> object (<a href="development.html#mock-obd">Development</a>).</p>
-        <p><strong>Browsers</strong> (<span class="file-path">src/service/websocket.{h,cpp}</span>, RFC 6455 by hand: Qt WebSockets is in no build). The same port takes a WebSocket (<code>ws://127.0.0.1:9876/</code>): one request, reply or event per text frame, the same JSON as a line; ping gets pong, a client close ends the connection, a malformed or unmasked frame or a message over 1&nbsp;MB closes it (1002). No extensions are negotiated. A plain <code>GET /</code> serves the reference client (<span class="file-path">sdk/web/index.html</span>, embedded as <code>:/web-client/index.html</code>), so a browser reaches the service same-origin, and <code>GET /dashboards</code> the browser dashboard editor (<span class="file-path">sdk/web/dashboards.html</span>, <code>CommandServer::addPage</code>; its policy also allows <code>data:</code> images, for thumbnails; see <a href="gauges-dashboards.html#phase4">Dashboards</a>); any other path is a 404. The first non-blank byte of a connection picks the protocol: only <code>{</code> is the line protocol; anything else is HTTP, which answers <code>GET</code> (the page, the routes, the WebSocket upgrade) and gives every other method a 405. So a browser's cross-site <code>POST</code> (a no-cors fetch needs no preflight) can never reach the line protocol, where its body would run as a trusted local op. A line connection that sends anything but a JSON object gets the error and is closed. <strong>Limits</strong> (<code>CommandServer::Limits</code>): 64 connections in all and 8 per network address (more are refused at once), with 8 of the 64 kept for this device (<code>loopbackReserve</code>): connections from the network can hold 56, so a flood from outside never locks out the screen&rsquo;s own tools; a connection that sends nothing for 10&nbsp;s is closed, and an untrusted one (protocol 2) after 60&nbsp;s of silence; a JSON line over 1&nbsp;MiB closes the connection (a WebSocket message is capped at 1&nbsp;MB, an HTTP head at 16&nbsp;KB); on Unix a connection's thread waits on its socket and a wake pipe together, so an event goes out the moment it is queued (elsewhere within the 20&nbsp;ms read poll); while over 4&nbsp;MiB waits unsent in the socket, events stay in the connection's bounded queue, which drops the oldest (streams fall back to a keyframe). Every HTTP request, with an <code>Origin</code> or not, needs an address in <code>Host</code> (an IP or <code>localhost</code>): a name is refused with 403, so a DNS-rebinding site can't read <code>/art</code> or <code>/export</code>. <strong>Origin rule:</strong> a request without <code>Origin</code> (scripts, the SDK) is allowed; a browser only from the service's own page: the <code>Origin</code>'s host and port must equal the <code>Host</code> header's, and that host must be an IP address or <code>localhost</code>, because a name could be DNS-rebound to the car by any website. <code>null</code> (file:// pages, sandboxed iframes) is refused. Refusals get a 403 with the reason and a log warning. The page goes out with <code>nosniff</code>, <code>no-store</code> and a Content-Security-Policy that limits it to this service. Open it by address, not by a <code>.local</code> name.</p>
-        <p><strong>Your own web frontend</strong> (<span class="file-path">src/service/staticfiles.{h,cpp}</span>): <code>--web-root DIR</code> (or the <code>serviceWebRoot</code> setting, edited in the file; the flag wins) serves a directory at <code>GET /</code> instead of the reference client, so a built frontend is same-origin with the socket and passes the Origin rule. It does not turn the service on by itself, and a directory without an <code>index.html</code> is not used (a warning, and the reference client is served): <code>/</code> or a home directory is never published by mistake. Types by extension (html, js / mjs, css, json, svg, png, jpg, gif, webp, avif, ico, woff / woff2 / ttf / otf, wasm, webmanifest; anything else <code>application/octet-stream</code>, with <code>nosniff</code>); a directory serves its <code>index.html</code>; a path with no extension that names nothing gets the root <code>index.html</code> (single-page-app routes); a missing file with an extension is a 404. Refused: <code>..</code> (also percent-encoded) 403, a backslash or NUL 400, any segment starting with <code>.</code> 404 (<code>.git</code>, <code>.env</code>), anything whose canonical path leaves the root through a symlink 403, files over 64&nbsp;MB 413, methods other than GET 405. Its Content-Security-Policy allows the page's own scripts (no inline script; WebAssembly allowed), inline styles, <code>data:</code> / <code>blob:</code> images and fonts, and sockets only to this service (<code>'self'</code> plus <code>ws://</code> / <code>wss://</code> the request's Host when that is an IP or localhost), with <code>frame-ancestors 'none'</code>. Requests from the page carry its Origin and pass the same rule; a page on another site gets 403.</p>
-        <p><strong>Demand follows the connection</strong> (<code>ServiceBridge::releaseOnClose</code>, wired in <span class="file-path">src/main.cpp</span>): a <code>call</code> to <code>obdManager.setParameterDemand</code> / <code>setBackgroundDemand</code> or <code>berryIMU.setDemand</code> is remembered against its connection, and when the connection closes, cleanly or not, each consumer it still holds is released (called again with <code>[]</code> / <code>false</code>), so a killed client never leaves the car polled until a restart. A consumer the client released itself, or one a later connection registered under the same name, is left alone.</p>
-        <p><strong>Album art and other routes</strong> (<code>CommandServer::addRoute</code>): <code>GET /art</code> (any <code>?query</code> ignored, so <code>/art?rev=N</code> busts caches) answers with <code>nowPlaying</code>'s current cover, read from its own <code>artUrl</code> file, never from anything in the request; typed by its signature (JPEG, PNG, GIF, WebP, BMP), 404 for no art, a non-image or a file over 16&nbsp;MB. Clients key their cache on <code>nowPlaying.artRevision</code>. <code>/art?song=&lt;library file name&gt;</code> serves a library song's cover, resolved only through <code>MediaManager</code>'s own lookup (<code>libraryArtFile</code>: the song must be in the scanned library, the file must canonically sit in the app's art cache), and <code>/art?queue=&lt;id&gt;</code> a phone queue item's art (<code>PhoneMirrorManager::queueArtFile</code>: the id must be in <code>mediaQueue</code>, the file in the queue-art folder); anything else is a 404. <code>GET /export/trip</code> (<code>?format=json</code> for its JSON sibling), <code>/export/dashboard</code> and <code>/export/logs</code> serve what the app itself last exported (<code>tripRecorder.lastExportPath</code>, <code>dashboardManager.lastExportPath</code>, <code>diagnosticsManager.lastExportPath</code>) as an attachment (<code>Content-Disposition</code> with a sanitised name, 64&nbsp;MB cap, 404 before any export); the logs export is a folder, so <code>/export/logs</code> is a JSON list of its file names and <code>?file=&lt;name&gt;</code> one of exactly those. Routes are answered ahead of the web root and the page. <strong>Cross-site loads:</strong> a plain request whose <code>Sec-Fetch-Site</code> is anything but <code>same-origin</code> or <code>none</code> (the address bar) is refused with 403, because an <code>&lt;img&gt;</code> or <code>&lt;script&gt;</code> on another site sends no <code>Origin</code>; non-browser clients send no such header and are not affected.</p>
-        <p><strong>Media streams</strong> (<span class="file-path">src/service/streamhub.{h,cpp}</span>; the full record layout is in <span class="file-path">docs/api/README.md</span>, "Streams"): <code>stream {object, name}</code> &rarr; <code>{stream, format, codec?, width?, height?}</code>, then binary records on the same connection (one binary WebSocket frame each; on the line protocol <code>0xFF</code> + u32 length + record): <code>u8 version | u8 stream | u8 flags (1 key, 2 config, 4 JPEG, 8 discontinuity) | u8 0 | u64 pts &micro;s | payload</code>. <code>phoneMirrorManager.video</code> is the phone's H.264 as it arrives (tapped in <code>ScrcpyClient</code>'s video loop before decoding, so the in-app picture is untouched; nothing is copied while nobody watches), Annex-B, every keyframe with SPS / PPS first; <code>androidAutoManager.frames</code> is JPEG from the DHU frame provider, at most 15 a second. <code>streamConfig</code> events announce parameter-set changes; a joiner waits for the next keyframe, and the phone is asked for one (RESET_VIDEO) at most once a second across all clients; a client that falls behind (2 MB or 90 records queued) loses its queue, gets <code>streamDropped</code> and resumes at a keyframe. <code>unstream {stream}</code>, or closing the connection, ends it. The connection queue keeps events and records in order (<code>Connection::pushRecord</code>). Under <code>--sim</code> (any build), <code>sim.setVideo(true)</code> loops <span class="file-path">tests/data/stream-test.h264</span> (compiled in) into the phone stream.</p>
-        <p><strong>What an op can reach</strong> (<span class="file-path">src/service/memberscope.h</span>): exactly what <code>describe</code> lists, the members the object's own classes declare below its first Qt base. <code>call</code> runs only public slots and <code>Q_INVOKABLE</code>s (never a signal, never QObject's <code>deleteLater</code>); <code>get</code> / <code>set</code> / <code>subscribe</code> see only the object's own properties and public signals (not <code>objectName</code> or <code>destroyed</code>). The dev-only actions keep the unrestricted lookup for QML functions.</p>
-        <p><strong>Pairing (protocol 2)</strong> (<span class="file-path">src/service/servicepairing.{h,cpp}</span>, <code>ServiceBridge::trusted</code>, <code>CommandServer::setTrust</code>): a connection is trusted if its peer is loopback and <code>serviceLoopbackOpen</code> is true (the default), or after <code>pair {code, name}</code> or <code>hello {token}</code>. The check runs in <code>handleLine</code> before every op and action except <code>hello</code> and <code>pair</code> (<code>{"ok": false, "code": "unauthorised"}</code>), and for the HTTP routes (<code>/art</code>, <code>/export</code>: 401 unless trusted, a valid <code>?ticket=</code> from <code>mediaTicket</code>, or <code>Authorization: Bearer</code>). Codes: 6 digits from the system CSPRNG, 2 minutes, single use; guesses are limited per address (an IPv6 /64): one attempt a second, 10 wrong codes lock it out until restart, so other clients' guesses never void the owner's code or delay their attempt; at most 10 attempts a second across every address but loopback, which is never throttled (about 0.1 % of the codes can be tried while one shows); an untrusted <code>hello</code> learns only the protocol version and that it must pair; tickets are capped at 256; refusals logged with the address only. Tokens: 32 random bytes, kept as SHA-256 in <code>serviceTokens</code> (file-only), compared in constant time. Revoke (Settings) closes the device's connections (<code>closeConnectionsOf</code>: cleanups run, the connection thread drops the socket) and voids its tickets. Every HTTP reply carries <code>Referrer-Policy: no-referrer</code>; request query strings are never logged. The head unit's side is Settings &gt; Device &gt; Developer &gt; Service (<span class="file-path">frontend/settings/DeviceSettingsPage.qml</span>): the service switch with its warning (takes effect at the next start), "Show a code" (the 6 digits and a countdown), and the paired devices with Revoke.</p>
-        <pre><code>{<span class="str">"op"</span>: <span class="str">"hello"</span>, <span class="str">"id"</span>: <span class="num">1</span>}
-{<span class="str">"ok"</span>: <span class="kw">true</span>, <span class="str">"id"</span>: <span class="num">1</span>, <span class="str">"result"</span>: {<span class="str">"protocolVersion"</span>: <span class="num">3</span>, <span class="str">"app"</span>: {<span class="str">"version"</span>: <span class="str">"0.9.6"</span>, <span class="str">"build"</span>: <span class="str">"debug"</span>, <span class="str">"headless"</span>: <span class="kw">false</span>}, <span class="str">"objects"</span>: [<span class="str">"settingsManager"</span>, &hellip;]}}</code></pre>
-        <ul>
-          <li><strong>Objects.</strong> <span class="file-path">src/service/serviceregistry.{h,cpp}</span> holds the managers by the names QML knows them by. <code>AppCore</code> (<span class="file-path">src/appcore.{h,cpp}</span>) enters each manager as it builds it, and <code>main.cpp</code> sets every entry as a QML context property (<code>core.exposeTo(ctx)</code>), so the QML UI and the protocol always see the same set (23 objects today; plain values such as <code>isAndroid</code> and <code>assetStore</code> are not exposed).</li>
-          <li><strong>Spec.</strong> <span class="file-path">docs/api/protocol.json</span> is the envelope as JSON Schema: every op's arguments and reply, the error form, the events, the stream record, the HTTP routes, the pairing flow (<span class="file-path">docs/api/README.md</span>, "Protocol spec"). Hand-written; <span class="file-path">sdk/python/tests/test_protocol_spec.py</span> (ctest <code>sdk_python</code>) checks it against a headless app, so an op, field or event added to the server without its line there fails the build. The SDK generators read it.</li>
-          <li><strong>Version.</strong> <code>kProtocolVersion</code> in <span class="file-path">src/service/protocol.h</span> (3). It is bumped on any breaking change: a removed or renamed op, object, property, method or signal, or a changed type or meaning. Additions don't bump it, and clients ignore fields they don't know.</li>
-          <li><strong>Ops.</strong> <span class="file-path">src/service/servicebridge.{h,cpp}</span> registers them on the server (<code>CommandServer::registerOp</code>). An unknown op is <code>{"ok": false, "error": "Unknown op: &hellip;"}</code>; an unknown object <code>"Unknown object: &hellip;"</code>.
-            <ul>
-              <li><code>hello</code> &rarr; <code>{protocolVersion, app: {version, build, headless}, objects: [names]}</code>.</li>
-              <li><code>describe {object?}</code> &rarr; one object's <code>{class, properties, methods, signals, enums?}</code>, or every object's as <code>{protocolVersion, objects: {name: &hellip;}, ops: [&hellip;]}</code> (about 110&nbsp;KB for all 23; <code>ops</code> names every op this server answers). A property is <code>{name, type, readable, writable, constant, notify?, enum?}</code> (<code>enum</code> lists the keys of a <code>Q_ENUM</code>), a method <code>{name, kind: "invokable" | "slot", params: [{name, type}], returns}</code>, a signal <code>{name, params}</code>. Only what the app's own classes declare: members of Qt base classes (<code>QObject</code>, <code>QAbstractItemModel</code>, <code>QQmlPropertyMap</code>&hellip;) are left out, overloads are listed apart. <span class="file-path">src/service/metadescribe.{h,cpp}</span>, which step 3's schema generator reuses.</li>
-              <li><code>get {object, property}</code> &rarr; the value. On <code>paramStore</code> (a <code>QQmlPropertyMap</code>, keyed by parameter id) <code>property</code> is a key (<code>null</code> before its first reading), and without one the reply is every key that has a value.</li>
-              <li><code>set {object, property, value}</code> &rarr; the value read back. Only writable properties: most manager state is read-only and changes through a method (settings through their <code>save_*</code> slots, e.g. <code>call settingsManager save_gauge_temp_unit ["F"]</code>), which keeps every rule in the manager.</li>
-              <li><code>call {object, method, args?: [...], timeoutMs?}</code> &rarr; the return value (<code>null</code> for <code>void</code>). Overloads are told apart by argument count.</li>
-              <li><code>subscribe {object, signals?: [...], properties?: [...], throttleMs?}</code> &rarr; <code>{sub}</code>, then events on the same connection (the reply always first: only the connection's own thread writes to the socket, and it writes a request's reply before the events queued meanwhile; <code>tst_servicebridge</code> <code>subscribeReplyComesBeforeItsEvents</code>), interleaved with replies (a reply has <code>ok</code>, an event <code>event</code>):
-                <ul>
-                  <li><code>{"event": "property", sub, object, name, value, t}</code>: the current value at once, then on every notify signal (read on the object's thread, so a notify with no argument still carries the value);</li>
-                  <li><code>{"event": "signal", sub, object, name, args: [...], t}</code>;</li>
-                  <li><code>{"event": "params", sub, object, values: {id: v}, t}</code> on <code>paramStore</code>: its 33&nbsp;ms batches of changed readings, filtered to <code>properties</code> (the ids; none = all), starting with what it holds;</li>
-                  <li><code>{"event": "dropped", count}</code> when a client stopped reading and more than 1000 events queued up (the oldest go).</li>
-                </ul>
-                <code>throttleMs</code> coalesces: at most one event per name (one merged <code>params</code> event) per interval, the latest value winning. <code>t</code> is when the event was sent (a throttled one: the flush), in milliseconds on a monotonic clock that starts at the bridge's first event: for ordering and intervals, not wall time. A signal emitted on a worker thread is queued to the GUI thread first. A subscription ends with an <code>unsubscribe {sub}</code>, with its object, or with the connection.</li>
-              <li><strong>List models</strong> (a property holding a <code>QAbstractItemModel</code>; no object has one at present, protocol 3). <code>get</code> gives <code>{model: true, count, roles}</code>; <code>rows {object, property, from?, count?}</code> the rows as <code>{role: value}</code> maps; subscribing to the property sends <code>{"event": "model", &hellip;, name, change, first, last, rows?}</code> with <code>change</code> one of <code>reset</code> (all rows; also the first event), <code>insert</code> and <code>update</code> (with the affected rows) and <code>remove</code>, which a client replays in order to keep its copy. List events ignore <code>throttleMs</code>.</li>
-            </ul>
-            <code>get</code>, <code>set</code> and <code>call</code> run on the object's (GUI) thread, so a slow method holds the UI just as it would from QML; the client waits up to <code>timeoutMs</code> (default 30&nbsp;s).
-            Enum values travel as their key names (<code>"Connected"</code>; an enum property reads as its key); on the way in a <code>Q_ENUM</code> parameter takes the key or its number (<code>convertTo()</code> in <span class="file-path">commandserver.cpp</span>), anything else is refused.</li>
-          <li><strong>When it runs.</strong> In every build, when "Off unless asked for" above turns it on; <span class="file-path">main.cpp</span> installs the bridge on the server (a <code>--profile</code> run shares it with the dev actions).</li>
-        </ul>
-        <p>Tests: <span class="file-path">tests/cpp/tst_servicebridge.cpp</span> (a real socket against a server on an ephemeral port).</p>
-
-        <h3 id="many-clients">Many clients</h3>
-        <p><span class="file-path">tools/stream/service_load.py</span> starts one OCTAVE with the simulated car (<code>--headless --sim --service PORT</code>, or with <code>--ui</code> the QML UI offscreen; any build, release too) on its own config (<code>--config</code>), <code>HOME</code> and XDG dirs and runs each scenario for 30&nbsp;s while a probe measures what everyone else loses: the OBD poll rate and its longest gap from the simulated adapter (<code>sim.status()</code> <code>polls</code> / <code>poll_max_gap_ms</code>, the Mode 01 replies it sent), a <code>get</code> every 100&nbsp;ms (the round trip through the GUI thread, where QML waits too), a <code>paramStore</code> subscription (values a second and event latency), and the backend's CPU and RSS from <code>/proc</code>. It prints a Markdown table and writes <code>results-&lt;mode&gt;.json</code>.</p>
-        <pre><code>python3 tools/stream/service_load.py build/octave PORT WORKDIR [MUSIC_DIR] [--ui] [--seconds 30] [--scenario idle fanout20 ...]
-python3 tools/stream/service_load.py build/octave 0 WORKDIR --check     # the ctest service_load_check</code></pre>
-        <p><code>--check</code> runs idle and <code>quick</code> (20 subscribers and the <code>call</code> flood) for 4&nbsp;s each and exits 1 unless no subscriber lost events, the flooder was limited and the poll rate stayed within 20&nbsp;% of idle, so a regression in the limits fails CI (<code>service_load_check</code>, about 15&nbsp;s).</p>
-        <p>Desktop results, 2026-10-23 (Debug build, AMD Ryzen 7 9700X, 16 threads, Arch Linux; the simulated car at 40&nbsp;% throttle, a local track playing), before the limits below and before <code>--sim</code>: these rows ran <code>--dev</code>, the UI ones with <code>--profile</code>. Each cell is headless / UI. CPU is percent of one core.</p>
+        <h2 id="platform">Small Helpers</h2>
+        <p>
+          <span class="file-path">src/util/</span> holds code that several managers share and that belongs to none
+          of them. Look here before writing a helper of your own.
+        </p>
         <table>
-          <thead><tr><th>Scenario</th><th>Load</th><th>CPU %</th><th>OBD polls/s</th><th>Longest poll gap, ms</th><th>GUI round trip p99, ms</th><th>GUI round trip max, ms</th><th>Load clients got (headless)</th></tr></thead>
+          <thead><tr><th>File in <code>src/util/</code></th><th>Reach for it when</th></tr></thead>
           <tbody>
-            <tr><td><code>idle</code></td><td>no load clients</td><td>2.4 / 2.8</td><td>18.7 / 18.4</td><td>125 / 131</td><td>0.8 / 0.3</td><td>0.9 / 0.4</td><td>&ndash;</td></tr>
-            <tr><td><code>fanout20</code></td><td>20 clients, each with a demand on and a subscription to all 129 PIDs, unthrottled</td><td>3.2 / 3.1</td><td>18.6 / 18.7</td><td>127 / 197</td><td>0.5 / 0.4</td><td>1.8 / 0.5</td><td>19.6 events/s to each, 0 dropped</td></tr>
-            <tr><td><code>nonreader</code></td><td>1 client subscribed to <code>paramStore</code>, <code>nowPlaying</code> and the audio levels that never reads</td><td>1.6 / 4.0</td><td>18.8 / 19.0</td><td>165 / 120</td><td>0.3 / 0.7</td><td>0.3 / 0.8</td><td>non-reader still connected at the end</td></tr>
-            <tr><td><code>callflood</code></td><td>1 client pipelining <code>call volumeController.toLinear</code>, 64 in flight</td><td>105.7 / 100.1</td><td>18.8 / 19.0</td><td>127 / 132</td><td>0.2 / 0.7</td><td>0.6 / 1.1</td><td>111,904 calls/s answered</td></tr>
-            <tr><td><code>churn</code></td><td>2 clients connecting, subscribing, reading one event and closing, in a loop</td><td>171.5 / 163.0</td><td>19.0 / 18.5</td><td>153 / 171</td><td>0.3 / 0.4</td><td>0.8 / 0.5</td><td>9,008 cycles/s</td></tr>
-            <tr><td><code>wsmix</code></td><td>8 WebSocket clients on <code>paramStore</code> (40&nbsp;ms) + <code>nowPlaying</code>, the phone video to 2 WebSocket and 1 TCP client</td><td>2.9 / 5.2</td><td>18.7 / 18.9</td><td>128 / 131</td><td>0.3 / 0.6</td><td>0.3 / 0.8</td><td>video 30 records/s to each</td></tr>
-            <tr><td><code>all</code></td><td>every row above at once</td><td>208.6 / 213.7</td><td>18.7 / 18.6</td><td>129 / 132</td><td>0.4 / 0.3</td><td>1.5 / 0.3</td><td>19.3 events/s to each, 0 dropped; non-reader still connected at the end; 33,327 calls/s answered; 6,867 cycles/s; video 30 records/s to each</td></tr>
-            <tr><td><code>media</code></td><td>the 2026-10-22 baseline: <code>paramStore</code> (40&nbsp;ms), <code>nowPlaying</code>, levels, video over WebSocket and TCP</td><td>1.7 / 2.3</td><td>18.5 / 18.6</td><td>146 / 134</td><td>0.3 / 0.3</td><td>0.4 / 0.3</td><td>video 30 records/s to each</td></tr>
+            <tr><td><span class="file-path">units</span></td><td>You format a duration (<code>3:07</code>, <code>1:02:45</code>), turn a heading into <code>NE</code>, or convert &deg;C to &deg;F, metres to feet, mph to km/h, gain to decibels. QML calls it as <code>units</code> (<code>units.formatDuration(ms)</code>); C++ uses the <code>UnitsFn</code> functions. No page should carry its own copy. API: <a href="api-reference.html#units">units</a>.</td></tr>
+            <tr><td><span class="file-path">assetstore</span></td><td>QML needs a plain <code>file://</code> address for a file under <span class="file-path">frontend/assets/</span>: <code>assetStore.localUrl("path")</code>. Needed for 3D models, whose loader cannot read from inside an Android package; on Android the file is copied out once and copied again after an update. <code>assetStore.readJson("path")</code> reads a JSON file there. QML only, not in the service API.</td></tr>
+            <tr><td><span class="file-path">fontcatalog</span></td><td>You need the fonts OCTAVE ships: <code>fontCatalog.fonts</code> (name and family of each) and <code>fontCatalog.symbolFamily</code> (the icon font). They are registered once at startup. API: <a href="api-reference.html#fontCatalog">fontCatalog</a>.</td></tr>
+            <tr><td><span class="file-path">variantlistmodel</span></td><td>A manager publishes a list that changes one row at a time. A view keeps its rows and its scroll position, where a replaced JavaScript array would rebuild it.</td></tr>
+            <tr><td><span class="file-path">folderbrowser</span></td><td>A frontend with no folder picker of its own lets the user choose a folder. It lists sub-folders and audio files by name, and refuses any path outside the allowed roots.</td></tr>
+            <tr><td><span class="file-path">pathurl.h</span></td><td>You get an address back from a folder picker and need a path to open, on desktop or Android.</td></tr>
+            <tr><td><span class="file-path">artfile.h</span></td><td>You save album art that arrives from a phone. Each cover gets a file name not used before, because QML caches pictures by address and would show the old one.</td></tr>
+            <tr><td><span class="file-path">audiooutput.h</span></td><td>You play sound. It answers "which output device?": the one the user picked while it is plugged in, otherwise the system default.</td></tr>
+            <tr><td><span class="file-path">h264decoder</span></td><td>You decode video from a phone. Shared by the phone mirror and Android Auto.</td></tr>
+            <tr><td><span class="file-path">threadidle.h</span></td><td>You start a thread that runs an event loop: call <code>sleepWhenIdle(thread)</code> on it. It does nothing except in the browser build, where an idle thread without it keeps a whole CPU core busy.</td></tr>
+            <tr><td><span class="file-path">dashboardgrid</span></td><td>You place or move cells in a dashboard grid. <code>DashboardManager</code> uses it; see <a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>.</td></tr>
+            <tr><td><span class="file-path">graphicsrenderer</span>, <span class="file-path">qmlmodules</span></td><td>You need to know whether a real GPU draws the window, or whether an optional QML module (Qt Quick 3D) is installed. <code>main()</code> asks both and tells QML (<code>gpuRendered</code>, <code>hasQuick3D</code>).</td></tr>
+            <tr><td><span class="file-path">licensetexts</span>, <span class="file-path">releasecheck</span></td><td>The licence texts behind <code>diagnosticsManager.licenseText()</code>, and the version comparison behind the <a href="#version">update check</a>.</td></tr>
+            <tr><td><span class="file-path">logger</span>, <span class="file-path">uiwatchdog</span>, <span class="file-path">perfscope.h</span></td><td>Described above and below: <a href="#logging">logs</a>, <a href="#ui-watchdog">the watchdog</a>, <a href="#perf-monitor">timing code</a>.</td></tr>
           </tbody>
         </table>
-        <p>What it shows, on a desktop:</p>
-        <ul>
-          <li><strong>The car and the screen lose nothing measurable in any scenario.</strong> The poll rate is set by the simulated adapter's latency (about 19 replies a second over 129 PIDs) and does not move; the GUI round trip stays under 2&nbsp;ms; the probe's values a second (most of them the simulated IMU: in the first UI rows 21 instead of 148, because a GUI <code>--dev</code> run left the IMU feed off; with <code>--sim</code> both modes get it) and its event latency (p99 at most 1.4&nbsp;ms) are the same in every row of a mode.</li>
-          <li><strong>Subscribers are cheap.</strong> 20 clients on every PID add under 1&nbsp;% CPU and no drops; RSS does not grow in any row.</li>
-          <li><strong>Request rate is what costs.</strong> One client flooding <code>call</code> keeps a core busy (every call is a blocking hop to the GUI thread, which is why the others don't notice: they queue between its calls). Connection churn costs most: each connection gets a thread, and thousands a second take 1.6 to 1.7 cores. On a quad-core Pi that is a third of the machine (not measured yet).</li>
-          <li><strong>A client that never reads costs nothing here, and stays connected.</strong> Its events fill the kernel's socket buffers and then 4&nbsp;MB in the socket before they queue (1000 events, the oldest dropped), which at these rates takes minutes, so in a 30&nbsp;s row it is never cut off.</li>
-        </ul>
-        <p><strong>Limits</strong> (<code>CommandServer::Limits</code>, <span class="file-path">src/service/commandserver.{h,cpp}</span>; the client's view is in <span class="file-path">docs/api/README.md</span>, "Limits per connection"). From what the table shows, the limits go on request and connection rates, not on subscribers:</p>
-        <ul>
-          <li><strong>Ops a second</strong>, a token bucket per connection (<code>Connection::takeOp</code>, 200 a second, 400 at once), checked in <code>handleLine</code> before trust and before any work; past it the op is answered <code>{"ok": false, "code": "rateLimited", "retryAfterMs": N}</code>. Dev <code>action</code>s are not counted. A connection refused more than 4000 times in one second ignores the answer and is closed.</li>
-          <li><strong>New connections a second</strong> per address (<code>admitConnect</code>, before a thread exists: the peer from <code>getpeername</code>), 20 a second and 100 at once from the network, 100 and 400 from this device, which counts as one address.</li>
-          <li><strong>A reader that stays behind</strong>: once 4&nbsp;MB sit unsent in the socket, events wait in the bounded queue; staying there for 15&nbsp;s closes the connection (<code>keepingUp</code>). At the event rates above that takes many minutes of not reading (a 240&nbsp;s non-reader was still connected: its 6&nbsp;KB a second had not filled the kernel's buffers and the 4&nbsp;MB); it is the phone video that gets there in seconds.</li>
-        </ul>
-        <p>The same rows with the limits (2026-10-23, the harness on <code>--sim</code>; each cell headless / UI):</p>
+        <p>
+          <span class="file-path">src/platform/</span> holds code for one operating system only:
+        </p>
         <table>
-          <thead><tr><th>Scenario</th><th>CPU % before</th><th>CPU % with limits</th><th>OBD polls/s</th><th>Longest poll gap, ms</th><th>GUI round trip p99, ms</th><th>What the load got (headless)</th></tr></thead>
+          <thead><tr><th>File in <code>src/platform/</code></th><th>System</th><th>What it does</th></tr></thead>
           <tbody>
-            <tr><td><code>idle</code></td><td>2.4 / 2.8</td><td>1.6 / 6.6</td><td>18.5 / 18.6</td><td>130 / 127</td><td>0.3 / 0.7</td><td>&ndash;</td></tr>
-            <tr><td><code>fanout20</code></td><td>3.2 / 3.1</td><td>2.8 / 3.2</td><td>18.7 / 18.4</td><td>134 / 132</td><td>0.7 / 0.3</td><td>subscribers 19.3 events/s each, 0 dropped</td></tr>
-            <tr><td><code>nonreader</code></td><td>1.6 / 4.0</td><td>1.7 / 2.3</td><td>18.9 / 18.4</td><td>128 / 116</td><td>0.3 / 0.3</td><td>non-reader still connected</td></tr>
-            <tr><td><code>callflood</code></td><td>105.7 / 100.1</td><td>1.7 / 2.0</td><td>18.9 / 18.5</td><td>129 / 151</td><td>0.4 / 0.3</td><td>flooder closed (ignored <code>rateLimited</code>)</td></tr>
-            <tr><td><code>churn</code></td><td>171.5 / 163.0</td><td>32.9 / 34.4</td><td>18.8 / 18.6</td><td>109 / 121</td><td>0.2 / 0.4</td><td>churn 100 cycles/s, 52,077 connections/s refused</td></tr>
-            <tr><td><code>wsmix</code></td><td>2.9 / 5.2</td><td>2.9 / 3.7</td><td>19.3 / 19.0</td><td>115 / 120</td><td>0.3 / 0.4</td><td>video 30 records/s each</td></tr>
-            <tr><td><code>all</code></td><td>208.6 / 213.7</td><td>38.3 / 40.2</td><td>18.8 / 18.9</td><td>116 / 168</td><td>0.2 / 0.5</td><td>subscribers 19.4 events/s each, 0 dropped; non-reader still connected; flooder closed (ignored <code>rateLimited</code>); churn 100 cycles/s, 49,501 connections/s refused; video 30 records/s each</td></tr>
-            <tr><td><code>media</code></td><td>1.7 / 2.3</td><td>2.0 / 2.6</td><td>18.9 / 18.9</td><td>123 / 125</td><td>0.5 / 0.3</td><td>video 30 records/s each</td></tr>
+            <tr><td><span class="file-path">androidmediabridge.h</span></td><td>Android</td><td>Calls into the app's Java side (<span class="file-path">android/src/org/octave/app/OctaveMediaBridge.java</span>) to read a song's tags, extract its cover, and find the app's own Music folder, which needs no storage permission.</td></tr>
+            <tr><td><span class="file-path">bluezpairer</span></td><td>Linux</td><td>Pairs a Bluetooth OBD adapter without a system dialog. See <a href="obd-manager.html">OBD Manager</a>.</td></tr>
+            <tr><td><span class="file-path">bluezhidmouse</span></td><td>Linux</td><td>Makes OCTAVE a Bluetooth mouse, so touches reach an iPhone shown over AirPlay.</td></tr>
+            <tr><td><span class="file-path">wasm/</span></td><td>Browser demo</td><td>What stands in for missing hardware in the browser: Web Bluetooth and Web Serial adapters, the visitor's music folder, the service offered to the page.</td></tr>
           </tbody>
         </table>
-        <p>The flooder ignores <code>retryAfterMs</code>, so it is closed within its first second (before that rule, answering only its 200 a second and refusing the rest still took 59&nbsp;% of a core). Churn costs a third of a core now: about 50,000 connections a second refused at the door, which a runaway local loop can still reach, and 100 cycles a second admitted.</p>
-        <p>Poll rate, longest poll gap and GUI round trip did not move in these rows either. Tests: <span class="file-path">tests/cpp/tst_servicebridge.cpp</span> (<code>aFloodIsRateLimitedAndNoOneElseIs</code>, <code>aClientThatIgnoresRateLimitedIsClosed</code>, <code>aConnectLoopIsRefusedAtTheDoor</code>, <code>aReaderThatStaysBehindIsClosed</code>), the same over WebSocket in <span class="file-path">tests/cpp/tst_websocket.cpp</span>, and <code>service_load_check</code> (above) for the whole of it against a real app.</p>
-        <p>Not covered: the Pi (the slowest head unit, still to measure); the test video is 300&nbsp;kbit/s where a phone sends 8-16&nbsp;Mbit/s; RSS is a Debug build's; the harness runs on the same machine (its own CPU is printed under the table, at most about half a core, in the churn rows).</p>
-        <h2 id="platform"><code>src/util/</code> and <code>src/platform/</code></h2>
-        <p>Both directories are listed explicitly in <code>qt_add_executable(octave …)</code> in <span class="file-path">CMakeLists.txt</span>.</p>
-
-        <h3><code>src/util/</code></h3>
-        <table>
-          <thead><tr><th>File</th><th>Contents</th></tr></thead>
-          <tbody>
-            <tr><td><code>assetstore.h / assetstore.cpp</code></td><td><code>AssetStore.localUrl(relativePath)</code> resolves assets under <code>frontend/assets/</code>. Android extracts them to <code>AppDataLocation/asset-cache/</code> when missing or changed in size, allowing Quick3D’s external model loader to read them. Desktop returns the source file URL. See the <a href="signals-slots-reference.html#assetStore">API reference</a>.</td></tr>
-            <tr><td><span class="file-path">logger.h</span> / <span class="file-path">logger.cpp</span></td><td>The <code>OctaveLog</code> namespace: rotating file logging, the Qt message handler and the crash handlers. See <a href="#logging">Logging</a> and <a href="#crash-handlers">Crash handlers</a>.</td></tr>
-            <tr><td><span class="file-path">uiwatchdog.h</span> / <span class="file-path">uiwatchdog.cpp</span></td><td><code>UiWatchdog</code>. See <a href="#ui-watchdog">UI watchdog</a>.</td></tr>
-            <tr><td><span class="file-path">perfscope.h</span></td><td><code>OCTAVE_PERF_SCOPE(label)</code>. See <a href="#perf-monitor">Performance monitor</a>.</td></tr>
-            <tr><td><span class="file-path">buildinfo.h.in</span></td><td>Template that CMake's <code>configure_file</code> turns into <code>&lt;build&gt;/generated/buildinfo.h</code>: <code>OCTAVE_GIT_COMMIT</code> and <code>OCTAVE_GIT_DATE</code>, the commit the binary was built from (<code>"unknown"</code> without git).</td></tr>
-          </tbody>
-        </table>
-
-        <h3><code>src/platform/</code></h3>
-        <p>This directory contains Android glue and desktop Linux Bluetooth pairing support.</p>
-        <table>
-          <thead><tr><th>File</th><th>Guard</th><th>Contents</th></tr></thead>
-          <tbody>
-            <tr><td><code>bluezpairer.h / bluezpairer.cpp</code></td><td>Desktop Linux build sources</td><td><code>BluezPairer</code> registers a BlueZ D-Bus PIN agent, tries the common ELM327 PINs, and trusts the adapter for reconnects. Used by <code>OBDAdapterFinder</code>. See <a href="obd-manager.html">OBD Manager</a>.</td></tr>
-            <tr>
-              <td><span class="file-path">androidmediabridge.h</span></td>
-              <td><code>#ifdef Q_OS_ANDROID</code></td>
-              <td>Namespace <code>OctaveAndroid</code>: inline <code>QJniObject</code> wrappers around <code>org.octave.app.OctaveMediaBridge</code> (<span class="file-path">android/src/org/octave/app/OctaveMediaBridge.java</span>). Functions: <code>readMetadata(path)</code> (newline-delimited title / artist / album / duration from <code>MediaMetadataRetriever</code>), <code>extractAlbumArt(path, out)</code>, <code>getAppMusicDir()</code> (the app&rsquo;s own external-files Music dir: scoped-storage-safe, needs no permission; <code>MediaManager</code> scans it as extra playlists).</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <h3>Android BLE bridge event logging (commit <code>3858c5c</code>)</h3>
-        <p>This does <em>not</em> live in <code>src/platform</code>. The OBD-over-BLE bridge is <span class="file-path">android/src/org/octave/app/OctaveOBDBridge.java</span> (Java) and <code>OBDManager::onAndroidBlePoll()</code> in <span class="file-path">src/managers/obdmanager.cpp</span>. Every <code>setEvent</code> / <code>setError</code> in the Java bridge is also pushed onto a bounded <code>ConcurrentLinkedQueue</code> (<code>LOG_QUEUE_MAX = 200</code>, so a disconnected adapter cannot grow it without bound) as <code>"I|msg"</code> or <code>"W|msg"</code>, exposed via <code>pollLog()</code>. The C++ side drains up to 50 lines per tick of its existing 50 ms notification poll and emits them as <code>qCInfo</code> / <code>qCWarning(lcElm327) &lt;&lt; "[BLE]" &lt;&lt; msg</code>, so a BLE drop in the car lands in <code>octave-cpp.log</code> and in the Diagnostics export instead of only in logcat. No JNI native registration is needed.</p>
+        <p>
+          One thing that is easy to look for here and not find: on Android the Bluetooth adapter is driven from Java
+          (<span class="file-path">android/src/org/octave/app/OctaveOBDBridge.java</span>). What it reports is copied
+          into OCTAVE's own log as <code>octave.elm327</code> lines starting <code>[BLE]</code>, so a dropped
+          adapter shows in the exported logs and not only in logcat.
+        </p>
 
         <!-- media / temp dirs -->
-        <h2 id="backend-dirs"><code>media/</code> and <code>temp/</code></h2>
-        <p><code>MediaManager</code> derives two directories from <code>QCoreApplication::applicationDirPath()</code> (<span class="file-path">src/managers/mediamanager.cpp</span>):</p>
+        <h2 id="backend-dirs">The <code>media/</code> and <code>temp/</code> Folders</h2>
+        <p>The media manager keeps two folders. Where they are depends on how OCTAVE was installed:</p>
         <table>
-          <thead><tr><th>Directory</th><th>Purpose</th><th>Location</th></tr></thead>
+          <thead><tr><th>Folder</th><th>What it is for</th><th>Source checkout</th><th>Installed app</th><th>Android</th></tr></thead>
           <tbody>
-            <tr>
-              <td><code>media/</code></td>
-              <td>MediaManager&rsquo;s fallback library directory before settings are connected. During normal startup, SettingsManager supplies the effective library root: an empty stored <code>mediaFolder</code> resolves to <code>QStandardPaths::MusicLocation</code>.</td>
-              <td><code>&lt;app dir&gt;/media</code> (e.g. <code>build/media</code> in a checkout); <code>&lt;Music&gt;/OCTAVE</code> when the app directory is read-only (an installed <code>.exe</code>, a mounted AppImage, a signed <code>.app</code>); the standard Music location on Android.</td>
-            </tr>
-            <tr>
-              <td><code>temp/</code></td>
-              <td>Scratch cache: <code>cover_&lt;hash&gt;.&lt;ext&gt;</code> album covers extracted from tags (content-addressed, kept across runs so a boot does not re-read every tag; <code>_prune_cover_dir()</code> removes the least-recently-read files at startup until at most 500 remain).</td>
-              <td><code>&lt;app dir&gt;/temp</code>; <code>AppLocalDataLocation/temp</code> when the app directory is read-only; <code>AppDataLocation/temp</code> on Android.</td>
-            </tr>
+            <tr><td><code>media/</code></td><td>The music folder used until the user picks one.</td><td><code>&lt;build folder&gt;/media</code></td><td><code>&lt;Music&gt;/OCTAVE</code></td><td>The system Music folder</td></tr>
+            <tr><td><code>temp/</code></td><td>Album covers taken out of song files, as <code>cover_&lt;hash&gt;</code> files. Kept between runs so a start does not read every song again.</td><td><code>&lt;build folder&gt;/temp</code></td><td>The app's local data folder, <code>/temp</code></td><td>The app's data folder, <code>/temp</code></td></tr>
           </tbody>
         </table>
+        <p>
+          "Installed" means the folder the program sits in cannot be written to: an installed Windows program, a
+          mounted AppImage, a signed macOS app. At startup the covers read longest ago are deleted until 500 are
+          left. More about the library is on the <a href="media-manager.html">Media Manager</a> page.
+        </p>
+
+        <!-- Performance monitor -->
+        <h2 id="perf-monitor">Timing Code</h2>
+        <p>To find out how long a function takes on the real device, put one line at its top:</p>
+        <pre><code>#include "../util/perfscope.h"
+
+void MediaManager::next_track()
+{
+    OCTAVE_PERF_SCOPE("media.next_track");   // times the rest of the function
+    ...
+}</code></pre>
+        <p>
+          Start a Debug build with <code>--profile</code> and the time is recorded under that label, from any
+          thread. The same run measures how late the event loop is running (the cause of a stuttering screen), CPU
+          and memory, prints a line every second and writes a CSV and a log to
+          <span class="file-path">dev/perf/logs/</span>. Reading the numbers, and the tools that collect them, are on
+          the <a href="development.html#profiling">Development</a> page.
+        </p>
+        <p>
+          The line costs nothing in a shipped app. Release builds compile it to nothing; a Debug build without
+          <code>--profile</code> pays one check of a flag.
+        </p>
+        <div class="info-box info">
+          <div class="info-box-title">Dev tooling is in Debug desktop builds only</div>
+          <p>Everything under <span class="file-path">src/dev/</span> is built only with the CMake option <code>OCTAVE_DEV_TOOLS</code>, which is on by default for <code>-DCMAKE_BUILD_TYPE=Debug</code> on desktop and off everywhere else. Without it, <code>--dev</code> and <code>--profile</code> log a warning and the app starts normally.</p>
+        </div>
+
+        <!-- Command server -->
+        <h2 id="command-server">Command Server</h2>
+        <p>
+          The command server is how scripts drive the running app: take a screenshot, open a page, tap a button,
+          read the perf numbers. It is the same socket as the <a href="#service-protocol">service protocol</a>
+          below, with a second kind of request, keyed on <code>action</code>:
+        </p>
+        <pre><code>{"action": "navigate", "args": {"page": "obd"}}
+{"ok": true, "result": {"navigated_to": "obd"}}</code></pre>
+        <p>
+          Two actions exist in every build: <code>ping</code> and <code>list_actions</code>. The ones that drive the
+          screen, record video and read the perf monitor are added by the dev tooling when a Debug build is started
+          with <code>--profile</code>, and the <code>sim_*</code> ones with <code>--dev</code>. They are never in a
+          Release build. Send <code>list_actions</code> to see what the app you are talking to offers; the list and
+          the scripts that use it are on the <a href="development.html#command-server">Development</a> page.
+        </p>
+        <p>To add an action, call <code>registerAction(name, handler)</code> on the server. Two things to know when writing a handler:</p>
+        <ul>
+          <li>It runs on the connection's own thread, not the main thread. A slow request from one client never holds up another.</li>
+          <li>Anything that touches a Qt object must go through <code>CommandServer::onGui(fn)</code>, which runs <code>fn</code> on the main thread and waits for its result (30 seconds at most), or <code>postGui(fn)</code>, which does not wait.</li>
+        </ul>
+
+        <!-- Service protocol -->
+        <h2 id="service-protocol">Service Protocol</h2>
+        <p>
+          The built-in screen is one way to use OCTAVE. The service protocol is the way for everything else: a web
+          page, a phone app, a script, a whole replacement screen. It serves the same objects QML uses
+          (<code>mediaManager</code>, <code>obdManager</code>, <code>volumeController</code> ...) under the same
+          names, so anything the built-in screen can do, another program can do.
+        </p>
+        <p>
+          This section says how the protocol behaves. To write a client, start with
+          <a href="writing-a-frontend.html">Writing a Frontend</a>. What each object offers is in the
+          <a href="api-reference.html">API reference</a>. The exact form of every message is in
+          <span class="file-path">docs/api/protocol.json</span> and <span class="file-path">docs/api/README.md</span>.
+        </p>
+
+        <h3>When it runs</h3>
+        <p>The service is <strong>off unless asked for</strong>. Any of these turns it on:</p>
+        <table>
+          <thead><tr><th>How</th><th>Effect</th></tr></thead>
+          <tbody>
+            <tr><td><code>--service [PORT]</code></td><td>On for this run. The port is 9876 unless given; 0 picks any free port.</td></tr>
+            <tr><td>Settings &gt; Device &gt; Developer &gt; Service (<code>serviceEnabled</code>)</td><td>On at every start. Takes effect at the next start.</td></tr>
+            <tr><td><code>--headless</code></td><td>No screen at all, so the service is the only way in.</td></tr>
+            <tr><td>An installed web frontend chosen as the screen</td><td>On, to serve that frontend.</td></tr>
+            <tr><td><code>--profile</code> in a Debug build</td><td>On, with the dev actions added.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          It listens on this device only (<code>127.0.0.1</code>). <code>--service-bind ADDRESS</code> opens it to
+          the network (<code>0.0.0.0</code> for every interface); clients from the network must then
+          <a href="#pairing">pair</a>. A bad port or address leaves the service off with a warning in the log.
+          <code>--command-port PORT</code> is an older way to give the port.
+        </p>
+
+        <h3>Talking to it</h3>
+        <p>
+          Connect to the port over TCP and send one JSON object per line; each gets one line back. A request names
+          an <code>op</code>. An optional <code>id</code> comes back in the reply, so a client can send several
+          requests without waiting.
+        </p>
+        <pre><code>{"op": "hello", "id": 1}
+{"ok": true, "id": 1, "result": {"protocolVersion": 3, "app": {"version": "0.9.6", "build": "debug", "headless": false}, "objects": ["settingsManager", ...], "auth": "trusted", "scopes": ["full"]}}
+
+{"op": "get", "object": "volumeController", "property": "percent"}
+{"ok": true, "result": 40}
+
+{"op": "call", "object": "volumeController", "method": "applyVolume", "args": [55]}
+{"ok": true, "result": null}</code></pre>
+        <table>
+          <thead><tr><th>Op</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>hello</code></td><td>The protocol version, the app's version, and the names of the objects.</td></tr>
+            <tr><td><code>describe {object?}</code></td><td>The properties, methods, signals and enums of one object, or of all of them.</td></tr>
+            <tr><td><code>get {object, property}</code></td><td>A property's value. On <code>paramStore</code> the property is a reading's id; with none given, every reading that has a value.</td></tr>
+            <tr><td><code>set {object, property, value}</code></td><td>Writes a writable property. Most state is read-only and changes through a method, which keeps the rules inside the manager.</td></tr>
+            <tr><td><code>call {object, method, args?, timeoutMs?}</code></td><td>Calls a method and returns what it returns.</td></tr>
+            <tr><td><code>subscribe {object, properties?, signals?, throttleMs?}</code></td><td>Starts <a href="#events">events</a>. <code>unsubscribe {sub}</code> ends them.</td></tr>
+            <tr><td><code>rows {object, property, from?, count?}</code></td><td>The rows of a property that holds a list model.</td></tr>
+            <tr><td><code>stream {object, name}</code></td><td>Starts a video stream. <code>unstream {stream}</code> ends it.</td></tr>
+            <tr><td><code>pair</code>, <code>unpair</code>, <code>mediaTicket</code></td><td>See <a href="#pairing">Pairing</a>.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          A failure is <code>{"ok": false, "error": "..."}</code>, for example <code>Unknown op: ...</code> or
+          <code>Unknown object: ...</code>. Some carry a <code>code</code> a program can test:
+          <code>unauthorised</code> (pair first) and <code>rateLimited</code> (slow down; see
+          <a href="#many-clients">Many Clients</a>).
+        </p>
+        <p>What an op can reach is exactly what <code>describe</code> lists:</p>
+        <ul>
+          <li><code>call</code> runs public slots and invokable methods, never a signal and never anything Qt's own base classes add.</li>
+          <li><code>get</code>, <code>set</code> and <code>subscribe</code> see the object's own properties and signals only.</li>
+          <li>They run on the main thread, like a call from QML. A slow method holds the screen for as long as it would from QML; the client waits up to <code>timeoutMs</code> (30 seconds by default).</li>
+          <li>Enum values travel as their names (<code>"Connected"</code>). A parameter that is an enum accepts the name or the number.</li>
+        </ul>
+
+        <h3 id="events">Events</h3>
+        <p>
+          After <code>subscribe</code>, the reply <code>{sub}</code> comes first and then events arrive on the same
+          connection, mixed with replies to later requests. A reply has <code>ok</code>; an event has
+          <code>event</code>.
+        </p>
+        <table>
+          <thead><tr><th>Event</th><th>When</th></tr></thead>
+          <tbody>
+            <tr><td><code>property</code></td><td>The current value at once, then every time it changes.</td></tr>
+            <tr><td><code>signal</code></td><td>A signal fired; <code>args</code> has its arguments.</td></tr>
+            <tr><td><code>params</code></td><td>On <code>paramStore</code>: the readings that changed, as one <code>{id: value}</code> map, starting with what it holds. <code>properties</code> picks the ids; none means all.</td></tr>
+            <tr><td><code>model</code></td><td>A list model changed: <code>reset</code>, <code>insert</code>, <code>update</code> or <code>remove</code>, to replay in order.</td></tr>
+            <tr><td><code>dropped</code></td><td>The client stopped reading and more than 1000 events queued up. The oldest were thrown away.</td></tr>
+            <tr><td><code>streamConfig</code>, <code>streamDropped</code></td><td>A video stream changed format, or the client fell behind and resumes at the next keyframe.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          <code>throttleMs</code> limits how often events arrive: at most one per name per interval, the latest
+          value winning. Use it for anything that feeds a display. Each event carries <code>t</code>, milliseconds
+          on a clock that only counts up: good for ordering and intervals, not the time of day.
+        </p>
+        <p>
+          <strong>A client that disappears leaves nothing behind.</strong> Its subscriptions end with the
+          connection. So does what it asked the car and the sensors to do: a client that called
+          <code>obdManager.setParameterDemand</code> or <code>setBackgroundDemand</code>,
+          <code>berryIMU.setDemand</code> or <code>audioAnalyzer.setDemand</code> has those requests taken back
+          when its connection closes, however it closed.
+        </p>
+        <p>
+          <strong>Video.</strong> Two streams exist: <code>phoneMirrorManager.video</code>, the phone's H.264 as it
+          arrives, and <code>androidAutoManager.frames</code>, JPEG pictures at up to 15 a second. Nothing is copied
+          while nobody watches. The record layout is in <span class="file-path">docs/api/README.md</span>,
+          "Streams".
+        </p>
+
+        <h3 id="browser-rules">From a browser</h3>
+        <p>
+          The same port speaks WebSocket (<code>ws://127.0.0.1:9876/</code>): one JSON message per text frame,
+          the same content as a line. It also answers plain <code>GET</code> requests:
+        </p>
+        <table>
+          <thead><tr><th>Address</th><th>What it serves</th></tr></thead>
+          <tbody>
+            <tr><td><code>/</code></td><td>The reference client, a page that shows and drives everything (<span class="file-path">sdk/web/index.html</span>), or your own frontend (below).</td></tr>
+            <tr><td><code>/dashboards</code></td><td>The browser dashboard editor. See <a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>.</td></tr>
+            <tr><td><code>/art</code></td><td>The cover of what is playing. <code>/art?song=&lt;file name&gt;</code> is a library song's cover, <code>/art?queue=&lt;id&gt;</code> a phone queue item's.</td></tr>
+            <tr><td><code>/export/trip</code>, <code>/export/dashboard</code>, <code>/export/logs</code></td><td>What the app itself last exported, as a download. <code>/export/trip?format=json</code> is the trip's JSON file. <code>/export/logs</code> lists the files of the last log export and <code>?file=&lt;name&gt;</code> fetches one.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          None of these routes takes a path from the request. Each serves only a file the app chose itself, so a
+          request can never be used to read some other file on the device.
+        </p>
+        <p>
+          A web page is a risk a script is not: any website open in a browser on the same network could try to
+          talk to the car. Four rules stop that.
+        </p>
+        <ul>
+          <li><strong>The Origin rule.</strong> A browser may connect only from the service's own page: the page's address and the address it connects to must be the same, and that address must be an IP address or <code>localhost</code>. A name is refused, because a website can point a name it owns at the car. So <strong>open the page by IP address</strong>, not by a <code>.local</code> name. Pages opened from a file are refused. Programs that are not browsers send no <code>Origin</code> and are not affected.</li>
+          <li><strong>Only <code>GET</code>.</strong> Every other method gets a 405. A connection is treated as the line protocol only if its first character is <code>{</code>, so a form posted by another site can never be read as a command.</li>
+          <li><strong>No loading from other sites.</strong> A picture or script tag on another site that points at <code>/art</code> or <code>/export</code> gets a 403.</li>
+          <li><strong>Refusals are explained.</strong> A refused request gets a 403 with the reason.</li>
+        </ul>
+
+        <h3>Serving your own web frontend</h3>
+        <p>
+          <code>--web-root DIR</code> (or the <code>serviceWebRoot</code> setting, edited in the settings file; the
+          flag wins) serves a folder at <code>/</code> in place of the reference client. Your page then comes from
+          the service itself and passes the Origin rule. It does not turn the service on by itself.
+        </p>
+        <ul>
+          <li>The folder must hold an <code>index.html</code>. Otherwise it is not used, the log says so, and the reference client is served. This keeps <code>/</code> or a home folder from being published by mistake.</li>
+          <li>An address with no file extension that matches nothing gets <code>index.html</code>, so single-page apps can use their own routes. A missing file with an extension is a 404.</li>
+          <li>Never served: anything reached through <code>..</code>, any file or folder whose name starts with a dot (<code>.git</code>, <code>.env</code>), anything a symbolic link leads to outside the folder, files over 64 MB.</li>
+          <li>The page may run its own scripts but no inline script, and may open sockets only to this service.</li>
+        </ul>
+
+        <h3 id="pairing">Pairing</h3>
+        <p>
+          Programs on the device itself are trusted. Anything coming from the network must pair first, the way a
+          phone pairs with a car:
+        </p>
+        <ol class="steps">
+          <li>On the head unit, open Settings &gt; Device &gt; Developer &gt; Service and tap <strong>Show a code</strong>. A 6-digit code appears, good for 2 minutes and one use. From a terminal on the device, <code>octave --pair-code</code> prints one.</li>
+          <li>The client sends <code>pair {code, name}</code> and gets a token back.</li>
+          <li>From then on it sends <code>hello {token}</code> when it connects.</li>
+        </ol>
+        <p>
+          Until it has done so, every op but <code>hello</code> and <code>pair</code> is answered
+          <code>unauthorised</code>, and <code>hello</code> tells it only the protocol version and that it must
+          pair. The paired devices are listed on the same Settings card, each with <strong>Revoke</strong>, which
+          also closes that device's connections. OCTAVE stores a hash of each token, never the token.
+        </p>
+        <p>
+          Guessing is limited: one attempt a second from an address, and ten wrong codes lock that address out until
+          OCTAVE restarts. A browser cannot put a token in a picture's address, so <code>mediaTicket</code> gives a
+          paired client a short-lived ticket to use as <code>/art?ticket=...</code>. A paired device also holds
+          <strong>permission scopes</strong> (read, media, vehicle and so on) that decide which methods it may
+          call; they are listed in <span class="file-path">docs/api/README.md</span>, "Permissions".
+        </p>
+        <p>
+          Trusting programs on the device is the setting <code>serviceLoopbackOpen</code> (on by default; edited in
+          the settings file).
+        </p>
+
+        <h3>Versions</h3>
+        <p>
+          <code>hello</code> reports <code>protocolVersion</code>. It goes up only when something a client relies
+          on is removed, renamed or changes meaning. Additions do not change it, and a client should ignore fields
+          it does not know. The rules for changing the API are in <span class="file-path">docs/api/README.md</span>,
+          "Versioning".
+        </p>
+
+        <h3 id="many-clients">Many Clients: Limits</h3>
+        <p>
+          The car and the screen come first. No client, however badly written, should slow the gauges or the
+          readings from the car. Measurements showed that clients which only listen are cheap, and that the cost
+          is in requests and new connections. So the limits are on those:
+        </p>
+        <table>
+          <thead><tr><th>Limit</th><th>Value</th><th>What happens past it</th></tr></thead>
+          <tbody>
+            <tr><td>Connections at once</td><td>64 in all, 8 from one network address</td><td>Refused at once. 8 of the 64 are kept for programs on this device, so a flood from the network cannot lock out local tools.</td></tr>
+            <tr><td>New connections from one network address</td><td>20 a second, 100 in a burst</td><td>Refused. (From this device: 100 a second, 400 in a burst.)</td></tr>
+            <tr><td>Requests on one connection</td><td>200 a second, 400 in a burst</td><td><code>{"ok": false, "code": "rateLimited", "retryAfterMs": N}</code>. Wait that long. A client that keeps flooding is disconnected.</td></tr>
+            <tr><td>A connection that sends nothing</td><td>10 seconds after connecting; 60 seconds for one that has not paired</td><td>Closed.</td></tr>
+            <tr><td>One message</td><td>1 MB</td><td>The connection is closed.</td></tr>
+            <tr><td>A client that does not read</td><td>4 MB waiting to be sent</td><td>Further events queue (1000 at most, the oldest dropped, with a <code>dropped</code> event). Still not reading after 15 seconds: closed.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          The values are <code>CommandServer::Limits</code> in <span class="file-path">src/service/commandserver.h</span>.
+          The client's side of them is in <span class="file-path">docs/api/README.md</span>, "Limits per connection".
+        </p>
+        <p>
+          <strong>Measuring it.</strong> <span class="file-path">tools/stream/service_load.py</span> starts one
+          OCTAVE with the simulated car on a config of its own, runs a set of abusive clients against it, and
+          measures what everyone else loses: how often the car is polled, how long a request takes to get through
+          the main thread, CPU and memory.
+        </p>
+        <pre><code>python3 tools/stream/service_load.py build/octave PORT WORKDIR [MUSIC_DIR] [--ui] [--seconds 30] [--scenario idle fanout20 ...]
+python3 tools/stream/service_load.py build/octave 0 WORKDIR --check</code></pre>
+        <p>
+          <code>--check</code> is a short run that fails unless no subscriber lost events, the flooding client was
+          limited, and the poll rate stayed within 20 % of idle. It runs with the tests as
+          <code>service_load_check</code>.
+        </p>
+        <p>
+          Results on a desktop (Debug build, 16-thread AMD Ryzen 7, each row 30 seconds, with the limits above).
+          CPU is percent of one core, without a screen / with the built-in screen:
+        </p>
+        <table>
+          <thead><tr><th>Scenario</th><th>Load</th><th>CPU %</th><th>Car polls a second</th><th>What the load got</th></tr></thead>
+          <tbody>
+            <tr><td><code>idle</code></td><td>No clients</td><td>1.6 / 6.6</td><td>18.5 / 18.6</td><td></td></tr>
+            <tr><td><code>fanout20</code></td><td>20 clients, each subscribed to every reading</td><td>2.8 / 3.2</td><td>18.7 / 18.4</td><td>19.3 events a second each, none dropped</td></tr>
+            <tr><td><code>nonreader</code></td><td>One client that subscribes and never reads</td><td>1.7 / 2.3</td><td>18.9 / 18.4</td><td>Still connected</td></tr>
+            <tr><td><code>callflood</code></td><td>One client sending calls as fast as it can</td><td>1.7 / 2.0</td><td>18.9 / 18.5</td><td>Disconnected for ignoring <code>rateLimited</code></td></tr>
+            <tr><td><code>churn</code></td><td>Two clients connecting and closing in a loop</td><td>32.9 / 34.4</td><td>18.8 / 18.6</td><td>100 connections a second let in, the rest refused</td></tr>
+            <tr><td><code>wsmix</code></td><td>8 WebSocket clients plus phone video to 3</td><td>2.9 / 3.7</td><td>19.3 / 19.0</td><td>Video at 30 records a second each</td></tr>
+            <tr><td><code>all</code></td><td>Everything above at once</td><td>38.3 / 40.2</td><td>18.8 / 18.9</td><td>As in the rows above</td></tr>
+          </tbody>
+        </table>
+        <p>
+          In every row the car was polled at the same rate and a request through the main thread took under a
+          millisecond. Not measured yet: the Raspberry Pi and Orange Pi, and video at a real phone's bit rate (the
+          test video is far smaller).
+        </p>
+
+        <!-- Files -->
+        <h2 id="files">Files and Tests</h2>
+        <table>
+          <thead><tr><th>File</th><th>What is in it</th></tr></thead>
+          <tbody>
+            <tr><td><span class="file-path">src/util/logger.{h,cpp}</span></td><td>The log files, the message handler, the crash handlers (<code>OctaveLog</code>).</td></tr>
+            <tr><td><span class="file-path">src/util/uiwatchdog.{h,cpp}</span></td><td>The UI watchdog.</td></tr>
+            <tr><td><span class="file-path">src/managers/diagnosticsmanager.{h,cpp}</span></td><td>The Diagnostics card's backend.</td></tr>
+            <tr><td><span class="file-path">src/managers/volumecontroller.{h,cpp}</span></td><td>Volume and mute.</td></tr>
+            <tr><td><span class="file-path">src/managers/clock.{h,cpp}</span></td><td>The clock text.</td></tr>
+            <tr><td><span class="file-path">src/appcore.{h,cpp}</span></td><td>Where every manager is built and connected: <code>wireVolume()</code>, <code>shutdown()</code>.</td></tr>
+            <tr><td><span class="file-path">src/main.cpp</span></td><td>Startup order, the command-line flags (<code>octave --help</code> lists them), signals, the quit cleanup, the service's routes.</td></tr>
+            <tr><td><span class="file-path">src/util/</span>, <span class="file-path">src/platform/</span></td><td>The <a href="#platform">small helpers</a>.</td></tr>
+            <tr><td><span class="file-path">src/service/</span></td><td>The service: <code>commandserver</code> (the socket, limits), <code>servicebridge</code> (the ops), <code>serviceregistry</code> (the objects), <code>metadescribe</code> (<code>describe</code>), <code>websocket</code>, <code>staticfiles</code> (the web root), <code>servicepairing</code>, <code>streamhub</code> (video), <code>serviceoptions</code> (the flags), <code>protocol.h</code> (the version).</td></tr>
+            <tr><td><span class="file-path">src/dev/</span></td><td>The dev tooling: perf monitor, the actions that drive the screen. See <a href="development.html">Development</a>.</td></tr>
+            <tr><td><span class="file-path">frontend/settings/DeviceSettingsPage.qml</span></td><td>The Diagnostics and Service cards.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          <strong>Tests</strong> (<span class="file-path">tests/cpp/</span>, run with <code>ctest</code>):
+          <code>tst_logger</code> (starts itself again as a program that crashes, then reads the log),
+          <code>tst_volumecontroller</code>, <code>tst_clock</code>, <code>tst_units</code>,
+          <code>tst_licensetexts</code>, <code>tst_releasecheck</code>, <code>tst_folderbrowser</code>,
+          <code>tst_pathurl</code>, <code>tst_fontcatalog</code>, <code>tst_graphicsrenderer</code>; for the service
+          <code>tst_servicebridge</code>, <code>tst_websocket</code>, <code>tst_staticfiles</code>,
+          <code>tst_serviceoptions</code>, <code>tst_servicepairing</code> and <code>service_load_check</code>. The
+          UI watchdog has no test.
+        </p>
 
         <!-- Design decisions -->
-        <h2 id="design-decisions">Design decisions</h2>
+        <h2 id="design-decisions">Why It Is Built This Way</h2>
+        <ul>
+          <li><strong>Everything goes to files.</strong> The head unit runs unattended in a car. After a crash or a freeze, the only thing its owner can do is export the logs later, so everything that matters must already be in them.</li>
+          <li><strong>The crash handler writes to its own file descriptor.</strong> Inside a signal almost nothing is safe to call. A descriptor opened at startup and raw writes work even when the rest of the process is broken. The handler then hands the crash back to the system, so its own crash report is still made.</li>
+          <li><strong>Signals quit through the event loop.</strong> Quitting from inside a signal handler is not safe. Writing one byte to a socket is, and the event loop does the rest in the same cleanup a closed window gets.</li>
+          <li><strong>The watchdog aborts a long freeze.</strong> A frozen screen in a car can only be cleared by pulling the power. An abort is logged, leaves a stack dump, and the launcher brings the app back in seconds.</li>
+          <li><strong>The watchdog stops early in the cleanup.</strong> Otherwise its thread can ping an object that has already been destroyed and log an error about a shutdown that was fine.</li>
+          <li><strong>One object owns volume.</strong> Every output must use the same curve, or they drift apart when the slider moves. The controller emits a signal and holds no output, so it can be built before the outputs exist.</li>
+          <li><strong>The clock reports changes, not ticks.</strong> With seconds hidden the text changes once a minute. Emitting it every second made every binding that shows the time work 60 times for the same text.</li>
+          <li><strong>A socket, not a test harness inside the app.</strong> Line-by-line JSON on a local port can be driven from any language. The app takes its own screenshots and injects its own input, so the same scripts work on Wayland, X11 and with no display.</li>
+          <li><strong>Off by default, local by default.</strong> A program that can drive the car's screen and read its data is opened by the owner, not found by accident.</li>
+        </ul>
 
-        <h3>Why the volume curve lives in one object</h3>
-        <p>Commit <code>d2b047b</code> moved every copy of the curve, including those in <span class="file-path">BottomBar.qml</span> and <span class="file-path">MediaRoom.qml</span>, into <code>VolumeController</code>. The risk is plain: every output must use the same curve <em>or they drift out of sync when the user moves the slider</em>. The controller emits <code>volumeApplied</code> rather than holding the output managers so it can be constructed before the managers it feeds exist (&ldquo;avoids tight coupling &mdash; VolumeController doesn&rsquo;t need pointers to managers that may not exist yet&rdquo;, <span class="file-path">volumecontroller.h</span>).</p>
-
-        <h3>Why the Clock emits on change</h3>
-        <p>Commit <code>7777777</code>: with seconds hidden the string changes once a minute, but the old code emitted it every second and every binding that shows the clock re-evaluated 60 times for the same value; a hidden clock emitted <code>""</code> forever. Comparing against the last emitted text costs one string compare per second and removes the churn. Settings are still re-read on every tick rather than wired to change signals, which keeps the class free of any signal connections.</p>
-
-        <h3>Why the crash handlers write where they do</h3>
-        <p>The observability overhaul (<code>053f587</code>) exists because the head unit runs unattended in a vehicle: the only thing a user can do after a freeze or crash is export the logs from the Device settings page later. Crash traces are therefore written to the error log. Diagnostics exports both main and error logs, and its tail combines the main log with a shorter error-log tail. The code comments spell out the constraint: &ldquo;a separate descriptor, opened once, so the signal path never touches Qt&rdquo; and &ldquo;async-signal-safe as far as practical&rdquo; &mdash; the handler only calls <code>write()</code> and <code>backtrace_symbols_fd()</code> on that raw descriptor. It then restores <code>SIG_DFL</code> and re-raises so the OS still writes its core dump / tombstone; the file log is additive, not a replacement.</p>
-
-        <h3>Why SIGTERM/SIGINT go through the event loop</h3>
-        <p>Commit <code>3810e03</code>: with the default action, a launcher or systemd stopping the app killed the process outright and the phone-mirror adb forward leaked. Calling <code>QCoreApplication::quit()</code> from inside a signal handler is not safe, so the handler only writes a byte into a <code>socketpair</code> and a <code>QSocketNotifier</code> does the real work on the event loop. It ends in the same <code>aboutToQuit</code> cleanup that a window close triggers.</p>
-
-        <h3>Why a watchdog, and why it stops first</h3>
-        <p>The header comment states the goal: &ldquo;so a frozen head unit leaves a trace&rdquo;. The watchdog (<code>f157b97</code>) is the smallest thing that turns a hang into evidence: one thread, one queued call, one warning per stall with the duration on recovery. The 2 s ping and 5 s stall threshold detect prolonged event-loop delays without logging on every normal tick. Commit <code>95dfb49</code> moved <code>stop()</code> to the head of the quit cleanup after a Pi run where the worker pinged a QObject Qt had already destroyed and the error was reported as CRITICAL &mdash; noise the whole effort exists to remove.</p>
-
-        <h3>Why a TCP command server rather than an in-process test harness</h3>
-        <p>The command server is what lets every external tool &mdash; the screenshot sweeper, the dashboard-editor scenario, the perf loops and the MCP servers &mdash; drive the <em>real</em> app process from outside without a display server: the app captures itself with <code>grabWindow()</code> and injects input from inside Qt (<code>QTest</code> mouse events, key events sent to the item), so the same scripts run on Wayland, X11, Xvfb and offscreen (an earlier xdotool + mss approach broke under Wayland). Newline-delimited JSON over localhost is trivially scriptable from any language and from an MCP tool. It is bound to <code>127.0.0.1</code>. The socket itself has since become the service (<span class="file-path">src/service/</span>, in every build, off unless asked for); what stays out of release binaries are the actions that drive the UI, which only the dev runtime (<code>OCTAVE_DEV_TOOLS</code>, <code>--profile</code>) registers. <code>registerAction()</code> lets dev-only code such as the UI driver and the collage bridge add actions without touching the core table.</p>
-
-        <h3>Why perf instrumentation is a macro</h3>
-        <p><code>OCTAVE_PERF_SCOPE</code> keeps profiling out of shipped binaries entirely: without <code>OCTAVE_DEV_TOOLS</code> it expands to <code>static_cast&lt;void&gt;(0)</code>, and with the tooling built but <code>--profile</code> off it is one relaxed atomic load. The labels are plain strings, so the list of instrumented functions can grow without touching the monitor.</p>
-
-        <div class="related-pages">
+        <div class="related-pages" id="related">
           <h3>Related Pages</h3>
           <a href="architecture.html" class="related-link">Architecture Overview</a>
-          <a href="signals-slots-reference.html" class="related-link">Signals &amp; Slots Reference</a>
           <a href="development.html" class="related-link">Development Guide</a>
-          <a href="settings-manager.html" class="related-link">Settings Manager</a>
+          <a href="writing-a-frontend.html" class="related-link">Writing a Frontend</a>
+          <a href="api-reference.html" class="related-link">Service API Reference</a>
+          <a href="settings-reference.html" class="related-link">Settings Reference</a>
           <a href="network-manager.html" class="related-link">Network Manager</a>
+          <a href="media-manager.html" class="related-link">Media Manager</a>
           <a href="troubleshooting.html" class="related-link">Troubleshooting</a>
         </div>
       </div>

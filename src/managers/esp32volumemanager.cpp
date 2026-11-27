@@ -215,6 +215,7 @@ QStringList ESP32VolumeManager::scanForDevices()
         qCDebug(lcEsp32) << "discovered ports:" << ports;
     }
 
+    m_scannedPorts = ports;
     return ports;
 }
 
@@ -318,6 +319,7 @@ void ESP32VolumeManager::initialConnect()
         qCInfo(lcEsp32) << "enabled but no port configured";
         m_connectionDetail = QStringLiteral("No port configured - select one above");
         emit connectionDetailChanged(m_connectionDetail);
+        m_scanTimer.start();   // a receiver plugged in later is found by the scan
     }
 }
 
@@ -792,9 +794,47 @@ void ESP32VolumeManager::onReconnectTimeout()
     attemptReconnect();
 }
 
+QString ESP32VolumeManager::portToConnectAfterScan(const QString &savedPort, const QString &esp32S3Port,
+                                                   const QStringList &portsBefore, const QStringList &portsNow)
+{
+    if (!savedPort.isEmpty() && portsNow.contains(savedPort))
+        return portsBefore.contains(savedPort) ? QString() : savedPort;
+    // No saved port, or it is not there
+    if (esp32S3Port.isEmpty())
+        return {};
+    if (savedPort.isEmpty() || !portsBefore.contains(esp32S3Port))
+        return esp32S3Port;
+    return {};
+}
+
+// The scan runs every 10 s while the knob is enabled and not connected. A
+// receiver that shows up is connected here; without this a knob plugged in
+// after startup (or after the retries ran out) waited for a tap in Settings.
 void ESP32VolumeManager::onScanTimeout()
 {
-    scanForDevices();
+    const QStringList before = m_scannedPorts;
+    const QStringList now = scanForDevices();
+    if (!m_settingsManager || !m_settingsManager->property("esp32VolumeEnabled").toBool())
+        return;
+    if (m_connected || m_awaitingKnob || m_reconnectTimer.isActive())
+        return;
+    // Auto Reconnect off: only startup and a tap in Settings connect
+    if (!m_settingsManager->property("esp32AutoReconnect").toBool())
+        return;
+
+    const QString saved = m_settingsManager->property("esp32VolumePort").toString();
+    const QString port = portToConnectAfterScan(saved, m_esp32S3Port, before, now);
+    if (port.isEmpty())
+        return;
+    m_reconnectAttempts = 0;
+    if (port != saved) {
+        // Saving it connects (onPortChanged)
+        qCInfo(lcEsp32) << "ESP32-S3 appeared on" << port << "- selecting it";
+        QMetaObject::invokeMethod(m_settingsManager, "save_esp32_volume_port", Q_ARG(QString, port));
+        return;
+    }
+    qCInfo(lcEsp32) << port << "appeared - connecting";
+    connect_device();
 }
 
 void ESP32VolumeManager::onStartupTimeout()

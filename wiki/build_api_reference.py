@@ -12,6 +12,58 @@ WIKI = os.path.dirname(os.path.abspath(__file__))
 API = os.path.join(WIKI, "..", "docs", "api")
 OUT = os.path.join(WIKI, "api-reference.html")
 
+# The wiki page (and heading) that explains what each object is for. This page only lists
+# members; add a row when a new object is exposed.
+GUIDE = {
+    "airPlayManager": ("phone-mirror-android-auto.html#airplay", "Phone Mirror & Android Auto: AirPlay"),
+    "androidAutoManager": ("phone-mirror-android-auto.html#android-auto", "Phone Mirror & Android Auto: Android Auto"),
+    "audioAnalyzer": ("audio-analyzer.html", "Audio Analyzer"),
+    "berryIMU": ("hardware-managers.html#imu-overview", "Hardware Managers: the motion sensor"),
+    "busMonitor": ("obd-manager.html#bus-monitor", "OBD Manager: Bus Monitor"),
+    "clock": ("utilities.html#clock", "Utilities: Clock"),
+    "customPids": ("obd-manager.html#custom-pids", "OBD Manager: Custom PIDs"),
+    "dashboardManager": ("gauges-dashboards.html", "Gauges & Dashboards"),
+    "diagnosticsManager": ("utilities.html#diagnostics-manager", "Utilities: Diagnostics"),
+    "esp32VolumeManager": ("hardware-managers.html#esp32-overview", "Hardware Managers: the volume knob"),
+    "fontCatalog": ("theme-system.html#font-system", "Theme System: Fonts"),
+    "frontendManager": ("writing-a-frontend.html#install", "Writing a Frontend: Installing"),
+    "gestureSensor": ("hardware-managers.html#gesture-overview", "Hardware Managers: the gesture sensor"),
+    "mediaManager": ("media-manager.html", "Media Manager"),
+    "networkManager": ("network-manager.html", "Network Manager"),
+    "nowPlaying": ("media-manager.html#now-playing", "Media Manager: Now Playing"),
+    "obdAdapterFinder": ("obd-manager.html#adapter-finder", "OBD Manager: finding an adapter"),
+    "obdManager": ("obd-manager.html", "OBD Manager"),
+    "paramStore": ("obd-manager.html#supported-parameters", "OBD Manager: readings"),
+    "parameterCatalog": ("obd-manager.html#supported-parameters", "OBD Manager: readings"),
+    "phoneMirrorManager": ("phone-mirror-android-auto.html#phone-mirror", "Phone Mirror & Android Auto: Phone Mirror"),
+    "settingsManager": ("settings-manager.html", "Settings Manager"),
+    "shiftLightManager": ("obd-manager.html#shift-light", "OBD Manager: Shift Light"),
+    "sim": ("development.html#mock-obd", "Development: the simulated car"),
+    "spotifyManager": ("media-manager.html#spotify", "Media Manager: Spotify"),
+    "themeCatalog": ("theme-system.html", "Theme System"),
+    "tripRecorder": ("obd-manager.html#black-box", "OBD Manager: the black box"),
+    "units": ("utilities.html#platform", "Utilities: small helpers"),
+    "vehicleManager": ("pages.html#carmenu", "Pages: 3D View"),
+    "volumeController": ("utilities.html#volume-controller", "Utilities: Volume"),
+}
+
+
+def guide_link(name):
+    """'Explained in: <link>. ' for an object, or '' (with a warning) when GUIDE has no usable row."""
+    if name not in GUIDE:
+        print(f"warning: no GUIDE row for {name}; its section links to no wiki page")
+        return ""
+    href, label = GUIDE[name]
+    page, _, anchor = href.partition("#")
+    path = os.path.join(WIKI, page)
+    if not os.path.exists(path):
+        raise SystemExit(f"GUIDE[{name}]: wiki/{page} does not exist")
+    if anchor:
+        with open(path, encoding="utf-8") as fh:
+            if f'id="{anchor}"' not in fh.read():
+                raise SystemExit(f"GUIDE[{name}]: wiki/{page} has no id \"{anchor}\"")
+    return f'Explained in: <a href="{esc(href)}">{esc(label)}</a>. '
+
 
 def load(name):
     with open(os.path.join(API, name), encoding="utf-8") as fh:
@@ -52,8 +104,7 @@ def object_section(name, obj):
     out = [f'        <h3 id="{esc(name)}"><code>{esc(name)}</code> <span class="cmt">&mdash; {esc(obj["class"])}</span></h3>']
     if obj.get("stability") == "experimental":
         out.append("        <p><strong>Experimental:</strong> this object may change or go in any release.</p>")
-    out.append(f'        <p>Hand-written notes: <a href="signals-slots-reference.html#{esc(name)}">Signals &amp; Slots API</a>. '
-               f'Raw: <span class="file-path">docs/api/{esc(name)}.json</span>.</p>')
+    out.append(f'        <p>{guide_link(name)}Raw: <span class="file-path">docs/api/{esc(name)}.json</span>.</p>')
     props = obj["properties"]
     if props:
         out.append("        <table>\n          <thead><tr><th>Property</th><th>Type</th><th>Access</th><th>Notify</th></tr></thead>\n          <tbody>")
@@ -123,7 +174,7 @@ def main():
         </nav>
 
         <h2 id="overview">Overview</h2>
-        <p>This page is generated from <span class="file-path">docs/api/</span> (<code>./build/octave --dump-api docs/api</code>, then <code>python wiki/build_api_reference.py</code>); <code>tst_apidocs</code> fails when that copy is out of date. The protocol itself (<code>hello</code>, <code>describe</code>, <code>get</code>, <code>set</code>, <code>call</code>, <code>subscribe</code>, <code>rows</code>, <code>stream</code>, <code>pair</code>) is specified in <span class="file-path">docs/api/protocol.json</span> (JSON Schema, checked against the server) and described in <a href="utilities.html#service-protocol">Utilities: Service protocol</a>; versioning and the dashboard file schema in <span class="file-path">docs/api/README.md</span> and <span class="file-path">docs/api/dashboard-spec.schema.json</span>. What each member means is in the hand-written <a href="signals-slots-reference.html">Signals &amp; Slots API</a>.</p>
+        <p>This page is generated from <span class="file-path">docs/api/</span> (<code>./build/octave --dump-api docs/api</code>, then <code>python wiki/build_api_reference.py</code>); <code>tst_apidocs</code> fails when that copy is out of date. The protocol itself (<code>hello</code>, <code>describe</code>, <code>get</code>, <code>set</code>, <code>call</code>, <code>subscribe</code>, <code>rows</code>, <code>stream</code>, <code>pair</code>) is specified in <span class="file-path">docs/api/protocol.json</span> (JSON Schema, checked against the server) and described in <a href="utilities.html#service-protocol">Utilities: Service protocol</a>; versioning and the dashboard file schema in <span class="file-path">docs/api/README.md</span> and <span class="file-path">docs/api/dashboard-spec.schema.json</span>. This page lists members and their types. What an object is for, and the calls most code needs, are on the page each section links to.</p>
         <p>The same objects are QML context properties under the same names. Types are Qt's names (<code>QString</code>, <code>QVariantMap</code>, ...); on the wire they are JSON. {len(names)} objects:</p>
         <ul>
 {toc}
@@ -139,7 +190,7 @@ def main():
         <div class="related-pages">
           <h3>Related Pages</h3>
           <a href="utilities.html#service-protocol" class="related-link">Service protocol</a>
-          <a href="signals-slots-reference.html" class="related-link">Signals &amp; Slots API</a>
+          <a href="writing-a-frontend.html" class="related-link">Writing a Frontend</a>
           <a href="architecture.html" class="related-link">Architecture Overview</a>
         </div>
       </div>

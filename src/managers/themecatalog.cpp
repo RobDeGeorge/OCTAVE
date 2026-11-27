@@ -1,5 +1,6 @@
 #include "themecatalog.h"
 
+#include <QColor>
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -32,13 +33,39 @@ ThemeCatalog::ThemeCatalog(const QString &jsonPath, QObject *settings, QObject *
     refresh();
 }
 
+namespace {
+
+// A custom theme is the user's own data (Settings, or a hand-edited file): it
+// may lack a colour a newer version added, or hold something that is no
+// colour. Every key the fallback theme has is filled from it in that case, so
+// a screen never binds to a missing or broken colour. Keys only the custom
+// theme has (its album art) are kept.
+QVariantMap filledFrom(const QVariantMap &fallback, const QVariantMap &custom)
+{
+    QVariantMap out = custom;
+    for (auto it = fallback.constBegin(); it != fallback.constEnd(); ++it) {
+        const QVariant mine = custom.value(it.key());
+        if (it.value().typeId() == QMetaType::QVariantMap) {
+            out.insert(it.key(), filledFrom(it.value().toMap(), mine.toMap()));
+        } else if (it.value().typeId() == QMetaType::QString && QColor::isValidColorName(it.value().toString())) {
+            if (mine.typeId() != QMetaType::QString || !QColor::isValidColorName(mine.toString()))
+                out.insert(it.key(), it.value());
+        } else if (!mine.isValid()) {
+            out.insert(it.key(), it.value());
+        }
+    }
+    return out;
+}
+
+}  // namespace
+
 QVariantMap ThemeCatalog::resolve(const QString &name, const QVariantMap &customThemes,
                                   const QVariantMap &albumArtColors) const
 {
     if (name == QLatin1String(kAlbumArtTheme) && !albumArtColors.isEmpty())
         return albumArtColors;
     if (customThemes.contains(name))
-        return customThemes.value(name).toMap();
+        return filledFrom(m_themes.value(QLatin1String(kFallbackTheme)).toMap(), customThemes.value(name).toMap());
     if (m_themes.contains(name))
         return m_themes.value(name).toMap();
     return m_themes.value(QLatin1String(kFallbackTheme)).toMap();

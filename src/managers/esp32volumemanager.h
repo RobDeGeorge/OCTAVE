@@ -101,6 +101,15 @@ public slots:
     void refreshPorts() { refresh_ports(); }
     void resetReconnectAttempts() { reset_reconnect_attempts(); }
 
+public:
+    // What a background scan found to connect to, or "" for nothing: the saved
+    // port when it has just appeared (plugged in after startup, or back after
+    // the retries ran out), else an ESP32-S3 when no port is saved or the
+    // saved one is gone and the ESP32-S3 has just appeared (the same receiver
+    // under another name). Never another kind of port: those are picked by hand.
+    static QString portToConnectAfterScan(const QString &savedPort, const QString &esp32S3Port,
+                                          const QStringList &portsBefore, const QStringList &portsNow);
+
 private slots:
     void onSerialReadyRead();
     void onSerialError(QSerialPort::SerialPortError error);
@@ -153,6 +162,7 @@ private:
     QString m_connectionDetail;
     QVariantList m_availablePorts;
     QString m_esp32S3Port;
+    QStringList m_scannedPorts;   // the ports of the last scan
     double m_stepSize;
 
     QMutex m_lock;

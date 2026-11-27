@@ -129,6 +129,7 @@ private:
     QThread *m_workerThread;
     GestureWorker *m_worker;
     bool m_running;
+    QString m_status = QStringLiteral("Disconnected");   // the last connectionStatusChanged
     bool m_enabled;
     bool m_shuttingDown;
     int m_retryCount;

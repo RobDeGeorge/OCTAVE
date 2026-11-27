@@ -4,7 +4,8 @@
 // mirroring runs (touches go through to the phone). Since 2026-11-25 this is
 // the only place the phone is shown (no bottom-bar button, nothing opens the
 // full-screen PhoneMirrorView) while the flow is worked out; Connect Phone
-// starts the session here. With Phone Mirror on, it also starts the
+// starts the session here, and what that page told the user is told here:
+// the manager's notices, "Phone is asleep", the picker for a second phone. With Phone Mirror on, it also starts the
 // session itself when it comes on screen (unless the user closed mirroring
 // with the full-screen page's X in this run: mainWindow.phoneMirrorStopped),
 // keeps the manager's phone retries running while shown, and reports its
@@ -66,6 +67,14 @@ Item {
     readonly property bool live: _available && (phoneMirrorManager.isRunning || _session === "streaming"
                                                 || _session === "reconnecting")
     readonly property string _device: _hasManager ? phoneMirrorManager.deviceState : ""
+    // The phones adb can mirror right now (authorized and online)
+    readonly property var _usableDevices: {
+        var out = []
+        var list = _hasManager && phoneMirrorManager.devices ? phoneMirrorManager.devices : []
+        for (var i = 0; i < list.length; ++i)
+            if (list[i].state === "device") out.push(list[i])
+        return out
+    }
 
     // ── Starting the session from Home ──
     // Always on where it can run: the phoneMirrorEnabled setting ("Show in
@@ -262,6 +271,159 @@ Item {
                 anchors.centerIn: parent
                 width: root.dp(48); height: width
                 running: root._waiting
+            }
+        }
+
+        // The phone went to sleep and the wake is taking more than a moment
+        // (the manager's keeper normally wakes it within a second). A tap
+        // tries again.
+        Rectangle {
+            objectName: "phoneMirrorWidgetAsleep"
+            anchors.fill: parent
+            color: Qt.rgba(0, 0, 0, 0.66)
+            visible: root.live && !root._waiting && asleepDelay.elapsed
+            Timer {
+                id: asleepDelay
+                property bool elapsed: false
+                interval: 1500
+                running: root._hasManager && phoneMirrorManager.phoneAsleep === true
+                onRunningChanged: if (!running) elapsed = false
+                onTriggered: elapsed = true
+            }
+            Column {
+                anchors.centerIn: parent
+                width: parent.width - root.dp(16)
+                spacing: root.dp(6) * root._fontFit
+                Text {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    elide: Text.ElideRight
+                    text: "Phone is asleep"
+                    color: "white"
+                    font.family: App.Style.fontFamily
+                    font.bold: true
+                    font.pixelSize: Math.max(1, App.Spacing.overallText * 1.1 * root._fontFit)
+                }
+                Text {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    elide: Text.ElideRight
+                    text: "Waking it up… tap to retry"
+                    color: "#CCFFFFFF"
+                    font.family: App.Style.fontFamily
+                    font.pixelSize: Math.max(1, App.Spacing.overallText * 0.8 * root._fontFit)
+                }
+            }
+            MouseArea {
+                anchors.fill: parent
+                onClicked: if (root._hasManager) phoneMirrorManager.wakePhone()
+            }
+        }
+
+        // Something the user should know that does not stop the session
+        // (the phone blocks touch, no audio, a software encoder). Tap to hide.
+        Rectangle {
+            id: noticeBanner
+            objectName: "phoneMirrorWidgetNotice"
+            readonly property string text: root._hasManager && phoneMirrorManager.mirrorNotice ? phoneMirrorManager.mirrorNotice : ""
+            anchors.top: parent.top
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.topMargin: root.dp(8)
+            width: Math.min(parent.width - root.dp(16), noticeLabel.implicitWidth + root.dp(24))
+            height: noticeLabel.height + root.dp(14)
+            radius: Math.max(2, root.dp(8))
+            color: "#DD000000"
+            border.color: App.Style.accent
+            border.width: 1
+            visible: root.live && text !== ""
+            Text {
+                id: noticeLabel
+                anchors.centerIn: parent
+                width: Math.min(implicitWidth, liveArea.width - root.dp(40))
+                text: noticeBanner.text + "  ✕"
+                color: "white"
+                wrapMode: Text.WordWrap
+                font.family: App.Style.fontFamily
+                font.pixelSize: Math.max(1, App.Spacing.overallText * 0.75 * Math.max(0.7, root._fontFit))
+            }
+            MouseArea {
+                anchors.fill: parent
+                onClicked: if (root._hasManager) phoneMirrorManager.dismissNotice()
+            }
+        }
+
+        // More than one phone is connected: pick which one to mirror
+        Rectangle {
+            id: pickerButton
+            objectName: "phoneMirrorWidgetPicker"
+            anchors.left: parent.left
+            anchors.bottom: parent.bottom
+            anchors.margins: root.dp(8)
+            width: root.dp(36); height: width
+            radius: width / 2
+            color: pickerMouse.pressed ? App.Style.accent : "#AA000000"
+            border.color: "#55FFFFFF"
+            border.width: 1
+            visible: root.live && root._usableDevices.length > 1
+            Text {
+                anchors.centerIn: parent
+                text: "⇄"
+                color: "white"
+                font.pixelSize: root.dp(18)
+            }
+            MouseArea {
+                id: pickerMouse
+                anchors.fill: parent
+                onClicked: devicePicker.open()
+            }
+        }
+    }
+
+    Popup {
+        id: devicePicker
+        x: root.dp(8)
+        y: Math.max(root.dp(8), root.height - root.dp(52) - implicitHeight)
+        padding: root.dp(8)
+        modal: true
+        background: Rectangle {
+            color: "#EE000000"
+            radius: Math.max(2, root.dp(10))
+            border.color: App.Style.accent
+            border.width: 1
+        }
+        contentItem: Column {
+            spacing: root.dp(6)
+            Repeater {
+                model: root._usableDevices
+                Rectangle {
+                    width: Math.min(root.dp(280), Math.max(root.dp(120), root.width - root.dp(32)))
+                    height: root.dp(44)
+                    radius: Math.max(2, root.dp(8))
+                    color: rowMouse.pressed || modelData.selected ? App.Style.accent : "transparent"
+                    border.color: "#55FFFFFF"
+                    border.width: 1
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.left: parent.left
+                        anchors.leftMargin: root.dp(12)
+                        width: parent.width - root.dp(24)
+                        elide: Text.ElideRight
+                        text: (modelData.model ? modelData.model : modelData.serial)
+                              + (modelData.wireless ? "  (Wi-Fi)" : "  (USB)")
+                        color: "white"
+                        font.family: App.Style.fontFamily
+                        font.pixelSize: root.dp(15)
+                    }
+                    MouseArea {
+                        id: rowMouse
+                        anchors.fill: parent
+                        onClicked: {
+                            devicePicker.close()
+                            if (root._hasManager && !modelData.selected)
+                                phoneMirrorManager.selectDevice(modelData.serial)
+                        }
+                    }
+                }
             }
         }
     }

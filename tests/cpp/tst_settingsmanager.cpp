@@ -108,6 +108,33 @@ private slots:
         QVERIFY(!sm.vinylRecordMode());
     }
 
+    void applySettingsTakesARowWhoseSetterIsNotASaveSlot()
+    {
+        // homeVehicleCard's setter is setHomeVehicleCard, lastSettingsSection's
+        // set_last_settings_section: an import or a profile used to drop both
+        SettingsManager sm;
+        const QVariantMap result = sm.apply_settings({{"homeVehicleCard", false},
+                                                      {"lastSettingsSection", "mediaSettings"}});
+        QCOMPARE(result.value("applied").toStringList(), (QStringList{"homeVehicleCard", "lastSettingsSection"}));
+        QVERIFY(result.value("refused").toMap().isEmpty());
+        QVERIFY(!sm.homeVehicleCard());
+        QCOMPARE(sm.lastSettingsSection(), QStringLiteral("mediaSettings"));
+        sm.setHomeVehicleCard(true);
+    }
+
+    void obdParameterToggleSurvivesAQuitInsideItsDebounce()
+    {
+        {
+            SettingsManager first;
+            first.save_obd_parameter_enabled(QStringLiteral("INTAKE_TEMP"), false);
+            first.flushPendingSave();   // what shutdown calls, well inside the 800 ms
+        }
+        SettingsManager second;
+        QVERIFY(!second.get_obd_parameter_enabled(QStringLiteral("INTAKE_TEMP")));
+        second.save_obd_parameter_enabled(QStringLiteral("INTAKE_TEMP"), true);
+        second.flushPendingSave();
+    }
+
     void mediaFolderMustBeAFolder()
     {
         SettingsManager sm;
@@ -482,7 +509,7 @@ private slots:
         {
             SettingsManager first;
             QCOMPARE(first.sensorDecimalPlaces(), 1);
-            QCOMPARE(first.sensorTempUnit(), QStringLiteral("F"));
+            QCOMPARE(first.sensorTempUnit(), QStringLiteral("C"));   // as gaugeTempUnit: one control sets both
             QCOMPARE(first.sensorAltitudeUnit(), QStringLiteral("m"));
             QCOMPARE(first.sensorCards().value("Pitch").toBool(), true);
             QCOMPARE(first.obdCardStyleCircular(), false);
@@ -494,7 +521,7 @@ private slots:
             QSignalSpy circ(&first, &SettingsManager::obdCardStyleCircularChanged);
 
             first.save_sensor_decimal_places(3);
-            first.save_sensor_temp_unit(QStringLiteral("C"));
+            first.save_sensor_temp_unit(QStringLiteral("F"));
             first.save_sensor_altitude_unit(QStringLiteral("ft"));
             first.save_sensor_card_visible(QStringLiteral("Roll"), false);
             first.save_obd_card_style_circular(true);
@@ -508,7 +535,7 @@ private slots:
 
             // Same names on disk as before
             QCOMPARE(first.m_settings.value("sensorDecimalPlaces").toInt(), 3);
-            QCOMPARE(first.m_settings.value("sensorTempUnit").toString(), QStringLiteral("C"));
+            QCOMPARE(first.m_settings.value("sensorTempUnit").toString(), QStringLiteral("F"));
             QCOMPARE(first.m_settings.value("sensorAltitudeUnit").toString(), QStringLiteral("ft"));
             QCOMPARE(first.m_settings.value("sensorShowRoll").toBool(), false);
             QCOMPARE(first.m_settings.value("obdCardStyleCircular").toBool(), true);
@@ -516,7 +543,7 @@ private slots:
         }
         SettingsManager second;
         QCOMPARE(second.sensorDecimalPlaces(), 3);
-        QCOMPARE(second.sensorTempUnit(), QStringLiteral("C"));
+        QCOMPARE(second.sensorTempUnit(), QStringLiteral("F"));
         QCOMPARE(second.sensorAltitudeUnit(), QStringLiteral("ft"));
         QCOMPARE(second.sensorCards().value("Roll").toBool(), false);
         QCOMPARE(second.obdCardStyleCircular(), true);
@@ -532,7 +559,7 @@ private slots:
         mgr.save_sensor_decimal_places(-2);
         QCOMPARE(mgr.sensorDecimalPlaces(), 0);
         mgr.save_sensor_temp_unit(QStringLiteral("K"));
-        QCOMPARE(mgr.sensorTempUnit(), QStringLiteral("F"));
+        QCOMPARE(mgr.sensorTempUnit(), QStringLiteral("C"));
         QCOMPARE(temp.count(), 0);
         mgr.save_sensor_altitude_unit(QStringLiteral("yards"));
         QCOMPARE(mgr.sensorAltitudeUnit(), QStringLiteral("m"));

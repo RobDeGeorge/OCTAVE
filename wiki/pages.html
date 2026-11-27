@@ -13,547 +13,696 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Pages</div>
           <h1 class="page-title">Pages</h1>
-          <p class="page-subtitle">Every view that can be pushed on the StackView (plus the Now Playing look editor inside the Media Room): what it shows, how it is reached, which managers it talks to, and the QML techniques worth knowing</p>
+          <p class="page-subtitle">A tour of every screen in OCTAVE: what each one is for, what you can do there, and how it is put together</p>
         </div>
 
         <nav class="toc">
           <h3>On This Page</h3>
           <ul class="toc-list">
-            <li><a href="#inventory">View Inventory</a></li>
-            <li><a href="#mainmenu">MainMenu</a></li>
-            <li><a href="#mediaroom">MediaRoom</a></li>
-            <li><a href="#mediaplayer">MediaPlayer</a></li>
-            <li><a href="#obdhome">OBDHome</a></li>
-            <li><a href="#obdmenu">OBDMenu</a></li>
-            <li><a href="#obddiagnostics">OBDDiagnostics</a></li>
-            <li><a href="#triphistory">TripHistory</a></li>
-            <li><a href="#sensorhome">SensorHome</a></li>
-            <li><a href="#sensormenu">SensorMenu</a></li>
-            <li><a href="#carmenu">CarMenu</a></li>
-            <li><a href="#clockmenu">ClockMenu</a></li>
-            <li><a href="#phonemirror">PhoneMirrorView</a></li>
-            <li><a href="#androidauto">AndroidAutoView</a></li>
-            <li><a href="#airplay">AirPlayView</a></li>
-            <li><a href="#settingsmenu">SettingsMenu and its Layouts</a></li>
-            <li><a href="#nowplayingstudio">NowPlayingStudio</a></li>
-            <li><a href="#navigation-summary">Navigation Summary</a></li>
-            <li><a href="#design-decisions">Design Decisions</a></li>
+            <li><a href="#overview">What a Page Is</a></li>
+            <li><a href="#navigation-summary">Getting Around</a></li>
+            <li><a href="#mainmenu">Home</a></li>
+            <li><a href="#mediaroom">Media Room</a></li>
+            <li><a href="#nowplayingstudio">The Look Editor</a></li>
+            <li><a href="#mediaplayer">Music Library</a></li>
+            <li><a href="#obdhome">OBD</a></li>
+            <li><a href="#obdmenu">Live Data</a></li>
+            <li><a href="#obddiagnostics">Trouble Codes</a></li>
+            <li><a href="#triphistory">Trip History</a></li>
+            <li><a href="#sensorhome">Sensors Hub</a></li>
+            <li><a href="#sensormenu">Sensors</a></li>
+            <li><a href="#carmenu">3D View</a></li>
+            <li><a href="#clockmenu">Clock</a></li>
+            <li><a href="#phonemirror">Phone Mirror</a></li>
+            <li><a href="#airplay">iPhone (AirPlay)</a></li>
+            <li><a href="#androidauto">Android Auto</a></li>
+            <li><a href="#settingsmenu">Settings</a></li>
+            <li><a href="#inventory">How Pages Are Built</a></li>
+            <li><a href="#design-decisions">Why It Is Built This Way</a></li>
+            <li><a href="#related">Related Pages</a></li>
           </ul>
         </nav>
 
-        <!-- Inventory -->
-        <h2 id="inventory">View Inventory</h2>
+        <!-- Overview -->
+        <h2 id="overview">What a Page Is</h2>
+        <p>
+          OCTAVE shows one screen at a time above (or beside) the bottom bar: Home, the music, the car's readings,
+          the sensors, Settings. Each of those screens is a <strong>page</strong>. This is the tour of all of them.
+        </p>
+        <p>
+          Each section below says what the page is for and what you can do on it, then, under "How it is built",
+          which file it is and what a developer should know before changing it. The last two sections are for
+          developers only.
+        </p>
 
-        <p>Most views live at the top of <span class="file-path">frontend/</span> and are built once, on first visit or during prewarming, then retained by the page cache. The dashboard editor lives under <span class="file-path">dashboards/editor/</span> and is destroyed when popped (see <a href="frontend-overview.html#page-cache">the page cache</a>). The table lists what each one declares and where it is opened from; "required" means <code>required property</code>, which <code>cachedPage()</code> satisfies by always passing <code>stackView</code> and <code>mainWindow</code>. Because instances are long-lived, per-visit work belongs in <code>StackView.onActivated</code>, not <code>Component.onCompleted</code>.</p>
-
+        <!-- Navigation -->
+        <h2 id="navigation-summary">Getting Around</h2>
+        <p>The buttons on the bottom bar open the sections. Tapping a button again while you are in its section does something useful too:</p>
         <table>
-          <thead><tr><th>View</th><th>objectName</th><th>Properties it takes</th><th>Reached from</th></tr></thead>
+          <thead><tr><th>Button</th><th>Opens</th><th>Tapped again</th></tr></thead>
           <tbody>
-            <tr><td><a href="#mainmenu">MainMenu</a></td><td><code>mainMenu</code></td><td><code>stackView</code>, <code>mainWindow</code>, <code>windowWidth</code>, <code>windowHeight</code> (plain)</td><td><code>StackView.initialItem</code>; BottomBar Home normally pops back to it; an open wiki reader can require a cached Home above Settings</td></tr>
-            <tr><td><a href="#mediaroom">MediaRoom</a></td><td><code>mediaRoom</code></td><td><code>stackView</code>, <code>mainWindow</code> (plain)</td><td>BottomBar Media, MainMenu media panel, MediaPlayer row tap</td></tr>
-            <tr><td><a href="#mediaplayer">MediaPlayer</a></td><td><code>mediaPlayer</code></td><td><code>stackView</code>, <code>mainWindow</code> (required)</td><td>BottomBar Media (toggles with MediaRoom), MainMenu media panel</td></tr>
-            <tr><td><a href="#obdhome">OBDHome</a></td><td><code>obdHome</code></td><td><code>stackView</code>, <code>mainWindow</code> (required)</td><td>BottomBar OBD</td></tr>
-            <tr><td><a href="#obdmenu">OBDMenu</a></td><td><code>obdMenu</code></td><td><code>stackView</code>, <code>mainWindow</code> (required)</td><td>OBDHome "Dashboards" card, MainMenu OBD panel, BottomBar OBD via <code>lastOBDPage</code></td></tr>
-            <tr><td><a href="#obddiagnostics">OBDDiagnostics</a></td><td><code>obdDiagnostics</code></td><td><code>stackView</code>, <code>mainWindow</code> (required)</td><td>OBDHome "Trouble Codes" card, BottomBar OBD via <code>lastOBDPage</code></td></tr>
-            <tr><td><a href="#triphistory">TripHistory</a></td><td><code>obdTripHistory</code></td><td><code>stackView</code>, <code>mainWindow</code> (required)</td><td>OBDHome "Trip History" card, Black Box settings card, BottomBar OBD via <code>lastOBDPage</code></td></tr>
-            <tr><td><a href="#sensorhome">SensorHome</a></td><td><code>sensorHome</code></td><td><code>stackView</code>, <code>mainWindow</code> (required)</td><td>BottomBar Sensor button</td></tr>
-            <tr><td><a href="#sensormenu">SensorMenu</a></td><td><code>sensorMenu</code></td><td><code>stackView</code>, <code>mainWindow</code> (required)</td><td>SensorHome "Sensors" card, BottomBar Sensor via <code>lastSensorPage</code></td></tr>
-            <tr><td><a href="#carmenu">CarMenu</a></td><td><code>carMenu</code></td><td><code>stackView</code> (required), <code>mainWindow</code> (plain)</td><td>SensorHome "3D View" card, BottomBar Sensor via <code>lastSensorPage</code></td></tr>
-            <tr><td><a href="#clockmenu">ClockMenu</a></td><td>&mdash;</td><td><code>stackView</code>, <code>mainWindow</code> (required)</td><td>BottomBar clock; <code>navigateTo("ClockMenu.qml")</code> (command server / screenshot sweeper)</td></tr>
-            <tr><td><a href="#phonemirror">PhoneMirrorView</a></td><td><code>phoneMirrorView</code></td><td><code>stackView</code>, <code>mainWindow</code> (plain)</td><td>BottomBar Phone Mirror (desktop only)</td></tr>
-            <tr><td><a href="#androidauto">AndroidAutoView</a></td><td>&mdash;</td><td><code>stackView</code>, <code>mainWindow</code> (plain)</td><td>BottomBar Android Auto (desktop only)</td></tr>
-            <tr><td><a href="#airplay">AirPlayView</a></td><td>&mdash;</td><td><code>stackView</code>, <code>mainWindow</code> (plain)</td><td>Opens by itself when an iPhone starts mirroring; Phone Mirror's "Using an iPhone?" button; the phone button while an iPhone mirrors</td></tr>
-            <tr><td><a href="#settingsmenu">SettingsMenu</a></td><td><code>settingsMenu</code></td><td><code>stackView</code>, <code>mainWindow</code>, <code>initialSection</code> (required)</td><td>BottomBar Settings, <code>navigateToSettings()</code></td></tr>
+            <tr><td>Home</td><td><a href="#mainmenu">Home</a></td><td>While the phone is live on Home, it is the phone's Home key.</td></tr>
+            <tr><td>OBD</td><td>With a car connected, the OBD page you used last (<a href="#obdmenu">Live Data</a>, <a href="#obddiagnostics">Trouble Codes</a> or <a href="#triphistory">Trip History</a>). With no car, or the first time, the <a href="#obdhome">OBD</a> page.</td><td>Goes back to the OBD page with its three cards.</td></tr>
+            <tr><td>Media</td><td>The <a href="#mediaroom">Media Room</a>, or the <a href="#mediaplayer">music library</a> if you turned on Settings &gt; Media &gt; Library &amp; Playback &gt; <strong>Open Music to the Library</strong>.</td><td>Switches between the two.</td></tr>
+            <tr><td>Sensors</td><td>The sensor page you used last (<a href="#sensormenu">Sensors</a> or <a href="#carmenu">3D View</a>), or the <a href="#sensorhome">sensors hub</a> the first time.</td><td>Goes back to the hub with its two cards.</td></tr>
+            <tr><td>Settings</td><td><a href="#settingsmenu">Settings</a></td><td>Closes the open card.</td></tr>
+            <tr><td>Android Auto</td><td><a href="#androidauto">Android Auto</a>. The button is there only when Android Auto is turned on in Settings &gt; Phone.</td><td></td></tr>
+            <tr><td>The clock</td><td>The full-screen <a href="#clockmenu">Clock</a></td><td></td></tr>
           </tbody>
         </table>
+        <p>
+          You can also swipe sideways on a page to go to the next or previous section, as if you had tapped its
+          button. The <a href="bottom-bar.html">Bottom Bar</a> page has the details of the bar and the swipe.
+        </p>
+        <p>
+          There is no bottom-bar button for the phone at the moment. An Android phone is shown on Home and in the
+          Media Room; an iPhone opens its own page by itself when it starts mirroring.
+        </p>
 
-        <p>Every view uses the OBD or media colour tokens from <code>Style</code> and the scaled sizes from <code>Spacing</code>, and every one carries the local <code>dp()</code> / <code>dpMin()</code> shim described in <a href="frontend-overview.html#gui-scale">GUI Scale</a>.</p>
+        <!-- Home -->
+        <h2 id="mainmenu">Home</h2>
+        <p>
+          Home is the screen OCTAVE starts on. What it looks like is your choice: Settings &gt; Display &gt; Layout
+          &gt; <strong>Home Screen</strong> shows a card with a picture for each Home, and tapping one picks it.
+          There are three kinds.
+        </p>
 
-        <!-- MainMenu -->
-        <h2 id="mainmenu">MainMenu.qml</h2>
-
-        <p><span class="file-path">frontend/MainMenu.qml</span> is the home screen and the <code>initialItem</code> of the StackView: three panels: media on the left (24&nbsp;% of the width), the OBD readings in the middle and the sensors on the right (22&nbsp;%). In a window taller than wide they stack: media as a strip on top (20&nbsp;% of the height, the art on the left with the title and progress beside it), the readings under it, the sensors as a strip below (20&nbsp;%). It imports <code>QtQuick.Controls.Basic</code>, <code>Qt5Compat.GraphicalEffects</code> and <code>QtQuick.Effects</code> &mdash; the only file besides MediaRoom that uses both effect modules.</p>
+        <h3 id="home-dashboard">The dashboard (the default)</h3>
+        <p>
+          Out of the box Home is a dashboard: your phone's screen in the middle, a Now Playing card under it, speed
+          and RPM on the left, coolant temperature and battery voltage on the right. In an upright window the phone
+          is on top, the four readings sit in a row under it and the music card runs along the bottom.
+        </p>
+        <ul>
+          <li><strong>The phone.</strong> While a phone is mirrored, its screen is live here and your touches go to the phone. Otherwise the card says "No phone connected" with a <strong>Connect Phone</strong> button, or <strong>Set Up</strong>, which takes you to Settings &gt; Phone. See <a href="phone-mirror-android-auto.html">Phone Mirror &amp; Android Auto</a>.</li>
+          <li><strong>The music card.</strong> Tap it to open the music (the Media Room or the library, as the Media button does). Its progress bar seeks without leaving Home. With no music it shows "No Music Loaded" and a <strong>Connect Music</strong> button, which offers Local Music, Spotify and Phone.</li>
+          <li><strong>The readings.</strong> With no car connected they are covered by "No vehicle connected" and a <strong>Connect Vehicle</strong> button. See <a href="obd-manager.html">OBD Manager</a>.</li>
+          <li>A widget that shows the motion sensor reads "No sensor" until one is connected.</li>
+        </ul>
+        <p>
+          Only the music card opens a page when tapped. The other widgets do nothing on a tap for now.
+        </p>
+        <p>
+          Any dashboard can be Home. A dashboard is a JSON file you write and put in the
+          <span class="file-path">dashboards</span> folder of OCTAVE's settings folder; it then appears among the
+          Home Screen cards. There is no dashboard editor in the app. <a href="gauges-dashboards.html">Gauges &amp;
+          Dashboards</a> explains how to write one.
+        </p>
 
         <h3 id="home-screens">Hand-built Home screens</h3>
-
-        <p>Home can also be a screen drawn by hand, free of the dashboard grid: the QML files in <span class="file-path">frontend/home/</span>, listed in <span class="file-path">home/HomeScreens.js</span> and picked beside the dashboards in Settings &gt; Display &gt; Home Screen, each as a card with its <code>preview</code> picture from <span class="file-path">frontend/assets/home/</span> (the <code>homeScreen</code> setting holds the id; <code>""</code> is the dashboard below). MainMenu loads the file in <code>homeScreenLoader</code>. Each is a <code>HomeScreen</code> (<span class="file-path">home/HomeScreen.qml</span>), which gives it the readings by id (<code>value(id)</code>, <code>text(id)</code> with "--" for none, <code>unitOf</code>, <code>titleOf</code>, <code>norm</code>), what is playing (<code>np</code>, <code>art</code>, <code>hasTrack</code>), the clock, <code>portrait</code> and <code>u</code> (1&nbsp;% of the short side, so a screen scales with its room), and registers the polling demand for its <code>paramIds</code> (consumer <code>"homeScreen"</code>) and the full IMU rate when <code>usesImu</code>, while it is on screen. Six ship:</p>
+        <p>Six Homes are drawn by hand and follow no grid. Each shows a Connect Vehicle button while no car is connected.</p>
         <table>
-          <thead><tr><th>Id / file</th><th>What it is</th></tr></thead>
+          <thead><tr><th>Name</th><th>What it is</th></tr></thead>
           <tbody>
-            <tr><td><code>cockpit</code> / HomeCockpit.qml</td><td>An instrument cluster: the tachometer with the speed inside it (the shift light as a halo), a shift strip across the top, two leaning readouts each side (coolant, fuel, voltage, throttle; red past a limit), and a bar along the bottom with the time, what is playing and two more readings. Upright, the readouts go under the dial.</td></tr>
-            <tr><td><code>glass</code> / HomeGlass.qml</td><td>Around the music: the album art blurred over the whole screen, the cover with the track, its progress and previous / play / next on one side, and panes of glass on the other with the time, the speed and four small readings. With no music it shows <code>MusicEmptyPrompt</code>.</td></tr>
-            <tr><td><code>retro</code> / HomeRetro.qml</td><td>A 1980s digital dash in one colour (the theme's accent) on black under scan lines: the speed in seven-segment figures drawn from rectangles, unlit segments faintly showing; a bar-graph tachometer that climbs across the top with its scale in thousands; fuel and temperature as stacks of ten blocks; one line of monospace text with the time, the track and the battery.</td></tr>
-            <tr><td><code>rings</code> / HomeRings.qml</td><td>Four readings as concentric rings that fill with their level (revs, speed, throttle, engine load, a colour each), the speed in the middle, and beside them the legend with each figure, three quiet readings, the time and what is playing.</td></tr>
-            <tr><td><code>telemetry</code> / HomeTelemetry.qml</td><td>A data logger: the last half-minute of revs, speed, throttle and load as four live traces (<code>SparklineGauge</code>), and beside them the speed, the black box's state (REC, the trip's time and sample count, from <code>tripRecorder</code>), a small table and the G-force plot.</td></tr>
-            <tr><td><code>trail</code> / HomeTrail.qml</td><td>For the trail, from the motion sensor: a heading tape across the top, an artificial horizon that tilts with pitch and roll behind the vehicle's picture, the G-force bubble, pitch and roll in figures, and speed, altitude, coolant and battery along the bottom.</td></tr>
+            <tr><td>Cockpit</td><td>An instrument cluster: the tachometer with the speed inside it, a shift strip across the top, two readouts on each side and what is playing along the bottom.</td></tr>
+            <tr><td>Glass</td><td>Built around the music: the album art, blurred, fills the screen, with the cover, the track and its controls on one side and the time, the speed and four small readings on the other.</td></tr>
+            <tr><td>Trail</td><td>For off-road, from the motion sensor: a heading tape, an artificial horizon that tilts with pitch and roll behind the vehicle, the G-force bubble, and a row of readings.</td></tr>
+            <tr><td>Retro</td><td>A 1980s digital dash in one colour on black: the speed in seven-segment figures, a bar-graph tachometer, fuel and temperature as stacks of blocks.</td></tr>
+            <tr><td>Rings</td><td>Revs, speed, throttle and engine load as four concentric rings that fill with their level, with a legend, the time and what is playing beside them.</td></tr>
+            <tr><td>Telemetry</td><td>A data logger: the last half-minute of revs, speed, throttle and load as live traces, the black box's state and the G-force plot.</td></tr>
           </tbody>
         </table>
-        <p>Each shows <code>OBDConnectButton</code> while no car is connected. A new one is a file in <span class="file-path">frontend/home/</span>, a row in <span class="file-path">HomeScreens.js</span> and a 640 &times; 310 picture of it in <span class="file-path">frontend/assets/home/</span>; <code>tst_dashboardwidgets</code> (<code>homeScreens</code>) loads each in three sizes.</p>
 
-        <h3 id="home-dashboard">Home is a dashboard</h3>
+        <h3 id="home-classic">Classic</h3>
+        <p>
+          The <strong>Classic</strong> card is the three-panel Home: music on the left, the car's readings in the
+          middle with a picture of your vehicle, the motion sensor on the right. Upright, the three stack. Each
+          panel opens its section when tapped: the music panel opens the music, the readings open
+          <a href="#obdmenu">Live Data</a>, the vehicle picture opens Settings &gt; Device &gt; Vehicle, and the
+          sensor panel opens the <a href="#sensorhome">sensors hub</a>. With nothing connected, the panels show the
+          same "No vehicle connected", "No Music Loaded" and "No sensors connected" prompts.
+        </p>
 
-        <p>By default MainMenu loads <span class="file-path">frontend/HomeDashboard.qml</span>: the dashboard <code>dashboardManager.homeDashboardId</code> names, drawn by the same <code>DashboardRenderer</code>, with <code>interactive: true</code>. Until another is chosen that is the built-in <code>home</code> (<span class="file-path">dashboards/presets/home.json</span>): the phone's screen as the base (<code>PhoneMirrorWidget</code>: once a phone has been mirrored on this install (the <code>phoneMirrorUsed</code> setting) it starts mirroring itself when Home is shown, sized to the window, and until then waits for Connect Phone or, on Linux, for a phone with USB debugging on to be plugged in (found without adb), so a fresh install with no phone runs no adb command; it does not start by itself when the user closed it with the full-screen page's X in this run (<code>mainWindow.phoneMirrorStopped</code>); touches go through to the phone; the only place the phone is shown for now, with no bottom-bar button or full-screen page; not live it shows Connecting, No phone connected with Connect Phone (starts mirroring there), Set Up (Settings &gt; Phone, where a new phone is paired by QR code)), a small Now Playing card under it, and two reading cards on each side (speed and RPM on the left, coolant and voltage on the right); no motion sensors or vehicle for now (2026-11-25, while Home is worked out). In a window taller than wide the phone fills the top, the four readings sit in a row under it and the music card along the bottom. With no adapter the "No vehicle connected" strip sits just above the music card. Any dashboard can be Home (the chooser's <strong>Use as Home</strong>), and on the first start after the update the classic Home's card list and vehicle switch are carried into a user dashboard "My Home" when they differ from the defaults (<code>DashboardManager::migrateClassicHome</code>).</p>
-        <ul>
-          <li><strong>No editing in the app</strong> (since 2026-11-24): a dashboard is written as a JSON file (<a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>) and put in <span class="file-path">&lt;config&gt;/dashboards/</span>, where it is read as it changes; Settings &gt; Display &gt; Home Screen, a card for each choice with a picture of it (<code>homeScreenCards</code>, <code>homeCard_&lt;kind&gt;_&lt;id&gt;</code>; a dashboard with no picture shows where its widgets stand) picks the one Home shows.</li>
-          <li><strong>Taps</strong> &mdash; <em>only the music card opens a page</em> (since 2026-11-26; all were off from 2026-11-24 while the new Home was worked out): <code>HomeDashboard.tapActionsThatOpen</code>, <code>["media"]</code>; a tap on any other widget opens nothing, and the prompts' buttons always work. The actions, from the renderer's <code>cellTapped(action, index)</code>: <code>media</code> opens MediaRoom or MediaPlayer (<code>musicButtonDefaultPage</code>), <code>obd</code> OBDMenu, <code>sensors</code> SensorHome, <code>vehicle</code> Settings &gt; Device &gt; Vehicle. Now Playing's progress bar seeks and keeps its touch.</li>
-          <li><strong>Prompts</strong> &mdash; laid over the widgets while there is nothing to show: "No vehicle connected" with <code>OBDConnectButton</code> over the block of OBD-bound cells (<code>homeOBDPrompt</code>; a strip along the bottom, <code>homeOBDPromptStrip</code>, when other widgets stand in that block, lifted above a widget that spans the bottom middle such as the music card), <code>MusicEmptyPrompt</code> over a Now Playing cell with no music (<code>homeMusicPrompt</code>), "No sensor" on the motion widgets.</li>
-          <li><strong>Demand</strong> &mdash; <code>obdManager.setParameterDemand("homeDashboard", renderer.paramIds)</code> while Home is on screen, and the full IMU rate (<code>ImuDemand</code>, consumer <code>homeDashboard</code>) only when the dashboard shows the motion sensor (<code>renderer.usesImu</code>).</li>
-        </ul>
-        <p>The hand-built three-panel Home described below is the <strong>Classic</strong> card among the Home choices (<code>homeScreen</code> = <code>classic</code>). The separate dashboard / classic switch (the <code>homeStyle</code> setting) left Settings on 2026-11-24; a config that still has it on <code>classic</code> keeps the classic Home until something is picked. See <span class="file-path">TODO/home-dashboard.md</span>.</p>
-
-        <h3>Classic layout</h3>
-
-        <pre><code><span class="cls">GridLayout</span> {
-    <span class="prop">anchors.fill</span>: parent; <span class="prop">anchors.margins</span>: <span class="fn">dp</span>(<span class="num">10</span>); <span class="prop">columns</span>: App.Spacing.isPortrait ? <span class="num">1</span> : <span class="num">3</span>
-
-    <span class="cmt">// LEFT (portrait: top): media (width * 0.24, or height * 0.2; clip: true)</span>
-    <span class="cls">Rectangle</span> { <span class="prop">id</span>: mediaSection ... }
-
-    <span class="cmt">// MIDDLE: OBD (fills what is left, 2 px accent border)</span>
-    <span class="cls">Rectangle</span> { <span class="prop">id</span>: obdSection; <span class="cls">HomeOBDView</span> { ... } <span class="cls">HomeVehicleCard</span> { ... } }
-
-    <span class="cmt">// RIGHT (portrait: bottom): sensors (width * 0.22, or height * 0.2)</span>
-    <span class="cls">HomeSensorPanel</span> { <span class="prop">inRow</span>: App.Spacing.isPortrait }
-}</code></pre>
-
-        <h3>First-run prompts</h3>
-
-        <p>Each panel asks for its connection while it has nothing to show, so a fresh install is one tap from a car and music. While <code>obdManager.connectionState</code> is not <code>Connected</code>, the OBD panel hides <code>HomeOBDView</code> (dropping its poll demand) and shows "No vehicle connected" with <code>OBDConnectButton</code> (<code>homeOBDConnectButton</code>), which opens the adapter sheet, under the vehicle's picture (<a href="components.html#vehicle-picture">VehiclePicture</a>, <code>homeVehiclePicture</code>, while the panel is at least <code>dp(360)</code> tall); a tap elsewhere on the panel still opens OBDMenu. While the active playlist is empty and no phone has the media controls (<code>musicEmpty</code>: <code>getCurrentSongList()</code> at load, then <code>mediaListChanged</code>), the media panel swaps its art and controls for <span class="file-path">frontend/MusicEmptyPrompt.qml</span>, the one prompt Home, Media Room and the Media Player list all show: "No Music Loaded" with one <b>Connect Music</b> button (<code>musicPromptConnectButton</code>) that opens a <a href="components.html#connect-sheet">ConnectSheet</a> (<code>musicSourceSheet</code>, the look Connect Vehicle shares) with a row per source: <b>Local Music</b> (<code>musicSourceLocal</code>: a <code>FolderDialog</code> into <code>save_media_folder_url()</code>, same rules and error wording as Media Room's Browse; the browser demo opens the browser's own folder picker), <b>Spotify</b> (<code>musicSourceSpotify</code>: <code>Main.qml</code>'s <code>openSpotify()</code> opens the music menu, which shows the Spotify library while there are no local songs, or when signed out starts the sign-in if there is a Client ID and opens the Spotify card in Settings) and, when phone mirroring or AirPlay is on, <b>Phone</b> (<code>musicSourcePhone</code>: PhoneMirrorView, else AirPlayView). The panel's tap-to-open-player is off meanwhile. The prompt fits the room its host gives it (<code>maxHeight</code>): in a low space, such as Home's music cell in a portrait window, it drops the explanation and then the heading, so the button is always there. Object names for the dev tools: <code>homeOBDPrompt</code>, <code>homeMusicPrompt</code>, <code>musicPromptConnectButton</code>, <code>musicSourceSheet</code>.</p>
-
-        <h3>Media panel</h3>
-        <ul>
-          <li><strong>Blurred album art background</strong> &mdash; an <code>Image</code> of the current art with <code>layer.effect: MultiEffect { blurEnabled: true; blurMax: 64; blur: min(1, settingsManager.backgroundBlurRadius / 64) }</code> under a <code>#C0000000</code> overlay; the panel border is drawn by a separate border-only rectangle at <code>z: 10</code> so it stays crisp above the blur.</li>
-          <li><strong>Foreground album art</strong> with the file's single <code>DropShadow</code> (offset 4/4, radius 12, 25 samples).</li>
-          <li><strong>Scrolling title and "artist &bull; album"</strong> &mdash; two copies of the <code>Flickable</code> + 3&nbsp;s <code>Timer</code> + 5&nbsp;s <code>InOutQuad</code> <code>NumberAnimation</code> ping-pong on <code>contentX</code>, running only while the text is wider than its container.</li>
-          <li><strong>Seek slider</strong> &mdash; a custom <code>Slider</code> (accent fill, round handle, <code>userSeeking</code> flag) that follows <code>nowPlaying.positionMs</code> (a <code>Binding</code> paused while <code>userSeeking</code>) and on release calls <code>nowPlaying.seek()</code>, flanked by position/duration labels bound to the same values.</li>
-          <li><strong>Either source</strong> &mdash; <code>currentArt/Title/Artist/Album</code> bind <a href="signals-slots-reference.html#nowPlaying"><code>nowPlaying</code></a>, which follows the phone while it has the media controls (see <a href="phone-mirror-android-auto.html#pm-media">phone media</a>) and local media otherwise; the page only picks the wording ("Phone" / "Nothing playing" for a phone with no media app, "Select a song" with nothing at all). Missing art falls back to <span class="file-path">assets/missing_art.png</span>. No timers or <code>Connections</code>: the phone's position clock is in <code>nowPlaying</code>.</li>
-          <li><strong>Tap to open the player</strong> &mdash; a <code>TapHandler</code>, not a <code>MouseArea</code>, pushes <code>MediaPlayer.qml</code> or <code>MediaRoom.qml</code> according to <code>settingsManager.musicButtonDefaultPage</code>. The comment explains: the layout is full of a Flickable title, a Flickable metadata row and a Slider, "all of which consume MouseArea clicks. TapHandler observes taps without interfering with those drag interactions".</li>
-        </ul>
-
-        <h3>OBD panel</h3>
-        <p>Hosts <a href="components.html#home-obd-view">HomeOBDView</a>; a <code>MouseArea</code> over the whole panel calls <code>stackView.openPage("OBDMenu.qml")</code> &mdash; straight to the gauges, bypassing OBDHome. <code>Component.onCompleted</code> and <code>onHomeOBDParametersChanged</code> call <code>obdManager.refreshValues()</code> so the cards are populated immediately.</p>
-        <p>With the <code>homeVehicleCard</code> setting on (Settings &gt; Device &gt; Vehicle, "Show on Home"; on by default) part of the panel is the <a href="components.html#home-vehicle-card">HomeVehicleCard</a> (in a landscape window the strip under the readings: 36&nbsp;% of the height with up to four reading cards, 30&nbsp;% with five or six, 24&nbsp;% with more; in portrait the right 36&nbsp;% of the width), with or without an adapter (the "No vehicle connected" prompt then centres in what is left and drops its own picture) and with or without a vehicle chosen ("No vehicle selected", "Tap to choose one"): the vehicle's picture. HomeOBDView gives up that room. The card sits above the panel's <code>MouseArea</code>: its tap opens Settings &gt; Device &gt; Vehicle (<code>navigateToSettings("deviceSettings", "device_vehicle")</code>), where the vehicle is picked or changed; the 3D view is reached from the Sensors menu.</p>
-
-        <h3>Sensor panel</h3>
-
-        <p><a href="components.html#home-sensor-panel">HomeSensorPanel</a>: a tile each for G-force, compass and tilt (pitch / roll) from the motion sensor, in a column, or side by side in portrait; "No sensors connected" without one. A tap opens <code>SensorHome.qml</code>. Home asks for the full IMU rate while it is on screen (<code>ImuDemand</code>, consumer <code>mainMenu</code>).</p>
-
-        <h3>Backend managers used</h3>
-        <p><code>nowPlaying</code> (everything about the playing track), <code>settingsManager</code>, <code>obdManager</code> (through HomeOBDView only <code>settingsManager</code>). No clock is drawn on this page; the clock lives in the <a href="bottom-bar.html#clock">BottomBar</a>.</p>
+        <h3>How it is built</h3>
+        <p>
+          <span class="file-path">frontend/MainMenu.qml</span> is the page. It reads the <code>homeScreen</code>
+          setting and loads one of three things:
+        </p>
+        <table>
+          <thead><tr><th><code>homeScreen</code></th><th>What is loaded</th></tr></thead>
+          <tbody>
+            <tr><td><code>""</code> (default)</td><td><span class="file-path">frontend/HomeDashboard.qml</span>: the dashboard <code>dashboardManager.homeDashboardId</code> names, drawn by the same <code>DashboardRenderer</code> as any dashboard. Until you pick another, that is the built-in <span class="file-path">dashboards/presets/home.json</span>.</td></tr>
+            <tr><td><code>cockpit</code>, <code>glass</code>, <code>trail</code>, <code>retro</code>, <code>rings</code>, <code>telemetry</code></td><td>The matching file in <span class="file-path">frontend/home/</span>, looked up in <span class="file-path">home/HomeScreens.js</span>.</td></tr>
+            <tr><td><code>classic</code></td><td>The three panels in MainMenu itself, using <a href="components.html#home-obd-view">HomeOBDView</a>, <a href="components.html#home-vehicle-card">HomeVehicleCard</a> and <a href="components.html#home-sensor-panel">HomeSensorPanel</a>.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          <strong>Taps on the dashboard.</strong> The renderer reports a tap as an action (<code>media</code>,
+          <code>obd</code>, <code>sensors</code>, <code>vehicle</code>). <code>HomeDashboard.tapActionsThatOpen</code>
+          lists the actions that open a page; it holds only <code>"media"</code>. Adding an action to that list is
+          all it takes to switch another one on.
+        </p>
+        <p>
+          <strong>Prompts.</strong> HomeDashboard lays the prompts over the widgets rather than leaving them to
+          read "--". The vehicle prompt covers the block of OBD widgets when nothing else stands in that block, and
+          becomes a strip along the bottom when something does. The music prompt is
+          <span class="file-path">frontend/MusicEmptyPrompt.qml</span>, the same one the Media Room and the library
+          show. Its Phone choice starts mirroring and goes Home, where the phone is shown; for an iPhone it opens
+          the <a href="#airplay">AirPlay page</a>.
+        </p>
+        <p>
+          <strong>Polling.</strong> Home asks the car only for what it shows: the dashboard registers its widgets'
+          readings with <code>obdManager.setParameterDemand("homeDashboard", ids)</code> while it is on screen, and
+          asks for the motion sensor's full rate only when a widget uses it. A hand-built Home does the same
+          through its base type.
+        </p>
+        <p>
+          <strong>Adding a hand-built Home.</strong> Each one is a <code>HomeScreen</code>
+          (<span class="file-path">home/HomeScreen.qml</span>), which hands it the readings by id (with "--" when
+          there is none), what is playing, whether the window is upright (<code>portrait</code>) and a unit
+          <code>u</code> that is 1&nbsp;% of the window's short side, so the screen scales with its room. To add
+          one:
+        </p>
+        <ol class="steps">
+          <li>Write the file in <span class="file-path">frontend/home/</span>.</li>
+          <li>Add a row to <span class="file-path">home/HomeScreens.js</span> with its <code>preview</code>, a 640 &times; 310 picture in <span class="file-path">frontend/assets/home/</span>.</li>
+          <li>Add a row to <code>homeScreens_data</code> in <code>tst_dashboardwidgets</code>, which loads every Home.</li>
+          <li>Look at it in both orientations.</li>
+        </ol>
 
         <!-- MediaRoom -->
-        <h2 id="mediaroom">MediaRoom.qml</h2>
-
-        <p><span class="file-path">frontend/MediaRoom.qml</span> is the "now playing" view: large album art in an <a href="components.html#album-art-carousel">AlbumArtCarousel</a>, transport controls, seek bar, an optional FFT visualizer and a blurred art background. Properties <code>stackView</code> / <code>mainWindow</code> are plain, so the BottomBar can push it with <code>stackView</code> alone.</p>
-
-        <h3>Key features</h3>
+        <h2 id="mediaroom">Media Room</h2>
+        <p>
+          The Media Room is the "now playing" screen: the album art, large, over a blurred copy of itself, with
+          the title, artist and album, a seek bar, Previous / Play / Next, Shuffle, the volume slider with its mute
+          button, and bars that move with the music. It shows whatever is playing, whether that is a file from
+          your library, Spotify or the phone. There is no repeat button.
+        </p>
+        <p>What you can do here beyond the transport buttons:</p>
         <ul>
-          <li><strong>Artwork and playback devices</strong> &mdash; Album art mode uses the carousel below. The album-art popup's ring (below; the only picker since 2026-11-23) also offers Record player, MP3 player, CD player, Cassette player and iPod through <code>MusicDevicePreference</code>; these use <code>MusicDeviceScene</code> when Quick3D is available. See <a href="components.html#music-devices">Music Device Components</a>.</li>
-          <li><strong>Carousel</strong> &mdash; one track-change transition for the square art and the record (see <a href="components.html">Components</a>; the <code>albumArtTransition</code> setting is no longer read); bound to the settings <code>show3DAlbumPreview</code>, <code>vinylRecordMode</code>, <code>sideCardAngle</code>, <code>sideCardOpacity</code>. The art is always rounded, by 16&nbsp;dp (<code>mediaRoom.albumArtRadius</code>; the <code>albumArtCornerRadius</code> setting is no longer read), and always has its shadow (<code>roundedAlbumArt</code> and <code>showAlbumArtShadow</code> are no longer read). <code>onArtClicked</code> opens <code>albumArtPopup</code>; <code>onArtLoadFailed</code> swaps in <span class="file-path">missing_art.png</span>.</li>
-          <li><strong>Blurred background</strong> &mdash; a <code>Grid</code> of repeated art tiles (<code>backgroundGrid</code> = "Normal" 1&times;1, "2x2", "4x4") with one <code>MultiEffect</code> blur applied to the whole grid ("16x cheaper on 4x4"), <code>blurMax: 64</code>, <code>blur: backgroundBlurRadius / 64</code>, <code>layer.live: !_cardAnimBusy</code> so the blur freezes during card animation, <code>autoPaddingEnabled: false</code> so the halo cannot bleed under the BottomBar (the StackView does not clip), and a black overlay at <code>backgroundOverlayOpacity / 100</code>.</li>
-          <li><strong>Scrolling metadata</strong> &mdash; title and "artist &bull; album" marquees whose scroll duration is <code>settingsManager.textScrollSpeed</code> (default 5000&nbsp;ms).</li>
-          <li><strong>Transport</strong> &mdash; Previous / Play-Pause / Next <code>Control</code>s with an X-axis "3D tilt" on press (<code>show3DButtonTilt</code>, <code>buttonTiltDuration</code>; 15&deg; and scale 0.9 for prev/next, 25&deg; and 0.85 for play); in landscape the three keys grow to fill the controls column (Play at 1.25 of a key, a gap of 0.6 of a key each side of it, limited by the height and never under the <code>Spacing</code> sizes), and each key's touch target reaches to the middle of the gap beside it and past the key above and below; a Shuffle button bottom-left (half as large again as a portrait transport key where the strip beside the seek bar allows; in portrait a key left of Previous), a volume slider with mute icon at the top (routed through <code>volumeController.applyVolume()</code>). Shuffle is dimmed while another phone app has the music; it works for local files and for Spotify, as the source or as the mirrored phone's app. There is no repeat button.</li>
-          <li><strong>Seek bar</strong> &mdash; 75&nbsp;% wide, follows <code>nowPlaying.positionMs</code> through a <code>Binding</code> paused while dragging (and while the page is hidden: it stays alive off-screen, and 10&nbsp;Hz position updates cost ~9&nbsp;% of a Pi core for nothing on screen), and commits once on release with <code>nowPlaying.seek()</code> (it used to seek twice, from the touch area and the slider).</li>
-          <li><strong>Either source</strong> &mdash; title, artist, album, art, play state, duration and position come from <a href="signals-slots-reference.html#nowPlaying"><code>nowPlaying</code></a>; the controls call its slots. A track change made on the phone animates the carousel from <code>nowPlaying.trackChanged</code> (not after a source switch); local changes animate from <code>mediaManager.currentMediaChanged</code>, which also drives the carousel's bookkeeping. The "Phone" pill calls <code>phoneMirrorManager.releaseMedia(true)</code>.</li>
-          <li><strong>Waveform visualizer</strong> &mdash; visible when <code>showWaveformVisualizer &amp;&amp; !playlistEmpty</code>; <code>audioAnalyzer.numBars</code> bars (fallback 96) as pill-shaped gradient rectangles in a <code>Row</code> with <code>layer.enabled</code> so 96 gradient draws collapse into one texture blit; fed by <code>onFftDataChanged(levels)</code>, the analyzer follows what is playing by itself (file analysis at the playback position, or live PCM for the phone); the page only calls <code>audioAnalyzer.setViewActive(visible &amp;&amp; !_cardAnimBusy)</code>. Both feed the same bars through <code>fftDataChanged</code>. See <a href="audio-analyzer.html">Audio Analyzer</a>.</li>
-          <li><strong>Empty playlist</strong> &mdash; <code>playlistEmpty = !usePhone &amp;&amp; localSongCount === 0</code> hides controls, seek bar, shuffle and visualizer and shows <code>MusicEmptyPrompt</code>, the prompt of Home's music card ("No Music Loaded", what to do, and <strong>Connect Music</strong>, whose sheet offers Local Music, Spotify and Phone where offered; the Media Player list shows it too in place of "No songs found in media folder"): the same music library folder picker as Settings &gt; Media &gt; Library &amp; Playback (a refused folder shows the reason under it; an accepted one rescans the library). When the list goes from empty to non-empty (<code>onMediaListChanged</code>) the first file auto-plays.</li>
-          <li><strong>Album-art popup</strong> &mdash; opened by a tap on the album art or on the 3D player (<code>MusicDeviceScene.clicked</code>), where Quick3D is installed (without it there is nothing to pick from and it stays shut). It has no panel of its own: over the dimmed page floats a carousel (<code>MusicDeviceCarousel.qml</code>) of the <code>MusicDevicePreference</code> options plus one: the album art, Vinyl (the album art with the <code>vinylRecordMode</code> setting on; picking Album art turns it off) the five 3D players and, while phone mirroring can run here (<code>phoneMirrorManager.nativeAvailable</code>), Phone mirror, on a ring that is all in view, the picked one large at the front and the rest going round behind it, with the front one's name underneath. Drag or flick the ring, tap another item to bring it to the front, or use the wheel or Left / Right; a tap on the front item, or Return, switches to it and closes the popup, and a tap on none of them closes it. Modal, <code>CloseOnEscape | CloseOnPressOutside</code>. (Until 2026-11-23 it also carried the album name and a "Save as Theme" button.)</li>
-          <li><strong>Phone mirror in the art corner</strong> (since 2026-11-26) &mdash; picking Phone mirror on the ring (the <code>mediaArtPhoneMirror</code> setting) puts Home's <code>PhoneMirrorWidget</code> where the art is: the phone's screen, live and touchable, its corners rounded as the art's, with Connect Phone when nothing is mirrored. It is not the art's square: the phone is landscape, so the corner takes 56&nbsp;% of the row (<code>_artShare</code>; 40&nbsp;% for the art, 44&nbsp;% for a 3D player) and the widget is drawn in a box of the mirrored display's own shape (<code>_phoneAspect</code>, from <code>phoneMirrorManager.activeDisplaySize</code>, 16:9 until one is known), as large as fits, centred, so the picture has no bands. The widget has <code>drivesDisplaySize: false</code>: it follows the display rather than resizing it, so going between Home and the Media Room never restarts the session (only a first start from here takes this box's size). Every tap on the phone is the phone's, so three dots just off the picture at its top right (above it, or below when there is no room; <code>mediaArtPhonePickerButton</code>) open the ring again; any other choice there puts the art back. Opposite them, at the picture's top left, a ring (<code>mediaArtPhoneHomeButton</code>, shown while a session runs) is the phone's Home key (<code>phoneMirrorManager.pressHome()</code>), as a mirrored phone has no nav bar to reach. The phone's one video sink follows whichever widget is on screen.</li>
-          <li><strong>Look editor</strong> &mdash; the customize button at the top right sets <code>studioOpen</code>: the page shrinks into a mirror at the top right and <a href="#nowplayingstudio">NowPlayingStudio</a>'s panels load around it; a tap on the mirror returns.</li>
+          <li><strong>Change what stands in the art's place.</strong> Tap the album art. A ring of choices opens: Album art, Vinyl (the art as a spinning record), five 3D players (Record player, MP3 player, CD player, Cassette player, iPod) and, where phone mirroring can run, Phone mirror. Turn the ring by dragging, tap an item to bring it to the front, and tap the front one to pick it. Tap beside the ring to close it. The ring needs the Qt Quick 3D module; without it a tap on the art does nothing.</li>
+          <li><strong>Use the phone here.</strong> With Phone mirror picked, the phone's screen takes the art's place, live and touchable, with <strong>Connect Phone</strong> when nothing is mirrored. Every tap on the picture goes to the phone, so two small buttons sit just off it: three dots at the top right open the ring again, and a ring at the top left, shown while a phone is mirrored, is the phone's Home key.</li>
+          <li><strong>Change the look.</strong> The customize button at the top right opens the <a href="#nowplayingstudio">look editor</a>.</li>
+          <li><strong>Add music.</strong> With no music the page shows "No Music Loaded" and <strong>Connect Music</strong>. When songs first appear in an empty library, the first one starts playing.</li>
         </ul>
+        <p>Shuffle is dimmed while a phone app other than Spotify has the music: its shuffle belongs to that app.</p>
 
-        <h3>Side-card preloading</h3>
-        <p>Two hidden 1&times;1 <code>Image</code>s (<code>prevArtPreloader</code> / <code>nextArtPreloader</code>, <code>sourceSize</code> 2&times;<code>artSize</code>, <code>asynchronous</code>, <code>cache: true</code>) decode the neighbouring art so a 3D transition never waits on a decode. <code>sideCardRefreshTimer</code> (<code>interval: 0</code>) fires on the next event-loop tick after any track, shuffle, queue or source change and makes one batched call, <code>mediaManager.getNeighborAlbumArts()</code> &rarr; <code>[prev, next]</code>, which halves the backend calls and keeps them off the animation frame. While the phone has the controls there are no side cards (the phone reports only what is playing now).</p>
-
-        <h3>Track-change sequencing</h3>
-        <pre><code><span class="kw">function</span> <span class="fn">animateTrackChange</span>() {
-    vizFadeInTimer.<span class="fn">stop</span>()
-    _cardAnimBusy = <span class="kw">true</span>
-    waveformContainer.<span class="fn">dropBars</span>()      <span class="cmt">// snap bars to zero, no animation</span>
-    albumArtStack.<span class="fn">triggerSlide</span>()       <span class="cmt">// carousel animation</span>
-}
-<span class="cmt">// _cardAnimBusy holds audioAnalyzer's view; it analyses the new local track once it settles</span>
-<span class="cmt">// then vizFadeInTimer (50 ms) fades the bars back in</span></code></pre>
-
-        <h3>Backend managers used</h3>
-        <p><code>nowPlaying</code>, <code>mediaManager</code> (playlists, side-card art, the carousel), <code>phoneMirrorManager</code> (the "Phone" pill, the save-theme popup), <code>settingsManager</code>, <code>audioAnalyzer</code>, <code>volumeController</code>.</p>
-
-        <!-- MediaPlayer -->
-        <h2 id="mediaplayer">MediaPlayer.qml</h2>
-
-        <p><span class="file-path">frontend/MediaPlayer.qml</span> is the library browser: a playlist dropdown, sortable column headers and a <code>ListView</code> of songs. Both <code>stackView</code> and <code>mainWindow</code> are <code>required</code>, which is why the BottomBar and MainMenu add <code>mainWindow</code> to the props only when pushing this page. The comment block at the top documents the Android singleton-function bug behind the local <code>dp()</code> wrappers.</p>
-
-        <h3>Key features</h3>
-        <ul>
-          <li><strong>Playlists</strong> &mdash; <code>playlistNames</code> (from <code>mediaManager.getPlaylistNames()</code>) feeds one dropdown popup; a 100&nbsp;ms <code>dropdownCooldown</code> timer stops <code>CloseOnPressOutside</code> from immediately re-opening it. Long-pressing a playlist (not "All Music" / "Unsorted") opens a delete dialog. The "Create New Playlist" popup is the same width as the song action sheet (<code>min(60&nbsp;%, dp(640))</code>) and grows to 82&nbsp;% of the window height when its inline QWERTY keyboard is toggled from the button inside the left of the name field; Cancel / Create are <code>SheetButton</code>s; every key handler ends with <code>newPlaylistInput.forceActiveFocus()</code>.</li>
-          <li><strong>Forced rebinding</strong> &mdash; <code>playlistRefreshCounter</code> is incremented by a 300&nbsp;ms <code>albumArtRefreshTimer</code> once the backend has cached album art; delegates read it in their bindings (<code>var _ = mediaPlayer.playlistRefreshCounter</code>) so art, title, artist, album and duration re-evaluate.</li>
-          <li><strong>Song rows</strong> &mdash; <code>ListView</code> with <code>reuseItems: true</code>, <code>cacheBuffer: height * 0.5</code>, <code>displayMarginBeginning/End: dp(40)</code>, set one <code>overallMargin</code> below the column header. Each card has a faint full-card art texture (opacity 0.10 when current, 0.03 otherwise) clipped to the card's rounded corners, and a square album-art <code>Image</code> the full height of the card, flush with its left edge, corners rounded with an <code>OpacityMask</code> (<code>sourceSize</code> 1.5&times; its size, <code>asynchronous</code>, <code>cache: true</code>). Title, artist and album share one text size (<code>mediaPlayerTextSize * 1.2</code>) on one vertically centered line; the duration sits under the title. Long values wrap to a second line before eliding, and each column keeps a gutter on its right. Column widths (title 40&nbsp;%, artist 25&nbsp;%, album 35&nbsp;%) live in <code>titleColumnRatio</code> / <code>artistColumnRatio</code> / <code>albumColumnRatio</code>, shared by the header and the rows. The list uses <code>boundsBehavior: Flickable.StopAtBounds</code>.</li>
-          <li><strong>Highlighting</strong> &mdash; the current song's card is filled with <code>App.Style.accent</code> at 35&nbsp;% alpha with a 2&nbsp;px accent border and a left accent gradient; the title turns accent-coloured. (The <code>playingHighlightColor</code> / <code>pausedHighlightColor</code> tokens in <code>Style</code> are not used here or anywhere else.)</li>
-          <li><strong>Sorting</strong> &mdash; clickable TITLE / ARTIST / ALBUM headers with &uarr;/&darr; arrows call <code>mediaManager.sortMediaFiles(column, ascending)</code>.</li>
-          <li><strong>Row actions</strong> &mdash; tap calls <code>mediaManager.playFile()</code> and pushes <code>MediaRoom.qml</code> unless <code>returnToLibraryAfterSelection</code> is set. A 600&nbsp;ms long-press opens <code>songActionSheet</code>: one popup whose header shows the song's art, title, artist &middot; album and the folder it lives in (<code>getSongPlaylistName()</code>), with three pages &mdash; actions (Move to playlist / Delete song), a scrollable list of move targets (<code>getMovablePlaylistNames()</code> minus the song's own folder, so a song viewed under "All Music" can't be "moved" into the folder it is already in), and an in-place delete confirmation. A failed move or delete shows an error line instead of closing. Buttons are the file-local <code>SheetButton</code> inline component; delete uses the fixed <code>dangerColor</code> so it never matches the theme accent. No search field, no drag reorder.</li>
-          <li><strong>Spotify</strong> &mdash; after the local playlists the dropdown has a <strong>Spotify</strong> heading: signed out, a <strong>Connect Spotify&hellip;</strong> entry (starts the sign-in and opens Settings &rarr; Media), or <strong>Set Up Spotify&hellip;</strong> with no Client ID yet; signed in, Liked Songs, every playlist and every saved album as ordinary entries. Picking one opens it (<code>spotifyManager.openCollection</code>) in the same song table and row cards as a local playlist (the remote list it shares with the phone queue; no sorting, album column and durations filled), with the title bar showing its song count, length and owner, and a button naming the playing device that opens the list of devices to move playback to. A followed playlist Spotify won't list shows a Play button instead. A track tap calls <code>spotifyManager.playCollection(uri, index)</code> (the song already on just carries on) and opens the Media Room unless <code>returnToLibraryAfterSelection</code>. The page opens on Spotify while <code>nowPlaying.source</code> is <code>"spotify"</code>. See <a href="media-manager.html#spotify">Media Manager &rarr; Spotify</a>.</li>
-          <li><strong>Initial scroll</strong> &mdash; <code>calculateScrollPosition()</code> estimates the current row's offset from <code>Spacing.mediaPlayerRowHeight</code>, then <code>scrollToCurrentTrack()</code> sets <code>contentY</code> once the real list height is known (50&nbsp;ms timer, <code>onHeightChanged</code>). While the page is showing, a track change (next / previous, track end; <code>onCurrentMediaChanged</code>) calls <code>followCurrentTrack()</code>, which animates <code>contentY</code> over 350&nbsp;ms to center the new song, unless the list is being dragged or flicked.</li>
-        </ul>
-
-        <h3>Backend managers used</h3>
-        <p><code>mediaManager</code>, <code>settingsManager</code>, <code>nowPlaying</code>, <code>phoneMirrorManager</code>, <code>spotifyManager</code>.</p>
-
-        <!-- OBDHome -->
-        <h2 id="obdhome">OBDHome.qml</h2>
-
-        <p>Its first card is <strong>Live Data</strong> (OBDMenu, the Parameter Cards) since 2026-11-24, beside Trouble Codes and Trip History; it was "Dashboards" before.</p>
-
-        <p><span class="file-path">frontend/OBDHome.qml</span> is the OBD hub the BottomBar's OBD button opens. It is a row of cards and nothing else (the status row above them, a dot with the connection status, went on 2026-11-24). The connection log (<code>obdManager.connectionLog</code>) is not shown here; it is on the OBD settings page.</p>
-
-        <p>While no adapter is connected (<code>obdManager.connected</code> false) the cards are hidden and the page shows only "No vehicle connected" and <a href="components.html#obd-connect-button">OBDConnectButton</a> ("Connect Vehicle", which opens <code>OBDAdapterSheet</code>; <code>obdHomeDisconnected</code>). The rest comes back as soon as the link is up. The BottomBar's OBD button lands here rather than on <code>lastOBDPage</code> meanwhile.</p>
-
+        <h3>How it is built</h3>
+        <p>
+          <span class="file-path">frontend/MediaRoom.qml</span>. Everything about the playing track comes from
+          <code>nowPlaying</code>, which follows the phone while it has the music and local playback otherwise, so
+          the page never asks which source is playing. The controls call <code>nowPlaying</code> too, and volume
+          goes through <code>volumeController</code>.
+        </p>
         <table>
-          <thead><tr><th>Card</th><th>Subtitle</th><th>Action</th></tr></thead>
+          <thead><tr><th>Part</th><th>What to know</th></tr></thead>
           <tbody>
-            <tr><td>Dashboards</td><td>Live gauges &amp; parameters</td><td><code>pushSubpage("OBDMenu.qml")</code></td></tr>
-            <tr><td>Trouble Codes</td><td>Read &amp; clear DTCs</td><td><code>pushSubpage("OBDDiagnostics.qml")</code></td></tr>
-            <tr><td>Trip History</td><td>"Recording this drive" / "<i>n</i> drives logged" / "Black box drive logs"</td><td><code>pushSubpage("TripHistory.qml")</code></td></tr>
+            <tr><td>Album art</td><td><a href="components.html#album-art-carousel">AlbumArtCarousel</a>, with the previous and next tracks' art loaded ahead so a track change never waits on a picture. No side cards while the phone has the music: it reports only the current track.</td></tr>
+            <tr><td>3D players</td><td>See <a href="components.html#music-devices">Music Device Components</a>. The choice is the <code>musicDeviceModel</code> setting; Vinyl is <code>vinylRecordMode</code>; Phone mirror is <code>mediaArtPhoneMirror</code>.</td></tr>
+            <tr><td>Phone in the art corner</td><td>Home's <code>PhoneMirrorWidget</code>, drawn in a box of the phone display's own shape so there are no bands. Here it follows the display's size instead of setting it, so going between Home and the Media Room never restarts the session.</td></tr>
+            <tr><td>Background</td><td>One blur over a grid of art tiles (the <code>backgroundGrid</code>, <code>backgroundBlurRadius</code> and <code>backgroundOverlayOpacity</code> settings).</td></tr>
+            <tr><td>Visualizer</td><td>Bars fed by <code>audioAnalyzer</code>, shown when <code>showWaveformVisualizer</code> is on. See <a href="audio-analyzer.html">Audio Analyzer</a>.</td></tr>
           </tbody>
         </table>
-
-        <p><code>pushSubpage()</code> saves the file name to the generic setting <code>lastOBDPage</code> and opens the page through <code>stackView.openPage()</code>, which logs a <code>console.warn</code> on failure. The card matching <code>lastSubpage</code> gets a 2&nbsp;px accent border ("you were just here"); the BottomBar reads the same key to jump straight to the remembered subpage on the next tap.</p>
-
-        <h3>Backend managers used</h3>
-        <p><code>obdManager</code> (<code>isConnected()</code>, <code>connectionStatusChanged</code>, <code>connectionStatusDetailChanged</code>), <code>settingsManager</code>.</p>
-
-        <!-- OBDMenu -->
-        <h2 id="obdmenu">OBDMenu.qml</h2>
-
-        <p><span class="file-path">frontend/OBDMenu.qml</span> is the live-data page: the <strong>Parameter Cards</strong>, one card for every reading the connected vehicle supports. It shows and chooses no dashboards (until 2026-11-24 it hosted a registry of them with a chooser, a swipe between them and an in-app editor; Home shows a dashboard now, see <a href="#home-dashboard">above</a>). The one exception is a dashboard being edited in the browser editor, which previews here in a <code>DashboardRenderer</code> (<code>activeDashboardRenderer</code>, <code>dashboardManager.preview</code>) in place of the cards.</p>
-
-        <h3>The Parameter Cards grid</h3>
-        <ul>
-          <li><code>Repeater { model: obdPage.vehicleParameters }</code> (= <code>App.OBDParameterModel.vehicleParameters</code>) &mdash; one card for every OBD PID the connected vehicle reported in this session's supported-PID scan; the per-PID enable toggles in OBD settings no longer filter it. Until a vehicle has answered, the grid is empty and <code>parameterCardsEmpty</code> explains why (it also covers every other dashboard while disconnected, see above): "No vehicle connected" (plus <code>obdConnectButton</code>, the shared <a href="components.html#obd-connect-button">OBDConnectButton</a>, "Connect", which opens <code>OBDAdapterSheet</code> to scan for, pair and connect an adapter; see <a href="obd-manager.html#adapter-finder">OBD Manager &rarr; Adapter Finder</a>), "Reading your vehicle's PIDs&hellip;" (adapter connected, scan pending) or "No supported PIDs reported". See <a href="gauges-dashboards.html#vehicle-gate">Gauges &amp; Dashboards &rarr; Vehicle Gate</a>.</li>
-          <li>The grid sits in a vertical <code>Flickable</code> (<code>parameterCardsScroll</code>) whose content height is <code>max(viewport, rows &times; 120&nbsp;dp)</code>, so a long vehicle list scrolls instead of shrinking cards to slivers.</li>
-          <li>Column count is imperative, in <code>updateLayout()</code> behind a 100&nbsp;ms debounce timer that also runs on resize and when the vehicle list changes: 2 columns for &le;4 cards, 3 for &le;9, 4 for &le;16 (or on a narrow page), 5 above that.</li>
-          <li>Polling is demand-driven: while Parameter Cards is showing, the page registers every card's id with <code>obdManager.setParameterDemand("cards", &hellip;)</code>; while a dashboard is showing it registers the renderer's <code>paramIds</code> as <code>"dashboard"</code>; both are withdrawn when the page stops being the active StackView page.</li>
-          <li><code>Behavior on displayValue { NumberAnimation { duration: 50; easing.type: Easing.Linear } }</code> &mdash; "fast rolling effect".</li>
-          <li>Each card reads its value through <code>OBDParameterModel.liveValue(id)</code> (<code>paramStore[id]</code>), and only while <code>_gridLive</code> (the grid is the active dashboard and the page is active): on screen a card re-evaluates only when its own PID changes; hidden, it stops listening and shows "--".</li>
-          <li>Two card styles from the <code>settingsManager.obdCardStyleCircular</code> property (live): a square card with title and value centred above a progress bar pinned to the card's bottom edge (the card clips, so a short card can't push the bar out; 100&nbsp;ms <code>OutCubic</code> width behaviour), or a circular card whose 270&deg; background/value arcs are <code>QtQuick.Shapes</code> <code>PathAngleArc</code>s ("GPU-accelerated Shape (no layer overhead)").</li>
-          <li>Until a PID has reported (<code>liveValue(id) === undefined</code>), both styles show "--" in the label colour and hide the bar or arc, instead of a fake 0.0. Values use <code>OBDParameterModel.decimalsFor(id)</code>: whole numbers for speed, RPM, run times, distances and counters, one decimal otherwise. Signed ranges (fuel trims, timing) fill the square card's bar outward from the zero point.</li>
-          <li>Colours come from the OBD tokens <code>obdBoxBackground</code>, <code>obdBarColor</code>, <code>obdValueColor</code>, <code>obdLabelColor</code>.</li>
-          <li>Only the RPM card is clickable: it opens the shift light editor, <span class="file-path">frontend/obd/ShiftLightEditor.qml</span> (a modal <code>Popup</code>; the page passes it only its font). The editor reads <code>rpm_shift_light_enabled</code>, <code>rpm_show_on_home_card</code>, <code>rpm_max_rpm</code> and <code>shiftLightManager.flags</code> when it opens and writes each change at once (<code>save_setting()</code>, <code>shiftLightManager.setFlags()</code>). Its parts are in the same folder: <code>ShiftFlagSettings</code> (one flag's band, colour and effects; it shows a <code>flag</code> and asks for changes with <code>edited(name, value)</code> / <code>deleteRequested()</code>), <code>ShiftToggleRow</code>, <code>ShiftLabeledSlider</code> and <code>ShiftSlider</code>. They keep the popup's own look (a round white handle ringed in the flag's colour), which is why they are not the <span class="file-path">settings/</span> toggle and slider.</li>
-        </ul>
-
-        <p>The page has no header: the cards take the whole of it (the title strip went on 2026-11-24).</p>
-
-        <h3>RPM shift-light popup</h3>
-        <p>Clicking the RPM card opens a 92&nbsp;% &times; 95&nbsp;% modal editor for the shift-light flags: "Enable Shift Light" and "Show Indicator on Home" toggles, a Redline slider (<code>rpm_max_rpm</code>, clamping existing flags), an RPM bar with coloured range segments, "+ Add Flag", and per-flag controls &mdash; RPM low/high sliders, colour, flash + flash speed, full-screen overlay + opacity, aura overlay + opacity + spread. <code>onOpened</code> loads <code>shiftLightManager.flags</code> (already migrated to <code>rpmLow</code>/<code>rpmHigh</code>) and edits save through <code>shiftLightManager.setFlags()</code>. It writes <code>rpm_flags</code>, <code>rpm_shift_light_enabled</code>, <code>rpm_show_on_home_card</code>, <code>rpm_max_rpm</code> and <code>activeDashboard</code>; the appearance keys it reads (<code>rpm_shift_light_size</code>, <code>rpm_glow_size</code>, <code>rpm_glow_intensity</code>, <code>rpm_color_transition_speed</code>, <code>rpm_pulse_enabled</code>, <code>rpm_fullscreen_flash_opacity</code>) have no controls in this popup; they use defaults unless changed through generic settings. The six <code>DropShadow</code>s in this file are all inside this popup (its background and five toggle handles). The rules belong to <a href="signals-slots-reference.html#shiftLightManager">ShiftLightManager</a>; <a href="components.html#home-obd-view">HomeOBDView</a> and <a href="frontend-overview.html#shift-light">Main.qml</a> draw its state.</p>
-
-        <h3>Backend managers used</h3>
-        <p><code>settingsManager</code>, <code>dashboardManager</code>, and <code>obdManager</code> only for <code>setParameterDemand()</code> and the <code>connected</code> flag (<code>obdConnected</code>) that gates every dashboard and the Parameter Cards grid behind the connect prompt (both behind <code>typeof</code> guards). Live values arrive through the <a href="components.html#obd-parameter-model">OBDParameterModel</a> singleton, and connection status is otherwise OBDHome's job.</p>
-
-        <!-- OBDDiagnostics -->
-        <h2 id="obddiagnostics">OBDDiagnostics.qml</h2>
-
-        <p><span class="file-path">frontend/OBDDiagnostics.qml</span> is the trouble-code reader. The terminal panel fills the left side of the page, and two buttons are stacked on the right (in portrait: side by side above the terminal) &mdash; <strong>Read DTCs</strong> (<code>readDtc()</code>, the stored codes) and a red <strong>Clear DTCs</strong> button that opens a <code>Dialog</code> ("This will also reset the Check Engine Light and clear freeze frame data", "may affect emissions testing readiness") before calling <code>clearDtc()</code>. There is no permanent-code (mode 0A) reader.</p>
-
-        <h3>Output is the terminal</h3>
-        <p>Every result is rendered as text in an inline terminal (<code>QtObject { id: terminalOutput }</code> with <code>lines</code>, <code>maxLines: 50</code>, <code>appendLine()</code>, <code>clear()</code>; <code>#1a1a1a</code> panel, "DIAGNOSTIC OUTPUT" header, a 3&nbsp;% scanline canvas, a 530&nbsp;ms blinking cursor, "&gt; Awaiting command..." when empty, a <code>BusyIndicator</code> while <code>isLoading</code>). Lines are colour-coded by prefix (<code>[ERROR]</code>, <code>[DONE]</code>/<code>[SUCCESS]</code>, <code>[INFO]</code>/<code>[SCAN]</code>, <code>[WARN]</code>, <code>[FOUND]</code>, <code>[CLEAR]</code>, <code>[DTC]</code>). The page stores <code>dtcCodes</code>, <code>dtcCount</code>, <code>milStatus</code> and <code>freezeFrameData</code>, but none of them has a dedicated widget &mdash; freeze-frame data, for instance, is printed as one <code>[DTC]</code> line per entry. This page does <em>not</em> use the reusable <a href="components.html#terminal-feedback">TerminalFeedback</a> component.</p>
-
-        <pre><code><span class="cls">Connections</span> {
-    <span class="prop">target</span>: obdManager
-    <span class="prop">enabled</span>: obdManager !== <span class="kw">null</span>
-    <span class="kw">function</span> <span class="fn">onDtcCodesChanged</span>(codes)              <span class="cmt">// "[DTC] P0301 - Cylinder 1 misfire" per code</span>
-    <span class="kw">function</span> <span class="fn">onDtcCountChanged</span>(count)
-    <span class="kw">function</span> <span class="fn">onMilStatusChanged</span>(status)
-    <span class="kw">function</span> <span class="fn">onDtcClearResult</span>(success, message)
-    <span class="kw">function</span> <span class="fn">onFreezeFrameChanged</span>(data)
-}</code></pre>
-
-        <h3>Diagnostic mode lifecycle</h3>
-        <p>Diagnostics need the polling loop paused. <code>Component.onCompleted</code> calls <code>obdManager.enterDiagnosticMode()</code> and <code>readStatus()</code> if already connected; <code>onVisibleChanged</code> re-enters or exits the mode as the page is covered and uncovered, because "StackView.push() doesn't destroy the page, so Component.onDestruction won't be called when navigating away"; <code>Component.onDestruction</code> is the fallback for real destruction. See <a href="obd-manager.html#diagnostics">OBD Manager &rarr; Diagnostics</a>.</p>
-
-        <h3>Backend managers used</h3>
-        <p><code>obdManager</code> only.</p>
-
-        <!-- TripHistory -->
-        <h2 id="triphistory">TripHistory.qml</h2>
-
-        <p><span class="file-path">frontend/TripHistory.qml</span> is the black box viewer, reached from the OBD Home "Trip History" card (and the Black Box settings card). Two views, Drives and <a href="#triphistory-trends">Trends</a>. Drives has two panels, side by side, or one above the other when the page is taller than wide (the list on top at 36&nbsp;% of the height, the drive below): the <strong>drive list</strong> on the left (newest first; the trip being recorded on top with a blinking red dot in its top right corner, a trip closed after a power cut with <code>RECOVERED</code>; each row shows the start, duration, distance and max speed) beside a recording mark in the header (a blinking red dot and <code>REC</code>, shown only while a trip is being recorded), with the drive count and storage used against the cap in the footer and a <strong>Folder</strong> button on desktop. The <strong>selected drive</strong> on the right: start &rarr; end, vehicle / VIN, eight stat tiles (duration, distance, max speed, max RPM, peak coolant, voltage range, fuel used, samples · PIDs), a chip row of every parameter recorded in that drive, a <code>Canvas</code> chart of the chosen parameter (min&ndash;max band per bucket and the bucket average, time axis in m:ss) with its min / avg / max / count line &mdash; pinch to zoom, one-finger drag to pan while zoomed, mouse wheel to zoom on desktop, double-tap (or the window badge) to reset; every window change re-queries the store for 360 buckets over just that span after a 120 ms debounce, so zooming reveals detail instead of stretching the overview &mdash;, and nothing below it (the events and the CSV path are in the trip's JSON, not on the page). The drive has no buttons: a trip ends by itself, and ending one by hand, export and delete are not on the page (the Black Box settings card has "Clear history", and <code>tripRecorder.endTripNow()</code> / <code>exportTrip()</code> / <code>deleteTrip()</code> remain in the API).</p>
-        <p>Everything is asynchronous: selecting a drive calls <code>tripRecorder.requestDetail(id)</code> and <code>requestSeries(id, param, 360)</code> and the page fills in on <code>detailReady</code> / <code>seriesReady</code>; the live trip re-requests both on <code>tripRecorder.liveTripChanged</code> (new samples reached the store, at most every 5 s) while shown. The live trip's duration is <code>tripRecorder.currentTripElapsedS</code> and the live row's count <code>currentSampleCount</code>, both from the recorder. The parameter defaults to <code>SPEED</code>, then <code>RPM</code>, then the first recorded one; titles and units come from <code>OBDParameterModel.allParameters</code> / <code>nativeUnit(id)</code>, the recorded units (the gauges' °F / km/h settings don't apply here: the chart and stats are the stored values, as in the CSV).</p>
-
-        <h3 id="triphistory-trends">Trends</h3>
-        <p>A <strong>Drives | Trends</strong> switch under the title (<code>tripView_drives</code> / <code>tripView_trends</code>, page property <code>view</code>) turns the page into the car's health across drives (<a href="obd-manager.html#health-trends">Health across drives</a>). Left: a card per health number (<code>tripTrendMetric_&lt;id&gt;</code>): a status dot (green ok, amber watch, grey no data), the average of the last three drives, a sparkline of one point per drive with the usual range shaded (scaled to the data, never finer than a quarter of the usual range, so noise stays flat), and the verdict's note (in full on the selected card). Right: the selected number's title and unit, window chips <strong>7 d / 30 d / 90 d / All</strong> (<code>tripTrendDays_&lt;n&gt;</code>, 30 by default), the note and the drive count, a chip row of every parameter recorded in the window (<code>tripTrendParam_&lt;id&gt;</code>), and a <code>Canvas</code> chart (<code>tripTrendChart</code>) over dates: a dot per drive, out-of-range dots in the warning colour, the usual range shaded, the earlier drives' average as a dashed "before" line, and for a parameter its lowest&ndash;highest per drive as a whisker. Tapping a point opens that drive in the Drives view. The first number shown is the first that needs a look, else the first with data.</p>
-        <p>Opening Trends (and every window change) calls <code>tripRecorder.requestHealthTrends(days)</code>, a parameter chip <code>requestParamTrend(id, days)</code>; answers for another window or parameter are ignored. When the trip list changes (a drive ended or was deleted) the trends are asked for again after 800 ms. <code>tst_triphistoryview</code> drives the view against a fake <code>tripRecorder</code>.</p>
-
-        <h3>Backend managers used</h3>
-        <p><code>tripRecorder</code> (<code>trips</code>, <code>recording</code>, <code>currentTripStartMs</code>, <code>currentTripElapsedS</code>, <code>currentSampleCount</code>, <code>liveTripChanged</code>, <code>storageBytes</code>, <code>canOpenFolder</code>, <code>refresh()</code>, <code>requestDetail()</code>, <code>requestSeries()</code>, <code>requestHealthTrends()</code>, <code>requestParamTrend()</code>), <code>settingsManager</code> (<code>blackBoxMaxMB</code>), <code>OBDParameterModel</code>.</p>
-
-        <!-- SensorHome -->
-        <h2 id="sensorhome">SensorHome.qml</h2>
-
-        <p><span class="file-path">frontend/SensorHome.qml</span> is the sensors hub, "styled to match OBDHome's palette so the two hubs feel like the same surface": a two-card row (the IMU status bar above it went on 2026-11-24).</p>
-
-        <table>
-          <thead><tr><th>Card</th><th>Subtitle</th><th>Behaviour</th></tr></thead>
-          <tbody>
-            <tr><td>Sensors</td><td>Pitch, roll, heading, G-force</td><td><code>pushSubpage("SensorMenu.qml")</code></td></tr>
-            <tr><td>3D View</td><td>"Live vehicle attitude", or "Requires the QtQuick3D module"</td><td><code>pushSubpage("CarMenu.qml")</code>; opacity 0.5 and <code>MouseArea.enabled: false</code> when <code>has3DView</code> is false</td></tr>
-          </tbody>
-        </table>
-
-        <p>Only the 3D View card is conditionally dimmed, and only by module availability: <code>has3DView</code> is the <code>hasQuick3D</code> context property, which <code>main.cpp</code> sets from the QtQuick3D <code>qmldir</code> in the engine's import paths (<span class="file-path">src/util/qmlmodules.cpp</span>) without loading the module; the page used to compile <code>CarMenu.qml</code> synchronously to find out. Both live cards stay tappable without an IMU. <code>pushSubpage()</code> opens the page with <code>stackView.openPage()</code> and persists <code>lastSensorPage</code> <em>only after that succeeds</em>; the comment records why: writing it up front once made an unloadable CarMenu the BottomBar's remembered target, "so the sensor button silently did nothing on every later launch" (commit <code>0c29e64</code>). On its first <code>StackView.onActivated</code> (a real visit, not the hidden pre-build), when <code>has3DView</code> is true, it calls <code>mainWindow.prewarmPageSoon("CarMenu.qml")</code> so the 3D View page is built and warm-rendered in the background before the tap. Main.qml drops the request when no GPU is known to draw the window (<code>gpuRendered</code> false: software rendering, and Windows for now), because that warm render stalls a software rasteriser for many seconds; the page is then built on the tap.</p>
-
-        <h3>Backend managers used</h3>
-        <p><code>berryIMU</code>, <code>settingsManager</code>.</p>
-
-        <!-- SensorMenu -->
-        <h2 id="sensormenu">SensorMenu.qml</h2>
-
-        <p><span class="file-path">frontend/SensorMenu.qml</span> is a 3&times;2 grid of BerryIMU readouts: <a href="components.html#sensor-card">SensorCard</a>s for PITCH, ROLL (bar = (value + 90) / 180), HEADING (value plus the compass point from <code>units.cardinal()</code>, bar = value / 360), ALTITUDE and TEMPERATURE, and a <a href="components.html#gforce-display">GForceDisplay</a> for lateral / longitudinal / magnitude. Below the grid, ZERO (<code>berryIMU.calibrateTare()</code>) and RESET (<code>resetTare()</code>) buttons appear while the IMU is connected.</p>
-
-        <h3>Display settings (bound to <code>settingsManager</code>, live)</h3>
-        <p>The page binds to typed <code>SettingsManager</code> properties, so a change in Settings &rarr; Accessories &rarr; IMU shows as soon as you return, although the page stack keeps this page alive. (It used to read them once in <code>Component.onCompleted</code> and show the old values until a restart.)</p>
-        <table>
-          <thead><tr><th>Key</th><th>Default</th><th>Effect</th></tr></thead>
-          <tbody>
-            <tr><td><code>sensorDecimalPlaces</code> (0&ndash;4)</td><td>1</td><td><code>toFixed()</code> precision everywhere</td></tr>
-            <tr><td><code>sensorTempUnit</code></td><td><code>"F"</code></td><td>Celsius &rarr; Fahrenheit in <code>tempDisplay()</code> through <code>units.cToF()</code></td></tr>
-            <tr><td><code>sensorAltitudeUnit</code></td><td><code>"m"</code></td><td><code>"ft"</code> converts in <code>altDisplay()</code> through <code>units.mToFt()</code></td></tr>
-            <tr><td><code>sensorCards</code> map (<code>Pitch</code>, <code>Roll</code>, <code>Heading</code>, <code>GForce</code>, <code>Altitude</code>, <code>Temperature</code>; saved as <code>sensorShow&lt;card&gt;</code>)</td><td>true</td><td>Card visibility; the temperature card is also hidden when <code>berryIMU.hasTemperature === false</code></td></tr>
-            <tr><td><code>sensorEmitRate</code></td><td>60</td><td>Not read here: <code>BerryIMUManager</code> follows <code>settingsManager.sensorEmitRate</code> from startup</td></tr>
-          </tbody>
-        </table>
-
-        <div class="info-box info">
-          <div class="info-box-title">Emit rate, not sample rate</div>
-          <code>sensorEmitRate</code> controls how often the IMU manager <em>emits</em> its signals into QML (10&ndash;120&nbsp;Hz, default 60). The sensor read loop and the Madgwick filter keep running at their ~200&nbsp;Hz target on the manager's own thread regardless; the setting only throttles the queued signal traffic. Main.qml separately drops the emission to 5&nbsp;Hz whenever no page is showing IMU values (<a href="frontend-overview.html#imu-gating">IMU Rate Gating</a>, <a href="hardware-managers.html#imu-emission">Hardware Managers &rarr; IMU emission</a>).
-        </div>
-
-        <p>The page subscribes to <code>pitchChanged</code>, <code>rollChanged</code>, <code>headingChanged</code>, <code>altitudeChanged</code>, <code>accelMagnitudeChanged</code>, <code>lateralGChanged</code>, <code>longitudinalGChanged</code>, <code>baroTempChanged</code> and <code>connectionStatusChanged</code> directly on <code>berryIMU</code> (it does not go through OBDParameterModel).</p>
-
-        <h3>Backend managers used</h3>
-        <p><code>berryIMU</code>, <code>settingsManager</code>.</p>
-
-        <!-- CarMenu -->
-        <h2 id="carmenu">CarMenu.qml</h2>
-
-        <p><span class="file-path">frontend/CarMenu.qml</span> is the vehicle as an inclinometer: the rigged 2003 Jeep TJ fills the page in a Qt Quick 3D scene and tilts with the live IMU attitude against a level ring on the ground, with pitch and roll as two large numbers under it. Nothing else is on screen. It uses unversioned Qt 6 imports plus <code>QtQuick3D</code>, so it only loads when the optional module is present (CMake links Quick3D when found; SensorHome greys the card out otherwise). It requires <code>stackView</code> only; <code>mainWindow</code> is a plain property.</p>
-
-        <p>The vehicle is whichever one <code>vehicleManager.active</code> names: a rigged one (the Jeep, through <code>JeepVehicle.qml</code>; the BMW, through <code>RigVehicle.qml</code> from its <code>rig.json</code>: four doors, hood and trunk open on a tap, the wheels steer and turn, the lamps light), or a model the user added, which is shown whole (it tilts, orbits and zooms; nothing on it opens, and the test controls are not offered). While none is chosen, as on a fresh install, the page is <span class="file-path">frontend/VehicleChooser.qml</span> (<code>vehicleChooser</code>): "Choose your vehicle", a tile per vehicle with its picture (<code>vehicleTile_&lt;id&gt;</code>) and "Add your own 3D model" (<code>vehicleTileAdd</code>, a file picker for a <code>.glb</code>). The menu's "Change vehicle" (<code>changeVehicle</code>) brings the chooser back over the car; a tap beside the tiles keeps the current one.</p>
-
-        <p>The page is three files. <span class="file-path">frontend/VehicleView.qml</span> is the scene and its gestures, a component any page can place (see <a href="components.html#vehicle-view">Components &rarr; VehicleView</a>); <span class="file-path">CarMenu.qml</span> adds the readouts, the menu and the IMU / OBD wiring; <span class="file-path">frontend/VehicleRigPanel.qml</span> holds the rig's test controls and is loaded only on request.</p>
-
-        <h3>What is on screen</h3>
-        <ul>
-          <li><strong>The vehicle</strong>, full-bleed on <code>Style.backgroundColor</code> (the scene's background is transparent, so it follows the theme). Drag orbits, pinch or the mouse wheel zooms, a double-tap beside the vehicle restores the view.</li>
-          <li><strong>Tap a panel to open it</strong>: either door, the hood, the tailgate. The tap is resolved by <code>View3D.pick()</code>, so the panel nearest the eye wins and the body hides what is behind it.</li>
-          <li><strong>Pitch</strong> (bottom left, <code>objectName: "carPitch"</code>) and <strong>Roll</strong> (bottom right, <code>carRoll</code>) in whole degrees, and the <strong>heading</strong> with its compass point above the car (<code>carHeading</code>). Shown only while the IMU is connected; without one the page reads "No motion sensor" and shows the car level.</li>
-          <li><strong>The menu button</strong> (three dots, top right, <code>carMenuButton</code>): "Set level here" (<code>imuZero</code> &rarr; <code>berryIMU.calibrateTare()</code>) and "Reset level" (<code>imuReset</code> &rarr; <code>resetTare()</code>) while the IMU is connected, and "Test controls" in a <code>--dev</code> run. The button is hidden when it would open an empty menu.</li>
-          <li>While the rig loads, a centred "Loading&hellip;" or "Unable to load the vehicle: &lt;error&gt;".</li>
-        </ul>
-        <p>Altitude and the barometer's temperature, which the old page listed in a strip, are on <a href="#sensormenu">SensorMenu</a>.</p>
-
-        <h3>IMU drives the body</h3>
-
-        <pre><code><span class="cls">Connections</span> {
-    <span class="prop">target</span>: berryIMU
-    <span class="prop">enabled</span>: carMenu.visible
-    <span class="cmt">// Quaternion drives the 3D model directly — no gimbal lock</span>
-    <span class="cmt">// Remap sensor frame (Z-up) to Qt3D frame (Y-up): (w,x,y,z) → (w,y,z,x)</span>
-    <span class="kw">function</span> <span class="fn">onOrientationChanged</span>(w, x, y, z) { view.attitude = Qt.<span class="fn">quaternion</span>(w, y, z, x) }
-    <span class="cmt">// Euler angles for the readouts only — NOT applied to the model</span>
-    <span class="kw">function</span> <span class="fn">onPitchChanged</span>(val) { currentPitch = val }
-    <span class="kw">function</span> <span class="fn">onRollChanged</span>(val) { currentRoll = val }
-    <span class="kw">function</span> <span class="fn">onHeadingChanged</span>(val) { currentHeading = val }
-}</code></pre>
-
-        <p>The handlers run only while the page is visible (it stays alive hidden in the StackView, and moving the model off screen kept the render loop busy); connection state is tracked always. <code>ImuDemand</code> asks for the full IMU rate while the page shows.</p>
-
-        <p><strong>Live OBD drive.</strong> While <code>obdManager.connected</code> is true (or the OBD simulator runs), two <code>Binding</code>s feed <code>OBDParameterModel</code>'s <code>RPM</code> into the rig's <code>engineRpm</code> and <code>SPEED</code> (MPH, converted to km/h) into <code>wheelSpeedKph</code>, so the fan, crank, driveshafts and wheels turn with the car. On disconnect the bindings release. CarMenu registers the <code>"carMenu"</code> poll demand for <code>["RPM", "SPEED"]</code> only while it is visible (it is pre-built hidden in the StackView), and clears it on destruction.</p>
-
-        <h3>Test controls (VehicleRigPanel)</h3>
-        <p>The buttons and sliders that used to surround the car are the rig's test bench, not something a driver needs, so they live in <span class="file-path">frontend/VehicleRigPanel.qml</span> and load only while <code>carMenu.rigControls</code> is true: the menu's "Test controls" sets it in a <code>--dev</code> run, and <span class="file-path">tools/vehicle/check_jeep_view.py</span> sets it on the page it builds. The panel is a <code>Flow</code> across the top with theme-coloured stock controls: Driver door, Passenger door, Rear glass (only when the rig has one; hidden for the installed soft top), Tailgate, Hood, Headlights, Fog lights, Brake lights, Reverse lights (each <code>objectName: "jeepControl_&lt;key&gt;"</code>, checkable, bound to the matching rig boolean), "Open all" (<code>jeepOpenAll</code>), "Close all", a Steer slider (<code>jeepSteering</code>) with "Center wheels" (<code>centerWheels</code>), "Spin wheels" (<code>jeepSpinWheels</code>) with a wheel-speed slider (<code>jeepWheelSpeed</code>, &minus;30..30&nbsp;km/h), an Engine slider (<code>jeepEngineRpm</code>, 0..6000&nbsp;rpm) and, without an IMU, Pitch and Roll sliders (<code>jeepPitch</code>, <code>jeepRoll</code>, &plusmn;60&deg;) with "Level". Live OBD disables the wheel and engine controls and the engine label adds "live OBD". The pitch and roll readouts show while the panel is open, so the sliders can be read. The old "Start Sim" animation is gone; <code>--sim</code> is the simulated car.</p>
-
-        <h3>Backend managers used</h3>
-        <p><code>berryIMU</code> for attitude, connection and calibration; <code>obdManager</code> for connection state and polling demand; <code>OBDParameterModel</code> for live RPM and speed; <code>units</code> for the compass point. The page reads no settings.</p>
-
-        <!-- ClockMenu -->
-        <h2 id="clockmenu">ClockMenu.qml</h2>
-
-        <p><span class="file-path">frontend/ClockMenu.qml</span> is a full-screen clock drawn entirely in theme tokens on <code>Style.backgroundColor</code>: an analog face on top &mdash; a <code>contentColor</code> circle (<code>dp(240)</code>, capped at 45&nbsp;% of the page height) with a 60&nbsp;% accent border, twelve hour ticks (every third one longer and in <code>primaryTextColor</code>), hour and minute hands in <code>primaryTextColor</code> (26&nbsp;% and 38&nbsp;% of the face), an accent second hand at 42&nbsp;% and an accent centre dot, all hands with <code>transformOrigin: Item.Bottom</code> anchored to the centre &mdash; then a <code>dp(64)</code> bold digital time in <code>clockTextColor</code> and the date as <code>Qt.formatDate(now, "dddd, MMMM d, yyyy")</code> in <code>dp(22)</code> <code>secondaryTextColor</code>.</p>
-
-        <p>A <code>Timer</code> (<code>running: visible</code>, <code>triggeredOnStart</code>) calls <code>refresh()</code> and then sets its <code>interval</code> to <code>1015 - ms</code>, so every tick lands about 15&nbsp;ms after the real second boundary (a plain 1000&nbsp;ms repeat kept the phase the page opened with, so the second hand trailed by up to a second and drift made it skip or repeat). <code>refresh()</code>, which reads <code>new Date()</code> and sets the digital text, the date and <code>hourHand.rotation = (h % 12) * 30 + m / 2</code>, <code>minuteHand.rotation = m * 6 + s / 10</code>, <code>secondHand.rotation = s * 6</code>. The digital text follows <code>clockFormat24Hour</code> and <code>clockShowSeconds</code> (<code>Qt.formatTime</code> with <code>HH:mm[:ss]</code> or <code>hh:mm[:ss] AP</code>), matching the <code>clock</code> manager. It no longer follows <code>clock.timeChanged</code>: that signal fires only when the text changes (once a minute without seconds), so a freshly opened page stayed blank until the next minute and the second hand never moved.</p>
-
-        <p>The file declares <code>required property StackView stackView</code> and <code>required property ApplicationWindow mainWindow</code> and has no <code>objectName</code>. Tapping the BottomBar clock opens it (<code>openClockSection()</code> &rarr; <code>stackView.openPage("ClockMenu.qml")</code>, which supplies both); the command server's <code>Main.navigateTo("ClockMenu.qml")</code> reaches it too. See <a href="frontend-overview.html#page-routing">Page Routing</a>.</p>
-
-        <h3>Backend managers used</h3>
-        <p><code>settingsManager</code> for 12/24-hour format and seconds visibility. Time itself comes from JavaScript <code>Date</code>; this page does not consume the <code>clock</code> manager.</p>
-
-        <!-- PhoneMirrorView -->
-        <h2 id="phonemirror">PhoneMirrorView.qml</h2>
-
-        <p><strong>Not reachable since 2026-11-25</strong> (no bottom-bar button; the phone is seen on Home only, in <code>PhoneMirrorWidget</code>, while that flow is worked out). <span class="file-path">frontend/PhoneMirrorView.qml</span>: OCTAVE's built-in scrcpy-protocol client streams the phone or a virtual display onto a <code>VideoOutput</code> and forwards touch over the control socket. It requires adb and the bundled phone-server jar, but no external scrcpy executable. It imports <code>QtQuick.Controls.Basic</code> and <code>QtMultimedia</code>. The BottomBar shows its button only when <code>!isAndroid &amp;&amp; settingsManager.phoneMirrorEnabled</code> and opens the view with <code>stackView.openPage("PhoneMirrorView.qml")</code>, so the single cached instance (and its running session) is reused; the view sets its own <code>objectName: "phoneMirrorView"</code>. Its <code>StackView.onActivated</code> calls <code>startMirror()</code> on every visit, which is a no-op while the stream is already up.</p>
-
-        <ul>
-          <li><strong>Video</strong> &mdash; a <code>VideoOutput</code> (<code>PreserveAspectFit</code>) whose <code>videoSink</code> is handed to the manager in <code>Component.onCompleted</code> (<code>phoneMirrorManager.videoSink = videoSink</code>); decoded frames land on it directly. <code>frameCounter</code> is bumped on every <code>frameReady</code> ("proof of life"); <code>hasVideo = frameCounter &gt;= 1</code>.</li>
-          <li><strong>Touch</strong> &mdash; a <code>MultiPointTouchArea</code> (1&ndash;10 points, <code>mouseEnabled</code>) maps each point through the letterboxed <code>video.contentRect</code> to 0..1 and calls <code>phoneMirrorManager.injectTouch(pointId, action, relX, relY)</code> with <code>0</code> pressed, <code>2</code> updated, <code>1</code> released/cancelled &mdash; real multitouch; mouse input arrives as one point.</li>
-          <li><strong>Nav buttons</strong> &mdash; &#9665; / &#9675; / &#9634; call <code>pressBack()</code>, <code>pressHome()</code>, <code>pressAppSwitch()</code>; shown only while mirroring the phone's own screen (<code>activeDisplaySize === ""</code>), because a virtual display "shows system decorations, i.e. Samsung's DeX taskbar with its own back/home/recents along the bottom, which this row would cover".</li>
-          <li><strong>Overlays</strong> &mdash; "Connecting..." until the first frame; a "Reconnecting to phone&hellip;" badge after 2&nbsp;s of quiet reconnect; a "Phone is asleep / Waking it up&hellip; tap to retry" scrim (after 1.5&nbsp;s of <code>phoneAsleep</code>, tap &rarr; <code>wakePhone()</code>); an "X" that calls <code>stopScrcpy()</code> and pops.</li>
-          <li><strong>No phone: QR pairing</strong> &mdash; when the error is "No Android device..." (<code>noPhone</code>) and no Wi-Fi phone is remembered, the page becomes the <a href="components.html#phone-qr-pairing-panel">PhoneQrPairingPanel</a> (code at 55&nbsp;% of the view height, plus "Or plug the phone in over USB..."), starts <code>startQrPairing()</code> on its own and cancels it when the view is deactivated or mirroring starts. With a remembered phone the error page is titled "Waiting for your phone" (not "Phone Mirror Failed") and offers "Connect a different phone" (<code>wantQr</code>), whose panel has a Cancel back to the waiting page. Pairing success needs nothing from the view: the 2&nbsp;s recovery timer sees the phone and starts mirroring.</li>
-          <li><strong>Errors and recovery</strong> &mdash; the manager decides and retries; the page follows <code>phoneMirrorManager.sessionState</code> (see <a href="phone-mirror-android-auto.html">Phone Mirror</a>). <code>"reconnecting"</code> (a drop after video was flowing) keeps the last frame up with a "Reconnecting to phone&hellip;" badge after 2&nbsp;s &mdash; "a USB blip (the phone re-enumerates when picked up / put down) kills the session". <code>"waitingForPhone"</code> shows the error page (the QR screen when <code>lastErrorKind</code> is <code>"noPhone"</code>), and <code>"starting"</code> from there (the manager saw the phone and restarted) goes back to "Connecting&hellip;". <code>"failed"</code> (setup or fatal) shows the error, or <code>getInstallInstructions()</code> when <code>setupOk</code> is false. The page reports <code>setViewActive(StackView.status === StackView.Active)</code>; the manager's retries and adb probes run only then. It has no timers of its own.</li>
-        </ul>
-
-        <p>Manager surface used: <code>startScrcpy()</code>, <code>stopScrcpy()</code>, <code>isRunning</code>, <code>videoSink</code>, <code>activeDisplaySize</code>, <code>phoneAsleep</code>, <code>wakePhone()</code>, <code>injectTouch()</code>, <code>pressBack/Home/AppSwitch()</code>, <code>getDeviceState()</code>, <code>environmentOk()</code>, <code>getInstallInstructions()</code>, <code>nativeAvailable</code>, <code>serverVersion</code>, <code>adbPath</code>, signals <code>scrcpyStarted</code>, <code>scrcpyStopped</code>, <code>scrcpyError</code>, <code>frameReady</code>. Protocol and manager details: <a href="phone-mirror-android-auto.html#phone-mirror">Phone Mirror &amp; Android Auto</a>.</p>
-
-        <h3>Backend managers used</h3>
-        <p><code>phoneMirrorManager</code>.</p>
-
-        <!-- AirPlayView -->
-        <h2 id="airplay">AirPlayView.qml</h2>
-        <p><span class="file-path">frontend/AirPlayView.qml</span> (objectName <code>airPlayView</code>, dev navigate page <code>airplay</code>) is the iPhone page over <code>airPlayManager</code> (<a href="phone-mirror-android-auto.html#airplay">iPhone (AirPlay)</a>). While an iPhone mirrors it shows the picture in a <code>VideoOutput</code> whose sink it hands to the manager; a <code>MultiPointTouchArea</code> maps touches through the letterboxed <code>contentRect</code> to 0..1 and calls <code>injectTouch()</code> (a touch that starts on the bars is ignored), and a <code>WheelHandler</code> calls <code>scroll()</code>. Top right: a touch badge (tap to open the Bluetooth pairing window) or <em>Calibrate touch</em>, and <strong>X</strong>, which only leaves the page. Without mirroring it shows the setup: <em>Turn on AirPlay</em>, the PIN in large digits while a new iPhone pairs, the track while AirPlay audio plays, the steps with OCTAVE's addresses, and the touch card with <em>Pair touch</em>. <code>Main.qml</code> opens it on <code>airPlayManager.mirroringStarted</code>.</p>
-
-        <!-- AndroidAutoView -->
-        <h2 id="androidauto">AndroidAutoView.qml</h2>
-
-        <p><span class="file-path">frontend/AndroidAutoView.qml</span> has two modes, following <code>androidAutoManager.backend</code>: the built-in head unit (<code>"native"</code>, below) and Google's Desktop Head Unit (<code>"dhu"</code>). For the DHU it imports <code>OCTAVE.AndroidAuto 1.0</code> for <code>EmbeddedDhuItem</code> &mdash; the one custom type <span class="file-path">src/main.cpp</span> registers with <code>qmlRegisterType</code> &mdash; and <code>QtQuick.Controls.Basic</code>. Like the phone mirror, its BottomBar button is hidden on Android and gated by <code>settingsManager.androidAutoEnabled</code>; the shared page cache reuses its instance.</p>
-
-        <pre><code><span class="cls">EmbeddedDhuItem</span> {
-    <span class="prop">id</span>: embeddedDhu
-    <span class="prop">anchors.fill</span>: parent
-    Component.onCompleted: <span class="kw">if</span> (androidAutoManager) <span class="fn">connectToManager</span>(androidAutoManager)
-    <span class="fn">onStreamStarted</span>: ...
-    <span class="fn">onStreamStopped</span>: dhuEmbedded = <span class="kw">false</span>
-    <span class="fn">onErrorOccurred</span>: <span class="kw">function</span>(error) { launchFailed = <span class="kw">true</span>; errorMessage = error }
-}</code></pre>
-
-        <ul>
-          <li>"The actual DHU window becomes a child of this" item; <code>onVisibleChanged</code> calls <code>embeddedDhu.detach()</code> when the page is covered and <code>reattach()</code> when it is shown again, and <code>StackView.onActivated</code> either resumes an already-embedded DHU (<code>androidAutoManager.isDhuEmbedded</code>) or calls <code>launchDhuSeamless()</code>.</li>
-          <li>Manager signals: <code>error(msg)</code>, <code>dhuWindowReady(hwnd)</code> (&rarr; <code>dhuEmbedded = true</code>), <code>dhuEmbeddedChanged(embedded)</code>.</li>
-          <li>States: "Starting Android Auto..." with a bouncing progress bar while <code>!embeddedDhu.isStreaming</code>; an error screen ("Could not start Android Auto") with a four-step setup checklist (USB debugging, developer mode, head-unit server, Google DHU), a "&lt; Back" button and "Try Again" (<code>launchDhuSeamless()</code> again).</li>
-          <li>A semi-transparent "X" at the top-right calls <code>androidAutoManager.closeDhu()</code> and pops the page.</li>
-        </ul>
-
-        <h3>Built-in mode (<code>backend === "native"</code>)</h3>
-        <p>The <code>androidAutoNative</code> item replaces the DHU items (which are hidden in this mode):</p>
-        <ul>
-          <li>A <code>VideoOutput</code> (<code>PreserveAspectFit</code>) whose <code>videoSink</code> is handed to <code>androidAutoManager.videoSink</code> in <code>Component.onCompleted</code>; shown while <code>nativeState === "running"</code>.</li>
-          <li>A <code>MultiPointTouchArea</code> (<code>androidAutoTouchArea</code>, up to 10 points, mouse enabled) that maps each point through the video's <code>contentRect</code> to 0..1 and calls <code>injectTouch(pointId, action, x, y)</code> (0 press, 2 move, 1 release or cancel). A touch that starts on the letterbox bars is ignored until it is released.</li>
-          <li>A status screen while not running: a title per <code>nativeState</code> ("Waiting for the phone", "Waiting for the phone's head unit server", "Android Auto needs a certificate", "Android Auto stopped", else "Starting Android Auto..."), <code>nativeStatus</code> under it (<code>androidAutoStatus</code>), the one-time phone setup hint while waiting for the phone or its server, and "Retrying on its own." after an error.</li>
-          <li><code>StackView.onActivated</code> calls <code>setViewVisible(true)</code> and <code>startNative()</code>; <code>onVisibleChanged</code> passes visibility to <code>setViewVisible()</code> (the phone pauses video while the page is hidden, audio continues). The "X" (<code>androidAutoClose</code>) calls <code>stopNative()</code> and pops the page.</li>
-        </ul>
-
-        <h3>Backend managers used</h3>
-        <p><code>androidAutoManager</code>. See <a href="phone-mirror-android-auto.html#android-auto">Phone Mirror &amp; Android Auto</a> for the built-in receiver, the DHU pipeline and the <code>dhuframe</code> image provider.</p>
-
-        <!-- SettingsMenu -->
-        <h2 id="settingsmenu">SettingsMenu and its Layouts</h2>
-
-        <p><span class="file-path">frontend/SettingsMenu.qml</span> is the settings orchestrator. It requires <code>stackView</code>, <code>mainWindow</code> and <code>initialSection</code> (hence <code>navigateToSettings()</code> in Main.qml), owns the <code>pageModel</code> &mdash; the single source of truth for the six settings pages &mdash; and loads one of four layout files into a single <code>Loader</code> according to <code>settingsManager.settingsLayoutStyle</code> (default <code>"Sidebar"</code>):</p>
-
-        <table>
-          <thead><tr><th>Section</th><th>Page (<span class="file-path">settings/</span>)</th><th>Group</th><th>Sub-sections</th></tr></thead>
-          <tbody>
-            <tr><td><code>displaySettings</code></td><td>DisplaySettingsPage</td><td>Appearance</td><td>Layout, Appearance, Units, Clock</td></tr>
-            <tr><td><code>mediaSettings</code></td><td>MediaSettingsPage</td><td>Appearance</td><td>Library &amp; Playback, Spotify</td></tr>
-            <tr><td><code>obdSettings</code></td><td>OBDSettingsPage</td><td>Connectivity</td><td>Connection (with the adapters), Black Box, Advanced (Custom PIDs, Bus Monitor)</td></tr>
-            <tr><td><code>phoneSettings</code> (<code>desktopOnly</code>)</td><td>PhoneSettingsPage</td><td>Connectivity</td><td>Phone Mirror, Android Auto, iPhone</tr>
-            <tr><td><code>accessoriesSettings</code> (<code>desktopOnly</code>)</td><td>AccessoriesSettingsPage</td><td>Connectivity</td><td>Volume Knob, IMU Sensor, Gesture Sensor</td></tr>
-            <tr><td><code>deviceSettings</code></td><td>DeviceSettingsPage</td><td>System</td><td>Device, Vehicle, and Developer, which holds as cards: Service (the service switch, pairing codes and paired devices, from <code>servicePairing</code>), Frontends (installed frontends from <code>frontendManager</code>: install from a folder or zip, then one box per screen with its preview picture, where tapping the box uses it, and Try / Remove under it; see <a href="writing-a-frontend.html#install">Installing Your Frontend</a>), Vehicle (the vehicle in the 3D view and on Home, from <code>vehicleManager</code>: the tiles of the 3D view's chooser (<span class="file-path">VehicleChooser.qml</span> with <code>embedded: true</code>: a picture per vehicle, the one in use outlined, a "No vehicle" tile (<code>offerNone</code>, <code>vehicleTileNone</code>: outlined while none is chosen) and an "Add your own" tile for a <code>.glb</code>), Show on Home, and for an added model a live preview with Turn 90&deg; / Stand it up / Remove; that preview, loaded only for an added model, is also where its Home picture is rendered from; guide: <span class="file-path">docs/VEHICLES.md</span>), Diagnostics</td></tr>
-            <tr><td><code>about</code></td><td>AboutPage</td><td>System</td><td>&mdash;</td></tr>
-          </tbody>
-        </table>
-
-        <p><code>buildHubModel()</code> drops <code>desktopOnly</code> pages when <code>typeof isAndroid !== "undefined" &amp;&amp; isAndroid</code> and any section the user hid (<code>settingsManager.is_settings_section_visible()</code>). <code>navigateToCategory(section)</code> persists the section with <code>set_last_settings_section()</code> and delegates to the layout (the grid opens the About card for <code>"about"</code>; a caller that wants a particular card passes it as <code>navigateToSettings(section, cardId)</code>); <code>navigateToHub()</code> is what the BottomBar's Settings button calls when Settings is already showing.</p>
-
-        <table>
-          <thead><tr><th>Layout file</th><th><code>settingsLayoutStyle</code></th><th>Shape</th></tr></thead>
-          <tbody>
-            <tr><td><span class="file-path">SettingsSidebarLayout.qml</span></td><td>not read (the only layout since the Carousel, Hub and Dashboard layouts were removed, 2026-11-15)</td><td>One <code>SettingsTilePage</code> grid of every section's tiles, one section per column, short columns stretched to fill (15 tiles on desktop); tiles open <code>SettingsCardPopup</code> with a hero-morph, the About tile opens the whole About page in that popup, and the <code>media_now_playing</code> tile hands off to <code>mainWindow.openNowPlayingStudio()</code>; tapping Settings again closes the open card</td></tr>
-          </tbody>
-        </table>
-
-        <p>None of the four layout files sets an <code>objectName</code>; the page root is <code>settingsMenu</code>, and settings cards are found by an <code>objectName</code> equal to their tile title. The component library, tile system, persistence and per-page details are on <a href="settings-ui.html">Settings UI</a>; the settings themselves are in the <a href="settings-reference.html">Settings Reference</a>.</p>
-
-        <h3>Backend managers used</h3>
-        <p><code>settingsManager</code>, <code>networkManager</code> (update badge on About); the Hub layout also reads <code>obdManager</code> and <code>esp32VolumeManager</code> for its summaries, both behind <code>typeof</code>.</p>
+        <p>
+          The page stays alive while hidden, so it stops what costs something off screen: the seek bar stops
+          following the position, and the analyzer is told the view is not active. During a track change the bars
+          drop and the blur freezes until the art has finished moving.
+        </p>
+        <p>Full lists of what the page can call: <a href="api-reference.html#nowPlaying">nowPlaying</a>, <a href="api-reference.html#mediaManager">mediaManager</a>, <a href="api-reference.html#audioAnalyzer">audioAnalyzer</a>.</p>
 
         <!-- NowPlayingStudio -->
-        <h2 id="nowplayingstudio">NowPlayingStudio.qml</h2>
+        <h2 id="nowplayingstudio">The Look Editor</h2>
+        <p>
+          The look editor changes how the Media Room looks while you watch it change. Tap the customize button at
+          the top right of the Media Room: the page shrinks into the top right corner and the editor's controls
+          appear around it. Tap the small page to go back.
+        </p>
+        <table>
+          <thead><tr><th>Section</th><th>Control</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td>BACKGROUND</td><td>Layout</td><td>The blurred background as one picture or as a 2x2 or 4x4 grid of the art.</td></tr>
+            <tr><td></td><td>Blur</td><td>How blurred the background is.</td></tr>
+            <tr><td></td><td>Dark Overlay</td><td>How much the background is darkened.</td></tr>
+            <tr><td>ALBUM ART</td><td>Waveform</td><td>Shows or hides the bars that move with the music.</td></tr>
+            <tr><td>AUDIO</td><td>Output</td><td>Where the music plays: "System default" or one of the outputs found. The same setting as Settings &gt; Media &gt; Library &amp; Playback &gt; Audio Output.</td></tr>
+          </tbody>
+        </table>
+        <p>Every change is saved at once. Album art, vinyl or a 3D player is picked on the page itself, by a tap on the art.</p>
+        <h3>How it is built</h3>
+        <p>
+          <span class="file-path">frontend/NowPlayingStudio.qml</span> holds the panels. It is not a page of its
+          own: the Media Room loads it the first time the button is tapped and keeps it. The small page in the
+          corner is the real Media Room scaled down, not a copy, with one touch area over it so nothing on it
+          reacts but the tap that closes the editor. Leaving the Media Room closes the editor.
+        </p>
 
-        <p><span class="file-path">frontend/NowPlayingStudio.qml</span> is the Now Playing look editor. It is neither a StackView page nor a settings tile: it lives in <a href="#mediaroom">MediaRoom</a>. The customize button at the top right of the Media Room (<code>customizeButton</code>, <span class="file-path">assets/customize_button.svg</span>; in portrait it takes the right end of the volume row) sets <code>mediaRoom.studioOpen</code>; the page then shrinks into a mirror at the top right and the editor's panels appear in the room that frees. A tap anywhere on the mirror brings the page back, and so does leaving the page (<code>StackView.onDeactivated</code>). The bottom bar stays in place throughout.</p>
+        <!-- MediaPlayer -->
+        <h2 id="mediaplayer">Music Library</h2>
+        <p>
+          The library is the list of your songs. The Media button switches between it and the Media Room. Each row
+          shows a song's art, title, artist, album and length; the bar at the top counts the songs, albums and
+          artists and their total length.
+        </p>
+        <table>
+          <thead><tr><th>To do this</th><th>Do this</th></tr></thead>
+          <tbody>
+            <tr><td>Play a song</td><td>Tap its row. The Media Room opens, unless Settings &gt; Media &gt; <strong>Return to Library After Picking a Song</strong> is on.</td></tr>
+            <tr><td>Sort</td><td>Tap the TITLE, ARTIST or ALBUM heading; tap again to reverse.</td></tr>
+            <tr><td>Show one playlist</td><td>Tap <strong>PLAYLIST</strong> and pick one. A playlist is a folder inside your music folder.</td></tr>
+            <tr><td>Make a playlist</td><td>Tap <strong>+</strong>, type a name (the button in the name field opens an on-screen keyboard) and tap <strong>Create</strong>.</td></tr>
+            <tr><td>Move or delete a song</td><td>Press and hold its row, then <strong>Move to playlist</strong> or <strong>Delete song</strong>. Delete removes the file for good and asks first.</td></tr>
+            <tr><td>Delete a playlist</td><td>Press and hold it in the playlist list. This deletes the songs in it. "All Music" and "Unsorted" cannot be deleted.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          <strong>Spotify.</strong> Under the local playlists the list has a Spotify heading. Signed out, it holds
+          <strong>Connect Spotify&hellip;</strong>, or <strong>Set Up Spotify&hellip;</strong> when no Client ID
+          has been entered yet. Signed in, it lists your Spotify library, and a pick shows its songs in the same
+          table. Those cannot be sorted: the order is Spotify's. A button names the device Spotify is playing on
+          and opens the list of devices to move playback to. See
+          <a href="media-manager.html#spotify">Media Manager: Spotify</a>.
+        </p>
+        <p>
+          <strong>The phone's queue.</strong> While a mirrored phone has the music and reports a queue, the list
+          can show that queue in the same way.
+        </p>
+        <p>With no songs the page shows the same "No Music Loaded" prompt as Home. There is no search and no drag to reorder.</p>
+        <h3>How it is built</h3>
+        <p>
+          <span class="file-path">frontend/MediaPlayer.qml</span>. Local songs and playlists come from
+          <code>mediaManager</code>; Spotify's from <code>spotifyManager</code>. The list scrolls to the playing
+          song when the page opens and follows it on a track change, unless you are scrolling. A failed move or
+          delete shows the reason in the sheet instead of closing it. Full lists:
+          <a href="api-reference.html#mediaManager">mediaManager</a>,
+          <a href="api-reference.html#spotifyManager">spotifyManager</a>.
+        </p>
 
+        <!-- OBDHome -->
+        <h2 id="obdhome">OBD</h2>
+        <p>
+          The OBD page is the way in to everything about the car. With no adapter connected it shows only "No
+          vehicle connected" and a <strong>Connect Vehicle</strong> button, which opens the sheet that finds and
+          connects an adapter (<a href="obd-manager.html#adapter-finder">OBD Manager</a>). Once connected it shows
+          three cards:
+        </p>
+        <table>
+          <thead><tr><th>Card</th><th>Under it</th><th>Opens</th></tr></thead>
+          <tbody>
+            <tr><td>Live Data</td><td>Every reading from the car</td><td><a href="#obdmenu">Live Data</a></td></tr>
+            <tr><td>Trouble Codes</td><td>Read &amp; clear DTCs</td><td><a href="#obddiagnostics">Trouble Codes</a></td></tr>
+            <tr><td>Trip History</td><td>"Recording this drive", "<i>n</i> drives logged", "Black box drive logs", or "Black box unavailable"</td><td><a href="#triphistory">Trip History</a></td></tr>
+          </tbody>
+        </table>
+        <p>
+          The card you used last has an accent border, and the OBD button takes you straight back to that page
+          next time. The connection status and log are not on this page: they are in Settings &gt; OBD &gt;
+          Connection.
+        </p>
+        <h3>How it is built</h3>
+        <p>
+          <span class="file-path">frontend/OBDHome.qml</span>. A tap on a card saves the page's file name in the
+          <code>lastOBDPage</code> setting and opens it. The bottom bar reads the same setting, and ignores it
+          while no car is connected, so the connect prompt is always what you see then.
+        </p>
+
+        <!-- OBDMenu -->
+        <h2 id="obdmenu">Live Data</h2>
+        <p>
+          Live Data shows one card for every reading your car supports, each with its name, value and unit and a
+          bar that shows where the value sits in its range. OCTAVE asks the car what it supports after connecting,
+          so the cards differ from car to car. A long list scrolls. A reading that has not answered yet shows "--".
+        </p>
+        <p>
+          Tap the <strong>RPM</strong> card to set up the shift light: colours and flashes at engine speeds you
+          choose (<a href="obd-manager.html#shift-light">OBD Manager: Shift Light</a>). No other card does
+          anything on a tap.
+        </p>
+        <p>What the page says when there are no cards:</p>
+        <table>
+          <thead><tr><th>Message</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td>No vehicle connected</td><td>No adapter is connected. Tap <strong>Connect Vehicle</strong>.</td></tr>
+            <tr><td>Reading your vehicle's PIDs&hellip;</td><td>The adapter is connected and OCTAVE is waiting for the car to say what it supports.</td></tr>
+            <tr><td>No supported PIDs reported</td><td>The car did not answer. Check that the ignition is on.</td></tr>
+          </tbody>
+        </table>
+        <h3>How it is built</h3>
+        <p>
+          <span class="file-path">frontend/OBDMenu.qml</span>. The list of cards is
+          <code>OBDParameterModel.vehicleParameters</code>, and each card reads its own value with
+          <code>OBDParameterModel.liveValue(id)</code>, so a card redraws only when its own reading changes
+          (<a href="components.html#obd-parameter-model">OBDParameterModel</a>,
+          <a href="gauges-dashboards.html#vehicle-gate">the vehicle gate</a>). The grid has 2 columns for up to 4
+          cards, 3 for up to 9, 4 for up to 16 or on a narrow page, and 5 beyond that.
+        </p>
+        <p>
+          While the page is on screen it asks the car for every card's reading
+          (<code>obdManager.setParameterDemand("cards", ids)</code>) and withdraws the request when you leave.
+          Hidden, the cards stop listening, so the page costs nothing off screen.
+        </p>
+        <p>
+          The page shows no dashboards of its own. The one exception: a dashboard being edited in the browser
+          editor (<a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>) previews here in place of the
+          cards while it is being edited.
+        </p>
+        <p>
+          The <code>obdCardStyleCircular</code> setting draws the cards as round dials instead of bars. Nothing in
+          Settings changes it at the moment. The shift light editor is
+          <span class="file-path">frontend/obd/ShiftLightEditor.qml</span>; its rules live in
+          <a href="api-reference.html#shiftLightManager">shiftLightManager</a>.
+        </p>
+
+        <!-- OBDDiagnostics -->
+        <h2 id="obddiagnostics">Trouble Codes</h2>
+        <p>
+          This page reads and clears the codes behind the check-engine light. Opening it reads the car's status
+          once and prints it: how many codes are stored and whether the check-engine light is on.
+        </p>
         <ul>
-          <li><strong>The mirror is the page</strong> &mdash; <code>mainContent</code> is scaled towards the top right by a <code>Scale</code> + <code>Translate</code> driven by <code>studioProgress</code> (0 &rarr; 1, 320&nbsp;ms <code>OutCubic</code>), so there is one MediaRoom and every change is seen on the real thing. It keeps the page's shape: half the height in a wide window (as long as the main panel keeps 300&nbsp;dp), 36&nbsp;% of the height and at most half the width in a tall one (<code>studioMirrorWidth</code>). While the editor is open a <code>MouseArea</code> over the whole mirror (<code>studioMirror</code>, accent frame) takes every press, so nothing on the mirror reacts.</li>
-          <li><strong>Loading</strong> &mdash; MediaRoom loads the file by url in an asynchronous <code>Loader</code> on the first open and keeps it; its opacity is <code>max(0, (studioProgress &minus; 0.45) / 0.55)</code>, so the page shrinks first and the controls resolve once there is room. MediaRoom passes <code>mirrorWidth</code>, <code>mirrorHeight</code>, <code>margin</code>, <code>gap</code> and <code>stacked</code>.</li>
-          <li><strong>Layout</strong> &mdash; wide window: the output strip under the mirror, the panel to its left over the full height. Tall window (<code>stacked</code>): the strip beside the mirror, the panel below both.</li>
-          <li><strong>Main panel sections</strong> &mdash; BACKGROUND (<code>backgroundGrid</code> Normal/2x2/4x4, <code>backgroundBlurRadius</code>, <code>backgroundOverlayOpacity</code>), ALBUM ART (<code>showWaveformVisualizer</code>; album art, vinyl or a 3D player is picked on the page itself, by a tap on the art). The 3D preview, side card, text scroll speed and button tilt controls left on 2026-11-23: those settings are still read &mdash; built from <code>SettingCategory</code>, <code>SettingSubcategory</code>, <code>SettingsSlider</code>, <code>SettingsToggle</code> (compact), <code>SettingLabel</code>, <code>ValueDisplay</code> and <code>NowPlayingButtonGrid</code>. Every control writes the matching <code>settingsManager.save_*()</code> immediately.</li>
-          <li><strong>Output strip</strong> &mdash; AUDIO (<code>outputStrip</code>, <code>objectName: "studioOutputStrip"</code>), framed and built as the main panel is: a section label and one <code>SettingCategory</code> card, "Output", whose description says where the music plays now (<code>mediaManager.currentAudioOutput</code>), holding one button per output in a column (the buttons of <code>NowPlayingButtonGrid</code>), "System default" first then <code>mediaManager.audioOutputs</code>. The strip scrolls when the list is long. A tap saves <code>audioOutputDevice</code> (the output's id, "" for the default); rows are matched by id, as two outputs can share a name. The same setting as Settings &gt; Media &gt; Audio Output, with the same rule: a picked output that is unplugged falls back to the system default until it returns, and the card's description says so.</li>
-          <li><strong>No presets, no transition picker</strong> &mdash; the strip that sat beside the mirror with PRESETS (Minimal, Vinyl, Showcase 3D, Cinema) and the TRACK TRANSITION grid left on 2026-11-23. The presets themselves stay in <code>SettingsManager</code> (<code>nowPlayingPresets</code> / <code>applyNowPlayingPreset()</code>) for other frontends.</li>
+          <li><strong>Read DTCs</strong> reads the stored trouble codes and prints each with its description.</li>
+          <li><strong>Clear DTCs</strong> (red) asks first. Clearing also turns the check-engine light off and erases the freeze frame data (the readings the car saved when the fault happened), and it may affect emissions testing readiness.</li>
         </ul>
+        <p>
+          Everything is printed as text in the <strong>DIAGNOSTIC OUTPUT</strong> panel, which keeps the last 50
+          lines. If no car is connected the panel says so; connect one and come back.
+        </p>
+        <p>The live readings pause while this page is open and resume when you leave it. It does not read permanent codes.</p>
+        <h3>How it is built</h3>
+        <p>
+          <span class="file-path">frontend/OBDDiagnostics.qml</span>. Reading codes needs the adapter to itself,
+          so the page calls <code>obdManager.enterDiagnosticMode()</code> when it becomes visible and
+          <code>exitDiagnosticMode()</code> when it is hidden. It does this on visibility, not on creation: the
+          page is built ahead of time and kept alive, and entering the mode while hidden would stop the gauges
+          behind the user's back. The buttons call <code>readDtc()</code> and <code>clearDtc()</code>, and the
+          answers arrive as signals. See <a href="obd-manager.html#diagnostics">OBD Manager: Trouble Codes</a>.
+        </p>
 
-        <p>Until 2026-11-23 this was a window-level overlay opened from a "Now Playing" tile in Settings &gt; Media, with a second MediaRoom as its preview.</p>
+        <!-- TripHistory -->
+        <h2 id="triphistory">Trip History</h2>
+        <p>
+          OCTAVE records every drive (the <a href="obd-manager.html#black-box">black box</a>). This page is where
+          you look at them. It opens from the OBD page's Trip History card and from Settings &gt; OBD &gt; Black
+          Box. A switch under the title chooses between <strong>Drives</strong> and <strong>Trends</strong>.
+        </p>
+        <p>
+          <strong>Drives</strong> lists every drive, newest first, with its start, duration, distance and top
+          speed. The drive being recorded is on top with a blinking red dot, and <strong>REC</strong> shows beside
+          the title. A drive that was cut off by a loss of power is marked <strong>RECOVERED</strong>. The line
+          under the list gives the number of drives and the space they use against the storage cap.
+        </p>
+        <p>Tap a drive to see it:</p>
+        <ul>
+          <li>Eight figures: Duration, Distance, Max speed, Max RPM, Peak coolant, Voltage, Fuel used, Samples.</li>
+          <li>A chip for every reading recorded in that drive. Tap one to chart it.</li>
+          <li>The chart, with the lowest, average and highest value. Pinch to zoom, drag to move while zoomed, use the mouse wheel on a computer, and double-tap to see the whole drive again. Zooming in fetches finer detail for the part you are looking at.</li>
+        </ul>
+        <p>
+          The figures and the chart are in the units the car reported (km/h, &deg;C), not your display units. A
+          drive ends by itself. Deleting and exporting are not on this page; Settings &gt; OBD &gt; Black Box can
+          clear the history (<strong>Clear history</strong>).
+        </p>
 
-        <h3>Backend managers used</h3>
-        <p><code>settingsManager</code> (the embedded MediaRoom preview reaches <code>mediaManager</code> and <code>audioAnalyzer</code> itself).</p>
+        <h3 id="triphistory-trends">Trends</h3>
+        <p>
+          Trends shows the car's health across drives rather than one drive
+          (<a href="obd-manager.html#health-trends">what the health numbers are</a>). On the left is a card per
+          health number, with a dot (green for fine, amber for worth a look, grey for no data), the recent
+          average, and a small chart with one point per drive. Tap a card to see it large on the right, over
+          <strong>7 d</strong>, <strong>30 d</strong>, <strong>90 d</strong> or <strong>All</strong> (30 days to
+          start with). The large chart shades the usual range and marks drives outside it. You can also chart any
+          recorded reading across drives from the chips above the chart. Tap a point to open that drive.
+        </p>
+        <h3>How it is built</h3>
+        <p>
+          <span class="file-path">frontend/TripHistory.qml</span>. Everything is asked for and answered later, so
+          the page never waits on the database: it calls <code>tripRecorder.requestDetail()</code>,
+          <code>requestSeries()</code>, <code>requestHealthTrends()</code> and <code>requestParamTrend()</code>
+          and fills in when the matching signal arrives. Answers for a window or reading you have since left are
+          ignored. Full list: <a href="api-reference.html#tripRecorder">tripRecorder</a>. Test:
+          <code>tst_triphistoryview</code>.
+        </p>
 
-        <!-- Navigation summary -->
-        <h2 id="navigation-summary">Navigation Summary</h2>
+        <!-- SensorHome -->
+        <h2 id="sensorhome">Sensors Hub</h2>
+        <p>The Sensors button opens a page with two cards:</p>
+        <table>
+          <thead><tr><th>Card</th><th>Under it</th><th>Opens</th></tr></thead>
+          <tbody>
+            <tr><td>Sensors</td><td>Pitch, roll, heading, G-force</td><td><a href="#sensormenu">Sensors</a></td></tr>
+            <tr><td>3D View</td><td>"Live vehicle attitude", or "Requires the QtQuick3D module"</td><td><a href="#carmenu">3D View</a></td></tr>
+          </tbody>
+        </table>
+        <p>
+          Both cards work without a motion sensor. The 3D View card is greyed out only when this build of OCTAVE
+          has no Qt Quick 3D. As on the OBD page, the card you used last has an accent border and the Sensors
+          button goes straight back to it.
+        </p>
+        <h3>How it is built</h3>
+        <p>
+          <span class="file-path">frontend/SensorHome.qml</span>. It saves <code>lastSensorPage</code> only after
+          the page has opened, and the bottom bar clears the setting if the remembered page will not load. The
+          reason is in <a href="#design-decisions">Why It Is Built This Way</a>. On your first visit the hub asks
+          for the 3D View to be built in the background, so it is ready by the time you tap it; that is skipped
+          where no GPU draws the window, because the warm-up stalls software rendering.
+        </p>
 
-        <p>Primary navigation is the seven BottomBar buttons plus its clock; secondary navigation happens inside pages. Most destinations use <code>stackView.openPage()</code> and reuse a cached instance. Home and hub returns can pop the stack, and the editor is pushed by URL.</p>
+        <!-- SensorMenu -->
+        <h2 id="sensormenu">Sensors</h2>
+        <p>
+          The Sensors page shows the motion sensor's readings as cards: <strong>PITCH</strong>,
+          <strong>ROLL</strong>, <strong>HEADING</strong> (in degrees with the compass point), G-force (sideways,
+          forward and total), <strong>ALTITUDE</strong> and <strong>TEMPERATURE</strong>. The temperature card is
+          left out for a sensor that has no thermometer.
+        </p>
+        <p>
+          While the sensor is connected, two buttons sit under the cards. <strong>ZERO</strong> makes the way the
+          vehicle sits now count as level; use it parked on flat ground. <strong>RESET</strong> undoes that.
+        </p>
+        <table>
+          <thead><tr><th>To change</th><th>Go to</th></tr></thead>
+          <tbody>
+            <tr><td>Which cards show, how many decimal places, how often the values update</td><td>Settings &gt; Accessories &gt; IMU Sensor &gt; Sensors Page</td></tr>
+            <tr><td>&deg;F or &deg;C, metres or feet</td><td>Settings &gt; Display &gt; Units</td></tr>
+          </tbody>
+        </table>
+        <h3>How it is built</h3>
+        <p>
+          <span class="file-path">frontend/SensorMenu.qml</span>, built from
+          <a href="components.html#sensor-card">SensorCard</a> and
+          <a href="components.html#gforce-display">GForceDisplay</a>. It listens to <code>berryIMU</code> directly
+          and binds to the settings, so a change in Settings shows as soon as you come back. The update rate
+          setting (<code>sensorEmitRate</code>) changes how often values reach the screen, not how often the
+          sensor is read: see <a href="hardware-managers.html#imu-emission">Hardware Managers</a>. Full list:
+          <a href="api-reference.html#berryIMU">berryIMU</a>.
+        </p>
 
-        <div class="diagram">
-<pre>
- BottomBar
- |-- Home ............ MainMenu (preserves Settings when its wiki reader is open)
- |-- OBD ............. OBDHome, or lastOBDPage (OBDMenu / OBDDiagnostics) when connected; on an obd* page: pop to OBDHome
- |-- Media ........... musicButtonDefaultPage (MediaRoom | MediaPlayer); on one of them: open the other
- |-- Sensor .......... SensorHome, or lastSensorPage (SensorMenu / CarMenu); on a sensor* / carMenu page: pop to SensorHome
- |-- Settings ........ SettingsMenu(initialSection = lastSettingsSection); already there: navigateToHub()
- |-- Android Auto .... AndroidAutoView          (desktop only, androidAutoEnabled)
- |-- Phone Mirror .... PhoneMirrorView          (not reachable since 2026-11-25; reuses a stacked instance)
- `-- clock label ..... ClockMenu
+        <!-- CarMenu -->
+        <h2 id="carmenu">3D View</h2>
+        <p>
+          The 3D View shows your vehicle as a 3D model that tilts as the real one does, with pitch and roll as two
+          large numbers under it and the heading above it. It is an inclinometer you can read at a glance.
+        </p>
+        <p>
+          The first time, the page asks you to <strong>Choose your vehicle</strong>: a tile per bundled vehicle
+          (a Jeep TJ and a BMW 330i ZHP) and <strong>Add your own 3D model (.glb)</strong>. After that:
+        </p>
+        <ul>
+          <li>Drag to look around the vehicle, pinch or use the mouse wheel to zoom.</li>
+          <li>On a bundled vehicle, tap a door, the hood or the tailgate to open or close it. A model of your own is shown whole and nothing on it opens.</li>
+          <li>With a car connected, a bundled vehicle is driven by the real speed and RPM: its wheels turn as the car's do.</li>
+          <li>The three dots at the top right open a menu: <strong>Change vehicle</strong>, and, while the motion sensor is connected, <strong>Set level here</strong> and <strong>Reset level</strong> (the same as ZERO and RESET on the Sensors page).</li>
+        </ul>
+        <p>Without a motion sensor the page reads "No motion sensor" and shows the vehicle level.</p>
+        <h3>How it is built</h3>
+        <table>
+          <thead><tr><th>File</th><th>Job</th></tr></thead>
+          <tbody>
+            <tr><td><span class="file-path">frontend/CarMenu.qml</span></td><td>The page: the readouts, the menu, and the wiring from the motion sensor and the car to the model.</td></tr>
+            <tr><td><span class="file-path">frontend/VehicleView.qml</span></td><td>The 3D scene and its gestures, a component any page can place. See <a href="components.html#vehicle-view">Components: VehicleView</a>.</td></tr>
+            <tr><td><span class="file-path">frontend/VehicleChooser.qml</span></td><td>The tiles. Settings &gt; Device &gt; Vehicle shows the same ones.</td></tr>
+            <tr><td><span class="file-path">frontend/VehicleRigPanel.qml</span></td><td>Test controls for the model's moving parts (doors, lamps, steering, wheel and engine speed). Loaded only from the menu's "Test controls", which is offered only in a <code>--dev</code> run.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          Which vehicle is shown comes from <a href="api-reference.html#vehicleManager">vehicleManager</a>; the
+          guide to vehicles and to adding your own is <span class="file-path">docs/VEHICLES.md</span>. The model
+          is turned by the sensor's orientation as a quaternion (a four-number rotation that has no awkward
+          angles); pitch, roll and heading in degrees are used for the numbers only. The page listens to the
+          sensor and asks the car for <code>RPM</code> and <code>SPEED</code> only while it is visible, because it
+          stays alive when hidden. The page needs the Qt Quick 3D module and does not load without it.
+        </p>
 
- MainMenu ---- media panel ----&gt; MediaRoom | MediaPlayer
-          |--- OBD panel ------&gt; OBDMenu            (bypasses OBDHome)
-          `--- sensor panel ---&gt; SensorHome
- OBDHome ----- Dashboards -----&gt; OBDMenu ----------&gt; dashboards/editor/DashboardEditor (chooser: + New / Edit / Draft)
-          `--- Trouble Codes --&gt; OBDDiagnostics
- SensorHome -- Sensors --------&gt; SensorMenu
-          `--- 3D View --------&gt; CarMenu            (only if QtQuick3D loads)
- MediaPlayer row -------------&gt; MediaRoom
- MediaRoom customize button --&gt; NowPlayingStudio  (panels inside MediaRoom, not a page)
- Main.navigateTo(...) --------&gt; any of 14 pages     (command server / screenshot sweeper)
-</pre>
+        <!-- ClockMenu -->
+        <h2 id="clockmenu">Clock</h2>
+        <p>
+          Tap the clock on the bottom bar for a full-screen clock: an analog face with a second hand, the time in
+          large digits, and the date. The digits follow Settings &gt; Display &gt; Clock (<strong>Time
+          Format</strong> and <strong>Show Seconds</strong>).
+        </p>
+        <h3>How it is built</h3>
+        <p>
+          <span class="file-path">frontend/ClockMenu.qml</span>, drawn in the theme's colours. It keeps its own
+          one-second timer, which runs only while the page is visible and re-aims itself at each second boundary
+          so the second hand does not lag or skip. It does not use the <code>clock</code> manager: that one
+          announces a change only when the bottom bar's text changes, which without seconds is once a minute.
+        </p>
+
+        <!-- PhoneMirrorView -->
+        <h2 id="phonemirror">Phone Mirror</h2>
+        <div class="info-box info">
+          <div class="info-box-title">Not reachable at the moment</div>
+          Nothing in the app opens this page for now. An Android phone is shown on <a href="#home-dashboard">Home</a>
+          and in the <a href="#mediaroom">Media Room</a> instead, and a new phone is paired in Settings &gt; Phone.
+          The page is still built and can be opened by the developer tools.
         </div>
+        <p>
+          The page shows an Android phone's screen full-screen and passes your touches to it, with Back, Home and
+          Recents buttons, and an <strong>X</strong> that stops mirroring and leaves. With no phone it shows a QR
+          code to pair one over Wi-Fi, or "Waiting for your phone" for a phone it already knows. When the link
+          drops it keeps the last picture and shows "Reconnecting to phone&hellip;"; when the phone sleeps it
+          shows "Phone is asleep".
+        </p>
+        <h3>How it is built</h3>
+        <p>
+          <span class="file-path">frontend/PhoneMirrorView.qml</span>. The page only follows
+          <code>phoneMirrorManager.sessionState</code>; deciding when to retry is the manager's job. How mirroring
+          works is on <a href="phone-mirror-android-auto.html#phone-mirror">Phone Mirror &amp; Android Auto</a>;
+          the full list of calls is <a href="api-reference.html#phoneMirrorManager">phoneMirrorManager</a>.
+        </p>
 
-        <p>Remembered subpages are generic settings keys written by the hubs (<code>lastOBDPage</code>, <code>lastSensorPage</code>) and <code>lastSettingsSection</code>; the BottomBar clears <code>lastSensorPage</code> if the remembered page fails to load. The prefix tests it uses (<code>indexOf("obd") === 0</code>, <code>indexOf("sensor") === 0 || name === "carMenu"</code>) are why page <code>objectName</code>s follow the camelCase-file-name convention listed in <a href="frontend-overview.html#objectnames">objectName Conventions</a>.</p>
+        <!-- AirPlayView -->
+        <h2 id="airplay">iPhone (AirPlay)</h2>
+        <p>
+          This page opens by itself when an iPhone starts mirroring to OCTAVE over AirPlay, and shows the
+          iPhone's screen. Before that it is the setup page: <strong>Turn on AirPlay</strong>, the steps to
+          mirror the screen, the PIN to type on the iPhone the first time, and <strong>Pair touch</strong>, which
+          lets your taps on OCTAVE's screen reach the iPhone. While mirroring, <strong>Calibrate touch</strong>
+          fixes taps that land in the wrong place, and <strong>X</strong> leaves the page without stopping the
+          iPhone.
+        </p>
+        <h3>How it is built</h3>
+        <p>
+          <span class="file-path">frontend/AirPlayView.qml</span>, over
+          <a href="api-reference.html#airPlayManager">airPlayManager</a>. <span class="file-path">Main.qml</span>
+          opens it when the manager reports that mirroring started. Setup and how touch works:
+          <a href="phone-mirror-android-auto.html#airplay">iPhone (AirPlay)</a>.
+        </p>
+
+        <!-- AndroidAutoView -->
+        <h2 id="androidauto">Android Auto</h2>
+        <p>
+          The Android Auto page shows Android Auto from your phone and passes touches to it. Its button is on the
+          bottom bar only when Android Auto is turned on in Settings &gt; Phone. While it is not running the page
+          says what it is waiting for ("Waiting for the phone", "Starting Android Auto...", "Android Auto
+          stopped") with the one-time setup to do on the phone, and it retries by itself. <strong>X</strong> stops
+          Android Auto and leaves the page.
+        </p>
+        <h3>How it is built</h3>
+        <p>
+          <span class="file-path">frontend/AndroidAutoView.qml</span> has two modes, chosen by
+          <code>androidAutoManager.backend</code>. With <code>"native"</code>, OCTAVE's own receiver draws the
+          video in the page; the phone stops sending video while the page is hidden, and audio carries on. With
+          <code>"dhu"</code>, Google's Desktop Head Unit runs as a separate program and its window is placed
+          inside the page; if it cannot start, the page shows "Could not start Android Auto" with setup
+          instructions and <strong>Try Again</strong>. Both are explained on
+          <a href="phone-mirror-android-auto.html#android-auto">Phone Mirror &amp; Android Auto</a>; the full list
+          of calls is <a href="api-reference.html#androidAutoManager">androidAutoManager</a>.
+        </p>
+
+        <!-- SettingsMenu -->
+        <h2 id="settingsmenu">Settings</h2>
+        <p>
+          Settings is one grid of tiles, a column per section. Tap a tile and it grows into a card with that
+          tile's settings; tap the Settings button again to close it.
+        </p>
+        <table>
+          <thead><tr><th>Section</th><th>Tiles</th></tr></thead>
+          <tbody>
+            <tr><td>Display</td><td>Layout, Appearance, Units, Clock</td></tr>
+            <tr><td>Media</td><td>Library &amp; Playback, Spotify</td></tr>
+            <tr><td>OBD</td><td>Connection, Black Box, Advanced</td></tr>
+            <tr><td>Phone</td><td>Phone Mirror, Android Auto, iPhone. Not on Android.</td></tr>
+            <tr><td>Accessories</td><td>Volume Knob, IMU Sensor, Gesture Sensor. Not on Android.</td></tr>
+            <tr><td>Device</td><td>Device, Vehicle, Developer</td></tr>
+            <tr><td>About</td><td>The About page, which also opens this wiki.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          What each setting does is in the <a href="settings-reference.html">Settings Reference</a>. How the
+          tiles, cards and controls are built is on <a href="settings-ui.html">Settings UI</a>.
+        </p>
+        <h3>How it is built</h3>
+        <p>
+          <span class="file-path">frontend/SettingsMenu.qml</span> owns the list of sections
+          (<code>pageModel</code>) and remembers the last one you opened;
+          <span class="file-path">frontend/SettingsSidebarLayout.qml</span> draws the grid; each section's
+          settings are a file in <span class="file-path">frontend/settings/</span>. To open Settings on a
+          particular card from another page, call <code>mainWindow.navigateToSettings(section, cardId)</code>, for
+          example <code>navigateToSettings("deviceSettings", "device_vehicle")</code>.
+        </p>
+
+        <!-- Inventory -->
+        <h2 id="inventory">How Pages Are Built</h2>
+        <p>From here on the page is for people changing the code.</p>
+        <p>
+          Every page is a QML file at the top of <span class="file-path">frontend/</span>, shown in one
+          <code>StackView</code> in <span class="file-path">Main.qml</span>. The important idea is the
+          <strong>page cache</strong>: a page is built once, on its first visit or ahead of time in the
+          background, and the same instance is shown again on every later visit. That makes a tap on the bottom
+          bar cheap, and it has three consequences for anyone writing a page:
+        </p>
+        <ul>
+          <li><strong>Open pages with <code>stackView.openPage("Foo.qml")</code>.</strong> It builds or reuses the instance and passes it <code>stackView</code> and <code>mainWindow</code>. It returns the page, or <code>null</code> if the file would not load.</li>
+          <li><strong>Do per-visit work in <code>StackView.onActivated</code>,</strong> not in <code>Component.onCompleted</code>, which runs once, possibly while the page is still hidden.</li>
+          <li><strong>A hidden page is still alive.</strong> Stop timers, animations, polling requests and signal handlers that cost something while the page is not visible. Every page above does this.</li>
+        </ul>
+        <p>More on the cache, pre-building and routing: <a href="frontend-overview.html#page-cache">Frontend Overview: the page cache</a> and <a href="frontend-overview.html#page-routing">Page Routing</a>.</p>
+        <table>
+          <thead><tr><th>Screen</th><th>File</th><th><code>objectName</code></th><th>Opened from</th></tr></thead>
+          <tbody>
+            <tr><td><a href="#mainmenu">Home</a></td><td>MainMenu.qml</td><td><code>mainMenu</code></td><td>The first page; the Home button</td></tr>
+            <tr><td><a href="#mediaroom">Media Room</a></td><td>MediaRoom.qml</td><td><code>mediaRoom</code></td><td>The Media button; Home's music card; a song picked in the library</td></tr>
+            <tr><td><a href="#mediaplayer">Music library</a></td><td>MediaPlayer.qml</td><td><code>mediaPlayer</code></td><td>The Media button; Home's music card; Connect Music &gt; Spotify</td></tr>
+            <tr><td><a href="#obdhome">OBD</a></td><td>OBDHome.qml</td><td><code>obdHome</code></td><td>The OBD button</td></tr>
+            <tr><td><a href="#obdmenu">Live Data</a></td><td>OBDMenu.qml</td><td><code>obdMenu</code></td><td>The Live Data card; the OBD button; the classic Home's readings</td></tr>
+            <tr><td><a href="#obddiagnostics">Trouble Codes</a></td><td>OBDDiagnostics.qml</td><td><code>obdDiagnostics</code></td><td>The Trouble Codes card; the OBD button</td></tr>
+            <tr><td><a href="#triphistory">Trip History</a></td><td>TripHistory.qml</td><td><code>obdTripHistory</code></td><td>The Trip History card; the OBD button; Settings &gt; OBD &gt; Black Box</td></tr>
+            <tr><td><a href="#sensorhome">Sensors hub</a></td><td>SensorHome.qml</td><td><code>sensorHome</code></td><td>The Sensors button; the classic Home's sensor panel</td></tr>
+            <tr><td><a href="#sensormenu">Sensors</a></td><td>SensorMenu.qml</td><td><code>sensorMenu</code></td><td>The Sensors card; the Sensors button</td></tr>
+            <tr><td><a href="#carmenu">3D View</a></td><td>CarMenu.qml</td><td><code>carMenu</code></td><td>The 3D View card; the Sensors button</td></tr>
+            <tr><td><a href="#clockmenu">Clock</a></td><td>ClockMenu.qml</td><td>none</td><td>The bottom bar's clock</td></tr>
+            <tr><td><a href="#phonemirror">Phone Mirror</a></td><td>PhoneMirrorView.qml</td><td><code>phoneMirrorView</code></td><td>Nothing at the moment</td></tr>
+            <tr><td><a href="#airplay">iPhone</a></td><td>AirPlayView.qml</td><td><code>airPlayView</code></td><td>By itself when an iPhone starts mirroring; Connect Music &gt; Phone where only AirPlay is offered</td></tr>
+            <tr><td><a href="#androidauto">Android Auto</a></td><td>AndroidAutoView.qml</td><td><code>androidAutoView</code></td><td>The Android Auto button</td></tr>
+            <tr><td><a href="#settingsmenu">Settings</a></td><td>SettingsMenu.qml</td><td><code>settingsMenu</code></td><td>The Settings button; <code>navigateToSettings()</code></td></tr>
+          </tbody>
+        </table>
+        <p>
+          The names matter. The bottom bar works out which section you are in from the current page's
+          <code>objectName</code>: a name that starts with <code>obd</code> is the OBD section, one that starts
+          with <code>sensor</code>, or <code>carMenu</code>, is the Sensors section. A new page in one of those
+          sections must follow the pattern, or the button's highlight and its "tapped again" behaviour will not
+          apply to it. See <a href="frontend-overview.html#objectnames">objectName Conventions</a>.
+        </p>
+        <p>
+          The developer tools and the command server open any of these fifteen pages by file name with
+          <code>mainWindow.navigateTo("Foo.qml")</code>. A new page needs a row in that function's table in
+          <span class="file-path">Main.qml</span>.
+        </p>
+        <p>
+          Pages size things with a local <code>dp()</code> function rather than fixed pixels, so they scale with
+          the UI Scale setting: see <a href="frontend-overview.html#gui-scale">GUI Scale</a>. Colours come from
+          <code>Style</code> (<a href="theme-system.html">Theme System</a>).
+        </p>
+        <p>
+          Tests: <code>tst_dashboardwidgets</code> loads every Home screen, <code>tst_triphistoryview</code>
+          drives Trip History against a fake recorder, and <code>tst_conformance</code> fails if any QML uses a
+          manager or member the published API does not list.
+        </p>
 
         <!-- Design decisions -->
-        <h2 id="design-decisions">Design Decisions</h2>
+        <h2 id="design-decisions">Why It Is Built This Way</h2>
+        <ul>
+          <li><strong>A hub page in front of the OBD and sensor pages.</strong> The bottom bar needs somewhere stable to land, and a place for the connect prompt, while still jumping straight to the page you used last.</li>
+          <li><strong>The last page is remembered only after it has opened.</strong> If the hub saved the name first and the page then failed to load (the 3D View without Qt Quick 3D, for one), the Sensors button would do nothing on every later start. For the same reason the bottom bar clears a remembered page that will not load and falls back to the hub.</li>
+          <li><strong>Trouble Codes pauses the live readings by visibility.</strong> A page under another page, or pre-built, is neither destroyed nor visible. Tying diagnostic mode to visibility means the gauges resume the moment you leave.</li>
+          <li><strong>Home's prompts sit over the widgets.</strong> A fresh install is then one tap from a car and one from music, instead of a screen of "--".</li>
+          <li><strong>The look editor is inside the page it edits.</strong> You see every change on the real Media Room, there is no second copy to keep in step, and the way back is a tap on the page itself.</li>
+          <li><strong>The phone pages recover by themselves.</strong> A nudged cable is the normal failure in a car. The last picture stays up and the session restarts when the phone is back; setup instructions are kept for when something really is missing.</li>
+        </ul>
 
-        <p>Reasons recorded in the files' own comments or in the commits that introduced them.</p>
-
-        <h3>Hub pages in front of feature pages</h3>
-        <p>OBDHome and SensorHome exist so that the BottomBar has a stable landing place and a place to show connection state and logs, while still letting the button jump straight to the last-used subpage. Commit <code>0c29e64</code> shaped the rule that the hub records the subpage only after a successful push and that the BottomBar falls back to the hub and clears the stale key &mdash; a "sensor button that silently does nothing" was the alternative. Placeholder cards ("Coming soon") reserve the grid for planned features without hiding the layout.</p>
-
-        <h3>Grid-as-a-dashboard</h3>
-        <p>Rather than replace the original parameter-card grid when JSON dashboards arrived, OBDMenu registers it as the built-in <code>"grid"</code> entry with a schematic preview; existing ids "still resolve to the same dashboards &mdash; they just render from JSON via DashboardRenderer now". The active choice is one generic setting, and every reference to <code>dashboardManager</code> is guarded so the page still loads if the manager is absent.</p>
-
-        <h3>Chooser actions as visible buttons</h3>
-        <p>Card actions are always-visible buttons rather than long-press menus because long-press is "discoverability-hostile in a glance-and-go in-car UI"; the two-tap delete keeps a destructive action safe without a modal.</p>
-
-        <h3>Diagnostics pause polling by visibility</h3>
-        <p>OBDDiagnostics enters and leaves diagnostic mode from <code>onVisibleChanged</code>, not from creation/destruction, because a page underneath another on the StackView is neither destroyed nor visible; polling resumes as soon as it is covered.</p>
-
-        <h3>Recover in the vehicle, not on the error page</h3>
-        <p>PhoneMirrorView's quiet reconnect and automatic restart (the manager's, see <code>sessionState</code>) exist because USB blips and nudged cables are the normal failure in a car; the last frame stays on screen and the session restarts itself the moment adb reports the device again, with the setup instructions reserved for genuinely missing tooling.</p>
-
-        <h3>TapHandler over MouseArea on composite panels</h3>
-        <p>MainMenu's media panel is a scrollable title, a scrollable metadata row and a slider; a <code>MouseArea</code> would steal their drags, so a <code>TapHandler</code> observes taps without interfering.</p>
-
-        <h3>The look editor inside the page it edits</h3>
-        <p>Editing Now Playing visuals needs the real MediaRoom in view while sliders move, and belongs where the music is rather than in Settings. So MediaRoom shrinks itself into a mirror and loads NowPlayingStudio's panels around it: one MediaRoom instead of a page plus a preview copy, nothing to keep in step, and the way back is a tap on the page itself. The BottomBar is untouched, so navigation still works while it is open.</p>
-
-        <p><strong>Method names:</strong> this page uses the camelCase names of the manager methods (<code>nextTrack</code>). The older snake_case name of each (<code>next_track</code>) still works through protocol&nbsp;4 and goes in protocol&nbsp;5; the <a href="api-reference.html">API reference</a> lists them.</p>
-
-        <div class="related-pages">
+        <div class="related-pages" id="related">
           <h3>Related Pages</h3>
           <a href="frontend-overview.html" class="related-link">Frontend Overview</a>
           <a href="components.html" class="related-link">Components</a>
@@ -562,6 +711,7 @@
           <a href="gauges-dashboards.html" class="related-link">Gauges &amp; Dashboards</a>
           <a href="phone-mirror-android-auto.html" class="related-link">Phone Mirror &amp; Android Auto</a>
           <a href="obd-manager.html" class="related-link">OBD Manager</a>
+          <a href="api-reference.html" class="related-link">API Reference</a>
         </div>
 
       </div>

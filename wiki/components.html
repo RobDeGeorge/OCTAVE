@@ -13,499 +13,660 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Components</div>
           <h1 class="page-title">Components</h1>
-          <p class="page-subtitle">Reusable top-level QML components: AlbumArtCarousel, CoverflowCard, ThemedIcon, TerminalFeedback, CornerBrackets, SensorCard, GForceDisplay, HomeOBDView, ErrorToast, OBDAdapterSheet, the OBDParameterModel singleton and the rigged Jeep TJ</p>
+          <p class="page-subtitle">The reusable QML building blocks of the built-in screen: what each one is for, how to drop it into a page, and what to watch for</p>
         </div>
 
         <nav class="toc">
           <h3>On This Page</h3>
           <ul class="toc-list">
-            <li><a href="#scope">Scope and Conventions</a></li>
-            <li><a href="#album-art-carousel">AlbumArtCarousel</a></li>
-            <li><a href="#coverflow-card">CoverflowCard</a></li>
-            <li><a href="#themed-icon">ThemedIcon</a></li>
-            <li><a href="#music-devices">Music Device Components</a></li>
-            <li><a href="#terminal-feedback">TerminalFeedback</a></li>
-            <li><a href="#corner-brackets">CornerBrackets</a></li>
-            <li><a href="#sensor-card">SensorCard</a></li>
-            <li><a href="#gforce-display">GForceDisplay</a></li>
-            <li><a href="#phone-qr-pairing-panel">PhoneQrPairingPanel</a></li>
-            <li><a href="#home-obd-view">HomeOBDView</a></li>
-            <li><a href="#error-toast">ErrorToast</a></li>
-            <li><a href="#obd-adapter-sheet">OBDAdapterSheet</a> (and ConnectSheet / SheetRow)</li>
-            <li><a href="#obd-parameter-model">OBDParameterModel</a></li>
-            <li><a href="#vehicle-view">VehicleView</a></li>
-            <li><a href="#vehicle-picture">VehiclePicture and HomeVehicleCard</a></li>
-            <li><a href="#jeep-rig">The Jeep TJ Rig</a></li>
-            <li><a href="#design-decisions">Design Decisions</a></li>
+            <li><a href="#scope">What This Page Covers</a></li>
+            <li><a href="#find">Find a Component</a></li>
+            <li><a href="#conventions">Before You Use One</a></li>
+            <li><a href="#readings">Readings and Sensors</a></li>
+            <li><a href="#connecting">Connecting Things</a></li>
+            <li><a href="#feedback">Notices, Logs and Icons</a></li>
+            <li><a href="#music">Music</a></li>
+            <li><a href="#vehicle">The Vehicle</a></li>
+            <li><a href="#classic-home">Classic Home Panels</a></li>
+            <li><a href="#design-decisions">Why They Are Built This Way</a></li>
+            <li><a href="#related">Related Pages</a></li>
           </ul>
         </nav>
 
         <!-- Scope -->
-        <h2 id="scope">Scope and Conventions</h2>
-
-        <p>This page covers the reusable QML types that live at the top of <span class="file-path">frontend/</span>. The settings component library (<span class="file-path">settings/</span>: cards, tiles, toggles, sliders, chips, hub widgets) is documented in <a href="settings-ui.html#components">Settings UI</a>; the gauge primitives (<span class="file-path">gauges/</span>) and the dashboard widgets (<span class="file-path">dashboards/widgets/</span>) in <a href="gauges-dashboards.html#primitives">Gauges &amp; Dashboards</a>; the design-token singletons (<code>Style</code>, <code>Spacing</code>, <code>EnvironmentTheme</code>) in <a href="theme-system.html">Theme System</a>. Full views are on the <a href="pages.html">Pages</a> page.</p>
-
-        <p>Because <span class="file-path">frontend/</span> is on the QML import path, every file here is usable by its type name without an import. Files that import <code>"." as App</code> reach the singletons as <code>App.Style</code> / <code>App.Spacing</code> / <code>App.EnvironmentTheme</code>. Almost every component carries the same two-line local <code>dp()</code> / <code>dpMin()</code> wrapper (see <a href="frontend-overview.html#gui-scale">GUI Scale</a> for why).</p>
-
-        <table>
-          <thead><tr><th>Component</th><th>Root type</th><th>Instantiated by</th></tr></thead>
-          <tbody>
-            <tr><td><code>AlbumArtCarousel</code></td><td><code>Item</code></td><td><span class="file-path">MediaRoom.qml</span> (the look editor shows it on the page itself)</td></tr>
-            <tr><td><code>CoverflowCard</code></td><td><code>Item</code></td><td><code>AlbumArtCarousel</code> (three instances)</td></tr>
-            <tr><td><code>ThemedIcon</code></td><td><code>Item</code></td><td>settings tiles and cards, hub widgets</td></tr>
-            <tr><td><code>TerminalFeedback</code></td><td><code>Rectangle</code></td><td><span class="file-path">settings/MediaSettingsPage.qml</span> (library-scan output); <span class="file-path">OBDDiagnostics.qml</span> has its own inline terminal instead</td></tr>
-            <tr><td><code>CornerBrackets</code></td><td><code>Item</code></td><td><code>TerminalFeedback</code>, <code>SettingsCard</code>, <code>SettingsTile</code> (always hidden, see below)</td></tr>
-            <tr><td><code>SensorCard</code>, <code>GForceDisplay</code></td><td><code>Rectangle</code></td><td><span class="file-path">SensorMenu.qml</span></td></tr>
-            <tr><td><code>HomeOBDView</code></td><td><code>Item</code></td><td><span class="file-path">MainMenu.qml</span></td></tr>
-            <tr><td><code>ErrorToast</code></td><td><code>Item</code></td><td><span class="file-path">Main.qml</span> (once, last child of the window)</td></tr>
-            <tr><td><code>ConnectSheet</code> / <code>SheetRow</code></td><td><code>Popup</code> / <code>Rectangle</code></td><td><span class="file-path">MusicEmptyPrompt.qml</span>, <span class="file-path">OBDAdapterSheet.qml</span></td></tr>
-            <tr><td><code>OBDAdapterSheet</code></td><td><code>ConnectSheet</code></td><td><span class="file-path">OBDConnectButton.qml</span>, <span class="file-path">settings/OBDSettingsPage.qml</span> (Connection card)</td></tr>
-            <tr><td><code>OBDConnectButton</code></td><td><code>Rectangle</code></td><td><span class="file-path">OBDHome.qml</span> and <span class="file-path">OBDMenu.qml</span> (the "No vehicle connected" prompt)</td></tr>
-            <tr><td><code>OBDParameterModel</code></td><td><code>QtObject</code> singleton</td><td>every OBD view, the gauges, Main.qml's IMU gating</td></tr>
-            <tr><td><code>JeepVehicle</code>, <code>JeepHinge</code>, <code>JeepLamp</code>, <code>JeepLink</code></td><td>Quick3D <code>Node</code></td><td><span class="file-path">VehicleView.qml</span></td></tr>
-            <tr><td><code>VehicleView</code></td><td><code>Item</code></td><td><span class="file-path">CarMenu.qml</span></td></tr>
-            <tr><td><code>VehiclePicture</code></td><td><code>Image</code></td><td><span class="file-path">MainMenu.qml</span> (the "No vehicle connected" panel), <span class="file-path">HomeVehicleCard.qml</span></td></tr>
-            <tr><td><code>HomeVehicleCard</code></td><td><code>Rectangle</code></td><td><span class="file-path">MainMenu.qml</span> (with the readings, <code>homeVehicleCard</code> setting)</td></tr>
-            <tr><td><code>HomeSensorPanel</code></td><td><code>Rectangle</code></td><td><span class="file-path">MainMenu.qml</span> (the classic Home's sensor panel)</td></tr>
-            <tr><td><code>HomeDashboard</code></td><td><code>Item</code></td><td><span class="file-path">MainMenu.qml</span> (Home as a dashboard, the default; see <a href="pages.html#home-dashboard">Pages</a>)</td></tr>
-            <tr><td><code>VehicleRigPanel</code></td><td><code>Rectangle</code></td><td><span class="file-path">CarMenu.qml</span> (test controls, on request)</td></tr>
-          </tbody>
-        </table>
-
-        <!-- AlbumArtCarousel -->
-        <h2 id="album-art-carousel">AlbumArtCarousel</h2>
-
-        <p><span class="file-path">frontend/AlbumArtCarousel.qml</span> is the album-art display at the centre of <a href="pages.html#mediaroom">MediaRoom</a>: the square art or, in vinyl mode, a record. It owns three <code>CoverflowCard</code>s (previous, centre, next), a frozen "exit snapshot" of the outgoing art, and the one track-change transition, the same for the square art and the record. The 3D players (<code>MusicDeviceScene</code>) have their own. Until 2026-11-23 there were ten transitions to pick from (<code>transitionStyle</code>, the <code>albumArtTransition</code> setting), one of them a shader.</p>
-
-        <h3>Public API</h3>
-
-        <pre><code><span class="cmt">// Inputs</span>
-<span class="prop">property int</span> direction: <span class="num">1</span>              <span class="cmt">// +1 next, -1 previous</span>
-<span class="prop">property url</span> artSource: <span class="str">""</span>
-<span class="prop">property url</span> prevArtSource: <span class="str">""</span>
-<span class="prop">property url</span> nextArtSource: <span class="str">""</span>
-<span class="prop">property bool</span> previewEnabled: <span class="kw">false</span>   <span class="cmt">// show 3D side cards</span>
-<span class="prop">property bool</span> roundedArt: <span class="kw">false</span>
-<span class="prop">property real</span> artRadius: <span class="num">0</span>
-<span class="prop">property bool</span> vinylMode: <span class="kw">false</span>
-<span class="prop">property real</span> sideCardAngle: <span class="num">30</span>
-<span class="prop">property real</span> sideCardOpacity: <span class="num">0.4</span>
-<span class="prop">property bool</span> showShadow: <span class="kw">false</span>
-<span class="prop">property real</span> playbackPosition: <span class="num">0</span>     <span class="cmt">// vinyl rotation</span>
-<span class="prop">property real</span> playbackDuration: <span class="num">0</span>
-
-<span class="cmt">// Outputs</span>
-<span class="prop">property bool</span> animBusy: <span class="kw">false</span>
-<span class="prop">property real</span> artSize          <span class="cmt">// min(w,h) * (previewEnabled ? 0.75 : 0.85)</span>
-
-<span class="kw">signal</span> <span class="fn">animationFinished</span>()
-<span class="kw">signal</span> <span class="fn">settled</span>()          <span class="cmt">// 50 ms after animationFinished, animBusy is false again</span>
-<span class="kw">signal</span> <span class="fn">artClicked</span>()
-<span class="kw">signal</span> <span class="fn">artLoadFailed</span>()
-
-<span class="kw">function</span> <span class="fn">triggerSlide</span>()    <span class="cmt">// run the transition (call as the track changes)</span>
-<span class="kw">function</span> <span class="fn">showSideCards</span>()   <span class="cmt">// the neighbours are refreshed: fade the side cards back in</span></code></pre>
-
-        <p>MediaRoom binds the inputs straight to settings: <code>show3DAlbumPreview</code>, <code>vinylRecordMode</code>, <code>sideCardAngle</code> and <code>sideCardOpacity</code>; <code>roundedArt</code> and <code>showShadow</code> are fixed on and <code>artRadius</code> is 16&nbsp;dp (<code>mediaRoom.albumArtRadius</code>).</p>
-
-        <h3>The transition</h3>
-
-        <p><code>triggerSlide()</code> runs <code>swapAnim</code>: the old art leaves a short way in the direction the track list moved, shrinking a little and fading; the new art arrives from the other side and settles without a bounce. <code>direction</code> 1 (next) brings the new art from the right, -1 from the left.</p>
-
-        <table>
-          <thead><tr><th>Constant (top of file)</th><th>Value</th><th>Meaning</th></tr></thead>
-          <tbody>
-            <tr><td><code>kSwapDuration</code></td><td>340 ms</td><td>The whole transition. The old art is gone at 60&nbsp;% of it (<code>OutQuad</code>), the new art is opaque at 75&nbsp;%</td></tr>
-            <tr><td><code>kSwapTravel</code></td><td>0.10</td><td>How far each picture travels, as a share of <code>artSize</code> (old art <code>OutCubic</code>, new art <code>OutQuint</code>)</td></tr>
-            <tr><td><code>kSwapScale</code></td><td>0.94</td><td>The scale the old art ends at and the new art starts from</td></tr>
-            <tr><td><code>k3dSideOffsetFactor</code>, <code>k3dSideScale</code></td><td>0.42, 0.72</td><td>Place and size of the 3D preview's side cards</td></tr>
-            <tr><td><code>kSideFadeDuration</code></td><td>160 ms</td><td>The side cards fade out as a transition starts and back in on <code>showSideCards()</code> (<code>_sideShown</code>)</td></tr>
-          </tbody>
-        </table>
-
-        <p>The transition sets <code>animBusy = true</code> on start and emits <code>animationFinished()</code> on finish; a 50&nbsp;ms <code>settleTimer</code> then clears <code>animBusy</code> and emits <code>settled()</code>. MediaRoom does its heavy work (FFT analysis of the new file) only on <code>settled</code>, so it never competes with animation frames. <code>swapAnim.running</code> gates the live-ness of the exit-snapshot texture and the drop-shadow layer.</p>
-
-        <h3>Structure</h3>
-
+        <h2 id="scope">What This Page Covers</h2>
+        <p>
+          OCTAVE's built-in screen is written in QML, Qt's language for describing a user interface. A
+          <strong>component</strong> is one QML file that draws one thing and can be used from any page: a card that
+          shows a sensor reading, the "Connect Vehicle" button, the 3D vehicle. This page lists the components at the
+          top of <span class="file-path">frontend/</span>, for someone building or changing a screen.
+        </p>
+        <p>
+          Each entry says what the component is for, gives a snippet you can paste, lists the properties that matter
+          and ends with anything that might surprise you. Three families of components have pages of their own:
+        </p>
         <ul>
-          <li><strong>Shared masks</strong> &mdash; two hidden <code>Rectangle</code>s with <code>layer.enabled: true</code>: <code>artRoundedMask</code> (radius = <code>artRadius</code> when <code>roundedArt</code>) and <code>vinylMaskRect</code> (a circle with a black centre hole at 12&nbsp;% of the width). They are handed to every card and to the exit snapshot as <code>OpacityMask.maskSource</code> so the GPU holds one mask texture, not one per card.</li>
-          <li><strong>Side cards</strong> &mdash; <code>prevCard</code> / <code>nextCard</code>, visible only when <code>previewEnabled</code> and a source is set, at <code>artSize * 0.9</code>, with <code>image.layer.live: !animBusy</code>.</li>
-          <li><strong>Exit snapshot</strong> &mdash; an <code>Item</code> (<code>exitSnapshot</code>, which keeps the place) holding a <code>ShaderEffectSource</code> of <code>centerCard.image</code> (<code>exitTexture</code>: <code>live: !swapAnim.running</code>, <code>hideSource: false</code>). The transition moves this frozen copy of the outgoing art while the centre card already shows the new one.</li>
-          <li><strong>Centre card</strong> &mdash; inside <code>centerSlot</code>, an <code>Item</code> that keeps the place so the card is free to be moved; carries <code>showShadow</code> / <code>shadowLive</code>, the vinyl angle, emits <code>artLoadFailed()</code> on <code>Image.Error</code> (MediaRoom then substitutes <span class="file-path">assets/missing_art.png</span>) and hosts the full-size <code>MouseArea</code> that emits <code>artClicked()</code>.</li>
-          <li><strong>Vinyl rotation</strong> &mdash; a <code>Binding</code> active only in <code>vinylMode</code> maps <code>playbackPosition / playbackDuration</code> to 0&ndash;360&deg; (one revolution per track), smoothed by a 200&nbsp;ms linear <code>Behavior</code> that is disabled while animating; the angle resets to 0 whenever <code>artSource</code> changes.</li>
-          <li><strong>Animation types</strong> &mdash; <code>swapAnim</code> is a <code>ParallelAnimation</code> of <code>Animator</code> types only (<code>XAnimator</code>, <code>ScaleAnimator</code>, <code>OpacityAnimator</code> on <code>exitTexture</code> and <code>centerCard</code>), so all of it runs on the render thread. An Animator writes its property only when it ends, so <code>triggerSlide()</code> puts both pictures at their start values first and <code>_resetAll()</code> at their rest values after.</li>
+          <li>Gauges and dashboard widgets (<span class="file-path">gauges/</span>, <span class="file-path">dashboards/widgets/</span>): <a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>.</li>
+          <li>Settings cards, toggles and sliders (<span class="file-path">settings/</span>): <a href="settings-ui.html#components">Settings UI</a>.</li>
+          <li>Colours, fonts and sizes (<code>Style</code>, <code>Spacing</code>): <a href="theme-system.html">Theme System</a>.</li>
         </ul>
+        <p>Whole screens (Home, the Media Room, the OBD pages) are on <a href="pages.html">Pages</a>.</p>
 
-        <!-- CoverflowCard -->
-        <h2 id="coverflow-card">CoverflowCard</h2>
+        <!-- Finder -->
+        <h2 id="find">Find a Component</h2>
+        <table>
+          <thead><tr><th>I want to&hellip;</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td>Show a number from the car or the motion sensor</td><td><a href="#obd-parameter-model">OBDParameterModel</a> (or a gauge, which uses it for you)</td></tr>
+            <tr><td>Keep the motion sensor at full speed while my page is on screen</td><td><a href="#imu-demand">ImuDemand</a></td></tr>
+            <tr><td>Show one reading as a large card</td><td><a href="#sensor-card">SensorCard</a></td></tr>
+            <tr><td>Plot cornering and braking force</td><td><a href="#gforce-display">GForceDisplay</a></td></tr>
+            <tr><td>Offer "Connect Vehicle" where there is no car</td><td><a href="#obd-connect-button">OBDConnectButton</a></td></tr>
+            <tr><td>Open the adapter list from my own button</td><td><a href="#obd-adapter-sheet">OBDAdapterSheet</a></td></tr>
+            <tr><td>Build another "pick one of these" popup</td><td><a href="#connect-sheet">ConnectSheet and SheetRow</a></td></tr>
+            <tr><td>Pair a phone over Wi-Fi</td><td><a href="#phone-qr-pairing-panel">PhoneQrPairingPanel</a></td></tr>
+            <tr><td>Tell the driver something failed, on any page</td><td><a href="#error-toast">ErrorToast</a></td></tr>
+            <tr><td>Show progress lines from a long job</td><td><a href="#terminal-feedback">TerminalFeedback</a></td></tr>
+            <tr><td>Draw an icon in a theme colour</td><td><a href="#themed-icon">ThemedIcon</a></td></tr>
+            <tr><td>Show album art that animates on a track change</td><td><a href="#album-art-carousel">AlbumArtCarousel</a></td></tr>
+            <tr><td>Show a 3D record player, cassette deck or iPod</td><td><a href="#music-devices">Music device components</a></td></tr>
+            <tr><td>Show the vehicle as a picture</td><td><a href="#vehicle-picture">VehiclePicture</a></td></tr>
+            <tr><td>Show the vehicle in 3D</td><td><a href="#vehicle-view">VehicleView</a></td></tr>
+          </tbody>
+        </table>
 
-        <p><span class="file-path">frontend/CoverflowCard.qml</span> is "one album art image with 3D perspective transform, rounded-corner or vinyl masking, and animated coverflow properties". The carousel animates the four <code>cf*</code> properties; the card itself contains no animation.</p>
+        <!-- Conventions -->
+        <h2 id="conventions">Before You Use One</h2>
+        <p>
+          <span class="file-path">frontend/</span> is on the QML import path, so a page in that folder uses a component
+          by its file name with no import. Most files also write <code>import "." as App</code> and then say
+          <code>App.SensorCard</code>, <code>App.Style</code>, <code>App.Spacing</code>; a file in a sub-folder writes
+          <code>import ".." as App</code>.
+        </p>
+        <p>
+          Sizes go through a small <code>dp()</code> function that each file defines for itself, so that everything
+          grows and shrinks with the GUI scale setting. See <a href="frontend-overview.html#gui-scale">GUI Scale</a>
+          for why each file carries its own copy.
+        </p>
+        <p>
+          Components reach the backend through <strong>context properties</strong>: the C++ managers, visible to all
+          QML under fixed names such as <code>obdManager</code> or <code>settingsManager</code>. A component that uses
+          one checks that it exists first, because the managers are destroyed before the QML at shutdown. Do the same in
+          yours.
+        </p>
 
-        <pre><code><span class="cmt">// Animated by the carousel</span>
-<span class="prop">property real</span> cfOffset: <span class="num">0</span>      <span class="cmt">// Translate.x</span>
-<span class="prop">property real</span> cfAngle: <span class="num">0</span>       <span class="cmt">// Rotation about the Y axis, origin = centre</span>
-<span class="prop">property real</span> cfScale: <span class="num">1.0</span>     <span class="cmt">// bound to scale</span>
-<span class="prop">property real</span> cfOpacity: <span class="num">1.0</span>   <span class="cmt">// bound to opacity</span>
+        <!-- Readings -->
+        <h2 id="readings">Readings and Sensors</h2>
 
-<span class="cmt">// Image</span>
-<span class="prop">property url</span> artSource: <span class="str">""</span>
-<span class="prop">property real</span> artSize: width   <span class="cmt">// sourceSize = 2 * artSize (supersampled)</span>
-<span class="prop">property bool</span> asynchronous: <span class="kw">true</span>
-<span class="prop">property bool</span> animating: <span class="kw">false</span> <span class="cmt">// smooth: !animating</span>
+        <h3 id="obd-parameter-model">OBDParameterModel</h3>
+        <p>
+          The one place QML gets readings from. It is a singleton (one shared object, no need to create it) that
+          answers two questions about any reading id such as <code>RPM</code>, <code>COOLANT_TEMP</code> or
+          <code>PITCH</code>: what is its value now, and how should it be shown (title, unit, range, decimals). Car
+          readings and motion-sensor readings come through the same calls.
+        </p>
+<pre><code><span class="cls">Text</span> {
+    <span class="kw">readonly property real</span> rpm: App.OBDParameterModel.<span class="fn">sample</span>(<span class="str">"RPM"</span>)
+    <span class="prop">text</span>: <span class="fn">isFinite</span>(rpm) ? rpm.<span class="fn">toFixed</span>(<span class="num">0</span>) : <span class="str">"--"</span>
+}</code></pre>
+        <table>
+          <thead><tr><th>Call</th><th>Gives you</th></tr></thead>
+          <tbody>
+            <tr><td><code>sample(id)</code></td><td>The reading as a number, <code>NaN</code> until one has arrived. Use this for anything you bind a <code>real</code> to: "no reading yet" can never look like a real 0.</td></tr>
+            <tr><td><code>liveValue(id)</code></td><td>The same reading, <code>undefined</code> until one has arrived.</td></tr>
+            <tr><td><code>rawValue(id)</code></td><td>The reading in the parameter's own unit (speed in MPH, temperature in &deg;C), whatever unit the user picked for gauges.</td></tr>
+            <tr><td><code>displayInfo(id)</code></td><td>Title, unit, min, max, <code>kind</code> and decimals in the units the gauges show, or <code>null</code> for an unknown id.</td></tr>
+            <tr><td><code>decimalsFor(id)</code></td><td>How many decimals a plain-text readout should print (0 for speed, RPM and counters, otherwise 1).</td></tr>
+            <tr><td><code>hasParameter(id)</code></td><td>Whether the id exists at all. Use it to validate an id.</td></tr>
+            <tr><td><code>isSupported(id)</code></td><td>Whether the connected car reports this reading. Always true for motion-sensor readings; false for every car reading until a car has been scanned (<code>vehicleKnown</code>).</td></tr>
+            <tr><td><code>vehicleParameters</code></td><td>The readings the connected car supports, in display units. Empty until a car has been scanned.</td></tr>
+            <tr><td><code>toDisplay(id, v)</code>, <code>fromDisplay(id, v)</code></td><td>Convert a value between the parameter's own unit and the gauges' unit.</td></tr>
+          </tbody>
+        </table>
+        <p>Things to know:</p>
+        <ul>
+          <li><strong>A reading is only polled if something asks for it.</strong> A page tells the OBD manager which ids it shows with <code>obdManager.setParameterDemand(consumer, ids)</code> and clears the list when it is hidden. Without that the value stays empty. See <a href="obd-manager.html#watcher-system">Which Readings Get Polled</a>.</li>
+          <li><strong>Values arrive in the user's units.</strong> <code>liveValue()</code> and <code>sample()</code> follow the temperature, speed and altitude unit settings. Code that does arithmetic on a physical quantity (the 3D vehicle's wheel speed) wants <code>rawValue()</code>.</li>
+          <li><strong>A binding wakes up only for its own id.</strong> The values live in a C++ store that notifies per id, about 30 times a second at most, so a page with forty readouts does not redraw forty times when one changes.</li>
+          <li><code>getParamInfo(id)</code> never fails: for an unknown id it returns the id as the title and a 0 to 100 range. It is handy for drawing and wrong for validating.</li>
+          <li><code>kind</code> is one of <code>percentage</code>, <code>temperature</code>, <code>voltage</code>, <code>pressure</code>, <code>bidirectional</code> (a value that swings either side of zero) or <code>numeric</code>. Dashboard widgets use it to say which readings suit them.</li>
+          <li><code>simulationActive</code> replaces every reading with a slow sweep between its min and max, for looking at a layout with no car. Nothing in the app turns it on; the tests do. For a car that behaves like one, start the simulated car instead (see <a href="obd-manager.html">OBD Manager</a>).</li>
+        </ul>
+        <p>
+          The list of readings and their metadata is not in this file: it comes from the C++ parameter catalog, which
+          is the same table every frontend reads. <a href="obd-manager.html">OBD Manager</a> describes what can be
+          read; <a href="api-reference.html">the API reference</a> lists <code>parameterCatalog</code> and
+          <code>paramStore</code>.
+        </p>
 
-<span class="cmt">// Masking (shared textures passed in by the carousel)</span>
-<span class="prop">property bool</span> roundedArt: <span class="kw">false</span>
-<span class="prop">property bool</span> vinylMode: <span class="kw">false</span>
-<span class="prop">property real</span> artRadius: <span class="num">0</span>
-<span class="prop">property Item</span> roundedMask: <span class="kw">null</span>
-<span class="prop">property Item</span> vinylMask: <span class="kw">null</span>
-<span class="prop">property real</span> vinylAngle: <span class="num">0</span>    <span class="cmt">// image.rotation in vinyl mode</span>
+        <h3 id="imu-demand">ImuDemand</h3>
+        <p>
+          The motion sensor idles at a low rate until a page wants it. Drop one of these into any page or widget that
+          shows pitch, roll, heading or G-force, and the sensor runs at full rate while <code>wanted</code> is true.
+        </p>
+<pre><code>App.<span class="cls">ImuDemand</span> { <span class="prop">consumer</span>: <span class="str">"myPage"</span>; <span class="prop">wanted</span>: myPage.visible }</code></pre>
+        <p>
+          <code>consumer</code> is any name that stays the same for this page (its <code>objectName</code> is the
+          habit). The request is withdrawn when the component is destroyed. With no <code>consumer</code> it does
+          nothing.
+        </p>
 
-<span class="cmt">// Shadow (centre card only)</span>
-<span class="prop">property bool</span> showShadow: <span class="kw">false</span>
-<span class="prop">property bool</span> shadowLive: <span class="kw">true</span>
+        <h3 id="sensor-card">SensorCard</h3>
+        <p>
+          A card for one reading: a small label with an icon, the value in large type, the unit, and an optional bar.
+          The Sensors page is built from these.
+        </p>
+<pre><code><span class="cls">SensorCard</span> {
+    <span class="prop">label</span>: <span class="str">"PITCH"</span>
+    <span class="prop">icon</span>: <span class="str">"↕"</span>
+    <span class="prop">value</span>: pitch.<span class="fn">toFixed</span>(<span class="num">1</span>)
+    <span class="prop">unit</span>: <span class="str">"°"</span>
+    <span class="prop">barValue</span>: (pitch + <span class="num">90</span>) / <span class="num">180</span>
+    <span class="prop">connected</span>: imuConnected
+}</code></pre>
+        <table>
+          <thead><tr><th>Property</th><th>Default</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>label</code>, <code>unit</code></td><td>empty</td><td>The texts above and below the value.</td></tr>
+            <tr><td><code>value</code></td><td><code>"--"</code></td><td>The text to show. You format the number.</td></tr>
+            <tr><td><code>icon</code></td><td>empty</td><td>One character from the symbol font, drawn in the accent colour.</td></tr>
+            <tr><td><code>barValue</code></td><td>-1</td><td>0 to 1 fills the bar; -1 hides it.</td></tr>
+            <tr><td><code>connected</code></td><td>false</td><td>While false the card shows "--" whatever <code>value</code> says.</td></tr>
+            <tr><td><code>globalFont</code></td><td>empty</td><td>Font family for the texts.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          The card is meant for a <code>GridLayout</code> or <code>RowLayout</code>: it asks to fill its cell and sets no
+          size of its own. <code>connected</code> defaults to false, so a card you forget to connect shows "--" forever.
+        </p>
 
-<span class="kw">readonly property alias</span> image: artImage
-<span class="kw">readonly property alias</span> imageStatus: artImage.status
+        <h3 id="gforce-display">GForceDisplay</h3>
+        <p>
+          The same card shape with a plot inside: a dot that moves with cornering (sideways) and braking or
+          accelerating (up and down), a short trail behind it, rings at 0.5 g and 1 g, and the total below.
+        </p>
+<pre><code><span class="cls">GForceDisplay</span> {
+    <span class="prop">lateralG</span>: currentLateralG
+    <span class="prop">longitudinalG</span>: currentLongitudinalG
+    <span class="prop">magnitude</span>: currentGForce
+    <span class="prop">connected</span>: imuConnected
+}</code></pre>
+        <table>
+          <thead><tr><th>Property</th><th>Default</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>lateralG</code>, <code>longitudinalG</code></td><td>0</td><td>Where the dot is, in g. Positive <code>longitudinalG</code> is up.</td></tr>
+            <tr><td><code>magnitude</code></td><td>0</td><td>The number printed under the plot. The component does not work it out from the other two.</td></tr>
+            <tr><td><code>maxG</code></td><td>1.5</td><td>The g at the outer ring.</td></tr>
+            <tr><td><code>decimalPlaces</code></td><td>2</td><td>Decimals of the printed number.</td></tr>
+            <tr><td><code>connected</code></td><td>false</td><td>While false the dot sits in the centre, the trail stops and the number reads "--".</td></tr>
+          </tbody>
+        </table>
+        <p>
+          This is the full-size version for a page. For a dashboard cell use the <code>GForceGauge</code> widget, which
+          finds its own data (<a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>).
+        </p>
 
-<span class="prop">transform</span>: [
-    <span class="cls">Translate</span> { <span class="prop">x</span>: root.cfOffset },
-    <span class="cls">Rotation</span> { <span class="prop">axis</span> { <span class="prop">x</span>: <span class="num">0</span>; <span class="prop">y</span>: <span class="num">1</span>; <span class="prop">z</span>: <span class="num">0</span> }; <span class="prop">angle</span>: root.cfAngle
-               <span class="prop">origin.x</span>: root.width / <span class="num">2</span>; <span class="prop">origin.y</span>: root.height / <span class="num">2</span> }
-]</code></pre>
+        <!-- Connecting -->
+        <h2 id="connecting">Connecting Things</h2>
 
-        <p>Two layers are involved. The <code>Image</code>'s own layer is enabled only when <code>roundedArt || vinylMode</code> and applies <code>OpacityMask</code> with whichever shared mask applies. The card's root layer is enabled only when <code>showShadow</code>, with <code>layer.live: shadowLive</code>, and its effect is a <code>DropShadow { transparentBorder: true; horizontalOffset: 8; verticalOffset: 8; radius: 16; samples: 33; color: "#E0000000" }</code> &mdash; the single user-toggleable drop shadow in the app.</p>
+        <h3 id="obd-connect-button">OBDConnectButton</h3>
+        <p>
+          The outlined <strong>Connect Vehicle</strong> button. It opens the adapter sheet by itself and reads
+          "Connecting&hellip;" while an attempt runs. Every screen that can show "No vehicle connected" uses it: the OBD
+          pages, the Home dashboard, the classic Home and the hand-built Home screens.
+        </p>
+<pre><code>App.<span class="cls">OBDConnectButton</span> {
+    <span class="prop">anchors.horizontalCenter</span>: parent.horizontalCenter
+    <span class="prop">mainWindow</span>: page.mainWindow
+}</code></pre>
+        <table>
+          <thead><tr><th>Property</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>mainWindow</code></td><td>The app window. The sheet's <strong>OBD Settings</strong> button uses it to open Settings &gt; OBD. Leave it out and that button does nothing.</td></tr>
+            <tr><td><code>fontFamily</code></td><td>Font of the label. Defaults to the theme's.</td></tr>
+          </tbody>
+        </table>
+        <p>The button sizes itself to its label. You decide when it is visible; it does not hide once a car is connected.</p>
 
-        <div class="info-box info">
-          <div class="info-box-title">Why the masks are passed in</div>
-          The comment on <code>roundedMask</code> / <code>vinylMask</code> says it directly: "External mask items &mdash; shared across all cards to avoid duplicating GPU textures." Three cards plus the exit snapshot would otherwise allocate four identical mask textures per resize.
-        </div>
+        <h3 id="obd-adapter-sheet">OBDAdapterSheet</h3>
+        <p>
+          The <strong>Connect Vehicle</strong> popup behind that button: it scans for OBD adapters, lists them, and
+          pairs and connects the one the user taps. Use it directly only when you want your own button in front of it,
+          as Settings &gt; OBD does.
+        </p>
+<pre><code>App.<span class="cls">OBDAdapterSheet</span> { <span class="prop">id</span>: adapterSheet }
+<span class="cmt">// from your button:</span>
+adapterSheet.<span class="fn">open</span>()</code></pre>
+        <p>
+          Opening it starts a scan and closing it stops the scan; a pairing that has started carries on. It closes
+          itself a second and a half after the car connects. Set <code>offerSettings: true</code> and handle
+          <code>settingsRequested()</code> if you want the <strong>OBD Settings</strong> button on devices where OCTAVE
+          cannot scan and only lists the adapters the system already knows.
+        </p>
+        <p>
+          What the user sees in the sheet, and what each platform can do, is in
+          <a href="obd-manager.html">OBD Manager</a>; how scanning and pairing work is in
+          <a href="obd-manager.html#adapter-finder">Finding and Pairing an Adapter</a>.
+        </p>
 
-        <!-- ThemedIcon -->
-        <h2 id="themed-icon">ThemedIcon</h2>
+        <h3 id="connect-sheet">ConnectSheet and SheetRow</h3>
+        <p>
+          The look that the "connect something" popups share: a card in the middle of the window with a centred title
+          and a column of choices. Connect Vehicle and Connect Music are both built from it. Use it for any short "pick
+          one of these" popup so they all look alike.
+        </p>
+<pre><code>App.<span class="cls">ConnectSheet</span> {
+    <span class="prop">id</span>: sheet
+    <span class="prop">title</span>: <span class="str">"Connect Music"</span>
+    App.<span class="cls">SheetRow</span> {
+        <span class="prop">title</span>: <span class="str">"Local Music"</span>
+        <span class="prop">detail</span>: <span class="str">"Songs in a folder on this device"</span>
+        <span class="fn">onPicked</span>: { sheet.<span class="fn">close</span>(); <span class="fn">chooseFolder</span>() }
+    }
+}</code></pre>
+        <table>
+          <thead><tr><th>Member</th><th>Default</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>ConnectSheet.title</code></td><td>empty</td><td>The heading.</td></tr>
+            <tr><td><code>ConnectSheet.busy</code></td><td>false</td><td>A spinner beside the heading, for a scan under way.</td></tr>
+            <tr><td><code>ConnectSheet.bodyWidth</code></td><td>read-only</td><td>Width of the column your children sit in.</td></tr>
+            <tr><td><code>SheetRow.title</code>, <code>detail</code></td><td>empty</td><td>The bold line and the smaller line under it (two lines at most).</td></tr>
+            <tr><td><code>SheetRow.trailing</code></td><td>empty</td><td>A word on the right, such as "Working&hellip;".</td></tr>
+            <tr><td><code>SheetRow.bars</code></td><td>-1</td><td>0 to 4 signal bars on the right; -1 for none.</td></tr>
+            <tr><td><code>SheetRow.active</code></td><td>true</td><td>False dims the row and makes it ignore taps.</td></tr>
+            <tr><td><code>SheetRow.highlighted</code></td><td>false</td><td>A stronger outline, for the row that is busy.</td></tr>
+            <tr><td><code>SheetRow.picked()</code></td><td>signal</td><td>The row was tapped.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          The sheet is a <code>Popup</code>: it is modal, attaches itself to the window, is as tall as its content (up
+          to 92 % of the window) and closes on a tap outside or Esc. Children go into a column, so give them
+          <code>width: parent.width</code>; a <code>SheetRow</code> does that itself. A row does not close the sheet
+          when picked: that is yours to do.
+        </p>
 
-        <p><span class="file-path">frontend/ThemedIcon.qml</span> is a theme-tinted SVG icon. The header comment explains its purpose: it "wraps the Image + ColorOverlay pair that the rest of the app hand-rolls at every call site (BottomBar.qml alone repeats it ~20 times)", and the assets in <span class="file-path">frontend/assets/</span> "are authored as flat white fills precisely so they can be recoloured this way". (BottomBar.qml has since folded its copies into one inline <code>TintedIcon</code>.)</p>
+        <h3 id="phone-qr-pairing-panel">PhoneQrPairingPanel</h3>
+        <p>
+          Connects an Android phone over Wi-Fi: a QR code on the left, the three steps to follow on the phone on the
+          right, then the result. The phone page shows it when no phone is connected, and Settings shows it in a
+          popup.
+        </p>
+<pre><code>App.<span class="cls">PhoneQrPairingPanel</span> {
+    <span class="prop">id</span>: pairing
+    <span class="prop">anchors.centerIn</span>: parent
+    <span class="prop">qrSize</span>: Math.<span class="fn">round</span>(page.height * <span class="num">0.55</span>)
+    Component.<span class="fn">onCompleted</span>: <span class="fn">start</span>()
+    Component.<span class="fn">onDestruction</span>: <span class="fn">cancel</span>()
+}</code></pre>
+        <table>
+          <thead><tr><th>Member</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>qrSize</code></td><td>Side of the code, in pixels. Size it from the screen as above, not with <code>dp()</code>: the phone has to read it from arm's length.</td></tr>
+            <tr><td><code>showCancel</code></td><td>Show a Cancel button while a code is up. Default true.</td></tr>
+            <tr><td><code>start()</code></td><td>Ask for a code, unless one is already showing.</td></tr>
+            <tr><td><code>cancel()</code></td><td>Withdraw the code.</td></tr>
+            <tr><td><code>cancelled()</code></td><td>Signal: the user tapped Cancel.</td></tr>
+            <tr><td><code>active</code></td><td>Read-only: a code is showing.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          The panel does not start by itself: until <code>start()</code> it shows a <strong>Show QR code</strong> button
+          in the code's place. The code is always black on white, whatever the theme, so cameras lock on. A code expires
+          after two minutes. How the pairing works is in
+          <a href="phone-mirror-android-auto.html#pm-wifi">Mirroring over Wi-Fi</a>.
+        </p>
 
-        <pre><code><span class="prop">property url</span> source: <span class="str">""</span>          <span class="cmt">// relative to the *importing* file; subdirectories pass "../assets/…"</span>
-<span class="prop">property color</span> color: <span class="str">"#FFFFFF"</span>   <span class="cmt">// tint for every non-transparent pixel</span>
-<span class="prop">property bool</span> shadow: <span class="kw">true</span>
-<span class="prop">property color</span> shadowColor: Qt.<span class="fn">rgba</span>(<span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>, <span class="num">0.40</span>)
-<span class="prop">property real</span> shadowOffsetX: <span class="num">1</span>
-<span class="prop">property real</span> shadowOffsetY: <span class="num">2</span>
-<span class="prop">property real</span> fillRatio: <span class="num">1.0</span>      <span class="cmt">// 0.7 matches the bottom-bar buttons</span>
-<span class="prop">implicitWidth</span>: <span class="num">24</span>; <span class="prop">implicitHeight</span>: <span class="num">24</span></code></pre>
+        <!-- Feedback -->
+        <h2 id="feedback">Notices, Logs and Icons</h2>
 
-        <p>Internally: a hidden <code>Image</code> (<code>sourceSize</code> = 2&times; the rendered size &mdash; "2x supersample keeps SVG edges crisp when the tile scales up" &mdash; <code>smooth</code>, <code>antialiasing</code>, <code>mipmap</code>) feeds two <code>ColorOverlay</code>s from <code>Qt5Compat.GraphicalEffects</code>: one offset by the shadow vector and tinted <code>shadowColor</code>, one tinted <code>color</code>. The comment stresses that the shadow "is a second ColorOverlay, not a blur, so there is no per-frame cost"; it reproduces the offset-glyph trick the settings tiles used when their icons were Unicode characters. See <a href="theme-system.html#themed-icon">Theme System &rarr; ThemedIcon</a> for how the tint follows the active theme.</p>
+        <h3 id="error-toast">ErrorToast</h3>
+        <p>
+          The one app-wide notice: a red strip at the top centre of the window for errors the driver should hear about
+          while on another page. There is exactly one, created at the end of <span class="file-path">Main.qml</span>
+          so that it draws over every page. You do not create another; you add a message to that one.
+        </p>
+<pre><code><span class="cmt">// in Main.qml, beside the two that are there</span>
+<span class="cls">Connections</span> {
+    <span class="prop">target</span>: <span class="kw">typeof</span> myManager !== <span class="str">"undefined"</span> ? myManager : <span class="kw">null</span>
+    <span class="kw">function</span> <span class="fn">onSomethingFailed</span>(message) { errorToast.<span class="fn">show</span>(message) }
+}</code></pre>
+        <table>
+          <thead><tr><th>Member</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>show(message)</code></td><td>Show the message, or queue it behind the one showing.</td></tr>
+            <tr><td><code>dismiss()</code></td><td>Remove the one showing and bring up the next.</td></tr>
+            <tr><td><code>durationMs</code></td><td>How long a message stays: 8 seconds. A tap removes it sooner.</td></tr>
+            <tr><td><code>currentMessage</code>, <code>queuedCount</code></td><td>Read-only, for tests.</td></tr>
+          </tbody>
+        </table>
+        <p>Two things use it today:</p>
+        <ul>
+          <li>The OBD connection dropping: "OBD connection lost: &lt;reason&gt;". Not shown on a page that already shows the OBD status (the OBD pages, Trip History, Settings &gt; OBD).</li>
+          <li>A Spotify control that did not work.</li>
+        </ul>
+        <p>
+          Be sparing. Everything else stays on its own page and in the logs, so that nothing chatty appears in the
+          driver's view. A message equal to the one showing, or to the last one queued, is dropped, so a repeating
+          failure does not stack up. Popups draw above the toast. There is one severity and no sound.
+        </p>
 
-        <!-- Music devices -->
-        <h2 id="music-devices">Music Device Components</h2>
-        <p><code>MusicDevicePreference</code> is the singleton behind the choice of what the Media Room's art corner shows (picked on the ring in its album-art popup). It persists <code>musicDeviceModel</code> through the generic settings API. Choices are Album art (default), Record player, MP3 player, CD player, Cassette player and iPod. It probes <code>MusicDeviceScene.qml</code> on demand and caches whether Quick3D can load; Album art does not require that module.</p>
-        <p><code>MusicDeviceCarousel</code> is the picker in the Media Room's album-art popup: every option of <code>MusicDevicePreference</code>, "Vinyl" (which the popup maps to Album art with <code>vinylRecordMode</code> on) and, where phone mirroring can run, "Phone mirror" (the popup's <code>mediaArtPhoneMirror</code> setting; a drawn phone card), on a ring in one <code>View3D</code> (orthographic, 1 unit = 1 px, so positions and the hit test are plain arithmetic on <code>pos</code>, the ring's position in items). The ring is an ellipse seen from a little above and every item stays in view: the front one large, the others smaller the further round. Set <code>options</code>, <code>artSource</code>, <code>artCornerRadius</code> (the album art card's corners in pixels when it is at the front; MediaRoom gives it the page's 16&nbsp;dp) and <code>playbackPosition</code> / <code>playbackDuration</code> (the Vinyl item turns once per song, as the record on the page does), call <code>show(value)</code> on open (<code>step(&plusmn;1)</code> moves it one item); it reports <code>focusValue</code> and emits <code>chosen(value)</code> for a tap on the front item or Return, and <code>missed()</code> for a tap on none. A drag follows the pointer and settles on the nearest item in 320 ms, a flick carries up to two items further, the wheel steps one item per notch.</p>
-        <p><code>MusicDeviceScene</code> renders the selected device, lets a drag turn it and then eases it back to its resting angle (a 450 ms hold, then 1.8 s; a double click snaps it back at once), emits <code>clicked()</code> for a tap that was not a drag or half of a double click (the Media Room opens its album-art popup on it), and accepts <code>device</code>, <code>playing</code>, <code>artSource</code>, <code>trackTitle</code>, <code>artist</code>, <code>playbackPosition</code>, <code>playbackDuration</code> and <code>hasTrack</code>. Position and duration are milliseconds. Its loading animation exchanges physical media on track changes, while playback progress drives the displays, record-player arm and cassette tape packs. MediaRoom hosts the scene in a Loader and keeps it loaded between visits while that mode remains selected.</p>
-        <p><code>MusicDeviceCover</code> loads artwork asynchronously with a 512&times;512 decode target and falls back to <code>assets/missing_art.png</code> for an empty or failed source. <code>MusicDeviceArtSurface</code> places that cover on a Quick3D rectangle, with optional static alpha masks for record and CD labels. Models, masks and the studio probe live in <code>assets/music_devices/</code>; <code>assetStore</code> resolves assets that need real filesystem paths.</p>
-
-        <h2 id="terminal-feedback">TerminalFeedback</h2>
-
-        <p><span class="file-path">frontend/TerminalFeedback.qml</span> is a "reusable terminal-style feedback component for displaying backend progress" &mdash; a dark <code>Rectangle</code> with a header bar, a touch-friendly <code>Flickable</code> log and a custom scroll indicator. Its one consumer is "Scan Log" in <span class="file-path">settings/MediaSettingsPage.qml</span>, fed by <code>mediaManager.scanProgress</code>. <a href="pages.html#obddiagnostics">OBDDiagnostics</a> does <em>not</em> use it &mdash; that page carries an older inline <code>QtObject</code> terminal with the same <code>appendLine()</code> / <code>clear()</code> API and prefix colouring, plus a blinking cursor and a scanline canvas.</p>
-
-        <pre><code><span class="prop">property int</span> maxLines: <span class="num">50</span>
-<span class="prop">property bool</span> autoScroll: <span class="kw">true</span>
-<span class="prop">property string</span> title: <span class="str">"Output"</span>
-<span class="prop">property bool</span> showHeader: <span class="kw">true</span>
-<span class="prop">property color</span> terminalBackground: <span class="str">"#1a1a1a"</span>
-<span class="prop">property color</span> terminalBorder: <span class="str">"#333333"</span>
-<span class="prop">property color</span> textColor: <span class="str">"#00ff00"</span>     <span class="cmt">// classic terminal green</span>
-<span class="prop">property color</span> errorColor: <span class="str">"#ff4444"</span>
-<span class="prop">property color</span> infoColor: <span class="str">"#4a9eff"</span>
-<span class="prop">property color</span> successColor: <span class="str">"#44ff44"</span>
-<span class="prop">property color</span> warningColor: <span class="str">"#ffaa00"</span>
-<span class="prop">property real</span> fontSize: App.Spacing.overallText * <span class="num">0.85</span>
-<span class="prop">implicitWidth</span>: <span class="fn">dp</span>(<span class="num">300</span>); <span class="prop">implicitHeight</span>: <span class="fn">dp</span>(<span class="num">150</span>)
-
-<span class="kw">function</span> <span class="fn">appendLine</span>(text)                 <span class="cmt">// colour from [PREFIX], timestamp prepended</span>
-<span class="kw">function</span> <span class="fn">appendLineWithColor</span>(text, color)
-<span class="kw">function</span> <span class="fn">clear</span>()</code></pre>
-
-        <p><code>appendLine()</code> picks the colour from the line's prefix &mdash; <code>[ERROR]</code> &rarr; error; <code>[DONE]</code>, <code>[SUCCESS]</code>, <code>[FOUND]</code>, <code>[OK]</code> &rarr; success; <code>[INFO]</code>, <code>[SCAN]</code>, <code>[CLEAR]</code> &rarr; info; <code>[WARN]</code>, <code>[WARNING]</code> &rarr; warning; <code>[PATH]</code> &rarr; grey &mdash; prepends a <code>hh:mm:ss</code> timestamp, and replaces the <code>lines</code> array (trimmed to <code>maxLines</code>) so the <code>Repeater</code> rebinds. Lines render in <code>"Consolas, Monaco, monospace"</code> with <code>lineHeight: 1.3</code> and wrap anywhere. When <code>autoScroll</code> is on, a 150&nbsp;ms <code>OutQuad</code> animation on <code>contentY</code> follows new content. The header holds the title and a "Clear" button; the <code>Flickable</code> uses <code>pressDelay: 0</code>, <code>flickDeceleration: 1500</code> and <code>maximumFlickVelocity: 4000</code> for touch, and a 4&nbsp;dp scroll indicator appears only when the content overflows (opacity 0.8 while moving, 0.3 at rest).</p>
-
-        <h3>Dormant environment styling</h3>
-        <p>The component reads several <code>App.EnvironmentTheme.active.*</code> flags &mdash; <code>terminalCornerBrackets</code> (a <code>CornerBrackets</code> child), <code>terminalScanlines</code> (a <code>Canvas</code> that strokes a white line every 3&nbsp;px at 4&nbsp;% opacity), <code>terminalAccentBorder</code> (accent border at 40&nbsp;% and a 1&nbsp;px top highlight at 25&nbsp;%), <code>terminalHeaderAccent</code> ("// TITLE" header, a pulsing status dot, "CLR" button) and <code>terminalAccentScroll</code> (a 2&nbsp;dp accent scrollbar). Since commit <code>484bc76</code> <code>EnvironmentTheme</code> exposes one fixed <code>active</code> object in which every one of these flags is <code>false</code> and <code>terminalRadius</code> is 4, so the terminal always renders in its plain form: <code>#333333</code> border, <code>#2d2d2d</code> header, grey "Clear" button, grey scrollbar. The branches remain in the file so the bindings keep working if environments are ever revived (see <a href="theme-system.html#environment-theme">Theme System &rarr; EnvironmentTheme</a>).</p>
-
-        <pre><code>App.<span class="cls">TerminalFeedback</span> {
-    <span class="prop">id</span>: scanTerminal
+        <h3 id="terminal-feedback">TerminalFeedback</h3>
+        <p>
+          A dark box of scrolling log lines with a title and a Clear button, for showing what a long job is doing. The
+          library scan in Settings &gt; Media uses it.
+        </p>
+<pre><code>App.<span class="cls">TerminalFeedback</span> {
+    <span class="prop">id</span>: scanLog
     <span class="prop">title</span>: <span class="str">"Scan Log"</span>
     Layout.fillWidth: <span class="kw">true</span>
+    Layout.preferredHeight: <span class="fn">dp</span>(<span class="num">300</span>)
+
+    <span class="cls">Connections</span> {
+        <span class="prop">target</span>: mediaManager
+        <span class="kw">function</span> <span class="fn">onScanProgress</span>(message) { scanLog.<span class="fn">appendLine</span>(message) }
+    }
+}</code></pre>
+        <table>
+          <thead><tr><th>Member</th><th>Default</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>appendLine(text)</code></td><td></td><td>Add a line, with the time in front. The colour follows the line's prefix (below).</td></tr>
+            <tr><td><code>appendLineWithColor(text, color)</code></td><td></td><td>Add a line in a colour you choose.</td></tr>
+            <tr><td><code>clear()</code></td><td></td><td>Empty the box.</td></tr>
+            <tr><td><code>title</code></td><td>"Output"</td><td>Text in the header.</td></tr>
+            <tr><td><code>showHeader</code></td><td>true</td><td>Hide the header, and the Clear button with it.</td></tr>
+            <tr><td><code>maxLines</code></td><td>50</td><td>Older lines are dropped beyond this.</td></tr>
+            <tr><td><code>autoScroll</code></td><td>true</td><td>Follow new lines to the bottom.</td></tr>
+          </tbody>
+        </table>
+        <p>A line that starts with one of these prefixes is coloured for you; anything else is terminal green:</p>
+        <table>
+          <thead><tr><th>Prefix</th><th>Colour</th></tr></thead>
+          <tbody>
+            <tr><td><code>[ERROR]</code></td><td>red</td></tr>
+            <tr><td><code>[WARN]</code>, <code>[WARNING]</code></td><td>amber</td></tr>
+            <tr><td><code>[DONE]</code>, <code>[SUCCESS]</code>, <code>[FOUND]</code>, <code>[OK]</code></td><td>bright green</td></tr>
+            <tr><td><code>[INFO]</code>, <code>[SCAN]</code>, <code>[CLEAR]</code></td><td>blue</td></tr>
+            <tr><td><code>[PATH]</code></td><td>grey</td></tr>
+          </tbody>
+        </table>
+        <p>
+          The colours are fixed and do not follow the theme. The box is 300 by 150 dp unless you size it. The OBD
+          Trouble Codes page has a terminal of its own and does not use this component.
+        </p>
+
+        <h3 id="themed-icon">ThemedIcon</h3>
+        <p>
+          Draws a single-colour SVG icon in any colour. The icons in <span class="file-path">frontend/assets/</span>
+          are drawn as flat white shapes so that they can be tinted this way.
+        </p>
+<pre><code>App.<span class="cls">ThemedIcon</span> {
+    <span class="prop">width</span>: <span class="fn">dp</span>(<span class="num">28</span>); <span class="prop">height</span>: <span class="fn">dp</span>(<span class="num">28</span>)
+    <span class="prop">source</span>: <span class="str">"assets/obd_button.svg"</span>
+    <span class="prop">color</span>: App.Style.accent
+}</code></pre>
+        <table>
+          <thead><tr><th>Property</th><th>Default</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>source</code></td><td>empty</td><td>The SVG file.</td></tr>
+            <tr><td><code>color</code></td><td>white</td><td>The tint, applied to every pixel that is not transparent.</td></tr>
+            <tr><td><code>shadow</code></td><td>true</td><td>A dark copy of the icon behind it, offset by <code>shadowOffsetX</code> / <code>shadowOffsetY</code> (1, 2) in <code>shadowColor</code>.</td></tr>
+            <tr><td><code>fillRatio</code></td><td>1.0</td><td>How much of the item the icon fills. 0.7 matches the bottom bar's buttons.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          <code>source</code> is resolved against the file that <em>uses</em> the icon, so a file in a sub-folder passes
+          <code>"../assets/&hellip;"</code>. The item is 24 by 24 unless you size it. A multi-colour picture comes out
+          as a flat silhouette. The shadow is an offset copy, not a blur, so it costs nothing per frame. How theme
+          colours reach an icon is in <a href="theme-system.html#themed-icon">Theme System</a>.
+        </p>
+
+        <h3 id="corner-brackets">CornerBrackets</h3>
+        <p>
+          A pulsing accent-coloured bracket at each corner of its parent. It is switched off everywhere: the settings
+          cards, the settings tiles and <code>TerminalFeedback</code> each carry one, bound to a style flag that is
+          always false (see <a href="theme-system.html#environment-theme">EnvironmentTheme</a>). It fills its parent,
+          you control <code>visible</code>, and its animation stops while hidden. Do not build on it.
+        </p>
+
+        <!-- Music -->
+        <h2 id="music">Music</h2>
+
+        <h3 id="album-art-carousel">AlbumArtCarousel</h3>
+        <p>
+          The album art in the middle of the Media Room: the square cover or, in vinyl mode, a turning record, with the
+          animation that plays when the track changes. It can also show the previous and next covers tilted at the
+          sides.
+        </p>
+<pre><code><span class="cls">AlbumArtCarousel</span> {
+    <span class="prop">id</span>: art
+    <span class="prop">anchors.fill</span>: parent
+    <span class="prop">artSource</span>: currentArt
+    <span class="prop">direction</span>: wentForward ? <span class="num">1</span> : <span class="num">-1</span>
+    <span class="prop">roundedArt</span>: <span class="kw">true</span>; <span class="prop">artRadius</span>: <span class="fn">dp</span>(<span class="num">16</span>)
+    <span class="fn">onArtClicked</span>: picker.<span class="fn">open</span>()
+    <span class="fn">onArtLoadFailed</span>: currentArt = <span class="str">"./assets/missing_art.png"</span>
 }
-scanTerminal.<span class="fn">appendLine</span>(<span class="str">"[SCAN] Scanning ~/Music ..."</span>)
-scanTerminal.<span class="fn">appendLine</span>(<span class="str">"[DONE] 412 files indexed"</span>)</code></pre>
-
-        <!-- CornerBrackets -->
-        <h2 id="corner-brackets">CornerBrackets</h2>
-
-        <p><span class="file-path">frontend/CornerBrackets.qml</span> draws eight 1&nbsp;px <code>Rectangle</code>s &mdash; a horizontal and a vertical arm of length <code>bracketLength = dp(12)</code> at each corner, offset by &minus;1 so they sit on the parent's border &mdash; tinted with <code>App.Style.accent</code> at an alpha that pulses 0.5 &rarr; 0.8 &rarr; 0.3 in two 2000&nbsp;ms <code>InOutSine</code> legs, looping forever. It anchors itself to fill the parent; the caller controls <code>visible</code>, and the <code>SequentialAnimation</code> has <code>running: brackets.visible</code>, so a hidden instance costs nothing per frame.</p>
-
-        <p>It is instantiated in three places (<code>TerminalFeedback</code>, <code>SettingsCard</code>, <code>SettingsTile</code>), every one bound to <code>App.EnvironmentTheme.active.cornerBrackets</code> or <code>.terminalCornerBrackets</code>. Both flags are permanently <code>false</code> in the single remaining environment (the file's own comment still calls it the "spacecraft theme" overlay), so the brackets are never shown in a shipped build. The component is retained because the ~40 <code>EnvironmentTheme.active.X</code> bindings were deliberately left intact when the presets were removed.</p>
-
-        <!-- SensorCard -->
-        <h2 id="sensor-card">SensorCard</h2>
-
-        <p><span class="file-path">frontend/SensorCard.qml</span> is the generic reading card in <a href="pages.html#sensormenu">SensorMenu</a>: a <code>headerBackgroundColor</code> <code>Rectangle</code> (<code>radius: dp(10)</code>, <code>Layout.minimumHeight: dp(100)</code>) with a <code>ColumnLayout</code> of a centred label row (accent-coloured <code>icon</code> glyph + upper-case <code>label</code> in secondary text with 1.5&nbsp;dp letter spacing), a spacer, the value in <code>dp(36)</code> bold, the <code>unit</code> in <code>dp(14)</code>, and an optional 4&nbsp;dp accent progress bar.</p>
-
-        <pre><code><span class="prop">property string</span> label: <span class="str">""</span>
-<span class="prop">property string</span> value: <span class="str">"--"</span>
-<span class="prop">property string</span> unit: <span class="str">""</span>
-<span class="prop">property string</span> icon: <span class="str">""</span>          <span class="cmt">// Unicode glyph</span>
-<span class="prop">property real</span> barValue: <span class="num">-1</span>        <span class="cmt">// 0..1 fills the bar, -1 hides it</span>
-<span class="prop">property string</span> globalFont: <span class="str">""</span>
-<span class="prop">property bool</span> connected: <span class="kw">false</span>    <span class="cmt">// shows "--" when false</span></code></pre>
-
-        <p>The value <code>Text</code> has <code>Behavior on text { enabled: false }</code> so rapid IMU updates never queue text animations; the bar width has a 100&nbsp;ms <code>OutQuad</code> <code>Behavior</code>. SensorMenu feeds pitch/roll as <code>(value + 90) / 180</code> and heading as <code>value / 360</code>, and hides the bar for altitude and temperature.</p>
-
-        <!-- GForceDisplay -->
-        <h2 id="gforce-display">GForceDisplay</h2>
-
-        <p><span class="file-path">frontend/GForceDisplay.qml</span> is the G-force card in SensorMenu. Same shell as <code>SensorCard</code>; the body is a 2-D "friction circle" plot.</p>
-
-        <pre><code><span class="prop">property real</span> lateralG: <span class="num">0</span>        <span class="cmt">// X axis</span>
-<span class="prop">property real</span> longitudinalG: <span class="num">0</span>   <span class="cmt">// Y axis (up = positive)</span>
-<span class="prop">property real</span> magnitude: <span class="num">0</span>       <span class="cmt">// printed below the plot</span>
-<span class="prop">property bool</span> connected: <span class="kw">false</span>
-<span class="prop">property string</span> globalFont: <span class="str">""</span>
-<span class="prop">property int</span> decimalPlaces: <span class="num">2</span>
-<span class="prop">property real</span> maxG: <span class="num">1.5</span>          <span class="cmt">// radius of the outer ring</span></code></pre>
-
-        <ul>
-          <li><strong>Rings</strong> &mdash; the outer ring at <code>maxG</code>, a 1&nbsp;g accent ring (only if <code>maxG &gt; 1</code>) and a 0.5&nbsp;g ring, plus a crosshair, all 1&nbsp;px at low alpha; the circle is 92&nbsp;% of the smaller card dimension and <code>gScale = circleSize / 2 / maxG</code> pixels per g.</li>
-          <li><strong>Trail</strong> &mdash; while <code>connected</code>, a 50&nbsp;ms <code>Timer</code> appends <code>{gx, gy}</code> to a <code>ListModel</code> capped at 30 entries; a <code>Repeater</code> draws them as 3&nbsp;dp accent dots whose opacity ramps to 0.3 with age.</li>
-          <li><strong>Marker</strong> &mdash; a 22&nbsp;dp accent glow at 20&nbsp;% alpha behind a 10&nbsp;dp dot; the position properties have 50&nbsp;ms <code>OutQuad</code> <code>Behavior</code>s and snap to the centre when disconnected.</li>
-          <li><strong>Readout</strong> &mdash; <code>magnitude.toFixed(decimalPlaces) + " g"</code> in <code>dp(20)</code> bold, or <code>"--"</code>.</li>
-        </ul>
-
-        <!-- PhoneQrPairingPanel -->
-        <h2 id="phone-qr-pairing-panel">PhoneQrPairingPanel</h2>
-        <p><span class="file-path">frontend/PhoneQrPairingPanel.qml</span> connects a phone over Wi-Fi by QR code, the only wireless
-          route (see <a href="phone-mirror-android-auto.html#pm-wifi">Mirroring over Wi-Fi</a>). A <code>RowLayout</code>: on the left the
-          code, drawn on a <code>Canvas</code> from <code>phoneMirrorManager.qrPairingRows</code> (one <code>'0'</code>/<code>'1'</code>
-          string per row) in whole pixels per module, black on white with a 4-module quiet zone whatever the theme; while no code is
-          shown, a same-size placeholder holds a "Show QR code" button. On the right "Connect your phone", the three steps (same Wi-Fi
-          network &rarr; Developer options &rarr; Wireless debugging &rarr; Pair device with QR code &rarr; scan), the
-          <code>wirelessResult</code> message (green / red), "The code expires after two minutes." and an optional Cancel.</p>
+<span class="cmt">// when the track changes:</span>
+art.<span class="fn">triggerSlide</span>()</code></pre>
         <table>
-          <thead><tr><th>Member</th><th>Description</th></tr></thead>
+          <thead><tr><th>Member</th><th>Default</th><th>What it does</th></tr></thead>
           <tbody>
-            <tr><td><code>qrSize</code></td><td>Side of the code box. Callers size it from the screen (55 % of the window height), not dp, so it scans from arm's length</td></tr>
-            <tr><td><code>showCancel</code></td><td>Show the Cancel button while a code is up (default true)</td></tr>
-            <tr><td><code>start()</code> / <code>cancel()</code></td><td><code>startQrPairing()</code> unless one is running / <code>cancelQrPairing()</code></td></tr>
-            <tr><td><code>cancelled()</code></td><td>Emitted after Cancel was tapped</td></tr>
+            <tr><td><code>artSource</code></td><td>empty</td><td>The cover to show.</td></tr>
+            <tr><td><code>direction</code></td><td>1</td><td>1 brings the new cover in from the right (next track), -1 from the left.</td></tr>
+            <tr><td><code>triggerSlide()</code></td><td></td><td>Play the transition. Call it as the track changes.</td></tr>
+            <tr><td><code>roundedArt</code>, <code>artRadius</code></td><td>false, 0</td><td>Rounded corners and their radius.</td></tr>
+            <tr><td><code>vinylMode</code></td><td>false</td><td>Show the cover as a record. It turns once per song, from <code>playbackPosition</code> / <code>playbackDuration</code>.</td></tr>
+            <tr><td><code>showShadow</code></td><td>false</td><td>A drop shadow under the cover.</td></tr>
+            <tr><td><code>artFill</code></td><td>0.85</td><td>Share of the shorter side the cover takes when there are no side cards.</td></tr>
+            <tr><td><code>previewEnabled</code></td><td>false</td><td>Show the neighbours' covers at the sides, from <code>prevArtSource</code> / <code>nextArtSource</code>, tilted by <code>sideCardAngle</code> (30) at <code>sideCardOpacity</code> (0.4). The cover then takes 0.75 of the shorter side.</td></tr>
+            <tr><td><code>showSideCards()</code></td><td></td><td>Fade the side cards back in. Call it once you have given them the new neighbours.</td></tr>
+            <tr><td><code>animBusy</code></td><td>false</td><td>True from the start of a transition until <code>settled()</code>.</td></tr>
+            <tr><td><code>animationFinished()</code>, <code>settled()</code></td><td>signals</td><td>The transition ended; a moment later, the component is at rest.</td></tr>
+            <tr><td><code>artClicked()</code>, <code>artLoadFailed()</code></td><td>signals</td><td>A tap on the cover; the cover could not be loaded.</td></tr>
           </tbody>
         </table>
-        <p>Used twice: by <a href="pages.html#phonemirror">PhoneMirrorView</a> as its no-phone screen (it calls <code>start()</code> when
-          that screen appears and <code>cancel()</code> when it goes away), and inside a centred modal <code>Popup</code> on the Phone Mirror
-          settings card ("Connect phone").</p>
-
-        <!-- HomeOBDView -->
-        <h2 id="home-obd-view">HomeOBDView</h2>
-
-        <p><span class="file-path">frontend/HomeOBDView.qml</span> is the reading cards of the OBD panel, the middle one of <a href="pages.html#mainmenu">MainMenu</a>. It has no <code>objectName</code> and no required properties; it is a plain child, and the tap that opens <code>OBDMenu.qml</code> is a <code>MouseArea</code> in MainMenu, not in this file.</p>
-
         <ul>
-          <li><strong>Which parameters</strong> &mdash; <code>settingsManager.get_home_obd_parameters()</code>, falling back to <code>["SPEED", "RPM", "COOLANT_TEMP", "CONTROL_MODULE_VOLTAGE"]</code>, cut to at most 8 ("Limit to maximum 8 cards"). Any of the 129 model ids can be displayed, IMU ones included, because titles/units come from <code>App.OBDParameterModel.parameterInfo</code> (short titles such as <code>CLT</code>) and values from <code>liveValue(id)</code>.</li>
-          <li><strong>Layout</strong> &mdash; a <code>GridLayout</code> of stacked cards: two columns from two cards up; with an odd count in two-column mode the first card spans both columns. Each card is a <code>backgroundColor</code> rectangle with a 1&nbsp;px accent border, an upper-case title (<code>Spacing.mainMenuOBDTextSize</code>), the value with <code>OBDParameterModel.decimalsFor(id)</code> decimals + unit (<code>Spacing.mainMenuOBDDataSize</code>), or "-- unit" in <code>secondaryTextColor</code> until the PID has reported (title and value shrink together, <code>textFit</code>, in a card too short for both at full size: eight cards above the vehicle card), and a 4&nbsp;dp progress strip along the bottom, inset by the border width so it doesn't paint over the border (200&nbsp;ms width <code>Behavior</code>; hidden until a value arrives). <code>displayValue</code> has the same 50&nbsp;ms linear <code>Behavior</code> as the OBDMenu cards ("fast rolling effect").</li>
-          <li><strong>Shift light on the RPM card</strong> &mdash; a circular lamp anchored right-middle, visible when <code>param === "RPM"</code> and <code>shiftLightManager.enabled</code> and <code>showOnHomeCard</code>. It only draws: the active flag and the flash phase come from <a href="signals-slots-reference.html#shiftLightManager"><code>shiftLightManager</code></a> (<code>activeFlag.color</code> while <code>lit</code>, a dark <code>#1a1a1a</code> silhouette otherwise). Size, glow (<code>glowSize</code> / <code>glowIntensity</code>), the colour <code>Behavior</code> (<code>colorTransitionSpeed</code> ms) and an 800&nbsp;ms pulse (scale 1.0 &rarr; 1.15 &rarr; 1.0, when <code>pulseEnabled</code>) are manager properties too, so edits apply live.</li>
-          <li><strong>Rebuild on change</strong> &mdash; <code>onHomeOBDParametersChanged</code> sets the <code>Repeater</code> model to <code>[]</code> and re-assigns it via <code>Qt.callLater</code> "to force re-creation of all delegates".</li>
+          <li>The component does not watch the player. You change <code>artSource</code> and call <code>triggerSlide()</code>.</li>
+          <li>The side cards hide themselves when a transition starts and stay hidden until you call <code>showSideCards()</code>.</li>
+          <li>Start heavy work for the new track on <code>settled()</code>, not on the track change, so that it does not compete with the animation. The Media Room does its audio analysis there.</li>
+          <li>A cover that fails to load leaves a hole: put a fallback in on <code>artLoadFailed()</code>.</li>
         </ul>
+        <p id="coverflow-card">
+          Each cover is a <span class="file-path">CoverflowCard.qml</span>: one image with the rounding or record mask,
+          the tilt and the shadow. It has no animation of its own and is not meant to be used outside the carousel.
+        </p>
 
-        <p>The window-wide full-screen and aura flashes for the same flags live in <span class="file-path">Main.qml</span> (see <a href="frontend-overview.html#shift-light">Shift Light Overlays</a>); the flags are edited in the shift light editor (<span class="file-path">frontend/obd/ShiftLightEditor.qml</span>), which the RPM card on <a href="pages.html#obdmenu">OBDMenu</a> opens.</p>
-
-        <!-- ErrorToast -->
-        <h2 id="error-toast">ErrorToast</h2>
-
-        <p><span class="file-path">frontend/ErrorToast.qml</span> (<code>objectName: "errorToast"</code>) is the one app-wide error notice, for the few errors the driver should hear about while on another page. <span class="file-path">Main.qml</span> instantiates it once as the window's last child (it draws over every page; popups draw above it). It sits top centre, since the bottom belongs to the BottomBar, in <code>Style.statusDanger</code> with bold white text, fades in and out (no slide), dismisses on a tap or after <code>durationMs</code> (8 s). <code>show(message)</code> shows a message or queues it; a message equal to the one showing, or to the last one queued, is dropped. <code>currentMessage</code> and <code>queuedCount</code> are read by <span class="file-path">tests/cpp/tst_errortoast.cpp</span> and the dev command server.</p>
-
-        <p>Wired in <span class="file-path">Main.qml</span>:</p>
-        <ul>
-          <li><code>obdManager.connectionLostUnexpectedly(reason)</code> &rarr; "OBD connection lost: &lt;reason&gt;", unless the current page already shows OBD status (OBDMenu, OBDHome, OBDDiagnostics, or Settings on the OBD section).</li>
-        </ul>
-        <p>Everything else stays on its own page and in the logs (no chime, one severity). Phone-mirror errors off-page are still open in <span class="file-path">TODO/error-notification-ui.md</span>.</p>
-
-        <!-- OBDAdapterSheet -->
-        <h2 id="obd-adapter-sheet">OBDAdapterSheet</h2>
-        <p id="connect-sheet"><span class="file-path">frontend/ConnectSheet.qml</span> is the template both "connect something" popups share (Connect Music in <span class="file-path">MusicEmptyPrompt.qml</span>, Connect Vehicle here): a <code>Popup</code> parented to <code>Overlay.overlay</code>, centred, <code>min(90&nbsp;% of the window, 440&nbsp;dp)</code> wide and as tall as its content (at most 92&nbsp;% of the window), 20&nbsp;dp padding, the accent-bordered card, a centred <code>title</code> with an optional spinner (<code>busy</code>), and its children in a column under it. Tap outside or Esc closes it. Each choice is a <span class="file-path">frontend/SheetRow.qml</span>: an outlined accent row with a bold <code>title</code>, a <code>detail</code> line, an optional <code>trailing</code> word and 0&ndash;4 signal <code>bars</code> on the right, <code>active</code> / <code>highlighted</code>, and a <code>picked()</code> signal.</p>
-
-        <p><span class="file-path">frontend/OBDAdapterSheet.qml</span> is the "Connect Vehicle" <code>ConnectSheet</code>. Opening it starts <code>obdAdapterFinder.startScan()</code>; closing it stops the scan but leaves a pairing that's under way running. From the top: the title with the spinner while scanning or pairing, the finder's <code>status</code> line (red when <code>statusIsError</code>, or "Bluetooth is off." with a "Turn Bluetooth On" button), a row per saved adapter from <code>settingsManager.obdSavedAdapters</code> (a tap calls <code>obdManager.connectToAdapter()</code>), the device list as <code>SheetRow</code>s (name; address &middot; Classic / Bluetooth LE / Classic + LE &middot; Paired; signal bars; "Working&hellip;" and a stronger outline on the row being paired; rows the finder marks not <code>connectable</code> are dimmed with the reason; the list scrolls past 45&nbsp;% of the window), and a centred footer with Scan Again, Show All Devices (N) / OBD Adapters Only, and Cancel while busy. It closes itself 1.5 s after <code>obdManager.connected</code> turns true. When <code>obdAdapterFinder.supported</code> is false it lists <code>obdManager.availableAdapters</code> instead and, when the host sets <code>offerSettings</code>, shows an "OBD Settings" button that emits <code>settingsRequested()</code>. See <a href="obd-manager.html#adapter-finder">OBD Manager &rarr; Adapter Finder</a>.</p>
-
-        <p id="obd-connect-button"><span class="file-path">frontend/OBDConnectButton.qml</span> (<code>objectName: "obdConnectButton"</code>) is the outlined "Connect Vehicle" button of the OBD pages' "No vehicle connected" prompt (<a href="pages.html#obdhome">OBDHome</a>, <a href="pages.html#obdmenu">OBDMenu</a>). It reads "Connecting&hellip;" while <code>obdManager.connectionState</code> is <code>Connecting</code> and opens its own <code>OBDAdapterSheet</code> with <code>offerSettings</code> on; the host passes <code>mainWindow</code> (for the sheet's "OBD Settings" &rarr; <code>navigateToSettings("obdSettings")</code>) and <code>fontFamily</code>.</p>
-
-        <!-- OBDParameterModel -->
-        <h2 id="obd-parameter-model">OBDParameterModel</h2>
-
-        <p><span class="file-path">frontend/OBDParameterModel.qml</span> is a <code>pragma Singleton</code> <code>QtObject</code> registered in <span class="file-path">qmldir</span>. It serves every displayable parameter's metadata and is the single live-value store that all OBD views, gauges and dashboards read. The metadata itself comes from the C++ <a href="signals-slots-reference.html#parameterCatalog"><code>parameterCatalog</code></a> (<span class="file-path">src/managers/parametercatalog.cpp</span>), the one table for every frontend; the singleton keeps the API below so its consumers did not change.</p>
-
-        <h3>Parameter definitions</h3>
-
-        <pre><code>{ <span class="prop">id</span>: <span class="str">"SPEED"</span>, <span class="prop">title</span>: <span class="str">"Speed"</span>, <span class="prop">shortTitle</span>: <span class="str">"SPD"</span>, <span class="prop">unit</span>: <span class="str">"MPH"</span>, <span class="prop">min</span>: <span class="num">0</span>, <span class="prop">max</span>: <span class="num">160</span>,
-  <span class="prop">kind</span>: <span class="str">"numeric"</span>, <span class="prop">decimals</span>: <span class="num">0</span>, <span class="prop">source</span>: <span class="str">"obd"</span>, <span class="prop">aliasOf</span>: <span class="str">""</span> }</code></pre>
-
-        <p><code>allParameters</code> (= <code>parameterCatalog.parameters</code>) holds <strong>129 entries: 120 polled OBD ids, the alias <code>IGNITION_TIMING</code> (it carries <code>TIMING_ADVANCE</code>, <code>aliasOf</code>) and 8 BerryIMU readings</strong>. The <code>kind</code> field (<code>"percentage"</code>, <code>"temperature"</code>, <code>"voltage"</code>, <code>"pressure"</code>, <code>"bidirectional"</code>, <code>"numeric"</code>) is what gauge widgets match against their <code>octaveSupportedKinds</code> array, and what the dashboard editor's PID picker filters on.</p>
-
+        <h3 id="music-devices">Music device components</h3>
+        <p>
+          The Media Room can show a 3D music player where the album art is: a record player, an MP3 player, a CD
+          player, a cassette player or an iPod. Four pieces make that up. They need Qt Quick 3D, which not every build
+          has.
+        </p>
         <table>
-          <thead><tr><th>Group (catalog order)</th><th>Count</th><th>Examples</th></tr></thead>
+          <thead><tr><th>Component</th><th>What it is</th></tr></thead>
           <tbody>
-            <tr><td>"Original 18" (historical group listed in <code>originalParameters</code>)</td><td>18</td><td>SPEED, RPM, COOLANT_TEMP, OIL_TEMP, COMMANDED_EQUIV_RATIO, ENGINE_LOAD, THROTTLE_POS, FUEL_LEVEL, SHORT/LONG_FUEL_TRIM_1, INTAKE_TEMP, INTAKE_PRESSURE, MAF, TIMING_ADVANCE, CONTROL_MODULE_VOLTAGE, O2_B1S1, FUEL_PRESSURE, IGNITION_TIMING</td></tr>
-            <tr><td>Additional (batch 1)</td><td>23</td><td>RUN_TIME, DISTANCE_W_MIL, FUEL_RAIL_PRESSURE_VAC/DIRECT, BAROMETRIC_PRESSURE, AMBIANT_AIR_TEMP, RELATIVE_THROTTLE_POS, THROTTLE_POS_B, ACCELERATOR_POS_D, CATALYST_TEMP_B1S1/B1S2, EVAP_VAPOR_PRESSURE, SHORT/LONG_FUEL_TRIM_2, O2_B1S2/B2S1/B2S2, DISTANCE_SINCE_DTC_CLEAR, WARMUPS_SINCE_DTC_CLEAR, ABSOLUTE_LOAD, COMMANDED_EGR, EGR_ERROR, ETHANOL_PERCENT</td></tr>
-            <tr><td>Extra narrow-band O2</td><td>4</td><td>O2_B1S3, O2_B1S4, O2_B2S3, O2_B2S4</td></tr>
-            <tr><td>Wide-range O2 voltage / current</td><td>8 + 8</td><td>O2_S1..S8_WR_VOLTAGE, O2_S1..S8_WR_CURRENT</td></tr>
-            <tr><td>Bank-2 catalyst</td><td>2</td><td>CATALYST_TEMP_B2S1, B2S2</td></tr>
-            <tr><td>Throttle / accelerator</td><td>4</td><td>THROTTLE_POS_C, ACCELERATOR_POS_E/F, THROTTLE_ACTUATOR</td></tr>
-            <tr><td>Fuel system</td><td>4</td><td>EVAPORATIVE_PURGE, FUEL_RAIL_PRESSURE_ABS, FUEL_INJECT_TIMING, FUEL_RATE</td></tr>
-            <tr><td>Time-based</td><td>2</td><td>RUN_TIME_MIL, TIME_SINCE_DTC_CLEARED</td></tr>
-            <tr><td>Other</td><td>11</td><td>MAX_MAF, FUEL_TYPE, EVAP_VAPOR_PRESSURE_ABS/ALT, SHORT/LONG_O2_TRIM_B1/B2, RELATIVE_ACCEL_POS, HYBRID_BATTERY_REMAINING, ELM_VOLTAGE</td></tr>
-            <tr><td>Extended PIDs (0x61 and above)</td><td>37</td><td>Torque, boost, air, temperature, throttle, EGR, fuel, drivetrain, distance/time and hybrid/EV values; delivered through <code>obdParameterChanged(paramId, value)</code></td></tr>
-            <tr><td>BerryIMU</td><td>8</td><td>PITCH, ROLL, HEADING, ALTITUDE, ACCEL_MAG, LATERAL_G, LONGITUDINAL_G, BARO_TEMP</td></tr>
+            <tr><td><code>MusicDevicePreference</code></td><td>A singleton that holds the choice. <code>mode</code> is one of <code>options</code> ("Album art", "Record player", "MP3 player", "CD player", "Cassette player", "iPod"); <code>select(value)</code> saves it (setting <code>musicDeviceModel</code>); <code>enabled</code> is true for anything but "Album art"; <code>isAvailable()</code> says whether this build can draw the 3D players.</td></tr>
+            <tr><td><code>MusicDeviceScene</code></td><td>The player itself. Give it <code>device</code>, <code>playing</code>, <code>artSource</code>, <code>trackTitle</code>, <code>artist</code>, <code>hasTrack</code>, and <code>playbackPosition</code> / <code>playbackDuration</code> in milliseconds. A drag turns it and it eases back; a tap emits <code>clicked()</code>. <code>ready</code> and <code>error</code> report the model load.</td></tr>
+            <tr><td><code>MusicDeviceCarousel</code></td><td>The picker: every choice on a ring, the front one large. Set <code>options</code> and <code>artSource</code>, call <code>show(value)</code> when it opens. It emits <code>chosen(value)</code> for a tap on the front item and <code>missed()</code> for a tap on none; <code>focusValue</code> is the one at the front and <code>step(&plusmn;1)</code> moves the ring.</td></tr>
+            <tr><td><code>MusicDeviceCover</code>, <code>MusicDeviceArtSurface</code></td><td>The cover as an image that falls back to the "missing art" picture, and that image printed on a 3D surface (a record label, a CD). Used inside the two above.</td></tr>
           </tbody>
         </table>
-
-        <p>Derived lookups: <code>parameterInfo</code> (a map keyed by id with <code>title</code> = the catalog <code>shortTitle</code> when there is one, e.g. <code>COOLANT_TEMP &rarr; "CLT"</code>, <code>unit</code>, <code>minValue</code>, <code>maxValue</code>, kept for <code>HomeOBDView</code> compatibility), <code>getParamInfo(id)</code> (permissive &mdash; unknown ids get <code>{title: id, unit: "", 0..100}</code>), <code>hasParameter(id)</code> (strict; used by <code>DashboardRenderer</code> and the editor for validation), <code>isOriginalParameter(id)</code>, <code>decimalsFor(id)</code> (the catalog <code>decimals</code>: 0 for speed, RPM, run times, distances and counters, else 1; used by the Parameter Cards and Home tiles) and <code>sensorParameters</code> / <code>isSensorParameter(id)</code> (the catalog's <code>source: "imu"</code> entries).</p>
-
-        <p><code>liveValue(id)</code> is what every reader binds (the gauge primitives, home cards, Parameter Cards, CarMenu, the OBD settings preview): <code>paramStore[id]</code>, or the demo sweep while demo mode is on, and <code>undefined</code> before the first reading or at shutdown. A binding depends only on the branch that ran, so outside demo mode it re-evaluates only when its own id changes. <code>getParamValue(id)</code> is the same with <code>0</code> for no value. Covered by <span class="file-path">tests/cpp/tst_vehiclegate.cpp</span> and <span class="file-path">tst_parameterstore.cpp</span>.</p>
-
-        <h3>Live values: the C++ ParameterStore</h3>
-
-        <p>The values live in C++: <a href="signals-slots-reference.html#paramStore"><code>paramStore</code></a> (<span class="file-path">src/managers/parameterstore.{h,cpp}</span>, a <code>QQmlPropertyMap</code>) holds the latest value of every id, one notifying key per id. <span class="file-path">src/appcore.cpp</span> feeds it from <code>obdManager.parameterSampled(id, value)</code> (every decoded PID, single- and multi-value, on desktop and Android) and the eight <code>berryIMU</code> signals; an alias (<code>IGNITION_TIMING</code>) is written whenever its target arrives. Writes are coalesced in the store: <code>ingest()</code> only records the value and arms a one-shot 33&nbsp;ms timer, and the fold inserts every pending value and emits <code>changed(ids)</code>. The reason is the Orange Pi lesson: the IMU alone sends ~440 values/s, and copying a whole dictionary on each one "pegged the QML thread at 100% CPU while idle".</p>
-
-        <p>A binding on <code>paramStore[id]</code> re-evaluates only when that id changes, and an id with no reading yet is <code>undefined</code> (the "--" readouts rely on it). Nothing copies the values into a QML map any more (the old whole-map <code>paramValues</code>, replaced on every fold, re-evaluated every reader whichever value changed; it is gone), and there are no per-signal handlers; <code>OBDManager</code>'s typed signals still exist for other consumers.</p>
-
-        <h3>Demo mode</h3>
-
-        <p><code>simulationActive</code> switches the singleton to "pure-QML fake data so dashboards can be built/tested without a live OBD connection": every parameter sweeps a sine between its <code>min</code> and <code>max</code> with a 4&ndash;16&nbsp;s period and a per-parameter phase (so the screen "doesn't pulse in lockstep"), driven by a 100&nbsp;ms timer; big-range values are rounded to integers. While active, <code>liveValue()</code> serves the sweep instead of the store; on deactivation it reads the store again, so the fake readings go and the real ones come back at once. The dashboard editor toggles this (see <a href="gauges-dashboards.html#editor">Gauges &amp; Dashboards &rarr; Editor</a>).</p>
-
-        <!-- Jeep rig -->
-        <h2 id="vehicle-view">VehicleView</h2>
-
-        <p><span class="file-path">frontend/VehicleView.qml</span> is the 3D vehicle as a component: the <code>View3D</code> (<code>objectName: "jeepScene"</code>), its light probe and two lights, the orbit camera (<code>jeepCamera</code>, fitted to the rig's radius and the view's aspect), the gestures and the <a href="#jeep-rig">rig</a> itself. A page gives it a size and adds whatever it wants around it; <a href="pages.html#carmenu">CarMenu</a> is the first user. Use one at a time: a Quick3D scene is the most expensive thing the app draws, and on a machine without a GPU building one stalls for seconds.</p>
-
-        <table>
-          <thead><tr><th>Member</th><th>Meaning</th></tr></thead>
-          <tbody>
-            <tr><td><code>attitude</code> (quaternion)</td><td>Orientation of the vehicle in the scene's frame (+Y up, +Z forward). Identity is level.</td></tr>
-            <tr><td><code>active</code></td><td>Whether the view is on screen; stops the rig's spin timer when false. Bind it to the page's <code>visible</code>.</td></tr>
-            <tr><td><code>interactive</code></td><td>Drag to orbit, pinch / wheel to zoom, tap a panel, double-tap to restore the view. Set false for a picture that should not take touches.</td></tr>
-            <tr><td><code>showLevelRing</code></td><td>The accent-coloured ring on the ground (<code>levelRing</code>) that stays level while the vehicle tilts.</td></tr>
-            <tr><td><code>cameraYaw</code>, <code>cameraPitch</code>, <code>cameraZoom</code></td><td>The orbit, in degrees (defaults &minus;35 / &minus;25), and zoom (1 = fitted; 0.4..3). <code>resetView()</code> animates back to the defaults.</td></tr>
-            <tr><td><code>spec</code></td><td>Which vehicle: <code>vehicleManager.active</code> by default (<code>{id, rigged, asset, modelUrl, yaw, tilt, ...}</code>), the built-in rig where there is no manager. <code>rigged</code> (read-only) says which kind is loaded; <code>hasVehicle</code> is false while none is chosen (nothing is loaded then). A bundled model's file comes through <code>assetStore.localUrl(asset)</code>, a user's own from <code>modelUrl</code>.</td></tr>
-            <tr><td><code>vehicle</code> (read-only)</td><td>The loaded vehicle (a <code>Loader3D</code>'s item): the <code>JeepVehicle</code> rig, a <code>RigVehicle</code> (a rig read from a <code>rig.json</code>, used when <code>spec.rig</code> names its folder), or a <code>GenericVehicle</code> for a model of the user's. All have <code>ready</code>, <code>error</code>, <code>closedRadius</code>, <code>sweptRadius</code>, <code>anyOpenRequested</code>, <code>groundY</code>, <code>toggle(key)</code>, <code>engineRpm</code> and <code>wheelSpeedKph</code>, so a host's bindings fit any of them. Null for a moment while the vehicle is swapped.</td></tr>
-            <tr><td><code>ready</code>, <code>error</code></td><td>The rig's load state.</td></tr>
-          </tbody>
-        </table>
-
-        <p>The scene background is transparent, so the vehicle sits on whatever the page draws behind it. The ring is a flat <code>#Rectangle</code> carrying a 2D circle as its texture (Quick3D has no ring mesh), unlit and alpha-blended.</p>
-
-        <p id="rig-vehicle"><span class="file-path">frontend/RigVehicle.qml</span> (<code>objectName: "rigVehicle"</code>) is a rigged vehicle put together from data: <code>folder</code> names a build script's output under <span class="file-path">frontend/assets/</span> (<span class="file-path">tools/vehicle/carkit.py</span>), and <code>assetStore.readJson(folder + "/rig.json")</code> gives it the parts. A part with role <code>body</code> or <code>panel</code> is a <code>JeepHinge</code> (its <code>folder</code> property says where the file is; a panel's <code>tap</code> names the property that opens it: <code>driverDoorOpen</code>, <code>passengerDoorOpen</code>, <code>rearLeftDoorOpen</code>, <code>rearRightDoorOpen</code>, <code>hoodOpen</code>, <code>tailgateOpen</code>); a <code>wheel</code> spins with <code>wheelSpeedKph</code> and a <code>steered_wheel</code> also turns with <code>steeringInput</code> (up to the rig's <code>maxSteer</code>, the inner wheel a little further); each entry of <code>lamps</code> is a <code>JeepLamp</code> on the <code>head</code> / <code>fog</code> / <code>brake</code> / <code>reverse</code> circuit. It has the members <code>JeepVehicle</code> has (<code>toggle()</code>, <code>openAll()</code>, <code>closeAll()</code>, the lamp switches, the radii, <code>groundY</code>), so the view and the test panel work with either. The BMW is the first vehicle shown this way.</p>
-
-        <p><span class="file-path">frontend/GenericVehicle.qml</span> is a user's model: one glTF file in a <code>RuntimeLoader</code>, turned by <code>yaw</code> / <code>tilt</code>, then centred and scaled so the half-diagonal of its bounding box is the Jeep's <code>closedRadius</code> (2.13&nbsp;m in scene units), whatever units the file is in. The box is measured from every <code>Model</code>'s own <code>bounds</code>, several times over the first moments after the load, and <code>ready</code> waits for it: <code>RuntimeLoader.bounds</code> is worked out before the meshes have bounds and comes out as the box of the parts' origins (Qt 6.11), which left a model of several objects off-centre and too large. Its underside becomes <code>groundY</code>, where the level ring sits. Nothing on it is pickable, so a tap only ever resets the view.</p>
-
-        <h2 id="vehicle-picture">VehiclePicture and HomeVehicleCard</h2>
-
-        <p><span class="file-path">frontend/VehiclePicture.qml</span> is the vehicle as an <code>Image</code>: <span class="file-path">assets/jeep_tj/preview.png</span> (900&nbsp;px, transparent background), fitted inside whatever size it is given. It is for the places that show the car without paying for a live scene; where the car has to move, use <a href="#vehicle-view">VehicleView</a>. The picture is the real scene rendered once: <code>tools/vehicle/render_preview.py</code> loads <code>VehicleView</code> at its default camera with no level ring, grabs it and crops to the vehicle. Run it again after the model or the view's lighting changes. The source follows <code>spec</code> (the active vehicle by default; the chooser's tiles pass a row of <code>vehicleManager.vehicles</code>): <code>assets/&lt;pictureAsset&gt;</code> for a vehicle that ships with the frontend (<code>render_preview.py &lt;id&gt;</code> renders a bundled model's), <code>pictureUrl</code> for a model the user added: the Vehicle card in Settings renders its preview at 720&times;600, and saves it to the vehicle's folder as soon as the model is on screen and again after each turn. Until then <code>hasPicture</code> is false and there is nothing to draw (the Home card shows the vehicle's name, the "No vehicle connected" panel leaves the picture out).</p>
-
-        <p id="home-vehicle-card"><span class="file-path">frontend/HomeVehicleCard.qml</span> (<code>objectName: "homeVehicleCard"</code>) is the Home screen's vehicle card, drawn like the reading cards: the picture alone (pitch and roll are in the sensor panel). It emits <code>clicked()</code>; <a href="pages.html#mainmenu">MainMenu</a> places it and decides what the tap opens.</p>
-
-        <p id="home-sensor-panel"><span class="file-path">frontend/HomeSensorPanel.qml</span> (<code>objectName: "homeSensorPanel"</code>) is the Home screen's third panel, the sensors: one tile each, drawn like the reading cards, for G-force (<code>gauges/GForceGauge</code>), compass (<code>gauges/CompassGauge</code>) and tilt (PITCH and ROLL in whole degrees from <code>OBDParameterModel.sample()</code>, "--" until the sensor reports). The tiles stand in a column, or side by side while <code>inRow</code> (Home in a window taller than wide). While <code>berryIMU.connected</code> is false it shows "No sensors connected" (<code>homeSensorPrompt</code>) instead. A further sensor is one more entry in <code>tiles</code> and a <code>Component</code> for it. It emits <code>clicked()</code>; <a href="pages.html#mainmenu">MainMenu</a> opens <code>SensorHome.qml</code> on it. Tile object names: <code>homeSensorTile_gforce</code>, <code>_compass</code>, <code>_tilt</code>.</p>
-
-        <h2 id="jeep-rig">The Jeep TJ Rig</h2>
-
-        <p>The 3D vehicle shown on <a href="pages.html#carmenu">CarMenu</a> is not one mesh but a small rig of Quick3D components at the top of <span class="file-path">frontend/</span>, assembled from part-local GLB files in <span class="file-path">frontend/assets/jeep_tj/</span>. Every file uses unversioned Qt 6 imports (<code>import QtQuick</code>, <code>import QtQuick3D</code>), so they only load when the optional QtQuick3D module is installed &mdash; <code>SensorHome</code> probes <code>CarMenu.qml</code> for exactly this reason.</p>
-
-        <h3>Assets and generated metadata</h3>
-
-        <table>
-          <thead><tr><th>File</th><th>Content</th></tr></thead>
-          <tbody>
-            <tr><td><span class="file-path">assets/jeep_tj/*.glb</span></td><td>Sixteen part meshes: <code>body</code>, <code>driver_door</code>, <code>passenger_door</code>, <code>tailgate</code>, <code>hood</code>, <code>driver_wheel</code> / <code>passenger_wheel</code> (front steering knuckles), <code>driver_front_spin</code> / <code>passenger_front_spin</code> / <code>driver_rear_spin</code> / <code>passenger_rear_spin</code> (rolling parts), <code>crank_pulley</code> / <code>engine_fan</code> / <code>front_driveshaft</code> / <code>rear_driveshaft</code> (engine and driveline spinners), <code>steering_links</code> (exported but not loaded &mdash; the linkage is drawn procedurally, see below). Geometry is batched by material within each part. The installed set is the lifted soft-top twin, so there is no <code>rear_glass</code> part (the hardtop build from <code>build_jeep_tj.py</code> adds one).</td></tr>
-            <tr><td><span class="file-path">assets/jeep_tj/Rig.js</span>, <span class="file-path">rig.json</span></td><td>"Generated by tools/vehicle/rig_export.py": for every part its file, pivot (metres, vehicle space), hinge <code>axis</code> (<code>"X"</code> or <code>"Y"</code>; <code>"Z"</code> for the spinners, which also carry an <code>orient</code> quaternion <code>[w, x, y, z]</code> that tilts their local +Z onto the real shaft axis) and <code>openAngle</code> (driver door &minus;68&deg;, passenger door 68&deg;, tailgate 90&deg;, hood &minus;65&deg;, rear glass 100&deg; on the hardtop build, 0 for the rest); <code>bounds</code> (<code>closedRadius</code> 2.13&nbsp;m, <code>sweptRadius</code> 2.82&nbsp;m); <code>bodyLift</code> (0.0889&nbsp;m, twin export only; the pitman pivot and end are raised by it too); and the <code>steering</code> geometry (knuckle pivots and ends, pitman pivot/end, <code>pickupFraction 0.15</code>, <code>pitmanTravel 22</code>&deg;, <code>tieBend 0.08</code>, damper anchor). <span class="file-path">rig.json</span> additionally lists the Blender object names batched into each part.</td></tr>
-            <tr><td><span class="file-path">tools/vehicle/reference/jeep_tj_2003.glb</span></td><td>The complete 22&nbsp;MB model as one file, kept outside <span class="file-path">frontend/</span> so no package ships it. It is the output of <span class="file-path">tools/vehicle/export_jeep_twin.py</span> (or <span class="file-path">build_jeep_tj.py</span> for the hardtop) and is used by the checker scripts and previews; the app does not load it.</td></tr>
-            <tr><td><span class="file-path">assets/vehicle_studio.hdr</span></td><td>128&nbsp;KiB studio light probe generated by <span class="file-path">tools/vehicle/build_studio_probe.py</span>; CarMenu uses it as <code>SceneEnvironment.lightProbe</code> (<code>probeExposure: 0.8</code>) so the paint and chrome pick up reflections.</td></tr>
-            <tr><td><span class="file-path">tools/vehicle/</span>, <span class="file-path">docs/vehicle/</span></td><td>The Blender builder (written for 4.2, also builds with 5.2), the rig exporter, checker scripts, a <span class="file-path">README.md</span>, and the photographic reference guide (<span class="file-path">references.md</span>, <span class="file-path">reference-manifest.json</span>, in-app and preview PNGs).</td></tr>
-          </tbody>
-        </table>
-
-        <p><span class="file-path">tools/vehicle/README.md</span> describes the model as "an original model reconstructed manually from photographs of one 2003 TJ Sahara", with the 2.372&nbsp;m wheelbase anchored to published dimensions and everything else interpreted from the 164 reference photos of a single vehicle catalogued in <span class="file-path">docs/vehicle/references.md</span>. No third-party meshes or photographic textures are bundled; the reference photography lives in the git-ignored <span class="file-path">dev/jeep-tj-reference/</span>. The in-app trim (silver metallic paint, black Sport-style flares, KO2-style tyres on 16-inch satin-black rims) differs from the Shale Green reference car by design.</p>
-
-        <p>The installed assets are the <strong>lifted soft-top digital twin</strong>: <span class="file-path">build_jeep_twin.py</span> takes the hardtop build, raises the sprung body 3.5&nbsp;inches, replaces the hardtop with a framed black soft top, and rebuilds the suspension, seats, shifters, dash and steering wheel. <span class="file-path">tools/vehicle/export_jeep_twin.py</span> poses that <code>.blend</code> at rest, bakes every object to world space, assigns each to the part of its nearest named ancestor (else <code>body</code>), takes the pivots from the twin's own joints and writes the same file set through <code>rig_export.py</code>. In the app the suspension, soft top and cabin are static body geometry, and the driveshafts keep the twin's rigid lift rather than being re-aimed at the axles. Export a new twin candidate with <code>blender -b --python tools/vehicle/export_jeep_twin.py -- --blend dev/jeep-twin/&lt;candidate&gt;/jeep-twin.blend --output &lt;dir&gt;/jeep_tj_2003.glb</code>, check it with <code>check_jeep_asset.py &lt;dir&gt;</code>, then copy it into <span class="file-path">frontend/assets/</span>. The app itself never needs Blender.</p>
-
-        <h3>JeepHinge</h3>
-
-        <p><span class="file-path">JeepHinge.qml</span> is a <code>Node</code> that loads one part with <code>RuntimeLoader</code> from <code>QtQuick3D.AssetUtils</code> (<code>source: "./assets/jeep_tj/" + part.file</code>) and positions it at the part's pivot. Its <code>rotation</code> is <code>orient</code> (identity unless the part carries one) times <code>animatedAngle</code> about the part's axis. <code>open: true</code> drives <code>animatedAngle</code> to <code>part.openAngle</code>, through a 450&nbsp;ms <code>InOutCubic</code> <code>Behavior</code> that can be disabled with <code>animate: false</code> (wheels are driven directly). It exposes <code>moving</code>, <code>closed</code>, <code>opened</code> (within 0.1&deg;), <code>ready</code> (<code>RuntimeLoader.Success</code>) and <code>error</code> (<code>errorString</code> on failure, also logged with <code>console.warn</code>).</p>
-
-        <h3>JeepVehicle</h3>
-
-        <p><span class="file-path">JeepVehicle.qml</span> (<code>pragma ComponentBehavior: Bound</code>, <code>objectName: "jeepVehicle"</code>) is the assembly. Its public state is plain booleans and reals that CarMenu's buttons and sliders toggle:</p>
-
-        <pre><code><span class="prop">property bool</span> driverDoorOpen, passengerDoorOpen, rearGlassOpen, tailgateOpen, hoodOpen
-<span class="prop">property bool</span> headlightsOn, fogLightsOn, brakeLightsOn, reverseLightsOn
-<span class="prop">property real</span> steeringInput: <span class="num">0</span>     <span class="cmt">// -1 .. 1, smoothed by a 180 ms Behavior</span>
-<span class="prop">property real</span> wheelSpeedKph: <span class="num">0</span>     <span class="cmt">// clamped to ±30</span>
-<span class="prop">property real</span> engineRpm: <span class="num">0</span>         <span class="cmt">// crank + fan, shown slowed 60x</span>
-<span class="prop">property real</span> axleRatio: <span class="num">3.73</span>      <span class="cmt">// driveshaft turns per wheel turn</span>
-<span class="kw">readonly property bool</span> ready       <span class="cmt">// every RuntimeLoader succeeded</span>
-<span class="kw">readonly property string</span> error     <span class="cmt">// first loader error, or ""</span>
-<span class="kw">readonly property real</span> radius      <span class="cmt">// closedRadius, or sweptRadius while anything is open</span>
-<span class="kw">function</span> <span class="fn">openAll</span>(); <span class="kw">function</span> <span class="fn">closeAll</span>()</code></pre>
-
+<pre><code><span class="cls">Loader</span> {
+    <span class="prop">id</span>: deviceLoader
+    <span class="prop">active</span>: App.MusicDevicePreference.enabled &amp;&amp; App.MusicDevicePreference.<span class="fn">isAvailable</span>()
+    <span class="prop">source</span>: active ? <span class="str">"MusicDeviceScene.qml"</span> : <span class="str">""</span>
+}
+<span class="cls">Binding</span> { <span class="prop">target</span>: deviceLoader.item; <span class="prop">property</span>: <span class="str">"device"</span>
+          <span class="prop">value</span>: App.MusicDevicePreference.mode; <span class="prop">when</span>: deviceLoader.status === Loader.Ready }</code></pre>
         <ul>
-          <li><strong>Hinged panels</strong> &mdash; six <code>JeepHinge</code>s (<code>body</code>, <code>driverHinge</code>, <code>passengerHinge</code>, <code>glassHinge</code>, <code>gateHinge</code>, <code>hoodHinge</code>). <code>hasRearGlass</code> is true only when <code>Rig.parts</code> has a <code>rear_glass</code>; on the soft top <code>glassHinge</code> is an empty, closed node with no file, <code>rearGlassOpen</code> stays false and CarMenu hides the Rear glass button. With a hardtop the tailgate and rear glass are sequenced: the glass opens only once the gate reports <code>opened</code>, the gate stays open while the glass is not <code>closed</code>, setting <code>tailgateOpen</code> mirrors into <code>rearGlassOpen</code> and raising the glass forces the gate open ("Open the swing gate fully before raising the glass; reverse this on closing"). The third brake light is a child of the gate hinge so it swings with the spare carrier.</li>
-          <li><strong>Steering</strong> &mdash; <code>driverWheel</code> / <code>passengerWheel</code> are hinges with <code>animate: false</code> whose angle comes from <code>steeringPose.driverAngle</code> / <code>passengerAngle</code>; the front spin parts are nested inside them (<code>relativeWheelPart()</code> re-bases the pivot) "so their spin axis turns with the steering knuckle".</li>
-          <li><strong>Wheel spin</strong> &mdash; a 16&nbsp;ms <code>Timer</code>, running while <code>ready &amp;&amp; visible &amp;&amp; (wheelSpeedKph !== 0 || engineRpm &gt; 0)</code>, integrates <code>wheelDegreesPerSecond</code> (speed in m/s over a 0.3937&nbsp;m tyre radius) into <code>wheelSpinAngle</code>, which all four spin hinges read. The same timer drives the engine and driveline.</li>
-          <li><strong>Engine and driveline</strong> &mdash; four spinner hinges, <code>crankPulley</code>, <code>engineFan</code>, <code>frontDriveshaft</code> and <code>rearDriveshaft</code>, turn about their own tilted axes. <code>driveshaftAngle</code> advances at <code>wheelDegreesPerSecond &times; axleRatio</code> and <code>crankAngle</code> at <code>engineRpm</code> &times; 6&deg;/s slowed by <code>engineMotionScale</code> (1/60) so the fan reads as motion instead of strobing at the frame rate. Both turn clockwise seen from the front (negative about their forward axis); the engine does not turn with the wheels. The model is a 4.0&nbsp;L inline six (block, head, valve cover, coil rail, driver-side intake and exhaust manifolds, accessory drive and serpentine belt, fan and shroud), an NV3550 five-speed with bellhousing and shifter tower, and an NP231 chain case with offset front output. Placement follows the engine-bay reference photos.</li>
-          <li><strong>Linkage</strong> &mdash; a <code>Node</code> of <code>JeepLink</code>s (pitman arm, drag link, three tie-rod segments with <code>objectName</code>s, two clamp sleeves, and a two-piece telescoping steering damper: "The steering damper telescopes; the steering rods remain rigid").</li>
-          <li><strong>Lamps</strong> &mdash; a <code>Repeater3D</code> over <code>[-1, 1]</code> places a fog, brake and reverse <code>JeepLamp</code> on each side; a second <code>Repeater3D</code> places the two headlights as an emissive <code>#Sphere</code> (<code>headlightGlow</code>) plus a <code>SpotLight</code> (<code>headlightBeam</code>, 48&deg; cone, brightness 8). All body-mounted lamps, and the third brake light, rise by <code>bodyLift</code> (<code>Rig.bodyLift</code>, else 0).</li>
+          <li>Load the scene and the picker through a <code>Loader</code> with a file name, as above, never as a plain child. A page that names them directly fails to load at all on a build without Qt Quick 3D.</li>
+          <li><code>isAvailable()</code> loads the 3D module the first time it is called. Call it only when the user has picked a player, so that the default (album art) never pays for it at startup.</li>
+          <li>The scene has no clock of its own. If you do not feed it the position, nothing moves.</li>
+          <li>The picker's list is the caller's. The Media Room adds "Vinyl" and, where phone mirroring can run, "Phone mirror" to <code>options</code> and handles those two itself.</li>
         </ul>
 
-        <h3>JeepSteering.js</h3>
+        <!-- Vehicle -->
+        <h2 id="vehicle">The Vehicle</h2>
+        <p>
+          The user picks a vehicle in Settings: one that ships with OCTAVE or a 3D model of their own. Two components
+          show it, a picture and a live 3D scene, and both follow that choice by themselves. Choosing and importing a
+          vehicle is described in <span class="file-path">docs/VEHICLES.md</span>.
+        </p>
 
-        <p><span class="file-path">JeepSteering.js</span> (<code>.pragma library</code>) is a small kinematics solver. <code>solve(input, g)</code> rotates the pitman arm by <code>input &times; pitmanTravel</code> in twelve steps and, at each step, Newton-iterates the two knuckle angles so that the drag link (pitman end &rarr; passenger knuckle) and the tie rod (driver knuckle &rarr; a pickup point <code>pickupFraction</code> along the drag link) keep their neutral lengths &mdash; "two fixed-length constraints, following the neutral assembly branch". It returns both wheel angles in degrees, the world points of every joint, and the residual errors. <code>tiePoints()</code> bends the tie rod by <code>tieBend</code> so it clears the differential. All coordinates are the metre-scale rig space the meshes use.</p>
+        <h3 id="vehicle-picture">VehiclePicture</h3>
+        <p>
+          The vehicle as an image, fitted inside whatever size you give it. Use it wherever the car only has to be
+          seen: it costs almost nothing, where a 3D scene is the most expensive thing the app draws.
+        </p>
+<pre><code>App.<span class="cls">VehiclePicture</span> {
+    <span class="prop">id</span>: picture
+    <span class="prop">anchors.fill</span>: parent
+    <span class="prop">visible</span>: hasPicture
+}</code></pre>
+        <table>
+          <thead><tr><th>Property</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>spec</code></td><td>Which vehicle. Defaults to the active one (<code>vehicleManager.active</code>); pass a row of <code>vehicleManager.vehicles</code> to show another, as the vehicle chooser's tiles do.</td></tr>
+            <tr><td><code>hasPicture</code></td><td>Read-only. False when no vehicle is chosen, or when the user's own model has no picture yet.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          Plan for <code>hasPicture</code> being false: there is nothing to draw then. A bundled vehicle's picture
+          ships with the app (rendered once from the 3D model by
+          <span class="file-path">tools/vehicle/render_preview.py</span>; run it again after changing a model). A
+          model the user added gets its picture the first time Settings shows it.
+        </p>
 
-        <h3>JeepLink and JeepLamp</h3>
+        <h3 id="vehicle-view">VehicleView</h3>
+        <p>
+          The vehicle in 3D: the scene, its lights and camera, and the gestures (drag to orbit, pinch or wheel to zoom,
+          tap a door or the hood to open it, double-tap to put the view back). Your page gives it a size and draws
+          whatever it wants around it. The 3D vehicle page is built on it.
+        </p>
+<pre><code><span class="cls">VehicleView</span> {
+    <span class="prop">id</span>: view
+    <span class="prop">anchors.fill</span>: parent
+    <span class="prop">active</span>: page.visible
+    <span class="prop">attitude</span>: Quaternion.<span class="fn">fromEulerAngles</span>(pitch, <span class="num">0</span>, roll)
+}</code></pre>
+        <table>
+          <thead><tr><th>Member</th><th>Default</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>active</code></td><td>true</td><td>Whether the view is on screen. Bind it to your page's <code>visible</code>: it stops the moving parts when false.</td></tr>
+            <tr><td><code>attitude</code></td><td>level</td><td>How the vehicle is tilted, as a quaternion in the scene's frame (+Y up, +Z forward).</td></tr>
+            <tr><td><code>interactive</code></td><td>true</td><td>False for a picture that should take no touches.</td></tr>
+            <tr><td><code>showLevelRing</code></td><td>true</td><td>A ring on the ground that stays level while the vehicle tilts.</td></tr>
+            <tr><td><code>cameraYaw</code>, <code>cameraPitch</code></td><td>-35, -25</td><td>The orbit, in degrees.</td></tr>
+            <tr><td><code>cameraZoom</code></td><td>1</td><td>1 fits the vehicle to the view; 0.4 to 3.</td></tr>
+            <tr><td><code>resetView()</code></td><td></td><td>Glide back to the default orbit and zoom.</td></tr>
+            <tr><td><code>spec</code></td><td>the active vehicle</td><td>Which vehicle to show.</td></tr>
+            <tr><td><code>hasVehicle</code></td><td>read-only</td><td>False while the user has chosen none. Nothing is loaded then.</td></tr>
+            <tr><td><code>ready</code>, <code>error</code></td><td>read-only</td><td>The model has loaded; or why it did not.</td></tr>
+            <tr><td><code>vehicle</code></td><td>read-only</td><td>The loaded vehicle object (below), or null.</td></tr>
+          </tbody>
+        </table>
+        <ul>
+          <li><strong>One at a time.</strong> On a machine without a GPU, building the scene stalls for seconds. Where the car does not have to move, use <code>VehiclePicture</code>.</li>
+          <li><strong>It needs Qt Quick 3D.</strong> A page that uses it must be opened only where that module is installed (the <code>hasQuick3D</code> context property), or be loaded through a <code>Loader</code> with a file name.</li>
+          <li><code>vehicle</code> is null for a moment while the user switches vehicles and while none is chosen. Guard every use, and show your own "Loading&hellip;" or error text from <code>ready</code> and <code>error</code>.</li>
+          <li>The background is transparent: the vehicle sits on whatever your page draws behind it.</li>
+          <li>A sideways drag turns the car, so the view opts out of the swipe that changes sections.</li>
+        </ul>
 
-        <p><span class="file-path">JeepLink.qml</span> draws a steel rod between two points: a <code>#Cylinder</code> scaled to the segment length and <code>radius</code>, rotated into place by a quaternion computed from the direction vector, with optional <code>#Sphere</code> joints at both ends (<code>joints: true</code>) and a <code>PrincipledMaterial</code> (<code>metalness 0.65</code>, <code>roughness 0.42</code>, tint <code>#424b52</code> by default). <span class="file-path">JeepLamp.qml</span> is an emissive lens (<code>#Cube</code> or <code>#Sphere</code> when <code>round</code>, <code>lensSize</code> in metres, <code>NoLighting</code> with an <code>emission</code> factor) plus a <code>SpotLight</code> (<code>beamBrightness</code>, <code>beamAngle</code>, <code>beamInnerAngle</code>, no shadows), both shown only while <code>on</code>. Each names its children <code>&lt;objectName&gt;Glow</code> / <code>&lt;objectName&gt;Beam</code> for scripts.</p>
+        <h3 id="jeep-rig">The vehicle inside the view</h3>
+        <p>
+          <code>view.vehicle</code> is one of three things, depending on the vehicle chosen. All three offer the same
+          members, so your page does not need to know which it has.
+        </p>
+        <table>
+          <thead><tr><th>Component</th><th>For</th><th>What moves</th></tr></thead>
+          <tbody>
+            <tr><td><code>JeepVehicle</code></td><td>The built-in Jeep TJ</td><td>Doors, hood, tailgate, wheels, steering with its linkage, engine fan and driveshafts, lamps.</td></tr>
+            <tr id="rig-vehicle"><td><code>RigVehicle</code></td><td>A bundled vehicle described by a <span class="file-path">rig.json</span> (the BMW)</td><td>Whatever the file lists: panels, wheels, steered wheels, lamps.</td></tr>
+            <tr><td><code>GenericVehicle</code></td><td>A model the user imported</td><td>Nothing. The model is shown whole, centred and scaled to fit, whatever units its file uses.</td></tr>
+          </tbody>
+        </table>
+        <table>
+          <thead><tr><th>Member (on all three)</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>engineRpm</code>, <code>wheelSpeedKph</code></td><td>Set <code>wheelSpeedKph</code> and a rig's wheels turn (shown up to 30 km/h). On the Jeep the driveshafts turn with them, and <code>engineRpm</code> turns the fan and crank pulley, 60 times slower than real so that it reads as motion.</td></tr>
+            <tr><td><code>toggle(key)</code></td><td>Open or close a panel: <code>driverDoorOpen</code>, <code>passengerDoorOpen</code>, <code>hoodOpen</code>, <code>tailgateOpen</code> (and <code>rearLeftDoorOpen</code>, <code>rearRightDoorOpen</code> on a rig that has them). The same names are properties on the two rigs.</td></tr>
+            <tr><td><code>ready</code>, <code>error</code></td><td>Load state.</td></tr>
+            <tr><td><code>closedRadius</code>, <code>sweptRadius</code>, <code>groundY</code></td><td>The size the camera frames, closed and with panels open, and where the ground is.</td></tr>
+          </tbody>
+        </table>
+<pre><code><span class="cls">Binding</span> { <span class="prop">target</span>: view.vehicle; <span class="prop">property</span>: <span class="str">"engineRpm"</span>
+          <span class="prop">value</span>: Number(App.OBDParameterModel.<span class="fn">liveValue</span>(<span class="str">"RPM"</span>)) || <span class="num">0</span>; <span class="prop">when</span>: carConnected }</code></pre>
+        <p>
+          The two rigs also have <code>openAll()</code>, <code>closeAll()</code>, <code>steeringInput</code> (-1 to 1) and
+          the lamp switches <code>headlightsOn</code>, <code>fogLightsOn</code>, <code>brakeLightsOn</code>,
+          <code>reverseLightsOn</code>. The vehicle itself reads no backend manager: the page feeds it. On a
+          <code>GenericVehicle</code>, <code>toggle()</code> and the speeds are accepted and do nothing.
+        </p>
+        <p>
+          A rig is a set of small parts, not one model: one <code>.glb</code> file per moving part, each with a pivot
+          and an axis. <code>JeepHinge</code> loads one part and turns it; <code>JeepLamp</code> is a lens with a beam;
+          <code>JeepLink</code> is a steel rod between two points; <span class="file-path">JeepSteering.js</span> works
+          out the two front wheel angles from the steering input. The Jeep's parts are in
+          <span class="file-path">frontend/assets/jeep_tj/</span>, with the pivots in
+          <span class="file-path">Rig.js</span>, both written by the Blender scripts in
+          <span class="file-path">tools/vehicle/</span>. To add a bundled vehicle, write a build script that produces a
+          folder with a <span class="file-path">rig.json</span> (the format is at the top of
+          <span class="file-path">RigVehicle.qml</span>; <span class="file-path">tools/vehicle/build_bmw_e46.py</span>
+          is the example) rather than new QML. <span class="file-path">tools/vehicle/README.md</span> describes how
+          the Jeep model was made.
+        </p>
+        <p>
+          <code>VehicleRigPanel</code> is a strip of test controls for a rig (every panel and lamp, steering, speeds,
+          and pitch and roll by hand). The 3D vehicle page loads it only in a developer run. It takes the
+          <code>vehicle</code> to drive.
+        </p>
 
-        <div class="info-box info">
-          <div class="info-box-title">IMU drives the whole body only</div>
-          CarMenu applies the BerryIMU quaternion to the parent <code>carModel</code> node (scaled 30&times;, "metre-scale TJ, +Z forward / +Y up, pivot at chassis centre"); doors, hood and tailgate open on a tap (a <code>JeepHinge</code> with <code>tappable: true</code> marks its part's Models pickable and names in <code>tapKey</code> the property <code>JeepVehicle.toggle(key)</code> flips; the body is tappable with an empty key, so it hides the panels behind it), and lights and steering are driven from the test panel. CarMenu feeds RPM and speed into the rig while OBD is connected or model simulation is active; otherwise wheel and engine motion use the test panel's sliders. The rig itself reads no backend manager. <code>JeepVehicle.groundY</code> (the ground under the tyres) and <code>closedRadius</code> place the level ring.
-        </div>
+        <!-- Classic Home -->
+        <h2 id="classic-home">Classic Home Panels</h2>
+        <p>
+          Home is normally a dashboard or a hand-built screen (see <a href="pages.html#mainmenu">Pages</a>). The
+          <strong>Classic</strong> choice in Settings &gt; Display &gt; Home Screen is the older three-panel Home, and
+          these are its panels. They are written for that one place. For a new Home, write a dashboard or a hand-built
+          screen instead of reusing them.
+        </p>
+        <table>
+          <thead><tr><th>Component</th><th>What it shows</th><th>Interface</th></tr></thead>
+          <tbody>
+            <tr id="home-obd-view"><td><code>HomeOBDView</code></td><td>Up to eight reading cards, the ones the user chose for Home, in two columns. Each has a short title, the value and a bar; "--" until the reading arrives. The RPM card carries the <a href="obd-manager.html#shift-light">shift light</a> lamp when that is on.</td><td>None. It reads its list from settings and rebuilds when the list changes.</td></tr>
+            <tr id="home-vehicle-card"><td><code>HomeVehicleCard</code></td><td>The vehicle's picture in a card. With no vehicle chosen: "No vehicle selected, tap to choose one". For a user's model with no picture yet: its name.</td><td><code>clicked()</code></td></tr>
+            <tr id="home-sensor-panel"><td><code>HomeSensorPanel</code></td><td>Three tiles from the motion sensor: G-force, compass, and pitch and roll. "No sensors connected" when there is no sensor.</td><td><code>clicked()</code>; <code>inRow</code> puts the tiles side by side, for an upright window.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          The two that emit <code>clicked()</code> open nothing themselves: Home decides where a tap goes. The
+          full-window shift-light flash is separate from the lamp on the RPM card
+          (<a href="frontend-overview.html#shift-light">Shift Light Overlays</a>).
+        </p>
 
         <!-- Design decisions -->
-        <h2 id="design-decisions">Design Decisions</h2>
+        <h2 id="design-decisions">Why They Are Built This Way</h2>
+        <ul>
+          <li><strong>One source for readings.</strong> A gauge needs only a reading id, because <code>OBDParameterModel</code> answers for both the value and how to show it. The motion sensor goes through the same store as the car, so a compass or a G-force gauge is not a special case.</li>
+          <li><strong>Values notify per id, at a capped rate.</strong> The motion sensor alone sends about 440 values a second. The store folds them together about 30 times a second, which is plenty for a needle, and wakes only the readers of the ids that changed.</li>
+          <li><strong>The album-art transition runs on the render thread.</strong> It moves a frozen copy of the old cover while the real image already shows the new one, so a busy interface thread cannot make it stutter.</li>
+          <li><strong>No blur where a shape will do.</strong> The icon shadow is an offset copy. A blurred shadow costs a full pass every frame on a small GPU. The album-art shadow is the one real drop shadow, and it stops updating during the transition.</li>
+          <li><strong>A picture where the car does not move.</strong> Home is on screen for most of a drive, so it shows <code>VehiclePicture</code> and leaves the 3D scene to the page made for it.</li>
+          <li><strong>A rig of parts, not one model.</strong> With one file per moving part and the pivots as data, QML can open a door or spin a wheel with plain transforms, and a new vehicle is data from a build script, with no new QML.</li>
+          <li><strong>One toast, few messages.</strong> A notice in the driver's view has to be rare to be read, so errors stay on their own pages unless the driver would otherwise miss them.</li>
+        </ul>
 
-        <p>Each item is taken from a comment in the file or from the commit that introduced it.</p>
-
-        <h3>One transition</h3>
-        <p>There were ten transitions and a setting to pick one; since 2026-11-23 there is one, with nothing to choose, as the 3D players bring their own. The exit-snapshot / centre-card split means the incoming art is always the real <code>Image</code> and only the outgoing art is a frozen texture.</p>
-
-        <h3>GPU work over scene-graph work</h3>
-        <p>Masks are shared textures; the album-art shadow is a layer whose <code>live</code> flag is dropped during the transition; the transition itself is render-thread <code>Animator</code>s only. All of these are documented in-line as ways to keep a busy QML thread (IMU signals, backend calls) from stuttering the visuals on the single-board head unit.</p>
-
-        <h3>No blur where a shape will do</h3>
-        <p><code>ThemedIcon</code>'s shadow is a second <code>ColorOverlay</code> and MediaPlayer's row shadow is a translucent <code>Rectangle</code>; both comments say so explicitly, because a <code>DropShadow</code> blur costs a full-screen pass per frame on Pi-class GPUs. <code>CornerBrackets</code> and the environment features in <code>TerminalFeedback</code> stop their animations when hidden for the same reason.</p>
-
-        <h3>A singleton as the data bus for gauges</h3>
-        <p><code>OBDParameterModel</code> centralises definitions <em>and</em> values so that a gauge only needs a parameter id. Feeding the IMU through the same store (rather than a second binding API) is what lets the compass, G-force and pitch/roll gauges, the PID picker and the demo mode work with no special cases; the store's 33&nbsp;ms coalescing keeps that single feed cheap (the IMU alone sends ~440 values a second; one dictionary copy per value once cost a full Pi core), and its per-key notify means a value only re-evaluates the readers of its own id.</p>
-
-        <h3>A rigged vehicle instead of one GLB</h3>
-        <p>Splitting the model into per-part GLBs with generated pivot metadata lets QML own the articulation with public Qt APIs (<code>RuntimeLoader</code> + <code>Node</code> transforms) instead of reaching into an imported scene's internals, as <span class="file-path">tools/vehicle/README.md</span> notes. It also keeps the steering solver, the lamp lights and the wheel spin as plain QML/JS that a script can drive by <code>objectName</code>, which is how the README captures are produced.</p>
-
-        <p><strong>Method names:</strong> this page uses the camelCase names of the manager methods (<code>nextTrack</code>). The older snake_case name of each (<code>next_track</code>) still works through protocol&nbsp;4 and goes in protocol&nbsp;5; the <a href="api-reference.html">API reference</a> lists them.</p>
-
-        <div class="related-pages">
+        <div class="related-pages" id="related">
           <h3>Related Pages</h3>
           <a href="frontend-overview.html" class="related-link">Frontend Overview</a>
           <a href="pages.html" class="related-link">Pages</a>
-          <a href="theme-system.html" class="related-link">Theme System</a>
-          <a href="settings-ui.html" class="related-link">Settings UI</a>
           <a href="gauges-dashboards.html" class="related-link">Gauges &amp; Dashboards</a>
-          <a href="hardware-managers.html" class="related-link">Hardware Managers</a>
+          <a href="settings-ui.html" class="related-link">Settings UI</a>
+          <a href="theme-system.html" class="related-link">Theme System</a>
           <a href="obd-manager.html" class="related-link">OBD Manager</a>
-          <a href="audio-analyzer.html" class="related-link">Audio Analyzer</a>
+          <a href="hardware-managers.html" class="related-link">Hardware Managers</a>
+          <a href="phone-mirror-android-auto.html" class="related-link">Phone Mirror</a>
+          <a href="api-reference.html" class="related-link">API Reference</a>
         </div>
 
       </div>

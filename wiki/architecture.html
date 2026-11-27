@@ -15,935 +15,541 @@
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Architecture</div>
           <h1 class="page-title">Architecture Overview</h1>
           <p class="page-subtitle">
-            System design, communication patterns, threading model, startup order,
-            observability, and the reasoning behind each of those choices &mdash; verified against
-            <code>src/main.cpp</code> and the manager sources.
+            What OCTAVE is made of, how the screen talks to the code underneath, what happens at startup,
+            and where settings and logs live
           </p>
         </div>
 
         <nav class="toc">
           <div class="toc-title">On This Page</div>
           <ul class="toc-list">
-            <li><a href="#high-level">High-Level Architecture</a></li>
-            <li><a href="#backend-frontend">Backend / Frontend Split</a></li>
-            <li><a href="#manager-pattern">The Manager Pattern</a></li>
-            <li class="toc-h3"><a href="#all-managers">All Managers</a></li>
-            <li><a href="#communication">Backend-QML Communication</a></li>
-            <li class="toc-h3"><a href="#context-properties">Context Properties</a></li>
-            <li class="toc-h3"><a href="#signals-slots">Signals and Slots</a></li>
-            <li class="toc-h3"><a href="#properties">Qt Properties</a></li>
-            <li class="toc-h3"><a href="#qml-types">Custom QML Types</a></li>
-            <li><a href="#startup">Application Startup Sequence</a></li>
-            <li class="toc-h3"><a href="#startup-cpp">src/main.cpp</a></li>
-            <li><a href="#threading">Threading Model</a></li>
-            <li class="toc-h3"><a href="#thread-obd">OBD Worker Thread</a></li>
-            <li class="toc-h3"><a href="#thread-pool">Thread Pools and QtConcurrent</a></li>
-            <li class="toc-h3"><a href="#thread-sensors">Sensor Read Loops</a></li>
-            <li class="toc-h3"><a href="#thread-watchdog">UI Watchdog</a></li>
+            <li><a href="#high-level">What OCTAVE Is Made Of</a></li>
+            <li><a href="#backend-frontend">Where the Code Lives</a></li>
+            <li><a href="#manager-pattern">What a Manager Is</a></li>
+            <li><a href="#communication">How a Screen Talks to a Manager</a></li>
+            <li><a href="#all-managers">The Managers</a></li>
+            <li><a href="#service">The Service: Other Programs</a></li>
+            <li><a href="#startup">Startup</a></li>
+            <li><a href="#threading">Threads</a></li>
+            <li class="toc-h3"><a href="#thread-watchdog">The UI Watchdog</a></li>
             <li><a href="#volume-system">Volume System</a></li>
-            <li><a href="#video">Video into QML: Image Provider vs QVideoSink</a></li>
-            <li><a href="#android-auto-module">The Built-in Android Auto Receiver</a></li>
-            <li><a href="#phone-server">The Phone Server Fork</a></li>
-            <li><a href="#settings-persistence">Settings Persistence</a></li>
-            <li><a href="#dashboards">Dashboards: JSON Specs + DashboardManager</a></li>
-            <li><a href="#vehicle-3d">The 3D Vehicle (CarMenu)</a></li>
-            <li><a href="#logging">Logging, Crash Handlers and Diagnostics</a></li>
-            <li><a href="#service">The Service: Other Frontends</a></li>
-            <li><a href="#dev-tooling">Profiling and the Command Server</a></li>
-            <li><a href="#signal-wiring">Signal Wiring Graph</a></li>
-            <li><a href="#cleanup">Shutdown &amp; Cleanup</a></li>
-            <li><a href="#design-decisions">Design Decisions &mdash; Why It Is Built This Way</a></li>
+            <li><a href="#video">Video on the Screen</a></li>
+            <li><a href="#settings-persistence">Where Settings and Files Live</a></li>
+            <li><a href="#logging">Logging</a></li>
+            <li><a href="#platforms">Platforms</a></li>
+            <li><a href="#dev-tooling">Simulator and Developer Tools</a></li>
+            <li><a href="#cleanup">Shutdown</a></li>
+            <li><a href="#files">Files and Tests</a></li>
+            <li><a href="#design-decisions">Why It Is Built This Way</a></li>
           </ul>
         </nav>
 
-        <!-- High-Level Architecture -->
-        <h2 id="high-level">High-Level Architecture</h2>
+        <!-- High level -->
+        <h2 id="high-level">What OCTAVE Is Made Of</h2>
         <p>
-          OCTAVE is a <strong>backend/frontend split</strong> joined by Qt's signals and slots. The
-          <strong>C++ / Qt 6</strong> backend in <code>src/</code> &mdash; built into every shipped binary
-          (Windows <code>.exe</code>, macOS <code>.dmg</code>, Linux x86_64 and aarch64 AppImages,
-          Android <code>.apk</code>, and the WebAssembly demo at <code>robdegeorge.com/OCTAVE/</code>) &mdash; owns all business logic, hardware I/O, network calls and data
-          processing; the QML frontend in <code>frontend/</code> owns rendering, animation and interaction.
+          OCTAVE is one program written in C++ with Qt 6. It has two layers. Underneath is a <strong>core</strong>: a
+          set of objects called <strong>managers</strong>, one per feature (music, the car's data, the phone,
+          settings and so on). Each manager owns its feature completely: its state, its hardware, its files. On top
+          is the <strong>screen</strong>, written in QML, Qt's language for user interfaces. The screen draws and
+          reacts to touches. It holds no logic of its own: it reads values from the managers and calls their methods.
+        </p>
+        <p>
+          The same managers are also offered to <strong>other programs</strong> over a network protocol, the
+          service. A web page, a script or a completely different screen can read and drive OCTAVE exactly as the
+          built-in screen does.
+        </p>
+        <pre class="diagram">
+   the QML screen (frontend/)              other programs
+   pages, gauges, the bottom bar           a web page, a script, another screen
+            |                                        |
+            |  by name: mediaManager, obdManager     |  the service protocol:
+            |  (context properties)                  |  JSON over TCP or WebSocket
+            v                                        v
+  +---------------------------------------------------------------------+
+  |  the core (AppCore): every manager, in one registry                 |
+  |                                                                     |
+  |  settingsManager   mediaManager   nowPlaying     volumeController   |
+  |  obdManager        paramStore     tripRecorder   dashboardManager   |
+  |  phoneMirrorManager   androidAutoManager   berryIMU   ...           |
+  +---------------------------------------------------------------------+
+            |
+            |  worker threads, serial ports, Bluetooth, I2C, adb, the network
+            v
+   the car's OBD adapter, sensors, the volume knob, the phone, the music folder
+        </pre>
+        <p>
+          Every build of OCTAVE comes from this one C++ tree: Windows, macOS, Linux (the Raspberry Pi and Orange Pi
+          included), Android and the browser demo. There is no other backend.
+        </p>
+        <p>
+          This page is the map. Each manager has its own page with the detail; the <a href="#all-managers">table
+          below</a> links to them.
         </p>
 
-        <div class="diagram">
-┌────────────────────────────────────────────────────────────────────────┐
-│                           OCTAVE Application                           │
-│                                                                        │
-│  ┌────────────────────────────┐   Signals / Slots   ┌───────────────┐  │
-│  │  C++ backend (src/)        │ ◄─────────────────► │  QML Frontend │  │
-│  │                            │   Context Props     │  frontend/    │  │
-│  │                            │                     │               │  │
-│  │  SettingsManager  Clock    │                     │  Main.qml     │  │
-│  │  DiagnosticsManager        │                     │  MainMenu     │  │
-│  │  VolumeController          │                     │  MediaRoom    │  │
-│  │  MediaManager AudioAnalyzer│                     │  MediaPlayer  │  │
-│  │  OBDManager (+ELM327)      │                     │  OBDMenu      │  │
-│  │  NetworkManager            │                     │  dashboards/  │  │
-│  │  TripRecorder + TripStore  │                     │  gauges/      │  │
-│  │  ESP32VolumeManager        │                     │  CarMenu +    │  │
-│  │  BerryIMUManager           │                     │   JeepVehicle │  │
-│  │  GestureManager            │                     │  SensorMenu   │  │
-│  │  AndroidAutoManager        │                     │  Settings/*   │  │
-│  │  PhoneMirrorManager        │                     │  BottomBar    │  │
-│  │  DashboardManager          │                     │  ...          │  │
-│  │  UiWatchdog (no QML API)   │                     └───────────────┘  │
-│  └────────────────────────────┘   ┌──────────────────────────────────┐ │
-│                                   │  Video paths into the scene graph│ │
-│                                   │  image://dhuframe  (AA via DHU)  │ │
-│                                   │  QVideoSink  (Phone Mirror, AA)  │ │
-│                                   └──────────────────────────────────┘ │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │  Qt 6 runtime — QGuiApplication                                  │  │
-│  │  → QQmlApplicationEngine → event loop                            │  │
-│  └──────────────────────────────────────────────────────────────────┘  │
-└────────────────────────────────────────────────────────────────────────┘</div>
-
-        <!-- Backend / Frontend Split -->
-        <div class="info-box info">
-          <div class="info-box-title">Platform note: the browser build</div>
-          The same tree compiles with Qt for WebAssembly (<code>EMSCRIPTEN</code> in CMake, <code>OCTAVE_WASM</code> + <code>Q_OS_MOBILE</code> in C++). A browser has no serial ports, Bluetooth, processes or persistent disk, so that build drops the OBD transports, TagLib and FFmpeg, swaps in inert stand-ins from <span class="file-path">src/platform/wasm/</span>, keeps the whole <span class="file-path">frontend/</span> tree in an in-memory filesystem, and drives the real <code>OBDManager</code> from the simulated car through <code>DemoDrive</code>'s autopilot (<span class="file-path">src/sim/demodrive</span>). Everything above the transports &mdash; managers, <code>paramStore</code>, dashboards, the black box (SQLite in memory), the 3D vehicle &mdash; is unchanged. Nothing persists across reloads and there is no service / command server. Details: <a href="building.html#wasm">Building: WebAssembly</a>.
-        </div>
-
-        <h2 id="backend-frontend">Backend / Frontend Split</h2>
-
+        <!-- Where the code lives -->
+        <h2 id="backend-frontend">Where the Code Lives</h2>
         <table>
-          <thead>
-            <tr><th>Layer</th><th>Technology</th><th>Location</th><th>Responsibility</th></tr>
-          </thead>
+          <thead><tr><th>Folder</th><th>What is in it</th></tr></thead>
           <tbody>
-            <tr>
-              <td><strong>Backend</strong></td>
-              <td>C++17 / Qt 6.7.3 (CMake 3.21+)</td>
-              <td><code>src/managers/</code>, <code>src/util/</code>, <code>src/phone_mirror/</code>, <code>src/android_auto/</code>, <code>src/items/</code>, <code>src/platform/</code></td>
-              <td>Business logic, hardware I/O, API calls, data processing, state</td>
-            </tr>
-            <tr>
-              <td><strong>Frontend</strong></td>
-              <td>QML (Qt Quick, Qt Quick 3D for the vehicle view)</td>
-              <td><code>frontend/</code></td>
-              <td>UI rendering, animation, interaction, layout &mdash; loaded from disk at runtime (Android bundles it as <code>assets:/frontend</code>)</td>
-            </tr>
-            <tr>
-              <td><strong>Bridge</strong></td>
-              <td><code>src/main.cpp</code></td>
-              <td><code>src/</code></td>
-              <td>Instantiates managers, registers context properties and custom types, wires cross-manager signals, owns shutdown</td>
-            </tr>
+            <tr><td><span class="file-path">src/managers/</span></td><td>The managers.</td></tr>
+            <tr><td><span class="file-path">src/appcore.{h,cpp}</span></td><td><code>AppCore</code>: builds every manager, connects them to each other, and lists them in the registry. It knows nothing about QML.</td></tr>
+            <tr><td><span class="file-path">src/main.cpp</span></td><td>Startup: reads the command line, builds the core, hands it to the screen and to the service, and runs the shutdown.</td></tr>
+            <tr><td><span class="file-path">src/service/</span></td><td>The service protocol: the server, pairing, permissions.</td></tr>
+            <tr><td><span class="file-path">src/phone_mirror/</span>, <span class="file-path">src/android_auto/</span>, <span class="file-path">src/airplay/</span></td><td>The protocols that bring a phone's screen and sound into OCTAVE.</td></tr>
+            <tr><td><span class="file-path">src/sim/</span></td><td>The simulated car.</td></tr>
+            <tr><td><span class="file-path">src/platform/</span></td><td>Code for one platform only (BlueZ on Linux, the browser's stand-ins for missing hardware).</td></tr>
+            <tr><td><span class="file-path">src/util/</span></td><td>Shared helpers: logging, the UI watchdog, the video decoder, unit conversions.</td></tr>
+            <tr><td><span class="file-path">src/dev/</span></td><td>Developer tools. Only compiled into debug builds.</td></tr>
+            <tr><td><span class="file-path">frontend/</span></td><td>The QML screen. <code>Main.qml</code> is the entry point. See <a href="frontend-overview.html">Frontend Overview</a>.</td></tr>
           </tbody>
         </table>
-
         <p>
-          Managers own hardware access and application state; QML consumes that state through the registered API. Some integrations explicitly cross the rendering boundary, such as frame providers, video sinks, and developer UI-driving tools.
-          The only contract between them is the set of context-property names, signals, slots and properties
-          (see <a href="#design-decisions">Design Decisions</a>).
+          The build system is CMake. Source files are listed one by one in <span class="file-path">CMakeLists.txt</span>,
+          so a new file must be added there. See <a href="building.html">Building</a>.
         </p>
 
-        <div class="info-box info">
-          <div class="info-box-title">Mobile builds</div>
-          Android/iOS-specific code lives behind <code>#ifdef Q_OS_ANDROID</code> /
-          <code>Q_OS_MOBILE</code>. Desktop-only managers keep their QML-facing API as stubs there, so QML needs
-          nothing beyond <code>typeof fooManager !== "undefined"</code> guards for features legitimately absent on
-          one platform.
-        </div>
-
-        <!-- The Manager Pattern -->
-        <h2 id="manager-pattern">The Manager Pattern</h2>
+        <!-- Manager pattern -->
+        <h2 id="manager-pattern">What a Manager Is</h2>
         <p>
-          Every backend feature is a <strong>manager class</strong> inheriting <code>QObject</code>. It
-          exposes state through <code>Q_PROPERTY</code>, <code>Q_INVOKABLE</code> / public slots and signals:
+          A manager is a C++ class that inherits from <code>QObject</code>, Qt's base class. Qt lets such a class
+          publish three kinds of members that code outside it can use without knowing the class:
         </p>
-
-        <pre><code><span class="cmt">// src/managers/examplemanager.h</span>
-<span class="kw">class</span> <span class="cls">ExampleManager</span> : <span class="kw">public</span> QObject {
-    Q_OBJECT
-    Q_PROPERTY(<span class="kw">int</span> value READ value NOTIFY valueChanged)
-<span class="kw">public</span>:
-    <span class="kw">int</span> <span class="fn">value</span>() <span class="kw">const</span> { <span class="kw">return</span> m_value; }
-<span class="kw">public slots</span>:
-    <span class="kw">void</span> <span class="fn">setValue</span>(<span class="kw">int</span> v) { m_value = v; <span class="kw">emit</span> valueChanged(v); }
-<span class="kw">signals</span>:
-    <span class="kw">void</span> <span class="fn">valueChanged</span>(<span class="kw">int</span>);
-<span class="kw">private</span>:
-    <span class="kw">int</span> m_value = <span class="num">0</span>;
-};</code></pre>
-
-        <p>Key principles:</p>
-        <ul>
-          <li><strong>Signals</strong> notify the UI (and other managers) when backend state changes</li>
-          <li><strong>Slots</strong> are methods QML can call &mdash; many use snake_case names rather than the usual C++ camelCase (<code>next_track</code>, <code>scan_library</code>, <code>connect_settings_manager</code>), and QML calls them as written</li>
-          <li><strong>Properties</strong> expose values with automatic binding updates</li>
-          <li>Managers are <strong>self-contained</strong>: each owns its state, timers and threads</li>
-          <li><span class="file-path">src/appcore.cpp</span> (<code>AppCore</code>, every manager as a member, no QML engine; <code>octave --headless</code> runs it with no engine at all) wires cross-manager signals and passes dependencies where needed, for example settings references, the <code>VolumeController</code> fan-out to its outputs, and <code>OBDAdapterFinder</code> handing a connection to <code>OBDManager</code>.</li>
-        </ul>
-
-        <h3 id="all-managers">All Managers</h3>
-        <p>Every row below is a member of <code>AppCore</code> (<span class="file-path">src/appcore.{h,cpp}</span>), entered in its service registry under the listed name; <span class="file-path">src/main.cpp</span> builds the core and sets each registry entry as a context property (<code>core.exposeTo(ctx)</code>), so the QML UI and the <a href="utilities.html#service-protocol">service protocol</a> see the same objects. Mobile stubs are
-          header-level <code>#else // Q_OS_MOBILE</code> classes with the same API so QML bindings stay valid.</p>
         <table>
-          <thead>
-            <tr><th>Class</th><th>Source (<code>src/managers/</code>)</th><th>Context property</th><th>Purpose</th></tr>
-          </thead>
+          <thead><tr><th>Kind</th><th>What it is</th><th>Example</th></tr></thead>
           <tbody>
-            <tr><td>SettingsManager</td><td><code>settingsmanager.{h,cpp}</code></td><td><code>settingsManager</code></td><td>Central settings store, JSON persistence, <code>getAppDataDir()</code></td></tr>
-            <tr><td>DiagnosticsManager</td><td><code>diagnosticsmanager.{h,cpp}</code></td><td><code>diagnosticsManager</code></td><td>Read / copy / export the log files from the head unit (Settings &rarr; Device &rarr; Developer &rarr; Diagnostics)</td></tr>
-            <tr><td>Clock</td><td><code>clock.{h,cpp}</code></td><td><code>clock</code></td><td>Real-time clock, format from settings</td></tr>
-            <tr><td>NetworkManager</td><td><code>networkmanager.{h,cpp}</code></td><td><code>networkManager</code></td><td>WiFi status, GitHub update check, git-based self-update + restart</td></tr>
-            <tr><td>VolumeController</td><td><code>volumecontroller.{h,cpp}</code></td><td><code>volumeController</code></td><td>Single entry point for the quadratic volume curve</td></tr>
-            <tr><td>MediaManager</td><td><code>mediamanager.{h,cpp}</code></td><td><code>mediaManager</code></td><td>Local playback (QMediaPlayer), library scan, album art + colours, persistent metadata store</td></tr>
-            <tr><td>AudioAnalyzer</td><td><code>audioanalyzer.{h,cpp}</code></td><td><code>audioAnalyzer</code></td><td>96-bar FFT waveform (QAudioDecoder + radix-2 FFT)</td></tr>
-            <tr><td>OBDManager (+ ELM327)</td><td><code>obdmanager.h</code>, <code>obdmanager*.cpp</code>, <code>obdconnectionworker.{h,cpp}</code>, <code>elm327protocol.{h,cpp}</code></td><td><code>obdManager</code></td><td>Vehicle diagnostics, standard and extended PID decoding, DTCs; Android BLE via a JNI bridge</td></tr>
-            <tr><td>OBDAdapterFinder</td><td><code>obdadapterfinder.{h,cpp}</code> (+ <code>platform/bluezpairer.{h,cpp}</code>)</td><td><code>obdAdapterFinder</code></td><td>Bluetooth scan, PIN pairing via BlueZ, trust, hand-off to <code>connectDirect()</code> (desktop Linux)</td></tr>
-            <tr><td>ESP32VolumeManager</td><td><code>esp32volumemanager.{h,cpp}</code></td><td><code>esp32VolumeManager</code></td><td>Wireless rotary knob over USB serial (ESP-NOW pair); stub on mobile</td></tr>
-            <tr><td>BerryIMUManager</td><td><code>berryimumanager.{h,cpp}</code></td><td><code>berryIMU</code></td><td>Madgwick fusion (accel + gyro, 6DOF; magnetometer for heading only) over I²C; on Android re-implemented with QtSensors (accelerometer, compass, pressure)</td></tr>
-            <tr><td>GestureManager</td><td><code>gesturemanager.{h,cpp}</code></td><td><code>gestureSensor</code></td><td>PAJ7620U2 gesture sensor over I²C; stub on mobile</td></tr>
-            <tr><td>AndroidAutoManager</td><td><code>androidautomanager.{h,cpp}</code>, <code>androidautomanager_native.cpp</code> + <code>src/android_auto/</code></td><td><code>androidAutoManager</code></td><td>Android Auto: the built-in head unit (<a href="#android-auto-module">native receiver</a>, <code>androidAutoBackend = "native"</code>) or Google DHU launch + window capture; stub on mobile</td></tr>
-            <tr><td>AirPlayManager</td><td><code>airplaymanager.{h,cpp}</code> + <code>src/airplay/</code>, <code>src/platform/bluezhidmouse</code>, <code>third_party/uxplay/</code></td><td><code>airPlayManager</code></td><td>An iPhone over AirPlay (<a href="phone-mirror-android-auto.html#airplay">screen and audio</a>, UxPlay's library), touch back through OCTAVE as a Bluetooth LE mouse; <code>available</code> false without libplist (Linux only so far)</td></tr>
-            <tr><td>PhoneMirrorManager</td><td><code>phonemirrormanager.{h,cpp}</code> + <code>src/phone_mirror/scrcpyclient.{h,cpp}</code></td><td><code>phoneMirrorManager</code></td><td>Built-in scrcpy-protocol client; stub on mobile</td></tr>
-            <tr><td>H264Decoder</td><td><code>src/util/h264decoder.{h,cpp}</code></td><td><em>none</em> (ScrcpyClient, AapConnection, AirPlayReceiver)</td><td>libavcodec H.264 (Annex B) &rarr; YUV 4:2:0 <code>QVideoFrame</code>, shared by phone mirroring, built-in Android Auto and AirPlay; <code>open()</code> fails without <code>OCTAVE_HAVE_FFMPEG</code></td></tr>
-            <tr><td>DashboardManager</td><td><code>dashboardmanager.{h,cpp}</code></td><td><code>dashboardManager</code></td><td>Built-in preset + user JSON dashboards, save / delete / duplicate, hot reload</td></tr>
-            <tr><td>ParameterCatalog</td><td><code>parametercatalog.{h,cpp}</code></td><td><code>parameterCatalog</code></td><td>Title / short title / unit / range / kind / decimals of every OBD PID and IMU reading, one table for C++ and every frontend; see <a href="signals-slots-reference.html#parameterCatalog">Signals &amp; Slots</a></td></tr>
-            <tr><td>NowPlaying</td><td><code>nowplaying.{h,cpp}</code></td><td><code>nowPlaying</code></td><td>What is playing and its controls, phone or local; the one phone-position clock; the phone/local hand-off</td></tr>
-            <tr><td>ParameterStore</td><td><code>parameterstore.{h,cpp}</code></td><td><code>paramStore</code></td><td>Latest value of every PID and IMU reading as a <code>QQmlPropertyMap</code> (one notifying key per id, 33 ms coalescing), fed from <code>parameterSampled</code> and the IMU in <code>appcore.cpp</code>; <code>OBDParameterModel</code> mirrors it</td></tr>
-            <tr><td>ShiftLightManager</td><td><code>shiftlightmanager.{h,cpp}</code></td><td><code>shiftLightManager</code></td><td>RPM shift light: flag migration, band match and flash phase, fed by <code>OBDManager::rpmChanged</code>; QML only draws it. See <a href="obd-manager.html#shift-light">OBD Manager &rarr; Shift Light</a></td></tr>
-            <tr><td>TripRecorder</td><td><code>triprecorder.{h,cpp}</code>, <code>tripstore.{h,cpp}</code></td><td><code>tripRecorder</code></td><td>Black box: every OBD reading of every drive into SQLite (own thread) and one CSV + JSON per trip; see <a href="obd-manager.html#black-box">OBD Manager &rarr; Black Box</a></td></tr>
-            <tr><td>Simulator</td><td><code>src/sim/simulator.{h,cpp}</code> (+ <code>carsim</code>, <code>simelm327</code>, <code>imufeed</code>, <code>simconfig</code>)</td><td><code>sim</code> (experimental)</td><td>The simulated car behind the real OBD stack, IMU motion, a test video and pairing codes; every build, inert unless <code>--sim</code> / <code>--dev</code> / the browser demo starts it</td></tr>
-            <tr><td>VehicleManager</td><td><code>vehiclemanager.{h,cpp}</code></td><td><code>vehicleManager</code></td><td>The vehicle the 3D view and Home show: the built-in rigged Jeep or a model of the user's own under <code>&lt;config&gt;/vehicles/</code> (import a <code>.glb</code>, select, turn, remove)</td></tr>
-            <tr><td>FrontendManager (+ FrontendSupervisor)</td><td><code>frontendmanager.{h,cpp}</code>, <code>frontendmanifest.{h,cpp}</code>, <code>frontendsupervisor.{h,cpp}</code></td><td><code>frontendManager</code></td><td>Installable frontends: install from a folder or zip, remove, pick the active screen; the supervisor runs an exec frontend, restarts it with back-off and falls back to QML</td></tr>
-            <tr><td>ServicePairing</td><td><code>src/service/servicepairing.{h,cpp}</code></td><td><code>servicePairing</code> (QML only, not a service object)</td><td>Pairing codes, paired devices and their scopes, revoking; Settings &gt; Device &gt; Developer &gt; Service</td></tr>
-            <tr><td>UiWatchdog</td><td><code>src/util/uiwatchdog.{h,cpp}</code></td><td><em>none</em> (internal)</td><td>Logs a blocked GUI thread</td></tr>
-            <tr><td>FontCatalog</td><td><code>src/util/fontcatalog.{h,cpp}</code></td><td><code>fontCatalog</code></td><td>Registers the bundled UI and icon fonts at startup; the font picker's list</td></tr>
-            <tr><td>ThemeCatalog</td><td><code>src/managers/themecatalog.{h,cpp}</code></td><td><code>themeCatalog</code></td><td>The built-in colour themes from <code>frontend/themes.json</code> (Style.qml binds them) and <code>activeTheme</code>, the palette in force for any frontend</td></tr>
-            <tr><td>PathUrl</td><td><code>src/util/pathurl.h</code></td><td><em>none</em> (SettingsManager, DashboardManager)</td><td>A picked folder or file as a path to open (file URLs, Android content trees)</td></tr>
-            <tr><td>Units</td><td><code>src/util/units.{h,cpp}</code></td><td><code>units</code></td><td>Time formatting, compass points and unit conversions for QML and C++</td></tr>
-            <tr><td>QmlModules</td><td><code>src/util/qmlmodules.{h,cpp}</code></td><td><em>none</em> (feeds <code>hasQuick3D</code> / <code>hasQuick3DAssetUtils</code>)</td><td>Is an optional QML module installed, from its <code>qmldir</code> in the import paths, without loading it</td></tr>
-            <tr><td>GraphicsRenderer</td><td><code>src/util/graphicsrenderer.{h,cpp}</code></td><td><em>none</em> (sets the root window's <code>graphicsRenderer</code> / <code>gpuRendered</code> properties)</td><td>What draws the window (<code>OpenGL: &lt;GL_RENDERER&gt;</code>, Metal, Direct3D 11, Vulkan, Qt Quick software), read on the render thread and logged once; <code>isGpu()</code> is true only for a named hardware OpenGL renderer or Metal. Main.qml uses it to skip the background build of Quick3D pages on software rendering</td></tr>
-            <tr><td>DashboardGrid</td><td><code>src/util/dashboardgrid.{h,cpp}</code></td><td><em>none</em> (through <code>dashboardManager.canPlace</code> / <code>fitAt</code>)</td><td>Dashboard grid placement: in the grid, no overlap, shrink-to-fit; shared by spec normalising and the editor</td></tr>
-            <tr><td>VariantListModel</td><td><code>src/util/variantlistmodel.{h,cpp}</code></td><td><em>none</em> (no manager serves one at present; the service bridge still handles it)</td><td>Generic list model of <code>QVariantMap</code> rows, one role per key, <code>count</code> and <code>get(row)</code>; a field change is one <code>dataChanged</code> on one row, so a ListView keeps its delegates and scroll position</td></tr>
+            <tr><td><strong>Property</strong></td><td>A value that announces when it changes.</td><td><code>nowPlaying.title</code></td></tr>
+            <tr><td><strong>Method</strong> (a slot, or a function marked <code>Q_INVOKABLE</code>)</td><td>Something you can ask the manager to do.</td><td><code>nowPlaying.togglePlay()</code></td></tr>
+            <tr><td><strong>Signal</strong></td><td>An event the manager announces.</td><td><code>obdManager.connectionLostUnexpectedly(reason)</code></td></tr>
           </tbody>
         </table>
-
         <p>
-          Other context properties include <code>assetStore</code> (local asset URLs), <code>wikiViewerAvailable</code>, <code>wikiHomeUrl</code>, <code>hasQuick3D</code> / <code>hasQuick3DAssetUtils</code> (optional QML modules, checked without loading them), and <code>screenAutoScale</code> (see
-          <a href="#startup">startup</a>) and <code>isAndroid</code> (<code>true</code> only in the Android build).
-          On an <code>OCTAVE_DEV_TOOLS</code> build, <code>--profile</code> also
-          registers <code>perfMonitor</code>, and dev mode (<code>octave --dev</code>)
-          adds <code>devMode</code>, <code>devKeyboardController</code> and <code>devToolsManager</code>.
+          These three kinds are the whole contract between the core and anything that uses it. The screen and the
+          service both work from them, which is why they see exactly the same thing.
         </p>
-
-        <!-- Communication -->
-        <h2 id="communication">Backend-QML Communication</h2>
-
-        <h3 id="context-properties">Context Properties</h3>
         <p>
-          Managers are registered as <strong>QML context properties</strong> on the engine's root context. That makes
-          them globally visible in every QML file without an import:
+          Managers do not reach into each other. Where one needs another, <code>AppCore</code> either passes it in
+          when it is built (most managers are given <code>settingsManager</code>) or connects a signal of one to a
+          method of the other. For example, the OBD manager announces every reading, and <code>AppCore</code>
+          connects that signal to <code>paramStore</code>, which holds the latest value of each reading for the
+          gauges. All of these connections are in <span class="file-path">src/appcore.cpp</span>, so there is one
+          place to look to see who talks to whom.
         </p>
-
-        <pre><code><span class="cmt">// src/main.cpp</span>
-QQmlContext *ctx = engine.rootContext();
-ctx-&gt;setContextProperty(<span class="str">"mediaManager"</span>, &amp;mediaManager);</code></pre>
-
-        <pre><code><span class="cmt">// QML</span>
-Button {
-    onClicked: mediaManager.nextTrack()
-}
-Text {
-    text: mediaManager.getDisplayName(mediaManager.getCurrentFile())
-}</code></pre>
-
-        <p>
-          Every context property must exist before <code>engine.load(Main.qml)</code>: bindings are evaluated at
-          first load, and an unregistered name is an error, not a late binding. <span class="file-path">src/main.cpp</span> therefore builds the
-          <code>AppCore</code> and exposes every manager (including <code>dashboardManager</code>, the last one) ahead of the load, and the dev
-          runtime's <code>beforeLoad()</code> hook runs before it too, so <code>--dev</code> can point the real
-          <code>OBDManager</code> at its simulated ELM327 before the QML is loaded.
-        </p>
-
-        <h3 id="signals-slots">Signals and Slots</h3>
-        <p>
-          <strong>Signals</strong> are the notification mechanism. QML reacts to them declaratively:
-        </p>
-
-        <pre><code><span class="cmt">// QML — react to a backend signal</span>
-Connections {
-    target: mediaManager
-    <span class="kw">function</span> onCurrentMediaChanged(filename) {
-        albumArt.source = mediaManager.getAlbumArt(filename)
-    }
-}</code></pre>
-
-        <p><strong>Slots</strong> are methods QML calls, declared under <code>public slots:</code> or marked
-          <code>Q_INVOKABLE</code>; a return value goes back to QML as a JS value:</p>
-
-        <pre><code>Q_INVOKABLE QVariant <span class="fn">loadDashboard</span>(<span class="kw">const</span> QString &amp;id);</code></pre>
-
-        <h3 id="properties">Qt Properties</h3>
-        <p>
-          Properties combine a getter, an optional setter and a notify signal into one bindable value. QML
-          re-evaluates any binding that reads the property when its notify signal fires. <code>CONSTANT</code>
-          properties (e.g. <code>diagnosticsManager.logDir</code>) never notify and are read once.
-        </p>
-
-        <h3 id="qml-types">Custom QML Types</h3>
-        <p>
-          One component is embedded as a QML <em>item</em> rather than a context property: the Android Auto
-          frame item, registered with <code>qmlRegisterType</code> under the <code>OCTAVE.AndroidAuto</code> module:
-        </p>
-
-        <pre><code><span class="cmt">// src/main.cpp — src/items/embeddeddhuitem.h, a QQuickItem</span>
-qmlRegisterType&lt;EmbeddedDhuItem&gt;(<span class="str">"OCTAVE.AndroidAuto"</span>, <span class="num">1</span>, <span class="num">0</span>, <span class="str">"EmbeddedDhuItem"</span>);</code></pre>
-
-        <pre><code><span class="cmt">// QML</span>
-<span class="kw">import</span> OCTAVE.AndroidAuto <span class="num">1.0</span>
-
-EmbeddedDhuItem { anchors.fill: parent }</code></pre>
-
-        <p>
-          Phone mirroring does <em>not</em> use a custom type: it binds a stock <code>VideoOutput</code>'s
-          <code>videoSink</code> to <code>phoneMirrorManager.videoSink</code> (see <a href="#video">video paths</a>).
-          The frontend's own singletons (<code>Style</code>, <code>Spacing</code>, <code>EnvironmentTheme</code>,
-          <code>OBDParameterModel</code>, <code>WidgetCatalog</code>, <code>MusicDevicePreference</code>) are declared in <code>frontend/qmldir</code>.
-        </p>
-
-        <!-- Startup Sequence -->
-        <h2 id="startup">Application Startup Sequence</h2>
-        <p>
-          <span class="file-path">src/main.cpp</span> runs logging first, then the managers (<code>AppCore</code>), then the
-          engine-only setup, the service and <code>Main.qml</code>:
-        </p>
-
-        <h3 id="startup-cpp"><span class="file-path">src/main.cpp</span></h3>
+        <p>To add a manager:</p>
         <ol class="steps">
-          <li><strong>Logging + crash handlers first</strong> &mdash; <code>argv</code> is scanned for <code>--debug</code>, <code>--smoke</code> (exit 0 five seconds after start; CI launches packaged builds with it), <code>--headless</code> and <code>--dump-api DIR</code>, and <code>OctaveLog::install(debug)</code> runs <em>before</em> <code>QGuiApplication</code> exists, so anything a manager constructor logs (and any crash) reaches the files. <code>--dump-api</code> first points the config at a temp dir so its logs land there.</li>
-          <li><strong>Other modes</strong> &mdash; <code>--dump-api</code> builds an <code>AppCore</code>, writes <span class="file-path">docs/api/</span> and exits; <code>--headless</code> (desktop) skips WebEngine, builds an <code>AppCore</code> on the offscreen platform and serves it (<a href="#service">The Service</a>). The rest of this list is the normal UI run.</li>
-          <li><strong>QGuiApplication</strong> &mdash; organization/application name <code>OCTAVE</code>; <code>QQuickStyle::setStyle("Basic")</code> so sliders are fully customisable. <code>Units</code> is created before the engine (bindings that format times run while the engine tears down).</li>
-          <li><strong>Auto-scale and scalar context properties</strong> &mdash; <code>screenAutoScale = min(width, height) / 720</code>, clamped to 0.4&ndash;3.0 (the shorter edge, because Android reports the natural portrait size even when locked landscape); <code>isAndroid</code>.</li>
-          <li><strong><code>frontend/</code></strong> &mdash; <code>assets:/frontend</code> on Android; on desktop <code>frontend/</code> next to the binary, or one directory up (so <code>build/octave</code> finds the checkout's).</li>
-          <li><strong><code>UiWatchdog</code></strong> started, then <strong><code>AppCore</code></strong> (<span class="file-path">src/appcore.{h,cpp}</span>): every manager as a member, constructed in dependency order (settings, diagnostics, clock, network, volume; media, analyzer; the PID catalog, OBD, shift light, adapter finder, trip recorder, ESP32, IMU, value store, gestures; Android Auto, phone mirror, now playing; fonts, dashboards) and wired by its <code>wire*()</code> helpers (<a href="#signal-wiring">Signal Wiring Graph</a>). On Android the constructor also requests the runtime permissions; a granted audio permission triggers a library scan. Each manager is entered in the service registry; <code>core.exposeTo(ctx)</code> makes them all context properties.</li>
-          <li><strong>Engine-only setup</strong> &mdash; the <code>dhuframe</code> image provider, <code>qmlRegisterType&lt;EmbeddedDhuItem&gt;</code> and the <code>OCTAVE.OBD</code> enum type, the QML import path, <code>assetStore</code> (<span class="file-path">src/util/assetstore.{h,cpp}</span>: <code>file://</code> URLs for <span class="file-path">frontend/assets/</span> files that Quick3D's Assimp importer must open itself, extracted once from the APK on Android), the <code>hasQuick3D</code> / <code>hasQuick3DAssetUtils</code> probes, and the offline wiki (<code>wikiViewerAvailable</code>, <code>wikiHomeUrl</code>: the local wiki, else <code>qrc:/wiki/index.html</code>, or the APK's assets on Android).</li>
-          <li><strong>Developer tooling</strong> (<code>OCTAVE_DEV_TOOLS</code> builds only) &mdash; <code>OctaveDev::Runtime::beforeLoad()</code> reads <code>--dev</code> / <code>--profile</code>; without them it does nothing. A build without the option warns and ignores the flags.</li>
-          <li><strong>The service</strong> &mdash; <code>makeService()</code> creates the command server and the service bridge when asked for (<a href="#service">The Service</a>); not started yet.</li>
-          <li><strong>Load <code>Main.qml</code></strong> &mdash; returns <code>-1</code> if no root object was created; then <code>Runtime::afterLoad(server)</code> (dev overlay, perf monitor, and with <code>--profile</code> its actions on the server), the server starts, and <code>setQuitOnLastWindowClosed(true)</code>.</li>
-          <li><strong>Signals</strong> &mdash; on Unix desktop, <code>SIGTERM</code>/<code>SIGINT</code> are turned into <code>QCoreApplication::quit()</code> with the self-pipe trick (<code>socketpair</code> + <code>QSocketNotifier</code>) so the <code>aboutToQuit</code> cleanup still runs under systemd or Ctrl-C.</li>
-          <li><strong><code>app.exec()</code></strong>.</li>
+          <li>Add its <code>.h</code> and <code>.cpp</code> to <span class="file-path">src/managers/</span> and list both in <span class="file-path">CMakeLists.txt</span>.</li>
+          <li>Add a member to <code>AppCore</code> in <span class="file-path">src/appcore.h</span>. Members are built in the order they are declared, so put it after everything it needs.</li>
+          <li>In the <code>AppCore</code> constructor, connect it and call <code>expose("myManager", &amp;myManager)</code>. That one line gives it its name on the screen and in the service.</li>
+          <li>Say who may use it over the service with <code>Q_CLASSINFO("octave.scope", "...")</code> in the class. The scopes are explained in <a href="utilities.html#service-protocol">Utilities</a>.</li>
+          <li>Regenerate the published API. The commands are in <a href="development.html">Development</a>.</li>
         </ol>
 
-        <!-- Threading -->
-        <h2 id="threading">Threading Model</h2>
+        <!-- Communication -->
+        <h2 id="communication">How a Screen Talks to a Manager</h2>
         <p>
-          The UI runs on the Qt main thread. Long-running work generally uses workers or asynchronous Qt APIs, with queued signals or timers returning results. There are exceptions: library scanning and parts of hardware initialization still execute on the GUI thread. The table describes the main paths:
+          At startup every manager in the registry is given to the QML engine as a <strong>context property</strong>:
+          a name that is visible in every QML file with no import. From then on QML uses the manager by that name.
         </p>
+        <pre><code>Text {
+    text: nowPlaying.title                 <span class="cmt">// a property: updates by itself when the track changes</span>
+}
 
-        <table>
-          <thead>
-            <tr><th>Manager</th><th>Threading</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>OBD</td><td><code>OBDConnectionWorker</code> on a dedicated <code>QThread</code> owns a serial port or direct RFCOMM transport and a poll <code>QTimer</code> (interval 0 in fast mode, 50&nbsp;ms otherwise). Android: the main thread owns the BLE link through the <code>OctaveOBDBridge</code> JNI class; no worker thread.</td></tr>
-            <tr><td>Network</td><td><code>QNetworkAccessManager</code> + <code>QProcess</code> (<code>git</code>) with <code>QTimer</code>s.</td></tr>
-            <tr><td>Media</td><td>Library scan runs synchronously on the GUI thread. Desktop neighbour pre-cache and album-colour extraction use <code>QtConcurrent::run</code>; Android pre-cache is synchronous. Timers handle position, saved state and cache scheduling.</td></tr>
-            <tr><td>AudioAnalyzer</td><td><code>QtConcurrent::run</code> decodes with <code>QAudioDecoder</code> and runs an in-house radix-2 FFT; never touches GUI objects.</td></tr>
-            <tr><td>BerryIMU / Gesture</td><td>Worker <code>QObject</code> on its own <code>QThread</code> doing <code>ioctl</code> I²C reads (<code>/dev/i2c-N</code>).</td></tr>
-            <tr><td>ESP32 knob</td><td>Event-driven <code>QSerialPort::readyRead</code> on the main thread; reconnect / scan / keepalive / send-debounce <code>QTimer</code>s.</td></tr>
-            <tr><td>Phone mirror</td><td><code>ScrcpyClient</code> runs the video/audio socket loops on a <code>std::thread</code>, decodes with libavcodec (<code>H264Decoder</code>) and pushes <code>QVideoFrame</code>s to the sink.</td></tr>
-            <tr><td>Android Auto (built-in)</td><td>adb calls (find the phone, check the head unit server, forward) through <code>QtConcurrent::run</code> + <code>QFutureWatcher</code>. <code>AapConnection</code> runs the socket, the <code>AapSession</code> and the <code>H264Decoder</code> on its own <code>QThread</code>; decoded frames go to the sink, PCM, state and errors come back to the GUI thread, where the <code>QAudioSink</code>s live.</td></tr>
-            <tr><td>UI watchdog</td><td><code>QThread</code> pinging the GUI thread.</td></tr>
-          </tbody>
-        </table>
-        <p>
-          Every <code>QThread</code> that runs an event loop (a worker object moved to it) is passed to
-          <code>sleepWhenIdle(thread)</code> (<span class="file-path">src/util/threadidle.h</span>). It does nothing
-          outside the browser build. There, Qt 6.10 and later (6.12 included) have a bug: a thread other than the main one
-          whose event loop has no running timer does not sleep, it spins, a whole CPU core for as long as the page is open
-          (<code>QEventDispatcherWasm::secondaryThreadWait()</code> waits for <code>milliseconds::max()</code>, which
-          overflows). The helper gives the thread a timer that fires once an hour and does nothing, which makes the wait a
-          real one. The black box's store thread and the OBD worker thread have it; a new worker thread needs it too.
-        </p>
+Button {
+    onClicked: nowPlaying.togglePlay()     <span class="cmt">// a method</span>
+}
 
-        <h3 id="thread-obd">OBD Worker Thread</h3>
-        <p>
-          Connecting to an ELM327 takes seconds (reset, protocol negotiation, supported-PID discovery), so it runs
-          on a worker and reports progress by signal. The diagram is schematic (Android uses its JNI BLE bridge instead):
-        </p>
-
-        <div class="diagram">
-Main Thread                    OBD Worker Thread (QThread)
-    │                               │
-    │── create worker ──────────────►│
-    │   moveToThread(thread)        │
-    │   thread.start()              │
-    │                               │── open port, ATZ / ATE0 ...
-    │◄── connectionProgress(20, …) ─│
-    │                               │── negotiate protocol
-    │◄── connectionProgress(60, …) ─│
-    │                               │── query supported PIDs
-    │◄── connectionProgress(100, …)─│
-    │◄── connectionComplete ────────│
-    │                               │
-    │   (watchdog QTimer on main)   │── poll loop: TX cmd / RX reply
-    │◄── value signals ─────────────│   (QTimer on the worker)</div>
-
-        <p>
-          Every command and reply is logged on the <code>octave.elm327</code> category
-          (<code>TX ...</code> / <code>RX ... (N ms)</code>), so a failed session leaves
-          a protocol transcript in the debug log (see <a href="#logging">logging</a>).
-        </p>
-
-        <h3 id="thread-pool">Thread Pools and QtConcurrent</h3>
-        <p>
-          Short-lived work with a single result (an API call, a decode, a colour extraction) uses a pool rather
-          than a hand-rolled thread: <code>QtConcurrent::run</code> + <code>QFutureWatcher</code>, whose
-          <code>finished</code> signal arrives on the main thread.
-        </p>
-
-        <pre><code><span class="cmt">// MediaManager colour extraction</span>
-<span class="kw">auto</span> *watcher = <span class="kw">new</span> QFutureWatcher&lt;QVariantMap&gt;(<span class="kw">this</span>);
-watcher-&gt;setFuture(QtConcurrent::run([<span class="kw">this</span>, imagePath]() {
-    <span class="kw">return</span> _extract_album_colors(imagePath);
-}));</code></pre>
-
-        <h3 id="thread-sensors">Sensor Read Loops</h3>
-        <p>
-          The I²C sensors are read in a loop on their own thread (a
-          <code>BerryIMUWorker</code> / gesture worker on a <code>QThread</code>), with values delivered to the main thread by signal. <code>QTimer</code>s are used for the surrounding
-          lifecycle &mdash; delayed start (1&nbsp;s after construction), retry back-off, reconnect, the ESP32's
-          10&nbsp;s port scan and 2&nbsp;s keepalive &mdash; not for the sampling itself.
-        </p>
-
-        <h3 id="thread-watchdog">UI Watchdog</h3>
-        <p>
-          <code>UiWatchdog</code> (<code>src/util/uiwatchdog.cpp</code>) is started
-          right after <code>SettingsManager</code> and stopped first in cleanup (after the dev runtime, when present). A worker thread posts
-          a queued call to the GUI thread every 2&nbsp;s and records when it is answered; if the GUI thread has been
-          silent for more than 5&nbsp;s it logs <code>UI thread blocked for N s and counting</code> on
-          <code>octave.ui_watchdog</code>, then <code>responsive again after N s</code> when the loop drains. In the
-          browser build a hidden page (phone locked, tab in the background), which the browser all but stops, logs
-          <code>page hidden; the browser paused it</code> and <code>page running again after N s</code> at info level
-          instead (<code>visibilitychange</code>, read through embind). It is
-          purely observational &mdash; it never kills or restarts anything.
-        </p>
-
-        <!-- Volume System -->
-        <h2 id="volume-system">Volume System</h2>
-        <p>
-          Volume uses a <strong>quadratic curve</strong>: the 0&ndash;100 slider percent becomes a linear
-          0.0&ndash;1.0 gain through
-        </p>
-
-        <pre><code>linear = std::pow(percent / <span class="num">100.0</span>, <span class="num">2.0</span>);   <span class="cmt">// src/managers/volumecontroller.cpp  VolumeController::toLinearStatic()</span></code></pre>
-
-        <p>
-          The curve and its dispatch live in exactly one class, <code>VolumeController</code>, registered
-          as <code>volumeController</code>.
-          <code>applyVolume(percent)</code> clamps, stores the raw percent in <code>SettingsManager</code>
-          (<code>setCurrentVolume</code>, idempotent), computes the linear value and fans it out:
-        </p>
-
-        <table>
-          <thead>
-            <tr><th>Output</th><th>Connection to <code>volumeApplied(percent, linear)</code> in <code>appcore.cpp</code></th></tr>
-          </thead>
-          <tbody>
-            <tr><td>Local media</td><td><code>mediaManager.setVolume(linear)</code></td></tr>
-            <tr><td>Phone mirror audio</td><td><code>phoneMirrorManager.setVolume(linear)</code></td></tr>
-            <tr><td>Built-in Android Auto audio</td><td><code>androidAutoManager.setVolume(linear)</code> (mute: <code>mutedChanged</code> &rarr; <code>androidAutoManager.setMuted()</code>), applied to every Android Auto <code>QAudioSink</code></td></tr>
-            <tr><td>ESP32 LED ring</td><td><code>esp32VolumeManager.send_volume_update(percent)</code> (compiled out under <code>Q_OS_MOBILE</code>)</td></tr>
-          </tbody>
-        </table>
-
-        <p>
-          One call therefore drives every output. The ESP32 manager adds its own 50&nbsp;ms
-          debounce, so the ring never sees more than 20 updates a second.
-        </p>
-
-        <p>Every source of a volume change routes through the same entry point:</p>
-
-        <table>
-          <thead>
-            <tr><th>Source</th><th>Call</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>UI sliders (<code>BottomBar.qml</code>, <code>MediaRoom.qml</code>)</td><td><code>volumeController.applyVolume(Math.round(value))</code></td></tr>
-            <tr><td>ESP32 knob</td><td>Serial &rarr; <code>volumeChangeRequested(delta)</code> &rarr; accumulator in main &rarr; <code>applyVolume(currentVolume + change)</code></td></tr>
-            <tr><td>Gesture sensor</td><td>I²C &rarr; <code>actionTriggered("volume_up"/"volume_down")</code> &rarr; <code>applyVolume(currentVolume &plusmn; gestureVolumeStep)</code></td></tr>
-            <tr><td>Startup</td><td><code>appcore.cpp</code> calls <code>applyVolume(settingsManager.currentVolume())</code> once, after the outputs exist</td></tr>
-          </tbody>
-        </table>
-
-        <p>The knob sends fractional deltas; <code>main.cpp</code> accumulates them until a whole step is available:</p>
-        <pre><code><span class="cmt">// src/main.cpp</span>
-<span class="kw">static float</span> accumulator = <span class="num">0.0f</span>;
-accumulator += delta;
-<span class="kw">if</span> (std::abs(accumulator) &gt;= <span class="num">1.0f</span>) {
-    <span class="kw">int</span> change = <span class="kw">static_cast</span>&lt;<span class="kw">int</span>&gt;(accumulator);
-    accumulator -= change;
-    volumeController.applyVolume(settingsManager.currentVolume() + change);
+Connections {                              <span class="cmt">// a signal</span>
+    target: obdManager
+    <span class="kw">function</span> onConnectionLostUnexpectedly(reason) { notice.show(reason) }
 }</code></pre>
+        <p>Three things are worth knowing:</p>
+        <ul>
+          <li><strong>A binding to a property stays up to date.</strong> When the manager announces a change, QML evaluates the binding again. Nothing polls.</li>
+          <li><strong>Every name must exist before <code>Main.qml</code> loads.</strong> A missing name is an error on first load, not something that fills in later. So the core is complete before the screen is created.</li>
+          <li><strong>Many methods have two names.</strong> Older methods were written with underscores (<code>next_track</code>). Each now has a camelCase twin (<code>nextTrack</code>), and the underscore name is deprecated. Use camelCase in new code. The <a href="api-reference.html">API reference</a> marks the deprecated ones.</li>
+        </ul>
+        <p>
+          A few values the screen needs are not managers and are set directly in
+          <span class="file-path">src/main.cpp</span>: <code>screenAutoScale</code> (the screen's short side divided
+          by 720, kept between 0.4 and 3), <code>isAndroid</code>, <code>assetStore</code> (file addresses for
+          bundled assets), <code>servicePairing</code> (pairing codes for the service; on the screen only, never
+          offered over the service), <code>hasQuick3D</code> and <code>hasQuick3DAssetUtils</code> (whether the 3D
+          modules are installed), and <code>wikiViewerAvailable</code> / <code>wikiHomeUrl</code>.
+        </p>
+        <p>
+          Two C++ types are registered as QML types, not as names: <code>EmbeddedDhuItem</code> (module
+          <code>OCTAVE.AndroidAuto</code>), an item that draws Android Auto frames, and <code>OBDManager</code>
+          (module <code>OCTAVE.OBD</code>), only so QML can use its connection-state values such as
+          <code>OBDManager.Connecting</code>. The screen's own shared objects (<code>Style</code>,
+          <code>Spacing</code>, <code>EnvironmentTheme</code>, <code>OBDParameterModel</code>,
+          <code>WidgetCatalog</code>, <code>MusicDevicePreference</code>) are QML singletons listed in
+          <span class="file-path">frontend/qmldir</span>.
+        </p>
 
-        <div class="info-box">
-          <strong>Rule:</strong> never call <code>mediaManager.setVolume()</code>,
-          <code>phoneMirrorManager.setVolume()</code> or <code>esp32VolumeManager.send_volume_update()</code> directly for a
-          user-driven change, and never re-implement the curve. Go through <code>volumeController.applyVolume()</code>
-          (or <code>toLinear()</code> for pure math in QML).
+        <!-- All managers -->
+        <h2 id="all-managers">The Managers</h2>
+        <p>
+          The name in the first column is the one you use in QML and over the service. Every member of each is
+          listed in the <a href="api-reference.html">API reference</a>, which is generated from the code.
+        </p>
+        <table>
+          <thead><tr><th>Name</th><th>What it is for</th><th>Its page</th></tr></thead>
+          <tbody>
+            <tr><td><code>settingsManager</code></td><td>Every setting, saved to one JSON file.</td><td><a href="settings-manager.html">Settings Manager</a></td></tr>
+            <tr><td><code>mediaManager</code></td><td>Local music: the library folders, playlists, playback, album art and the colours taken from it.</td><td><a href="media-manager.html">Media Manager</a></td></tr>
+            <tr><td><code>nowPlaying</code></td><td>What is playing and its controls, whichever source has them: OCTAVE's own player, a mirrored phone, Android Auto or Spotify.</td><td><a href="media-manager.html">Media Manager</a></td></tr>
+            <tr><td><code>spotifyManager</code></td><td>Spotify: sign-in, your library, remote control of the Spotify app. Experimental.</td><td><a href="media-manager.html#spotify">Media Manager</a></td></tr>
+            <tr><td><code>audioAnalyzer</code></td><td>The bars of the music visualizer.</td><td><a href="audio-analyzer.html">Audio Analyzer</a></td></tr>
+            <tr><td><code>volumeController</code></td><td>The one place volume and mute are set, for every output.</td><td><a href="utilities.html">Utilities</a></td></tr>
+            <tr><td><code>obdManager</code></td><td>The conversation with the car through an OBD adapter: connecting, live readings, trouble codes.</td><td><a href="obd-manager.html">OBD Manager</a></td></tr>
+            <tr><td><code>obdAdapterFinder</code></td><td>Finding and pairing a Bluetooth OBD adapter.</td><td><a href="obd-manager.html#adapter-finder">OBD Manager</a></td></tr>
+            <tr><td><code>paramStore</code></td><td>The latest value of every reading from the car and the motion sensor. Gauges read from here.</td><td><a href="gauges-dashboards.html">Gauges &amp; Dashboards</a></td></tr>
+            <tr><td><code>parameterCatalog</code></td><td>The title, unit and range of every reading.</td><td><a href="gauges-dashboards.html">Gauges &amp; Dashboards</a></td></tr>
+            <tr><td><code>customPids</code></td><td>Readings specific to your make of car, from a file you write.</td><td><a href="obd-manager.html#custom-pids">OBD Manager</a></td></tr>
+            <tr><td><code>busMonitor</code></td><td>The raw messages on the car's network, listen only.</td><td><a href="obd-manager.html#bus-monitor">OBD Manager</a></td></tr>
+            <tr><td><code>shiftLightManager</code></td><td>The shift light: which colour is active at the current engine speed, and its flashing.</td><td><a href="obd-manager.html#shift-light">OBD Manager</a></td></tr>
+            <tr><td><code>tripRecorder</code></td><td>The black box: every reading of every drive, kept on disk.</td><td><a href="obd-manager.html#black-box">OBD Manager</a></td></tr>
+            <tr><td><code>dashboardManager</code></td><td>Dashboards as JSON files: listing, loading, saving, importing, and the catalog of widgets.</td><td><a href="gauges-dashboards.html">Gauges &amp; Dashboards</a></td></tr>
+            <tr><td><code>phoneMirrorManager</code></td><td>An Android phone's screen and sound on OCTAVE's screen, with touch.</td><td><a href="phone-mirror-android-auto.html">Phone Mirror &amp; Android Auto</a></td></tr>
+            <tr><td><code>androidAutoManager</code></td><td>Android Auto.</td><td><a href="phone-mirror-android-auto.html#android-auto">Phone Mirror &amp; Android Auto</a></td></tr>
+            <tr><td><code>airPlayManager</code></td><td>An iPhone's screen and sound over AirPlay.</td><td><a href="phone-mirror-android-auto.html#airplay">Phone Mirror &amp; Android Auto</a></td></tr>
+            <tr><td><code>berryIMU</code></td><td>The motion sensor: pitch, roll, heading, g-forces, altitude.</td><td><a href="hardware-managers.html">Hardware Managers</a></td></tr>
+            <tr><td><code>gestureSensor</code></td><td>The hand-gesture sensor.</td><td><a href="hardware-managers.html">Hardware Managers</a></td></tr>
+            <tr><td><code>esp32VolumeManager</code></td><td>The wireless volume knob and its light ring.</td><td><a href="hardware-managers.html">Hardware Managers</a></td></tr>
+            <tr><td><code>vehicleManager</code></td><td>Which vehicle the 3D view shows: a bundled one or a model of your own. Experimental.</td><td><a href="pages.html#carmenu">Pages</a></td></tr>
+            <tr><td><code>themeCatalog</code></td><td>The colour themes, and the palette in force right now.</td><td><a href="theme-system.html">Theme System</a></td></tr>
+            <tr><td><code>fontCatalog</code></td><td>The bundled fonts.</td><td><a href="theme-system.html">Theme System</a></td></tr>
+            <tr><td><code>networkManager</code></td><td>Network status, the check for a newer version, updating a source checkout, restart and shut down.</td><td><a href="network-manager.html">Network Manager</a></td></tr>
+            <tr><td><code>clock</code></td><td>The time, in the format the settings ask for.</td><td><a href="utilities.html">Utilities</a></td></tr>
+            <tr><td><code>units</code></td><td>Time formatting, compass points and unit conversions.</td><td><a href="utilities.html">Utilities</a></td></tr>
+            <tr><td><code>diagnosticsManager</code></td><td>Reading and exporting the log files from the screen.</td><td><a href="utilities.html">Utilities</a></td></tr>
+            <tr><td><code>frontendManager</code></td><td>Other screens you install, and which one is in use.</td><td><a href="writing-a-frontend.html#install">Writing a Frontend</a></td></tr>
+            <tr><td><code>sim</code></td><td>The simulated car. Does nothing unless started. Experimental.</td><td><a href="development.html">Development</a></td></tr>
+          </tbody>
+        </table>
+
+        <!-- Service -->
+        <h2 id="service">The Service: Other Programs</h2>
+        <p>
+          The QML screen is the reference screen, not the only possible one. The service offers every manager in the
+          table above to other programs: lines of JSON over TCP, or WebSocket frames, on port 9876. A client can
+          list what exists (<code>describe</code>), read a property (<code>get</code>), change one
+          (<code>set</code>), call a method (<code>call</code>) and be told about changes (<code>subscribe</code>).
+        </p>
+        <ul>
+          <li><strong>It is off unless you turn it on</strong>: with <code>--service</code>, or the <code>serviceEnabled</code> setting. It listens on this device only (<code>127.0.0.1</code>) unless <code>--service-bind</code> gives another address.</li>
+          <li><strong>A program on another device must pair</strong> with a 6-digit code, and is given permission scopes (<code>read</code>, <code>media</code>, <code>vehicle</code>, ..., <code>full</code>) that decide what it may change.</li>
+          <li><strong><code>octave --headless</code></strong> runs the core and the service with no screen at all. Another program is the screen. Desktop and Pi only.</li>
+          <li><strong>The published API</strong> in <span class="file-path">docs/api/</span> is generated from the managers themselves (<code>octave --dump-api</code>) and has a version number, so a client knows what it can rely on.</li>
+        </ul>
+        <p>
+          The protocol, pairing, scopes and limits are in <a href="utilities.html#service-protocol">Utilities</a>.
+          <a href="writing-a-frontend.html">Writing a Frontend</a> is the walkthrough, and the
+          <a href="api-reference.html">API reference</a> lists every member.
+        </p>
+
+        <!-- Startup -->
+        <h2 id="startup">Startup</h2>
+        <p>From here on the page is for people changing the code. This is what <span class="file-path">src/main.cpp</span> does in a normal run, in order:</p>
+        <ol class="steps">
+          <li><strong>Quick answers.</strong> <code>--help</code>, <code>--version</code> and <code>--pair-code</code> print and exit before anything is created. An unknown option gets a warning.</li>
+          <li><strong>Choose the config folder.</strong> Normally the one for your system (<a href="#settings-persistence">below</a>); <code>--config DIR</code> picks another. <code>--sim</code> without <code>--config</code> uses a throwaway folder, so trying the simulator never touches a real install.</li>
+          <li><strong>Start logging and the crash handlers.</strong> This comes before any manager exists, so whatever a manager says while it is being built, and any crash, reaches the <a href="#logging">log files</a>.</li>
+          <li><strong>Create the Qt application and the QML engine.</strong> The Qt Quick Controls style is set to Basic, which is what lets OCTAVE draw its own sliders.</li>
+          <li><strong>Find <span class="file-path">frontend/</span>.</strong> Next to the program, or one folder up (so a build in <span class="file-path">build/</span> finds the checkout's). On Android it is inside the app package.</li>
+          <li><strong>Start the UI watchdog</strong>, then <strong>build the core.</strong> <code>AppCore</code> creates every manager, settings first, connects them, and enters each in the registry. Each manager is then given to the QML engine by name.</li>
+          <li><strong>Set up what only the screen needs</strong>: the Android Auto image provider, the two QML types, the QML import path, and the non-manager values listed <a href="#communication">above</a>.</li>
+          <li><strong>Start the simulated car</strong> if <code>--sim</code> or <code>--dev</code> asked for it.</li>
+          <li><strong>Create the service</strong> if it was asked for. It does not listen yet.</li>
+          <li><strong>Load <code>Main.qml</code>.</strong> If it fails to load, OCTAVE logs why and exits.</li>
+          <li><strong>Start the service listening</strong>, now that the screen exists.</li>
+          <li><strong>Run.</strong> The event loop runs until the window closes or OCTAVE is told to stop. On Linux and macOS, Ctrl-C and a stop from systemd go through the same clean <a href="#cleanup">shutdown</a>.</li>
+        </ol>
+        <p>
+          Managers start their own slow work after the event loop is running (looking for the OBD adapter, probing
+          the sensors), so none of it delays the first frame.
+        </p>
+        <p>Three runs take a different path after step 3 and never create a QML engine:</p>
+        <table>
+          <thead><tr><th>Run</th><th>What happens</th></tr></thead>
+          <tbody>
+            <tr><td><code>--headless</code></td><td>Builds the core, starts the service, and runs with no window. If the service cannot start, it exits: nothing could reach it.</td></tr>
+            <tr><td>An installed program is the chosen screen</td><td>The same as <code>--headless</code>, and OCTAVE starts that program and watches it. If it keeps failing, OCTAVE starts again on the QML screen. <code>--qml</code> forces the QML screen for one run.</td></tr>
+            <tr><td><code>--dump-api DIR</code></td><td>Builds the core in a throwaway config folder, writes the published API to <code>DIR</code> and exits.</td></tr>
+          </tbody>
+        </table>
+
+        <!-- Threading -->
+        <h2 id="threading">Threads</h2>
+        <p>
+          The screen and every manager's properties, methods and signals live on one thread, the <strong>main
+          thread</strong>. If it waits on anything, the screen freezes. So anything slow or blocking runs on another
+          thread and sends its result back as a signal, which Qt delivers on the main thread. A worker never touches
+          QML or a manager's state directly.
+        </p>
+        <table>
+          <thead><tr><th>Work</th><th>Where it runs</th></tr></thead>
+          <tbody>
+            <tr><td>Talking to the OBD adapter</td><td>Its own thread, <code>obd-worker</code>. On Android there is no worker: a Java helper does it. See <a href="obd-manager.html">OBD Manager</a>.</td></tr>
+            <tr><td>The black box's database</td><td>Its own thread, <code>trip-store</code>.</td></tr>
+            <tr><td>The motion sensor and the gesture sensor</td><td>One thread each, reading the sensor in a loop.</td></tr>
+            <tr><td>Phone mirroring</td><td>The client's own threads for video, audio and messages from the phone. Video is decoded there and handed straight to the screen.</td></tr>
+            <tr><td>Built-in Android Auto</td><td>Its own thread for the connection and the video decoder.</td></tr>
+            <tr><td>Reading tags and album art, album colours, the visualizer's analysis of a track</td><td>Qt's shared thread pool: short jobs with one result.</td></tr>
+            <tr><td>The service</td><td>One thread for the server and one per connected client. Anything a client asks of a manager is run on the main thread.</td></tr>
+            <tr><td>The volume knob, the network</td><td>The main thread. These are event-driven and never wait.</td></tr>
+          </tbody>
+        </table>
+        <div class="info-box warning">
+          <div class="info-box-title">Rule: pass every new worker thread to <code>sleepWhenIdle()</code></div>
+          A thread that runs an event loop must be passed to <code>sleepWhenIdle(thread)</code>
+          (<span class="file-path">src/util/threadidle.h</span>). It does nothing on a normal build. In the browser
+          build, such a thread with no running timer does not sleep: it uses a whole CPU core for as long as the page
+          is open. The OBD worker and the black box's thread already do this.
         </div>
 
-        <!-- Video paths -->
-        <h2 id="video">Video into QML: Image Provider vs QVideoSink</h2>
-        <p>Two external video sources reach the scene graph by two different mechanisms, chosen by how the frames arrive:</p>
-
-        <h3>Android Auto, DHU backend &mdash; <code>image://dhuframe</code></h3>
+        <h3 id="thread-watchdog">The UI Watchdog</h3>
         <p>
-          Google's Desktop Head Unit is a separate process with its own window. OCTAVE launches it and
-          <em>captures the window</em> with <code>QScreen::grabWindow()</code>. Nothing looks the window up, so automatic embedded capture is incomplete (on Linux and macOS the capture falls back to the whole screen). See <a href="phone-mirror-android-auto.html#android-auto">Android Auto limitations</a>. Captured frames are plain
-          <code>QImage</code>s, so a <code>QQuickImageProvider</code> named <code>dhuframe</code> serves the latest
-          one and QML re-requests it:
-        </p>
-        <pre><code><span class="cmt">// src/main.cpp</span>
-engine.addImageProvider(QStringLiteral(<span class="str">"dhuframe"</span>), androidAutoManager.frameProvider());
-
-<span class="cmt">// QML</span>
-Image { source: <span class="str">"image://dhuframe/frame"</span>; cache: <span class="kw">false</span> }</code></pre>
-
-        <h3>Phone mirror &mdash; <code>QVideoSink</code></h3>
-        <p>
-          The phone streams H.264 over a TCP socket that OCTAVE decodes itself with libavcodec.
-          Decoded YUV420P planes are wrapped in a <code>QVideoFrame</code> without an RGB conversion and pushed to the
-          <code>QVideoSink</code> that QML's <code>VideoOutput</code> exposes, so the GPU does the colour conversion
-          and the frame never becomes a <code>QImage</code>:
-        </p>
-        <pre><code><span class="cmt">// QML (PhoneMirrorView.qml) — inside the VideoOutput</span>
-Component.onCompleted: <span class="kw">if</span> (phoneMirrorManager) phoneMirrorManager.videoSink = videoSink</code></pre>
-        <p>
-          <code>videoSink</code> is a <code>Q_PROPERTY(QObject*)</code> on
-          <code>PhoneMirrorManager</code>. Audio comes over a second socket as PCM and is played
-          through a <code>QAudioSink</code> with a client-side gain (<code>scrcpyAudioGain</code>); sound detected in
-          that PCM drives <code>duckingChanged</code> &rarr; <code>MediaManager.setDucking()</code> so local music dips
-          under navigation prompts.
+          A frozen screen in a car has nobody watching a terminal. So a small thread asks the main thread to answer
+          every 2 seconds. If no answer comes for 5 seconds it writes <code>UI thread blocked for N s and
+          counting</code> to the log, and <code>responsive again after N s</code> when the screen comes back.
         </p>
         <p>
-          Phone mirror and built-in Android Auto decode with the same <code>H264Decoder</code>
-          (<span class="file-path">src/util/h264decoder.{h,cpp}</span>), pulled out of <code>ScrcpyClient</code> so every projection
-          source decodes one way: it owns the libavcodec context (slice threading only), puts SPS/PPS sent apart in front of the next
-          packet, and copies a decoded <code>YUV420P</code> / <code>YUVJ420P</code> picture into a mapped <code>QVideoFrame</code>.
-          What is specific to a source stays with it (the phone mirror's black-frame hold and size tracking are in
-          <code>ScrcpyClient</code>'s frame callback).
+          On desktop Linux it also acts (not on Android, where nothing would start the app again). After 15 seconds it writes what every thread was doing to
+          <code>hang-&lt;time&gt;.txt</code> in the log folder (this needs <code>gdb</code> installed). After 30
+          seconds it ends the program so the launcher can start it again, which is better than a dead screen that
+          only pulling the power clears. It never does this in the first 2 minutes after launch, when a first scan
+          of a large music library can keep the main thread busy.
         </p>
 
-        <h3>Android Auto, built-in &mdash; <code>QVideoSink</code></h3>
+        <!-- Volume -->
+        <h2 id="volume-system">Volume System</h2>
         <p>
-          With <code>androidAutoBackend = "native"</code>, <code>AndroidAutoView.qml</code> gives its <code>VideoOutput</code>'s sink to
-          <code>androidAutoManager.videoSink</code> the same way, and the receiver's worker thread decodes the phone's H.264 into it.
-          See <a href="#android-auto-module">The Built-in Android Auto Receiver</a>.
+          Volume has one entry point: <code>volumeController.applyVolume(percent)</code>, with 0 to 100. Mute is
+          <code>volumeController.toggleMute()</code>. The sliders on the screen, the volume knob, the gesture sensor
+          and the service all call these two and nothing else.
         </p>
+        <p>
+          The controller turns the percent into a gain with a quadratic curve, <code>(percent / 100)&sup2;</code>,
+          which sounds more even to the ear than a straight line: 50 % is a quarter of full gain. It then sends the
+          result to every output at once: OCTAVE's own player, the mirrored phone's audio, Android Auto, AirPlay,
+          Spotify while it is the source, and the knob's light ring.
+        </p>
+        <div class="info-box warning">
+          <div class="info-box-title">Rule: never set an output's volume yourself</div>
+          Do not call a manager's own <code>setVolume</code> or <code>setMuted</code> for a change the user made, and
+          do not write the curve anywhere else. If every output does not use the same curve, they drift apart as the
+          slider moves. In QML, bind to <code>volumeController.percent</code> and <code>muted</code>.
+        </div>
+        <p>The mute rules and the rest of the controller are in <a href="utilities.html">Utilities</a>.</p>
 
-        <!-- Android Auto module -->
-        <h2 id="android-auto-module">The Built-in Android Auto Receiver</h2>
-        <p>
-          <span class="file-path">src/android_auto/</span> makes OCTAVE the head unit for the phone's Android Auto: it speaks the Android
-          Auto Protocol (AAP) to the phone's head unit server, reached through an adb forward to phone port 5277. It is compiled only with
-          <code>OCTAVE_HAVE_NATIVE_AA</code> (OpenSSL + FFmpeg, desktop; <a href="building.html#cmake-options">Building</a>) and driven by
-          <code>AndroidAutoManager</code>'s native mode (<span class="file-path">src/managers/androidautomanager_native.cpp</span>), which does the
-          adb work, loads the head-unit certificate and retries. User-facing behaviour:
-          <a href="phone-mirror-android-auto.html#aa-native">Built-in Android Auto</a>; byte layouts:
-          <span class="file-path">docs/ANDROID_AUTO_PROTOCOL.md</span>.
-        </p>
+        <!-- Video -->
+        <h2 id="video">Video on the Screen</h2>
+        <p>Video from a phone reaches the screen in one of two ways, depending on how the frames arrive.</p>
         <table>
-          <thead><tr><th>File</th><th>Role</th></tr></thead>
+          <thead><tr><th>Source</th><th>How it gets to the screen</th></tr></thead>
           <tbody>
-            <tr><td><code>aapproto.{h,cpp}</code></td><td>The handful of AAP messages OCTAVE sends and reads, hand-encoded in the protobuf wire format (<code>ProtoWriter</code> / <code>ProtoReader</code>, no libprotobuf); the head unit's configuration (video size, fps, density) and the channel numbering</td></tr>
-            <tr><td><code>aapframer.{h,cpp}</code></td><td>Framing: <code>FrameReader</code> splits the byte stream into frames, <code>MessageAssembler</code> joins a channel's fragments into messages. Two steps because TLS is one stream across every channel: each encrypted frame is decrypted in arrival order before reassembly</td></tr>
-            <tr><td><code>aaptls.{h,cpp}</code></td><td>TLS 1.2 client over an OpenSSL memory BIO pair, the bytes travelling inside AAP messages instead of a socket; loads the user's PEM certificate and key at run time (OCTAVE ships none)</td></tr>
-            <tr><td><code>aapsession.{h,cpp}</code></td><td>One session with no I/O of its own (bytes in through <code>receive()</code>, out through <code>transmit</code>): version &rarr; TLS &rarr; auth &rarr; service discovery &rarr; channel opens, media acks, audio focus, sensors (night mode, driving status), touch input reports, pings every 1.5 s (no answer for 10 s fails it) and bye-bye. Transport-agnostic, so the same session can later run over a USB accessory link</td></tr>
-            <tr><td><code>aapconnection.{h,cpp}</code></td><td>The session over a <code>QTcpSocket</code> on a worker thread with the <code>H264Decoder</code>; frames to the <code>QVideoSink</code>, audio (media, guidance, system) to one <code>QAudioSink</code> per stream on the GUI thread; 10 s from TCP connect to service discovery before it gives up on a head unit server that accepts but never answers</td></tr>
+            <tr><td>Phone mirroring, built-in Android Auto, AirPlay</td><td>OCTAVE receives a compressed video stream (H.264) and decodes it itself with one shared decoder (<span class="file-path">src/util/h264decoder</span>). Each decoded frame goes straight to the video sink of a QML <code>VideoOutput</code>, which the manager exposes as its <code>videoSink</code> property. The graphics card does the colour conversion.</td></tr>
+            <tr><td>Android Auto through Google's Desktop Head Unit</td><td>That is a separate program with its own window. OCTAVE captures its picture and serves the latest one to QML through an image provider, <code>image://dhuframe</code>.</td></tr>
           </tbody>
         </table>
-        <p>
-          The manager side: find the phone with <code>adb devices</code> and Phone Mirror's serial choice, check the phone's
-          <code>/proc/net/tcp</code> for a socket listening on port 5277, <code>adb forward tcp:0 tcp:5277</code>, then
-          <code>AapConnection::start("127.0.0.1", port, options)</code>. Volume, mute, audio output and night mode reach it from
-          <code>AppCore</code> (<code>VolumeController</code>, the <code>audioOutputDevice</code> setting, <code>themeCatalog</code>: any theme
-          outside the light group is night). <code>tst_androidauto</code> runs the core against a fake phone with throwaway self-signed
-          certificates, no device needed (<a href="development.html#testing">Development</a>).
+        <p id="android-auto-module">
+          The built-in Android Auto receiver is the code in <span class="file-path">src/android_auto/</span>. It makes
+          OCTAVE the car's head unit: it speaks the Android Auto protocol to the phone, with no Google software on
+          the OCTAVE side. It is only compiled when the build has OpenSSL and FFmpeg, on desktop
+          (<a href="building.html#cmake-options">build options</a>). How to use it, what works and how it is put
+          together are in <a href="phone-mirror-android-auto.html#aa-native">Phone Mirror &amp; Android Auto</a>.
         </p>
 
-        <!-- Phone server -->
-        <h2 id="phone-server">The Phone Server Fork</h2>
-        <p>
-          The Java program that runs on the phone during mirroring is OCTAVE's own fork of the scrcpy server
-          (Apache-2.0, forked at v3.3.4, package <code>org.octave.phoneserver</code>), source in
-          <span class="file-path">phone_server/</span>. The prebuilt jar
-          <span class="file-path">tools/phone-server/octave-phone-server</span> is committed alongside it with its
-          LICENSE and NOTICE; the build embeds all three as Qt resources (<code>:/phone-server/</code>) and writes
-          the jar to a temp file at runtime, so no packaging target has to carry a loose file. The client pushes the
-          jar over <code>adb</code> every session (the server's clean-up helper deletes it from
-          <code>/data/local/tmp</code> once it is running) and speak the scrcpy 3.x protocol to it.
-        </p>
-        <ul>
-          <li>The version string must agree in two places or the server refuses to start: <code>SCRCPY_VERSION_NAME</code> in <code>phone_server/build_without_gradle.sh</code> and <code>kServerVersion</code> in <code>src/phone_mirror/scrcpyclient.h</code> &mdash; both <code>3.3.4-octave</code>.</li>
-          <li>The <code>phone-server</code> CI job rebuilds the jar from source on every push and fails if the committed jar does not carry the expected package and version (a byte-level difference is reported as a warning because javac/d8 output differs across toolchains).</li>
-          <li><code>adb</code> itself is bundled: <code>scripts/fetch_platform_tools.py</code> downloads Google's pinned platform-tools (SHA-256 verified) into the gitignored <code>tools/platform-tools/&lt;os&gt;/</code>, and CI ships it beside the binary. Google publishes no aarch64 build, so ARM boards fall back to the distro's <code>adb</code>.</li>
-          <li>Protocol byte layouts are documented in <span class="file-path">docs/PHONE_MIRROR_NATIVE_PLAN.md</span>; re-verify them against <code>DesktopConnection</code>, <code>control/ControlMessageReader</code> and <code>device/Streamer</code> when pulling upstream changes.</li>
-        </ul>
-
-        <!-- Settings Persistence -->
-        <h2 id="settings-persistence">Settings Persistence</h2>
-        <p>
-          All user settings live in one JSON file, <code>settingsConfigure.json</code>, under the directory returned by
-          <code>SettingsManager::getAppDataDir()</code>. The same directory holds
-          <code>logs/</code>, <code>dashboards/</code> (user dashboards), <code>metadata_cache.json</code> (the media
-          manager's persistent tag/cover store).
-        </p>
-
+        <!-- Settings and files -->
+        <h2 id="settings-persistence">Where Settings and Files Live</h2>
+        <p>Everything OCTAVE keeps is in one folder, the <strong>config folder</strong>:</p>
         <table>
-          <thead>
-            <tr><th>Platform</th><th>Path</th></tr>
-          </thead>
+          <thead><tr><th>Platform</th><th>Config folder</th></tr></thead>
           <tbody>
+            <tr><td>Linux, Raspberry Pi</td><td><code>~/.config/OCTAVE/</code> (or <code>$XDG_CONFIG_HOME/OCTAVE/</code> when that is set)</td></tr>
             <tr><td>Windows</td><td><code>%APPDATA%\OCTAVE\</code></td></tr>
             <tr><td>macOS</td><td><code>~/Library/Application Support/OCTAVE/</code></td></tr>
-            <tr><td>Linux / Raspberry Pi</td><td><code>$XDG_CONFIG_HOME/OCTAVE/</code>, default <code>~/.config/OCTAVE/</code></td></tr>
-            <tr><td>Android</td><td>Same code path as Linux: <code>QDir::homePath() + "/.config/OCTAVE/"</code>, which resolves inside the app's private storage</td></tr>
+            <tr><td>Android</td><td><code>.config/OCTAVE/</code> under the app's own home folder</td></tr>
           </tbody>
         </table>
-
+        <p>Start OCTAVE with <code>--config DIR</code> to use another folder. Inside it:</p>
+        <table>
+          <thead><tr><th>File or folder</th><th>What</th></tr></thead>
+          <tbody>
+            <tr><td><code>settingsConfigure.json</code></td><td>Every setting. See <a href="settings-manager.html">Settings Manager</a> and the <a href="settings-reference.html">Settings Reference</a>.</td></tr>
+            <tr><td><code>logs/</code></td><td>The <a href="#logging">log files</a>.</td></tr>
+            <tr><td><code>dashboards/</code></td><td>Your dashboards. See <a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>.</td></tr>
+            <tr><td><code>history/</code></td><td>The black box: recorded drives. See <a href="obd-manager.html#black-box">OBD Manager</a>.</td></tr>
+            <tr><td><code>custom-pids.json</code></td><td>Your <a href="obd-manager.html#custom-pids">custom PIDs</a>.</td></tr>
+            <tr><td><code>vehicles/</code></td><td>3D models you imported.</td></tr>
+            <tr><td><code>frontends/</code></td><td>Other screens you installed.</td></tr>
+            <tr><td><code>metadata_cache.json</code></td><td>What the music library scan learned about each song.</td></tr>
+          </tbody>
+        </table>
         <p>
-          Reads happen <em>once</em>: after the constructor has loaded and validated the file, the in-memory object
-          is authoritative (<code>loadSettings()</code> returns <code>m_settings</code>
-          without touching disk). Writes are <strong>coalesced</strong>: every setter calls <code>saveSettings()</code>,
-          which updates memory, marks a pending flag and (re)starts a 500&nbsp;ms single-shot timer; when it fires,
-          <code>flushPendingSave()</code> writes the whole object atomically
-          (<code>QSaveFile</code>: temp file, fsync, rename). Writes are not serialized across running application instances. OBD parameter selections have a separate 800&nbsp;ms debounce, which <code>flushPendingSave()</code> does not drain. <code>AppCore::shutdown()</code> (run from <code>main.cpp</code>'s <code>aboutToQuit</code> handler) explicitly flushes the main settings store, but simultaneous instances can overwrite each other's settings. See
-          <a href="settings-manager.html">Settings Manager</a> for the registry, validation and every key.
-        </p>
-
-        <!-- Dashboards -->
-        <h2 id="dashboards">Dashboards: JSON Specs + DashboardManager</h2>
-        <p>
-          OBD dashboards are <strong>data, not code</strong>. A dashboard is a JSON object with <code>id</code>,
-          <code>label</code>, <code>schema</code>, a grid size and a list of cells, each naming a widget type from
-          <code>frontend/dashboards/WidgetCatalog.qml</code>, a PID id from <code>OBDParameterModel</code>, a grid
-          rectangle and per-widget props:
-        </p>
-        <pre><code>{
-  <span class="prop">"id"</span>: <span class="str">"sport"</span>, <span class="prop">"label"</span>: <span class="str">"Sport"</span>, <span class="prop">"schema"</span>: <span class="num">1</span>,
-  <span class="prop">"gridColumns"</span>: <span class="num">12</span>, <span class="prop">"gridRows"</span>: <span class="num">8</span>,
-  <span class="prop">"cells"</span>: [
-    { <span class="prop">"type"</span>: <span class="str">"DigitalReadout"</span>, <span class="prop">"paramId"</span>: <span class="str">"SPEED"</span>,
-      <span class="prop">"col"</span>: <span class="num">0</span>, <span class="prop">"row"</span>: <span class="num">0</span>, <span class="prop">"colSpan"</span>: <span class="num">6</span>, <span class="prop">"rowSpan"</span>: <span class="num">7</span>,
-      <span class="prop">"props"</span>: { <span class="prop">"valueScale"</span>: <span class="num">7.0</span>, <span class="prop">"padDigits"</span>: <span class="num">3</span> } },
-    ...
-  ]
-}</code></pre>
-        <ul>
-          <li><strong>Sources</strong> &mdash; built-in presets in <code>frontend/dashboards/presets/</code> (<code>fullgrid</code>, <code>minimal</code>, <code>performance</code>, <code>sport</code>, <code>tj-wrangler</code>) and user files in <code>&lt;appdata&gt;/dashboards/</code>. Ids must be unique across both; a user file that collides with a built-in id is rejected at load.</li>
-          <li><strong>API</strong> (<code>src/managers/dashboardmanager.h</code>) &mdash; <code>dashboards</code> property (list of <code>{id, label, builtIn, path}</code>, built-ins first), <code>loadDashboard(id)</code>, <code>isBuiltIn(id)</code>, <code>saveDashboard(spec)</code>, <code>deleteDashboard(id)</code> (hides a built-in), <code>restoreBuiltInDashboards()</code>, <code>hiddenBuiltInCount</code>, <code>duplicateDashboard(sourceId, newLabel)</code>, <code>refresh()</code>, <code>dashboardsChanged</code>.</li>
-          <li><strong>Hot reload</strong> &mdash; a <code>QFileSystemWatcher</code> on the user directory, debounced and compared against a (name, mtime, size) signature so OCTAVE's own atomic saves do not double-fire.</li>
-          <li><strong>Rendering</strong> &mdash; <code>frontend/dashboards/DashboardRenderer.qml</code> instantiates the cells from the spec; Home (<code>frontend/HomeDashboard.qml</code>) shows the one picked in Settings &gt; Display. There is no editor in the app since 2026-11-24: a dashboard is a JSON file, written by hand or in the browser editor the service serves.</li>
-          <li><strong>Primitives</strong> &mdash; <code>frontend/gauges/</code>: <code>CircularGauge</code>, <code>ArcGauge</code>, <code>BarGauge</code>, <code>LinearGauge</code>, <code>DigitalReadout</code>, <code>SparklineGauge</code>, <code>WarningLight</code>, plus the self-binding <code>GForceGauge</code> and <code>CompassGauge</code>.</li>
-        </ul>
-        <p>The full spec (binding API, every prop, parameter bindings, recipes) is <span class="file-path">docs/GAUGE_AUTHORING.md</span>; the wiki page is <a href="gauges-dashboards.html">Gauges &amp; Dashboards</a>.</p>
-
-        <!-- 3D vehicle -->
-        <h2 id="vehicle-3d">The 3D Vehicle (CarMenu)</h2>
-        <p>
-          <code>frontend/CarMenu.qml</code> shows a rigged, lifted soft-top 2003 Jeep TJ (<code>frontend/JeepVehicle.qml</code>) in a
-          Qt Quick 3D scene (<code>frontend/VehicleView.qml</code>, a component other pages can place), rolled and pitched live by
-          <code>berryIMU</code> against a level ring, with pitch and roll as the page's two readouts. Doors, hood and tailgate open on a
-          tap; lights, steering and the other rig controls are a test panel (<code>frontend/VehicleRigPanel.qml</code>) a <code>--dev</code> run can open. The model is an original reconstruction: the full
-          per-part GLBs under <code>frontend/assets/jeep_tj/</code> (the full reference model is <code>tools/vehicle/reference/jeep_tj_2003.glb</code>, not shipped)
-          with generated <code>Rig.js</code> / <code>rig.json</code> pivot metadata, built by
-          <code>tools/vehicle/build_jeep_tj.py</code> and <code>build_jeep_twin.py</code>, then exported by
-          <code>export_jeep_twin.py</code> (Blender, not needed at runtime). The photo references and
-          the corrections they informed are catalogued in <span class="file-path">docs/vehicle/references.md</span>.
-        </p>
-        <p>
-          Qt Quick 3D is <strong>optional at build time</strong>: <code>CMakeLists.txt</code> probes for it, and
-          <code>frontend/SensorHome.qml</code> probes by creating the <code>CarMenu.qml</code> component and greys out
-          the "3D View" card with "Requires the QtQuick3D module" when it fails. <code>RuntimeLoader</code> also needs
-          Qt's assimp asset-import plugin; on distro Qt that is often a separate package (see <code>BUILD.md</code>).
-          <code>JeepVehicle.qml</code> assembles the part GLBs with public Qt APIs rather than reaching into an
-          imported scene's internals, so a rebuild of the asset set does not break the QML.
+          Settings are read from disk once, at startup. After that the copy in memory is the truth. A change is
+          written back half a second later, so a slider being dragged causes one write, not hundreds. The write goes
+          to a temporary file that then replaces the real one, so a power cut in the middle leaves the old file
+          whole. Pending changes are written on shutdown.
         </p>
 
         <!-- Logging -->
-        <h2 id="logging">Logging, Crash Handlers and Diagnostics</h2>
+        <h2 id="logging">Logging</h2>
         <p>
-          OCTAVE runs in a car with no console attached, so "it was in the terminal" is not observability. It
-          therefore writes rotating log files, leave a trace on crash, notice a hung UI, and let the user
-          get the files off the head unit from the screen.
-        </p>
-
-        <h3>Log files &mdash; <span class="file-path">src/util/logger.cpp</span></h3>
-        <p>
-          <code>OctaveLog::install(debug)</code> runs before <code>QGuiApplication</code> and installs a
-          <code>qInstallMessageHandler</code> that routes every <code>qDebug</code>/<code>qCDebug</code>/<code>qInfo</code>/
-          <code>qWarning</code>/<code>qCritical</code>/<code>qFatal</code> <em>and every QML <code>console.*</code> call</em>
-          into the same <code>logs/</code> directory while still echoing to stderr on desktop (on Android and iOS,
-          where stderr goes nowhere, the line is handed to Qt's default handler instead so it reaches logcat /
-          <code>os_log</code>). Managers use
-          one <code>Q_LOGGING_CATEGORY</code> each (<code>octave.media</code>,
-          <code>octave.elm327</code>, <code>octave.dashboards</code>,
-          <code>octave.ui_watchdog</code>, &hellip;). Without <code>--debug</code> the filter rule
-          <code>*.debug=false</code> discards debug messages at the source, so they cost nothing.
+          OCTAVE runs in a car with no terminal attached, so everything it has to say goes to files. They are in
+          <code>logs/</code> inside the <a href="#settings-persistence">config folder</a>:
         </p>
         <table>
-          <thead><tr><th>File</th><th>Level</th><th>Max size</th><th>Backups</th></tr></thead>
+          <thead><tr><th>File</th><th>What is in it</th><th>Size limit</th><th>Old copies kept</th></tr></thead>
           <tbody>
-            <tr><td><code>octave-cpp.log</code></td><td>INFO+</td><td>5 MB</td><td>3</td></tr>
-            <tr><td><code>octave-cpp-error.log</code></td><td>WARNING+ and crash backtraces</td><td>2 MB</td><td>5</td></tr>
-            <tr><td><code>octave-cpp-debug.log</code></td><td>DEBUG+ (only with <code>--debug</code>)</td><td>10 MB</td><td>2</td></tr>
+            <tr><td><code>octave-cpp.log</code></td><td>Everything at info level and above. Start here.</td><td>5 MB</td><td>3</td></tr>
+            <tr><td><code>octave-cpp-error.log</code></td><td>Warnings and errors only, and the trace of a crash.</td><td>2 MB</td><td>5</td></tr>
+            <tr><td><code>octave-cpp-debug.log</code></td><td>Everything, including debug messages. Only written when OCTAVE is started with <code>--debug</code>.</td><td>10 MB</td><td>2</td></tr>
           </tbody>
         </table>
-        <p>Maximum on disk: ~32 MB without debug, ~62 MB with. Format:</p>
-        <pre><code><span class="str">2026-09-10 12:00:00.123 | INFO    | octave.media | mediamanager.cpp:123 | Library scan complete</span></code></pre>
-
-        <h3>Crash handlers</h3>
-        <ul>
-          <li><strong>Unix</strong>: <code>SIGSEGV</code>/<code>SIGABRT</code>/<code>SIGFPE</code>/<code>SIGILL</code>/<code>SIGBUS</code> handlers write a <code>==== FATAL SIGSEGV ====</code> block and a <code>backtrace_symbols_fd</code> backtrace to <code>octave-cpp-error.log</code> over a raw descriptor opened at install time, on a signal stack of their own on the GUI thread so a stack overflow there is logged too (no Qt in the signal path &mdash; not even <code>OctaveLog::flush()</code>, which the log files do not need because every line is flushed as it is written), then restore the default action and re-raise so the OS still produces its core / tombstone. Windows uses <code>SetUnhandledExceptionFilter</code> + <code>CaptureStackBackTrace</code>. Symbolise with <code>addr2line -e octave</code> against the same build. <code>qFatal</code> passes through the message handler first, which calls <code>OctaveLog::flush()</code> after a fatal message, so assertion text is on disk before the abort; the <code>aboutToQuit</code> handler calls the same flush last on a normal exit.</li>
-        </ul>
-
-        <h3>Getting logs out of the vehicle &mdash; <code>DiagnosticsManager</code></h3>
         <p>
-          Settings &rarr; Device &rarr; Developer &rarr; Diagnostics (<code>frontend/settings/DeviceSettingsPage.qml</code>) is backed by
-          <code>diagnosticsManager</code>: <code>recentLogLines(200)</code> shows the tail of the
-          main log followed by the error log; <code>copyLogsToClipboard(400)</code> prepends a
-          version/device header; <code>exportLogs()</code> copies every current and rotated log file plus a
-          <code>device-info.txt</code> into <code>&lt;Downloads&gt;/OCTAVE-logs-&lt;timestamp&gt;/</code> (so on the Android
-          head unit they can be attached from any mail or files app) and updates <code>lastExportPath</code>;
-          <code>openLogFolder()</code> opens the directory in the OS file manager where <code>canOpenFolder</code> is
-          true. Constant properties <code>logDir</code>, <code>appVersion</code> (from <code>OCTAVE_VERSION</code>,
-          <code>0.9.6</code>), <code>backendName</code> and
-          <code>deviceInfo</code> feed the page header.
+          When a file reaches its limit it is renamed with <code>.1</code> at the end, the older copies move up a
+          number, and the oldest is deleted. A line looks like this:
+        </p>
+        <pre><code>2026-09-10 12:00:00.123 | INFO    | octave.media | mediamanager.cpp:123 | Library scan complete</code></pre>
+        <p>
+          The third column is the <strong>category</strong>, which says which part of OCTAVE wrote the line:
+          <code>octave.media</code>, <code>octave.elm327</code>, <code>octave.dashboards</code>,
+          <code>octave.ui_watchdog</code> and so on. Search for it to follow one part. Messages from QML
+          (<code>console.log</code>) land in the same files.
+        </p>
+        <ul>
+          <li><strong>On a computer</strong> every line is also printed to the terminal. <strong>On Android</strong> it goes to logcat as well as the files.</li>
+          <li><strong>Without <code>--debug</code></strong>, debug messages are dropped before they are even built, so they cost nothing.</li>
+          <li><strong>When OCTAVE crashes</strong>, it writes a block starting <code>==== FATAL SIGSEGV</code> (or the signal that happened) and the list of code addresses it was in to <code>octave-cpp-error.log</code>, then lets the system handle the crash as usual. Turn the addresses into function names with <code>addr2line -e octave</code> against the same build.</li>
+          <li><strong>When the screen freezes</strong>, the <a href="#thread-watchdog">UI watchdog</a> says so in the same log.</li>
+        </ul>
+        <p>
+          <strong>Getting the logs out of the car.</strong> Settings &gt; Device &gt; Developer &gt; Diagnostics shows
+          the end of the log on the screen, copies it to the clipboard, or exports every log file with a description
+          of the device to an <code>OCTAVE-logs-&lt;time&gt;</code> folder in Downloads. See
+          <a href="utilities.html">Utilities</a> for the details and <a href="troubleshooting.html">Troubleshooting</a>
+          for what to look for.
+        </p>
+        <p>
+          In C++, log through a category (<code>Q_LOGGING_CATEGORY</code> with <code>qCInfo</code>,
+          <code>qCWarning</code>, <code>qCDebug</code>), not bare <code>qDebug()</code>, so the line can be found
+          by its category.
+        </p>
+
+        <!-- Platforms -->
+        <h2 id="platforms">Platforms</h2>
+        <p>
+          All platforms build from the same code. A feature that a platform cannot have is replaced by a stand-in
+          with the same name and members that does nothing, so the screen never has to ask which platform it is on.
+        </p>
+        <table>
+          <thead><tr><th>Platform</th><th>What is different</th></tr></thead>
+          <tbody>
+            <tr><td>Linux, Raspberry Pi, Orange Pi</td><td>Everything is available. This is the platform the car's head unit runs.</td></tr>
+            <tr><td>Windows, macOS</td><td>No AirPlay, and no built-in Bluetooth pairing for OBD adapters (pair in the system's settings). The motion and gesture sensors are read over Linux's I2C interface, so they are not available.</td></tr>
+            <tr><td>Android</td><td>The volume knob, gesture sensor, phone mirroring and Android Auto are stand-ins. The motion readings come from the phone's own sensors. The car is reached over Bluetooth LE through a Java helper. No <code>--headless</code>.</td></tr>
+            <tr><td>Browser demo</td><td>A browser has no serial ports, no Bluetooth as Qt knows it, and cannot start other programs. An OBD adapter is reached through the browser's own Web Bluetooth or Web Serial, or you pick the simulated car. The service is offered to the page itself, not on a network port. See <a href="building.html#wasm">Building</a>.</td></tr>
+            <tr><td>iOS</td><td>Not built yet.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          In the code, <code>Q_OS_MOBILE</code> is defined for Android and the browser and selects the stand-ins;
+          <code>OCTAVE_WASM</code> marks the browser alone. New code that starts another program must be inside
+          <code>#if QT_CONFIG(process)</code>, and new hardware code must be kept out of the browser build with
+          <code>OCTAVE_WASM</code>, or that build breaks. Optional parts are switched by what the build finds:
+          <code>OCTAVE_HAVE_FFMPEG</code> (the video decoder), <code>OCTAVE_HAVE_NATIVE_AA</code> (built-in Android
+          Auto), <code>OCTAVE_HAVE_AIRPLAY</code>. See <a href="building.html#cmake-options">Building</a>.
         </p>
 
         <!-- Dev tooling -->
-        <h2 id="service">The Service: Other Frontends</h2>
+        <h2 id="dev-tooling">Simulator and Developer Tools</h2>
+        <table>
+          <thead><tr><th>Option</th><th>In which builds</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>--sim</code></td><td>Every build</td><td>A simulated car. It is a simulated adapter underneath the real OBD manager, so the real code runs. Uses a throwaway config folder unless <code>--config</code> is given.</td></tr>
+            <tr><td><code>--dev</code></td><td>Debug builds</td><td>The simulated car on your usual config, and a developer overlay on the screen.</td></tr>
+            <tr><td><code>--profile</code></td><td>Debug builds</td><td>A performance monitor, and the service with extra actions that drive the screen (navigate, tap, capture) for test scripts.</td></tr>
+          </tbody>
+        </table>
         <p>
-          The QML UI is the reference frontend, not the only possible one. Every manager is published over the
-          <a href="utilities.html#service-protocol">service protocol</a> (<span class="file-path">src/service/</span>): JSON
-          over TCP, or WebSocket frames on the same port, with <code>hello</code>, <code>describe</code>, <code>get</code>,
-          <code>set</code>, <code>call</code>, <code>subscribe</code> and <code>rows</code>. The objects are the same ones QML sees, because
-          <code>AppCore</code>'s registry feeds both, and the published list (<span class="file-path">docs/api/</span>,
-          <a href="api-reference.html">Service API Reference</a>) is generated from the meta-objects and checked by
-          <code>tst_apidocs</code>. <code>tst_conformance</code> checks that the QML uses nothing the service doesn't publish.
-        </p>
-        <ul>
-          <li><strong>Off unless asked for</strong>: <code>--service [PORT]</code>, the <code>serviceEnabled</code> setting, <code>--headless</code>, or <code>--profile</code> in a developer build; loopback only unless <code>--service-bind</code>.</li>
-          <li><strong>Who may use it</strong> (protocol 2): everything on this device is trusted by default; anything else pairs with a 6-digit code from Settings &gt; Device &gt; Developer &gt; Service and gets a token whose scopes (<code>read</code>, <code>media</code>, <code>vehicle</code>, &hellip;, <code>full</code>) decide what it may change. Each connection has limits (ops and new connections a second, a reader that stays behind), so one client cannot slow the car, the screen or the others (<a href="utilities.html#many-clients">Many clients</a>).</li>
-          <li><strong>The contract</strong>: <code>protocolVersion</code> 3; <span class="file-path">tools/api/check_compat.py</span> in CI fails a breaking change without a version bump and a <span class="file-path">docs/api/CHANGELOG.md</span> entry; members marked experimental or deprecated say so in <code>describe</code>; <span class="file-path">docs/api/protocol.json</span> describes the envelope (ops, errors, events, stream records) as JSON Schema.</li>
-          <li><strong><code>--headless</code></strong>: the managers and the service with no QML engine and no window (about a fifth less memory on the desktop). Another program is the UI.</li>
-          <li><strong>Streams</strong>: the <code>stream</code> op sends the phone mirror's H.264 and Android Auto's frames as binary records on the same connection; <code>GET /art</code> serves covers.</li>
-          <li><strong><code>--sim</code></strong> (every build): a simulated car, IMU motion and test tracks on a throwaway config, driven through the experimental <code>sim</code> object, so a frontend can be written without a car.</li>
-          <li><strong>Installable frontends</strong> (<code>FrontendManager</code>, Settings &gt; Device &gt; Developer &gt; Frontends): a folder or zip with an <code>octave-frontend.json</code> manifest, either web (served at <code>GET /</code>) or a program OCTAVE runs headless, restarts with back-off and falls back to QML from.</li>
-          <li><strong>Clients</strong>: <span class="file-path">sdk/python</span> (stdlib only), <span class="file-path">sdk/web</span> (the reference page the app serves at <code>http://127.0.0.1:9876/</code>), <span class="file-path">sdk/typescript</span> and <span class="file-path">sdk/go</span> (generated from <span class="file-path">docs/api/</span>); starter projects in <span class="file-path">templates/</span> (JavaScript, Python, Go); <span class="file-path">tools/api/fake_server.py</span> for testing a new SDK without the app. <a href="writing-a-frontend.html">Writing a Frontend</a> is the walkthrough.</li>
-        </ul>
-
-        <h2 id="dev-tooling">Profiling and the Command Server</h2>
-        <p>
-          Developer tooling lives in <span class="file-path">src/dev/</span>, compiled in only with the
-          <code>OCTAVE_DEV_TOOLS</code> CMake option (default on only for Debug desktop builds) and inert without its
-          flags. <code>--profile</code> creates a
-          <code>PerfMonitor</code> (event-loop latency, a thread-wake jitter probe, per-label timings, CPU / memory)
-          writing CSV and log files to <code>dev/perf/logs/</code>, registers it as the <code>perfMonitor</code> context
-          property, turns the service's command server on (<code>127.0.0.1:9876</code>, <code>--command-port N</code>
-          to move it; <a href="#service">The Service</a>) and adds the UI-driving actions to it (navigate, click, drag,
-          capture, record), which run on the GUI thread. Both are stopped first on <code>aboutToQuit</code> and the
-          report is written to the log. <code>--sim</code> (any build; implied by dev mode, <code>--dev</code>) adds a simulated car behind the real OBD stack, driven by the experimental <code>sim</code> object (<span class="file-path">src/sim/</span>); dev builds also take the <code>sim_*</code> actions.
-        </p>
-        <ul>
-          <li><code>OctaveDev::Runtime</code> is created in <code>main.cpp</code> after the managers. The simulated car
-            is not part of it: <code>main.cpp</code> starts the <code>sim</code> object (<code>Simulator::start</code>, every build) for
-            <code>--sim</code> or <code>--dev</code>, and it talks to the real <code>OBDManager</code> through a fake ELM327 <code>QIODevice</code>
-            (<code>OBDConnectionWorker::addCustomTransport()</code>, <code>OBDManager::setPortOverride()</code>).</li>
-          <li>Hot paths are timed with <code>OCTAVE_PERF_SCOPE</code> (<code>src/util/perfscope.h</code>), which compiles
-            to nothing without the option.</li>
-        </ul>
-        <p>See <a href="development.html#command-server">Development</a> for the protocol, the action list and the
-          clients (MCP servers, screenshot and perf scripts in <span class="file-path">dev/</span>) that drive the app over it.</p>
-
-        <!-- Signal Wiring -->
-        <h2 id="signal-wiring">Signal Wiring Graph</h2>
-        <p>
-          Cross-manager signals are wired in <code>src/appcore.cpp</code> (the <code>wire*()</code> helpers of <code>AppCore</code>), mostly as lambdas. This is the central nervous
-          system that connects hardware inputs to software outputs (the ESP32 LED sync block and the volume fan-out to the
-          knob are compiled out under <code>Q_OS_MOBILE</code>, where those managers are stubs):
+          The developer tools are in <span class="file-path">src/dev/</span> and are compiled only with the
+          <code>OCTAVE_DEV_TOOLS</code> build option, which is on by default for desktop Debug builds and off for
+          everything else. A build without them warns and ignores <code>--dev</code> and <code>--profile</code>. To
+          time a piece of code, put <code>OCTAVE_PERF_SCOPE("label")</code> at the top of the function; it compiles
+          to nothing without the option. Everything else is in <a href="development.html">Development</a>.
         </p>
 
-        <div class="diagram">
-Gesture Sensor                       ESP32 Volume Knob
-    │ actionTriggered                     │ volumeChangeRequested(delta) / muteToggleRequested
-    ▼                                     ▼
-gesture lambda                   volume lambda / muteToggleRequested ─► volumeController.toggleMute()
-    ├── next_track ──► nowPlaying*       ├── accumulate ≥ 1.0
-    ├── previous_track ► nowPlaying*     └── volumeController.applyVolume()
-    ├── play_pause ──► nowPlaying*                  ├── settingsManager.setCurrentVolume()
-    ├── mute_toggle ─► volumeController             ├── mediaManager.setVolume(linear)
-    ├── volume_up ───► volumeController              ├── phoneMirrorManager.setVolume(linear)
-    └── volume_down ─► volumeController              │
-                                                    └── esp32VolumeManager.send_volume_update(percent)
-                                     volumeController.mutedChanged ─► mediaManager.setMuted()
-                                       (raise while muted unmutes)  ├► phoneMirrorManager.setMuted()
-                                                                    └► esp32VolumeManager.send_mute_state()
-  * routed to the phone while it has the media controls, else mediaManager
-
-                   ESP32 LED sync (desktop only)
-settingsManager.albumArtColorsChanged ──────► send_theme_color(accent)   (theme mode: album accent)
-settingsManager.esp32LedStaticColorChanged ─► send_theme_color(colour)   (static mode)
-settingsManager.esp32LedColorModeChanged ───► sendCurrentLedColor()
-esp32VolumeManager.connectionStatusChanged ─► initial volume / mute / colour after 500 ms
-
-                   Phone mirror ↔ settings / media
-settingsManager.scrcpyAudioGainChanged ─────► phoneMirrorManager.setAudioGain()
-settingsManager.scrcpyAudioDuck*Changed ────► phoneMirrorManager.setAudioDuck*()
-settingsManager.scrcpyPhoneScreenOffChanged ► phoneMirrorManager.setPhoneScreenOff()
-settingsManager.scrcpyDisplayDpiChanged ► phoneMirrorManager.setDisplayDpi()
-settingsManager.scrcpyAutoWifiChanged ► phoneMirrorManager.setAutoWifi()
-phoneMirrorManager.wirelessAddressChanged ► settingsManager.save_scrcpy_wireless_address()
-phoneMirrorManager.duckingChanged ──────────► mediaManager.setDucking()</div>
-
-        <!-- Cleanup -->
-        <h2 id="cleanup">Shutdown &amp; Cleanup</h2>
+        <!-- Shutdown -->
+        <h2 id="cleanup">Shutdown</h2>
+        <p>When OCTAVE quits, things stop in an order chosen so that nothing is cut off mid-write:</p>
+        <ol class="steps">
+          <li>The developer tools, when present, so a performance report or recording is finished.</li>
+          <li>The service, so no client reaches a manager that is shutting down.</li>
+          <li>The UI watchdog.</li>
+          <li>The managers (<code>AppCore::shutdown()</code>): Spotify is paused, then the phone connections, the knob and the sensors stop. The black box closes the current drive and writes its files before the OBD connection closes. Last, the playback position, the library data and any pending settings are written.</li>
+          <li>The log is flushed.</li>
+          <li>The QML engine is destroyed while the managers still exist, so no binding is left reading a manager that is gone.</li>
+        </ol>
         <p>
-          <code>src/main.cpp</code> connects a cleanup handler to <code>aboutToQuit</code>. The dev runtime (when compiled in) and the watchdog stop first; the managers clean up next; playback state, the metadata store and settings are flushed after manager cleanup, and the log is flushed last:
+          Closing the window, Ctrl-C and a stop from systemd all take this path. That matters: without it the
+          programs OCTAVE started and its adb connections to the phone would be left running.
         </p>
 
-        <pre><code><span class="cmt">// src/main.cpp</span>
-QObject::connect(&amp;app, &amp;QGuiApplication::aboutToQuit, [&amp;]() {
-    devRuntime.shutdown();                 <span class="cmt">// OCTAVE_DEV_TOOLS builds only</span>
-    uiWatchdog.stop();
-    androidAutoManager.cleanup();  phoneMirrorManager.cleanup();
-    esp32VolumeManager.cleanup();  berryIMU.cleanup();  gestureSensor.cleanup();
-    obdManager.close();
-    networkManager.cleanup();
-    mediaManager._save_playback_state();   <span class="cmt">// before the settings flush</span>
-    mediaManager.flushMetadataStore();
-    settingsManager.flushPendingSave();
-    OctaveLog::flush();                    <span class="cmt">// last: everything the cleanup logged reaches disk</span>
-});</code></pre>
-
+        <!-- Files and tests -->
+        <h2 id="files">Files and Tests</h2>
+        <table>
+          <thead><tr><th>File</th><th>What is in it</th></tr></thead>
+          <tbody>
+            <tr><td><span class="file-path">src/main.cpp</span></td><td>The command line, startup, the headless run, creating the service, shutdown.</td></tr>
+            <tr><td><span class="file-path">src/appcore.{h,cpp}</span></td><td>The managers as members, their connections, the registry, <code>shutdown()</code>.</td></tr>
+            <tr><td><span class="file-path">src/service/serviceregistry.{h,cpp}</span></td><td>The list of named objects the screen and the service share.</td></tr>
+            <tr><td><span class="file-path">src/util/logger.{h,cpp}</span></td><td>The log files and the crash handlers.</td></tr>
+            <tr><td><span class="file-path">src/util/uiwatchdog.{h,cpp}</span></td><td>The UI watchdog.</td></tr>
+            <tr><td><span class="file-path">src/util/threadidle.h</span></td><td><code>sleepWhenIdle()</code>.</td></tr>
+            <tr><td><span class="file-path">frontend/Main.qml</span></td><td>The top of the screen.</td></tr>
+          </tbody>
+        </table>
         <p>
-          On Unix desktop, <code>SIGTERM</code>/<code>SIGINT</code> reach this handler too (through the self-pipe),
-          otherwise <code>adb</code> forwards, the DHU and the phone server would be orphaned when a launcher script or
-          systemd stops the app. With <code>--profile</code>, <code>OctaveDev::Runtime::shutdown()</code> stops the
-          command server and the perf monitor and writes the report.
+          <strong>Tests</strong> (<span class="file-path">tests/cpp/</span>, run with <code>ctest</code>) that guard
+          the structure described here: <code>tst_conformance</code> fails if QML uses a name or member that is not
+          in the registry and the published API; <code>tst_apidocs</code> fails if
+          <span class="file-path">docs/api/</span> no longer matches the managers; <code>tst_logger</code> covers
+          the log files; <code>tst_servicebridge</code>, <code>tst_serviceoptions</code> and
+          <code>tst_servicepairing</code> cover the service.
         </p>
 
         <!-- Design decisions -->
-        <h2 id="design-decisions">Design Decisions &mdash; Why It Is Built This Way</h2>
-        <p>Each rationale below is taken from a code comment, <code>CLAUDE.md</code>, <code>BUILD.md</code> or a design doc in the repository, not inferred.</p>
-
-        <h3>One C++ tree for every platform</h3>
-        <p>
-          Every shipped artefact, including the Android APK, is built from one CMake tree by one CI matrix, so there
-          is one packaging story (CMake plus Qt's own deploy tools) and native performance on the Orange Pi /
-          Raspberry Pi head unit. The QML frontend is a separate layer that talks to the managers only through their
-          registered names, so the UI can change without touching the backend and vice versa.
-        </p>
-
-        <h3>A manager per feature, registered as a context property</h3>
-        <p>
-          One <code>QObject</code> per feature keeps ownership obvious: each manager owns its state, timers and
-          threads and cleans them up in <code>cleanup()</code>. Context properties (rather than QML singletons or
-          <code>qmlRegisterSingletonInstance</code>) were chosen so the objects are constructed in a controlled order
-          in one place, can be handed to each other before the QML exists (<code>Clock(settingsManager)</code>,
-          <code>connect_settings_manager()</code>), can be reconfigured by the dev runtime before the load
-          (<code>OBDManager::setPortOverride()</code>), and are reachable in every QML file with no import. Custom QML
-          <em>types</em> are reserved for things that must be items in the scene graph (the DHU frame item).
-        </p>
-
-        <h3>Mobile stubs in the headers instead of <code>typeof</code> checks everywhere</h3>
-        <p>
-          On Android, desktop-only managers such as ESP32, gesture, phone mirror and Android Auto expose stub APIs under <code>Q_OS_MOBILE</code>. These preserve the QML-facing names, though calls may report unavailability. BerryIMU is different: Android uses a QtSensors implementation. Some signal wiring is also platform-guarded. CMake currently defines <code>Q_OS_MOBILE</code> for Android; iOS builds are not wired up.
-        </p>
-
-        <h3>Threading rule: I/O off the main thread, results only by queued signal</h3>
-        <p>
-          The OBD connect, the sensor read loops, decoding and HTTP all run elsewhere because a 30&nbsp;ms stall is
-          visible on a dashboard gauge. Managers never call into QML from a worker; they emit signals, and Qt
-          delivers them queued on the GUI thread. The UI watchdog exists because a frozen head unit in a car has
-          nobody watching a terminal.
-        </p>
-
-        <h3>Settings in memory, one coalesced atomic write</h3>
-        <p>
-          Re-reading the JSON per key "cost a parse + validate on every slider release and every track change, and
-          always returned what we had just written" (<code>settingsmanager.cpp</code>). The in-memory copy is now
-          authoritative and disk writes are debounced 500&nbsp;ms and written temp-file-then-rename, which also
-          "spares the SD card on the Pi".
-        </p>
-
-        <h3>Volume curve in one place</h3>
-        <p>
-          A quadratic curve gives a more natural perceptual response than linear at low volume, but every output
-          must apply the <em>same</em> curve or they drift apart as the slider moves. Centralising both the math and
-          the dispatch in <code>VolumeController</code> means a curve change is a one-line edit and a new output is
-          one more connection. The controller uses a signal fan-out
-          (<code>volumeApplied</code>) rather than holding pointers so the controller could be constructed in
-          Phase&nbsp;1 before the outputs existed.
-        </p>
-
-        <h3>Image provider for the DHU, <code>QVideoSink</code> for the phone</h3>
-        <p>
-          The DHU is a foreign window that can only be <em>captured</em>, producing <code>QImage</code>s at a timer
-          rate; an image provider is the natural fit. The phone mirror is a stream OCTAVE decodes itself, so it hands
-          YUV frames straight to the video sink and skips both the RGB conversion and the disk. Qt's own FFmpeg
-          backend was rejected for the mirror because it refuses a raw Annex-B H.264 <code>QIODevice</code>
-          (<code>docs/PHONE_MIRROR_NATIVE_PLAN.md</code>, Phase&nbsp;0); libavcodec decodes at 12&ndash;15&nbsp;%
-          of one RK3588 core and paint the first frame in about a second. The built-in Android Auto receiver is a stream OCTAVE decodes
-          too, so it takes the phone mirror's route (and its decoder) rather than the DHU's.
-        </p>
-
-        <h3>Fork the phone server, bundle adb</h3>
-        <p>
-          The goal of the native mirror was "no user-installed dependencies": no scrcpy binary, no v4l2loopback, no
-          ffmpeg on PATH, no <code>adb shell input</code> for touch. Forking the server (package renamed, version
-          <code>3.3.4-octave</code>) lets OCTAVE change the phone side (the keeper that survives locks and cable
-          blips, the screen-off policy) while CI checks the committed jar's package and version (hash mismatches only warn). Bundling
-          platform-tools avoids a separate adb installation on the desktop targets that bundle it; Linux aarch64 needs a compatible adb installed separately.
-        </p>
-
-        <h3>Dashboards as JSON, primitives as QML</h3>
-        <p>
-          Hand-written dashboard QML files could not be created by the user in the car. Moving the layout into a
-          JSON spec rendered by <code>DashboardRenderer</code> made the in-app editor possible (pure QML on top of
-          <code>saveDashboard</code>/<code>duplicateDashboard</code>/<code>deleteDashboard</code>), keeps built-ins and
-          user files in the same format, and lets a file dropped into the user directory appear without a restart.
-          The gauge primitives stay as QML because that is where the drawing belongs; the spec only names them.
-        </p>
-
-        <h3>QML loaded from disk, not compiled in</h3>
-        <p>
-          <code>frontend/</code> is added to the import path and <code>Main.qml</code> is loaded from the file system
-          (from <code>assets:/frontend</code> on Android) so a QML edit
-          does not require a rebuild. The one exception is the <code>.qsb</code> shader, which must be a Qt resource
-          because RHI's <code>ShaderEffect</code> rejects <code>assets:/</code> URIs on Android.
-        </p>
-
-        <h3>Observability first</h3>
-        <p>
-          Logging is installed before the application object, crash handlers use raw descriptors so they work when
-          Qt cannot, the watchdog records stalls, and <code>DiagnosticsManager</code> exists so the driver can export
-          the logs from the screen. All of that follows from OCTAVE being daily-driven in a vehicle: in-car
-          reliability and after-the-fact debuggability are first-order requirements, not polish. Errors are logged and surfaced through page-specific status text; a global notification layer is parked in
-          <code>TODO/error-notification-ui.md</code>.
-        </p>
+        <h2 id="design-decisions">Why It Is Built This Way</h2>
+        <ul>
+          <li><strong>One C++ tree for every platform.</strong> One build system, one set of packages, and native speed on the small computer in the car.</li>
+          <li><strong>One manager per feature.</strong> It is always clear who owns a piece of state, a timer or a thread, and who must clean it up.</li>
+          <li><strong>The core knows nothing about QML.</strong> Because <code>AppCore</code> builds and connects everything without a QML engine, the same core runs headless, serves other screens, and can be tested without a window.</li>
+          <li><strong>One registry for the screen and the service.</strong> A manager is entered once and both see it, so the two can never disagree about what exists.</li>
+          <li><strong>Managers are named objects created in one place</strong>, not QML singletons. That gives a fixed build order, lets managers be handed to each other before any QML exists, and lets the simulator be plugged in before the screen loads.</li>
+          <li><strong>Stand-ins for missing features.</strong> A platform without a feature gets an object with the same members that does nothing, so the QML is the same everywhere.</li>
+          <li><strong>Slow work off the main thread, results by signal.</strong> A stall of a few hundredths of a second is visible on a gauge needle.</li>
+          <li><strong>Volume in one place.</strong> Every output must use the same curve. One controller that sends to all of them makes a new output one more connection and a change of curve one edit.</li>
+          <li><strong>The QML is loaded from files, not compiled in.</strong> A change to the screen needs no rebuild.</li>
+          <li><strong>Failures must reach the log files.</strong> OCTAVE is driven daily in a car. Logging starts before anything else, crashes and freezes leave a trace, and the logs can be exported from the screen, so a problem on the road can be understood afterwards.</li>
+        </ul>
 
         <!-- Related Pages -->
-        <p><strong>Method names:</strong> this page uses the camelCase names of the manager methods (<code>nextTrack</code>). The older snake_case name of each (<code>next_track</code>) still works through protocol&nbsp;4 and goes in protocol&nbsp;5; the <a href="api-reference.html">API reference</a> lists them.</p>
-
         <div class="related-pages">
           <h3>Related Pages</h3>
           <div class="related-links">
             <a href="getting-started.html" class="related-link">Getting Started</a>
+            <a href="frontend-overview.html" class="related-link">Frontend Overview</a>
             <a href="settings-manager.html" class="related-link">Settings Manager</a>
             <a href="media-manager.html" class="related-link">Media Manager</a>
             <a href="obd-manager.html" class="related-link">OBD Manager</a>
             <a href="hardware-managers.html" class="related-link">Hardware Managers</a>
             <a href="phone-mirror-android-auto.html" class="related-link">Phone Mirror &amp; Android Auto</a>
             <a href="gauges-dashboards.html" class="related-link">Gauges &amp; Dashboards</a>
-            <a href="frontend-overview.html" class="related-link">Frontend Overview</a>
-            <a href="signals-slots-reference.html" class="related-link">Signals &amp; Slots API</a>
+            <a href="utilities.html" class="related-link">Utilities</a>
+            <a href="writing-a-frontend.html" class="related-link">Writing a Frontend</a>
+            <a href="api-reference.html" class="related-link">Service API Reference</a>
+            <a href="development.html" class="related-link">Development</a>
             <a href="building.html" class="related-link">Building &amp; CI/CD</a>
             <a href="troubleshooting.html" class="related-link">Troubleshooting</a>
           </div>

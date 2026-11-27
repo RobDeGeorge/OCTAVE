@@ -13,354 +13,477 @@
         <div class="page-header">
           <div class="breadcrumb"><a href="index.html">OCTAVE Wiki</a> / Troubleshooting</div>
           <h1 class="page-title">Troubleshooting</h1>
-          <p class="page-subtitle">Symptom &rarr; cause &rarr; fix, where the logs are and what is in them, and the observability built into the app for diagnosing problems after the fact.</p>
+          <p class="page-subtitle">What to do when something is not working: where to look first, then each problem with its likely cause and its fix</p>
         </div>
 
         <nav class="toc">
           <h3>Table of Contents</h3>
           <ul class="toc-list">
             <li><a href="#first-look">Where to Look First</a></li>
-            <li><a href="#logs">Log Files, Crash Traces &amp; Debug Mode</a></li>
-            <li><a href="#installation">Installation Issues</a></li>
-            <li><a href="#display">Display &amp; Rendering Issues</a></li>
-            <li><a href="#audio">Audio Issues</a></li>
-            <li><a href="#obd">OBD Connection Issues</a></li>
-            <li><a href="#android-obd">Android OBD (Bluetooth / BLE)</a></li>
-            <li><a href="#phone-mirror">Phone Mirror Issues</a></li>
-            <li><a href="#android-auto">Android Auto Issues</a></li>
-            <li><a href="#hardware-sensors">Hardware Sensor Issues</a></li>
-            <li><a href="#performance">Performance Issues</a></li>
-            <li><a href="#dev-tooling">Dev Tooling Issues</a></li>
-            <li><a href="#wsl">WSL Display Issues</a></li>
+            <li><a href="#logs">The Log Files</a></li>
+            <li><a href="#installation">Installing and Starting</a></li>
+            <li><a href="#display">Screen and Display</a></li>
+            <li><a href="#audio">Sound and Music</a></li>
+            <li><a href="#obd">The Car (OBD)</a></li>
+            <li><a href="#android-obd">The Car, on Android</a></li>
+            <li><a href="#phone-mirror">Phone Mirror</a></li>
+            <li><a href="#android-auto">Android Auto</a></li>
+            <li><a href="#hardware-sensors">Sensors and the Volume Knob</a></li>
+            <li><a href="#performance">Slow or Frozen</a></li>
+            <li><a href="#dev-tooling">Developer Tools</a></li>
           </ul>
         </nav>
 
         <!-- First look -->
         <h2 id="first-look">Where to Look First</h2>
-        <p>Start with the status text on the affected page and the logs. OCTAVE has no global error-notification layer, but individual views can show details on request. These are the main places to look:</p>
+        <p>
+          Most failures do not pop up a message. The reason is written in one of three places. Look in this
+          order:
+        </p>
         <ol class="steps">
-          <li><strong>The Connection Log / status text on the relevant page</strong> &mdash; the OBD settings card shows each connection step and rfcomm / permission errors; the phone-mirror view shows the adb / authorization message.</li>
-          <li><strong>Settings &rarr; Device &rarr; Developer &rarr; Diagnostics card</strong> (<code>diagnosticsManager</code>) &mdash; a 2&times;2 grid: <strong>Refresh</strong> (last 200 log lines), <strong>Copy</strong> (last 400 lines to the clipboard), <strong>Export logs</strong> (copies the log files to the Downloads folder &mdash; the way to get logs off an Android tablet or a head unit without a shell) and <strong>Open folder</strong> (hidden on Android/iOS, where <code>canOpenFolder</code> is false). The log directory path is printed on the card.</li>
-          <li><strong>The rotating log files</strong> described next. A hung UI, a crash and a dropped adapter all leave a trace there even when the screen shows nothing.</li>
+          <li><strong>The status line of the part that is failing.</strong> The car: Settings &gt; OBD &gt; Connection, with its <strong>Connection Log</strong>. A phone: Settings &gt; Phone &gt; Phone Mirror, Android Auto or iPhone. Music: the <strong>Scan Log</strong> in Settings &gt; Media &gt; Library &amp; Playback. A sensor or the knob: its card in Settings &gt; Accessories. These say what is missing in plain words.</li>
+          <li><strong>Settings &gt; Device &gt; Developer &gt; Diagnostics.</strong> It shows the last 200 lines of the log on the screen, so you can read them in the car. The buttons are in the table below.</li>
+          <li><strong>The log files</strong>, described in the next section. A crash, a frozen screen and a dropped adapter all leave a line there even when the screen showed nothing.</li>
         </ol>
+        <table>
+          <thead><tr><th>Diagnostics button</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Refresh</strong></td><td>Reads the last 200 log lines again.</td></tr>
+            <tr><td><strong>Copy</strong></td><td>Puts the last 400 lines and the device information on the clipboard.</td></tr>
+            <tr><td><strong>Export logs</strong></td><td>Copies every log file to a new folder <code>OCTAVE-logs-&lt;date&gt;-&lt;time&gt;</code> in your Downloads folder, with a <code>device-info.txt</code>. This is how you get logs off a phone or a tablet.</td></tr>
+            <tr><td><strong>Open folder</strong></td><td>Opens the log folder in the file manager. Not on Android.</td></tr>
+          </tbody>
+        </table>
+        <p>The card also shows the OCTAVE version and the path of the log folder. Include both when you report a problem.</p>
 
         <!-- Logs -->
-        <h2 id="logs">Log Files, Crash Traces &amp; Debug Mode</h2>
-
-        <h3>Log directory</h3>
-        <p>OCTAVE writes to a <code>logs/</code> subdirectory of the app data directory (<code>SettingsManager::getAppDataDir()</code>):</p>
+        <h2 id="logs">The Log Files</h2>
+        <p>The logs are in a <code>logs</code> folder inside OCTAVE's config folder:</p>
         <table>
-          <thead><tr><th>Platform</th><th>Path</th></tr></thead>
+          <thead><tr><th>System</th><th>Folder</th></tr></thead>
           <tbody>
             <tr><td>Windows</td><td><code>%APPDATA%\OCTAVE\logs\</code></td></tr>
             <tr><td>macOS</td><td><code>~/Library/Application Support/OCTAVE/logs/</code></td></tr>
-            <tr><td>Linux</td><td><code>$XDG_CONFIG_HOME/OCTAVE/logs/</code>, i.e. <code>~/.config/OCTAVE/logs/</code></td></tr>
-            <tr><td>Android</td><td><code>getAppDataDir()</code> has no Android branch, so the Android build falls through the Linux rule into the app's private home directory. It is not browsable from a file manager &mdash; use <strong>Export logs</strong> on the Diagnostics card, which writes into <code>Download/</code>. On Android and iOS the message handler also forwards every line to Qt's default handler (stderr goes nowhere on a phone), so <code>adb logcat</code> / <code>os_log</code> show the same messages.</td></tr>
+            <tr><td>Linux, Raspberry Pi</td><td><code>~/.config/OCTAVE/logs/</code> (under <code>$XDG_CONFIG_HOME</code> if that is set)</td></tr>
+            <tr><td>Android</td><td>Inside the app's private storage, which a file manager cannot open. Use <strong>Export logs</strong>. The same lines also go to <code>adb logcat</code>.</td></tr>
           </tbody>
         </table>
-
-        <h3>Log files</h3>
         <table>
-          <thead><tr><th>File</th><th>Level</th><th>Max size</th><th>Backups</th><th>Notes</th></tr></thead>
+          <thead><tr><th>File</th><th>What is in it</th></tr></thead>
           <tbody>
-            <tr><td><code>octave-cpp.log</code></td><td>INFO+</td><td>5 MB</td><td>3</td><td><span class="file-path">src/util/logger.cpp</span>, custom size-based rotation</td></tr>
-            <tr><td><code>octave-cpp-error.log</code></td><td>WARNING+</td><td>2 MB</td><td>5</td><td>also the raw crash descriptor for the signal handler</td></tr>
-            <tr><td><code>octave-cpp-debug.log</code></td><td>everything</td><td>10 MB</td><td>2</td><td>only with <code>--debug</code></td></tr>
+            <tr><td><code>octave-cpp.log</code></td><td>Everything of note: connections made and lost, songs skipped, sensors found. Start here.</td></tr>
+            <tr><td><code>octave-cpp-error.log</code></td><td>Only warnings and errors, and the trace of a crash. Shorter, so a problem is easier to find.</td></tr>
+            <tr><td><code>octave-cpp-debug.log</code></td><td>Every detail, including each line sent to and received from the OBD adapter. Written only when OCTAVE is started with <code>--debug</code>.</td></tr>
+            <tr><td><code>hang-&lt;date&gt;-&lt;time&gt;.txt</code></td><td>Linux only: what every thread was doing when the screen froze for 15 seconds. Needs <code>gdb</code> installed.</td></tr>
           </tbody>
         </table>
-        <p>Total disk is bounded at roughly 32 MB without debug, ~62 MB with it.</p>
-
-        <h3>Line format</h3>
-        <pre><code><span class="cmt"># file and stderr (millisecond timestamps, Qt category in the module column):</span>
-YYYY-MM-DD HH:MM:SS.zzz | LEVEL   | octave.elm327 | obdmanager.cpp:1772 | message</code></pre>
-        <p>Each manager logs through its own <code>QLoggingCategory</code>: <code>octave.settings</code>, <code>octave.media</code>, <code>octave.network</code>, <code>octave.phonemirror</code> (+ <code>octave.phonemirror.client</code> for the scrcpy-protocol client), <code>octave.androidauto</code> (+ <code>octave.androidauto.session</code> and <code>octave.androidauto.connection</code> for the built-in receiver), <code>octave.embeddeddhu</code>, <code>octave.audioanalyzer</code>, <code>octave.berryimu</code>, <code>octave.gesture</code>, <code>octave.esp32volume</code>, <code>octave.dashboards</code>, <code>octave.diagnostics</code>, <code>octave.ui_watchdog</code> and <code>octave.elm327</code> (protocol transcript and the Android BLE bridge lines). The exceptions are <code>obdmanager.cpp</code>, <code>clock.cpp</code> and <code>volumecontroller.cpp</code>, which log through plain <code>qDebug()</code>/<code>qWarning()</code> and therefore appear under the category <code>default</code> &mdash; so there is no <code>octave.obd</code> category to filter on; look for the <code>[OBD Worker]</code> message prefix instead. With <code>--debug</code> the filter rules are <code>*.debug=true</code>, <code>qt.*.debug=false</code>; without it <code>*.debug=false</code>, so category-debug output costs nothing.</p>
-
-        <h3>Crash traces</h3>
-        <ul>
-          <li><strong>Unix:</strong> a signal handler for SIGSEGV, SIGABRT, SIGFPE, SIGBUS and SIGILL writes <code>==== FATAL SIGSEGV - backtrace (addresses; symbolise with addr2line against this build) ====</code> plus <code>backtrace_symbols_fd()</code> frames to <code>octave-cpp-error.log</code> and stderr, then restores the default action and re-raises so the OS still produces a core / tombstone. The addresses are only meaningful against the exact binary that crashed. The handler never touches Qt (every log line is already flushed as it is written, so it has nothing to flush); a <code>qFatal</code> goes through the message handler first, which flushes the files before Qt aborts, and a normal exit flushes them last in the <code>aboutToQuit</code> cleanup. <strong>Windows:</strong> <code>SetUnhandledExceptionFilter</code> writes the exception code, address and a <code>CaptureStackBackTrace</code> frame list.</li>
-          <li><strong>SIGTERM / SIGINT</strong> (launcher scripts, systemd, Ctrl-C) on desktop Unix are turned into <code>app.quit()</code> through a self-pipe so the <code>aboutToQuit</code> cleanup runs and child processes / adb forwards are not orphaned (<span class="file-path">src/main.cpp</span>).</li>
-        </ul>
-
-        <h3>UI watchdog: "UI thread blocked for N s and counting"</h3>
-        <p>A watchdog thread (<span class="file-path">src/util/uiwatchdog.cpp</span>) posts a ping to the GUI thread every 2 s; if the GUI thread has not answered within 5 s a WARNING is logged under <code>octave.ui_watchdog</code>, once per stall, followed by <code>UI thread responsive again after N s</code> when it recovers. A frozen head unit therefore leaves a timestamped trace even though nothing was drawn. Look at the lines immediately before the warning to see which manager was busy; the watchdog is stopped before Qt tears down the QObjects so a shutdown never shows as a stall.</p>
-
-        <h3>Enabling debug mode</h3>
-        <pre><code>./build/octave --debug      <span class="cmt"># debug logging (--smoke is also available)</span></code></pre>
-        <p>Creates the <code>-debug.log</code> file with DEBUG-level output. Useful for: the ELM327 TX/RX transcript (<code>[OBD Worker]</code> TX/RX lines with round-trip times at debug level under <code>octave.elm327</code>), serial data from the ESP32 knob, settings load/save, media library scanning and tag extraction, and the phone-mirror adb / server launch sequence.</p>
+        <p>
+          Old logs are replaced by new ones, so the folder stays small: about 30 MB at most without
+          <code>--debug</code>.
+        </p>
+        <p>To get the detailed log, start OCTAVE from a terminal with <code>--debug</code>, make the problem happen, then export the logs:</p>
+        <pre><code>octave --debug                                  <span class="cmt"># an installed or built binary</span>
+./OCTAVE-&lt;version&gt;-linux-x86_64.AppImage --debug <span class="cmt"># the AppImage</span></code></pre>
+        <p><a href="architecture.html#logging">Architecture</a> explains how logging and the crash trace work.</p>
 
         <!-- Installation -->
-        <h2 id="installation">Installation Issues</h2>
-        <p>These concern installing and starting a packaged build. Build-time problems are on the <a href="building.html#troubleshooting">Building</a> page.</p>
+        <h2 id="installation">Installing and Starting</h2>
+        <p>These are problems with a downloaded package. Problems building from source are on the <a href="building.html">Building</a> page.</p>
 
-        <h3>Windows</h3>
-        <table>
-          <thead><tr><th>Problem</th><th>Solution</th></tr></thead>
-          <tbody>
-            <tr><td>"DLL not found" launching the shipped <code>.exe</code></td><td>The current installer bundles the VC++ runtime DLLs and has no registry warning. Reinstall the complete package if files are missing; for an older or hand-built copy missing MSVCP140/VCRUNTIME140, see <a href="building.html#troubleshooting">Build Troubleshooting</a>.</td></tr>
-          </tbody>
-        </table>
-
-        <h3>macOS</h3>
-        <table>
-          <thead><tr><th>Problem</th><th>Solution</th></tr></thead>
-          <tbody>
-            <tr><td>"App is damaged" Gatekeeper error on the <code>.dmg</code> build</td><td>The workflow does not configure Developer ID signing or notarization. Check the downloaded package and follow <a href="https://support.apple.com/en-us/102445">Apple's Gatekeeper guidance</a>; a damaged-app message can also indicate modified or corrupted files.</td></tr>
-          </tbody>
-        </table>
-
-        <h3>Linux</h3>
-        <table>
-          <thead><tr><th>Problem</th><th>Solution</th></tr></thead>
-          <tbody>
-            <tr><td>Missing <code>libxcb</code> / <code>libGL</code> libraries (a binary built from source)</td><td>Qt's xcb platform plugin and the renderer need the host's XCB, GL and audio libraries. On Debian/Ubuntu the core set is <code>libxcb-xinerama0 libxcb-cursor0 libxkbcommon0 libgl1 libegl1 libpulse0</code>; the full XCB list is under <a href="#display">Display</a>.</td></tr>
-            <tr><td>AppImage won't run</td><td><code>chmod +x OCTAVE-&lt;version&gt;-linux-x86_64.AppImage</code>; if FUSE is missing, <code>sudo apt install libfuse2</code> or run <code>./OCTAVE-&lt;version&gt;-linux-x86_64.AppImage --appimage-extract &amp;&amp; ./squashfs-root/AppRun</code>.</td></tr>
-            <tr><td>AppImage from a GitHub release fails with a glibc error on an old distro</td><td>CI builds on Ubuntu 22.04; older glibc cannot load it. Build locally instead (<a href="building.html#linux">Building &rarr; Linux</a>).</td></tr>
-            <tr><td>Locally built AppImage starts, no window appears</td><td>The QML tree is not at <code>usr/frontend/</code> next to <code>usr/bin/octave</code>; see <a href="building.html#linux">AppImage structure</a>.</td></tr>
-          </tbody>
-        </table>
-
-        <!-- Display -->
-        <h2 id="display">Display &amp; Rendering Issues</h2>
-
-        <h3>XCB platform plugin errors (Linux)</h3>
-        <div class="info-box danger">
-          <div class="info-box-title">Error</div>
-          <code>qt.qpa.plugin: Could not load the Qt platform plugin "xcb"</code>
-        </div>
-        <p>Install the X11/XCB libraries Qt's xcb plugin loads (Debian/Ubuntu package names):</p>
-        <pre><code>sudo apt install libxcb1 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
-  libxcb-randr0 libxcb-render0 libxcb-render-util0 libxcb-shape0 libxcb-shm0 \
-  libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 libxcb-util1 \
-  libxkbcommon0 libxkbcommon-x11-0</code></pre>
-        <p>The AppImage ships its own platform plugins and sets <code>QT_QPA_PLATFORM_PLUGIN_PATH</code> in its <code>AppRun</code>, but host libraries and a working display are still required. Run with <code>QT_DEBUG_PLUGINS=1</code> to identify missing dependencies or plugin conflicts, and check <code>DISPLAY</code>/<code>WAYLAND_DISPLAY</code>.</p>
-
-        <h3>Wayland vs X11</h3>
-        <p>Qt picks the platform plugin from the session. To force one:</p>
-        <pre><code><span class="kw">export</span> QT_QPA_PLATFORM=xcb       <span class="cmt"># force X11 / XWayland</span>
-<span class="kw">export</span> QT_QPA_PLATFORM=wayland   <span class="cmt"># force Wayland</span>
-./build/octave</code></pre>
-        <p>The dev screenshot and recording tools do not care which one is active: they grab the window from inside Qt (<code>grabWindow()</code>) rather than through the compositor &mdash; see <a href="development.html#screenshots">Development &rarr; Screenshots</a>.</p>
-
-        <h3>Black UI, missing icons or album art</h3>
-        <p>The nav icons and media controls are SVGs wrapped in <code>ColorOverlay</code> and the album art uses <code>MultiEffect</code> / <code>DropShadow</code> &mdash; GPU shader effects that need a real GL context. In some headless configurations the rendering backend cannot provide those effects, so an offscreen smoke test does not verify their appearance. On a real display, a black window usually means a broken GL stack: try <code>QT_QUICK_BACKEND=software</code> (slow but reliable) and check the log for <code>module "..." is not installed</code>, which means the Qt build lacks <code>QtQuick.Effects</code> / <code>Qt5Compat.GraphicalEffects</code> (<a href="building.html#cmake-options">Building</a>).</p>
-
-        <h3>Nothing appears at startup</h3>
-        <ul>
-          <li><strong>QML import path:</strong> the binary looks for <code>frontend/</code> next to itself, then one level up; running a binary copied elsewhere logs <code>Could not locate frontend/ directory</code>.</li>
-          <li><strong>Controls style:</strong> <span class="file-path">src/main.cpp</span> forces the <code>Basic</code> style (<code>QQuickStyle::setStyle("Basic")</code>) because the sliders are fully custom-drawn, so setting <code>QT_QUICK_CONTROLS_STYLE</code> does not change it.</li>
-          <li>Run with <code>--debug</code> and read the QML warnings in the debug log.</li>
-        </ul>
-
-        <h3>UI scale wrong</h3>
-        <p>The <code>uiScale</code> setting ranges 0.5&ndash;2.0 in 0.05 steps (Settings &rarr; Display, or edit <code>settingsConfigure.json</code>; an old default of 0.6 is migrated to 1.0 on load). On top of it <span class="file-path">src/main.cpp</span> computes <code>screenAutoScale</code> from the <em>shorter</em> screen edge divided by 720, clamped to 0.4&ndash;3.0, so a portrait-reporting Android tablet no longer gets a 3&times; factor.</p>
-
-        <!-- Audio -->
-        <h2 id="audio">Audio Issues</h2>
-
-        <h3>No or very quiet audio</h3>
-        <ul>
-          <li>The volume slider is mapped through a <strong>quadratic</strong> curve, <code>(volume/100)^2.0</code> (<span class="file-path">src/managers/volumecontroller.cpp</span>): 50 % on the slider is 25 % linear gain, 10 % is 1 %. Low slider values are genuinely quiet.</li>
-          <li>Mute: <code>volumeController.muted</code> (the command server's <code>get_media_status</code> reports it as <code>muted</code>). <code>toggleMute()</code> ignores a press within 150 ms of the previous one, so a bouncing ESP32 button cannot double-toggle. Turning the volume up from any input unmutes.</li>
-          <li>Phone-mirror ducking: while the phone is producing sound, local playback is ducked to <code>scrcpyAudioDuckLevel</code> (default 0.1) and released 1.5 s after the phone goes quiet (<code>scrcpyAudioDuckEnabled</code>, default on). If music seems to drop out during mirroring, this is why.</li>
-          <li>Verify the output device in the system mixer.</li>
-        </ul>
-
-        <h3>PulseAudio / PipeWire (Linux)</h3>
-        <pre><code>pactl list short sinks             <span class="cmt"># is there a sink at all?</span>
-pactl info                         <span class="cmt"># identifies the audio server (PulseAudio or PipeWire compatibility)</span></code></pre>
-
-        <h3>Media backend</h3>
-        <p>OCTAVE assumes Qt Multimedia's FFmpeg backend: the media manager passes <code>probe-size</code> / <code>analyzeduration</code> hints to the player, and the aarch64 AppImage deliberately ships <em>without</em> Qt's GStreamer plugin (<a href="building.html#design-decisions">Building</a>). OCTAVE does not set <code>QT_MEDIA_BACKEND</code> or any GStreamer variable; if you set one yourself and playback breaks, unset it.</p>
-
-        <h3>Playback stalls, a track keeps skipping, or playback stops by itself</h3>
-        <p>The media manager recovers like this: an invalid or stalled file is retried at most <strong>2</strong> times, then skipped; after <strong>10 consecutive</strong> unplayable tracks (or the playlist length, if shorter) playback stops and the source is cleared rather than looping forever. Check the log for the file names; the usual cause is an unsupported container. Extensions scanned: <code>.mp3 .m4a .mp4 .flac .ogg .opus .wav</code> (<code>.mp4</code> because an audio-only MP4 is the same container as <code>.m4a</code>).</p>
-
-        <!-- OBD -->
-        <h2 id="obd">OBD Connection Issues</h2>
-        <p>Read the <strong>Connection Log</strong> on Settings &rarr; OBD first: every init step, rfcomm command and error the manager sees is appended there. The status dot and label above it follow <code>connectionStatusChanged</code>, and <code>getConnectionStatus()</code> returns the same vocabulary (initially "Disconnected"). The colour follows the manager's <code>connectionState</code>: <strong>Connected</strong> (accent); <strong>Connecting</strong> (warning) for Connecting, Reconnecting, Stale Connection and the Android BLE steps (Connecting BLE..., Discovering services..., Initializing ELM327..., Querying PIDs...); <strong>No Vehicle</strong> (info); <strong>Disconnected</strong> (grey); and <strong>Failed</strong> (error) for Device Not Found, Connection Failed, Error, No MAC Address, BLE connect failed, BLE error and anything else.</p>
-
-        <h3>Which port / address to enter</h3>
-        <p>The single field (<code>obdBluetoothPort</code>, placeholder "MAC address, /dev path, or COM port") accepts a Bluetooth MAC, a device path or a COM port. Left empty, the default is <code>/dev/rfcomm0</code> on Linux, <code>COM3</code> on Windows, <code>/dev/tty.OBD</code> on macOS, and nothing on Android (a MAC is required). While disconnected, the OBD manager rescans every 10 s: Linux globs <code>/dev/rfcomm*</code>, <code>/dev/ttyUSB*</code>, <code>/dev/ttyACM*</code> (<code>/dev/ttyS*</code> is excluded as a false-positive source); Windows filters serial-port descriptions for bluetooth / obd / elm / serial / usb; macOS looks at <code>tty.OBD*</code>, <code>tty.Bluetooth*</code>, <code>cu.*</code>, <code>*ELM*</code>. Note the OBD scanner does <em>not</em> exclude the ESP32 volume knob's USB serial port; the knob's own manager does exclude the OBD port.</p>
-
-        <h3>Serial port permissions (Linux)</h3>
-        <pre><code>sudo usermod -aG dialout $USER     <span class="cmt"># log out and back in, then: groups | grep dialout</span></code></pre>
-
-        <h3>Bluetooth ELM327 pairing (Linux)</h3>
-        <p>The Linux adapter picker uses direct RFCOMM sockets through <code>connectDirect()</code>; this path does not need a privileged <code>/dev/rfcommN</code> binding. A bare MAC entered through <code>connectToAdapter()</code> uses the older <code>rfcomm bind</code> path. Pair and trust the adapter in the picker or with <code>bluetoothctl</code>. If using a serial-node connection, you can bind manually and enter the resulting device path:</p>
-        <pre><code>sudo rfcomm bind 0 XX:XX:XX:XX:XX:XX
-ls -la /dev/rfcomm0</code></pre>
-        <p>"rfcomm bind failed: rfcomm binary not found" in the Connection Log means <code>bluez-utils</code> (Arch) / the package that ships <code>rfcomm</code> is missing; the log also tells you to bind once with sudo and enter <code>/dev/rfcomm0</code>.</p>
-
-        <h3>Connection is slow or times out</h3>
-        <ul>
-          <li>The connection runs on a dedicated worker thread (<code>OBDConnectionWorker</code> on a <code>QThread</code>) so the UI never blocks; progress is reported through <code>connectionProgress</code> / <code>connectionDetail</code>.</li>
-          <li>The connection timeout is 5 s by default and is set at runtime through <code>obdManager.setConnectionTimeout(seconds)</code>, clamped to 5&ndash;60 s (there is no <code>obdConnectionTimeout</code> settings key). The worker uses it for the vehicle-verify wait (the RPM probe after init) and fixed per-command timeouts otherwise (300&ndash;1500 ms for init commands, 500 ms per poll).</li>
-          <li><code>obdFastMode</code> (default on): the worker polls with a 0 ms interval instead of 50 ms, and asks the adapter for a single reply per PID (<code>010C1</code>), so it doesn't wait out its timeout for more ECUs; on a CAN car it asks for up to six PIDs per request. Turn it off for an adapter that misreads that.</li>
-          <li>The last successful protocol is not cached: every connect sends the fixed init sequence ending in <code>ATSP0</code> (auto-detect).</li>
-          <li><code>obdAutoReconnectAttempts</code> is 0&ndash;10 and <strong>defaults to 0 = off</strong> (shown as "Off" on the slider). With 0, the active retry loop is off, but the 10 s passive scan remains: a saved direct <code>rfcomm://</code> address can be retried on each scan. Serial-node discovery retries when the detected list changes. With 1&ndash;10 a failed connect is retried that many times with a <code>min(10, 2 + 2n)</code> s backoff before falling back to the passive scan.</li>
-        </ul>
-
-        <h3>"Adapter stopped responding" / a dead port pegs a CPU core</h3>
-        <p>An rfcomm port that has gone away can look readable while delivering nothing. The worker guards against spinning on it: non-productive waits are paced to ~10 Hz; after 50 consecutive "readable but zero bytes" polls the worker logs <code>Port reports readable but delivers no data; treating as disconnected</code>, releases the port and emits <code>connectionLost("Adapter stopped responding")</code>; every failed init and the no-vehicle path also release the port so no read notifier stays armed; a USB unplug (<code>ResourceError</code> / <code>DeviceNotFoundError</code>) is treated as connection lost.</p>
-
-        <h3>"No Data" for a parameter</h3>
-        <ul>
-          <li>The OBD manager queries the adapter's supported-PID bitmaps (ranges 00/20/40/60/80/A0/C0/E0) automatically 2 s after every successful connect; the OBD settings page shows the scan progress. There is no manual "Scan Vehicle" button.</li>
-          <li>The parameter catalog (<span class="file-path">src/managers/parametercatalog.cpp</span>, served by <span class="file-path">frontend/OBDParameterModel.qml</span>) lists 129 entries: 121 vehicle/adapter entries (including the <code>IGNITION_TIMING</code> alias and extended values) and 8 BerryIMU-derived values. The base decoder table has 82 Mode-01 entries plus adapter voltage (<code>ELM_VOLTAGE</code>, <code>ATRV</code>); the extended table adds 37 values from 23 PIDs. These are supported by the software, not a promise that a vehicle provides every value. Parameter toggles apply live without a reconnect. Unsupported parameters are filtered by vehicle support and the active view's polling demand; see <a href="obd-manager.html#watcher-system">Which PIDs Get Polled</a>.</li>
-          <li>Many parameters only report with the engine running.</li>
-        </ul>
-
-        <h3>Data watchdog: "Stale Connection" / "No data received, reconnecting..."</h3>
-        <p>While connected <em>and</em> at least one parameter is being watched, the OBD manager checks every 5 s whether any data arrived in the last 30 s (<code>DATA_WATCHDOG_TIMEOUT_MS = 30000</code>). If not, it logs the messages above, tears the connection down and reconnects after 100 ms. A watchdog warning can reflect the vehicle, adapter, or transport, so inspect the protocol log before diagnosing the cause. Android uses a separate per-PID watchdog; it does not start this desktop timer.</p>
-
-        <h3>Reading the ELM327 transcript</h3>
-        <p>TX/RX lines with round-trip times are logged at debug level under <code>octave.elm327</code> (run with <code>--debug</code> and read <code>octave-cpp-debug.log</code>); short responses and decoder exceptions are warnings and always logged.</p>
-
-        <!-- Android OBD -->
-        <h3 id="black-box-unavailable">Black box says "unavailable" / Trip History stays empty after a drive</h3>
-        <p>
-          The OBD Home tile reads "Black box unavailable", the Black Box card in OBD settings shows the error under
-          Status, and <code>octave-cpp.log</code> has a <code>octave.tripstore</code> warning such as
-          <code>Cannot open .../history/blackbox.sqlite: ...</code>. The recorder then records nothing rather than
-          pretend. Common causes: the config directory is not writable or the disk is full (the error names the path);
-          or a build older than the bundled SQLite (<span class="file-path">third_party/sqlite/</span>) running on a
-          Debian / Ubuntu box without the <code>libqt6sql6-sqlite</code> package, which showed as
-          <code>Driver not loaded</code>. Current builds compile SQLite in and need no package; for an old build install
-          that package and restart OCTAVE. See <a href="obd-manager.html#black-box">OBD Manager &rarr; Black Box</a>.
-        </p>
-
-        <h2 id="android-obd">Android OBD (Bluetooth / BLE)</h2>
-        <span class="platform-badge android">Android</span>
-        <p>The APK connects to ELM327 adapters over Bluetooth through <span class="file-path">android/src/org/octave/app/OctaveOBDBridge.java</span> (Qt's <code>QLowEnergyController</code> is deliberately bypassed). The manifest declares <code>BLUETOOTH_CONNECT</code>, <code>BLUETOOTH_SCAN</code> (<code>neverForLocation</code>, so no location permission is needed on Android 12+) and <code>BLUETOOTH_ADVERTISE</code>; <code>ACCESS_FINE_LOCATION</code> is only declared up to API 30.</p>
-        <table>
-          <thead><tr><th>Symptom</th><th>Cause / fix</th></tr></thead>
-          <tbody>
-            <tr><td>Status "Requesting Bluetooth permission &mdash; tap Allow, then tap Connect again"</td><td>First connect on API 31+: the bridge calls <code>requestPermissions()</code> and returns; answer the system dialog and press Connect again.</td></tr>
-            <tr><td>Status "Bluetooth permission denied", detail "Grant Bluetooth in Settings -&gt; Apps -&gt; OCTAVE -&gt; Permissions"</td><td>The permission was refused. Grant it in the system app settings. The permission flow lives entirely in the Java bridge now (<code>OctaveOBDBridge.connect()</code> requests <code>BLUETOOTH_CONNECT</code>); Qt's <code>QBluetoothPermission</code> is no longer involved.</td></tr>
-            <tr><td>Nothing happens with an empty port field</td><td>Android requires the adapter's MAC address; there is no default and no serial scan. Once Bluetooth permission has been granted (first Connect tap), the adapter list on the OBD settings page fills with the phone's paired devices as "&lt;name&gt; &middot; &lt;MAC&gt;" (<code>OctaveOBDBridge.bondedDevices()</code>) &mdash; pick the ELM327 there instead of typing the address. An empty list means the permission is still missing or Bluetooth is off.</td></tr>
-            <tr><td>Where are the BLE logs?</td><td>The Java side queues <code>I|</code>/<code>W|</code> lines; the OBD manager drains up to 50 per 50 ms poll and re-emits them as <code>[BLE] ...</code> under <code>octave.elm327</code>, so they land in <code>octave-cpp.log</code>, the Connection Log and the Diagnostics export. No <code>adb logcat</code> needed.</td></tr>
-            <tr><td>Update refuses to install</td><td>Signing key mismatch (<code>INSTALL_FAILED_UPDATE_INCOMPATIBLE</code>). Releases up to 0.9.3 each used a throwaway key, and a local build uses your own key. Uninstall <code>org.octave.app</code> once, then install; from 0.9.4 on, releases update in place (<a href="building.html#android">Building &rarr; Android</a>).</td></tr>
-          </tbody>
-        </table>
-
-        <!-- Phone mirror -->
-        <h2 id="phone-mirror">Phone Mirror Issues</h2>
-        <p>Desktop mirroring needs <code>adb</code>, the phone server jar, and libavcodec for decoding; the full design is on the <a href="phone-mirror-android-auto.html">Phone Mirror</a> page. Symptoms specific to recent behaviour:</p>
-        <table>
-          <thead><tr><th>Symptom</th><th>Cause / fix</th></tr></thead>
-          <tbody>
-            <tr><td>"adb not found: &hellip;" (the rest says how to get it: in a source checkout <code>python3 scripts/fetch_platform_tools.py</code>; on Linux <code>sudo apt install adb</code> or Arch's <code>android-tools</code>; on Windows / macOS reinstall, since releases bundle adb)</td><td>OCTAVE looks for a bundled <code>adb</code> first (<code>platform-tools/</code> next to the binary, <code>tools/platform-tools/&lt;os&gt;/</code> in a checkout, <code>Contents/Resources/platform-tools/</code> in the bundle), then PATH, then common SDK paths. On ARM boards Google ships no adb; the distro's (<code>sudo apt install adb</code>) works over USB.</td></tr>
-            <tr><td>"adb is too old for wireless pairing (needs platform-tools 30 or newer)"</td><td>The adb found has no <code>pair</code> / <code>mdns</code> commands, e.g. Ubuntu 22.04's <code>/usr/bin/adb</code> 28.x. OCTAVE prefers any adb that reports platform-tools 30+ and check <code>~/Android/Sdk/platform-tools/adb</code> before <code>/usr/bin/adb</code>. On an ARM64 board, an x86-64 SDK adb runs through box64 binfmt; symlink it into PATH (for example <code>~/.local/bin/adb</code>) or leave it at <code>~/Android/Sdk/platform-tools/adb</code>. USB mirroring still works with the old adb.</td></tr>
-            <tr><td>"Phone is connected but USB debugging is not authorized. Unlock the phone and tap 'Allow' on the USB debugging prompt."</td><td><code>adb devices</code> shows <code>unauthorized</code>. Unlock, accept the prompt (tick "always allow"); if the prompt never appears, unplug and replug.</td></tr>
-            <tr><td>Picture freezes for a moment when the cable is bumped, then continues</td><td>Working as designed: for virtual-display sessions the server keeps the session alive for <code>octave_persist_ms</code> = 60 s after the socket drops; the client reattaches to the same session within 55 s with a 4 s deadline, and the view holds the last frame and shows a "Reconnecting to phone…" badge only after 2 s. If the attach fails or the window expires ("No client reconnected within N ms" in the server log) a fresh session starts.</td></tr>
-            <tr><td>Mirror goes dark when the phone screen is off / shows a black frame with a status bar</td><td>The phone-side <code>MirrorKeeper</code> reports sleep state; while asleep every incoming frame is dropped and the last good one is held. A stride-2 luma test over the Y plane detects black frames, with a 5 % lenient fraction (a solid status strip is 3&ndash;4 % of samples) for 3 s around a reattach.</td></tr>
-            <tr><td>Cannot get the phone back after it went dark on the dash</td><td>The pick-up path: a power press forces the panel back on (<code>relightOnWake</code>), a second press within the 10 s pickup window (the 8 s screen grace plus 2 s) marks the phone as in use, and waking to an unlocked phone counts as in use.</td></tr>
-            <tr><td>Music ducks while mirroring</td><td>Intentional: see <a href="#audio">Audio</a>. The phone's own volume is never changed; OCTAVE applies its own gain (<code>scrcpyAudioGain</code>, default 2.0, soft-limited).</td></tr>
-            <tr><td>Server refuses to start: version mismatch</td><td>The jar in <span class="file-path">tools/phone-server/</span> and the client (<code>kServerVersion</code> in <span class="file-path">src/phone_mirror/scrcpyclient.h</span>) must agree on <code>3.3.4-octave</code>; rebuild the jar after editing <code>phone_server/src</code> (<a href="building.html#phone-server">Building</a>).</td></tr>
-            <tr><td>Wi-Fi: the phone scans the QR code but nothing happens / "The phone did not scan the code within 120 s"</td><td>Phone and OCTAVE must be on the same network; client isolation on guest networks blocks the mDNS discovery and the connection. A phone-hosted hotspot does not work: Android only enables Wireless debugging while the phone is a Wi-Fi <em>client</em>, so let the OCTAVE machine host the access point (<a href="phone-mirror-android-auto.html#pm-wifi">Mirroring over Wi-Fi</a>). Tap "Show QR code" for a fresh code after it expires.</td></tr>
-            <tr><td>Wi-Fi phone does not come back after a drive / phone reboot</td><td>Wireless debugging switches itself off when the phone leaves the network and picks a new port when switched on. Turn it back on (there is a quick-settings tile); OCTAVE retries the remembered address every 5 s and follows the new port over mDNS.</td></tr>
-            <tr><td>Mirror stutters over Wi-Fi</td><td>The bit rate backs off on its own when frames queue (a softer picture, not a stutter); a stutter that stays points at the link itself. Prefer 5 GHz; a 2.4 GHz link shared with Bluetooth audio in a car is marginal. Plugging in a cable switches the next session back to USB.</td></tr>
-            <tr><td><code>phoneMirrorManager.nativeAvailable</code> is false (desktop)</td><td>The desktop check requires libavcodec, a server jar, and adb. Check the installation diagnostic and bundled files first; if the decoder was omitted at build time, rebuild with FFmpeg development packages. Mobile builds deliberately report mirroring unavailable.</td></tr>
-          </tbody>
-        </table>
-
-        <!-- Android Auto -->
-        <h2 id="android-auto">Android Auto Issues</h2>
-        <p>These are for the <strong>built-in</strong> backend (Settings &rarr; Phone &rarr; Android Auto &rarr; <em>Head unit</em> = Built-in); setup and the meaning of every state are on the <a href="phone-mirror-android-auto.html#aa-native">Android Auto</a> page. The page keeps retrying on its own (every 3 s while it waits for something, 8 s after an error) until its close button is tapped, so after fixing the cause there is nothing to restart in OCTAVE. The status line under the page title, and the <em>Status</em> row on the settings card, give the exact reason; the log has it under <code>octave.androidauto</code>.</p>
-        <table>
-          <thead><tr><th>Symptom</th><th>Cause / fix</th></tr></thead>
-          <tbody>
-            <tr><td>No <em>Head unit</em> choice on the Android Auto settings card</td><td>The build has no built-in receiver (<code>androidAutoManager.nativeAvailable</code> is false): it was built without OpenSSL or FFmpeg, or it is not a desktop build. Rebuild with both (<a href="building.html#cmake-options"><code>OCTAVE_HAVE_NATIVE_AA</code></a>); only the Google DHU backend is available until then.</td></tr>
-            <tr><td>"Waiting for the phone" / "Connect your phone with USB debugging on (or pair it for wireless debugging in Phone Mirror)"</td><td><code>adb devices</code> lists no usable phone. Plug it in with USB debugging on and accept the authorization prompt, or pair it for wireless debugging in Phone Mirror; the adb symptoms under <a href="#phone-mirror">Phone Mirror Issues</a> apply unchanged.</td></tr>
-            <tr><td>"adb was not found (it comes with OCTAVE's platform tools, or the Android SDK)."</td><td>The same adb search as Phone Mirror found nothing: bundled <code>platform-tools/</code>, then PATH, then the common SDK paths. In a source checkout run <code>python3 scripts/fetch_platform_tools.py</code>; on Linux the distro's adb works too. Retried every 8 s.</td></tr>
-            <tr><td>"Waiting for the phone's head unit server"</td><td>The phone is connected but nothing listens on its port 5277. On the phone: Android Auto settings &rarr; &#8942; &rarr; <em>Start head unit server</em>. No &#8942; entry: developer mode is off; tap <em>Version</em> in Android Auto's settings about 10 times first. Recent Android Auto versions (17.9 checked) do not let adb start the server, so it has to be tapped on the phone.</td></tr>
-            <tr><td>"the phone's head unit server did not answer (restart it: Android Auto settings &gt; Stop / Start head unit server)"</td><td>The server accepted the connection but never answered within 10 s. This happens after a session was cut off without a bye-bye at the wrong moment: the server keeps accepting TCP connections but stops answering. On the phone, &#8942; &rarr; <em>Stop head unit server</em>, then <em>Start head unit server</em>; OCTAVE reconnects within seconds. OCTAVE always ends with a bye-bye (close button, app quit) to avoid this.</td></tr>
-            <tr><td>"Android Auto needs a certificate" (state <code>needsCertificate</code>)</td><td>No head-unit certificate was found. OCTAVE ships none; put a PEM certificate and its key in the folder the status line names (<code>&lt;config dir&gt;/android-auto/headunit.crt</code> and <code>headunit.key</code>) or point <code>androidAutoCertPath</code> at the certificate. "No private key next to the head-unit certificate (looked for &hellip;)": the file at <code>androidAutoCertPath</code> holds no key and the sibling <code>.key</code> file is missing. Picked up on the next retry, within 3 s. See <a href="phone-mirror-android-auto.html#aa-native-cert">The head-unit certificate</a>.</td></tr>
-            <tr><td>"the head-unit certificate is not a PEM certificate" / "OpenSSL refused the head-unit certificate" / "no private key found for the head-unit certificate" / "the private key does not match the head-unit certificate"</td><td>The files exist but OpenSSL can't use them: not PEM (convert DER with <code>openssl x509 -inform der</code>), a key for another certificate, or a passphrase-protected key (not supported: OCTAVE has no way to ask for the passphrase). The log line carries OpenSSL's own reason.</td></tr>
-            <tr><td>"TLS handshake failed: &hellip;", or "the phone closed the connection" right after connecting</td><td>The phone refused the head unit's certificate. Android Auto only accepts a client certificate that chains to Google's head-unit certificate authority; a self-signed or otherwise unrecognised one is rejected during the handshake. Phone logcat (<code>adb logcat | grep -i CAR.GAL</code>) shows the phone's side.</td></tr>
-            <tr><td>"the phone refused protocol version 1.6"</td><td>The phone's Android Auto no longer speaks the protocol version OCTAVE asks for. Note the Android Auto version from the phone's app info and report it; the receiver was checked against 17.9.</td></tr>
-            <tr><td>"the phone stopped answering" / "Android Auto ended (&hellip;); reconnecting..."</td><td>No ping answer for 10 s (a dropped Wi-Fi or USB link, the phone asleep or killed), or the phone ended the session. OCTAVE reconnects on its own while the page is wanted.</td></tr>
-            <tr><td>Picture but no sound</td><td>The log says "no audio output device; Android Auto audio will not play" or "could not start audio output": check OCTAVE's audio output device (Settings &rarr; Media) and its volume / mute, which Android Auto audio follows. The phone's own volume is not used.</td></tr>
-            <tr><td>Google Assistant / voice commands hear nothing</td><td>Expected for now: the microphone channel is announced but OCTAVE sends no audio on it.</td></tr>
-            <tr><td>Video stops when leaving the page</td><td>Intentional: a hidden page tells the phone to stop sending video; audio continues and the picture returns when the page is shown again. The close button (X) ends the session.</td></tr>
-          </tbody>
-        </table>
-
-        <!-- Hardware Sensors -->
-        <h2 id="hardware-sensors">Hardware Sensor Issues</h2>
-
-        <h3>I&sup2;C permissions and bus</h3>
-        <pre><code>sudo usermod -aG i2c $USER
-sudo raspi-config                  <span class="cmt"># Raspberry Pi: Interface Options &gt; I2C &gt; Enable</span>
-i2cdetect -y 2
-<span class="cmt"># Expected: 0x6A (LSM6DSL), 0x1C (LIS3MDL), 0x77 (BMP388), 0x73 (PAJ7620U2)</span></code></pre>
-        <p>The default bus number is the constant <code>I2C_BUS = 2</code> (<span class="file-path">src/managers/berryimumanager.cpp</span>, <span class="file-path">src/managers/gesturemanager.cpp</span>) &mdash; there is no setting. The managers open <code>/dev/i2c-2</code> directly with <code>ioctl(I2C_SLAVE)</code> (Linux only).</p>
-
-        <h3>"Device not found" errors</h3>
-        <table>
-          <thead><tr><th>Error</th><th>Cause</th><th>Solution</th></tr></thead>
-          <tbody>
-            <tr><td><code>/dev/i2c-2 not found</code></td><td>I&sup2;C not enabled or the sensors are on another bus</td><td>Enable I&sup2;C; move the sensors to bus 2 or change the constant and rebuild/restart.</td></tr>
-            <tr><td>Permission denied on <code>/dev/i2c-2</code></td><td>User not in the <code>i2c</code> group</td><td><code>sudo usermod -aG i2c $USER</code>, then log out/in.</td></tr>
-            <tr><td>Expected chip ID 0x7620, got 0x0000</td><td>PAJ7620U2 not responding</td><td>Check wiring, 3.3 V supply, pull-ups.</td></tr>
-          </tbody>
-        </table>
-
-        <h3>Reconnection behaviour</h3>
-        <p>BerryIMU and gesture managers retry up to 5 times with linear backoff (5, 10, 15, 20, 25 s), then give up. Both skip the retries on a permission error (it cannot fix itself): when <code>open()</code> fails with <code>EACCES</code> / <code>EPERM</code> they log <code>permission denied on /dev/i2c-2 - add the user to the i2c group; not retrying</code>. Fix the group, log out and in, then toggle the sensor off and on in Settings &rarr; Accessories. A bus that fails mid-run is reported as "Error" and retried after 5 consecutive failed block reads (<code>read loop error: 5 consecutive I2C read failures</code>), so one NACK on a marginal cable no longer goes unnoticed as frozen zeros.</p>
-
-        <h3>IMU updates look slow</h3>
-        <p>The software read/fusion loop stays active, but the signals emitted to QML drop to 5 Hz (<code>IDLE_EMIT_INTERVAL = 0.2</code>) unless a page that draws them is showing &mdash; Car, Sensors, Sensor Home, the OBD menu, or the home screen when an IMU parameter is on a home card &mdash; where they run at ~60 Hz. This is the idle-CPU optimisation, not a fault.</p>
-
-        <h3>ESP32 volume knob not connecting</h3>
-        <ul>
-          <li>Confirm the ESP32-S3 dongle appears in <code>dmesg</code> after plugging in and that you are in <code>dialout</code>.</li>
-          <li>The knob's manager excludes the OBD adapter's port from its scan; <code>esp32VolumePort</code> defaults to empty, which means an ESP32-S3 is auto-selected at startup; no other port is. A dongle that isn't an ESP32-S3 has to be picked in the Volume Knob settings, and then shows "Port &hellip; open: turn the knob to confirm" until the first turn or press (nothing is written to it before that). A settings file from an older build may still hold the former <code>"COM7"</code> default; clear it.</li>
-          <li>A dongle that disappears is detected on <code>QSerialPort</code>'s <code>ResourceError</code> / <code>DeviceNotFoundError</code> / <code>PermissionError</code> / <code>ReadError</code> / <code>WriteError</code> or a rejected keepalive write; with <code>esp32AutoReconnect</code> on it then retries five times.</li>
-          <li>Baud rate is 115200. The reader is driven by <code>QSerialPort::readyRead</code>.</li>
-        </ul>
-
-        <!-- Performance -->
-        <h2 id="performance">Performance Issues</h2>
-
-        <h3>UI stuttering</h3>
+        <h3>Windows: "DLL not found" when starting</h3>
+        <p>Files are missing from the install folder. The installer puts every DLL OCTAVE needs, including the Visual C++ runtime, next to <code>OCTAVE.exe</code>.</p>
         <ol class="steps">
-          <li>Look for <code>octave.ui_watchdog</code> warnings in the log &mdash; they sample every 2 s and warn when the last GUI response is more than 5 s old; this is not a complete record of all UI stalls.</li>
-          <li>Run with <code>--profile</code> (<code>build/octave --profile</code> on a Debug build) and watch the <code>[PERF]</code> line: event-loop latency is green under 5 ms average, yellow under 16 ms, red above (STUTTER); the jitter column is the delay a background thread sees trying to run every 10 ms (CPU contention); slow slots are those with p95 &gt; 2 ms. Details on the <a href="development.html#profiling">Development</a> page.</li>
-          <li>Check CPU: if a core is pegged while the OBD adapter is unplugged, see the dead-port note under <a href="#obd">OBD</a>.</li>
+          <li>Run the installer (<code>OCTAVE-&lt;version&gt;-windows-x86_64.exe</code>) again.</li>
+          <li>If you copied the program folder by hand, copy all of it, not only the <code>.exe</code>.</li>
         </ol>
 
-        <h3>High memory usage</h3>
-        <ul>
-          <li>The cover cache keeps up to 500 files (<code>m_maxCacheFiles</code>); filenames hash the album identifier, not image contents. The in-memory metadata cache has a 1000-entry limit. The separate persistent <code>metadata_cache.json</code> store is not bounded by that limit; see <a href="media-manager.html#metadata-caching">Metadata Caching</a>.</li>
-          <li>Audio analyzer: the FFT is pre-computed for the entire track when it starts, so a long lossless file costs memory up front.</li>
-        </ul>
+        <h3>macOS: "App is damaged" or "cannot be opened"</h3>
+        <p>The <code>.dmg</code> is not signed with an Apple Developer ID and not notarized, so macOS blocks a downloaded copy.</p>
+        <ol class="steps">
+          <li>Try to open OCTAVE once, then go to System Settings &gt; Privacy &amp; Security and choose <strong>Open Anyway</strong>.</li>
+          <li>If macOS still says "damaged", remove the download mark in Terminal: <code>xattr -dr com.apple.quarantine /Applications/OCTAVE.app</code></li>
+          <li>If that does not help, the download itself may be broken: download it again.</li>
+        </ol>
 
-        <h3>Slow library scan</h3>
-        <p>The library scan runs synchronously on the GUI thread (progress via <code>scanProgress</code>); a very large first scan will block the UI until it finishes. Desktop neighbouring-track pre-cache (&plusmn;3 tracks, 80 ms after a track change) and album-colour extraction run off-thread. Android pre-cache is synchronous.</p>
+        <h3>Linux: AppImage won't run</h3>
+        <p>The file is not marked as a program, or the system has no FUSE 2, which an AppImage uses to open itself.</p>
+        <ol class="steps">
+          <li><code>chmod +x OCTAVE-&lt;version&gt;-linux-x86_64.AppImage</code></li>
+          <li>Install FUSE 2: <code>sudo apt install libfuse2</code> on Debian and Ubuntu, <code>sudo pacman -S fuse2</code> on Arch.</li>
+          <li>Or run it without FUSE: <code>./OCTAVE-&lt;version&gt;-linux-x86_64.AppImage --appimage-extract-and-run</code></li>
+          <li>An error that names <code>GLIBC</code> means the system is older than Ubuntu 22.04, which the release is built on. Build OCTAVE on that machine instead: see <a href="building.html">Building</a>.</li>
+        </ol>
+        <p>On a Raspberry Pi or another ARM board, use the <code>aarch64</code> AppImage.</p>
+
+        <h3>Android: the update will not install</h3>
+        <p>The new APK is signed with a different key from the installed one. This happens between a release and a build you made yourself, and with releases older than 0.9.4.</p>
+        <ol class="steps">
+          <li>Uninstall OCTAVE (this deletes its settings on the phone).</li>
+          <li>Install the new APK.</li>
+        </ol>
+
+        <h3>The app will not start, or closes at once</h3>
+        <p>Start it from a terminal so you can read what it says.</p>
+        <ol class="steps">
+          <li>Run it with <code>--debug</code> and read the last lines printed, or <code>octave-cpp-error.log</code>.</li>
+          <li><code>Could not load the Qt platform plugin "xcb"</code>: see <a href="#display">Screen and Display</a>.</li>
+          <li><code>Could not locate frontend/ directory</code>: the program was moved away from its <code>frontend</code> folder. The folder must be next to the program or one level above it. Reinstall, or move both together.</li>
+          <li>To rule out your own settings, start once on an empty config folder: <code>octave --config /tmp/octave-test</code>. If that works, the problem is in your config folder; nothing in it was changed by the test.</li>
+          <li>To check the app without any hardware: <code>octave --sim</code> starts with a simulated car on a throwaway config.</li>
+        </ol>
+
+        <!-- Display -->
+        <h2 id="display">Screen and Display</h2>
+
+        <h3>Linux: Could not load the Qt platform plugin "xcb"</h3>
+        <p>Libraries that Qt needs to open a window under X11 are missing, or there is no display to open it on. This happens with a binary you built, on a minimal system.</p>
+        <ol class="steps">
+          <li>Install the libraries (Debian and Ubuntu names):
+            <pre><code>sudo apt install libxcb1 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+  libxcb-randr0 libxcb-render0 libxcb-render-util0 libxcb-shape0 libxcb-shm0 \
+  libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1 libxcb-util1 \
+  libxkbcommon0 libxkbcommon-x11-0 libgl1 libegl1</code></pre></li>
+          <li>Check that <code>echo $DISPLAY $WAYLAND_DISPLAY</code> prints something. Over SSH it usually prints nothing: start OCTAVE from the desktop session.</li>
+          <li>Run with <code>QT_DEBUG_PLUGINS=1</code> to see which library is still missing.</li>
+          <li>On Wayland, try <code>QT_QPA_PLATFORM=wayland</code>; to force X11, <code>QT_QPA_PLATFORM=xcb</code>.</li>
+        </ol>
+
+        <h3>A black window, or icons and album art missing</h3>
+        <p>The icons, the album art and the 3D vehicle are drawn by the graphics card, so a broken graphics driver shows as a black or half-empty window.</p>
+        <ol class="steps">
+          <li>Start with <code>QT_QUICK_BACKEND=software</code>. If the window appears, the graphics driver is the problem. This mode is slow and shows no shader effects and no 3D view, so use it only to find the cause.</li>
+          <li>Look in the log for <code>module "..." is not installed</code>. It means the Qt you built against lacks a module; see <a href="building.html">Building</a>.</li>
+        </ol>
+
+        <h3>Everything is too big or too small</h3>
+        <p>OCTAVE sizes itself from the screen's shorter side, and you can scale it on top of that.</p>
+        <ol class="steps">
+          <li>Settings &gt; Display &gt; <strong>UI Scaling</strong>, from 0.5 to 2.0.</li>
+          <li>If the screen is too small to reach the setting, close OCTAVE and set <code>"uiScale": 1.0</code> in <code>settingsConfigure.json</code> in the config folder.</li>
+        </ol>
+
+        <h3 id="wsl">Windows Subsystem for Linux: no window</h3>
+        <p>OCTAVE needs a display, and WSL only has one with WSLg (WSL 2 on Windows 10 build 19044 or later, or Windows 11).</p>
+        <ol class="steps">
+          <li>Set up WSLg with <a href="https://learn.microsoft.com/en-us/windows/wsl/tutorials/gui-apps">Microsoft's guide to Linux GUI apps</a>.</li>
+          <li>If the window is black, start with <code>QT_QUICK_BACKEND=software LIBGL_ALWAYS_SOFTWARE=1</code>.</li>
+        </ol>
+
+        <!-- Audio -->
+        <h2 id="audio">Sound and Music</h2>
+
+        <h3>No sound</h3>
+        <p>Most often OCTAVE is muted, or it is playing on another output than the one you are listening to.</p>
+        <ol class="steps">
+          <li>Check the volume on the bottom bar. Its icon shows when OCTAVE is muted; turning the volume up unmutes.</li>
+          <li>Settings &gt; Media &gt; Library &amp; Playback &gt; <strong>Audio Output</strong> says where OCTAVE plays. If it reads "The picked output is not connected", OCTAVE is on the system default until that output is back: pick the right one.</li>
+          <li>Check the system's own volume and output. On Linux, <code>pactl list short sinks</code> lists the outputs and <code>pactl info</code> shows the default one.</li>
+        </ol>
+
+        <h3>Very quiet at low volume</h3>
+        <p>
+          This is intended. The slider follows a curve that matches how hearing works: 50 % on the slider is a quarter
+          of full power, 10 % is a hundredth. Turn it up.
+        </p>
+
+        <h3>The music gets quiet while a phone is mirrored</h3>
+        <p>OCTAVE turns its own music down while the phone makes a sound, and back up a moment after it stops.</p>
+        <ol class="steps">
+          <li>To stop this: Settings &gt; Phone &gt; Phone Mirror &gt; <strong>Duck Local Music</strong>.</li>
+        </ol>
+
+        <h3>"No Music Loaded", or songs are missing</h3>
+        <p>The library folder is not set, or the files are of a type OCTAVE does not read.</p>
+        <ol class="steps">
+          <li>Settings &gt; Media &gt; Library &amp; Playback: check <strong>Library Folder</strong>, tap <strong>Scan</strong> and read the <strong>Scan Log</strong>.</li>
+          <li>OCTAVE reads <code>.mp3</code>, <code>.m4a</code>, <code>.mp4</code> (sound only), <code>.flac</code>, <code>.ogg</code>, <code>.opus</code> and <code>.wav</code>.</li>
+          <li>For which folders are read, see <a href="media-manager.html">Media Manager</a>.</li>
+        </ol>
+
+        <h3>A song is skipped, or playback stops by itself</h3>
+        <p>The file is damaged or uses a codec the system cannot play. OCTAVE tries a file twice, then skips it. After 10 unplayable songs in a row it stops instead of running through the whole library.</p>
+        <ol class="steps">
+          <li>Find the file in the log: "Giving up on ..." names it.</li>
+          <li>Play that file in another player. If it fails there too, replace it.</li>
+          <li>If many files fail, the folder may be gone (an unplugged drive): check the Library Folder.</li>
+        </ol>
+        <p>Spotify problems are shown in red on the Spotify card in Settings &gt; Media; see <a href="media-manager.html#spotify">Media Manager</a>.</p>
+
+        <!-- OBD -->
+        <h2 id="obd">The Car (OBD)</h2>
+        <p>
+          Read the status in Settings &gt; OBD &gt; Connection first. <a href="obd-manager.html">OBD Manager</a> has a
+          table of what each status means; the entries here are the common cases.
+        </p>
+
+        <h3>The adapter is not found</h3>
+        <p>The Connect Vehicle sheet lists nothing, or the status is <strong>Device Not Found</strong>. Usually the adapter has no power, or the system has not paired with it.</p>
+        <ol class="steps">
+          <li>Turn the ignition on. Most adapters only have power with the ignition on. Check that the adapter's light is on.</li>
+          <li>Scan again, and tap <strong>Show All Devices</strong>: the sheet normally lists only devices whose name looks like an OBD adapter.</li>
+          <li>On Windows and macOS, pair the adapter in the system's Bluetooth settings first. On Linux, <strong>Pick Bluetooth Adapter</strong> pairs it for you.</li>
+          <li>A USB adapter on Linux: your user must be allowed to open serial ports. <code>sudo usermod -aG dialout $USER</code> (the group is <code>uucp</code> on Arch), then log out and in.</li>
+          <li>If you know the address, type it: Settings &gt; OBD &gt; Connection &gt; <strong>Enter Address Manually</strong>.</li>
+        </ol>
+
+        <h3>The status is "No Vehicle"</h3>
+        <p>The adapter answers but the car does not. This is nearly always the ignition.</p>
+        <ol class="steps">
+          <li>Turn the ignition on. OCTAVE tries again every 10 seconds; you do not need to tap anything.</li>
+          <li>Push the adapter firmly into the port.</li>
+          <li>Look at the "Vehicle check" line in the Connection Log.</li>
+        </ol>
+
+        <h3>The status is "Connection Failed", or the connection keeps dropping</h3>
+        <p>The adapter was found but stopped answering. Cheap adapters lock up, and another app may be holding the adapter.</p>
+        <ol class="steps">
+          <li>Unplug the adapter, wait a few seconds and plug it back in.</li>
+          <li>Close any other OBD app, on this device and on your phone: an adapter talks to one program at a time.</li>
+          <li>If readings drop out while connected, turn <strong>Fast Polling</strong> off in Settings &gt; OBD: not every adapter and car keep up.</li>
+          <li><strong>Stale Connection</strong> needs nothing: after 30 seconds without a reading OCTAVE connects again by itself.</li>
+        </ol>
+
+        <h3>The status is "Error" (Linux)</h3>
+        <p>OCTAVE could not set up the Bluetooth link. The Connection Log says why.</p>
+        <ol class="steps">
+          <li>Use <strong>Pick Bluetooth Adapter</strong> in the Connect Vehicle sheet. It connects directly and needs no system tool.</li>
+          <li>"rfcomm bind failed: rfcomm binary not found" appears when a Bluetooth address was typed by hand and the <code>rfcomm</code> tool is not installed. Install it (<code>bluez-utils</code> on Arch), or bind the adapter once yourself and enter the port:
+            <pre><code>sudo rfcomm bind 0 AA:BB:CC:DD:EE:FF    <span class="cmt"># your adapter's address</span>
+<span class="cmt"># then enter /dev/rfcomm0 under Enter Address Manually</span></code></pre></li>
+        </ol>
+
+        <h3>A reading is missing or shows "--"</h3>
+        <p>The car does not report it. After connecting, OCTAVE asks the car which readings it supports and shows only those.</p>
+        <ol class="steps">
+          <li>Start the engine: many readings exist only while it runs.</li>
+          <li>If the car has the sensor but reports it in its own way, see Custom PIDs in <a href="obd-manager.html">OBD Manager</a>.</li>
+        </ol>
+
+        <h3 id="black-box-unavailable">Trip History is empty, or says "Black box unavailable"</h3>
+        <p>Either recording is off, no drive has been made yet, or OCTAVE could not open its database.</p>
+        <ol class="steps">
+          <li>Settings &gt; OBD &gt; Black Box: <strong>Record every drive</strong> must be on. A drive starts at the first reading with the engine running, so a connection with the engine off records nothing.</li>
+          <li>"Black box unavailable" means the database could not be opened, and nothing is recorded until it can. The Status line on the Black Box card gives the reason, and <code>octave-cpp.log</code> has it too.</li>
+          <li>The usual reasons are a full disk or a config folder that cannot be written. Free some space or fix the folder's permissions, then restart OCTAVE.</li>
+        </ol>
+        <p>See <a href="obd-manager.html#black-box">OBD Manager: Black Box</a>.</p>
+
+        <!-- Android OBD -->
+        <h2 id="android-obd">The Car, on Android</h2>
+        <span class="platform-badge android">Android</span>
+
+        <h3>"Requesting Bluetooth permission &mdash; tap Allow, then tap Connect again"</h3>
+        <p>Android has to ask you once before OCTAVE may use Bluetooth.</p>
+        <ol class="steps">
+          <li>Tap <strong>Allow</strong> on Android's question.</li>
+          <li>Tap <strong>Connect</strong> again.</li>
+          <li>If Android no longer asks, give the permission by hand in Android's settings, under the OCTAVE app's permissions.</li>
+        </ol>
+
+        <h3>The adapter is not in the list</h3>
+        <p>On Android OCTAVE does not scan. It lists the devices the phone is already paired with.</p>
+        <ol class="steps">
+          <li>Turn Bluetooth on and pair the adapter in Android's Bluetooth settings.</li>
+          <li>Tap Connect once so that the permission is asked for (above); the list fills after that.</li>
+          <li>The adapter must be a Bluetooth LE one. An older "Bluetooth classic" ELM327 does not work on Android.</li>
+        </ol>
+        <p>
+          The adapter's Bluetooth events are written to the Connection Log and to <code>octave-cpp.log</code> as lines
+          starting with <code>[BLE]</code>. Trouble codes, custom PIDs and the bus monitor are not on Android yet.
+        </p>
+
+        <!-- Phone mirror -->
+        <h2 id="phone-mirror">Phone Mirror</h2>
+        <p>
+          The first line of Settings &gt; Phone &gt; Phone Mirror says what is missing. The
+          <a href="phone-mirror-android-auto.html">Phone Mirror</a> page has a table of every message; these are the
+          ones met most often.
+        </p>
+
+        <h3>The phone does not appear</h3>
+        <p>OCTAVE reaches an Android phone through <code>adb</code>, Android's debugging tool, and the phone must allow it.</p>
+        <ol class="steps">
+          <li>On the phone, turn on <strong>USB debugging</strong> (Settings &gt; Developer options) and plug it in with a cable that carries data.</li>
+          <li>"USB debugging is not authorized": unlock the phone and tap <strong>Allow</strong> on its prompt. If no prompt comes, unplug and plug in again.</li>
+          <li>"adb not found": on Linux install it (<code>sudo apt install adb</code>, or <code>sudo pacman -S android-tools</code> on Arch) and restart OCTAVE. On Windows and macOS the release includes it: reinstall OCTAVE.</li>
+          <li>An iPhone is not shown here: use <a href="phone-mirror-android-auto.html#airplay">AirPlay</a>.</li>
+        </ol>
+
+        <h3>"adb is too old for wireless pairing"</h3>
+        <p>Pairing over Wi-Fi needs adb from platform-tools 30 or newer, and some systems ship an older one (Ubuntu 22.04 does).</p>
+        <ol class="steps">
+          <li>Install Google's current Android platform-tools, with adb at <code>~/Android/Sdk/platform-tools/adb</code>, and restart OCTAVE. It uses the first adb it finds that is new enough.</li>
+          <li>Or use the cable: mirroring over USB works with the old adb.</li>
+        </ol>
+
+        <h3>Wi-Fi: the phone scans the QR code and nothing happens</h3>
+        <p>The phone and OCTAVE cannot see each other on the network. After 120 seconds OCTAVE says "The phone did not scan the code".</p>
+        <ol class="steps">
+          <li>Put both on the same Wi-Fi network. A guest network usually keeps devices apart and will not work.</li>
+          <li>The phone's own hotspot does not work for pairing. See <a href="phone-mirror-android-auto.html#pm-wifi">Without a Cable: Wi-Fi</a> for what does.</li>
+          <li>Tap <strong>Show QR code</strong> for a new code and scan again.</li>
+        </ol>
+
+        <h3>Wi-Fi: the phone does not come back after a drive or a restart</h3>
+        <p>Android switches Wireless debugging off when the phone leaves the network or restarts.</p>
+        <ol class="steps">
+          <li>Switch <strong>Wireless debugging</strong> on again on the phone. OCTAVE finds it by itself.</li>
+          <li>Or plug the phone in once.</li>
+        </ol>
+
+        <!-- Android Auto -->
+        <h2 id="android-auto">Android Auto</h2>
+        <p>
+          These are for OCTAVE's built-in head unit (Settings &gt; Phone &gt; Android Auto &gt; Head Unit:
+          <strong>Built-in</strong>). Setting it up is described under
+          <a href="phone-mirror-android-auto.html#aa-native">The Built-in Head Unit</a>. While the Android Auto page is
+          open OCTAVE keeps trying by itself, every few seconds, so after you fix the cause there is nothing to restart.
+          The line under the page title gives the exact reason.
+        </p>
+
+        <h3>There is no Head Unit choice in the settings</h3>
+        <p>This build has no built-in head unit: it was built without OpenSSL or FFmpeg, or it is not a desktop build.</p>
+        <ol class="steps">
+          <li>Rebuild with both present: see <a href="building.html#cmake-options">Building</a>.</li>
+        </ol>
+
+        <h3>"Connect your phone with USB debugging on"</h3>
+        <p>OCTAVE does not see a phone. Android Auto reaches the phone the same way Phone Mirror does.</p>
+        <ol class="steps">
+          <li>Follow <a href="#phone-mirror">The phone does not appear</a> above.</li>
+          <li>"adb was not found" has the same fix as "adb not found" there.</li>
+        </ol>
+
+        <h3>"Waiting for the phone's head unit server"</h3>
+        <p>The phone is connected, but Android Auto on it is not listening. The server has to be started on the phone by hand.</p>
+        <ol class="steps">
+          <li>On the phone: Android Auto settings &gt; &#8942; &gt; <strong>Start head unit server</strong>.</li>
+          <li>No &#8942; menu? Developer mode is off. Tap <strong>Version</strong> in Android Auto's settings 10 times, then look again.</li>
+        </ol>
+
+        <h3>"the phone's head unit server did not answer"</h3>
+        <p>The server on the phone accepted the connection and then said nothing for 10 seconds. It gets stuck like this after a session was cut off.</p>
+        <ol class="steps">
+          <li>On the phone: &#8942; &gt; <strong>Stop head unit server</strong>, then <strong>Start head unit server</strong>.</li>
+          <li>Wait a few seconds; OCTAVE connects again by itself.</li>
+        </ol>
+
+        <h3>"Android Auto needs a certificate"</h3>
+        <p>Android Auto only talks to a head unit that shows a certificate, and OCTAVE does not come with one.</p>
+        <ol class="steps">
+          <li>Put <code>headunit.crt</code> and <code>headunit.key</code> in the folder the message names. See <a href="phone-mirror-android-auto.html#aa-native-cert">The Head-Unit Certificate</a>.</li>
+          <li>"No private key next to the head-unit certificate": the <code>.key</code> file is missing. It must have the same name as the certificate.</li>
+          <li>"The head-unit certificate can't be used", followed by the reason: the certificate is not in PEM format, the key belongs to another certificate, or the key is protected by a passphrase (not supported). Convert a DER certificate with <code>openssl x509 -inform der -in headunit.der -out headunit.crt</code>.</li>
+        </ol>
+
+        <h3>"TLS handshake failed", or "the phone closed the connection"</h3>
+        <p>The phone refused the certificate. Android Auto accepts only a certificate issued under Google's head-unit authority; one you signed yourself is refused.</p>
+        <ol class="steps">
+          <li>Use a certificate the phone accepts: see <a href="phone-mirror-android-auto.html#aa-native-cert">The Head-Unit Certificate</a>.</li>
+          <li>To see the phone's side: <code>adb logcat | grep -i CAR.GAL</code></li>
+        </ol>
+
+        <h3>"the phone stopped answering", or "Android Auto ended"</h3>
+        <p>The link dropped, the phone went to sleep, or the phone ended the session.</p>
+        <ol class="steps">
+          <li>Nothing: OCTAVE reconnects while the page is open.</li>
+          <li>If it keeps happening on Wi-Fi, use the cable.</li>
+        </ol>
+
+        <h3>There is a picture but no sound, or the Assistant does not hear you</h3>
+        <p>Android Auto plays through OCTAVE's output and listens through the system's default microphone. The phone's own volume is not used.</p>
+        <ol class="steps">
+          <li>Check OCTAVE's volume and mute, and Settings &gt; Media &gt; <strong>Audio Output</strong>.</li>
+          <li>For the Assistant, the device needs a microphone set as the system's default input. The log says "the phone asked for the microphone, but there is no audio input" when there is none.</li>
+        </ol>
+
+        <h3>"the phone refused protocol version 1.6"</h3>
+        <p>The phone's Android Auto is a version OCTAVE's head unit does not work with. Report it with the Android Auto version from the phone's app information.</p>
+
+        <!-- Hardware -->
+        <h2 id="hardware-sensors">Sensors and the Volume Knob</h2>
+        <p>Wiring and first set-up are on the <a href="hardware-setup.html">Hardware Setup</a> page.</p>
+
+        <h3>The IMU or the gesture sensor is not found</h3>
+        <span class="platform-badge linux">Linux only</span>
+        <p>Both sensors must be on I2C bus 2, and your user must be allowed to use it. The bus number cannot be changed in the settings.</p>
+        <ol class="steps">
+          <li>Check that the bus exists: <code>ls /dev/i2c-2</code>. If not, enable it on your board (on a Raspberry Pi, <code>sudo raspi-config</code> &gt; Interface Options &gt; I2C turns I2C on; the board decides which bus number the pins get).</li>
+          <li>Check that the sensors answer: <code>i2cdetect -y 2</code> should show <code>1c</code>, <code>6a</code> and <code>77</code> for the BerryIMU and <code>73</code> for the gesture sensor. A missing address is a wiring or power problem.</li>
+          <li>The log says "permission denied on /dev/i2c-2": <code>sudo usermod -aG i2c $USER</code>, then log out and in.</li>
+          <li>OCTAVE tries five times, waiting longer each time (5 to 25 seconds), then gives up; after a permission error it does not retry at all. Once the cause is fixed, restart OCTAVE.</li>
+        </ol>
+
+        <h3>The volume knob does nothing</h3>
+        <p>OCTAVE has not found the knob's USB dongle, or is listening on the wrong port.</p>
+        <ol class="steps">
+          <li>Plug the dongle in and open Settings &gt; Accessories &gt; Volume Knob &gt; Connection.</li>
+          <li>An ESP32-S3 dongle is picked by itself. Any other has to be picked from the list there.</li>
+          <li>"Port ... open: turn the knob to confirm": turn or press the knob once. OCTAVE waits for that before it trusts the port.</li>
+          <li>"Max retries reached. Check connection.": the dongle disappeared and five attempts to get it back failed. Unplug it and plug it back in; OCTAVE looks for it every 10 seconds and connects when it appears.</li>
+          <li>On Linux your user must be allowed to open serial ports: <code>sudo usermod -aG dialout $USER</code> (<code>uucp</code> on Arch), then log out and in.</li>
+        </ol>
+
+        <!-- Performance -->
+        <h2 id="performance">Slow or Frozen</h2>
+
+        <h3>The screen froze</h3>
+        <p>
+          OCTAVE watches its own screen thread. When it has not answered for 5 seconds, the log gets "UI thread blocked
+          for N s and counting", and "UI thread responsive again" when it recovers. On Linux, after 15 seconds it writes
+          a <code>hang-*.txt</code> file, and after 30 seconds it closes itself so that a launcher script can start it
+          again (the one for the <a href="hardware-setup.html">reference install</a> does).
+        </p>
+        <ol class="steps">
+          <li>Find the "UI thread blocked" line in <code>octave-cpp-error.log</code> and read the lines just before it in <code>octave-cpp.log</code>: they show what OCTAVE was doing.</li>
+          <li>Report it with the exported logs, including the <code>hang-*.txt</code> file.</li>
+        </ol>
+
+        <h3>The app freezes for a while when it reads a big music library</h3>
+        <p>The library scan is done in one go and the screen waits for it. With a very large library the first one can take a while. Let it finish.</p>
+
+        <h3>The screen stutters</h3>
+        <p>The device is short of graphics or processor power for what is on screen.</p>
+        <ol class="steps">
+          <li>Check that OCTAVE is not running in software mode: unset <code>QT_QUICK_BACKEND</code> if you set it.</li>
+          <li>Look at what else is using the processor: <code>top</code>.</li>
+          <li>If one core is busy while the OBD adapter is unplugged or out of range, report it with the logs.</li>
+          <li>To measure it, a development build has a profiler: see <a href="development.html#profiling">Performance Profiling</a>.</li>
+        </ol>
 
         <!-- Dev tooling -->
-        <h2 id="dev-tooling">Dev Tooling Issues</h2>
-        <table>
-          <thead><tr><th>Symptom</th><th>Cause / fix</th></tr></thead>
-          <tbody>
-            <tr><td>MCP servers <code>octave-perf</code> / <code>octave-benchmark</code> fail to connect</td><td>The servers are Python scripts (<span class="file-path">dev/mcp_server.py</span>, <span class="file-path">dev/mcp_benchmark.py</span>) that drive the app over its command server. Check the interpreter and script paths in the local, gitignored <code>.mcp.json</code>, install the <code>mcp</code> package for that interpreter, and run the app with <code>--profile</code>. Machine-specific entries copied from another workstation may be invalid. The benchmark server also needs <code>--mcp</code> or it runs its CLI suite and exits.</td></tr>
-            <tr><td><code>build/octave --dev</code> / <code>--profile</code> logs <code>--dev / --profile need a build with -DOCTAVE_DEV_TOOLS=ON (the default for Debug); ignoring</code></td><td>Only <code>-DCMAKE_BUILD_TYPE=Debug</code> builds include the dev tooling by default. For just the simulated car, <code>--sim</code> works in every build. Build a Debug tree (<code>cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug</code>) or pass <code>-DOCTAVE_DEV_TOOLS=ON</code>. The tools pick the binary through <span class="file-path">dev/app_launch.py</span>; point <code>OCTAVE_BIN</code> at the right one if several builds exist.</td></tr>
-            <tr><td><code>command server could not listen on 127.0.0.1:9876</code></td><td>Another OCTAVE is still running with <code>--profile</code> (or <code>--service</code>), often a story or sweep that was interrupted. The server tries a port that is in use again for 3 s (an instance that is just quitting, as when OCTAVE restarts itself to change frontend, has let go by then) before it logs this. Stop the other one, or start this one with <code>--command-port N</code> and pass <code>--port N</code> to the tool.</td></tr>
-            <tr><td>Screenshots have blank icons / album art</td><td>Offscreen rendering may lack the effects needed for a faithful screenshot; use the default Xvfb mode (<code>sudo pacman -S xorg-server-xvfb</code>) or <code>--visible</code>.</td></tr>
-            <tr><td>Screenshot tool navigates but every capture shows the home page</td><td>The page is listed in the command server's <code>navigate</code> map (<code>kPages</code> in <span class="file-path">src/dev/coreactions.cpp</span>) but missing from <code>Main.qml</code>'s <code>navigateTo</code> page map; a name missing from <code>kPages</code> returns <code>Unknown page: …</code> instead. Register a new page in both. Arguments reach the QML function as <code>QVariant</code> (<code>invokeByName()</code> in <span class="file-path">src/service/commandserver.cpp</span>), since QML functions take untyped parameters.</td></tr>
-            <tr><td><code>ctest --test-dir build</code> hangs or a UI test fails to start</td><td>Run with <code>QT_QPA_PLATFORM=offscreen</code>, as CI does. Use <code>ctest --test-dir build --output-on-failure -V -R &lt;name&gt;</code> to run one test verbosely. The tests are only built with <code>OCTAVE_BUILD_TESTS</code> (on by default for desktop Debug builds).</td></tr>
-          </tbody>
-        </table>
+        <h2 id="dev-tooling">Developer Tools</h2>
+        <p>For people working on OCTAVE itself. The tools are described on the <a href="development.html">Development</a> page.</p>
 
-        <!-- WSL -->
-        <h2 id="wsl">WSL Display Issues</h2>
-        <p>OCTAVE needs a display: <code>DISPLAY</code> or <code>WAYLAND_DISPLAY</code> must be set. WSLg supports WSL 2 on Windows 10 build 19044+ and Windows 11; follow <a href="https://learn.microsoft.com/en-us/windows/wsl/tutorials/gui-apps">Microsoft's GUI-app instructions</a>. An external X server needs a <code>DISPLAY</code> value appropriate to its address and WSL network mode; do not assume <code>:0</code>. Software rendering can help diagnose graphics problems, but does not reproduce shader effects or the 3D view:</p>
-        <pre><code><span class="kw">export</span> QT_QUICK_BACKEND=software
-<span class="kw">export</span> LIBGL_ALWAYS_SOFTWARE=1
-./build/octave</code></pre>
+        <h3>"--dev / --profile need a build with -DOCTAVE_DEV_TOOLS=ON"</h3>
+        <p>The developer tools are only compiled into Debug builds.</p>
+        <ol class="steps">
+          <li>Build a Debug tree: <code>cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug &amp;&amp; cmake --build build -j8</code></li>
+          <li>For only the simulated car, <code>--sim</code> works in every build.</li>
+        </ol>
 
-        <p><strong>Method names:</strong> this page uses the camelCase names of the manager methods (<code>nextTrack</code>). The older snake_case name of each (<code>next_track</code>) still works through protocol&nbsp;4 and goes in protocol&nbsp;5; the <a href="api-reference.html">API reference</a> lists them.</p>
+        <h3>"command server could not listen on 127.0.0.1:9876"</h3>
+        <p>Another OCTAVE is already running with <code>--profile</code> or <code>--service</code> and holds the port.</p>
+        <ol class="steps">
+          <li>Close the other one. A test that was interrupted often leaves one behind: <code>pgrep -a octave</code>.</li>
+          <li>Or use another port: <code>./build/octave --dev --profile --service=9933</code>, and give the tool the same port.</li>
+        </ol>
+
+        <h3>The MCP servers or the screenshot tools cannot reach the app</h3>
+        <p>They are Python programs in the <code>dev/</code> folder that drive a running OCTAVE through the <a href="development.html#command-server">command server</a>.</p>
+        <ol class="steps">
+          <li>The app must be a Debug build. The tools start it through <code>dev/app_launch.py</code>; set <code>OCTAVE_BIN</code> if you have more than one build.</li>
+          <li>Check the Python path in <code>.mcp.json</code>: it is different on every machine. Install what the tools need with <code>venv/bin/pip install -r requirements.txt</code>.</li>
+          <li>A screenshot tool that asks for an unknown page gets "Unknown page: ..." with the list of valid names.</li>
+        </ol>
+
+        <h3>A test hangs or will not start</h3>
+        <p>The tests that draw a screen need a display.</p>
+        <ol class="steps">
+          <li>Run them without one, as CI does: <code>QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure</code></li>
+          <li>Run one test with its full output: <code>ctest --test-dir build --output-on-failure -V -R &lt;name&gt;</code></li>
+        </ol>
+        <p>See <a href="development.html#testing">Tests and Linting</a>.</p>
 
         <div class="related-pages">
           <h3>Related Pages</h3>
