@@ -121,7 +121,7 @@ Rectangle {
             spacing: App.Spacing.overallSpacing * 0.5
 
             Text {
-                text: "→"
+                text: "←"
                 color: backArea.containsMouse ? App.Style.accent : App.Style.secondaryTextColor
                 font.pixelSize: App.Spacing.overallText * 1.6
                 font.family: App.Style.fontFamily

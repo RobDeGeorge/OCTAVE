@@ -446,14 +446,14 @@ adapterSheet.<span class="fn">open</span>()</code></pre>
     <span class="fn">onArtClicked</span>: picker.<span class="fn">open</span>()
     <span class="fn">onArtLoadFailed</span>: currentArt = <span class="str">"./assets/missing_art.png"</span>
 }
-<span class="cmt">// when the track changes:</span>
-art.<span class="fn">triggerSlide</span>()</code></pre>
+<span class="cmt">// when the track changes (true: the cover comes separately, as from a phone):</span>
+art.<span class="fn">triggerSlide</span>(<span class="kw">false</span>)</code></pre>
         <table>
           <thead><tr><th>Member</th><th>Default</th><th>What it does</th></tr></thead>
           <tbody>
-            <tr><td><code>artSource</code></td><td>empty</td><td>The cover to show.</td></tr>
+            <tr><td><code>artSource</code></td><td>empty</td><td>The cover to show. Changing it plays the transition to the new cover.</td></tr>
             <tr><td><code>direction</code></td><td>1</td><td>1 brings the new cover in from the right (next track), -1 from the left.</td></tr>
-            <tr><td><code>triggerSlide()</code></td><td></td><td>Play the transition. Call it as the track changes.</td></tr>
+            <tr><td><code>triggerSlide(artMayFollow)</code></td><td></td><td>The track changed. With <code>false</code> the transition plays now, also when the cover stays the same. With <code>true</code> the source sends its cover apart from the track (a phone, Spotify): the transition plays when <code>artSource</code> changes, and a track with the same cover moves nothing.</td></tr>
             <tr><td><code>roundedArt</code>, <code>artRadius</code></td><td>false, 0</td><td>Rounded corners and their radius.</td></tr>
             <tr><td><code>vinylMode</code></td><td>false</td><td>Show the cover as a record. It turns once per song, from <code>playbackPosition</code> / <code>playbackDuration</code>.</td></tr>
             <tr><td><code>showShadow</code></td><td>false</td><td>A drop shadow under the cover.</td></tr>
@@ -466,7 +466,9 @@ art.<span class="fn">triggerSlide</span>()</code></pre>
           </tbody>
         </table>
         <ul>
-          <li>The component does not watch the player. You change <code>artSource</code> and call <code>triggerSlide()</code>.</li>
+          <li>The component does not watch the player. You change <code>artSource</code> and call <code>triggerSlide()</code>, in either order.</li>
+          <li>The cover on screen never changes its picture. The component has two cards: the hidden one loads the new cover, comes in once its picture is ready, and the two change roles. A cover that arrives late, or two changes close together, therefore cannot show the wrong picture in the middle of a transition.</li>
+          <li>The transition moves a plain holder around each card, not the card. An <code>Animator</code> has no visible effect on an item with a layer effect (the cards have the corner mask and the shadow): the item stays still and jumps at the end.</li>
           <li>The side cards hide themselves when a transition starts and stay hidden until you call <code>showSideCards()</code>.</li>
           <li>Start heavy work for the new track on <code>settled()</code>, not on the track change, so that it does not compete with the animation. The Media Room does its audio analysis there.</li>
           <li>A cover that fails to load leaves a hole: put a fallback in on <code>artLoadFailed()</code>.</li>

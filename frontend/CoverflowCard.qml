@@ -33,7 +33,6 @@ Item {
 
     // ── Optional: drop shadow (only used by the center card) ──
     property bool showShadow: false
-    property bool shadowLive: true
 
     // ── Convenience alias for the inner Image ──
     readonly property alias image: artImage
@@ -72,13 +71,6 @@ Item {
 
     // Drop shadow — only active when showShadow is true
     layer.enabled: showShadow
-    // layer.live is set through a Binding, not declared as `layer.live:`.
-    // It is a revisioned property (Qt 6.5), and on Qt 6.7 whether the QML
-    // compiler accepts the declaration depends on which file first compiled
-    // the layer type: sometimes it fails with '".live" is not available due
-    // to component versioning', which made MediaRoom unloadable (seen when
-    // pages are pre-built at startup). A Binding sets it by name at runtime.
-    Binding { target: root.layer; property: "live"; value: root.shadowLive }
     layer.effect: DropShadow {
         transparentBorder: true
         horizontalOffset: 8

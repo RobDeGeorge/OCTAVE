@@ -200,7 +200,9 @@ Item {
 
         // Always trigger the carousel (hidden under a 3D player it still
         // times the change).  Heavy work deferred via settled signal.
-        albumArtStack.triggerSlide()
+        // A phone's or Spotify's art comes apart from the track: there the
+        // carousel moves when the art does.
+        albumArtStack.triggerSlide(useRemote)
         if (musicDeviceLoader.item) musicDeviceLoader.item.loadMedia(false)
     }
 
@@ -736,9 +738,8 @@ Item {
                                 anchors.bottomMargin: -transportRow.hitVertical
                                 onClicked: {
                                     mediaRoom._slideDirection = -1
-                                    // Fire animation BEFORE the backend call — enter card
-                                    // starts at opacity 0 so stale art is invisible.
-                                    // Backend data arrives while card is still transparent.
+                                    // Ask for the animation before the backend call: the
+                                    // carousel takes the art as it is once the call is done
                                     mediaRoom._userInitiatedChange = true
                                     mediaRoom.animateTrackChange()
                                     if (mediaRoom._np) mediaRoom._np.previous()

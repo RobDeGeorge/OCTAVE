@@ -1,5 +1,4 @@
 import QtQuick
-import Qt5Compat.GraphicalEffects
 import "." as App
 
 // The Media Room's album art (square or, in vinyl mode, a record), with the
@@ -7,6 +6,12 @@ import "." as App
 // direction the track list moved, shrinking a little and fading, while the
 // new one arrives from the other side and settles. The same for the square
 // art and the record; the 3D players (MusicDeviceScene) have their own.
+//
+// There are two cards. One shows the art; the other, hidden, loads the next
+// art and comes in only once its picture is ready, and then the two change
+// roles. A card on screen never changes its picture, so the art cannot be
+// seen switching in the middle of a transition, whenever the new art turns
+// up: with the track, before it, or a second later (a phone, Spotify).
 //
 // With the 3D preview on, the neighbours' art stands tilted at the sides:
 // those cards fade out as a transition starts and back in once the parent
@@ -109,67 +114,158 @@ Item {
     //  The transition
     // ═══════════════════════════════════════════════════════════════════
 
-    // Run it: call before (or as) artSource changes. The old art is kept as
-    // a frozen picture (exitTexture) while the card takes the new one.
-    function triggerSlide() {
-        _stopAll()
+    // The card showing the art, and the one that brings the next art in
+    property CoverflowCard _front: cardA
+    readonly property CoverflowCard _back: _front === cardA ? cardB : cardA
+    // The back card has its new art and waits for the picture to load
+    property bool _loading: false
+    // The two cards are moving
+    property bool _sliding: false
+    // A track change asked for a transition even if the art stays the same
+    property bool _slideAsked: false
+    property bool _ready: false
+
+    Component.onCompleted: {
+        cardA.artSource = artSource
+        _ready = true
+    }
+
+    // The track changed. artMayFollow: the source sends its art apart from
+    // the track (a phone, Spotify), so the transition belongs to the art and
+    // runs when that changes; a track with the same cover moves nothing.
+    // Otherwise the art is known now (local music): the transition runs at
+    // once, to the art as it is at the end of this turn of the event loop
+    // (callers change the track just before or just after this call).
+    function triggerSlide(artMayFollow) {
+        animBusy = true
+        if (artMayFollow === true) {
+            if (!_loading && !_sliding) settleTimer.restart()
+            return
+        }
         if (previewEnabled) _sideShown = 0
+        _slideAsked = true
+        evalTimer.restart()
+    }
+
+    onArtSourceChanged: {
+        if (vinylMode) _vinylAngleInternal = 0
+        evalTimer.restart()
+    }
+
+    // One decision per turn of the event loop, whatever the order the track
+    // change and the art change came in
+    Timer {
+        id: evalTimer
+        interval: 0
+        onTriggered: carousel._eval()
+    }
+
+    // The art that is, or is about to be, on screen
+    function _pendingArt() { return (_loading || _sliding) ? _back.artSource : _front.artSource }
+
+    function _eval() {
+        if (!_ready) return
+        if (!_slideAsked && String(artSource) === String(_pendingArt())) return
+        _slideAsked = false
+        _begin(artSource)
+    }
+
+    function _begin(target) {
+        // A transition under way ends where it was going; one still loading
+        // just gets the newer art
+        if (_sliding) {
+            swapAnim.stop()
+            _commit()
+        }
+        settleTimer.stop()
+        animBusy = true
+        _loading = true
+        loadGuard.restart()
+        _back.artSource = target
+        _cardStatus(_back)
+    }
+
+    // A card's picture is ready, or failed
+    function _cardStatus(card) {
+        var st = card.image.status
+        if (st === Image.Error && (card === _front || _loading)) {
+            // The parent answers with a fallback art, which is a new target
+            artLoadFailed()
+            return
+        }
+        if (card === _back && _loading && (st === Image.Ready || st === Image.Null))
+            _start()
+    }
+
+    // A picture that neither loads nor fails must not hold the page's
+    // "busy" state for good: go with what there is
+    Timer {
+        id: loadGuard
+        interval: 2000
+        onTriggered: if (carousel._loading) carousel._start()
+    }
+
+    function _start() {
+        if (!_loading) return
+        _loading = false
+        loadGuard.stop()
         swapAnim._travel = (direction === -1 ? -1 : 1) * Math.round(artSize * kSwapTravel)
-        // Animators do not write the property until they end: put both
-        // pictures where the animation starts them
-        exitSnapshot.visible = true
-        exitTexture.opacity = 1.0
-        centerCard.opacity = 0
-        centerCard.scale = kSwapScale
-        centerCard.x = swapAnim._travel
+        // What moves is each card's holder (see the cards). Animators do
+        // not write the property until they end: put both where the
+        // animation starts them
+        var outSlot = _front.parent, inSlot = _back.parent
+        outSlot.opacity = 1.0; outSlot.scale = 1.0; outSlot.x = 0
+        inSlot.opacity = 0; inSlot.scale = kSwapScale; inSlot.x = swapAnim._travel
+        swapAnim._out = outSlot
+        swapAnim._in = inSlot
+        _sliding = true
         swapAnim.start()
     }
 
-    function _stopAll() {
-        // The previous run's pending "settled" would clear animBusy in the
-        // middle of the one about to start (which settles itself)
-        settleTimer.stop()
-        if (swapAnim.running) swapAnim.stop()
-        _resetAll()
-    }
-
-    function _resetAll() {
-        exitSnapshot.visible = false
-        exitTexture.opacity = 0
-        exitTexture.scale = 1.0
-        exitTexture.x = 0
-        centerCard.opacity = 1.0
-        centerCard.scale = 1.0
-        centerCard.x = 0
+    // The card that came in is the art now
+    function _commit() {
+        // Once per transition: stopping the animation may or may not report
+        // it finished, and a second swap would put the old art back
+        if (!_sliding) return
+        var inSlot = _back.parent, outSlot = _front.parent
+        _front = _back
+        _sliding = false
+        inSlot.opacity = 1.0; inSlot.scale = 1.0; inSlot.x = 0
+        outSlot.opacity = 1.0; outSlot.scale = 1.0; outSlot.x = 0
     }
 
     // Animators only, so the whole of it runs on the render thread and a
-    // busy GUI thread (the track change itself) cannot make it stutter
+    // busy GUI thread (the track change itself) cannot make it stutter.
+    // Their targets must be plain items: an item with a layer effect (the
+    // cards have two, the corner mask and the shadow) is drawn by the
+    // effect, which an Animator does not reach, so it would stay where it
+    // was for the whole animation and jump at the end.
     ParallelAnimation {
         id: swapAnim
         // Signed: positive when the new art comes from the right
         property real _travel: 0
+        property Item _out: null
+        property Item _in: null
 
-        onStarted: carousel.animBusy = true
         onFinished: {
-            carousel._resetAll()
+            carousel._commit()
             carousel.animationFinished()
         }
 
         // The old art: away, and gone a little past half-way
-        XAnimator { target: exitTexture
+        XAnimator { target: swapAnim._out
             from: 0; to: -swapAnim._travel; duration: carousel.kSwapDuration; easing.type: Easing.OutCubic }
-        ScaleAnimator { target: exitTexture
+        ScaleAnimator { target: swapAnim._out
             from: 1.0; to: carousel.kSwapScale; duration: carousel.kSwapDuration; easing.type: Easing.OutCubic }
-        OpacityAnimator { target: exitTexture
+        OpacityAnimator { target: swapAnim._out
             from: 1.0; to: 0; duration: Math.round(carousel.kSwapDuration * 0.6); easing.type: Easing.OutQuad }
 
         // The new art: in from the other side, settling without a bounce
-        XAnimator { target: centerCard
+        XAnimator { target: swapAnim._in
             from: swapAnim._travel; to: 0; duration: carousel.kSwapDuration; easing.type: Easing.OutQuint }
-        ScaleAnimator { target: centerCard
+        ScaleAnimator { target: swapAnim._in
             from: carousel.kSwapScale; to: 1.0; duration: carousel.kSwapDuration; easing.type: Easing.OutQuint }
-        OpacityAnimator { target: centerCard
+        OpacityAnimator { target: swapAnim._in
             from: 0; to: 1.0; duration: Math.round(carousel.kSwapDuration * 0.75); easing.type: Easing.OutQuad }
     }
 
@@ -201,13 +297,6 @@ Item {
         animating: carousel.animBusy
 
         image.layer.enabled: carousel.roundedArt || carousel.vinylMode
-        // layer.live is set through a Binding, not declared as `layer.live:`.
-        // It is a revisioned property (Qt 6.5), and on Qt 6.7 whether the QML
-        // compiler accepts the declaration depends on which file first compiled
-        // the layer type: sometimes it fails with '".live" is not available due
-        // to component versioning', which made MediaRoom unloadable (seen when
-        // pages are pre-built at startup). A Binding sets it by name at runtime.
-        Binding { target: prevCard.image.layer; property: "live"; value: !carousel.animBusy }
     }
 
     // Next card (tilted right) — only visible with 3D preview
@@ -234,36 +323,13 @@ Item {
         animating: carousel.animBusy
 
         image.layer.enabled: carousel.roundedArt || carousel.vinylMode
-        Binding { target: nextCard.image.layer; property: "live"; value: !carousel.animBusy }
     }
 
-    // Exit snapshot — frozen texture of the old art for the transition.
-    // The holder keeps the place; the texture inside it is what moves.
-    Item {
-        id: exitSnapshot
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.horizontalCenter: parent.horizontalCenter
-        width: carousel.artSize; height: width
-        z: 0
-        visible: false
-
-        ShaderEffectSource {
-            id: exitTexture
-            width: parent.width; height: parent.height
-            opacity: 0
-            sourceItem: centerCard.image
-            live: !swapAnim.running
-            hideSource: false
-
-            layer.enabled: carousel.roundedArt || carousel.vinylMode
-            layer.effect: OpacityMask {
-                maskSource: carousel.vinylMode ? vinylMaskRect : artRoundedMask
-            }
-        }
-    }
-
-    // Center card — current track. The holder keeps the place, so the card
-    // inside it is free to be moved by the transition.
+    // The two art cards, each in a plain holder: the holder is what the
+    // transition moves and fades (an Animator cannot move the card itself,
+    // see swapAnim). The cards' layers stay live: the picture inside does
+    // not change while a card moves, so they cost nothing then, and a frozen
+    // one would go on showing the art the card had before.
     Item {
         id: centerSlot
         anchors.verticalCenter: parent.verticalCenter
@@ -271,36 +337,61 @@ Item {
         width: carousel.artSize; height: width
         z: 1
 
-        CoverflowCard {
-            id: centerCard
+        Item {
+            id: slotA
             width: parent.width; height: parent.height
+            visible: carousel._front === cardA || carousel._sliding
+            z: carousel._front === cardA ? 0 : 1
 
-            artSource: carousel.artSource
-            artSize: carousel.artSize
-            roundedArt: carousel.roundedArt
-            vinylMode: carousel.vinylMode
-            artRadius: carousel.artRadius
-            roundedMask: artRoundedMask
-            vinylMask: vinylMaskRect
-            asynchronous: true
-            animating: carousel.animBusy
-
-            vinylAngle: carousel.vinylMode ? carousel._vinylAngleInternal : 0
-
-            showShadow: carousel.showShadow
-            shadowLive: !swapAnim.running
-
-            image.onStatusChanged: {
-                if (centerCard.image.status === Image.Error)
-                    carousel.artLoadFailed()
-            }
-
-            MouseArea {
+            CoverflowCard {
+                id: cardA
                 anchors.fill: parent
-                z: 2
-                cursorShape: Qt.PointingHandCursor
-                onClicked: carousel.artClicked()
+
+                artSize: carousel.artSize
+                roundedArt: carousel.roundedArt
+                vinylMode: carousel.vinylMode
+                artRadius: carousel.artRadius
+                roundedMask: artRoundedMask
+                vinylMask: vinylMaskRect
+                asynchronous: true
+                animating: carousel.animBusy
+                vinylAngle: carousel.vinylMode ? carousel._vinylAngleInternal : 0
+                showShadow: carousel.showShadow
+
+                image.onStatusChanged: carousel._cardStatus(cardA)
             }
+        }
+
+        Item {
+            id: slotB
+            width: parent.width; height: parent.height
+            visible: carousel._front === cardB || carousel._sliding
+            z: carousel._front === cardB ? 0 : 1
+
+            CoverflowCard {
+                id: cardB
+                anchors.fill: parent
+
+                artSize: carousel.artSize
+                roundedArt: carousel.roundedArt
+                vinylMode: carousel.vinylMode
+                artRadius: carousel.artRadius
+                roundedMask: artRoundedMask
+                vinylMask: vinylMaskRect
+                asynchronous: true
+                animating: carousel.animBusy
+                vinylAngle: carousel.vinylMode ? carousel._vinylAngleInternal : 0
+                showShadow: carousel.showShadow
+
+                image.onStatusChanged: carousel._cardStatus(cardB)
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            z: 2
+            cursorShape: Qt.PointingHandCursor
+            onClicked: carousel.artClicked()
         }
     }
 
@@ -324,10 +415,6 @@ Item {
         NumberAnimation { duration: 200; easing.type: Easing.Linear }
     }
 
-    onArtSourceChanged: {
-        if (vinylMode) _vinylAngleInternal = 0
-    }
-
     // ═══════════════════════════════════════════════════════════════════
     //  Settle timer
     // ═══════════════════════════════════════════════════════════════════
@@ -336,6 +423,7 @@ Item {
         id: settleTimer
         interval: 50
         onTriggered: {
+            if (carousel._loading || carousel._sliding || carousel._slideAsked) return
             carousel.animBusy = false
             carousel.settled()
         }
