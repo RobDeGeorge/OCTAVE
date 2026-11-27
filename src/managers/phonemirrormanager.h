@@ -480,6 +480,13 @@ private:
     // Runs on m_wirelessPool (one job at a time); ui jobs drive wirelessBusy
     void runWirelessJob(std::function<void()> job, bool ui);
     void maybeReconnectWireless();
+    // Worker thread. The state adb holds a Wi-Fi transport in: "device",
+    // "unauthorized" or "offline"
+    QString wifiTransportState(const QString &address) const;
+    // Drop the transport and connect again; the state it is in afterwards
+    QString refreshWifiTransport(const QString &address) const;
+    // Do that for every Wi-Fi transport adb lists as anything but "device"
+    void refreshStaleWifiTransports() const;
     // GUI thread: `address` is where the phone was just reached. It becomes
     // wirelessAddress and the first of the known addresses, replacing any
     // other on the same host (Wireless debugging moves to a new port).
@@ -660,6 +667,9 @@ private:
     QThreadPool m_wirelessPool;
     int m_wirelessJobs = 0;                       // UI-started jobs in flight (GUI thread)
     std::atomic<bool> m_autoConnectRunning{false};
+    std::atomic<bool> m_wifiRefusedLogged{false}; // the "has not allowed this computer" warning was logged
+    std::atomic<qint64> m_wifiPromptAtMs{0};      // when the phone was last made to ask again
+    static constexpr qint64 kWifiPromptIntervalMs = 30000;
     std::atomic<bool> m_reconnectAbort{false};    // a cable start is waiting for the wireless queue
     qint64 m_lastAutoConnectMs = 0;
     QStringList m_qrRows;

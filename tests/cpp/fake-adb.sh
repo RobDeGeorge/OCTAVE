@@ -17,10 +17,13 @@
 #                       exists the phone's Wi-Fi address is its contents (it joined the car's Wi-Fi)
 #   FAKE_ADB_WIFI_NO_R  `cmd wifi connect-network` refuses the -r option (an older Android)
 #   FAKE_ADB_WATCHER    file holding the version of the Wi-Fi watcher that runs on the phone
+#   FAKE_ADB_UNAUTH     file naming a Wi-Fi address adb holds as "unauthorized" (get-state);
+#                       `adb disconnect` of that address removes the file: connected afresh, it is usable
 #   FAKE_ADB_CONNECT_ONLY  the one address `adb connect` reaches (any when unset)
 
 [ -n "$FAKE_ADB_LOG" ] && echo "$*" >> "$FAKE_ADB_LOG"
-if [ "$1" = "-s" ]; then shift 2; fi
+SERIAL=
+if [ "$1" = "-s" ]; then SERIAL=$2; shift 2; fi
 
 case "$1" in
 version)
@@ -47,6 +50,17 @@ connect)
     else
         echo "connected to $2"
     fi
+    ;;
+get-state)
+    if [ -n "$FAKE_ADB_UNAUTH" ] && [ "$(cat "$FAKE_ADB_UNAUTH" 2>/dev/null)" = "$SERIAL" ]; then
+        echo "error: device unauthorized."
+    else
+        echo device
+    fi
+    ;;
+disconnect)
+    [ -n "$FAKE_ADB_UNAUTH" ] && [ "$(cat "$FAKE_ADB_UNAUTH" 2>/dev/null)" = "$2" ] && rm -f "$FAKE_ADB_UNAUTH"
+    echo "disconnected $2"
     ;;
 logcat)
     # Following a reattached server's log: stays open like the real one

@@ -800,6 +800,41 @@ private slots:
         QCOMPARE(adbCalls("connect-network"), 4);
     }
 
+    void aRefusedWifiTransportIsConnectedAfresh()
+    {
+        // The phone took its permission away and gave it back (over the cable):
+        // adb keeps the old Wi-Fi transport as "unauthorized" for good, and
+        // every cable pull then fell onto it
+        PhoneMirrorManager m;
+        m.m_testSubnets = {{QHostAddress("10.42.0.1"), 24}};
+        m.m_testSubnetsSet = true;
+        m.setWirelessAddress("10.42.0.30:5555");
+        const QString unauth = m_tmp.filePath("unauth");
+        QFile f(unauth);
+        QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        f.write("10.42.0.30:5555\n");
+        f.close();
+        qputenv("FAKE_ADB_UNAUTH", unauth.toUtf8());
+        auto restore = qScopeGuard([] { qunsetenv("FAKE_ADB_UNAUTH"); });
+        m.m_adbPath = kFakeAdb;
+        QCOMPARE(m.wifiTransportState("10.42.0.30:5555"), QString("unauthorized"));
+
+        // The reconnect drops it and connects again: usable at once
+        m.maybeReconnectWireless();
+        QTRY_VERIFY_WITH_TIMEOUT(!m.m_autoConnectRunning && adbCalls("disconnect") == 1, 8000);
+        QCOMPARE(m.wifiTransportState("10.42.0.30:5555"), QString("device"));
+        QVERIFY(!m.m_wifiRefusedLogged.load());
+
+        // At a cable session: every Wi-Fi transport adb lists as refused or offline
+        QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        f.write("10.42.0.30:5555\n");
+        f.close();
+        setDevices(USB + "\tdevice\n10.42.0.30:5555\tunauthorized\n192.168.0.117:5555\tdevice\n");
+        m.refreshStaleWifiTransports();
+        QCOMPARE(adbCalls("disconnect"), 2);   // only the refused one
+        QVERIFY(!QFile::exists(unauth));
+    }
+
     void pluggingInWhileMirroringOverWifiMovesThePhone()
     {
         // In the driveway: mirroring over the Wi-Fi at home, then the cable goes in

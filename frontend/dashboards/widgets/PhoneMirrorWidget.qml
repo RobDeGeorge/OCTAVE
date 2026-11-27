@@ -476,7 +476,7 @@ Item {
             elide: Text.ElideRight
             text: !root._available ? "Phone mirroring isn't available here"
                   : root._connecting ? "Connecting to your phone…"
-                  : root._device === "unauthorized" ? "Allow USB debugging on your phone"
+                  : root._device === "unauthorized" ? "Unlock your phone and tap Allow"
                   : root._session === "failed" ? "Phone mirroring needs setting up"
                   : "No phone connected"
             color: root.valueColor

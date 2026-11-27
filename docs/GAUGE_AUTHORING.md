@@ -362,7 +362,7 @@ server (on Windows, a firewall prompt). It keeps the manager's
 phone retries running while shown (`setViewActive`), and reports its size
 (`setViewSize`) so an "auto" virtual display is drawn to fit it. Not live it
 says why: "Connecting to your phone…", "No phone connected" with Connect Phone
-(starts the session here), "Allow USB debugging on your phone", Set Up when
+(starts the session here), "Unlock your phone and tap Allow", Set Up when
 mirroring needs setting up (Settings > Phone, where a new phone is paired by
 QR code). It runs wherever phone mirroring can (the `phoneMirrorEnabled`
 setting is not consulted since 2026-11-25). The manager has one video

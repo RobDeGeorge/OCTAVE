@@ -1049,6 +1049,9 @@ void PhoneMirrorManager::continueStart(const StartPrep &prep, int generation)
         m_reconnectAbort = true;
         runWirelessJob([this, serial, gen, carWifi, subnets]() {
             m_reconnectAbort = false;
+            // The cable session is where the phone allows this computer: a
+            // Wi-Fi transport adb still holds as refused is usable from now
+            refreshStaleWifiTransports();
             joinCarWifi(serial, carWifi, subnets, hostedCarSubnets(carWifi.name));
             const QString address = enableTcpip(serial);
             QMetaObject::invokeMethod(this, [this, address, gen]() {
@@ -2075,6 +2078,32 @@ QStringList PhoneMirrorManager::reconnectOrder(const QStringList &known, const Q
     return order;
 }
 
+QString PhoneMirrorManager::wifiTransportState(const QString &address) const
+{
+    // "device", or adb's complaint ("error: device unauthorized. ...", "error: device offline")
+    const QString out = runAdbFull({QStringLiteral("-s"), address, QStringLiteral("get-state")}, 3000).trimmed();
+    if (out == QLatin1String("device") || out.isEmpty())
+        return out.isEmpty() ? QStringLiteral("device") : out;   // an adb that says nothing: no verdict
+    return out.contains(QLatin1String("unauthorized")) ? QStringLiteral("unauthorized") : QStringLiteral("offline");
+}
+
+QString PhoneMirrorManager::refreshWifiTransport(const QString &address) const
+{
+    runAdbFull({QStringLiteral("disconnect"), address}, 5000);
+    adbConnect(address, nullptr, 4000);
+    const QString state = wifiTransportState(address);
+    qCInfo(lcPhoneMirror) << "Connected afresh to" << address << ":" << state;
+    return state;
+}
+
+void PhoneMirrorManager::refreshStaleWifiTransports() const
+{
+    const Probe probe = probeDevices();
+    for (const auto &row : probe.rows)
+        if (ScrcpyClient::isNetworkSerial(row.first) && row.second != QLatin1String("device"))
+            refreshWifiTransport(row.first);
+}
+
 void PhoneMirrorManager::maybeReconnectWireless()
 {
     static constexpr qint64 kAutoConnectIntervalMs = 5000;
@@ -2119,7 +2148,28 @@ void PhoneMirrorManager::maybeReconnectWireless()
                 }
             }
         }
-        if (!reached.isEmpty())
+        // adb also "connects" to a phone that has not allowed this computer:
+        // there is a transport, in the state "unauthorized", and nothing can
+        // be done over it. adb never looks at it again by itself, so it stays
+        // that way after the phone has allowed this computer (over the cable,
+        // say), and every cable pull then falls onto a dead transport. Drop
+        // it and connect afresh: a phone that allows us now is usable at
+        // once, and one that does not is made to ask again (it asks only when
+        // a connection is made; a prompt that was dismissed does not come back).
+        bool refused = !reached.isEmpty() && wifiTransportState(reached) != QLatin1String("device");
+        if (refused) {
+            const qint64 now = QDateTime::currentMSecsSinceEpoch();
+            if (now - m_wifiPromptAtMs.load() >= kWifiPromptIntervalMs) {
+                m_wifiPromptAtMs = now;
+                refused = refreshWifiTransport(reached) != QLatin1String("device");
+            }
+        }
+        if (refused != m_wifiRefusedLogged.exchange(refused) && refused)
+            qCWarning(lcPhoneMirror) << "The phone at" << reached << "has not allowed this computer to debug it:"
+                                     << "unlock the phone and tap Allow on its prompt";
+        if (refused)
+            qCDebug(lcPhoneMirror) << "Wi-Fi phone" << reached << "still waits for its Allow";
+        else if (!reached.isEmpty())
             qCInfo(lcPhoneMirror) << "Reconnected to the phone over Wi-Fi at" << reached;
         else
             qCDebug(lcPhoneMirror) << "Wi-Fi phone not reachable at" << candidates << ":" << msg;
@@ -2402,6 +2452,7 @@ void PhoneMirrorManager::startWirelessDebugging(const QString &serial, int sdk)
     const CarWifi carWifi = m_carWifi;
     const QList<Subnet> subnets = localSubnets();
     runWirelessJob([this, serial, carWifi, subnets]() {
+        refreshStaleWifiTransports();   // see the cable step in continueStart
         joinCarWifi(serial, carWifi, subnets, hostedCarSubnets(carWifi.name));
         const QString address = enableWirelessDebugging(serial);
         QMetaObject::invokeMethod(this, [this, address]() {
