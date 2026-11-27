@@ -2,13 +2,11 @@
 
 # OCTAVE
 
-### The car head unit you build yourself.
+### **O**pen-source **C**ross-platform **T**elematics for **A**ugmented **V**ehicle **E**xperience
 
-**Live engine data. Gauges you design on the screen. Music that repaints the whole dash.<br>Your phone on the dash. A black box that remembers every drive.**
+<img src="frontend/assets/readme/phone_home.png" alt="OCTAVE's Home: a phone's navigation mirrored in the middle, the playing song under it, speed, RPM, coolant temperature and voltage either side" width="900">
 
-<img src="frontend/assets/readme/drive.webp" alt="OCTAVE pulling through the gears: album art beside live speed and RPM, the whole UI coloured by the cover" width="900">
-
-<sub>Real app, real UI, recorded from a script. Engine data comes from OCTAVE's built-in car simulator, so you can try all of this with no car.</sub>
+<sub>The real app, shot from a script: a real phone mirrored live (street names made up), engine data from the built-in car simulator.</sub>
 
 [![Latest Release](https://img.shields.io/github/v/release/RobDeGeorge/OCTAVE?label=latest%20release&style=for-the-badge&color=41cd52)](https://github.com/RobDeGeorge/OCTAVE/releases/latest)
 [![Stars](https://img.shields.io/github/stars/RobDeGeorge/OCTAVE?style=for-the-badge&color=ffb400&logo=github)](https://github.com/RobDeGeorge/OCTAVE/stargazers)
@@ -25,122 +23,127 @@
 
 ---
 
-Stock head units are locked boxes. Phone projection hides the car behind your phone. **OCTAVE is a full infotainment system you run on your own hardware**: a Pi behind the dash, a laptop in a project car, an old Android tablet. It reads the car over OBD-II, plays your music, mirrors your phone, and every pixel of it is yours to change.
+**OCTAVE is a car head unit you build yourself**, on a Pi behind the dash, a laptop or an old Android tablet. Your phone, your music and the car's own data on one screen, and every pixel yours to change. I daily-drive it in my 2003 Jeep TJ.
 
-I daily-drive it in my 2003 Jeep TJ.
-
-> **Getting data from your car:** plug an ELM327 OBD-II adapter (the cheap $15–30 kind) into the port under your dash. Every car sold in the US since 1996 has one.
-> - **USB** adapters work on every platform.
-> - **Bluetooth** adapters pair from inside OCTAVE on Linux and the Pi. On Windows and macOS, pair it in system settings and pick its port.
-> - **BLE** adapters work on Android.
+> **Getting data from your car:** plug a $15–30 ELM327 OBD-II adapter into the port under your dash (every US car since 1996 has one). USB works everywhere; Bluetooth pairs inside OCTAVE on Linux and the Pi, and through system settings on Windows and macOS; BLE works on Android.
 >
 > No car handy? `octave --sim` drives a simulated one, in any build.
->
-> I am also designing an adapter for OCTAVE itself, every OBD-II protocol on one board: [an OBD adapter of its own](#an-obd-adapter-of-its-own). It is not built yet.
 
 <table>
 <tr>
+<td width="33%" align="center"><a href="#your-phone-on-the-dash"><img src="frontend/assets/readme/phone_mediaroom.png" alt="A phone's navigation beside the music controls"></a><br><b>Your phone on the dash</b><br><sub>Android by cable or Wi-Fi, iPhone over AirPlay</sub></td>
 <td width="33%" align="center"><a href="#music-that-paints-the-whole-dash"><img src="frontend/assets/readme/media_media_room_playing.png" alt="Media room"></a><br><b>Music paints the dash</b><br><sub>Every song recolours the UI</sub></td>
-<td width="33%" align="center"><a href="#gauges-you-design-on-the-screen"><img src="frontend/assets/readme/dashboards_sport.png" alt="Sport dashboard"></a><br><b>Gauges you design</b><br><sub>On the screen or in a browser, 129 live readings</sub></td>
-<td width="33%" align="center"><a href="#a-black-box-for-every-drive"><img src="frontend/assets/readme/blackbox_coolant.png" alt="Trip history chart"></a><br><b>A black box</b><br><sub>Every drive recorded, charted and compared</sub></td>
+<td width="33%" align="center"><a href="#a-home-that-is-yours"><img src="frontend/assets/readme/homes_glass.png" alt="The Glass Home screen"></a><br><b>A Home that is yours</b><br><sub>Pick one, or write your own</sub></td>
 </tr>
 <tr>
-<td align="center"><a href="#your-phone-on-the-dash"><img src="frontend/assets/readme/mirror_live.png" alt="Phone mirroring"></a><br><b>Your phone on the dash</b><br><sub>Android over USB or Wi-Fi, iPhone over AirPlay</sub></td>
+<td align="center"><a href="#a-black-box-for-every-drive"><img src="frontend/assets/readme/blackbox_coolant.png" alt="Trip history chart"></a><br><b>A black box</b><br><sub>Every drive recorded</sub></td>
 <td align="center"><a href="#shift-light-warnings-and-trouble-codes"><img src="frontend/assets/readme/shiftlight_strobe.png" alt="Shift light"></a><br><b>Shift light & codes</b><br><sub>Read and clear the check-engine light</sub></td>
 <td align="center"><a href="#drive-it-from-anything"><img src="frontend/assets/readme/webclient_tile.png" alt="OCTAVE's web client on a phone"></a><br><b>Open API</b><br><sub>Drive it from a browser or a script</sub></td>
 </tr>
 <tr>
-<td align="center"><a href="#the-car-live-in-3d"><img src="frontend/assets/readme/jeep_open.png" alt="The 3D Jeep with its doors and hood open"></a><br><b>The car in 3D</b><br><sub>Doors, lights and tilt, live</sub></td>
+<td align="center"><a href="#your-car-live-in-3d"><img src="frontend/assets/readme/jeep_open.png" alt="The 3D Jeep with its doors and hood open"></a><br><b>Your car in 3D</b><br><sub>The Jeep, a BMW, or a model of your own</sub></td>
 <td align="center"><a href="#drive-it-from-anything"><img src="wiki/images/frontends/retro-cluster.png" alt="Retro Cluster, one of the example frontends"></a><br><b>Your own screen</b><br><sub>Swap the whole UI for one you wrote</sub></td>
-<td align="center"><a href="#an-obd-adapter-of-its-own"><img src="frontend/assets/readme/obd_adapter_angle.png" alt="A 3D render of OCTAVE's OBD adapter board"></a><br><b>Its own OBD adapter</b><br><sub>Designed here, not built yet</sub></td>
+<td align="center"><a href="#hardware-designed-here"><img src="frontend/assets/readme/obd_adapter_top.png" alt="A 3D render of OCTAVE's OBD adapter board"></a><br><b>Its own hardware</b><br><sub>Designed here, not built yet</sub></td>
 </tr>
 </table>
 
 ---
 
+## Your phone on the dash
+
+<p align="center"><img src="frontend/assets/readme/phone_mediaroom.png" alt="The music page with a phone's navigation where the album art would be, beside the transport keys" width="900"></p>
+
+Plug in an Android phone and it is on the dash: in the middle of Home, or in place of the album art. **Nothing to install on the phone**, only USB debugging turned on.
+
+- **Pull the cable and it carries on** over Wi-Fi (Android 11+), song and all.
+- **Touch it on the dash**, and the dash's play, skip and volume drive the phone's player.
+
+<p align="center">
+  <img src="frontend/assets/readme/phone_portrait.png" alt="Home in an upright window: the phone on top, four readings and the song under it" width="27%">
+</p>
+
+**iPhone:** OCTAVE is an AirPlay receiver, and pairs as a Bluetooth mouse so taps on the dash reach the phone. Linux and the Pi for now.
+
+**Android Auto** runs through Google's Desktop Head Unit or OCTAVE's own receiver (beta).
+
 ## Music that paints the whole dash
 
 <p align="center"><img src="frontend/assets/readme/media.webp" alt="Skipping tracks: the accent, glow and background follow each album's art" width="900"></p>
 
-Skip a track and the whole interface takes its colours from the cover art. Local MP3, M4A and FLAC with a live waveform.
-
-<p align="center"><img src="frontend/assets/readme/media_media_player_playing.png" alt="The music library in the red of the playing cover" width="60%"></p>
-
-## Gauges you design on the screen
-
-<p align="center"><img src="frontend/assets/readme/dashboards.webp" alt="The dashboard chooser with live miniatures, then Sport, Performance, TJ Wrangler and Full Grid under load" width="900"></p>
-
-**129 live readings** (121 OBD-II PIDs plus the IMU), **13 widget types**, and full-screen dashboards you swipe between. Pick one of the built-ins or build your own:
-
-<p align="center"><img src="frontend/assets/readme/editor.webp" alt="Building a dashboard in the editor: start from a template, resize the tachometer, add a G-force meter and a graph from the gallery, pick its reading, recolour it, save, drive on it" width="900"></p>
-
-No code and no JSON. Start from a template that fills itself in with what your car reports, then select a gauge and drag it: the others move out of the way. The gallery shows every widget running on live data, the picker lists your car's readings by system, and one sheet per gauge covers its look, range and warning limits, with a test value to watch them trip. Undo, redo, three grid densities, and a portrait layout of its own. Share a dashboard as a file or through the clipboard.
+Every song recolours the whole interface from its cover. Tap the art to play it on something else: a spinning vinyl, or one of five 3D players, from a record player to an iPod. Local MP3, M4A and FLAC.
 
 <p align="center">
-  <img src="frontend/assets/readme/editor_gallery.png" alt="The widget gallery: every gauge type as a live miniature, by category" width="49%">
-  <img src="frontend/assets/readme/editor_settings_sheet.png" alt="A gauge's settings sheet in the editor, on its Look tab with the colour swatches" width="49%">
+  <img src="frontend/assets/readme/media_ring.png" alt="The ring of players over the music page: the cover, a vinyl, a cassette deck, a CD player, an iPod, a record player" width="49%">
+  <img src="frontend/assets/readme/media_media_player_playing.png" alt="The music library in the colours of the playing cover" width="49%">
 </p>
 
-Rather use a keyboard? The head unit serves the same editor to a browser (**Dashboards > In a browser** shows the address, a QR code and a pairing code), and what you change there previews live on the car's screen:
+## A Home that is yours
 
-<p align="center"><img src="frontend/assets/readme/webeditor.png" alt="The dashboard editor in a browser, with the Sport dashboard open as a copy" width="80%"></p>
-
-A dashboard can also watch the car for you: a red strip across the top when one of its values goes critical, or a rule that brings it up by itself, such as the temperatures when the coolant runs hot.
+<p align="center"><img src="frontend/assets/readme/drive.webp" alt="The Cockpit Home pulling through the gears: a speed arc, the tachometer strip, readings either side, then the car's readings as cards" width="900"></p>
 
 <p align="center">
-  <img src="frontend/assets/readme/dashboards_fullgrid.png" alt="Full Grid dashboard: eight circular gauges" width="49%">
-  <img src="frontend/assets/readme/dashboards_tj_wrangler.png" alt="TJ Wrangler 4.0 dashboard: fuel trims, O2 sensors, timing and pressures" width="49%">
+  <img src="frontend/assets/readme/homes_cockpit.png" alt="Cockpit: a large speed arc with readings either side" width="32%">
+  <img src="frontend/assets/readme/homes_glass.png" alt="Glass: album art and frosted panels over the blurred cover" width="32%">
+  <img src="frontend/assets/readme/homes_trail.png" alt="Trail: the 3D Jeep with a compass strip, a G-force plot, pitch and roll" width="32%">
 </p>
+<p align="center">
+  <img src="frontend/assets/readme/homes_retro.png" alt="Retro: a segment-display speedometer under a bar tachometer" width="32%">
+  <img src="frontend/assets/readme/homes_rings.png" alt="Rings: four concentric rings for RPM, speed, throttle and load" width="32%">
+  <img src="frontend/assets/readme/homes_telemetry.png" alt="Telemetry: four live traces beside the speed and a G-force plot" width="32%">
+</p>
+<p align="center"><sub>Cockpit, Glass, Trail, Retro, Rings, Telemetry: the same car, the same minute.</sub></p>
 
-Screen mounted upright, or running on a phone? Home and every dashboard re-flow for portrait.
+Pick your Home in Settings: six screens built by hand, each its own idea of a dash, or the phone-in-the-middle one at the top of this page.
+
+Or write your own. A dashboard is a small JSON file: a grid of **16 widget types** bound to any of **129 live readings** ([format](docs/GAUGE_AUTHORING.md)). Drop it in the dashboards folder and it appears. Or build it in a browser, previewed live on the car's screen:
+
+<p align="center"><img src="frontend/assets/readme/webeditor.png" alt="The dashboard editor in a browser, with the Home dashboard open: the phone in the middle, readings either side" width="80%"></p>
+
+Every reading your car reports is one tap away as plain cards, and every page re-flows for an upright screen.
 
 <p align="center">
-  <img src="frontend/assets/readme/portrait_home.png" alt="The home screen in portrait: album art above the drive cards" width="27%">
-  &nbsp;&nbsp;
-  <img src="frontend/assets/readme/portrait_dashboard.png" alt="The Sport dashboard in its portrait layout" width="27%">
+  <img src="frontend/assets/readme/drive_drive_cards.png" alt="The OBD page: a card for each live reading" width="58%">
+  &nbsp;
+  <img src="frontend/assets/readme/portrait_home.png" alt="The Rings Home in an upright window" width="19%">
+  <img src="frontend/assets/readme/portrait_cards.png" alt="The reading cards in an upright window" width="19%">
 </p>
 
 ## A black box for every drive
 
 <p align="center"><img src="frontend/assets/readme/blackbox.webp" alt="Trip History: the drive in progress recording at the top, then a past drive's stats and its coolant and voltage charts" width="900"></p>
 
-OCTAVE records **every reading of every drive**, quietly, in the background. Open Trip History to see each drive's distance, top speed, peak coolant, voltage and fuel used, and chart any parameter over the whole trip. Export a drive as CSV, or open the files yourself.
+OCTAVE records **every reading of every drive** in the background. Trip History charts any of them over a whole trip and exports CSV.
 
 <p align="center"><img src="frontend/assets/readme/blackbox_trends_warmup.png" alt="Trends: warm-up time per drive over two months, creeping up, with a note that a thermostat stuck open is the usual cause" width="80%"></p>
 
-**Trends** lines your drives up against each other: warm-up time, running coolant temperature, idle and charging voltage, warm idle speed, fuel trims. When the recent drives move away from the earlier ones it says so, and what usually causes it. Here a thermostat is starting to stick open.
+**Trends** compares your drives: warm-up time, coolant, voltage, idle, fuel trims. When recent drives drift it says so, and what usually causes it. Here a thermostat is starting to stick open.
 
-<sub>The history in these pictures is generated (`tools/trips/make_mock_trip.py`): 40 drives over two months with a thermostat wearing out.</sub>
+<sub>The history in these pictures is generated: 40 drives with a thermostat wearing out.</sub>
 
 ## Shift light, warnings and trouble codes
 
 <p align="center"><img src="frontend/assets/readme/shiftlight.webp" alt="Revving up: the shift lamp turns green, flashes yellow, then the whole screen strobes red" width="900"></p>
 
-Set your own RPM bands: the lamp goes green, flashes yellow, and at the top **the whole screen strobes red**, whatever page you're on. Any gauge can also be a warning light with its own threshold.
+Set your own RPM bands: green, flashing yellow, then **the whole screen strobes red**, whatever page you're on.
 
-<p align="center"><img src="frontend/assets/readme/diagnostics.webp" alt="TEMP and FUEL warning lights come on, then the diagnostics page reads two trouble codes, takes a freeze frame and clears them" width="900"></p>
+<p align="center"><img src="frontend/assets/readme/diagnostics.webp" alt="The engine runs hot and the tank low on the reading cards, then the diagnostics page reads two trouble codes and clears them" width="900"></p>
 
-Check-engine light on? Read the stored and pending codes in plain English, grab the freeze frame, and clear them, right from the dash.
+Check-engine light on? Read the codes in plain English and clear them from the dash.
 
-## Your phone on the dash
+## Your car, live in 3D
 
-<p align="center"><img src="frontend/assets/readme/mirror_live.png" alt="A Samsung phone's DeX desktop mirrored onto the head unit" width="900"></p>
+<p align="center"><img src="frontend/assets/readme/jeep.webp" alt="The 3D view: the Jeep with its doors and hood open over a level ring, pitch and roll in large numbers, then the BMW and the vehicle chooser" width="900"></p>
 
-Plug in an Android phone, or pair it once over Wi-Fi by scanning a QR code. OCTAVE mirrors a DeX-style desktop onto the dash with its own built-in client: **nothing to install on the phone**. A bumped USB cable picks up where it left off instead of starting over.
+An inclinometer: your vehicle over a level ring, tilted in real time by an IMU on the dash. A rigged Jeep TJ and a BMW 330i ZHP ship with it, or add a model of your own car (any `.glb`, [guide](docs/VEHICLES.md)).
 
-**iPhone:** OCTAVE is an AirPlay receiver, so an iPhone mirrors its screen or plays its music to the dash the way it would to an Apple TV. AirPlay carries no touch, so the head unit also pairs with the phone as a Bluetooth mouse and your taps on the dash land on the phone. Linux and the Pi for now, and off until you turn it on.
-
-**Android Auto** runs through Google's Desktop Head Unit, or through OCTAVE's own built-in receiver (beta, checked on desktop Linux so far).
-
-## The car, live in 3D
-
-<p align="center"><img src="frontend/assets/readme/jeep.webp" alt="A rigged 3D Jeep TJ: doors, hood and tailgate open, lights on, steering and wheels turning, tilted by the IMU" width="900"></p>
-
-A rigged model of the Jeep with working doors, hood, tailgate, lights, steering and wheels, rolled and pitched in real time by an IMU on the dash.
+<p align="center">
+  <img src="frontend/assets/readme/jeep_bmw.png" alt="The BMW 330i ZHP in the 3D view" width="49%">
+  <img src="frontend/assets/readme/jeep_chooser.png" alt="Choose your vehicle: the Jeep, the BMW, or add your own 3D model" width="49%">
+</p>
 
 <p align="center"><img src="frontend/assets/readme/sensors.webp" alt="The sensors page while driving: pitch, roll, heading, a G-force trail, altitude" width="900"></p>
 
-Pitch, roll, heading, a G-force plot with a trail, altitude and temperature, sampled at 200 Hz.
+Pitch, roll, heading, G-force, altitude and temperature, sampled at 200 Hz.
 
 ## Drive it from anything
 
@@ -149,7 +152,7 @@ Pitch, roll, heading, a G-force plot with a trail, altitude and temperature, sam
 <td width="38%" align="center"><img src="frontend/assets/readme/webclient_phone.png" alt="OCTAVE's web client on a phone: live engine gauges, now playing with controls, volume" width="280"></td>
 <td>
 
-Everything the touch screen can do is open to other programs over a small JSON API. Start OCTAVE with `--service --service-bind 0.0.0.0` and open **`http://<head-unit-ip>:9876/`** on your phone, enter the pairing code from Settings > Device > Developer > Service: live gauges, now playing, volume. Or run it with **no screen at all** (`--headless`) and make your own UI.
+Everything the touch screen can do is open to other programs over a small JSON API. Start OCTAVE with `--service --service-bind 0.0.0.0` and open **`http://<head-unit-ip>:9876/`** on your phone, or run it with **no screen at all** (`--headless`) and make your own UI.
 
 ```python
 from octave_client import Client
@@ -161,9 +164,9 @@ with Client() as octave:
         print(event["values"])        # {'RPM': 2210, 'SPEED': 41}
 ```
 
-[SDKs](sdk/) for Python, TypeScript and Go, a no-build [web client](sdk/web/index.html), [starter projects](templates/) to copy, the full [API reference](https://robdegeorge.com/OCTAVE/wiki/api-reference.html), and a walkthrough: **[Writing a Frontend](https://robdegeorge.com/OCTAVE/wiki/writing-a-frontend.html)**. Install your frontend as the head unit's screen from Settings > Device > Developer > Frontends; *Try* gives it two minutes, and five presses of mute always bring the built-in screen back.
+[SDKs](sdk/) for Python, TypeScript and Go, [starter projects](templates/), the [API reference](https://robdegeorge.com/OCTAVE/wiki/api-reference.html), and a walkthrough: **[Writing a Frontend](https://robdegeorge.com/OCTAVE/wiki/writing-a-frontend.html)**. Install yours as the head unit's screen from Settings; five presses of mute always bring the built-in one back.
 
-**[Try a frontend in your browser](https://robdegeorge.com/OCTAVE/playground.html)** against the real core and a simulated car, or browse the **[frontend gallery](https://robdegeorge.com/OCTAVE/wiki/frontend-gallery.html)**: five complete examples in Svelte, Textual, Gio, SDL2 and egui (`examples/frontends/`, MIT). Built one? See [CONTRIBUTING.md](CONTRIBUTING.md).
+**[Try a frontend in your browser](https://robdegeorge.com/OCTAVE/playground.html)**, or browse the **[gallery](https://robdegeorge.com/OCTAVE/wiki/frontend-gallery.html)** of five complete examples (`examples/frontends/`, MIT).
 
 </td>
 </tr>
@@ -176,29 +179,24 @@ with Client() as octave:
   <img src="wiki/images/frontends/arcade.png" alt="Arcade: a pixel-art dash in C and SDL2" width="19%">
   <img src="wiki/images/frontends/console.png" alt="Console: a terminal frontend in Python" width="19%">
 </p>
-<p align="center"><sub>The five example frontends: Glass (Svelte), Sunlight (Go + Gio), Retro Cluster (Rust + egui), Arcade (C + SDL2), Console (Python + Textual). Each one is a complete screen for the same car.</sub></p>
+<p align="center"><sub>Glass (Svelte), Sunlight (Go), Retro Cluster (Rust), Arcade (C + SDL2), Console (Python): five complete screens for the same car.</sub></p>
 
-## An OBD adapter of its own
+## Hardware designed here
 
-<p align="center"><img src="frontend/assets/readme/obd_adapter_angle.png" alt="A 3D render of the OCTAVE OBD adapter, Rev 0: a green four-layer board with an STM32, an ESP32 module, two USB-C ports and the OBD-II plug on one end" width="760"></p>
+<p align="center"><img src="frontend/assets/readme/obd_adapter_top.png" alt="A 3D render of the OCTAVE OBD adapter: an 80 by 55 mm board with an STM32, an ESP32 module, a USB-C socket and the OBD-II plug on one end" width="760"></p>
 
-The $20 ELM327 clones work, and they are the slow part of the system: every reading waits for a Bluetooth round trip, and they keep drawing current from a parked car. So OCTAVE is getting an adapter of its own, designed in this repository: [`hardware/obd-adapter/`](hardware/obd-adapter/).
+The $20 ELM327 clones work, and they are the slow part of the system. So OCTAVE is getting hardware of its own, designed in this repository as code: [`hardware/`](hardware/).
 
-- **Every OBD-II bus on one board:** two CAN channels, K-line (ISO 9141 / KWP2000) and J1850 VPW / PWM for older Chrysler, GM and Ford cars. My 2003 TJ speaks VPW, which a CAN-only dongle cannot hear at all.
-- **An STM32G474 on the car's side, an ESP32 for the radio:** Bluetooth Classic, BLE and Wi-Fi, plus USB-C for a head unit on a cable.
-- **Plugs straight into the port,** on a small J1962 plug board soldered across its end. Reverse-battery and surge protection on the way in; the supply is simulated to keep running through a 6 V cold crank.
-- **Meant to do more than an ELM327.** The plan is the ELM327 command set for every app, plus a native mode: the adapter schedules the polling itself, stamps each sample as it comes off the bus, and keeps recording while Bluetooth is down, to fill the black box in afterwards.
-- **A board written as code.** The schematic, placement, routing and fab files are generated by Python ([`gen/obd_adapter.py`](hardware/obd-adapter/gen/obd_adapter.py) is the design; `python3 build.py all` rebuilds everything through KiCad and Freerouting), and checked the same way: ERC and DRC clean, the STM32's pins against ST's own data, two datasheet audits, and ngspice simulations of the supply, the input protection and the K-line and J1850 circuits. Every finding and what was done about it is in [`verify/REVIEW.md`](hardware/obd-adapter/verify/REVIEW.md).
+- **OBD adapter:** every OBD-II bus on one 80 x 55 mm board (two CAN, K-line, J1850 VPW / PWM for older cars like my TJ), an STM32 on the car's side, an ESP32 for Bluetooth and Wi-Fi, USB-C.
+- **LoRa pod:** where the parked car is, beaconed over LoRa where there is no phone signal ([plan](TODO/lora-car-finder.md)).
+- **Volume knob:** wireless, battery-powered, with a ring of twelve LEDs that follows the theme.
 
 <p align="center">
-  <img src="frontend/assets/readme/obd_adapter_top.png" alt="The adapter board from above" width="58%">
-  <img src="frontend/assets/readme/obd_adapter_plug.png" alt="The small J1962 plug board that goes into the car's socket" width="38%">
+  <img src="frontend/assets/readme/lora_pod_top.png" alt="The LoRa pod: a GPS module with its patch antenna, a LoRa and Bluetooth module, two pod-bus sockets" width="49%">
+  <img src="frontend/assets/readme/volume_knob_top.png" alt="The volume knob: a round board with an encoder in the middle of a ring of twelve LEDs" width="49%">
 </p>
 
-<p align="center"><img src="frontend/assets/readme/obd_adapter_back.png" alt="The back of the adapter board: a silkscreen map of the circuits on the other side, the signal of every plug pin, a small wizard and a line of Gandalf's" width="760"></p>
-<p align="center"><sub>The parts side names each circuit; the back is a map of it, with every pin's signal. And a wizard, who arrives precisely when he means to.</sub></p>
-
-> **Where it stands:** Rev 0 is a bring-up board for the bench and the Jeep, not the final dongle. It is designed and routed, the fab files are generated, and bring-up firmware is started (it builds and passes its host tests; it has never run on hardware). **Nobody else has reviewed the board, and it has not been ordered or built.** Read it, learn from it, tell me what is wrong with it, but do not send it to a fab yet. Plan and background: [`TODO/diy-obd-adapter.md`](TODO/diy-obd-adapter.md). Nothing in OCTAVE depends on it: the ELM327 adapters above keep working.
+> **Where it stands:** all three boards are designed and routed. **Nobody else has reviewed them, and none has been ordered or built.** Read them, tell me what is wrong with them, but do not send them to a fab yet ([plan](TODO/diy-obd-adapter.md)). Nothing in OCTAVE depends on them.
 
 ---
 
@@ -237,12 +235,15 @@ Grab the file for your platform from **[Releases](https://github.com/RobDeGeorge
 
 ## Everything else it does
 
+- **Swipe between sections**: a sideways flick on any page opens the next one
 - **ESP32 wireless volume knob** with an LED ring that matches the theme
 - **Gesture sensor** (PAJ7620U2): wave to skip, pause or change the volume
 - **Bluetooth OBD adapters** found, paired and connected from the app on Linux; BLE adapters on Android
+- **Readings your car's maker kept to itself**: describe a manufacturer-specific PID in a file and it becomes a gauge like any other ([guide](docs/CUSTOM_PIDS.md))
+- **A bus monitor**: watch and record the raw messages on the vehicle bus, listen only ([guide](docs/BUS_MONITOR.md))
 - **Spotify** (experimental): your playlists in the same song table as your own music, playing on the Spotify app on your phone (Premium)
 - **Pick the audio output**: the car's amp, a USB DAC or Bluetooth, from Settings
-- **The browser demo is the real app**: point it at a folder of your own music, or connect a real Bluetooth LE adapter from Chrome or Edge
+- **The browser demo is the real app**: point it at a folder of your own music, or connect a real adapter from Chrome or Edge, Bluetooth LE or on a USB cable
 - **100+ settings**, all on the screen, all saved
 - **The whole wiki inside the app**, readable offline
 - **Logs and crash traces** you can export from the dash when something goes wrong
@@ -280,13 +281,13 @@ Until October 2026 OCTAVE also had a Python / PySide6 backend. It is frozen, wit
 <details>
 <summary><b>Dev tooling: how the clips above were made</b></summary>
 
-Every clip and picture in this README is scripted, and one command makes them all again. `./build/octave --dev --profile` (a Debug build) runs OCTAVE with the simulator and a local command server; a story script drives it scene by scene (navigate, play, floor the throttle, tap buttons by their label, type into fields, build a dashboard), captures the window from inside Qt, and writes WebP and PNG. The same run fills the black box with two months of mock drives, shoots the browser pages in headless Chromium, renders the adapter board with `kicad-cli` from the committed design, and then checks that every picture this file points at exists. The same channel is exposed as MCP tools, so a coding agent can drive the app, change settings, read performance counters and record clips. The in-app half is in `src/dev/`; see the [Development guide](https://robdegeorge.com/OCTAVE/wiki/development.html).
+Every clip and picture in this README is scripted, and one command makes them all again. `./build/octave --dev --profile` (a Debug build) runs OCTAVE with the simulator and a local command server; a story script drives it scene by scene (navigate, play, floor the throttle, tap buttons by their label, type into fields), captures the window from inside Qt, and writes WebP and PNG. The same run fills the black box with two months of mock drives, shoots the browser pages in headless Chromium, renders the boards with `kicad-cli` from the committed design, and then checks that every picture this file points at exists. The same channel is exposed as MCP tools, so a coding agent can drive the app, change settings, read performance counters and record clips. The in-app half is in `src/dev/`; see the [Development guide](https://robdegeorge.com/OCTAVE/wiki/development.html).
 
 </details>
 
 ## What's next
 
-- **The OBD adapter as a real board**: a review, a first order, and the firmware on hardware ([plan](TODO/diy-obd-adapter.md))
+- **The OBD adapter and the pods as real boards**: a review, a first order, and firmware on hardware ([plan](TODO/diy-obd-adapter.md))
 - **Android on the Play Store**: the APK runs today as a sideload ([plan](TODO/android-cpp-port.md))
 - **Wireless CarPlay / Android Auto** through a CarlinKit dongle ([plan](TODO/carlinkit-dongle-port.md))
 - **Video over the API**, so your own frontend can show the phone mirror too ([plan](TODO/open-backend.md))
@@ -352,7 +353,7 @@ OCTAVE stands on a lot of other people's work.
 
 **External tools and services:** adb (phone mirroring and Android Auto), Google's Android Auto Desktop Head Unit (the Android Auto view).
 
-**The OBD adapter (`hardware/obd-adapter/`):** [KiCad](https://www.kicad.org/) (the project, `kicad-cli` checks, fab output and the renders above), [Freerouting](https://github.com/freerouting/freerouting) (autorouting), [ngspice](https://ngspice.sourceforge.io/) (simulations), `arm-none-eabi-gcc` (firmware).
+**The boards (`hardware/`):** [KiCad](https://www.kicad.org/) (the project, `kicad-cli` checks, fab output and the renders above), [Freerouting](https://github.com/freerouting/freerouting) (autorouting), [ngspice](https://ngspice.sourceforge.io/) (simulations), `arm-none-eabi-gcc` (firmware).
 
 **Fonts, icons and 3D assets**
 
