@@ -77,4 +77,11 @@ Release parseLatest(const QByteArray &json, const QString &repo)
     return r;
 }
 
+bool sameCommit(const QString &a, const QString &b)
+{
+    if (a.isEmpty() || b.isEmpty())
+        return false;
+    return a.startsWith(b, Qt::CaseInsensitive) || b.startsWith(a, Qt::CaseInsensitive);
+}
+
 } // namespace ReleaseCheck

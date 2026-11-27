@@ -42,6 +42,19 @@ private slots:
         QCOMPARE(ReleaseCheck::compareVersions(b, a), -order);
     }
 
+    void shortHashesOfOneCommit()
+    {
+        // GitHub's is 7 characters, git's 8 once 7 is ambiguous here
+        QVERIFY(ReleaseCheck::sameCommit("ebfa078", "ebfa0782"));
+        QVERIFY(ReleaseCheck::sameCommit("ebfa0782", "ebfa078"));
+        QVERIFY(ReleaseCheck::sameCommit("ebfa078", "ebfa078"));
+        QVERIFY(ReleaseCheck::sameCommit("EBFA078", "ebfa0782"));
+        QVERIFY(!ReleaseCheck::sameCommit("ebfa078", "ebfa079a"));
+        QVERIFY(!ReleaseCheck::sameCommit("", "ebfa0782"));
+        QVERIFY(!ReleaseCheck::sameCommit("ebfa078", ""));
+        QVERIFY(!ReleaseCheck::sameCommit("", ""));
+    }
+
     void theLatestReleaseIsRead()
     {
         const QByteArray json = R"({

@@ -1206,7 +1206,9 @@ QString NetworkManager::localVsRemote(const QString &remoteShort, const QString 
 {
     if (remoteShort.isEmpty())
         return QStringLiteral("behind");
-    if (remoteShort == localShort)
+    // "ebfa078" from GitHub and "ebfa0782" from git are one commit; compared
+    // as strings they read as "ahead"
+    if (ReleaseCheck::sameCommit(remoteShort, localShort))
         return QStringLiteral("same");
 
     // Do we even have the remote commit locally? If the object is missing we

@@ -33,6 +33,12 @@ struct Release {
 // the About page opens it in the browser.
 Release parseLatest(const QByteArray &json, const QString &repo);
 
+// Whether two abbreviated commit hashes name the same commit. A git checkout
+// compares its own short hash with GitHub's, and the two need not be the same
+// length: GitHub's is cut to 7 characters, git abbreviates to 8 or more once
+// 7 is ambiguous in the repository. Empty on either side is never the same.
+bool sameCommit(const QString &a, const QString &b);
+
 } // namespace ReleaseCheck
 
 #endif // RELEASECHECK_H
