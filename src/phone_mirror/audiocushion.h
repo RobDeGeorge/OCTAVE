@@ -42,6 +42,9 @@ public:
         bool write = false;   // write what is queued (false: keep holding it back)
         int dropMs = 0;       // first drop this much of the oldest queued audio
         bool grew = false;    // the target grew: reopen the device at targetMs()
+        bool ranDry = false;  // the output ran out mid-stream (counted as an underrun)
+        bool resumed = false; // the output ran out kPauseMs or longer ago: a pause or a dead link, not counted
+        int dryForMs = 0;     // with either: how long since audio was last written
     };
 
     int targetMs() const { return m_targetMs; }
@@ -64,7 +67,10 @@ public:
     {
         Step s;
         if (!m_priming && m_lastWriteMs >= 0 && (deviceIdle || deviceMs <= kDryMs)) {
-            if (nowMs - m_lastWriteMs < kPauseMs) {
+            s.dryForMs = int(std::min<qint64>(nowMs - m_lastWriteMs, 3600 * 1000));
+            s.ranDry = nowMs - m_lastWriteMs < kPauseMs;
+            s.resumed = !s.ranDry;
+            if (s.ranDry) {
                 ++m_underruns;
                 const int grown = std::min(kMaxMs, m_targetMs * 2);
                 s.grew = grown != m_targetMs;

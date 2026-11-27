@@ -160,6 +160,8 @@ constexpr quint32 kAudioStreamError = 1;                  // configuration error
 // The audio thread's own limit, against a GUI thread that stopped taking
 // audio at all; latency is bounded by the cushion (audiocushion.h)
 constexpr qsizetype kAudioQueueMaxBytes = kAudioSampleRate * kAudioBytesPerFrame * 2;  // 2 s
+constexpr qint64 kAudioReportMs = 60 * 1000;   // the "last minute" log line
+constexpr int kAudioReportWaitMs = 100;        // ... written only when a wait reached this
 constexpr int kAudioBytesPerMs = kAudioSampleRate * kAudioBytesPerFrame / 1000;
 // Sound detection (for ducking local media): a chunk counts as sound when its
 // peak, before gain, exceeds about -46 dBFS; a silent remote submix is exact
@@ -1113,6 +1115,7 @@ void ScrcpyClient::audioLoop(QTcpSocket *audio)
             announced = true;
             emit audioStateChanged(true);
             QByteArray data;
+            qint64 lastArrival = 0;
             while (!m_stopping.load()) {
                 char header[12];
                 if (!recvExact(audio, header, 12, m_stopping))
@@ -1125,6 +1128,14 @@ void ScrcpyClient::audioLoop(QTcpSocket *audio)
                 data.resize(int(size));
                 if (!recvExact(audio, data.data(), size, m_stopping))
                     break;
+                // For the log: how long the phone (the link) kept us waiting
+                const qint64 arrived = nowMs();
+                if (lastArrival > 0) {
+                    const int gap = int(std::min<qint64>(arrived - lastArrival, 3600 * 1000));
+                    int longest = m_audioGapMaxMs.load();
+                    while (gap > longest && !m_audioGapMaxMs.compare_exchange_weak(longest, gap)) {}
+                }
+                lastArrival = arrived;
                 auto *samples = reinterpret_cast<qint16 *>(data.data());
                 const int n = data.size() / 2;
                 // Peak before gain: is the phone actually making sound?
@@ -1146,9 +1157,14 @@ void ScrcpyClient::audioLoop(QTcpSocket *audio)
                     m_audioQueue.append(data);
                     m_audioQueueBytes += data.size();
                     // Bound latency: if the GUI thread fell behind, drop the oldest
-                    while (m_audioQueueBytes > kAudioQueueMaxBytes && m_audioQueue.size() > 1)
-                        m_audioQueueBytes -= m_audioQueue.takeFirst().size();
+                    while (m_audioQueueBytes > kAudioQueueMaxBytes && m_audioQueue.size() > 1) {
+                        const qsizetype dropped = m_audioQueue.takeFirst().size();
+                        m_audioQueueBytes -= dropped;
+                        m_audioOverflowBytes += dropped;
+                    }
                 }
+                qint64 nobody = 0;
+                m_audioWaitingSinceMs.compare_exchange_strong(nobody, arrived);
                 emit audioReady();
             }
         }
@@ -1227,8 +1243,9 @@ void ScrcpyClient::stopAudioSink()
     }
     if (m_audioSink) {
         qCInfo(lcScrcpyClient) << "phone audio:" << m_audioCushion.underruns() << "underruns,"
-                               << m_audioCushion.droppedMs() << "ms dropped, cushion"
-                               << m_audioCushion.targetMs() << "ms";
+                               << m_audioCushion.droppedMs() + m_audioOverflowMs << "ms dropped, cushion"
+                               << m_audioCushion.targetMs() << "ms; longest wait for the phone"
+                               << m_audioSession.phoneMs << "ms, for OCTAVE" << m_audioSession.appMs << "ms";
         m_audioSink->stop();
         m_audioSink->deleteLater();
         m_audioSink = nullptr;
@@ -1249,6 +1266,40 @@ void ScrcpyClient::setAudioCushionMs(int ms)
     m_audioCushion.setTargetMs(ms);
 }
 
+void ScrcpyClient::noteAudioWaits(qint64 now)
+{
+    // GUI thread. Take what the audio thread measured since the last call
+    const int phoneMs = m_audioGapMaxMs.exchange(0);
+    const qint64 since = m_audioWaitingSinceMs.exchange(0);
+    const int appMs = since > 0 ? int(std::clamp<qint64>(now - since, 0, 3600 * 1000)) : 0;
+    for (AudioWaits *w : {&m_audioMinute, &m_audioSession}) {
+        w->phoneMs = std::max(w->phoneMs, phoneMs);
+        w->appMs = std::max(w->appMs, appMs);
+    }
+    if (const qint64 overflow = m_audioOverflowBytes.exchange(0)) {
+        const qint64 ms = overflow / kAudioBytesPerMs;
+        m_audioOverflowMs += ms;
+        qCInfo(lcScrcpyClient) << "phone audio: OCTAVE fell 2 s behind playing it and dropped the oldest" << ms
+                               << "ms (" << m_audioOverflowMs << "ms this session ); it was busy for"
+                               << appMs << "ms";
+    }
+    // Once a minute, when anything waited long enough to matter: the near
+    // misses, and totals that survive a shutdown without a session end
+    if (m_audioMinuteSinceMs == 0)
+        m_audioMinuteSinceMs = now;
+    if (now - m_audioMinuteSinceMs < kAudioReportMs)
+        return;
+    if (m_audioMinute.phoneMs >= kAudioReportWaitMs || m_audioMinute.appMs >= kAudioReportWaitMs) {
+        qCInfo(lcScrcpyClient) << "phone audio, last minute: longest wait for the phone" << m_audioMinute.phoneMs
+                               << "ms, for OCTAVE" << m_audioMinute.appMs << "ms; this session"
+                               << m_audioCushion.underruns() << "underruns,"
+                               << m_audioCushion.droppedMs() + m_audioOverflowMs << "ms dropped, cushion"
+                               << m_audioCushion.targetMs() << "ms";
+    }
+    m_audioMinute = AudioWaits();
+    m_audioMinuteSinceMs = now;
+}
+
 void ScrcpyClient::deliverAudio()
 {
     // GUI thread. Write whatever is queued; never block on a full device
@@ -1257,6 +1308,8 @@ void ScrcpyClient::deliverAudio()
         setAudioPlaying(true);
         m_audioHoldTimer->start();   // (re)arm the release
     }
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    noteAudioWaits(now);
     if (m_stopping.load() || !ensureAudioSink()) {
         std::lock_guard<std::mutex> lock(m_audioMutex);
         m_audioQueue.clear();
@@ -1269,14 +1322,25 @@ void ScrcpyClient::deliverAudio()
         std::lock_guard<std::mutex> lock(m_audioMutex);
         queued = m_audioQueueBytes;
     }
-    const qint64 now = QDateTime::currentMSecsSinceEpoch();
     const qsizetype inDevice = std::max<qsizetype>(0, m_audioSink->bufferSize() - m_audioSink->bytesFree());
     const AudioCushion::Step step = m_audioCushion.step(now, int(queued / kAudioBytesPerMs),
                                                          int(inDevice / kAudioBytesPerMs),
                                                          m_audioSink->state() == QAudio::IdleState);
+    // Every cut is logged with what was waited for, so a log tells a slow
+    // link (the phone) from a busy GUI thread (OCTAVE)
+    if (step.ranDry) {
+        qCInfo(lcScrcpyClient).nospace()
+            << "phone audio ran dry (" << m_audioCushion.underruns() << " this session): longest wait for the phone "
+            << m_audioMinute.phoneMs << " ms, for OCTAVE " << m_audioMinute.appMs << " ms; "
+            << (step.grew ? "keeping " : "the cushion stays at ") << m_audioCushion.targetMs()
+            << (step.grew ? " ms ahead from now on" : " ms");
+    } else if (step.resumed) {
+        qCInfo(lcScrcpyClient).nospace()
+            << "phone audio is back after " << step.dryForMs << " ms without any (a pause on the phone or a stopped"
+            << " link; not counted): longest wait for the phone " << m_audioMinute.phoneMs << " ms, for OCTAVE "
+            << m_audioMinute.appMs << " ms";
+    }
     if (step.grew) {
-        qCInfo(lcScrcpyClient) << "phone audio ran dry (" << m_audioCushion.underruns()
-                               << "this session ); keeping" << m_audioCushion.targetMs() << "ms ahead from now on";
         emit audioCushionChanged(m_audioCushion.targetMs());
         // A device buffer of the new size
         m_audioSink->stop();
@@ -1295,7 +1359,8 @@ void ScrcpyClient::deliverAudio()
             drop -= size;
         }
         qCInfo(lcScrcpyClient) << "phone audio arrived" << step.dropMs << "ms late in one burst; dropped the oldest ("
-                               << m_audioCushion.droppedMs() << "ms this session )";
+                               << m_audioCushion.droppedMs() << "ms this session ); longest wait for the phone"
+                               << m_audioMinute.phoneMs << "ms, for OCTAVE" << m_audioMinute.appMs << "ms";
     }
     if (!step.write)
         return;

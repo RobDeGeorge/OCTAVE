@@ -184,6 +184,7 @@ signals:
 private slots:
     void deliverFrame();
     void deliverAudio();
+    void noteAudioWaits(qint64 now);
 
 private:
     // tests/cpp feeds device messages and reads control bytes through a socket pair
@@ -268,6 +269,22 @@ private:
     qsizetype m_audioQueueBytes = 0;
     std::mutex m_audioMutex;
     AudioCushion m_audioCushion;   // GUI thread
+    // Why the sound cut out, for the log. The audio thread measures the wait
+    // between two packets from the phone (the link) and notes when the oldest
+    // packet the GUI thread has not looked at yet arrived (OCTAVE itself);
+    // deliverAudio() takes both and keeps the longest of this minute and of
+    // the session.
+    std::atomic<int> m_audioGapMaxMs{0};
+    std::atomic<qint64> m_audioWaitingSinceMs{0};
+    std::atomic<qint64> m_audioOverflowBytes{0};   // dropped by the audio thread: the GUI thread fell 2 s behind
+    struct AudioWaits {
+        int phoneMs = 0;   // longest wait for a packet from the phone
+        int appMs = 0;     // longest a packet waited for the GUI thread
+    };
+    AudioWaits m_audioMinute;      // GUI thread
+    AudioWaits m_audioSession;     // GUI thread
+    qint64 m_audioMinuteSinceMs = 0;
+    qint64 m_audioOverflowMs = 0;  // this session
     QAudioSink *m_audioSink = nullptr;
     QIODevice *m_audioIo = nullptr;
     QString m_audioDeviceId;

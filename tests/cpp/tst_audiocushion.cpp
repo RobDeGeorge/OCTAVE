@@ -51,6 +51,9 @@ private slots:
             QCOMPARE(c.targetMs(), expected);
             QCOMPARE(c.underruns(), i);
             QCOMPARE(s.grew, i <= 2);   // 400, 800, then it stays
+            QVERIFY(s.ranDry);          // every one is reported, also at the limit
+            QVERIFY(!s.resumed);
+            QCOMPARE(s.dryForMs, 400);
             QVERIFY(!s.write);          // held back until the new target is there
             QVERIFY(c.priming());
             now += 50;
@@ -71,6 +74,9 @@ private slots:
         QVERIFY(!s.grew);
         QCOMPARE(c.underruns(), 0);
         QCOMPARE(c.targetMs(), AudioCushion::kStartMs);
+        QVERIFY(!s.ranDry);         // told apart for the log
+        QVERIFY(s.resumed);
+        QCOMPARE(s.dryForMs, int(AudioCushion::kPauseMs) + 500);
     }
 
     void aLateBurstIsKeptUpToTheSlackThenTheOldestGoes()
