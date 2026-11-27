@@ -18,7 +18,7 @@ The riskiest part is the J1850 VPW front end and driver: every open project foun
 ## Key facts established
 
 - **The TJ (1997–2006) is J1850 VPW, not CAN.** CAN arrived with the JK (2007). An ESP32 + CAN-transceiver dongle shows nothing on the Jeep.
-- **"ELM327" is the command language, not the chip.** Genuine ELM327 (a PIC with Elm firmware) is weak: small buffers, one protocol, no CAN FD, fixed firmware. Clones are worse. Ranking: own MCU > STN2120 (ScanTool, OBDLink's chip family; ELM superset, all legacy protocols proven) > genuine ELM327 > clone.
+- **"ELM327" is the command language, not the chip.** Genuine ELM327 (a PIC with Elm firmware) is weak: small buffers, one protocol, no CAN FD, fixed firmware. Clones are worse. Ranking: own MCU > STN2120 (ScanTool, OBDLink's chip family; ELM superset, all legacy protocols proven) > genuine ELM327 > clone. **None of those chips can be bought any more (checked 2026-11-26):** Elm Electronics closed in June 2022, and OBD Solutions lists the STN1110, STN1170, STN2100 and STN2120 as discontinued with no successor named (obdsol.com/solutions/chips/); the family lives on only inside finished OBDLink adapters. An own MCU is the only chip-level option left.
 - **What OCTAVE sends today** (`src/managers/elm327protocol.cpp`, `obdmanager.cpp`): `ATZ ATE0 ATL0 ATS0 ATH0 ATSP0 ATAT2 ATRV`. Compatibility mode must cover at least those plus Mode 01–09, `ATSH/ATCRA/ATMA`.
 - **BLE UUIDs OCTAVE's Android bridge expects** (`android/src/org/octave/app/OctaveOBDBridge.java`): service `FFE0`, characteristic `FFE1`; also the Microchip transparent-UART service `49535343-FE7D-4AE5-8FA9-9FAFD205E455`. Classic SPP: UUID `1101`.
 - **No existing OBD scanner uses the STM32G474** (searched 2026-10-22). The G4 family launched 2019, is active, mature, and on ST's longevity program (check the end date before layout).
@@ -50,7 +50,7 @@ The riskiest part is the J1850 VPW front end and driver: every open project foun
 | GM single-wire CAN (stretch) | 1 | NCV7356 |
 | Ford MS-CAN (stretch) | 3 / 11 | Second CAN FD transceiver behind an analog switch |
 
-DoIP (automotive Ethernet) is out of scope.
+DoIP (automotive Ethernet) is out of scope. **Open check (2026-11-26):** on DoIP cars pins 3 / 11 carry an Ethernet pair, and the board has its MS-CAN transceiver on them; whether that load can disturb such a car is not checked. See "Known Rev 0 limits" in `hardware/obd-adapter/README.md` before plugging into one.
 
 ### Power
 
@@ -129,7 +129,7 @@ None of the extras touch the core adapter; they hang off the expansion port and 
 ## Steps
 
 1. **Bench CAN, compatibility mode over USB.** Nucleo-G474RE + CAN transceiver breakout; implement the ELM327 subset above; point OCTAVE at it as a plain serial port. **Effort:** M. **Needs:** desktop, ECU simulator (e.g. ECUsim 2000) or any CAN car.
-2. **J1850 VPW front end on perfboard**, tested in the Jeep from a laptop over USB. A junkyard JTEC PCM powered on the bench saves trips to the car. **Effort:** L (riskiest step). **Needs:** Jeep (or bench PCM), scope ideally. **Fallback:** if this stalls, put an STN2120 on the board as the legacy-bus engine and keep the STM32 for the scheduler, buffering and native mode.
+2. **J1850 VPW front end on perfboard**, tested in the Jeep from a laptop over USB. A junkyard JTEC PCM powered on the bench saves trips to the car. **Effort:** L (riskiest step). **Needs:** Jeep (or bench PCM), scope ideally. **Fallback (changed 2026-11-26: the STN2120 this step used to name is discontinued, so there is no chip to fall back on):** if this stalls, the adapter ships with CAN and K-line only and VPW cars such as the TJ stay on the NEXAS or an OBDLink; OpenDiag's VPW circuit and firmware are the reference to debug against; OBD Solutions could be asked whether it still supplies chips or licences to manufacturers (not asked). The old text, for the record: put an STN2120 on the board as the legacy-bus engine and keep the STM32 for the scheduler, buffering and native mode.
 3. **ESP32 bridge:** SPP + BLE `FFE0`/`FFE1`, then pair through `OBDAdapterFinder`. **Effort:** M. **Needs:** Pi, S22.
 4. **Native mode** in firmware + a new OCTAVE protocol class beside `elm327protocol`, with a QtTest in `tests/cpp/` (and a `carsim` / `simelm327`-style simulated native adapter for `--dev`). Measure PIDs/s against the NEXAS. **Effort:** L. **Needs:** desktop, Jeep.
 5. **Store-and-forward backfill** into `TripRecorder` / `TripStore`. **Effort:** M. **Needs:** desktop, Jeep.
@@ -146,6 +146,6 @@ None of the extras touch the core adapter; they hang off the expansion port and 
 
 ## Recommended order
 
-1 → 2 (go/no-go on own VPW vs STN2120) → 3 → 4 → 5 → 6 → 7. Steps 1–5 need no custom PCB.
+1 → 2 (go/no-go on own VPW; no chip fallback, see step 2) → 3 → 4 → 5 → 6 → 7. Steps 1–5 need no custom PCB.
 
 Delete this file (and its README row) when done.

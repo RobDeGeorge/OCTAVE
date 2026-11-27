@@ -15,6 +15,8 @@ Because of that, `phonemirrormanager` is a mobile stub (`phonemirrormanager.h:48
 
 It's parked because the adb client is a protocol implementation in its own right, and the Jeep runs the Orange Pi 5 Plus, not a tablet.
 
+The same built-in adb client is the main piece of `TODO/phone-mirror-browser.md` (mirroring in the browser build over WebUSB). Build it once, transport-agnostic (`src/adb/` over a byte pipe), for both.
+
 **Shared decoder (done 2026-10-25):** `src/util/h264decoder.{h,cpp}` (libavcodec, SPS/PPS prepend, `AVFrame` → `QVideoFrame`), extracted from `scrcpyclient.cpp`; phone mirroring and the native Android Auto receiver (`TODO/android-auto-native-receiver.md`) use it. A MediaCodec backend goes behind the same `H264Decoder` interface.
 
 ## What has to be built

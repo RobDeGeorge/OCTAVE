@@ -1,6 +1,6 @@
 # TODO index — easiest to hardest
 
-**Last updated:** 2026-11-24 (the OBD adapter reworked into a compact two-sided board with the pod-bus connector on it: diy-obd-adapter.md, lora-car-finder.md; home-dashboard.md added; maps.md added)
+**Last updated:** 2026-11-26 (phone-mirror-browser.md added; the OBD adapter reworked into a compact two-sided board with the pod-bus connector on it: diy-obd-adapter.md, lora-car-finder.md; home-dashboard.md added; maps.md added)
 
 One file per deferred plan. Each file opens with a one-line **Goal**, lists only the work that is left, and gives every step an **Effort** (S under an hour, M one session, L several sessions, XL a new subsystem) and the device it needs. When a plan is finished, delete its file and its row here.
 
@@ -51,6 +51,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | File | Goal | Effort | Needs |
 |---|---|---|---|
 | [phone-mirror-android-host.md](phone-mirror-android-host.md) | OCTAVE on an Android tablet mirrors a phone | XL | tablet + phone |
+| [phone-mirror-browser.md](phone-mirror-browser.md) | The browser build mirrors a phone on a USB cable (WebUSB adb, WebCodecs decode), Chrome / Edge only; shares its adb client with the Android-host plan | L–XL | desktop Chrome + S22, Win11 VM |
 | [android-auto-native-receiver.md](android-auto-native-receiver.md) | Android Auto straight into OCTAVE over adb (works on desktop; Pi, AOA next), no DHU | L | AA phone, Pi |
 | [carplay-native.md](carplay-native.md) | CarPlay from an iPhone on USB with no dongle, on a user-supplied Apple identity (spike first) | M research, L spike | iPhone on USB |
 | [carlinkit-dongle-port.md](carlinkit-dongle-port.md) | CarPlay / wireless Android Auto through a Carlinkit dongle | XL | $60 dongle, iPhone |
