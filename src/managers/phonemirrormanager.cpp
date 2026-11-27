@@ -14,6 +14,7 @@
 #include <QHostAddress>
 #include <QNetworkInterface>
 #include <QTcpSocket>
+#include <QTemporaryFile>
 #include <QFile>
 #include <QFileInfo>
 #include <QHash>
@@ -1064,6 +1065,9 @@ void PhoneMirrorManager::continueStart(const StartPrep &prep, int generation)
     // on, which has already done that its own way.
     if (!wireless && !m_autoWifi)
         startWirelessDebugging(serial, prep.sdk);
+    // After those (the wireless jobs run one at a time): `adb tcpip` and a
+    // cable going in or out restart the phone's adb service, which ends the watcher
+    startWatcher(serial);
     const QString jar = ScrcpyClient::bundledServerJar();
     if (jar.isEmpty()) {
         reportError(QStringLiteral("Bundled scrcpy server could not be extracted"));
@@ -1885,7 +1889,137 @@ void PhoneMirrorManager::rememberWireless(const QString &address)
 
 void PhoneMirrorManager::setCarWifi(const QString &name, const QString &password)
 {
-    m_carWifi = CarWifi{name.trimmed(), password};
+    const CarWifi wifi{name.trimmed(), password};
+    if (wifi.name.isEmpty() && !m_carWifi.name.isEmpty())
+        m_watcherRemovalPending = true;
+    else if (!wifi.name.isEmpty())
+        m_watcherRemovalPending = false;
+    m_carWifi = wifi;
+    m_watcherAtMs = 0;   // new name or password: the next session start replaces the watcher
+}
+
+QString PhoneMirrorManager::watcherScript(const CarWifi &wifi)
+{
+    // Plain sh, no awk (Android's toybox has had one only since Android 15).
+    // `cmd wifi list-scan-results` prints "BSSID Frequency RSSI Age(sec) SSID
+    // Flags"; RSSI may read "-41(0:-43/1:-45)". Every command here was run
+    // from a detached shell on an S26 Ultra (Android 17) on 2026-11-26.
+    // The name and the password go in by concatenation, never through
+    // arg(): they may hold a "%1" of their own
+    const QString join = carWifiCommand(wifi, true).join(QLatin1Char(' '));
+    const QString joinPlain = carWifiCommand(wifi, false).join(QLatin1Char(' '));
+    QString s = QStringLiteral(
+        "#!/system/bin/sh\n"
+        "# OCTAVE: joins the car's Wi-Fi when the phone has no Wi-Fi and it is in range.\n"
+        "# Left by OCTAVE's phone mirror; clearing Car Wi-Fi in OCTAVE removes it.\n"
+        "f=%1\n"
+        "echo $$ > $f.pid\n").arg(QLatin1String(kWatcherPath));
+    s += QStringLiteral("name=") + shellQuote(wifi.name) + QLatin1Char('\n');
+    s += QStringLiteral("join() { ") + join + QStringLiteral(" >/dev/null 2>&1 || ") + joinPlain
+         + QStringLiteral(" >/dev/null 2>&1; }\n");
+    s += QStringLiteral(
+        "while true; do\n"
+        "  s=$(cmd wifi status 2>/dev/null)\n"
+        "  case \"$s\" in\n"
+        "  *\"Wifi is disabled\"*|*\"Wifi is connected to\"*) ;;\n"
+        "  *\"Wifi is not connected\"*)\n"
+        "    if cmd wifi list-scan-results 2>/dev/null | grep -F \" $name \" | {\n"
+        "      while read -r bssid freq rssi age rest; do\n"
+        "        rssi=${rssi%%(*}; age=${age%%.*}\n"
+        "        if [ \"$age\" -lt %1 ] 2>/dev/null && [ \"$rssi\" -ge %2 ] 2>/dev/null; then exit 0; fi\n"
+        "      done; exit 1; }; then\n"
+        "      join\n"
+        "    else\n"
+        "      cmd wifi start-scan >/dev/null 2>&1\n"
+        "    fi ;;\n"
+        "  esac\n"
+        "  sleep %3\n"
+        "done\n").arg(kWatcherMaxAgeS).arg(kWatcherMinRssi).arg(kWatcherPeriodS);
+    return s;
+}
+
+QString PhoneMirrorManager::watcherCheckCommand(const QString &version)
+{
+    // The pid must still be the script (a pid is reused after a while)
+    return QStringLiteral("f=%1; p=$(cat $f.pid 2>/dev/null); "
+                          "if [ \"$(cat $f.ver 2>/dev/null)\" = %2 ] && [ -n \"$p\" ] "
+                          "&& grep -q octave-wifi-watch /proc/$p/cmdline 2>/dev/null; "
+                          "then echo running; else echo stopped; fi")
+        .arg(QLatin1String(kWatcherPath), shellQuote(version));
+}
+
+QString PhoneMirrorManager::watcherStartCommand(const QString &version)
+{
+    // setsid + nohup: it outlives this adb shell and the adb connection
+    return QStringLiteral("f=%1; p=$(cat $f.pid 2>/dev/null); "
+                          "[ -n \"$p\" ] && grep -q octave-wifi-watch /proc/$p/cmdline 2>/dev/null && kill $p; "
+                          "chmod 700 $f.sh; echo %2 > $f.ver; "
+                          "nohup setsid sh $f.sh >/dev/null 2>&1 & echo started")
+        .arg(QLatin1String(kWatcherPath), shellQuote(version));
+}
+
+QString PhoneMirrorManager::watcherRemoveCommand()
+{
+    return QStringLiteral("f=%1; p=$(cat $f.pid 2>/dev/null); "
+                          "[ -n \"$p\" ] && grep -q octave-wifi-watch /proc/$p/cmdline 2>/dev/null && kill $p; "
+                          "rm -f $f.sh $f.pid $f.ver; echo removed")
+        .arg(QLatin1String(kWatcherPath));
+}
+
+QString PhoneMirrorManager::ensureWatcher(const QString &serial, const CarWifi &wifi, bool hosted, bool remove) const
+{
+    const QStringList shell{QStringLiteral("-s"), serial, QStringLiteral("shell")};
+    if (remove) {
+        const QString out = runAdbFull(shell + QStringList{watcherRemoveCommand()}, 5000);
+        return out.contains(QLatin1String("removed")) ? QStringLiteral("removed") : QString();
+    }
+    if (wifi.name.isEmpty() || !hosted)
+        return {};
+    const QString script = watcherScript(wifi);
+    const QString version = QString::fromLatin1(
+        QCryptographicHash::hash(script.toUtf8(), QCryptographicHash::Sha1).toHex().left(12));
+    if (runAdbFull(shell + QStringList{watcherCheckCommand(version)}, 5000).contains(QLatin1String("running")))
+        return QStringLiteral("running");
+    // The script holds the network's password: a private file here, and
+    // mode 700 in the shell user's folder on the phone
+    QTemporaryFile file;
+    if (!file.open())
+        return {};
+    file.write(script.toUtf8());
+    file.close();
+    int code = -1;
+    const QString pushed = runAdbFull({QStringLiteral("-s"), serial, QStringLiteral("push"), file.fileName(),
+                                       QLatin1String(kWatcherPath) + QStringLiteral(".sh")}, 15000, &code);
+    if (code != 0) {
+        qCInfo(lcPhoneMirror) << "The Wi-Fi watcher could not be copied to the phone:" << pushed.right(200);
+        return {};
+    }
+    const QString out = runAdbFull(shell + QStringList{watcherStartCommand(version)}, 5000);
+    return out.contains(QLatin1String("started")) ? QStringLiteral("started") : QString();
+}
+
+void PhoneMirrorManager::startWatcher(const QString &serial)
+{
+    const bool remove = m_watcherRemovalPending;
+    if (m_carWifi.name.isEmpty() && !remove)
+        return;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (serial == m_watcherSerial && now - m_watcherAtMs < kWirelessDebuggingIntervalMs)
+        return;
+    m_watcherSerial = serial;
+    m_watcherAtMs = now;
+    const CarWifi carWifi = m_carWifi;
+    runWirelessJob([this, serial, carWifi, remove]() {
+        const bool hosted = !remove && !hostedCarSubnets(carWifi.name).isEmpty();
+        const QString done = ensureWatcher(serial, carWifi, hosted, remove);
+        if (done == QLatin1String("started"))
+            qCInfo(lcPhoneMirror) << "Started the Wi-Fi watcher on the phone: it joins" << carWifi.name
+                                  << "by itself when in range";
+        else if (done == QLatin1String("removed"))
+            qCInfo(lcPhoneMirror) << "Removed the Wi-Fi watcher from the phone";
+        if (remove && !done.isEmpty())
+            QMetaObject::invokeMethod(this, [this]() { m_watcherRemovalPending = false; }, Qt::QueuedConnection);
+    }, false);
 }
 
 QList<PhoneMirrorManager::Subnet> PhoneMirrorManager::localSubnets() const

@@ -213,6 +213,25 @@ public:
     // `fixedAddress` asks for the same MAC address on every join, so the
     // network hands the phone the same IP address each time.
     static QStringList carWifiCommand(const CarWifi &wifi, bool fixedAddress);
+    // The watcher: a small shell script OCTAVE leaves running on the phone,
+    // which joins the car's Wi-Fi when the phone has no Wi-Fi and that
+    // network is in range. Android never rejoins a network without internet
+    // by itself, so without it every drive would start with the cable.
+    // Only the machine that hosts the network installs it. It scans only
+    // while the phone is on no Wi-Fi, never touches a phone whose Wi-Fi is
+    // switched off, and ends when the phone restarts.
+    static QString watcherScript(const CarWifi &wifi);
+    // Shell lines for the phone: is the watcher of this `version` running
+    // (prints "running"), start the pushed script, stop it and remove its files
+    static QString watcherCheckCommand(const QString &version);
+    static QString watcherStartCommand(const QString &version);
+    static QString watcherRemoveCommand();
+    static constexpr const char *kWatcherPath = "/data/local/tmp/octave-wifi-watch";
+    // Seconds between its looks, the oldest scan result it trusts and the
+    // weakest signal it joins on (in the car the hotspot is at about -40 dBm)
+    static constexpr int kWatcherPeriodS = 10;
+    static constexpr int kWatcherMaxAgeS = 120;
+    static constexpr int kWatcherMinRssi = -70;
     // One word for the phone's shell, whatever characters it holds
     static QString shellQuote(const QString &word);
     // A network this machine is on: its own address there and the prefix length
@@ -512,6 +531,12 @@ private:
     // left alone; with Car Wi-Fi set the phone is put on the car's network
     // in the background, and the session follows it as after any dropped link.
     void cablePluggedInOnWifi();
+    // GUI thread, at every session start: in the background, make sure the
+    // watcher runs on the phone (the phone's adb service is restarted when a
+    // cable is pulled, which ends it), or remove it once Car Wi-Fi is cleared
+    void startWatcher(const QString &serial);
+    // Worker thread: "running", "started", "removed" or "" (nothing done / failed)
+    QString ensureWatcher(const QString &serial, const CarWifi &wifi, bool hosted, bool remove) const;
     // adb needs a moment before it lists a phone that was just plugged in
     static constexpr int kUsbSettleMs = 1500;
     // Worker thread: the first phone on a cable that adb lists as ready
@@ -624,6 +649,9 @@ private:
     QStringList m_knownWireless;                  // every address the phone was reached at, most recent first
     CarWifi m_carWifi;
     QList<Subnet> m_testSubnets;                  // tests: stands in for this machine's networks
+    bool m_watcherRemovalPending = false;         // Car Wi-Fi was cleared: take the watcher off the phone
+    QString m_watcherSerial;                      // the transport startWatcher last ran for ...
+    qint64 m_watcherAtMs = 0;                     // ... and when
     QList<Subnet> m_testCarSubnets;               // tests: the networks this machine hosts as the car's
     bool m_testSubnetsSet = false;
     QString m_connectionType;

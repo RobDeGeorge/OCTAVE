@@ -20,6 +20,8 @@
 #include <unistd.h>
 #endif
 
+#include <QTemporaryFile>
+#include <QProcess>
 #include "managers/phonemirrormanager.h"
 #include "phone_mirror/scrcpyclient.h"
 
@@ -840,6 +842,67 @@ private slots:
         QCOMPARE(adbCalls("connect-network"), 1);
         QCOMPARE(m.wirelessAddress(), QString("10.42.0.30:33659"));
         QCOMPARE(adbCalls("app_process"), 0);   // the session itself was not restarted
+    }
+
+    void theWatcherIsLeftOnThePhone()
+    {
+        using M = PhoneMirrorManager;
+        // The script: the quoted name and password, plain sh, both forms of the join
+        const QString script = M::watcherScript({"Rob's Jeep", "p%1ss w%2rd"});
+        QVERIFY(script.startsWith("#!/system/bin/sh\n"));
+        QVERIFY(script.contains("name='Rob'\\''s Jeep'\n"));
+        QVERIFY(script.contains("cmd wifi connect-network 'Rob'\\''s Jeep' wpa2 'p%1ss w%2rd' -r persistent >/dev/null"));
+        QVERIFY(script.contains("|| cmd wifi connect-network 'Rob'\\''s Jeep' wpa2 'p%1ss w%2rd' >/dev/null"));
+        QVERIFY(script.contains("-lt 120 ]"));
+        QVERIFY(script.contains("-ge -70 ]"));
+        QVERIFY(script.contains("sleep 10\n"));
+        QVERIFY(!script.contains("awk"));
+        // It never acts on a phone whose Wi-Fi is off or on another network
+        QVERIFY(script.contains("*\"Wifi is disabled\"*|*\"Wifi is connected to\"*) ;;"));
+#ifdef Q_OS_UNIX
+        // ... and is a script the shell accepts
+        QTemporaryFile file;
+        QVERIFY(file.open());
+        file.write(script.toUtf8());
+        file.close();
+        QCOMPARE(QProcess::execute("sh", {"-n", file.fileName()}), 0);
+#endif
+
+        PhoneMirrorManager m;
+        m.m_adbPath = kFakeAdb;
+        const QString watcher = m_tmp.filePath("watcher");
+        QFile::remove(watcher);
+        qputenv("FAKE_ADB_WATCHER", watcher.toUtf8());
+        auto restore = qScopeGuard([] { qunsetenv("FAKE_ADB_WATCHER"); });
+        const M::CarWifi car{"OCTAVE-Jeep", "secret pass"};
+
+        // Only the machine that hosts the network, and only with Car Wi-Fi set
+        QCOMPARE(m.ensureWatcher(USB, car, false, false), QString());
+        QCOMPARE(m.ensureWatcher(USB, {}, true, false), QString());
+        QCOMPARE(adbCalls("push"), 0);
+
+        // Copied and started once; found running after that
+        QCOMPARE(m.ensureWatcher(USB, car, true, false), QString("started"));
+        QCOMPARE(adbCalls("push"), 1);
+        QCOMPARE(m.ensureWatcher(USB, car, true, false), QString("running"));
+        QCOMPARE(adbCalls("push"), 1);
+        // A new password: replaced
+        QCOMPARE(m.ensureWatcher(USB, {"OCTAVE-Jeep", "other"}, true, false), QString("started"));
+        QCOMPARE(adbCalls("push"), 2);
+
+        // Car Wi-Fi cleared: taken off the phone at the next session start
+        m.m_testSubnetsSet = true;
+        m.m_testCarSubnets = {{QHostAddress("10.42.0.1"), 24}};
+        m.setCarWifi("OCTAVE-Jeep", "other");
+        m.setCarWifi("", "");
+        QVERIFY(m.m_watcherRemovalPending);
+        m.startWatcher(USB);
+        QTRY_VERIFY_WITH_TIMEOUT(!m.m_watcherRemovalPending, 5000);
+        QVERIFY(!QFile::exists(watcher));
+        // ... and with it set, started from a session start
+        m.setCarWifi("OCTAVE-Jeep", "other");
+        m.startWatcher(USB);
+        QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(watcher), 5000);
     }
 
     void thePhoneIsRememberedOnEveryNetwork()
