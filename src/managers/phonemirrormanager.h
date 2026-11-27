@@ -214,12 +214,14 @@ public:
     // network hands the phone the same IP address each time.
     static QStringList carWifiCommand(const CarWifi &wifi, bool fixedAddress);
     // The watcher: a small shell script OCTAVE leaves running on the phone,
-    // which joins the car's Wi-Fi when the phone has no Wi-Fi and that
-    // network is in range. Android never rejoins a network without internet
-    // by itself, so without it every drive would start with the cable.
-    // Only the machine that hosts the network installs it. It scans only
-    // while the phone is on no Wi-Fi, never touches a phone whose Wi-Fi is
-    // switched off, and ends when the phone restarts.
+    // which joins the car's Wi-Fi when that network is in range. Android
+    // never rejoins a network without internet by itself, so without it
+    // every drive would start with the cable. Only the machine that hosts
+    // the network installs it. A phone on no Wi-Fi joins as soon as the
+    // network is seen; a phone on another Wi-Fi (the one at home, in the
+    // driveway) only on a strong signal, as inside the car, and is scanned
+    // for it once a minute at most. A phone whose Wi-Fi is switched off is
+    // left alone. It ends when the phone restarts.
     static QString watcherScript(const CarWifi &wifi);
     // Shell lines for the phone: is the watcher of this `version` running
     // (prints "running"), start the pushed script, stop it and remove its files
@@ -234,6 +236,10 @@ public:
     static constexpr int kWatcherPeriodS = 10;
     static constexpr int kWatcherMaxAgeS = 120;
     static constexpr int kWatcherMinRssi = -70;
+    // On another Wi-Fi: the signal it takes to leave it, and how many looks
+    // pass between the scans the watcher asks for itself
+    static constexpr int kWatcherMinRssiElsewhere = -60;
+    static constexpr int kWatcherElsewherePasses = 6;
     // One word for the phone's shell, whatever characters it holds
     static QString shellQuote(const QString &word);
     // A network this machine is on: its own address there and the prefix length

@@ -195,14 +195,16 @@
         <p>
           <strong>After that first cable session you do not need the cable.</strong> Android never rejoins a network
           with no internet by itself, so the head unit leaves a small helper on the phone, the watcher. When the
-          phone has no Wi-Fi and the car's network comes in range, the watcher joins it. This works with the phone
-          asleep in a pocket; allow up to two minutes then, and a few seconds when the phone is awake. OCTAVE finds
-          the phone and starts mirroring.
+          car's network comes in range, the watcher joins it. This works with the phone asleep in a pocket; allow
+          up to two minutes then, and a few seconds when the phone is awake. OCTAVE finds the phone and starts
+          mirroring. In the driveway the phone is still on your Wi-Fi at home: there the watcher waits for a strong
+          signal from the car, as you get sitting in it, and then moves the phone over.
         </p>
         <p>
-          The watcher does little: every ten seconds it asks the phone whether it is on Wi-Fi. It asks for a scan
-          only while the phone is on no Wi-Fi at all, and it leaves a phone alone whose Wi-Fi is switched off or
-          that is on another network. A phone restart ends it; plug the phone in once and it is back. To stop it,
+          The watcher does little: every ten seconds it asks the phone whether it is on Wi-Fi. On no Wi-Fi it
+          asks for a scan each time; on another network, once a minute at most. It leaves a phone alone whose
+          Wi-Fi is switched off. While the car's network is on and close, the phone stays on it and uses mobile
+          data, also when you sit in the driveway. A phone restart ends it; plug the phone in once and it is back. To stop it,
           clear the Car Wi-Fi name: OCTAVE removes it from the phone the next time it connects.
         </p>
         <p>
@@ -742,7 +744,7 @@
         </p>
         <ul>
           <li><strong>Joining the car's Wi-Fi.</strong> Before either cable step below, the manager reads the phone's Wi-Fi address over the cable. With Car Wi-Fi set, it first asks whether this machine hosts that network: on Linux, an access point with that name in <code>iw dev</code>. If it does, the phone must be on that network. If it does not, any network this machine is on will do. When the phone's address does not fit, the manager runs <code>cmd wifi connect-network</code> in the phone's shell with the network's name and password, then waits up to 10 seconds for the phone to get an address there. The command asks for a fixed MAC address (<code>-r persistent</code>), so the network gives the phone the same IP address every time. An Android that does not know that option is asked again without it. Joined this way, the network does not become the phone's route to the internet. A phone plugged in while it is already mirrored over Wi-Fi is moved in the background; the session drops for a moment and comes back on the cable. If the session was still starting over Wi-Fi, it starts again on the cable.</li>
-          <li><strong>The watcher</strong> is a shell script, <code>/data/local/tmp/octave-wifi-watch.sh</code> on the phone. Only a machine that hosts the Car Wi-Fi network installs it. At every session start the manager asks the phone whether the watcher of the current version is running (the version is a hash of the script, so a new name or password replaces it). If not, it copies the script over and starts it detached from adb. It has to ask every time: pulling a USB cable restarts the phone's adb service, which ends the watcher, and the session that follows over Wi-Fi starts it again. The script holds the network's password; the file is readable only by the phone's shell user. It joins only when the network's scan result is under 120 seconds old and stronger than -70 dBm.</li>
+          <li><strong>The watcher</strong> is a shell script, <code>/data/local/tmp/octave-wifi-watch.sh</code> on the phone. Only a machine that hosts the Car Wi-Fi network installs it. At every session start the manager asks the phone whether the watcher of the current version is running (the version is a hash of the script, so a new name or password replaces it). If not, it copies the script over and starts it detached from adb. It has to ask every time: pulling a USB cable restarts the phone's adb service, which ends the watcher, and the session that follows over Wi-Fi starts it again. The script holds the network's password; the file is readable only by the phone's shell user. It joins only on a scan result under 120 seconds old: stronger than -70 dBm when the phone is on no Wi-Fi, stronger than -60 dBm when it has to leave another network for it.</li>
           <li><strong>After a cable session.</strong> A computer the phone approved over USB is accepted by its Wireless debugging too, with no pairing. So OCTAVE reads the phone's Wi-Fi address over the cable, switches Wireless debugging on, finds its port, and connects. The session does not wait for this.</li>
           <li><strong>QR pairing.</strong> OCTAVE shows a QR code holding a random service name and password, in the format Android Studio uses. The phone scans it and announces a pairing service under that name on the network. OCTAVE finds it, runs <code>adb pair</code> and then <code>adb connect</code>, and reports the outcome with the <code>wirelessResult</code> signal. Needs platform-tools 30 or newer; with an older adb pairing fails at once and says so.</li>
           <li><strong>Stay Wireless After USB</strong> runs <code>adb tcpip 5555</code> before a USB session. This restarts the phone's adb service, so the session starts a couple of seconds later. The phone then listens on port 5555 on every network until it restarts, which is why the setting carries a warning.</li>

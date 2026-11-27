@@ -856,11 +856,15 @@ private slots:
         QVERIFY(script.contains("|| cmd wifi connect-network 'Rob'\\''s Jeep' wpa2 'p%1ss w%2rd' >/dev/null"));
         QVERIFY(script.contains("[ -n \"$age\" ] && [ -n \"$rssi\" ] || continue\n"));   // mksh: "" counts as 0
         QVERIFY(script.contains("-lt 120 ]"));
-        QVERIFY(script.contains("-ge -70 ]"));
         QVERIFY(script.contains("sleep 10\n"));
         QVERIFY(!script.contains("awk"));
-        // It never acts on a phone whose Wi-Fi is off or on another network
-        QVERIFY(script.contains("*\"Wifi is disabled\"*|*\"Wifi is connected to\"*) ;;"));
+        // A phone whose Wi-Fi is off is left alone; on the car's network nothing
+        // is done; on another one it takes a strong signal, and a scan a minute
+        QVERIFY(script.contains("*\"Wifi is disabled\"*) ;;"));
+        QVERIFY(script.contains("*\"Wifi is connected to \\\"$name\\\"\"*) n=0 ;;"));
+        QVERIFY(script.contains("if seen -60; then join; n=0"));
+        QVERIFY(script.contains("elif [ $n -ge 6 ]; then cmd wifi start-scan"));
+        QVERIFY(script.contains("if seen -70; then join; else cmd wifi start-scan"));
 #ifdef Q_OS_UNIX
         // ... and is a script the shell accepts
         QTemporaryFile file;

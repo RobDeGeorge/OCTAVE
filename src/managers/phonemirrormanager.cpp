@@ -1007,6 +1007,20 @@ void PhoneMirrorManager::startScrcpy()
             const QStringList shell{QStringLiteral("-s"), prep.serial, QStringLiteral("shell")};
             prep.phoneId = runAdbFull(shell + QStringList{QStringLiteral("getprop"),
                                                           QStringLiteral("ro.serialno")}, 5000).trimmed();
+            if (prep.phoneId.isEmpty() && ScrcpyClient::isNetworkSerial(prep.serial)) {
+                // adb still lists a Wi-Fi phone that has left the network, and
+                // a start on it hangs in the server push for half a minute.
+                // No answer to the first question: drop it and look again.
+                qCInfo(lcPhoneMirror) << "No answer from" << prep.serial << ": dropping it";
+                runAdbFull({QStringLiteral("disconnect"), prep.serial}, 5000);
+                prep.probe = probeDevices();
+                prep.serial = pickSerial(prep.probe.rows, preferred);
+                if (ScrcpyClient::isNetworkSerial(prep.serial))
+                    prep.serial.clear();   // another Wi-Fi address: the next look asks it
+                if (!prep.serial.isEmpty())
+                    prep.phoneId = runAdbFull({QStringLiteral("-s"), prep.serial, QStringLiteral("shell"),
+                                               QStringLiteral("getprop"), QStringLiteral("ro.serialno")}, 5000).trimmed();
+            }
             // Clear a stale server first, unless this is the phone whose
             // session we are about to reattach to
             if (attachScid.isEmpty() || !samePhone(prep.phoneId, persistPhoneId))
@@ -1931,25 +1945,32 @@ QString PhoneMirrorManager::watcherScript(const CarWifi &wifi)
     s += QStringLiteral("name=") + shellQuote(wifi.name) + QLatin1Char('\n');
     s += QStringLiteral("join() { ") + join + QStringLiteral(" >/dev/null 2>&1 || ") + joinPlain
          + QStringLiteral(" >/dev/null 2>&1; }\n");
+    // seen MIN: a scan result for the network, fresh and at least MIN dBm
     s += QStringLiteral(
+        "seen() {\n"
+        "  cmd wifi list-scan-results 2>/dev/null | grep -F \" $name \" | {\n"
+        "    while read -r bssid freq rssi age rest; do\n"
+        "      rssi=${rssi%%[!0-9-]*}; age=${age%%.*}\n"
+        "      [ -n \"$age\" ] && [ -n \"$rssi\" ] || continue\n"
+        "      if [ \"$age\" -lt %1 ] 2>/dev/null && [ \"$rssi\" -ge \"$1\" ] 2>/dev/null; then exit 0; fi\n"
+        "    done; exit 1; }\n"
+        "}\n"
+        "n=0\n"
         "while true; do\n"
         "  s=$(cmd wifi status 2>/dev/null)\n"
         "  case \"$s\" in\n"
-        "  *\"Wifi is disabled\"*|*\"Wifi is connected to\"*) ;;\n"
+        "  *\"Wifi is disabled\"*) ;;\n"
+        "  *\"Wifi is connected to \\\"$name\\\"\"*) n=0 ;;\n"
+        "  *\"Wifi is connected to\"*)\n"
+        "    n=$((n+1))\n"
+        "    if seen %2; then join; n=0\n"
+        "    elif [ $n -ge %3 ]; then cmd wifi start-scan >/dev/null 2>&1; n=0; fi ;;\n"
         "  *\"Wifi is not connected\"*)\n"
-        "    if cmd wifi list-scan-results 2>/dev/null | grep -F \" $name \" | {\n"
-        "      while read -r bssid freq rssi age rest; do\n"
-        "        rssi=${rssi%%[!0-9-]*}; age=${age%%.*}\n"
-        "        [ -n \"$age\" ] && [ -n \"$rssi\" ] || continue\n"
-        "        if [ \"$age\" -lt %1 ] 2>/dev/null && [ \"$rssi\" -ge %2 ] 2>/dev/null; then exit 0; fi\n"
-        "      done; exit 1; }; then\n"
-        "      join\n"
-        "    else\n"
-        "      cmd wifi start-scan >/dev/null 2>&1\n"
-        "    fi ;;\n"
+        "    if seen %4; then join; else cmd wifi start-scan >/dev/null 2>&1; fi ;;\n"
         "  esac\n"
-        "  sleep %3\n"
-        "done\n").arg(kWatcherMaxAgeS).arg(kWatcherMinRssi).arg(kWatcherPeriodS);
+        "  sleep %5\n"
+        "done\n").arg(kWatcherMaxAgeS).arg(kWatcherMinRssiElsewhere).arg(kWatcherElsewherePasses)
+             .arg(kWatcherMinRssi).arg(kWatcherPeriodS);
     return s;
 }
 
