@@ -1910,6 +1910,7 @@ void PhoneMirrorManager::setCarWifi(const QString &name, const QString &password
 QString PhoneMirrorManager::watcherScript(const CarWifi &wifi)
 {
     // Plain sh for Android's mksh, which is stricter than bash or dash: an
+    // empty string counts as 0 in a [ -ge ] test there, and an
     // unquoted "(" inside ${...} is "no closing quote" there (the first
     // version never ran on the phone for it). tst_phonemirror runs the
     // script through mksh where one is installed. No awk either (Android's
@@ -1939,6 +1940,7 @@ QString PhoneMirrorManager::watcherScript(const CarWifi &wifi)
         "    if cmd wifi list-scan-results 2>/dev/null | grep -F \" $name \" | {\n"
         "      while read -r bssid freq rssi age rest; do\n"
         "        rssi=${rssi%%[!0-9-]*}; age=${age%%.*}\n"
+        "        [ -n \"$age\" ] && [ -n \"$rssi\" ] || continue\n"
         "        if [ \"$age\" -lt %1 ] 2>/dev/null && [ \"$rssi\" -ge %2 ] 2>/dev/null; then exit 0; fi\n"
         "      done; exit 1; }; then\n"
         "      join\n"

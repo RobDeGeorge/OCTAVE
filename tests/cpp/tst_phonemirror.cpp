@@ -854,6 +854,7 @@ private slots:
         QVERIFY(script.contains("name='Rob'\\''s Jeep'\n"));
         QVERIFY(script.contains("cmd wifi connect-network 'Rob'\\''s Jeep' wpa2 'p%1ss w%2rd' -r persistent >/dev/null"));
         QVERIFY(script.contains("|| cmd wifi connect-network 'Rob'\\''s Jeep' wpa2 'p%1ss w%2rd' >/dev/null"));
+        QVERIFY(script.contains("[ -n \"$age\" ] && [ -n \"$rssi\" ] || continue\n"));   // mksh: "" counts as 0
         QVERIFY(script.contains("-lt 120 ]"));
         QVERIFY(script.contains("-ge -70 ]"));
         QVERIFY(script.contains("sleep 10\n"));
