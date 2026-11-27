@@ -1044,7 +1044,11 @@ void PhoneMirrorManager::continueStart(const StartPrep &prep, int generation)
         const int gen = ++m_startGeneration;
         const CarWifi carWifi = m_carWifi;
         const QList<Subnet> subnets = localSubnets();
+        // The wireless jobs run one at a time: a reconnect that is trying
+        // addresses nobody answers on gives way to the phone on the cable
+        m_reconnectAbort = true;
         runWirelessJob([this, serial, gen, carWifi, subnets]() {
+            m_reconnectAbort = false;
             joinCarWifi(serial, carWifi, subnets, hostedCarSubnets(carWifi.name));
             const QString address = enableTcpip(serial);
             QMetaObject::invokeMethod(this, [this, address, gen]() {
@@ -1065,9 +1069,14 @@ void PhoneMirrorManager::continueStart(const StartPrep &prep, int generation)
     // on, which has already done that its own way.
     if (!wireless && !m_autoWifi)
         startWirelessDebugging(serial, prep.sdk);
-    // After those (the wireless jobs run one at a time): `adb tcpip` and a
-    // cable going in or out restart the phone's adb service, which ends the watcher
-    startWatcher(serial);
+    // Once the session has run for a while: `adb tcpip` and a cable going
+    // in or out restart the phone's adb service, which ends the watcher, and
+    // a link that is still coming and going is left in peace
+    const int watcherGen = m_startGeneration;
+    QTimer::singleShot(kWatcherDelayMs, this, [this, serial, watcherGen]() {
+        if (watcherGen == m_startGeneration && m_ready && m_serial == serial)
+            startWatcher(serial);
+    });
     const QString jar = ScrcpyClient::bundledServerJar();
     if (jar.isEmpty()) {
         reportError(QStringLiteral("Bundled scrcpy server could not be extracted"));
@@ -1588,9 +1597,9 @@ QString PhoneMirrorManager::mdnsConnectAddressFor(const QString &host) const
     return {};
 }
 
-bool PhoneMirrorManager::adbConnect(const QString &address, QString *message) const
+bool PhoneMirrorManager::adbConnect(const QString &address, QString *message, int timeoutMs) const
 {
-    const QString out = runAdbFull({QStringLiteral("connect"), address}, 10000);
+    const QString out = runAdbFull({QStringLiteral("connect"), address}, timeoutMs);
     // adb connect exits 0 on failure too; "already connected to" counts as success
     const bool ok = out.contains(QLatin1String("connected to")) && !out.contains(QLatin1String("failed"))
                     && !out.contains(QLatin1String("cannot"));
@@ -2076,17 +2085,32 @@ void PhoneMirrorManager::maybeReconnectWireless()
     runWirelessJob([this, candidates]() {
         QString msg;
         QString reached;
+        // A phone on the same network answers at once: a short wait each, so
+        // a list of addresses nobody is at does not hold the queue for long
+        static constexpr int kReconnectTryMs = 4000;
         for (const QString &saved : candidates) {
-            if (adbConnect(saved, &msg)) {
+            if (m_reconnectAbort)
+                break;
+            if (adbConnect(saved, &msg, kReconnectTryMs)) {
                 reached = saved;
                 break;
             }
-            // Wireless debugging picks a new port every time it is switched
-            // on; the phone advertises the current one over mDNS.
-            const QString fresh = mdnsConnectAddressFor(hostOf(saved));
-            if (!fresh.isEmpty() && fresh != saved && adbConnect(fresh, &msg)) {
-                reached = fresh;
-                break;
+        }
+        // Wireless debugging picks a new port every time it is switched
+        // on; the phone advertises the current one over mDNS (asked once)
+        if (reached.isEmpty() && !m_reconnectAbort && !candidates.isEmpty()) {
+            const QList<MdnsService> services = mdnsServices();
+            for (const QString &saved : candidates) {
+                QString fresh;
+                for (const MdnsService &s : services)
+                    if (s.type.contains(QLatin1String("_adb-tls-connect")) && hostOf(s.address) == hostOf(saved))
+                        fresh = s.address;
+                if (m_reconnectAbort)
+                    break;
+                if (!fresh.isEmpty() && fresh != saved && adbConnect(fresh, &msg, kReconnectTryMs)) {
+                    reached = fresh;
+                    break;
+                }
             }
         }
         if (!reached.isEmpty())

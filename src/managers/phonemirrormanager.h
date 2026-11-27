@@ -229,6 +229,8 @@ public:
     static constexpr const char *kWatcherPath = "/data/local/tmp/octave-wifi-watch";
     // Seconds between its looks, the oldest scan result it trusts and the
     // weakest signal it joins on (in the car the hotspot is at about -40 dBm)
+    // How long a session streams before the watcher is looked after
+    static constexpr int kWatcherDelayMs = 10000;
     static constexpr int kWatcherPeriodS = 10;
     static constexpr int kWatcherMaxAgeS = 120;
     static constexpr int kWatcherMinRssi = -70;
@@ -470,7 +472,7 @@ private:
     // `avahi-browse` fallback for an adb built without mDNS (distro arm64 adb)
     static QList<MdnsService> avahiMdnsServices();
     QString mdnsConnectAddressFor(const QString &host) const;
-    bool adbConnect(const QString &address, QString *message) const;
+    bool adbConnect(const QString &address, QString *message, int timeoutMs = 10000) const;
     // After a successful adb pair: find the phone's connect port over mDNS
     // (polled up to 8 s) and connect. Returns the address reached, "" if none.
     QString connectPairedHost(const QString &host) const;
@@ -658,6 +660,7 @@ private:
     QThreadPool m_wirelessPool;
     int m_wirelessJobs = 0;                       // UI-started jobs in flight (GUI thread)
     std::atomic<bool> m_autoConnectRunning{false};
+    std::atomic<bool> m_reconnectAbort{false};    // a cable start is waiting for the wireless queue
     qint64 m_lastAutoConnectMs = 0;
     QStringList m_qrRows;
     std::atomic<int> m_qrGeneration{0};           // bumped on start/cancel; a stale wait gives up
