@@ -373,11 +373,14 @@ private slots:
             auto phone = makeRecorder(QStringLiteral("phone"));   // start() empties the inbox
             QSignalSpy done(phone.get(), &TripRecorder::importFinished);
             QTRY_COMPARE_WITH_TIMEOUT(phone->trips().size(), 1, 5000);
+            // The drive is listed before its pair is cleared from the inbox,
+            // and the start's own importFinished may still be on its way
+            QTRY_VERIFY_WITH_TIMEOUT(!QFile::exists(inbox + "/" + QFileInfo(csv).fileName())
+                                     && !QFile::exists(inbox + "/" + QFileInfo(json).fileName()), 5000);
             drop();
             phone->importInbox();
-            QTRY_COMPARE_WITH_TIMEOUT(done.count(), 1, 5000);
-            QCOMPARE(done.first().at(0).toInt(), 0);
-            QCOMPARE(done.first().at(1).toInt(), 1);   // already here
+            QTRY_VERIFY_WITH_TIMEOUT(!done.isEmpty() && done.last().at(1).toInt() == 1, 5000);   // already here
+            QCOMPARE(done.last().at(0).toInt(), 0);
             phone->shutdown();
         }
         TripStore phone;
