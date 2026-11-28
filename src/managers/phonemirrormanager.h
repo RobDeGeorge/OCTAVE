@@ -129,6 +129,8 @@ public:
     ~PhoneMirrorManager() override;
 
     QString adbPath() const { return m_adbPath; }
+    // The adb serial of the phone of the session, "" before the first one
+    QString serial() const { return m_serial; }
     bool nativeAvailable() const;
     QString serverVersion() const;
     bool isRunning() const;

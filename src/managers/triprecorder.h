@@ -23,7 +23,8 @@ class SettingsManager;
 // TripRecorder -- the vehicle's black box.
 //
 // Taps every decoded OBD value (OBDManager::parameterSampled) and records it
-// with its time into the TripStore database, one trip per drive. On top of
+// with its time into the TripStore database, one trip per drive. The
+// simulated car is never recorded (setSimulated). On top of
 // what the pages on screen poll, it asks OBDManager to sweep every PID the
 // vehicle supports in the background (setBackgroundDemand), so the record is
 // complete even on the home screen. When the drive ends the trip is
@@ -49,6 +50,7 @@ class TripRecorder : public QObject
     Q_CLASSINFO("octave.scope", "files")
     Q_CLASSINFO("octave.scope.read", "refresh requestDetail requestSeries requestHealthTrends requestParamTrend")
     Q_CLASSINFO("octave.scope.system", "openHistoryFolder")
+    Q_CLASSINFO("octave.experimental", "importInbox importFinished")
     Q_CLASSINFO("octave.scope.full", "noteEvent recordSample setConnected setVehicleIdentity setVehicleParameters")
 
     Q_PROPERTY(bool enabled READ enabled NOTIFY enabledChanged)
@@ -79,13 +81,26 @@ public:
     // Open the store on its thread, recover an unfinished trip, list the
     // history and apply the size cap.
     void start();
+    // TripStore::writeSnapshot() of the drive being recorded; `done` (GUI
+    // thread) gets its id and the time of the last sample written, 0 for
+    // nothing new or no drive
+    void snapshot(qint64 afterTs, const QString &base, std::function<void(qint64 id, qint64 lastTs)> done);
+    // The device is about to power off: end the drive here and start no
+    // other (the engine may still run). Not a slot: the service must not offer it.
+    void stopForPowerOff();
+    // One more folder importInbox() takes drives from (TripStore::addInboxDir)
+    void addInboxDir(const QString &dir);
     // Wire the OBD manager's samples, connection state, vehicle identity and
     // diagnostic events into the recorder, and register the background sweep.
     void attach(OBDManager *obd);
-    // The readings come from the simulated car: trips started from now on
-    // are marked, so a real car's history never passes a made-up drive off
+    // The readings come from the simulated car (OBDManager::simulated).
+    // Nothing of a simulated drive is recorded: no trip, no sample, and a
+    // trip of a real car open at that moment ends. The background sweep
+    // stays, so the simulated car is polled as a real one is.
+    // Going back to a real car takes effect once the simulated link has
+    // dropped, so its last readings cannot start a trip.
     // Not a slot: the service must not offer it.
-    void setSimulated(bool simulated) { m_simulated = simulated; }
+    void setSimulated(bool simulated);
     // End the trip being recorded, write it out and stop the store thread.
     // Blocks (bounded) so the files exist before the process exits.
     void shutdown();
@@ -148,6 +163,11 @@ public slots:
     Q_INVOKABLE void deleteTrip(qint64 id);
     Q_INVOKABLE void clearHistory();               // everything but the trip being recorded
     Q_INVOKABLE void exportTrip(qint64 id);        // copy CSV + JSON to Downloads -> exportFinished
+    // Take in the drives of another OCTAVE waiting in <historyDir>/inbox (a
+    // drive's CSV + JSON pair, see TripStore::importTrip) -> importFinished.
+    // Also runs at every start. No path argument: a client cannot point it
+    // at a folder of its choosing.
+    Q_INVOKABLE void importInbox();
     Q_INVOKABLE bool openHistoryFolder();          // desktop only
 
 signals:
@@ -170,6 +190,7 @@ signals:
     void detailReady(qint64 id, const QVariantMap &detail);
     void seriesReady(qint64 id, const QString &paramId, const QVariantList &points);
     void exportFinished(qint64 id, const QString &path);
+    void importFinished(int imported, int alreadyHere, int rejected);
     void healthTrendsReady(int days, const QVariantMap &result);
     void paramTrendReady(const QString &paramId, int days, const QVariantList &rows);
 
@@ -211,7 +232,8 @@ private:
     bool m_rpmExpected = true;      // the car has an RPM PID (or we don't know yet)
     QStringList m_vehicleParams;
     QVariantMap m_identity;
-    bool m_simulated = false;
+    bool m_simulated = false;        // nothing is recorded while set
+    bool m_simulatedEnding = false;  // cleared with the next disconnect
 
     // Coalescing
     struct Last { bool valid = false; float value = 0.0f; qint64 tsMs = 0; };
@@ -235,6 +257,8 @@ private:
     qint64 m_storageBytes = 0;
     QString m_lastExportPath;
     QString m_lastError;
+    QStringList m_pendingInboxes;   // addInboxDir() before start()
+    bool m_poweringOff = false;
 };
 
 #endif // TRIPRECORDER_H

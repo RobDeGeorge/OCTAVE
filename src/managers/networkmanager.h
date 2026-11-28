@@ -8,6 +8,8 @@
 #include <QTimer>
 #include <QMutex>
 
+#include <functional>
+
 class QNetworkAccessManager;
 class QNetworkReply;
 
@@ -33,6 +35,10 @@ class NetworkManager : public QObject
     // ======================================================================
     // Q_PROPERTY declarations
     // ======================================================================
+
+    // shutdownDevice() was asked for and the last things are being done
+    // (the drive goes to the phone) before the power goes
+    Q_PROPERTY(bool poweringOff READ poweringOff NOTIFY poweringOffChanged)
 
     // Network status
     Q_PROPERTY(QString networkName READ networkName NOTIFY networkNameChanged)
@@ -86,7 +92,17 @@ public slots:
     // the old names are marked octave.deprecated and go in protocol 5)
     void shutdownDevice() { shutdown_device(); }
 
+public:
+    bool poweringOff() const { return m_poweringOff; }
+    // What shutdownDevice() does first, with the system still whole (the
+    // network and adb are up): `work` is handed a function to call when it
+    // is done, and the power goes then, or after kPowerOffWaitMs at the
+    // latest. AppCore: the black box closes the drive and sends it to the phone.
+    static constexpr int kPowerOffWaitMs = 30000;
+    void setBeforePowerOff(std::function<void(std::function<void()>)> work) { m_beforePowerOff = std::move(work); }
+
 signals:
+    void poweringOffChanged();
     // Network status signals
     void networkNameChanged(const QString &name);
     void isConnectedChanged(bool connected);
@@ -114,6 +130,11 @@ private slots:
 #endif
 
 private:
+    void powerOffNow();
+    std::function<void(std::function<void()>)> m_beforePowerOff;
+    bool m_poweringOff = false;
+    bool m_powerOffDone = false;
+
     // Internal helpers
     void refreshNetworkStatus();
     void startConnectivityCheck();

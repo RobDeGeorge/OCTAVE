@@ -4,7 +4,7 @@
 
 **Status:** deferred. The session fixed what could be verified on a desktop (branch `fixing-party`); these are the rest.
 
-**Last updated:** 2026-11-15
+**Last updated:** 2026-11-27
 
 **Why parked:** each item below either cannot be verified without a device or a CI release run, or is a refactor that should follow the bug fixes rather than be mixed with them. None was skipped for being unimportant. The licensing points are in [licensing-review.md](licensing-review.md).
 
@@ -89,7 +89,7 @@ Left:
 ## Decided 2026-11-15
 
 - Pairing lockouts last until restart: kept as they are.
-- Simulated drives are marked (`trips.simulated`, schema 2) and shown as "simulated car" in Trip History. A paired frontend can still switch the car to the simulator.
+- Simulated drives are not recorded at all (Rob, 2026-11-27; `TripRecorder::setSimulated`). The mark (`trips.simulated`, schema 2, "simulated car" in Trip History) is left for drives recorded before that. A paired frontend can still switch the car to the simulator, which ends the drive being recorded.
 - Destructive one-tap actions ask first (`settings/ConfirmButton.qml`).
 - Frontends outside this repository must stay possible: protocol 4 removes nothing without a deprecation period and a release of notice.
 

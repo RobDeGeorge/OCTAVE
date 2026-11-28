@@ -503,6 +503,26 @@ void NetworkManager::restartApp()
 
 void NetworkManager::shutdown_device()
 {
+    if (m_poweringOff)
+        return;
+    m_poweringOff = true;
+    emit poweringOffChanged();
+    if (!m_beforePowerOff) {
+        powerOffNow();
+        return;
+    }
+    // systemctl poweroff takes the network and adb down with the app, so
+    // what needs them is done first
+    qCInfo(lcNetwork) << "Shutdown asked for: finishing up first";
+    QTimer::singleShot(kPowerOffWaitMs, this, &NetworkManager::powerOffNow);
+    m_beforePowerOff([this] { QMetaObject::invokeMethod(this, &NetworkManager::powerOffNow, Qt::QueuedConnection); });
+}
+
+void NetworkManager::powerOffNow()
+{
+    if (m_powerOffDone)
+        return;
+    m_powerOffDone = true;
     QString system = QSysInfo::kernelType();
     qCInfo(lcNetwork) << "Device shutdown requested on" << system;
 

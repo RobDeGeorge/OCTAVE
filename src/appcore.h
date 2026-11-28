@@ -30,6 +30,7 @@
 #include "managers/shiftlightmanager.h"
 #include "managers/obdadapterfinder.h"
 #include "managers/triprecorder.h"
+#include "managers/tripsync.h"
 #include "managers/esp32volumemanager.h"  // desktop-only; empty on Q_OS_MOBILE
 #include "managers/berryimumanager.h"     // desktop-only; empty on Q_OS_MOBILE
 #include "managers/parameterstore.h"
@@ -99,6 +100,9 @@ public:
     ThemeCatalog themeCatalog;
     // Pairing and the service switch (not a service object: QML only)
     ServicePairing servicePairing;
+    // The black box's drives to and from other OCTAVEs (after the phone
+    // mirror and the pairing, which it is wired to)
+    TripSync tripSync;
     DashboardManager dashboardManager;
     // The simulated car, started by --sim / --dev or the adapter picker.
     Simulator sim;

@@ -1,6 +1,6 @@
 # TODO index — easiest to hardest
 
-**Last updated:** 2026-11-26 (phone-mirror-browser.md added; the OBD adapter reworked into a compact two-sided board with the pod-bus connector on it: diy-obd-adapter.md, lora-car-finder.md; home-dashboard.md added; maps.md added)
+**Last updated:** 2026-11-27 (trip-sync.md added; phone-mirror-browser.md added; the OBD adapter reworked into a compact two-sided board with the pod-bus connector on it: diy-obd-adapter.md, lora-car-finder.md; home-dashboard.md added; maps.md added)
 
 One file per deferred plan. Each file opens with a one-line **Goal**, lists only the work that is left, and gives every step an **Effort** (S under an hour, M one session, L several sessions, XL a new subsystem) and the device it needs. When a plan is finished, delete its file and its row here.
 
@@ -28,6 +28,7 @@ Devices: **S22** = Galaxy S22 test phone, **Pi** = Orange Pi 5 Plus head unit in
 | [future-tests.md](future-tests.md) | Wiring of the hardware inputs (the rest is checked by ctest `wiring`), then QML integration and OBD replay suites | S … L–XL | desktop, Jeep for OBD recordings |
 | [dp-helper-consolidation.md](dp-helper-consolidation.md) | One shared `dp()` instead of 63 private copies | M | 10-min S22 check first |
 | [obd-adapter-discovery.md](obd-adapter-discovery.md) | Pick-and-connect Bluetooth OBD on every platform (Jeep test S, other platforms L) | S, then L | Pi + NEXAS, S22 |
+| [trip-sync.md](trip-sync.md) | The black box's drives on the phone and the server: built and tested on the desktop (pull from a paired OCTAVE, push over adb); left: the checks on the phone and the Pi | S … M | S22, S26, Pi |
 | [octave-companion-app.md](octave-companion-app.md) | Mirror setup walkthrough (no app), then the companion app: car link, phone GPS into the black box, traffic stop recorder, notifications / calls, keep-mirror-connected; v2 remote, parking, car health, hotspot | M, then L–XL | S22, Pi |
 | [phone-spotify-library.md](phone-spotify-library.md) | Step 1 (shared song rows, shuffle/repeat to the phone) M; library reader is a maybe | M … L | S22 + Spotify |
 | [arm64-qt-ffmpeg-lgpl.md](arm64-qt-ffmpeg-lgpl.md) | aarch64 AppImage ships an LGPL FFmpeg for Qt's music playback instead of Ubuntu's GPL one | M (or with a Qt upgrade) | arm64 CI, Pi |

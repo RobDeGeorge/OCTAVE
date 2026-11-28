@@ -4,6 +4,7 @@
 #include <QDateTime>
 #include <QDir>
 #include <QHash>
+#include <QJsonArray>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -25,6 +26,7 @@ const int kSchemaVersion = 1;     // of the per-trip JSON files
 // Of the database. 2: trips.simulated (a drive of the simulated car)
 const int kDbSchemaVersion = 2;
 const int kDamagedCopiesKept = 3;
+const qint64 kMaxImportJsonBytes = 8 * 1024 * 1024;   // a drive's summary is a few hundred kB at most
 // Gaps longer than this between two speed samples are not integrated into
 // the distance (a dropout, not a 10 s stretch at the last known speed)
 const qint64 kMaxIntegrationGapMs = 10000;
@@ -587,7 +589,7 @@ QVariantMap TripStore::tripRow(qint64 id)
     return row;
 }
 
-QVariantMap TripStore::endTrip(qint64 id, qint64 endMs, bool clean)
+QVariantMap TripStore::endTrip(qint64 id, qint64 endMs, bool clean, bool partial)
 {
     if (!isOpen())
         return {};
@@ -606,6 +608,8 @@ QVariantMap TripStore::endTrip(qint64 id, qint64 endMs, bool clean)
     meta[QStringLiteral("simulated")] = row.value(QStringLiteral("simulated"));
 
     QVariantMap summary = summarise(id, startMs, endMs, clean, meta);
+    if (partial)
+        summary[QStringLiteral("partial")] = true;
     QString base;
     if (writeTripFiles(id, startMs, summary, &base))
         summary[QStringLiteral("file")] = base + QStringLiteral(".csv");
@@ -1082,6 +1086,79 @@ QString TripStore::stampFor(qint64 startMs)
     return QDateTime::fromMSecsSinceEpoch(startMs).toString(QStringLiteral("yyyy-MM-dd_HH-mm-ss"));
 }
 
+bool TripStore::writeCsv(const QString &path, qint64 id, qint64 startMs, qint64 afterTs, qint64 *lastTs)
+{
+    QSaveFile f(path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        qCWarning(lcTripStore) << "Cannot write" << f.fileName() << f.errorString();
+        return false;
+    }
+    QTextStream out(&f);
+    // unit last, so readers that go by position keep working
+    out << "timestamp_ms,time,elapsed_s,parameter,value,unit\n";
+    QHash<QString, QString> units;   // per id, from ParameterCatalog
+    Query q(m_db);
+    if (q.prepare("SELECT s.ts_ms, p.name, s.value FROM samples s JOIN params p ON p.id = s.param_id "
+                  "WHERE s.trip_id = ? AND s.ts_ms > ? ORDER BY s.ts_ms, p.name")) {
+        q.bind(1, id).bind(2, afterTs);
+        while (q.step()) {
+            const qint64 ts = q.int64(0);
+            const QString name = q.text(1);
+            auto unit = units.constFind(name);
+            if (unit == units.constEnd()) {
+                const ParameterCatalog::Parameter *meta = ParameterCatalog::find(name);
+                unit = units.insert(name, meta ? meta->unit : QString());
+            }
+            out << ts << ','
+                << QDateTime::fromMSecsSinceEpoch(ts).toString(Qt::ISODateWithMs) << ','
+                << QString::number(static_cast<double>(ts - startMs) / 1000.0, 'f', 3) << ','
+                << name << ','
+                << QString::number(q.dbl(2), 'g', 7) << ','
+                << unit.value() << '\n';
+            if (lastTs)
+                *lastTs = ts;
+        }
+    }
+    out.flush();
+    if (!f.commit()) {
+        qCWarning(lcTripStore) << "Cannot commit" << f.fileName() << f.errorString();
+        return false;
+    }
+    return true;
+}
+
+qint64 TripStore::writeSnapshot(qint64 id, qint64 afterTs, const QString &base)
+{
+    if (!isOpen())
+        return 0;
+    const QVariantMap row = tripRow(id);
+    // Only the drive being recorded, and never the simulated car's
+    if (row.isEmpty() || row.value(QStringLiteral("endMs")).isValid() || row.value(QStringLiteral("simulated")).toBool())
+        return 0;
+    const qint64 startMs = row.value(QStringLiteral("startMs")).toLongLong();
+    QDir().mkpath(QFileInfo(base).absolutePath());
+    qint64 lastTs = 0;
+    if (!writeCsv(base + QStringLiteral(".csv"), id, startMs, afterTs, &lastTs) || lastTs <= afterTs) {
+        QFile::remove(base + QStringLiteral(".csv"));
+        return 0;
+    }
+    QVariantMap meta;
+    meta[QStringLiteral("vin")] = row.value(QStringLiteral("vin"));
+    meta[QStringLiteral("make")] = row.value(QStringLiteral("make"));
+    meta[QStringLiteral("modelYear")] = row.value(QStringLiteral("modelYear"));
+    QVariantMap doc = summarise(id, startMs, lastTs, true, meta);
+    doc[QStringLiteral("partial")] = true;
+    doc[QStringLiteral("format")] = QStringLiteral("octave-trip");
+    doc[QStringLiteral("schema")] = kSchemaVersion;
+    doc[QStringLiteral("csv")] = QFileInfo(base + QStringLiteral(".csv")).fileName();
+    QSaveFile f(base + QStringLiteral(".json"));
+    if (!f.open(QIODevice::WriteOnly) || f.write(QJsonDocument(QJsonObject::fromVariantMap(doc)).toJson()) <= 0 || !f.commit()) {
+        QFile::remove(base + QStringLiteral(".csv"));
+        return 0;
+    }
+    return lastTs;
+}
+
 bool TripStore::writeTripFiles(qint64 id, qint64 startMs, const QVariantMap &summary, QString *baseOut)
 {
     QString base = tripsDir() + QLatin1Char('/') + stampFor(startMs);
@@ -1090,42 +1167,8 @@ bool TripStore::writeTripFiles(qint64 id, qint64 startMs, const QVariantMap &sum
     *baseOut = base;
 
     // CSV: every sample, long format, in time order
-    {
-        QSaveFile f(base + QStringLiteral(".csv"));
-        if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            qCWarning(lcTripStore) << "Cannot write" << f.fileName() << f.errorString();
-            return false;
-        }
-        QTextStream out(&f);
-        // unit last, so readers that go by position keep working
-        out << "timestamp_ms,time,elapsed_s,parameter,value,unit\n";
-        QHash<QString, QString> units;   // per id, from ParameterCatalog
-        Query q(m_db);
-        if (q.prepare("SELECT s.ts_ms, p.name, s.value FROM samples s JOIN params p ON p.id = s.param_id "
-                      "WHERE s.trip_id = ? ORDER BY s.ts_ms, p.name")) {
-            q.bind(1, id);
-            while (q.step()) {
-                const qint64 ts = q.int64(0);
-                const QString name = q.text(1);
-                auto unit = units.constFind(name);
-                if (unit == units.constEnd()) {
-                    const ParameterCatalog::Parameter *meta = ParameterCatalog::find(name);
-                    unit = units.insert(name, meta ? meta->unit : QString());
-                }
-                out << ts << ','
-                    << QDateTime::fromMSecsSinceEpoch(ts).toString(Qt::ISODateWithMs) << ','
-                    << QString::number(static_cast<double>(ts - startMs) / 1000.0, 'f', 3) << ','
-                    << name << ','
-                    << QString::number(q.dbl(2), 'g', 7) << ','
-                    << unit.value() << '\n';
-            }
-        }
-        out.flush();
-        if (!f.commit()) {
-            qCWarning(lcTripStore) << "Cannot commit" << f.fileName() << f.errorString();
-            return false;
-        }
-    }
+    if (!writeCsv(base + QStringLiteral(".csv"), id, startMs, 0, nullptr))
+        return false;
     // JSON: the summary with per-parameter stats and events
     {
         QSaveFile f(base + QStringLiteral(".json"));
@@ -1427,6 +1470,182 @@ qint64 TripStore::prune(qint64 maxBytes)
     }
     emit storageChanged(bytes);
     return bytes;
+}
+
+TripStore::ImportResult TripStore::importTrip(const QString &jsonPath)
+{
+    if (!isOpen())
+        return ImportResult::Invalid;
+    QFile jf(jsonPath);
+    if (!jf.open(QIODevice::ReadOnly) || jf.size() > kMaxImportJsonBytes)
+        return ImportResult::Invalid;
+    const QJsonObject doc = QJsonDocument::fromJson(jf.readAll()).object();
+    jf.close();
+    const qint64 id = doc.value(QLatin1String("id")).toInteger();
+    const qint64 startMs = doc.value(QLatin1String("startMs")).toInteger();
+    const qint64 endMs = doc.value(QLatin1String("endMs")).toInteger();
+    if (doc.value(QLatin1String("format")).toString() != QLatin1String("octave-trip")
+        || doc.value(QLatin1String("schema")).toInt() != kSchemaVersion
+        || id <= 0 || startMs <= 0 || endMs < startMs) {
+        qCWarning(lcTripStore) << "Not a trip file:" << jsonPath;
+        return ImportResult::Invalid;
+    }
+    if (doc.value(QLatin1String("simulated")).toBool()) {
+        qCWarning(lcTripStore) << "A simulated drive is not taken in:" << jsonPath;
+        return ImportResult::Invalid;
+    }
+    // A drive still being recorded over there comes in parts (`partial`):
+    // each part adds what is newer than what is here, and the whole drive,
+    // when it comes, takes the place of the parts
+    const bool partial = doc.value(QLatin1String("partial")).toBool();
+    qint64 afterTs = 0;        // only samples newer than this are taken
+    bool adding = false;       // to a partial drive that is here
+    {
+        const QVariantMap here = tripRow(id);
+        if (!here.isEmpty()) {
+            const bool herePartial = here.value(QStringLiteral("endMs")).isValid()
+                                     && QJsonDocument::fromJson(here.value(QStringLiteral("summary")).toString().toUtf8())
+                                            .object().value(QLatin1String("partial")).toBool();
+            if (!herePartial)
+                return ImportResult::AlreadyHere;
+            if (partial) {
+                adding = true;
+                Query last(m_db);
+                if (last.prepare("SELECT MAX(ts_ms) FROM samples WHERE trip_id = ?")) {
+                    last.bind(1, id);
+                    if (last.step() && !last.isNull(0))
+                        afterTs = last.int64(0);
+                }
+                if (endMs <= afterTs)
+                    return ImportResult::AlreadyHere;   // a part that is here already
+                removeTripFiles(here.value(QStringLiteral("fileBase")).toString());
+            } else if (!deleteTrip(id)) {
+                return ImportResult::Invalid;
+            }
+        }
+    }
+    // The CSV is the file beside the JSON that it names, never a path
+    const QString csvName = QFileInfo(doc.value(QLatin1String("csv")).toString()).fileName();
+    QFile cf(QFileInfo(jsonPath).absolutePath() + QLatin1Char('/') + csvName);
+    if (csvName.isEmpty() || !cf.open(QIODevice::ReadOnly)) {
+        qCWarning(lcTripStore) << "Trip file without its CSV:" << jsonPath;
+        return ImportResult::Invalid;
+    }
+    if (!cf.readLine().startsWith("timestamp_ms,time,elapsed_s,parameter,value"))
+        return ImportResult::Invalid;
+
+    if (!exec(QStringLiteral("BEGIN")))
+        return ImportResult::Invalid;
+    bool ok = false;
+    qint64 count = 0;
+    {
+        Query t(m_db);
+        ok = adding || t.prepare("INSERT INTO trips(id, start_ms, vin, make, model_year) VALUES(?, ?, ?, ?, ?)");
+        if (ok && !adding) {
+            t.bind(1, id).bind(2, startMs)
+                .bind(3, doc.value(QLatin1String("vin")).toString())
+                .bind(4, doc.value(QLatin1String("make")).toString())
+                .bind(5, doc.value(QLatin1String("modelYear")).toInt());
+            ok = t.exec();
+        }
+        Query q(m_db);
+        ok = ok && q.prepare("INSERT INTO samples(trip_id, ts_ms, param_id, value) VALUES(?, ?, ?, ?)");
+        while (ok && !cf.atEnd()) {
+            const QList<QByteArray> f = cf.readLine().trimmed().split(',');
+            if (f.size() < 5)
+                continue;
+            bool tsOk = false, vOk = false;
+            const qint64 ts = f.at(0).toLongLong(&tsOk);
+            const double v = f.at(4).toDouble(&vOk);
+            // Outside the drive, or not a number: not a sample of it
+            if (!tsOk || !vOk || !std::isfinite(v) || ts < startMs || ts > endMs || ts <= afterTs
+                || f.at(3).isEmpty() || f.at(3).size() > 64)
+                continue;
+            const int pid = paramId(QString::fromUtf8(f.at(3)));
+            if (pid < 0)
+                continue;
+            q.bind(1, id).bind(2, ts).bind(3, pid).bind(4, v);
+            ok = q.exec();
+            q.reset();
+            ++count;
+        }
+        if (ok && adding) {
+            // The newer part carries every event so far
+            Query d(m_db);
+            ok = d.prepare("DELETE FROM events WHERE trip_id = ?") && d.bind(1, id).exec();
+        }
+        Query e(m_db);
+        ok = ok && e.prepare("INSERT INTO events(trip_id, ts_ms, kind, detail) VALUES(?, ?, ?, ?)");
+        const QJsonArray events = doc.value(QLatin1String("events")).toArray();
+        for (const QJsonValue &ev : events) {
+            if (!ok)
+                break;
+            const QJsonObject o = ev.toObject();
+            e.bind(1, id).bind(2, startMs + qRound64(o.value(QLatin1String("t")).toDouble() * 1000.0))
+                .bind(3, o.value(QLatin1String("kind")).toString().left(64))
+                .bind(4, o.value(QLatin1String("detail")).toString().left(1024));
+            ok = e.exec();
+            e.reset();
+        }
+        Query c(m_db);
+        ok = ok && c.prepare("UPDATE trips SET sample_count = sample_count + ? WHERE id = ?");
+        if (ok) {
+            c.bind(1, count).bind(2, id);
+            ok = c.exec();
+        }
+    }
+    if (!ok || !exec(QStringLiteral("COMMIT"))) {
+        exec(QStringLiteral("ROLLBACK"));
+        m_paramIds.clear();   // names interned inside the rolled-back transaction are gone
+        qCWarning(lcTripStore) << "Could not take in" << jsonPath;
+        return ImportResult::Invalid;
+    }
+    // Finished like a drive recorded here: summary, health, its own files
+    endTrip(id, endMs, doc.value(QLatin1String("clean")).toBool(true), partial);
+    qCInfo(lcTripStore) << "Trip" << id << "taken in from" << jsonPath << "-" << count << "samples";
+    return ImportResult::Imported;
+}
+
+void TripStore::addInboxDir(const QString &dir)
+{
+    if (!dir.isEmpty() && !m_extraInboxes.contains(dir))
+        m_extraInboxes.append(dir);
+}
+
+void TripStore::importInbox()
+{
+    int imported = 0, alreadyHere = 0, rejected = 0;
+    const QStringList dirs = isOpen() ? QStringList{inboxDir()} + m_extraInboxes : QStringList();
+    for (const QString &dir : dirs) {
+        const QDir inbox(dir);
+        const QStringList files = inbox.entryList({QStringLiteral("*.json")}, QDir::Files, QDir::Name);
+        for (const QString &name : files) {
+            const QString json = inbox.filePath(name);
+            QString csv;
+            {
+                QFile f(json);
+                if (f.open(QIODevice::ReadOnly) && f.size() <= kMaxImportJsonBytes) {
+                    const QString n = QFileInfo(QJsonDocument::fromJson(f.readAll()).object()
+                                                    .value(QLatin1String("csv")).toString()).fileName();
+                    if (!n.isEmpty())
+                        csv = inbox.filePath(n);
+                }
+            }
+            const ImportResult r = importTrip(json);
+            if (r == ImportResult::Invalid) {
+                ++rejected;
+                QFile::rename(json, json + QStringLiteral(".rejected"));
+                continue;
+            }
+            (r == ImportResult::Imported ? imported : alreadyHere) += 1;
+            QFile::remove(json);
+            if (!csv.isEmpty())
+                QFile::remove(csv);
+        }
+    }
+    if (imported + alreadyHere + rejected > 0)
+        qCInfo(lcTripStore) << "Inbox:" << imported << "taken in," << alreadyHere << "already here," << rejected << "rejected";
+    emit importFinished(imported, alreadyHere, rejected);
 }
 
 QString TripStore::exportTrip(qint64 id, const QString &destDir)

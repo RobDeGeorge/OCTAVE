@@ -398,6 +398,7 @@ Item {
             spacing: App.Spacing.rowSpacing
 
             readonly property bool recorderReady: typeof tripRecorder !== "undefined" && tripRecorder !== null
+            readonly property bool syncReady: typeof tripSync !== "undefined" && tripSync !== null
             function fmtBytes(b) {
                 b = b || 0
                 if (b >= 1024 * 1024) return (b / (1024 * 1024)).toFixed(1) + " MB"
@@ -531,6 +532,116 @@ Item {
                     confirmLabel: "Confirm clear"
                     enabled: parent.parent.recorderReady && tripRecorder.trips.length > 0
                     onConfirmed: tripRecorder.clearHistory()
+                }
+            }
+
+            // ── Drives from and to other OCTAVEs (TripSync) ───────────────
+            SettingsDivider { visible: blackBoxColumn.syncReady }
+            SettingLabel { text: "Other OCTAVEs"; visible: blackBoxColumn.syncReady }
+            SettingDescription {
+                visible: blackBoxColumn.syncReady
+                text: "Drives recorded by another OCTAVE show up here. Pair with the code from its Settings > Device > Pair a device"
+            }
+            Repeater {
+                model: blackBoxColumn.syncReady ? tripSync.peers : []
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: App.Spacing.overallSpacing
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+                        Text {
+                            Layout.fillWidth: true
+                            text: modelData.name
+                            color: App.Style.primaryTextColor
+                            font.pixelSize: App.Spacing.overallText * 0.85
+                            font.family: App.Style.fontFamily
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: modelData.lastError !== "" ? modelData.lastError
+                                : modelData.drives + (modelData.drives === 1 ? " drive" : " drives")
+                                  + (modelData.lastSyncMs > 0
+                                     ? " · " + Qt.formatDateTime(new Date(modelData.lastSyncMs), "d MMM hh:mm") : "")
+                            color: modelData.lastError !== "" ? App.Style.statusDisconnected : App.Style.secondaryTextColor
+                            font.pixelSize: App.Spacing.overallText * 0.7
+                            font.family: App.Style.fontFamily
+                            elide: Text.ElideRight
+                        }
+                    }
+                    ConfirmButton {
+                        Layout.preferredHeight: dp(44)
+                        label: "Forget"
+                        confirmLabel: "Confirm"
+                        onConfirmed: tripSync.removePeer(modelData.id)
+                    }
+                }
+            }
+            // An OCTAVE that left its address on this phone during mirroring
+            SettingsButton {
+                Layout.preferredHeight: dp(44)
+                visible: blackBoxColumn.syncReady && tripSync.carHint.host !== undefined
+                text: visible ? "Use " + (tripSync.carHint.name || tripSync.carHint.host) : ""
+                onClicked: syncAddressField.text = tripSync.carHint.host + ":" + tripSync.carHint.port
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                visible: blackBoxColumn.syncReady
+                spacing: App.Spacing.overallSpacing
+                SettingsTextField {
+                    id: syncAddressField
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: dp(260)
+                    placeholderText: "Address"
+                    inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText
+                }
+                SettingsTextField {
+                    id: syncCodeField
+                    Layout.preferredWidth: dp(150)
+                    placeholderText: "Code"
+                    inputMethodHints: Qt.ImhDigitsOnly
+                }
+                SettingsButton {
+                    Layout.preferredHeight: dp(44)
+                    text: "Pair"
+                    enabled: syncAddressField.text.trim() !== "" && syncCodeField.text.trim() !== "" && !tripSync.busy
+                    onClicked: tripSync.addPeer(syncAddressField.text, 0, syncCodeField.text)
+                }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                visible: blackBoxColumn.syncReady
+                spacing: App.Spacing.overallSpacing
+                SettingsButton {
+                    Layout.preferredHeight: dp(44)
+                    text: "Sync now"
+                    enabled: tripSync.peers.length > 0 && !tripSync.busy
+                    onClicked: tripSync.syncNow()
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: blackBoxColumn.syncReady ? tripSync.status : ""
+                    color: App.Style.secondaryTextColor
+                    font.pixelSize: App.Spacing.overallText * 0.75
+                    font.family: App.Style.fontFamily
+                    wrapMode: Text.WordWrap
+                }
+            }
+            SettingsToggle {
+                text: "Copy drives to a mirrored phone"
+                compact: true
+                Layout.fillWidth: false
+                Layout.alignment: Qt.AlignLeft
+                // Only where a phone is mirrored (not on a phone itself)
+                visible: blackBoxColumn.syncReady && typeof isAndroid !== "undefined" && !isAndroid
+                checked: blackBoxColumn.syncReady ? tripSync.pushToPhone : true
+                onToggled: function(checked) { tripSync.pushToPhone = checked }
+            }
+            Connections {
+                target: blackBoxColumn.syncReady ? tripSync : null
+                function onPairFinished(ok, error) {
+                    if (ok) { syncAddressField.text = ""; syncCodeField.text = "" }
                 }
             }
         }

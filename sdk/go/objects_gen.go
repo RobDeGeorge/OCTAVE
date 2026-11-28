@@ -4,7 +4,7 @@
 package octave
 
 // ObjectNames is every service object, as hello lists them.
-var ObjectNames = []string{"airPlayManager", "androidAutoManager", "audioAnalyzer", "berryIMU", "busMonitor", "clock", "customPids", "dashboardManager", "diagnosticsManager", "esp32VolumeManager", "fontCatalog", "frontendManager", "gestureSensor", "mediaManager", "networkManager", "nowPlaying", "obdAdapterFinder", "obdManager", "paramStore", "parameterCatalog", "phoneMirrorManager", "settingsManager", "shiftLightManager", "sim", "spotifyManager", "themeCatalog", "tripRecorder", "units", "vehicleManager", "volumeController"}
+var ObjectNames = []string{"airPlayManager", "androidAutoManager", "audioAnalyzer", "berryIMU", "busMonitor", "clock", "customPids", "dashboardManager", "diagnosticsManager", "esp32VolumeManager", "fontCatalog", "frontendManager", "gestureSensor", "mediaManager", "networkManager", "nowPlaying", "obdAdapterFinder", "obdManager", "paramStore", "parameterCatalog", "phoneMirrorManager", "settingsManager", "shiftLightManager", "sim", "spotifyManager", "themeCatalog", "tripRecorder", "tripSync", "units", "vehicleManager", "volumeController"}
 
 // AirPlayManager is the service object "airPlayManager" (C++ AirPlayManager); NewAirPlayManager(c) binds it to a client.
 type AirPlayManager struct{ c *Client }
@@ -2435,6 +2435,12 @@ func NewNetworkManager(c *Client) NetworkManager { return NetworkManager{c} }
 
 // Name is the object's name on the wire.
 func (NetworkManager) Name() string { return "networkManager" }
+
+// GetPoweringOff reads the property "poweringOff" (bool).
+func (o NetworkManager) GetPoweringOff() (v bool, err error) {
+	err = o.c.Get("networkManager", "poweringOff", &v)
+	return
+}
 
 // GetNetworkName reads the property "networkName" (QString).
 func (o NetworkManager) GetNetworkName() (v string, err error) {
@@ -7044,10 +7050,91 @@ func (o TripRecorder) ExportTrip(id int64) error {
 	return o.c.Call("tripRecorder", "exportTrip", nil, id)
 }
 
+// ImportInbox calls importInbox().
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+func (o TripRecorder) ImportInbox() error {
+	return o.c.Call("tripRecorder", "importInbox", nil)
+}
+
 // OpenHistoryFolder calls openHistoryFolder() -> bool.
 func (o TripRecorder) OpenHistoryFolder() (v bool, err error) {
 	err = o.c.Call("tripRecorder", "openHistoryFolder", &v)
 	return
+}
+
+// TripSync is the service object "tripSync" (C++ TripSync); NewTripSync(c) binds it to a client.
+//
+// Experimental: not covered by the protocol version; may change or go in any release.
+type TripSync struct{ c *Client }
+
+// NewTripSync binds "tripSync" to c.
+func NewTripSync(c *Client) TripSync { return TripSync{c} }
+
+// Name is the object's name on the wire.
+func (TripSync) Name() string { return "tripSync" }
+
+// GetPeers reads the property "peers" (QVariantList).
+func (o TripSync) GetPeers() (v []any, err error) {
+	err = o.c.Get("tripSync", "peers", &v)
+	return
+}
+
+// GetBusy reads the property "busy" (bool).
+func (o TripSync) GetBusy() (v bool, err error) {
+	err = o.c.Get("tripSync", "busy", &v)
+	return
+}
+
+// GetStatus reads the property "status" (QString).
+func (o TripSync) GetStatus() (v string, err error) {
+	err = o.c.Get("tripSync", "status", &v)
+	return
+}
+
+// GetAutoSync reads the property "autoSync" (bool, writable).
+func (o TripSync) GetAutoSync() (v bool, err error) {
+	err = o.c.Get("tripSync", "autoSync", &v)
+	return
+}
+
+// SetAutoSync writes the property "autoSync" and returns the value read back.
+func (o TripSync) SetAutoSync(value bool) (v bool, err error) {
+	err = o.c.Set("tripSync", "autoSync", value, &v)
+	return
+}
+
+// GetPushToPhone reads the property "pushToPhone" (bool, writable).
+func (o TripSync) GetPushToPhone() (v bool, err error) {
+	err = o.c.Get("tripSync", "pushToPhone", &v)
+	return
+}
+
+// SetPushToPhone writes the property "pushToPhone" and returns the value read back.
+func (o TripSync) SetPushToPhone(value bool) (v bool, err error) {
+	err = o.c.Set("tripSync", "pushToPhone", value, &v)
+	return
+}
+
+// GetCarHint reads the property "carHint" (QVariantMap).
+func (o TripSync) GetCarHint() (v map[string]any, err error) {
+	err = o.c.Get("tripSync", "carHint", &v)
+	return
+}
+
+// AddPeer calls addPeer(QString, int, QString).
+func (o TripSync) AddPeer(host string, port int, code string) error {
+	return o.c.Call("tripSync", "addPeer", nil, host, port, code)
+}
+
+// RemovePeer calls removePeer(QString).
+func (o TripSync) RemovePeer(id string) error {
+	return o.c.Call("tripSync", "removePeer", nil, id)
+}
+
+// SyncNow calls syncNow().
+func (o TripSync) SyncNow() error {
+	return o.c.Call("tripSync", "syncNow", nil)
 }
 
 // Units is the service object "units" (C++ Units); NewUnits(c) binds it to a client.

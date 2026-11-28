@@ -696,6 +696,8 @@ Item {
                                     if (selectedTrip.modelYear > 0 || selectedTrip.make)
                                         parts.push([selectedTrip.modelYear > 0 ? selectedTrip.modelYear : "", selectedTrip.make].join(" ").trim())
                                     if (selectedTrip.simulated) parts.push("simulated car")
+                                    // a drive whose end has not come over from the car yet
+                                    if (selectedTrip.partial) parts.push("the last minutes are still in the car")
                                     if (selectedTrip.vin) parts.push("VIN " + selectedTrip.vin)
                                     // an open trip is the one being recorded: not clean yet, not recovered either
                                     if (selectedTrip.clean === false && !selectedTrip.open) parts.push("recovered after a power cut")

@@ -260,7 +260,7 @@
         </ol>
 
         <h3 id="black-box-unavailable">Trip History is empty, or says "Black box unavailable"</h3>
-        <p>Either recording is off, no drive has been made yet, or OCTAVE could not open its database.</p>
+        <p>Either recording is off, no drive has been made yet, or OCTAVE could not open its database. The simulated car is never recorded, so driving it leaves Trip History empty.</p>
         <ol class="steps">
           <li>Settings &gt; OBD &gt; Black Box: <strong>Record every drive</strong> must be on. A drive starts at the first reading with the engine running, so a connection with the engine off records nothing.</li>
           <li>"Black box unavailable" means the database could not be opened, and nothing is recorded until it can. The Status line on the Black Box card gives the reason, and <code>octave-cpp.log</code> has it too.</li>

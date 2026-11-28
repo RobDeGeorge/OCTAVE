@@ -284,37 +284,118 @@ private slots:
         QVERIFY(QFile::exists(dir + "/blackbox.sqlite"));
     }
 
-    // A drive of the simulated car is marked as one, in the list and the
-    // detail; a real drive carries no mark
-    void simulatedDrivesAreMarked()
+    // The simulated car is never recorded: no trip, no sample. A real
+    // drive open when it takes over ends there, and recording starts again
+    // only once the simulated link has dropped
+    void theSimulatedCarIsNeverRecorded()
     {
         auto r = makeRecorder(QStringLiteral("simulated"));
+        QSignalSpy started(r.get(), &TripRecorder::tripStarted);
         r->setSimulated(true);
-        QSignalSpy ended(r.get(), &TripRecorder::tripEnded);
         drive(*r, 30, 30.0f);
-        // Engine off past the timeout ends the first trip
-        for (int i = 0; i < 7; ++i) {
-            m_now += 1000;
-            r->recordSample(QStringLiteral("RPM"), 0.0f);
-            r->tick();
-        }
         QVERIFY(!r->recording());
-        QTRY_COMPARE_WITH_TIMEOUT(ended.count(), 1, 5000);
+        QCOMPARE(r->currentSampleCount(), 0);
+        QCOMPARE(started.count(), 0);
+
+        // Back to a real car: the simulated link is still up, and its last
+        // readings start nothing
         r->setSimulated(false);
+        drive(*r, 5, 30.0f);
+        QVERIFY(!r->recording());
+        r->setConnected(false);
+        r->setConnected(true);
         m_now += 60'000;
         drive(*r, 30, 30.0f);
+        QVERIFY(r->recording());
+        QCOMPARE(started.count(), 1);
+
+        // The simulated car takes over mid-drive: the real trip ends
+        r->setSimulated(true);
+        QVERIFY(!r->recording());
+        drive(*r, 30, 90.0f);
+        QVERIFY(!r->recording());
         r->shutdown();
+
         TripStore store;
         QVERIFY(store.open(m_tmp->path() + "/simulated"));
         const QVariantList trips = store.listTrips();
-        QVERIFY2(trips.size() >= 2, qPrintable(QString::number(trips.size())));
-        int marked = 0;
-        for (const QVariant &t : trips)
-            marked += t.toMap().value("simulated").toBool() ? 1 : 0;
-        QCOMPARE(marked, 1);
-        const QVariantMap oldest = trips.last().toMap();
-        QCOMPARE(oldest.value("simulated").toBool(), true);
-        QCOMPARE(store.tripDetail(oldest.value("id").toLongLong()).value("simulated").toBool(), true);
+        QCOMPARE(trips.size(), 1);
+        const QVariantMap trip = trips.first().toMap();
+        QCOMPARE(trip.value("simulated").toBool(), false);
+        // Nothing of the 90 mph simulated stretch got in
+        const QVariantList speed = store.series(trip.value("id").toLongLong(), QStringLiteral("SPEED"), 400, -1, -1);
+        QVERIFY(!speed.isEmpty());
+        for (const QVariant &p : speed)
+            QVERIFY(p.toMap().value("hi").toDouble() < 60.0);
+    }
+
+    // A drive's CSV + JSON pair dropped in another OCTAVE's inbox becomes a
+    // drive there, with every sample; a second copy changes nothing, and
+    // what is not a drive (or is a simulated one) is set aside
+    void aDriveIsTakenInFromTheInbox()
+    {
+        auto car = makeRecorder(QStringLiteral("car"));
+        drive(*car, 40, 35.0f);
+        car->noteEvent(QStringLiteral("mil"), QStringLiteral("on"));
+        car->shutdown();
+        TripStore carStore;
+        QVERIFY(carStore.open(m_tmp->path() + "/car"));
+        const QVariantMap original = carStore.listTrips().first().toMap();
+        const qint64 id = original.value("id").toLongLong();
+        const QString csv = original.value("file").toString();
+        const QString json = original.value("summaryFile").toString();
+        QVERIFY(QFile::exists(csv) && QFile::exists(json));
+
+        const QString phoneDir = m_tmp->path() + "/phone";
+        const QString inbox = phoneDir + "/inbox";
+        QVERIFY(QDir().mkpath(inbox));
+        auto drop = [&] {
+            QVERIFY(QFile::copy(csv, inbox + "/" + QFileInfo(csv).fileName()));
+            QVERIFY(QFile::copy(json, inbox + "/" + QFileInfo(json).fileName()));
+        };
+        drop();
+        QFile junk(inbox + "/junk.json");
+        QVERIFY(junk.open(QIODevice::WriteOnly));
+        junk.write("{\"format\": \"something else\"}");
+        junk.close();
+        // The same drive, marked as one of the simulated car
+        QFile in(json);
+        QVERIFY(in.open(QIODevice::ReadOnly));
+        QJsonObject sim = QJsonDocument::fromJson(in.readAll()).object();
+        sim["simulated"] = true;
+        sim["id"] = double(id + 1);
+        QFile simFile(inbox + "/sim.json");
+        QVERIFY(simFile.open(QIODevice::WriteOnly));
+        simFile.write(QJsonDocument(sim).toJson());
+        simFile.close();
+
+        {
+            auto phone = makeRecorder(QStringLiteral("phone"));   // start() empties the inbox
+            QSignalSpy done(phone.get(), &TripRecorder::importFinished);
+            QTRY_COMPARE_WITH_TIMEOUT(phone->trips().size(), 1, 5000);
+            drop();
+            phone->importInbox();
+            QTRY_COMPARE_WITH_TIMEOUT(done.count(), 1, 5000);
+            QCOMPARE(done.first().at(0).toInt(), 0);
+            QCOMPARE(done.first().at(1).toInt(), 1);   // already here
+            phone->shutdown();
+        }
+        TripStore phone;
+        QVERIFY(phone.open(phoneDir));
+        const QVariantList trips = phone.listTrips();
+        QCOMPARE(trips.size(), 1);
+        QCOMPARE(trips.first().toMap().value("id").toLongLong(), id);
+        QCOMPARE(phone.sampleCount(id), carStore.sampleCount(id));
+        const QVariantMap detail = phone.tripDetail(id);
+        QCOMPARE(detail.value("durationS").toDouble(), original.value("durationS").toDouble());
+        QCOMPARE(detail.value("distanceMiles").toDouble(), carStore.tripDetail(id).value("distanceMiles").toDouble());
+        QCOMPARE(detail.value("events").toList().size(), carStore.tripDetail(id).value("events").toList().size());
+        QVERIFY(!phone.series(id, QStringLiteral("SPEED"), 400).isEmpty());
+        // Its own pair, so this OCTAVE can hand the drive on in turn
+        QVERIFY(QFile::exists(detail.value("file").toString()));
+        QVERIFY(detail.value("file").toString().startsWith(phoneDir + "/trips/"));
+        QCOMPARE(QDir(inbox).entryList(QDir::Files, QDir::Name),
+                 QStringList({"junk.json.rejected", "sim.json.rejected"}));
     }
 
     // A database from before the column existed is brought up on open,
@@ -829,6 +910,28 @@ private slots:
         r->recordSample(QStringLiteral("RPM"), 1200.0f);
         QVERIFY(!r->recording());
         QCOMPARE(r->currentSampleCount(), 0);
+        r->shutdown();
+    }
+
+    // The manager's readings are the recorder's: a real car's start a
+    // trip, and once the manager is on the simulated car they start none
+    void theManagersReadingsAreRecordedUnlessSimulated()
+    {
+        OBDManager obd(m_settings.get());
+        auto r = makeRecorder(QStringLiteral("wired"));
+        r->attach(&obd);
+        r->setConnected(true);
+        r->setVehicleParameters({QStringLiteral("RPM")});
+        m_now += 1000;
+        emit obd.parameterSampled(QStringLiteral("RPM"), 900.0f);
+        QVERIFY(r->recording());
+
+        obd.setPortOverride(QStringLiteral("sim://elm327"));
+        QVERIFY(obd.isSimulated());
+        QVERIFY(!r->recording());   // the real drive ended there
+        m_now += 1000;
+        emit obd.parameterSampled(QStringLiteral("RPM"), 2500.0f);
+        QVERIFY(!r->recording());
         r->shutdown();
     }
 

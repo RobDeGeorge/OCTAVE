@@ -287,6 +287,15 @@
         },
         {
             "kind": "slot",
+            "name": "importInbox",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "files",
+            "stability": "experimental"
+        },
+        {
+            "kind": "slot",
             "name": "openHistoryFolder",
             "params": [
             ],
@@ -536,6 +545,24 @@
                     "type": "QString"
                 }
             ]
+        },
+        {
+            "name": "importFinished",
+            "params": [
+                {
+                    "name": "imported",
+                    "type": "int"
+                },
+                {
+                    "name": "alreadyHere",
+                    "type": "int"
+                },
+                {
+                    "name": "rejected",
+                    "type": "int"
+                }
+            ],
+            "stability": "experimental"
         },
         {
             "name": "healthTrendsReady",

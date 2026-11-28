@@ -28,6 +28,7 @@
         "spotifyManager": "SpotifyManager",
         "themeCatalog": "ThemeCatalog",
         "tripRecorder": "TripRecorder",
+        "tripSync": "TripSync",
         "units": "Units",
         "vehicleManager": "VehicleManager",
         "volumeController": "VolumeController"

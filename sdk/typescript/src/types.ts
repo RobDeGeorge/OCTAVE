@@ -889,6 +889,8 @@ export interface MediaManager {
 /** networkManager (NetworkManager) */
 export interface NetworkManager {
   properties: {
+    /** bool, notify poweringOffChanged */
+    poweringOff: boolean
     /** QString, notify networkNameChanged */
     networkName: string
     /** bool, notify isConnectedChanged */
@@ -923,6 +925,7 @@ export interface NetworkManager {
     shutdownDevice: { args: []; returns: void }
   }
   signals: {
+    poweringOffChanged: []
     networkNameChanged: [name: string]
     isConnectedChanged: [connected: boolean]
     updateStatusChanged: [status: string]
@@ -2369,6 +2372,8 @@ export interface TripRecorder {
     deleteTrip: { args: [id: number]; returns: void }
     clearHistory: { args: []; returns: void }
     exportTrip: { args: [id: number]; returns: void }
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    importInbox: { args: []; returns: void }
     openHistoryFolder: { args: []; returns: boolean }
   }
   signals: {
@@ -2388,8 +2393,47 @@ export interface TripRecorder {
     detailReady: [id: number, detail: Record<string, unknown>]
     seriesReady: [id: number, paramId: string, points: unknown[]]
     exportFinished: [id: number, path: string]
+    /** @experimental not covered by the protocol version; may change or go in any release */
+    importFinished: [imported: number, alreadyHere: number, rejected: number]
     healthTrendsReady: [days: number, result: Record<string, unknown>]
     paramTrendReady: [paramId: string, days: number, rows: unknown[]]
+  }
+}
+
+/**
+ * tripSync (TripSync)
+ * @experimental not covered by the protocol version; may change or go in any release
+ */
+export interface TripSync {
+  properties: {
+    /** QVariantList, notify peersChanged */
+    peers: unknown[]
+    /** bool, notify busyChanged */
+    busy: boolean
+    /** QString, notify statusChanged */
+    status: string
+    /** bool, writable, notify autoSyncChanged */
+    autoSync: boolean
+    /** bool, writable, notify pushToPhoneChanged */
+    pushToPhone: boolean
+    /** QVariantMap, notify carHintChanged */
+    carHint: Record<string, unknown>
+  }
+  methods: {
+    addPeer: { args: [host: string, port: number, code: string]; returns: void }
+    removePeer: { args: [id: string]; returns: void }
+    syncNow: { args: []; returns: void }
+  }
+  signals: {
+    peersChanged: []
+    busyChanged: []
+    statusChanged: []
+    autoSyncChanged: []
+    pushToPhoneChanged: []
+    carHintChanged: []
+    pairFinished: [ok: boolean, error: string]
+    syncFinished: [imported: number, failedPeers: number]
+    pushFinished: [pushed: number, note: string]
   }
 }
 
@@ -2499,6 +2543,7 @@ export interface Objects {
   spotifyManager: SpotifyManager
   themeCatalog: ThemeCatalog
   tripRecorder: TripRecorder
+  tripSync: TripSync
   units: Units
   vehicleManager: VehicleManager
   volumeController: VolumeController

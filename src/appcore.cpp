@@ -25,6 +25,7 @@ AppCore::AppCore(const QDir &frontendDir, Units *units)
     , fontCatalog(frontendDir.absoluteFilePath(QStringLiteral("assets/fonts")))
     , themeCatalog(frontendDir.absoluteFilePath(QStringLiteral("themes.json")), &settingsManager)
     , servicePairing(&settingsManager)
+    , tripSync(&tripRecorder)
     , demoDrive(&sim, &obdManager, &berryIMU, &servicePairing)
 {
     // Settings Manager — central settings store, everything depends on this
@@ -92,6 +93,24 @@ AppCore::AppCore(const QDir &frontendDir, Units *units)
     tripRecorder.attach(&obdManager);
     tripRecorder.start();
     expose("tripRecorder", &tripRecorder);
+    // Drives to and from other OCTAVEs: pulled from a paired one over the
+    // service, pushed to a mirrored phone over adb
+    tripSync.start();
+    QObject::connect(&servicePairing, &ServicePairing::serviceUrlsChanged, &tripSync, [this] {
+        tripSync.setServiceUrls(servicePairing.serviceUrls(), servicePairing.onNetwork());
+    });
+#ifndef Q_OS_MOBILE
+    QObject::connect(&phoneMirrorManager, &PhoneMirrorManager::isRunningChanged, &tripSync, [this] {
+        tripSync.setPhone(phoneMirrorManager.adbPath(),
+                          phoneMirrorManager.isRunning() ? phoneMirrorManager.serial() : QString());
+    });
+#endif
+    // The shutdown button: the drive is closed and sent to the phone while
+    // the network and adb are still up, and the power goes after that
+    networkManager.setBeforePowerOff([this](std::function<void()> done) {
+        tripSync.finishBeforePowerOff(std::move(done));
+    });
+    expose("tripSync", &tripSync);
 
     // Hardware managers (USB-serial / I2C on desktop, stubbed on mobile via header).
     esp32VolumeManager.connect_settings_manager(&settingsManager);

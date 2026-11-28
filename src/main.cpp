@@ -227,6 +227,14 @@ Service makeService(const QStringList &arguments, AppCore &core, bool headless)
                 csv = csv.left(csv.size() - 4) + QStringLiteral(".json");   // its sibling, written with it
             return OctaveService::StaticFiles::serveDownload(csv);
         });
+        // GET /trips: the closed drives and their files, for another OCTAVE
+        // to pull (TripSync::serve; scope files)
+        service.server->addRoute("/trips", [trips](const QByteArray &target) {
+            const QVariantList list = OctaveService::CommandServer::onGui([trips]() {
+                return QVariant(trips ? trips->trips() : QVariantList());
+            }, 5000).toList();
+            return TripSync::serve(list, target);
+        });
         service.server->addRoute("/export/dashboard", [dashboards, lastExport](const QByteArray &) {
             return OctaveService::StaticFiles::serveDownload(lastExport(dashboards.data()));
         });

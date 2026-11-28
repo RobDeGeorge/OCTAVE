@@ -415,6 +415,8 @@ qt_add_executable(octave
     src/managers/tripstore.cpp
     src/managers/triprecorder.h
     src/managers/triprecorder.cpp
+    src/managers/tripsync.h
+    src/managers/tripsync.cpp
     src/managers/frontendmanifest.h
     src/managers/frontendmanifest.cpp
     src/managers/frontendmanager.h

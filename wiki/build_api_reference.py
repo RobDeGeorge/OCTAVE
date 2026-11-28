@@ -42,6 +42,7 @@ GUIDE = {
     "spotifyManager": ("media-manager.html#spotify", "Media Manager: Spotify"),
     "themeCatalog": ("theme-system.html", "Theme System"),
     "tripRecorder": ("obd-manager.html#black-box", "OBD Manager: the black box"),
+    "tripSync": ("obd-manager.html#trip-sync", "OBD Manager: drives to your phone and server"),
     "units": ("utilities.html#platform", "Utilities: small helpers"),
     "vehicleManager": ("pages.html#carmenu", "Pages: 3D View"),
     "volumeController": ("utilities.html#volume-controller", "Utilities: Volume"),

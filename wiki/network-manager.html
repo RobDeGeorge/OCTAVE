@@ -150,6 +150,12 @@
           operating system to power off and closes itself, saving its state on the way out.
         </p>
         <p>
+          With a phone mirrored, it first ends the drive being recorded and copies it to the phone, so the drive
+          is on your phone when you get home. The card says "Sending the drive to your phone, then powering
+          off…" and <code>networkManager.poweringOff</code> is true meanwhile. This takes a few seconds and
+          never more than 30. See <a href="obd-manager.html#trip-sync">Drives to your phone and server</a>.
+        </p>
+        <p>
           Whether the device then powers off is up to the operating system: the user OCTAVE runs as must be allowed
           to do it. OCTAVE does not check.
         </p>

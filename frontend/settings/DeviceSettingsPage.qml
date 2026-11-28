@@ -365,7 +365,9 @@ Flickable {
 
             SettingCategory {
                 title: "Power"
-                description: "Powers off the device."
+                description: networkManager && networkManager.poweringOff
+                             ? "Sending the drive to your phone, then powering off…"
+                             : "Powers off the device."
 
                 ConfirmButton {
                     label: "Shut Down"

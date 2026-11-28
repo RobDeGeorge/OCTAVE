@@ -431,6 +431,7 @@
           <li><strong>Everything is recorded</strong>, not only what is on screen: the recorder asks for every reading the car supports through the <a href="#watcher-system">background list</a>. Turn "Record everything the car reports" off to record only what the screen asked for.</li>
           <li><strong>A power cut loses at most 2 seconds.</strong> Readings are written to disk every 2 seconds. A drive cut short is finished off at the next start.</li>
           <li><strong>Events are kept too:</strong> disconnects, the check-engine light coming on, codes read and cleared.</li>
+          <li><strong>The simulated car is never recorded.</strong> Trip History holds real drives only. Picking the <a href="#simulated-adapter">simulated car</a> during a drive ends that drive.</li>
         </ul>
         <p>A value that is not changing is stored once every 5 seconds, so a steady reading does not fill the disk. Expect about 3 MB per hour of driving.</p>
         <h3>The files</h3>
@@ -440,6 +441,7 @@
           <tbody>
             <tr><td><code>blackbox.sqlite</code></td><td>The database with every sample of every drive. Tables: <code>trips</code>, <code>params</code>, <code>samples</code>, <code>events</code>, <code>meta</code>. A damaged file is renamed and a new one started.</td></tr>
             <tr><td><code>trips/&lt;date&gt;_&lt;time&gt;.csv</code></td><td>One drive, written when it ends, for a spreadsheet: <code>timestamp_ms, time, elapsed_s, parameter, value, unit</code>.</td></tr>
+            <tr><td><code>inbox/</code></td><td>Drives from another OCTAVE waiting to be taken in. See <a href="#trip-sync">below</a>.</td></tr>
             <tr><td><code>trips/&lt;date&gt;_&lt;time&gt;.json</code></td><td>The drive's summary: start, end, distance, maximum speed and RPM, fuel used, the minimum / maximum / average of every reading, the events, and the health numbers below.</td></tr>
           </tbody>
         </table>
@@ -449,6 +451,55 @@
           When the storage cap is reached the oldest drives are deleted. If the database cannot be opened (a full or
           read-only disk), the Black Box card says "unavailable" with the reason, and nothing is recorded.
         </p>
+        <h3 id="trip-sync">Drives to your phone and server</h3>
+        <p>
+          The drives the car records can also live on your phone and on a computer at home. There is no separate
+          app for this: you run OCTAVE there too, and the OCTAVEs pass drives to each other. A drive that arrives
+          shows in that OCTAVE's Trip History like one recorded there. Two ways move a drive, and you can use both.
+        </p>
+        <table>
+          <thead><tr><th>Way</th><th>How it works</th><th>When it runs</th></tr></thead>
+          <tbody>
+            <tr><td>Over the network</td><td>One OCTAVE is paired with another and fetches the drives it does not have yet.</td><td>Soon after start, every 5 minutes, when the app comes to the front, and on "Sync now".</td></tr>
+            <tr><td>Over the phone's cable or Wi-Fi link</td><td>While a phone is <a href="phone-mirror-android-auto.html">mirrored</a>, the car copies its drives into the OCTAVE app's folder on the phone.</td><td>When you press Shut Down, when the phone connects and when a drive ends. The app on the phone can be closed; it takes the drives in the next time it opens.</td></tr>
+          </tbody>
+        </table>
+        <p><strong>Pairing two OCTAVEs</strong></p>
+        <ol class="steps">
+          <li>On the OCTAVE that has the drives (the car), open Settings &gt; Device &gt; Pair a device and show the code. Its service must be on and reachable from the other device: start it with <code>--service --service-bind 0.0.0.0</code>. See <a href="architecture.html#service">Architecture</a>.</li>
+          <li>On the OCTAVE that should get them (the phone, the server), open Settings &gt; OBD &gt; Black Box. Under "Other OCTAVEs" type the car's address and the code, then Pair.</li>
+          <li>The drives come over at once, and from then on by themselves.</li>
+        </ol>
+        <p>
+          A phone that has been mirrored by the car already knows the car's address: a "Use" button fills it in.
+          A computer with no screen is paired from a program:
+          <code>tripSync.addPeer("10.42.0.1", 9876, "123456")</code>.
+        </p>
+        <p><strong>Rules</strong></p>
+        <ul>
+          <li><strong>Shut Down sends the drive first.</strong> Settings &gt; Device &gt; Device &gt; Shut Down ends the drive you were on, copies it to the mirrored phone and only then powers off. This takes a few seconds, 30 at most. Open the app at home and the drive is there.</li>
+          <li><strong>A car computer that is cut off with the ignition</strong> never gets to do that: its drive is closed at its next start and goes to the phone then. To have it sooner, set <code>"snapshotMinutes"</code> in <code>trip-sync.json</code> (for example 2): the drive being recorded is then sent in parts while you drive, Trip History on the phone says "the last minutes are still in the car", and the whole drive replaces the parts later.</li>
+          <li><strong>Over the network only finished drives travel.</strong> A drive of the simulated car never travels either way.</li>
+          <li><strong>A drive comes once.</strong> Delete it on the phone and it stays deleted there. Deleting never travels: the car keeps its copy until its storage cap removes it, so the phone and the server are the long-term record.</li>
+          <li><strong>A drive can be passed on.</strong> A server paired with the phone gets the car's drives from the phone.</li>
+          <li><strong>The copy to a mirrored phone</strong> can be switched off: "Copy drives to a mirrored phone" on the same card. It does nothing when the OCTAVE app is not installed on the phone.</li>
+        </ul>
+        <p><strong>How a drive travels</strong></p>
+        <p>
+          A drive's <code>.csv</code> and <code>.json</code> are the whole drive, so those two files are what is
+          sent. Whichever way they come, they are put in <code>history/inbox/</code> of the receiving OCTAVE, which
+          takes in what is there when it starts and when <code>tripRecorder.importInbox()</code> is called. You can
+          also put a pair there by hand.
+        </p>
+        <ul>
+          <li>A drive it already has is not added twice.</li>
+          <li>A file that is not a drive, or is a drive of the simulated car, is left in the inbox with <code>.rejected</code> added to its name.</li>
+          <li>Files that were taken in are removed from the inbox.</li>
+          <li>Over the network the files come from <code>GET /trips</code> on the other OCTAVE's service, which needs the <code>files</code> permission: <code>/trips</code> lists the drives, <code>/trips?id=N&amp;format=json</code> or <code>format=csv</code> gives one file.</li>
+          <li>A part of a drive still being recorded is the same two files with <code>"partial": true</code> in the <code>.json</code> and only the new samples in the <code>.csv</code>.</li>
+          <li>On a phone the mirroring car writes to <code>Android/data/org.octave.app/files/history/inbox/</code>, and leaves its address in <code>car.json</code> beside it.</li>
+          <li>The paired OCTAVEs and the lists of drives already moved are in <code>trip-sync.json</code> in the <a href="settings-manager.html">config folder</a>.</li>
+        </ul>
         <h3 id="health-trends">Health across drives</h3>
         <p>
           At the end of each drive OCTAVE works out a few numbers that say something about the car's health. The Trends
@@ -587,7 +638,7 @@
         </p>
         <ul>
           <li>Settings &gt; OBD shows "Simulated" beside the status, and <code>obdManager.simulated</code> is true.</li>
-          <li>Drives recorded from it are marked "simulated car" in Trip History.</li>
+          <li>Its drives are not recorded: the <a href="#black-box">black box</a> keeps real drives only.</li>
           <li>Your real adapter stays saved. Picking it again, or restarting, goes back to it.</li>
           <li>From code: <code>obdManager.connectToAdapter("sim://elm327")</code>.</li>
           <li>From the command line: <code>octave --sim</code>, or <code>octave --headless --sim</code> with no screen. See <a href="development.html">Development</a>.</li>
@@ -619,6 +670,7 @@
             <tr><td><span class="file-path">derivedparameters.{h,cpp}</span></td><td>The calculated readings: which a car can have, what each needs polled, the sums. Tested by <code>tst_derivedparameters</code>.</td></tr>
             <tr><td><span class="file-path">parameterstore</span>, <span class="file-path">parametercatalog</span></td><td>The latest values; the title, unit and range of every reading.</td></tr>
             <tr><td><span class="file-path">triprecorder</span>, <span class="file-path">tripstore</span></td><td>The black box and its database.</td></tr>
+            <tr><td><span class="file-path">tripsync</span></td><td>Drives to and from other OCTAVEs.</td></tr>
             <tr><td><span class="file-path">custompids</span>, <span class="file-path">busmonitor</span>, <span class="file-path">shiftlightmanager</span>, <span class="file-path">dtcdescriptions</span></td><td>As named.</td></tr>
             <tr><td><span class="file-path">android/src/org/octave/app/OctaveOBDBridge.java</span></td><td>Android's Bluetooth LE helper.</td></tr>
             <tr><td><span class="file-path">src/sim/</span></td><td>The simulated car and its ELM327.</td></tr>

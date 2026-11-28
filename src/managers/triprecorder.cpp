@@ -7,7 +7,9 @@
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QDir>
+#include <QCoreApplication>
 #include <QLoggingCategory>
+#include <QPointer>
 #include <QStandardPaths>
 #include <QThread>
 #include <QUrl>
@@ -149,6 +151,7 @@ void TripRecorder::start()
         }
         emit exportFinished(id, path);
     });
+    connect(m_store, &TripStore::importFinished, this, &TripRecorder::importFinished);
     connect(m_store, &TripStore::error, this, [this](const QString &message) {
         m_lastError = message;
         emit lastErrorChanged();
@@ -157,10 +160,15 @@ void TripRecorder::start()
     m_thread->start();
     const QString dir = m_historyDir;
     const qint64 maxBytes = m_maxBytes;
-    onStore([dir, maxBytes](TripStore *store) {
+    const QStringList inboxes = m_pendingInboxes;
+    onStore([dir, maxBytes, inboxes](TripStore *store) {
         if (!store->open(dir))
             return;
         store->recoverOpenTrips();
+        QDir().mkpath(store->inboxDir());
+        for (const QString &inbox : inboxes)
+            store->addInboxDir(inbox);
+        store->importInbox();   // drives another OCTAVE left while this one was closed
         store->listTrips();
         store->prune(maxBytes);
     });
@@ -177,8 +185,8 @@ void TripRecorder::attach(OBDManager *obd)
     connect(obd, &OBDManager::connectionStatusChanged, this, [this, obd](const QString &) {
         setConnected(obd->isConnected());
     });
-    m_simulated = obd->isSimulated();
-    connect(obd, &OBDManager::simulatedChanged, this, [this, obd]() { m_simulated = obd->isSimulated(); });
+    setSimulated(obd->isSimulated());
+    connect(obd, &OBDManager::simulatedChanged, this, [this, obd]() { setSimulated(obd->isSimulated()); });
     connect(obd, &OBDManager::connectionLostUnexpectedly, this, [this](const QString &reason) {
         noteEvent(QStringLiteral("connection_lost"), reason);
     });
@@ -255,6 +263,10 @@ void TripRecorder::recordSample(const QString &paramId, float value)
 {
     if (!m_enabled || !m_store || !m_storeReady)
         return;   // no database: never pretend to record
+    if (m_simulated)
+        return;   // a made-up drive is not history
+    if (m_poweringOff)
+        return;   // the drive was ended for the power-off
     const qint64 now = nowMs();
     m_lastSampleMs = now;
 
@@ -301,8 +313,7 @@ void TripRecorder::openTrip(qint64 now)
     m_buffer.clear();
     m_rpmZeroSinceMs = 0;
     const qint64 id = m_tripId;
-    QVariantMap meta = m_identity;
-    meta[QStringLiteral("simulated")] = m_simulated;
+    const QVariantMap meta = m_identity;
     onStore([id, now, meta](TripStore *store) { store->beginTrip(id, now, meta); });
     m_flushTimer.start();
     qCInfo(lcTrip) << "Trip" << id << "started";
@@ -394,9 +405,36 @@ void TripRecorder::setConnected(bool connected)
         m_disconnectedAtMs = now;
         if (m_tripOpen)
             noteEvent(QStringLiteral("disconnected"), QString());
+        if (m_simulatedEnding) {
+            // The simulated link is down: what comes next is a real car
+            m_simulatedEnding = false;
+            m_simulated = false;
+        }
     } else if (m_tripOpen) {
         noteEvent(QStringLiteral("reconnected"), QString());
     }
+}
+
+void TripRecorder::setSimulated(bool simulated)
+{
+    if (!simulated) {
+        if (!m_simulated)
+            return;
+        // Readings of the simulated car can still be on their way while its
+        // link is up: stay deaf until it has dropped
+        if (m_connected) {
+            m_simulatedEnding = true;
+            return;
+        }
+        m_simulated = false;
+        return;
+    }
+    m_simulatedEnding = false;
+    if (m_simulated)
+        return;
+    m_simulated = true;
+    if (m_tripOpen)
+        closeTrip(QStringLiteral("simulated car"));
 }
 
 void TripRecorder::setVehicleParameters(const QStringList &ids)
@@ -444,6 +482,7 @@ void TripRecorder::applyBackgroundDemand()
 {
     if (!m_obd)
         return;
+    // Kept for the simulated car too: it must be polled as a real car is
     const bool sweep = m_enabled && m_sweepAll && !m_vehicleParams.isEmpty();
     m_obd->setBackgroundDemand(QStringLiteral("blackbox"), sweep ? m_vehicleParams : QStringList());
 }
@@ -507,6 +546,48 @@ void TripRecorder::deleteTrip(qint64 id)
 void TripRecorder::clearHistory()
 {
     onStore([](TripStore *store) { store->clearAll(); });
+}
+
+void TripRecorder::snapshot(qint64 afterTs, const QString &base, std::function<void(qint64, qint64)> done)
+{
+    if (!m_tripOpen || !m_store) {
+        done(0, 0);
+        return;
+    }
+    flush();
+    const qint64 id = m_tripId;
+    QPointer<TripRecorder> self(this);
+    onStore([self, id, afterTs, base, done](TripStore *store) {
+        const qint64 lastTs = store->writeSnapshot(id, afterTs, base);
+        QMetaObject::invokeMethod(qApp, [self, id, lastTs, done] {
+            if (self)
+                done(id, lastTs);
+        }, Qt::QueuedConnection);
+    });
+}
+
+void TripRecorder::stopForPowerOff()
+{
+    m_poweringOff = true;
+    if (m_tripOpen)
+        closeTrip(QStringLiteral("power off"));
+}
+
+void TripRecorder::addInboxDir(const QString &dir)
+{
+    QDir().mkpath(dir);
+    if (m_store)
+        onStore([dir](TripStore *store) {
+            store->addInboxDir(dir);
+            store->importInbox();   // what waited there while the app was closed
+        });
+    else
+        m_pendingInboxes.append(dir);
+}
+
+void TripRecorder::importInbox()
+{
+    onStore([](TripStore *store) { store->importInbox(); });
 }
 
 void TripRecorder::exportTrip(qint64 id)

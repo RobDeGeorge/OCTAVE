@@ -249,6 +249,18 @@ set(_boot_defines OCTAVE_APP_BINARY="$<TARGET_FILE:octave>")
 if(OCTAVE_DEV_TOOLS)
     list(APPEND _boot_defines OCTAVE_DEV_TOOLS)
 endif()
+# Drives from one OCTAVE to another: the served files, a pull from a real
+# octave --headless, the push over a fake adb
+octave_add_test(tst_tripsync
+    SOURCES managers/tripstore.h managers/tripstore.cpp managers/triprecorder.h managers/triprecorder.cpp
+            managers/tripsync.h managers/tripsync.cpp service/staticfiles.h service/staticfiles.cpp
+            ${OCTAVE_OBD_MANAGER_SOURCES} managers/dtcdescriptions.h managers/dtcdescriptions.cpp managers/parametercatalog.h managers/parametercatalog.cpp
+            managers/elm327protocol.cpp managers/rfcommsocket.h managers/rfcommsocket.cpp
+            managers/settingsmanager.h managers/settingsmanager.cpp
+    LIBS Qt6::Gui Qt6::SerialPort Qt6::Network Qt6::Concurrent octave_sqlite
+    DEFINES OCTAVE_APP_BINARY="$<TARGET_FILE:octave>")
+add_dependencies(tst_tripsync octave)
+set_tests_properties(tst_tripsync PROPERTIES TIMEOUT 300)
 octave_add_test(tst_boot LIBS Qt6::Network DEFINES ${_boot_defines})
 add_dependencies(tst_boot octave)
 set_tests_properties(tst_boot PROPERTIES TIMEOUT 300)

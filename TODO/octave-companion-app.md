@@ -6,6 +6,8 @@
 
 Already shipped: adb pairing and connect over Wi-Fi in the phone mirror via QR pairing (`f100f60`), with mDNS discovery (`phonemirrormanager.cpp:1218-1274`) and a remembered phone (`wirelessAddress`). Now-playing metadata ships through `phone_server`'s `PhoneMedia.java`. No app was needed for either.
 
+**Rob, 2026-11-27: no separate app for moving the black box.** The drives go from OCTAVE to OCTAVE (the OCTAVE app on the phone, a headless one on a server): `trip-sync.md`. That replaces item 10's trip part. He also said a different companion app does not make sense to him and he wants "all my octaves working with one another"; whether the rest of this plan (the features that need Android services) moves into the OCTAVE Android app instead of `companion/` is his to decide before any of it is built.
+
 ## Why it's parked
 
 Nothing here blocks daily use in the Jeep. A separate app is its own product (build, signing, release cycle, Android permission model), and its first real customer, traffic stop mode (`traffic-stop-mode.md`), is still at the spike stage.

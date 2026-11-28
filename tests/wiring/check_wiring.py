@@ -105,13 +105,16 @@ class WiringTest(unittest.TestCase):
         light = self.get("shiftLightManager", "rpm")
         self.assertLess(abs(store - light), 1500, f"paramStore RPM {store} vs shift light {light}")
 
-    def test_readings_reach_the_black_box(self):
+    def test_the_simulated_car_never_reaches_the_black_box(self):
+        # OBDManager.simulated reaches the recorder: the car runs, the black
+        # box is ready, and nothing of the drive is kept (the wire from a
+        # real car's readings is tst_triprecorder's)
         self.drive()
+        self.assertTrue(self.get("obdManager", "simulated"))
         self.assertTrue(wait_for(lambda: self.get("tripRecorder", "storeReady"), timeout=20), "black box not ready")
-        self.assertTrue(wait_for(lambda: self.get("tripRecorder", "recording"), timeout=30),
-                        "no trip started though RPM > 0 reached paramStore")
-        self.assertTrue(wait_for(lambda: self.get("tripRecorder", "currentSampleCount") > 10, timeout=30),
-                        "the open trip is not collecting samples")
+        self.assertFalse(wait_for(lambda: self.get("tripRecorder", "recording"), timeout=8),
+                         "a trip started on the simulated car")
+        self.assertEqual(self.get("tripRecorder", "trips"), [])
 
     def test_more_than_rpm_reaches_the_value_store(self):
         self.drive()

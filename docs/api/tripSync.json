@@ -1,0 +1,170 @@
+{
+    "class": "TripSync",
+    "methods": [
+        {
+            "kind": "invokable",
+            "name": "addPeer",
+            "params": [
+                {
+                    "name": "host",
+                    "type": "QString"
+                },
+                {
+                    "name": "port",
+                    "type": "int"
+                },
+                {
+                    "name": "code",
+                    "type": "QString"
+                }
+            ],
+            "returns": "",
+            "scope": "full"
+        },
+        {
+            "kind": "invokable",
+            "name": "removePeer",
+            "params": [
+                {
+                    "name": "id",
+                    "type": "QString"
+                }
+            ],
+            "returns": "",
+            "scope": "full"
+        },
+        {
+            "kind": "invokable",
+            "name": "syncNow",
+            "params": [
+            ],
+            "returns": "",
+            "scope": "files"
+        }
+    ],
+    "object": "tripSync",
+    "properties": [
+        {
+            "constant": false,
+            "name": "peers",
+            "notify": "peersChanged",
+            "readable": true,
+            "type": "QVariantList",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "busy",
+            "notify": "busyChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "status",
+            "notify": "statusChanged",
+            "readable": true,
+            "type": "QString",
+            "writable": false
+        },
+        {
+            "constant": false,
+            "name": "autoSync",
+            "notify": "autoSyncChanged",
+            "readable": true,
+            "scope": "full",
+            "type": "bool",
+            "writable": true
+        },
+        {
+            "constant": false,
+            "name": "pushToPhone",
+            "notify": "pushToPhoneChanged",
+            "readable": true,
+            "scope": "full",
+            "type": "bool",
+            "writable": true
+        },
+        {
+            "constant": false,
+            "name": "carHint",
+            "notify": "carHintChanged",
+            "readable": true,
+            "type": "QVariantMap",
+            "writable": false
+        }
+    ],
+    "signals": [
+        {
+            "name": "peersChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "busyChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "statusChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "autoSyncChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "pushToPhoneChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "carHintChanged",
+            "params": [
+            ]
+        },
+        {
+            "name": "pairFinished",
+            "params": [
+                {
+                    "name": "ok",
+                    "type": "bool"
+                },
+                {
+                    "name": "error",
+                    "type": "QString"
+                }
+            ]
+        },
+        {
+            "name": "syncFinished",
+            "params": [
+                {
+                    "name": "imported",
+                    "type": "int"
+                },
+                {
+                    "name": "failedPeers",
+                    "type": "int"
+                }
+            ]
+        },
+        {
+            "name": "pushFinished",
+            "params": [
+                {
+                    "name": "pushed",
+                    "type": "int"
+                },
+                {
+                    "name": "note",
+                    "type": "QString"
+                }
+            ]
+        }
+    ],
+    "stability": "experimental"
+}

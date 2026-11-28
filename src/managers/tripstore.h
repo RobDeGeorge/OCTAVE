@@ -58,7 +58,9 @@ public:
     void appendEvent(qint64 tripId, qint64 tsMs, const QString &kind, const QString &detail);
     // Close a trip: summarise it, write its files, emit tripFinalized() and
     // tripsChanged(). `clean` is false for a trip recovered after a power cut.
-    QVariantMap endTrip(qint64 id, qint64 endMs, bool clean);
+    // `partial`: a drive still being recorded on another OCTAVE, of which only
+    // the first part has arrived (importTrip); its summary says so.
+    QVariantMap endTrip(qint64 id, qint64 endMs, bool clean, bool partial = false);
     // Trips left open by a crash / power cut get their last sample time as
     // the end and are finalised (clean = false, or true when a trip_end event
     // was logged: the drive ended, only the summary was lost). Returns how many.
@@ -114,6 +116,31 @@ public:
     QString exportTrip(qint64 id, const QString &destDir);
     QString tripFileBase(qint64 id);          // "<tripsDir>/<stamp>" or ""
 
+    // --- drives from another OCTAVE ---
+    // A drive's CSV + JSON pair, as endTrip() writes it, is the whole drive:
+    // importTrip() reads one pair (the JSON's path; its CSV beside it) into
+    // this database and finishes it like a drive recorded here, so it gets
+    // its own summary and its own pair under trips/. A drive already here
+    // (same id) is left alone, unless what is here is only a part of it
+    // (writeSnapshot); one marked simulated is refused.
+    enum class ImportResult { Imported, AlreadyHere, Invalid };
+    ImportResult importTrip(const QString &jsonPath);
+    // The drive being recorded, for an OCTAVE that should have it before it
+    // ends (the car loses power with the ignition): the samples newer than
+    // `afterTs` as <base>.csv and the summary so far, marked `partial`, as
+    // <base>.json. Returns the time of the last sample written, 0 when
+    // there was nothing new (and no files). The receiver's importTrip()
+    // adds each part to the ones before; the whole drive replaces them.
+    qint64 writeSnapshot(qint64 id, qint64 afterTs, const QString &base);
+    // Where pairs wait to be taken in: <dir>/inbox
+    QString inboxDir() const { return m_dir + QStringLiteral("/inbox"); }
+    // One more folder importInbox() empties (the phone's adb-reachable one)
+    void addInboxDir(const QString &dir);
+    // Import every pair in the inbox. A pair that was taken in, or was
+    // already here, is deleted from it; one that could not be read stays,
+    // renamed *.rejected, so it is not tried again. Emits importFinished().
+    void importInbox();
+
     // Number of stored samples for a trip (tests, status)
     qint64 sampleCount(qint64 id);
 
@@ -125,6 +152,7 @@ signals:
     void detailReady(qint64 id, const QVariantMap &detail);
     void seriesReady(qint64 id, const QString &paramId, const QVariantList &points);
     void exportFinished(qint64 id, const QString &path);
+    void importFinished(int imported, int alreadyHere, int rejected);
     void healthTrendsReady(int days, const QVariantMap &result);
     void paramTrendReady(const QString &paramId, int days, const QVariantList &rows);
     void storageChanged(qint64 bytes);
@@ -143,6 +171,7 @@ private:
     // Summaries of the closed trips in the window, oldest first, health filled in
     QList<QVariantMap> closedSummaries(int days, qint64 nowMs);
     bool writeTripFiles(qint64 id, qint64 startMs, const QVariantMap &summary, QString *base);
+    bool writeCsv(const QString &path, qint64 id, qint64 startMs, qint64 afterTs, qint64 *lastTs);
     static QString stampFor(qint64 startMs);
     void removeTripFiles(const QString &base);
     void emitStorage();
@@ -150,6 +179,7 @@ private:
     QString m_dir;
     struct sqlite3 *m_db = nullptr;
     QHash<QString, int> m_paramIds;
+    QStringList m_extraInboxes;
 };
 
 #endif // TRIPSTORE_H

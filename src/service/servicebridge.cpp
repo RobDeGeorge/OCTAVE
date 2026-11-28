@@ -274,7 +274,7 @@ void ServiceBridge::install(CommandServer &server)
         server.setTrust([this](const Connection &c) { return trusted(c); },
                         [this](const Connection &c, const QHash<QByteArray, QByteArray> &headers, const QByteArray &target) {
                             // Downloads of what is saved need files; covers only read
-                            const QString scope = target.startsWith("/export") ? QStringLiteral("files")
+                            const QString scope = target.startsWith("/export") || target.startsWith("/trips") ? QStringLiteral("files")
                                                                                : QStringLiteral("read");
                             if (trusted(c) && connectionAllows(c, scope))
                                 return true;

@@ -63,6 +63,14 @@
     "properties": [
         {
             "constant": false,
+            "name": "poweringOff",
+            "notify": "poweringOffChanged",
+            "readable": true,
+            "type": "bool",
+            "writable": false
+        },
+        {
+            "constant": false,
             "name": "networkName",
             "notify": "networkNameChanged",
             "readable": true,
@@ -151,6 +159,11 @@
         }
     ],
     "signals": [
+        {
+            "name": "poweringOffChanged",
+            "params": [
+            ]
+        },
         {
             "name": "networkNameChanged",
             "params": [
